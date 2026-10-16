@@ -46,6 +46,7 @@
     "../../ide/modules/Names.js",
     "../../ide/modules/Snippets.js",
     "../../ide/modules/Folding.js",
+    "../../ide/modules/Accessibility.js",
     "../../ide/modules/Lex.js",
     "../../ide/modules/Refactor.js",
     "../../ide/modules/Live.js",

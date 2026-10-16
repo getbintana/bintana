@@ -1162,3 +1162,18 @@ exist, so `Label.For` given a name not yet built is kept and settled by
 component declares the caption first on purpose, and is red with the resolve
 taken out. **`Captioned` is a class of `forms.js`'s own** -- the first fixture
 was called that and the project stopped with *redeclaration*.
+
+**`AccessibleHidden` is GTK's own state, which GTK rewrites.** `HIDDEN` is *true*
+while a widget is not mapped and *false* once it is, written by GTK **after** the
+`map` signal has been emitted -- measured in a plain probe: a `connect_after`
+handler set `true` and saw `false` written over it. A decorative mark therefore
+survived `Visible = false; Visible = true` only after being put back **in an
+idle** that holds a `GWeakRef` and nothing of ours, so a control deleted in the
+meantime is simply gone. `notify::visible` happens to run after GTK's write but
+is not emitted when the *parent* hides the child (leaving a page), which is the
+case that matters, so it is not the hook. `has_state(HIDDEN)` is true for a widget
+that is on screen too, with the value false: `AccessibleInfo().Hidden` asks for
+the value (`check_state(..., FALSE)` answers non-NULL when it is not false), and
+is true for a control not yet shown, which is the truth. Reading it right after
+`Add` therefore says `true`: the test waits for a frame, and counts the wait
+(`waiting++`), or the assertions after it are a smaller total and not a red line.

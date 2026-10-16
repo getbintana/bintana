@@ -13577,6 +13577,125 @@ function* p_check(ide) {
  * test drives the same two questions the window asks rather than a list of its
  * own.
  */
+/*
+ * Accessibility: which controls of a form a screen reader cannot name.
+ *
+ * `Accessibility.findings` is a pure function over a `.form`'s JSON, held with
+ * the cases that decide it -- what counts as a caption, as words, as a name, as
+ * decoration -- and the project's one word for how loudly it speaks goes through
+ * `Check`, because *every row follows it* is a property of the pass and not of the
+ * function. The runtime half (what GTK is told) is `tests/widgets`' `Accessible`.
+ */
+function* p_access(ide) {
+    const said = (children, actions) => Accessibility.findings({ children, actions: actions || [] });
+    const text = (type, name, properties) => ({ type, name, properties: properties || {} });
+
+    /* --- a field: named by a name or by a caption -------------------------- */
+    let got = said([text("TextBox", "TxtA")]);
+    eq("a text box with no name and no caption is found", got.length, 1);
+    check("...and the sentence says what it is and how to fix it",
+          got[0].includes("TxtA") && got[0].includes("AccessibleName") && got[0].includes("For"), got[0]);
+    eq("an AccessibleName names it", said([text("TextBox", "TxtA", { AccessibleName: "Nombre" })]).length, 0);
+    eq("a caption that points at it names it, from anywhere in the tree",
+       said([text("Panel", "Left", {}), { ...text("Panel", "Right"), children: [text("Label", "LblA", { For: "TxtA" })] },
+             text("TextBox", "TxtA")]).length, 0);
+    eq("a caption that points at something else does not",
+       said([text("Label", "LblA", { For: "TxtB" }), text("TextBox", "TxtA")]).length, 1);
+    eq("decoration says nothing is missing",
+       said([text("TextBox", "TxtA", { AccessibleHidden: true })]).length, 0);
+
+    got = said([text("Label", "LblA", { Text: "Nombre" }), text("TextBox", "TxtA")]);
+    check("the caption just above, with no For, is named as the fix",
+          got[0].includes("Label LblA just before it") && got[0].includes('set LblA.For to "TxtA"'), got[0]);
+    check("but a caption that has one is not offered",
+          !said([text("Label", "LblA", { For: "TxtB" }), text("TextBox", "TxtA")])[0].includes("just before it"));
+
+    for (const type of ["SpinBox", "DecimalBox", "ComboBox", "DatePicker", "Slider", "Switch",
+                        "TextEditor", "SourceEditor"])
+        eq(`a ${type} is a field`, said([text(type, "X")]).length, 1);
+    eq("a CheckButton has words of its own", said([text("CheckButton", "X")]).length, 0);
+    eq("and a Label is never asked for a name", said([text("Label", "X")]).length, 0);
+    check("an unnamed control is still found, by what it is",
+          said([text("TextBox", "")])[0].includes("an unnamed TextBox"));
+    eq("a control inside a panel is found", said([{ ...text("Panel", "P"), children: [text("TextBox", "TxtA")] }]).length, 1);
+
+    /* --- a button: words, a command with words, or a tooltip short enough --- */
+    eq("a button with no words is found", said([text("Button", "BtnA", { Icon: "edit-delete" })]).length, 1);
+    eq("words are enough", said([text("Button", "BtnA", { Text: "Save" })]).length, 0);
+    eq("a command with words is enough",
+       said([text("Button", "BtnA", { Action: "ActSave" })], [{ name: "ActSave", text: "Save" }]).length, 0);
+    eq("a command with none is not",
+       said([text("Button", "BtnA", { Action: "ActSave" })], [{ name: "ActSave", icon: "document-save" }]).length, 1);
+    eq("a short tooltip is a name", said([text("Button", "BtnA", { Tooltip: "Borrar" })]).length, 0);
+    eq("sixty characters still is",
+       said([text("Button", "BtnA", { Tooltip: "x".repeat(60) })]).length, 0);
+    eq("sixty-one is advice and not a name",
+       said([text("Button", "BtnA", { Tooltip: "x".repeat(61) })]).length, 1);
+    eq("an AccessibleName beats any of it",
+       said([text("Button", "BtnA", { Tooltip: "x".repeat(61), AccessibleName: "Borrar" })]).length, 0);
+    eq("a toggle button is a button", said([text("ToggleButton", "T")]).length, 1);
+
+    /* --- a picture --------------------------------------------------------- */
+    eq("an image with no name is found", said([text("Image", "Logo")]).length, 1);
+    eq("so is a picture", said([text("Picture", "Foto")]).length, 1);
+    eq("named, it is not", said([text("Image", "Logo", { AccessibleName: "Logo" })]).length, 0);
+    check("and the sentence offers decoration as the other way out",
+          said([text("Image", "Logo")])[0].includes("AccessibleHidden"));
+    eq("decoration is not found", said([text("Image", "Logo", { AccessibleHidden: true })]).length, 0);
+
+    /* --- the project's one word -------------------------------------------- */
+    eq("no word is a warning", Accessibility.level({}), "warning");
+    eq("a word is read in any case", Accessibility.level({ accessibility: "Info" }), "info");
+    eq("off is off", Accessibility.level({ accessibility: "off" }), "off");
+    eq("a word that is not one is the default", Accessibility.level({ accessibility: "loud" }), "warning");
+    eq("a warning row", Accessibility.kind("warning"), "Warning");
+    eq("an info row", Accessibility.kind("info"), "Info");
+    eq("and off has no row at all", Accessibility.kind("off"), null);
+    check("the manifest says what is wrong with a word that is not one",
+          ProjectFile.Load({ name: "p", startup: "F", accessibility: "loud" })
+              .Validate().some((m) => m.includes("warning, info or off")));
+    eq("while its own words are fine",
+       ProjectFile.Load({ name: "p", startup: "F", accessibility: "info" })
+           .Validate().filter((m) => m.includes("accessibility")).length, 0);
+
+    /* --- through the pass: every row follows the word ------------------------ */
+    const manifest = File.LoadJson(File.Join(TMP, "project.json"));
+    File.Save(File.Join(TMP, "Mute.form"), JSON.stringify({
+        format: "bintana-form/1", class: "Mute",
+        properties: { Width: 300, Height: 200 },
+        children: [text("Button", "BtnGo", { Icon: "go-next" }),
+                   text("TextBox", "TxtWho"),
+                   text("Image", "ImgLogo")],
+    }, null, 2));
+    ide.listFiles();
+
+    const mine = () => ide.problems.of("project").filter((r) => r.file === "Mute.form");
+    const say  = (word) => {
+        const m = { ...manifest };
+        if (word === null) delete m.accessibility; else m.accessibility = word;
+        File.SaveJson(File.Join(TMP, "project.json"), m);
+        ide.check.run();
+        return mine();
+    };
+
+    let rows = say(null);
+    eq("a project that says nothing is told about all three", rows.length, 3);
+    check("...each a warning", rows.every((r) => r.kind === "Warning"), JSON.stringify(rows));
+    rows = say("info");
+    eq("info: the same three", rows.length, 3);
+    check("...each an Info, **all of them**: the word is not per rule",
+          rows.every((r) => r.kind === "Info"), JSON.stringify(rows));
+    rows = say("off");
+    eq("off: nothing about accessibility", rows.length, 0);
+    rows = say("warning");
+    eq("warning, said out loud, is the default", rows.length, 3);
+
+    File.SaveJson(File.Join(TMP, "project.json"), manifest);
+    File.Delete(File.Join(TMP, "Mute.form"));
+    ide.listFiles();
+    ide.check.run();
+}
+
 function* p_quick(ide) {
     /* --- the keys ------------------------------------------------------------ */
 
@@ -16634,6 +16753,7 @@ const PHASES = [
     { name: "outline", run: p_outline },
     { name: "modules", run: p_modules },
     { name: "check", run: p_check },
+    { name: "access", run: p_access },
     { name: "quick", run: p_quick },
     { name: "recovery", run: p_recovery },
     { name: "unsaved",  run: p_unsaved },

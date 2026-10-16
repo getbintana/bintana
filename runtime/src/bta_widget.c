@@ -5884,6 +5884,93 @@ void bta_a11y_refresh(BtaWidget *w)
 
 enum { A11Y_NAME, A11Y_DESCRIPTION };
 
+#define A11Y_HIDDEN_KEY "bta-a11y-hidden"
+
+/*
+ * `AccessibleHidden` -- decorative: **assistive technologies skip it**.
+ *
+ * A logo, a divider and a drawing say nothing a person needs read to them, and
+ * a screen reader that stops on each of them is noise.  GTK's own word for it is
+ * the *hidden* state (`GTK_ACCESSIBLE_STATE_HIDDEN`), which is on the control and
+ * covers what is inside it; it is not `Visible`, which hides it from everyone.
+ * It is also the one honest way to say *nothing is missing here* to the IDE's
+ * accessibility check, since what the check asks for is a name and a control
+ * that is not to be read has no use for one.
+ *
+ * **GTK keeps the same state itself, and rewrites it.**  Measured: `HIDDEN` is
+ * *true* while a widget is not mapped and *false* once it is, set by GTK as the
+ * window maps and unmaps -- so a decorative mark made while the control is on
+ * screen is overwritten the next time its page is left and come back to, and the
+ * logo is read out again.  **The mark is put back after every `map`, and not
+ * in the handler**: GTK writes its own value *after* the `map` signal has been
+ * emitted (measured -- a `connect_after` handler saw `false` written over its
+ * `true`), so the handler only queues an idle that does it.  The idle holds a
+ * weak reference and nothing of ours: a control deleted in the meantime is just
+ * gone.  A control not yet on screen answers `Hidden` true in `AccessibleInfo()`
+ * whatever it was told, which is true: nothing can read it.
+ */
+static gboolean a11y_reassert_idle(gpointer data)
+{
+    GWeakRef  *ref = data;
+    GtkWidget *wd  = g_weak_ref_get(ref);
+
+    if (wd) {
+        if (g_object_get_data(G_OBJECT(wd), A11Y_HIDDEN_KEY))
+            gtk_accessible_update_state(GTK_ACCESSIBLE(wd), GTK_ACCESSIBLE_STATE_HIDDEN,
+                                        TRUE, -1);
+        g_object_unref(wd);
+    }
+    g_weak_ref_clear(ref);
+    g_free(ref);
+    return G_SOURCE_REMOVE;
+}
+
+static void on_a11y_mapped(GtkWidget *wd, gpointer data)
+{
+    if (!g_object_get_data(G_OBJECT(wd), A11Y_HIDDEN_KEY))
+        return;
+
+    GWeakRef *ref = g_new0(GWeakRef, 1);
+
+    g_weak_ref_init(ref, wd);
+    g_idle_add(a11y_reassert_idle, ref);
+}
+
+static JSValue w_get_a11y_hidden(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, g_object_get_data(G_OBJECT(w->gtk), A11Y_HIDDEN_KEY) != NULL);
+}
+
+static JSValue w_set_a11y_hidden(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int b = JS_ToBool(ctx, val);
+    if (b < 0)
+        return JS_EXCEPTION;
+
+    /* The handler goes on the first time anything is said, and stays: it does
+     * nothing while the mark is off. */
+    if (!g_object_get_data(G_OBJECT(w->gtk), "bta-a11y-hidden-on")) {
+        g_object_set_data(G_OBJECT(w->gtk), "bta-a11y-hidden-on", GINT_TO_POINTER(1));
+        g_signal_connect(w->gtk, "map", G_CALLBACK(on_a11y_mapped), NULL);
+    }
+
+    g_object_set_data(G_OBJECT(w->gtk), A11Y_HIDDEN_KEY, b ? GINT_TO_POINTER(1) : NULL);
+    if (b)
+        gtk_accessible_update_state(GTK_ACCESSIBLE(w->gtk), GTK_ACCESSIBLE_STATE_HIDDEN, TRUE, -1);
+    else if (gtk_widget_get_mapped(w->gtk))
+        gtk_accessible_update_state(GTK_ACCESSIBLE(w->gtk), GTK_ACCESSIBLE_STATE_HIDDEN, FALSE, -1);
+    /* Not mapped: GTK's own `true` for *not on screen* stands, and it sets the
+     * state itself when the control is mapped. */
+    return JS_UNDEFINED;
+}
+
 static JSValue w_get_a11y(JSContext *ctx, JSValueConst this_val, int magic)
 {
     BtaWidget *w = bta_this(ctx, this_val);
@@ -5990,6 +6077,20 @@ static JSValue w_accessible_info(JSContext *ctx, JSValueConst this_val,
     JS_SetPropertyStr(ctx, out, "Label",       JS_NewString(ctx, label ? label : ""));
     JS_SetPropertyStr(ctx, out, "Description", JS_NewString(ctx, desc ? desc : ""));
     JS_SetPropertyStr(ctx, out, "LabelledBy",  JS_NewBool(ctx, named));
+
+    /* On the control itself, which is where the state is put. */
+    GtkAccessible *root = GTK_ACCESSIBLE(w->gtk);
+    /* The state's *value*: `has_state` is true for a widget that is on screen too,
+     * with the value false.  Asking whether it is not false reads it. */
+    gboolean hidden = false;
+    if (gtk_accessible_get_at_context(root) &&
+        gtk_test_accessible_has_state(root, GTK_ACCESSIBLE_STATE_HIDDEN)) {
+        char *v = gtk_test_accessible_check_state(root, GTK_ACCESSIBLE_STATE_HIDDEN, FALSE, -1);
+
+        hidden = v != NULL;
+        g_free(v);
+    }
+    JS_SetPropertyStr(ctx, out, "Hidden", JS_NewBool(ctx, hidden));
     g_free(label);
     g_free(desc);
     return out;
@@ -7274,14 +7375,24 @@ static const JSCFunctionListEntry widget_props[] = {
      *   would be too long to be a name. `""` is none. **Translated**
      */
     JS_CGETSET_MAGIC_DEF("AccessibleDescription", w_get_a11y, w_set_a11y, A11Y_DESCRIPTION),
+    /* AccessibleHidden
+     *   decorative: **a screen reader skips it**, and what is inside it. A
+     *   logo, a divider, a drawing that says nothing to be read. Not `Visible`,
+     *   which takes it away from everyone. It is also what the IDE's
+     *   accessibility check takes as *nothing is missing here*. Default `false`
+     */
+    JS_CGETSET_DEF("AccessibleHidden", w_get_a11y_hidden, w_set_a11y_hidden),
     /* AccessibleInfo()
      *   what the assistive technologies are told, **read back from GTK**:
-     *   `{ Role, Label, Description, LabelledBy }` -- the role is GTK's name for
+     *   `{ Role, Label, Description, LabelledBy, Hidden }` -- the role is GTK's name for
      *   the kind of control (`button`, `text-box`), `Label` and `Description`
      *   are what a screen reader says (an icon-only button's tooltip included,
      *   which no assignment shows), and `LabelledBy` is whether a caption's
-     *   `For` points at it. Read off the control that takes the focus, which is
-     *   what is read. Empty where the desktop has no accessibility at all
+     *   `For` points at it, and `Hidden` is whether a screen reader skips it --
+     *   `AccessibleHidden`, **or the control not being on screen yet**, which GTK
+     *   marks the same way.
+     *   Read off the control that takes the focus, which is what is read.
+     *   Empty where the desktop has no accessibility at all
      *   (`GTK_A11Y=none`)
      */
     JS_CFUNC_DEF("AccessibleInfo", 0, w_accessible_info),

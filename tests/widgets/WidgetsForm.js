@@ -2182,6 +2182,44 @@ class WidgetsForm extends Form {
            cap.LblWho.Serialize().properties.For, "TxtWho");
 
         for (const c of [words, trash, box, lbl, cap]) c.Delete();
+
+        /* --- decorative: a screen reader skips it -------------------------- */
+        const logo = new Image();
+        this.Fixed1.Add(logo);
+        logo.Resize(24, 24);
+        until("the image is on screen", () => logo.Bounds().Width > 0, () => {
+            eq("nothing is hidden from a screen reader until it is asked",
+               logo.AccessibleHidden, false);
+            eq("...as GTK sees it, once the control is on screen",
+               logo.AccessibleInfo().Hidden, false);
+
+            logo.AccessibleHidden = true;
+            eq("a decorative control reads back", logo.AccessibleHidden, true);
+            eq("**and GTK has it hidden**", logo.AccessibleInfo().Hidden, true);
+            eq("it is still visible to everyone else", logo.Visible, true);
+
+            /* GTK rewrites the state as the control is unmapped and mapped, which
+             * is what leaving a page and coming back does: the mark must survive. */
+            logo.Visible = false;
+            logo.Visible = true;
+            /* A turn, not a frame: GTK writes its own value after the signal and the
+             * runtime puts the mark back in an idle.  Counted, or the assertions
+             * below would be a smaller total and not a red line. */
+            waiting++;
+            Timer.After(60, () => {
+                eq("**and it is still hidden after being hidden and shown again**",
+                   logo.AccessibleInfo().Hidden, true);
+
+                logo.AccessibleHidden = false;
+                eq("taken off, a screen reader reads it again",
+                   logo.AccessibleInfo().Hidden, false);
+                eq("it is saved when it is on",
+                   (() => { logo.AccessibleHidden = true;
+                            return logo.Serialize().properties.AccessibleHidden; })(), true);
+                logo.Delete();
+                waiting--;
+            });
+        });
     }
 
     testEditorScroll() {

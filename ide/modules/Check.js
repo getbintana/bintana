@@ -91,6 +91,7 @@ export class Check {
         if (!ide.project) return [];
 
         const found = [];
+        this.a11y = "warning";
         this.manifest(found);
 
         for (const file of ide.classes.files) {
@@ -132,6 +133,10 @@ export class Check {
             found.push({ kind: "Error", file: rel, line: 0, text: e.message });
             return;
         }
+
+        /* How loudly the accessibility rows speak: the manifest's one word for
+         * all of them, read here because this is where the manifest is read. */
+        this.a11y = Accessibility.level(cfg);
 
         const known = new ProjectFile().PropertyNames().map((n) => n.toLowerCase());
         for (const key in cfg) {
@@ -246,6 +251,13 @@ export class Check {
             }
         };
         walk(root.children);
+
+        /* What a screen reader cannot name, at the severity the project chose --
+         * and nothing at all when it chose `off`. */
+        const kind = Accessibility.kind(this.a11y);
+        if (kind)
+            for (const text of Accessibility.findings(root))
+                found.push({ kind, file: rel, line: 0, text });
     }
 
     /*

@@ -11067,12 +11067,21 @@
           "Native": true
         },
         {
+          "Name": "AccessibleHidden",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "decorative: **a screen reader skips it**, and what is inside it. A logo, a divider, a drawing that says nothing to be read. Not `Visible`, which takes it away from everyone. It is also what the IDE's accessibility check takes as *nothing is missing here*. Default `false`",
+          "Native": true
+        },
+        {
           "Name": "AccessibleInfo",
           "Kind": "Method",
           "Params": 0,
           "Signature": "()",
           "Returns": "",
-          "Doc": "what the assistive technologies are told, **read back from GTK**: `{ Role, Label, Description, LabelledBy }` -- the role is GTK's name for the kind of control (`button`, `text-box`), `Label` and `Description` are what a screen reader says (an icon-only button's tooltip included, which no assignment shows), and `LabelledBy` is whether a caption's `For` points at it. Read off the control that takes the focus, which is what is read. Empty where the desktop has no accessibility at all (`GTK_A11Y=none`)",
+          "Doc": "what the assistive technologies are told, **read back from GTK**: `{ Role, Label, Description, LabelledBy, Hidden }` -- the role is GTK's name for the kind of control (`button`, `text-box`), `Label` and `Description` are what a screen reader says (an icon-only button's tooltip included, which no assignment shows), and `LabelledBy` is whether a caption's `For` points at it, and `Hidden` is whether a screen reader skips it -- `AccessibleHidden`, **or the control not being on screen yet**, which GTK marks the same way. Read off the control that takes the focus, which is what is read. Empty where the desktop has no accessibility at all (`GTK_A11Y=none`)",
           "Native": true
         },
         {

@@ -113,6 +113,16 @@ export class ProjectFile extends Record {
          * about itself.
          */
         Launch: Field.List(LaunchConfig),
+
+        /*
+         * How loudly the IDE says a control cannot be named to a screen reader:
+         * `warning` (what no word means), `info`, or `off`. **Read by the IDE and
+         * not by the runtime**, like `launch`, and one word for all three of the
+         * rules in `Accessibility`: a project that thinks of it as advice thinks
+         * so about every row of it. Free text here and a rule in `Validate`, since
+         * a `Field` speaks about one value and the three words are the IDE's.
+         */
+        Accessibility: Field.Text({ max: 10 }),
     };
 
     /*
@@ -132,6 +142,9 @@ export class ProjectFile extends Record {
         else if (this.Startup && this.Main)
             out.push(`declares both startup (${this.Startup}) and main (${this.Main}); ` +
                      "the runtime calls main and never opens the form");
+
+        if (this.Accessibility && !Accessibility.isLevel(this.Accessibility))
+            out.push(`accessibility is "${this.Accessibility}": it is warning, info or off`);
 
         if (this.Id && !ProjectFile.idValid(this.Id))
             out.push(`"${this.Id}" is not an application id -- a reverse-DNS name ` +

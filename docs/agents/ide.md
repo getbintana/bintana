@@ -993,3 +993,25 @@ both put `AspectFrame` in the tree twice and `Add` refused it: the globals of th
 list are those that are not controls. The no-package path cannot be run where the
 package is installed, so `p_help` stands `HelpForm.root` in for `""` and opens a
 window of its own, and is red with the tree not built.
+
+**The accessibility check is a pure function over a `.form`'s JSON, and every
+row is one severity.** `Accessibility.findings(root)` (`ide/modules/Accessibility.js`)
+is called from `Check.form`, so it runs in the pass that already reads every
+`.form` and reports under the `project` source: three rules -- a field with
+neither `AccessibleName` nor a `Label.For` naming it (the caption just above it,
+when it has no `For`, is offered as the fix), a `Button`/`ToggleButton` with no
+`Text`, no `Action` whose entry in `actions` has `text`, and no `Tooltip` of 60
+characters or fewer (the runtime's `A11Y_TOOLTIP_MAX`, counted in characters),
+and an `Image`/`Picture` with no `AccessibleName`. **The severity is the
+manifest's one word** (`"accessibility"`: `warning` by default, `info`, `off`),
+read in `Check.manifest` -- where the manifest is read anyway -- and used for
+every row: the first design had images as `Info` and the rest `Warning`, and the
+decision was that a project which treats accessibility as advice treats it so
+for all of it. The word is a `ProjectFile` field (`Naming = "lower"`, so the key
+is `accessibility`) and not a bare key, or `Check`'s own *a key nothing reads*
+pass would flag it; it is validated in `Validate` because a `Field` speaks about
+one value and the three words are the IDE's. **`AccessibleHidden: true` is the
+way to quiet a row that is also true**: GTK's hidden state, which a screen reader
+needs in order to skip a logo. Not done: a box for the word in `ProjectForm`,
+whose `.form` is positioned by hand. A row's `line` is `0` as every `.form`
+row's is; the control is named in the text.

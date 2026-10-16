@@ -47,6 +47,7 @@
     "modules/Names.js",
     "modules/Snippets.js",
     "modules/Folding.js",
+    "modules/Accessibility.js",
     "modules/Lex.js",
     "modules/Refactor.js",
     "modules/Live.js",
