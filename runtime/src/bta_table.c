@@ -277,6 +277,14 @@ typedef struct {
      * not kept alive by this. */
     BtaTableRow   *cell;
     guint          cell_col;
+
+    /* **How many times the table was remade**: `Clear`, `Count`, `Columns`,
+     * a model of another shape (on demand, a tree, multiple selection). A verb
+     * that raises an event and goes on working reads it before the emit and
+     * gives up if it moved -- the one question that has an answer in every
+     * mode, since an on-demand row is only an index and the index survives a
+     * `Count = 0; Count = 50` that made it another row. See `cell_refind`. */
+    guint          epoch;
 } TableState;
 
 static void table_state_free(gpointer p)
@@ -2037,9 +2045,11 @@ typedef struct {
     GtkWidget   *box;
     BtaTableRow *row;
     guint        col;
+    guint        epoch;   /* the table's when it was asked; see cell_refind */
 } CellBegin;
 
 static BtaCell *table_find_cell(GtkWidget *x, BtaTableRow *row, int index, int col);
+static BtaCell *cell_refind(BtaWidget *w, guint epoch, BtaTableRow *row, guint col);
 
 static gboolean cell_begin_cb(gpointer p)
 {
@@ -2047,8 +2057,16 @@ static gboolean cell_begin_cb(gpointer p)
     BtaCell   *c = cell_get(b->box);
     BtaWidget *w = c ? cell_table(c) : NULL;
 
-    if (c && c->row != b->row)
-        c = w ? table_find_cell(w->inner, b->row, -1, (int)b->col) : NULL;
+    /* A turn later, a commit's `CellEdit` may have remade the table, and the
+     * box may draw another row: asked again by the address, as after any
+     * emit -- which is also what finds an on-demand row, whose object a
+     * rebind replaced. */
+    if (!w)
+        return G_SOURCE_REMOVE;
+    if (c->row != b->row)
+        c = cell_refind(w, b->epoch, b->row, b->col);
+    else if (table_state(w)->epoch != b->epoch)
+        c = NULL;
 
 
     if (c)
@@ -2070,12 +2088,18 @@ static void cell_begin_free(gpointer p)
  * `CellChange` and `Select` run the program, and a handler that clears, refills
  * or reshapes the table makes GTK unbind -- and destroy -- the drawn rows at
  * once: the `BtaCell` in hand before the emit may be freed, or bound to another
- * row. So the caller holds the row (and the wrapper), and asks by it: a held
- * row only while the table still holds it, an on-demand one by its index.
+ * row. So the caller holds the row (and the wrapper) and reads the table's
+ * `epoch` before the emit, and asks after it: nothing if the table was remade
+ * or left its window, else the cell drawn for the row -- a held row only while
+ * the table still holds it, an on-demand one by its index. **Nothing found is
+ * the gesture given up**, never handed to whatever row is there now.
  */
-static BtaCell *cell_refind(BtaWidget *w, BtaTableRow *row, guint col)
+static BtaCell *cell_refind(BtaWidget *w, guint epoch, BtaTableRow *row, guint col)
 {
-    if (!w->inner || !row)
+    /* Remade, or taken out of its window (`Delete`, the form closed): the
+     * gesture's target is gone, and it is not handed to whatever is there now. */
+    if (!w->inner || !row || table_state(w)->epoch != epoch ||
+        !gtk_widget_get_root(w->inner))
         return NULL;
     if (!row->cells)
         return table_find_cell(w->inner, NULL, (int)row->index, (int)col);
@@ -2087,6 +2111,7 @@ static BtaCell *cell_refind(BtaWidget *w, BtaTableRow *row, guint col)
 static void cell_begin_later(BtaCell *c)
 {
     CellBegin *b;
+    BtaWidget *w;
 
     if (!c->row)
         return;
@@ -2094,6 +2119,8 @@ static void cell_begin_later(BtaCell *c)
     b->box = g_object_ref(c->box);
     b->row = g_object_ref(c->row);
     b->col = c->col;
+    if ((w = cell_table(c)))
+        b->epoch = table_state(w)->epoch;
     g_idle_add_full(G_PRIORITY_DEFAULT, cell_begin_cb, b, cell_begin_free);
 }
 
@@ -2251,17 +2278,18 @@ static void on_view_pressed(GtkGestureClick *g, int n, double x, double y,
     /* **The press is also what chooses the cell**, before the lock and the
      * kind decide whether it opens: a locked cell is read and a tick turns,
      * but both are the reader's cell as much as an editable one. */
-    BtaTableRow *row  = g_object_ref(c->row);
-    guint        col  = c->col;
-    JSValue      self = JS_DupValue(w->ctx, w->self);
+    BtaTableRow *row   = g_object_ref(c->row);
+    guint        col   = c->col;
+    guint        epoch = table_state(w)->epoch;
+    JSValue      self  = JS_DupValue(w->ctx, w->self);
 
     table_current_set(w, row, col);
-    c = cell_refind(w, row, col);
+    c = cell_refind(w, epoch, row, col);
 
     if (!c || cell_locked(c))
         goto out;
     cell_select_row(w, row);
-    c = cell_refind(w, row, col);
+    c = cell_refind(w, epoch, row, col);
     if (!c || c->editor || c->spec->kind == ED_CHECK)
         goto out;
     gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);
@@ -2324,12 +2352,13 @@ static gboolean on_table_key(GtkEventControllerKey *k, guint keyval, guint keyco
     if (!c || c->editor || c->locked || !c->row)
         return FALSE;
 
-    BtaTableRow *row  = g_object_ref(c->row);
-    guint        col  = c->col;
-    JSValue      self = JS_DupValue(w->ctx, w->self);
+    BtaTableRow *row   = g_object_ref(c->row);
+    guint        col   = c->col;
+    guint        epoch = table_state(w)->epoch;
+    JSValue      self  = JS_DupValue(w->ctx, w->self);
 
     table_current_set(w, row, col);
-    if ((c = cell_refind(w, row, col)) && !c->editor && !c->locked)
+    if ((c = cell_refind(w, epoch, row, col)) && !c->editor && !c->locked)
         cell_begin_later(c);
     g_object_unref(row);
     JS_FreeValue(w->ctx, self);
@@ -3296,13 +3325,14 @@ static JSValue table_edit_cell(JSContext *ctx, JSValueConst this_val,
      * the same place. */
     /* Both raise events, and a handler may take the drawn cell away: the row
      * is held and the cell asked for again after each. */
-    BtaTableRow *at = cell && cell->row ? g_object_ref(cell->row) : NULL;
+    BtaTableRow *at    = cell && cell->row ? g_object_ref(cell->row) : NULL;
+    guint        epoch = table_state(w)->epoch;
 
     if (at) {
         cell_select_row(w, at);
-        if (cell_refind(w, at, (guint)c))
+        if (cell_refind(w, epoch, at, (guint)c))
             table_current_set(w, at, (guint)c);
-        cell = cell_refind(w, at, (guint)c);
+        cell = cell_refind(w, epoch, at, (guint)c);
         g_object_unref(at);
     } else {
         cell = NULL;
@@ -3827,6 +3857,8 @@ static void on_header_pressed(GtkGestureClick *g, int n_press,
         JS_NewBool(ctx, (state & GDK_SHIFT_MASK) != 0),
     };
 
+    guint   epoch  = table_state(w)->epoch;
+    JSValue holder = JS_DupValue(ctx, w->self);
     JSValue answer = bta_emit_answer(w, "HeaderClick", 4, argv, NULL);
 
     for (int i = 0; i < 4; i++)
@@ -3836,12 +3868,17 @@ static void on_header_pressed(GtkGestureClick *g, int n_press,
      * Only the secondary click asks for a menu, and that is GTK's rule as much
      * as ours: `click_released_cb` presents the column's model for the
      * secondary button and sorts for the primary. The others are told and
-     * that is all.
+     * that is all. **And a handler that remade the table** (`Columns = …`
+     * is the usual one) or took it out of its window leaves no heading that
+     * was clicked: the menu is not hung on whichever column now has the index.
      */
-    if (button != GDK_BUTTON_SECONDARY) {
+    if (button != GDK_BUTTON_SECONDARY || table_state(w)->epoch != epoch ||
+        !gtk_widget_get_root(w->inner)) {
         JS_FreeValue(ctx, answer);
+        JS_FreeValue(ctx, holder);
         return;
     }
+    JS_FreeValue(ctx, holder);   /* still in its window: someone else holds it */
 
     /* Both owned: the answer may *be* the spec, so it is duplicated rather than
      * taken, and freed once below. */
@@ -4165,6 +4202,7 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
     }
 
     /* Out with the old. Walked backwards because removing shortens the list. */
+    table_state(w)->epoch++;
     GListModel *have = gtk_column_view_get_columns(view);
     for (guint i = g_list_model_get_n_items(have); i > 0; i--) {
         GtkColumnViewColumn *c = g_list_model_get_item(have, i - 1);
@@ -4644,6 +4682,8 @@ static JSValue table_clear(JSContext *ctx, JSValueConst this_val,
 
     TableState *st = table_state(w);
 
+    st->epoch++;
+
     /* **The current cell goes with the rows**, and the frame comes off while
      * the cell is still drawn. */
     table_current_clear(w);
@@ -4957,6 +4997,10 @@ static JSValue table_set_count(JSContext *ctx, JSValueConst this_val,
                                       "the on-demand mode is a flat list, so "
                                       "Clear() this table first");
 
+    /* Assigned at all is remade: a program sets `Count` to say the data is
+     * new, even at the same number. */
+    st->epoch++;
+
     if (!st->virt) {
         /* Going on demand: what the table held is dropped, because it is no
          * longer what it shows and keeping it would be two answers to Count. */
@@ -5216,6 +5260,8 @@ static void table_use_model(BtaWidget *w, GListModel *model)
     TableState        *st  = table_state(w);
     GtkSelectionModel *old = table_model(w);
     GtkSelectionModel *sel;
+
+    st->epoch++;
 
     if (st->multi) {
         sel = GTK_SELECTION_MODEL(gtk_multi_selection_new(g_object_ref(model)));
@@ -5609,10 +5655,12 @@ static JSValue table_set_current(JSContext *ctx, JSValueConst this_val,
     }
     JS_FreeValue(ctx, rv);
 
-    /* `Select` runs the program first, and a handler that took the row away
-     * leaves nothing to be current. */
+    /* `Select` runs the program first, and a handler that remade the table
+     * or took the row away leaves nothing to be current. */
+    guint epoch = st->epoch;
+
     cell_select_row(w, row);
-    if (!row->cells || table_still_holds(w, row) >= 0)
+    if (st->epoch == epoch && (!row->cells || table_still_holds(w, row) >= 0))
         table_current_set(w, row, (guint)col);
     g_clear_object(&row);
     return JS_UNDEFINED;

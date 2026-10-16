@@ -17578,6 +17578,29 @@ function Main() {
             t.On("Select", null);
             t.Clear();
 
+            /* **And a handler that takes the table out of its window**: the
+             * control lives on (the program holds it), drawn nowhere, and the
+             * edit it was asked for is given up. */
+            const lost = new TableView();
+            lost.Name = "CurGone";
+            lost.Columns = [{ Text: "A", Editor: "Text" }];
+            this.geoAdd(lost, 0, 80);
+            lost.Add(["uno"]);
+            lost.Add(["dos"]);
+            until("a table to be deleted drawn", () => lost.RowHeight > 0, () => {
+                let deleted = false;
+                lost.On("Select", () => {
+                    if (deleted) return;
+                    deleted = true;
+                    lost.Delete();
+                });
+                eq("EditCell whose Select deleted the table opens nothing",
+                   lost.EditCell(1, 0), false);
+                check("...the handler having run", deleted);
+                eq("and the deleted table still answers", lost.Count, 2);
+                lost.geoHost.Delete();
+            });
+
             /* A tree: a key is the address, and assigning opens the way. */
             const tree = new TableView();
             tree.Name = "CurTree";
@@ -17613,6 +17636,28 @@ function Main() {
                 eq("and selects the row", v.Index, 2);
                 v.Count = 1;
                 eq("a count that shrank past it clears it", v.CurrentCell, null);
+
+                /* **An on-demand row is only its index**, and the index
+                 * survives a handler that remade the table: `Count = 0; Count
+                 * = 3` leaves a row 1 that is another row. The table's epoch
+                 * moved, so the gesture is given up rather than handed to it. */
+                v.Count = 3;
+                let remake = true;
+                v.On("Select", () => {
+                    if (!remake) return;
+                    remake = false;
+                    v.Count = 0;
+                    v.Count = 3;
+                });
+                eq("EditCell whose Select remade an on-demand table opens nothing",
+                   v.EditCell(1, 0), false);
+                check("...the handler having run", !remake);
+                v.CurrentCell = null;
+                remake = true;
+                v.CurrentCell = { Row: 1, Column: 0 };
+                eq("and CurrentCell is not set on the row the index now names",
+                   v.CurrentCell, null);
+                v.On("Select", null);
                 v.geoHost.Delete();
             });
 
