@@ -1876,6 +1876,8 @@ class WidgetsForm extends Form {
         throws("so is one that is not a row", () => { ed.FoldRanges = [1]; });
         throws("and so is one with no line", () => { ed.FoldRanges = [{ Start: 1 }]; });
         throws("and what is not a list", () => { ed.FoldRanges = "1-3"; });
+        throws("a Tail that is not text is refused",
+               () => { ed.FoldRanges = [{ Start: 1, End: 3, Tail: 5 }]; });
         eq("and the list is what it was",
            JSON.stringify(ed.FoldRanges),
            '[{"Start":1,"End":3},{"Start":5,"End":7}]');
@@ -1885,6 +1887,14 @@ class WidgetsForm extends Form {
         throws("an end that is not after the start is refused", () => ed.Fold(2, 2));
         eq("Unfold on a line with no fold says so", ed.Unfold(1), false);
         eq("and nothing is folded", JSON.stringify(ed.Folds()), "[]");
+
+        /* `Tail` is optional, comes back when given, and is what the dots are
+         * followed by. */
+        ed.FoldRanges = [{ Start: 1, End: 3, Tail: "}" }, { Start: 5, End: 7 }];
+        eq("a Tail reads back, and only where there is one",
+           JSON.stringify(ed.FoldRanges),
+           '[{"Start":1,"End":3,"Tail":"}"},{"Start":5,"End":7}]');
+        ed.FoldRanges = [{ Start: 5, End: 7 }, { Start: 1, End: 3 }];
 
         until("the editor is laid out", () => ed.Bounds().Width > 0, () => {
             ed.Select(6, 1, 0);
@@ -2012,18 +2022,27 @@ class WidgetsForm extends Form {
                   "        this.Add(ed);\n" +
                   "        this.ed = ed;\n" +
                   "        ed.Text = 'a {\\n  b\\n  c\\n}\\nz\\n';\n" +
-                  "        ed.FoldRanges = [{ Start: 1, End: 3 }];\n" +
+                  "        ed.FoldRanges = [{ Start: 1, End: 4, Tail: '}' }];\n" +
                   "        Timer.After(800, () => File.Save(Application.Directory + '/ready', '1'));\n" +
                   "    }\n" +
                   "    Ed_FoldChange(line, folded) {\n" +
-                  "        File.SaveJson(Application.Directory + '/out.json',\n" +
-                  "            { line, folded, folds: this.ed.Folds(), text: this.ed.Text });\n" +
-                  "        Application.Quit(0);\n" +
+                  "        this.said = this.said || [];\n" +
+                  "        this.said.push([line, folded, this.ed.Folds().length, this.ed.Text]);\n" +
+                  "        File.Save(Application.Directory + '/step' + this.said.length, '1');\n" +
+                  "        if (this.said.length === 2)\n" +
+                  "            Timer.After(1500, () => {\n" +
+                  "                File.SaveJson(Application.Directory + '/out.json', { said: this.said });\n" +
+                  "                Application.Quit(0);\n" +
+                  "            });\n" +
                   "    }\n" +
                   "}\n");
-        for (const gone of ["ready", "out.json"])
+        for (const gone of ["ready", "out.json", "step1", "step2", "step3"])
             if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
 
+        /* Three stages.  The margin's marker closes the block.  The dots after
+         * the line -- somewhere along it, the script walks it -- open it again.
+         * And then the same walk keeps clicking where the dots were: a chip that
+         * was left behind, and clickable, would close it again and say so. */
         const script = File.Join(proj, "run.sh");
         File.Save(script,
                   "bin=$1; dir=$2\n" +
@@ -2032,8 +2051,15 @@ class WidgetsForm extends Form {
                   "child=$!\n" +
                   "i=0; while [ ! -f \"$dir/ready\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
                   "for x in 30 34 38 42 46 50 54; do\n" +
-                  "  [ -f \"$dir/out.json\" ] && break\n" +
+                  "  [ -f \"$dir/step1\" ] && break\n" +
                   "  xdotool mousemove $x 9 click 1; sleep 0.3\n" +
+                  "done\n" +
+                  "for x in 70 76 82 88 94 100 106 112 118 124 130; do\n" +
+                  "  [ -f \"$dir/step2\" ] && break\n" +
+                  "  xdotool mousemove $x 9 click 1; sleep 0.3\n" +
+                  "done\n" +
+                  "for x in 76 88 100 112 124; do\n" +
+                  "  xdotool mousemove $x 9 click 1; sleep 0.2\n" +
                   "done\n" +
                   "wait $child; echo \"child=$?\"\n");
 
@@ -2046,10 +2072,14 @@ class WidgetsForm extends Form {
         check("a click on the marker raised FoldChange", got !== null, ran.Output);
         if (!got) return;
 
-        eq("for that line, and what it is now", [got.line, got.folded].join(), "1,true");
-        eq("and the block really is closed", JSON.stringify(got.folds),
-           '[{"Start":1,"End":3}]');
-        eq("with the text still whole", got.text, "a {\n  b\n  c\n}\nz\n");
+        const text = "a {\n  b\n  c\n}\nz\n";
+        const said = got.said || [];
+        eq("the marker, then the dots, and nothing after them", said.length, 2);
+        eq("the marker closed line 1 and the block was closed",
+           JSON.stringify([said[0][0], said[0][1], said[0][2]]), "[1,true,1]");
+        eq("**the dots opened it again**: line 1, open, no folds left",
+           JSON.stringify([said[1][0], said[1][1], said[1][2]]), "[1,false,0]");
+        eq("with the text whole both times", said[0][3] + said[1][3], text + text);
     }
 
     testEditorScroll() {

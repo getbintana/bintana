@@ -4407,36 +4407,42 @@ function* p_snippets(ide) {
 function* p_folding(ide) {
     const rs = (text) => JSON.stringify(Folding.ranges(text));
 
-    /* What a block hides is the lines between its braces, so the closer stays. */
-    eq("a block of three lines hides its middle", rs("a {\n  b\n}\n"), '[{"Start":1,"End":2}]');
-    eq("two lines have nothing between them to hide", rs("a {\n}\n"), "[]");
-    eq("and one line has none either", rs("a { }\n"), "[]");
-    eq("an array folds like a block", rs("x = [\n  1,\n  2\n]\n"), '[{"Start":1,"End":3}]');
+    /* What a block hides is everything after its opening line, the closer too;
+     * the closer's own text is its `Tail`, what the editor shows after the dots. */
+    eq("a block of three lines hides the rest, and says what closes it",
+       rs("a {\n  b\n}\n"), '[{"Start":1,"End":3,"Tail":"}"}]');
+    eq("two lines fold to `{ … }`", rs("a {\n}\n"), '[{"Start":1,"End":2,"Tail":"}"}]');
+    eq("one line has nothing to hide", rs("a { }\n"), "[]");
+    eq("an array folds like a block", rs("x = [\n  1,\n  2\n]\n"),
+       '[{"Start":1,"End":4,"Tail":"]"}]');
     eq("nested blocks are both there, outer first",
        rs("f {\n if {\n  x\n }\n y\n}\n"),
-       '[{"Start":1,"End":5},{"Start":2,"End":3}]');
+       '[{"Start":1,"End":6,"Tail":"}"},{"Start":2,"End":4,"Tail":"}"}]');
+    eq("a closer that opens another is the first one's tail",
+       rs("if (x) {\n  a\n} else {\n  b\n}\n"),
+       '[{"Start":1,"End":3,"Tail":"} else {"},{"Start":3,"End":5,"Tail":"}"}]');
 
     /* The scanner is what keeps a brace that is not code from being one. */
     eq("a brace in a string is not a block",
-       rs("a {\n  s = '}';\n  t = \"{\";\n}\n"), '[{"Start":1,"End":3}]');
+       rs("a {\n  s = '}';\n  t = \"{\";\n}\n"), '[{"Start":1,"End":4,"Tail":"}"}]');
     eq("nor in a comment",
-       rs("a {\n  // }\n  /* { */\n}\n"), '[{"Start":1,"End":3}]');
+       rs("a {\n  // }\n  /* { */\n}\n"), '[{"Start":1,"End":4,"Tail":"}"}]');
     eq("nor in a template's text, while its hole is code",
-       rs("a {\n  s = `}${ {x: 1}.x }`;\n  y;\n}\n"), '[{"Start":1,"End":3}]');
+       rs("a {\n  s = `}${ {x: 1}.x }`;\n  y;\n}\n"), '[{"Start":1,"End":4,"Tail":"}"}]');
 
     /* Two that open on one line are one marker, and it is the outer's. */
     eq("two openers on a line are one marker",
-       rs("x = [{\n  a\n}]\n"), '[{"Start":1,"End":2}]');
+       rs("x = [{\n  a\n}]\n"), '[{"Start":1,"End":3,"Tail":"}]"}]');
     eq("the outer one, when they end on different lines",
-       rs("x = [{\n  a\n},\n  b\n]\n"), '[{"Start":1,"End":4}]');
+       rs("x = [{\n  a\n},\n  b\n]\n"), '[{"Start":1,"End":5,"Tail":"]"}]');
 
     /* A file being typed is not balanced, and the part that is should answer. */
     eq("an opener never closed makes no range", rs("a {\n  b\n"), "[]");
     eq("a closer with nothing to close is ignored", rs("}\n}\n"), "[]");
     eq("the balanced inner one is still there",
-       rs("a {\n b {\n  c\n }\n"), '[{"Start":2,"End":3}]');
+       rs("a {\n b {\n  c\n }\n"), '[{"Start":2,"End":4,"Tail":"}"}]');
     eq("a closer of the other kind is ignored",
-       rs("a {\n ]\n b\n}\n"), '[{"Start":1,"End":3}]');
+       rs("a {\n ]\n b\n}\n"), '[{"Start":1,"End":4,"Tail":"}"}]');
     eq("an empty file has none", rs(""), "[]");
 
     /* Only for a language it knows. */
@@ -4458,7 +4464,8 @@ function* p_folding(ide) {
     ed.Text = text;
     ide.live.pass();
     eq("the pause brings the markers up to the text",
-       JSON.stringify(ed.FoldRanges), '[{"Start":1,"End":3},{"Start":5,"End":7}]');
+       JSON.stringify(ed.FoldRanges),
+       '[{"Start":1,"End":4,"Tail":"}"},{"Start":5,"End":8,"Tail":"}"}]');
 
     /* The key: the block the cursor is in, and the same key again is the one
      * around it. */
@@ -4466,7 +4473,7 @@ function* p_folding(ide) {
     eq("Ctrl+Shift+[ is taken when there is a block",
        ide.Editor_KeyPreview("braceleft", true, true), true);
     eq("and closes the one the cursor is in", JSON.stringify(ed.Folds()),
-       '[{"Start":5,"End":7}]');
+       '[{"Start":5,"End":8}]');
     eq("the cursor, which was in it, is on the line that stays", ed.Line, 5);
     eq("**and the text is still the whole file**", ed.Text, text);
     eq("Ctrl+Shift+] opens the one on the cursor's line",

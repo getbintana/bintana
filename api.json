@@ -7328,7 +7328,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the blocks that can be folded, as `[{ Start, End }]` lines, 1-based: what a fold of one would hide is `Start + 1` to `End`. **The program says** -- only whoever knows the language knows where a block ends -- and the editor draws a marker beside each `Start` (`▼` open, `▶` folded) that a click toggles. Assigning is all or nothing, and a row that is not `1 <= Start < End` is a `RangeError`. Keep it in step with the text",
+          "Doc": "the blocks that can be folded, as `[{ Start, End, [Tail] }]` lines, 1-based: what a fold of one would hide is `Start + 1` to `End`, **whole**. A closed fold shows `…` after the line it hangs from, and `Tail` -- text, `}` or `} else {` -- after the dots, so a block reads `function f() { … }`; a click on the dots opens it. **The program says** -- only whoever knows the language knows where a block ends -- and the editor draws a marker beside each `Start` (`▼` open, `▶` folded) that a click toggles. Assigning is all or nothing, and a row that is not `1 <= Start < End` is a `RangeError`. Keep it in step with the text",
           "Native": true
         },
         {

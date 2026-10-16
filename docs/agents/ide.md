@@ -960,9 +960,12 @@ and to each born later by `dressEditor`, like the other two settings.
 **Folding in the IDE is `Folding.js` and one rule: lines between the braces.**
 `Folding.ranges(text)` scans `Lex.blank`'s output -- strings, templates, regexes
 and comments already blanked, line breaks kept -- with a stack of `{`/`[`, and a
-block from line 3 to line 9 is the range `3..8`, so the closer stays visible
-(`foo() {` over `}`) and a `} else {` is never swallowed. Two blocks opening on
-one line are one marker, the outer; a block with nothing between its braces has
+block from line 3 to line 9 is the range `3..9` with the closer's trimmed text as
+its `Tail`: the closer is hidden with the rest and the editor shows `foo() { … }`,
+as Android Studio does (the first version left the `}` on its own row, and "beyond
+the icon it is not clear there is folded code"). A `} else {` closer is the first
+block's tail and the second's opening line, so it goes and comes with the first.
+Two blocks opening on one line are one marker, the outer; a block on one line has
 none; an unbalanced file answers for the part that balances. It is for `js`
 only. The markers are brought up to the text where the other checks already
 run -- `Live.pass`, on the pause -- and when a tab opens (`TabSet`), so

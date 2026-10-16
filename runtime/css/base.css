@@ -76,3 +76,23 @@ fontbutton.flat > button:checked {
     background-color: alpha(@theme_fg_color, 0.24);
     transition: all 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
+
+/* The dots a closed fold leaves after the line it hangs from (`SourceEditor`,
+ * `bta_editor.c`): a small chip of the text colour's own tint, so it reads as
+ * a placeholder in any theme and not as code.  Only the dots wear it. */
+label.bta-fold-chip {
+    font-family: monospace;
+    padding: 0 6px;
+    border-radius: 4px;
+    background-color: alpha(@theme_fg_color, 0.14);
+    color: alpha(@theme_fg_color, 0.75);
+}
+
+label.bta-fold-chip:hover {
+    background-color: alpha(@theme_fg_color, 0.26);
+}
+
+/* What follows the dots -- `}` -- is code and is drawn as code: no tint. */
+label.bta-fold-tail {
+    font-family: monospace;
+}

@@ -18,12 +18,16 @@
  * editor with no parser does and it is what is wanted: both are lines a person
  * wants out of the way.
  *
- * **What a fold hides is the lines between the braces.** A block from line 3 to
- * line 9 is the range `3..8`: the line with the `{` and the line with the `}`
- * stay, so what remains reads `foo() {` over `}` and the closer of a `} else {`
- * is still there to be seen. A block with nothing between its braces (`{}`,
- * or `{` and `}` on neighbouring lines) has nothing to hide and gets no marker.
- * Two blocks that open on one line -- `[{` -- are one marker, for the outer.
+ * **What a fold hides is everything after the opening line, the closer too, and
+ * what is left says so.** A block from line 3 to line 9 is the range `3..9` with
+ * the closer's own text as its `Tail`, and a closed one reads `foo() { … }`: the
+ * editor draws the dots after the line and the `Tail` after them, as Android
+ * Studio and IntelliJ do, because a margin marker alone does not say that code
+ * is there. A `} else {` closer is the tail of the first block and the line the
+ * second one opens on, so it is hidden with the first and back with it.
+ * A block with its braces on one line (`{ }`) has nothing to hide and gets no
+ * marker; two lines (`{` over `}`) fold to `{ … }`. Two blocks that open on
+ * one line -- `[{` -- are one marker, for the outer.
  *
  * Only for `js`: a `.form` and a `project.json` are JSON that this editor shows
  * as a tab too, and folding them would be an answer to a question nobody asked
@@ -33,7 +37,8 @@
 
 export class Folding {
     /*
-     * The ranges of a source text, sorted by `Start`, `[]` for text with none.
+     * The ranges of a source text, `{ Start, End, Tail }` sorted by `Start`, `[]` for
+     * text with none.
      *
      * One pass over the blanked text with a stack of openers. A closer that does
      * not match the opener on top is ignored -- an unbalanced file is a file
@@ -42,8 +47,9 @@ export class Folding {
      */
     static ranges(text) {
         const code  = Lex.blank(text);
+        const rows  = text.split("\n");
         const stack = [];
-        const best  = {};          // Start -> End, the outermost for that line
+        const best  = {};          // Start -> { End, Tail }, the outermost for that line
         let   line  = 1;
 
         for (let i = 0; i < code.length; i++) {
@@ -58,16 +64,16 @@ export class Folding {
                 if (!top || (c === "}") !== (top.open === "{")) continue;
                 stack.pop();
 
-                /* The lines between the braces; none, no range. */
-                const end = line - 1;
-                if (end <= top.line) continue;
-                if (best[top.line] === undefined || best[top.line] < end)
-                    best[top.line] = end;
+                /* Everything after the opening line, down to the closer; a
+                 * closer on the opening line itself is nothing to hide. */
+                if (line <= top.line) continue;
+                if (best[top.line] === undefined || best[top.line].End < line)
+                    best[top.line] = { End: line, Tail: rows[line - 1].trim() };
             }
         }
 
         return Dictionary.Keys(best)
-            .map((k) => ({ Start: Number(k), End: best[k] }))
+            .map((k) => ({ Start: Number(k), End: best[k].End, Tail: best[k].Tail }))
             .sort((a, b) => a.Start - b.Start);
     }
 
@@ -95,7 +101,7 @@ export class Folding {
         let   found = null;
 
         for (const r of ed.FoldRanges) {
-            if (line >= r.Start && line <= r.End + 1 && !ed.Folded(r.Start))
+            if (line >= r.Start && line <= r.End && !ed.Folded(r.Start))
                 found = r;      // sorted by Start: the last one is the innermost
         }
         return found;

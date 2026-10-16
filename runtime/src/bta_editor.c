@@ -1549,8 +1549,19 @@ static JSValue ed_marks(JSContext *ctx, JSValueConst this_val,
  */
 #define FOLDS_KEY "bta-folds"
 
-typedef struct { GtkTextTag *tag; GtkTextMark *from, *to; } BtaFold;
-typedef struct { int start, end; } BtaRange;
+/* `chip` is the "…" drawn after the line a fold hangs from, over the text, with
+ * the place it was last put (`x`, `y`) so that it is moved only when it moved. */
+typedef struct {
+    GtkTextTag  *tag;
+    GtkTextMark *from, *to;
+    GtkWidget   *chip;
+    int          x, y;
+} BtaFold;
+
+/* `tail` is what the program says is at the other end of the fold -- `}`,
+ * `} else {` -- shown after the dots; owned by `FoldRanges`' own list and
+ * NULL everywhere else a range is copied. */
+typedef struct { int start, end; char *tail; } BtaRange;
 
 typedef struct {
     GArray                  *folds;      /* BtaFold */
@@ -1560,15 +1571,27 @@ typedef struct {
     GtkSourceGutterRenderer *renderer;   /* the markers */
     GtkSourceGutterRenderer *numbers;    /* the line numbers, in place of the view's */
     int                      digits;     /* what `numbers` is as wide as */
+    GtkWidget               *view;       /* where the chips are put */
+    GPtrArray               *spare;      /* chips of folds that were opened, hidden
+                                          * and waiting to be used again */
 } BtaFolds;
+
+static void ranges_forget(GArray *ranges)
+{
+    for (guint i = 0; i < ranges->len; i++)
+        g_free(g_array_index(ranges, BtaRange, i).tail);
+    g_array_set_size(ranges, 0);
+}
 
 static void folds_free(gpointer data)
 {
     BtaFolds *f = data;
 
     g_array_free(f->folds, TRUE);
+    ranges_forget(f->ranges);
     g_array_free(f->ranges, TRUE);
     g_array_free(f->spans, TRUE);
+    g_ptr_array_free(f->spare, TRUE);       /* the pointers: the view owns the chips */
     g_free(f);
 }
 
@@ -1647,6 +1670,13 @@ static void fold_drop(GtkTextBuffer *buf, BtaFolds *f, guint index)
     gtk_text_buffer_get_iter_at_mark(buf, &b, fold->to);
     gtk_text_buffer_remove_tag(buf, fold->tag, &a, &b);
     gtk_text_tag_table_remove(gtk_text_buffer_get_tag_table(buf), fold->tag);
+    /* **Never removed, only put away.**  `gtk_text_view_remove` does not take an
+     * overlay out (it answers *GtkLabel is not a child of GtkSourceView* and the
+     * label stays), and a chip that stayed was clickable with a mark that no
+     * longer existed.  So it is hidden, and `fold_add` takes it back; the view
+     * disposes of whatever is left when it goes. */
+    gtk_widget_set_visible(fold->chip, FALSE);
+    g_ptr_array_add(f->spare, fold->chip);
     gtk_text_buffer_delete_mark(buf, fold->from);
     gtk_text_buffer_delete_mark(buf, fold->to);
     g_array_remove_index(f->folds, index);
@@ -1740,6 +1770,72 @@ static void folds_changed(GtkTextBuffer *buf, gpointer data)
     numbers_resize(data, buf);
 }
 
+/*
+ * Where each chip goes: just after the last character of the line its fold
+ * hangs from, in the buffer's coordinates, which is what scrolls with the text.
+ * A chip whose line is itself inside another fold has no row to stand on --
+ * it would be drawn over the outer one's -- so it is hidden.
+ *
+ * Run on every frame while there is a fold, because nothing says when the layout
+ * moved a line (a resize, a wrap, a font): a loop over the few folds that are
+ * closed, moving a chip only when its place changed.
+ */
+static void folds_place(BtaFolds *f)
+{
+    if (f->folds->len == 0)
+        return;
+
+    GtkTextView   *tv  = GTK_TEXT_VIEW(f->view);
+    GtkTextBuffer *buf = gtk_text_view_get_buffer(tv);
+    GArray        *spans = g_array_new(FALSE, FALSE, sizeof(BtaRange));
+
+    for (guint i = 0; i < f->folds->len; i++) {
+        BtaFold *fold = &g_array_index(f->folds, BtaFold, i);
+        BtaRange span = { fold_first(buf, fold), fold_last(buf, fold), NULL };
+
+        g_array_append_val(spans, span);
+    }
+
+    for (guint i = 0; i < f->folds->len; i++) {
+        BtaFold  *fold   = &g_array_index(f->folds, BtaFold, i);
+        int       line   = g_array_index(spans, BtaRange, i).start;
+        gboolean  hidden = FALSE;
+
+        for (guint j = 0; j < spans->len && !hidden; j++) {
+            const BtaRange *s = &g_array_index(spans, BtaRange, j);
+
+            hidden = line > s->start && line <= s->end;
+        }
+        gtk_widget_set_visible(fold->chip, !hidden);
+        if (hidden)
+            continue;
+
+        /* The break that ends the line is the position after its last
+         * character: where the line's text stops. */
+        GtkTextIter it;
+        gtk_text_buffer_get_iter_at_mark(buf, &it, fold->from);
+        gtk_text_iter_backward_char(&it);
+
+        GdkRectangle r;
+        gtk_text_view_get_iter_location(tv, &it, &r);
+
+        int x = r.x + r.width + 8, y = r.y + 1;
+        if (x != fold->x || y != fold->y) {
+            gtk_widget_set_size_request(fold->chip, -1, r.height - 2);
+            gtk_text_view_move_overlay(tv, fold->chip, x, y);
+            fold->x = x;
+            fold->y = y;
+        }
+    }
+    g_array_free(spans, TRUE);
+}
+
+static gboolean folds_tick(GtkWidget *view, GdkFrameClock *clock, gpointer data)
+{
+    folds_place(data);
+    return G_SOURCE_CONTINUE;
+}
+
 /* The folds as lines, read once at the start of a paint so that asking about
  * each of the lines in view does not walk the marks again for every one. */
 static void fold_begin(GtkSourceGutterRenderer *r, GtkSourceGutterLines *lines)
@@ -1755,7 +1851,7 @@ static void fold_begin(GtkSourceGutterRenderer *r, GtkSourceGutterLines *lines)
     g_array_set_size(f->spans, 0);
     for (guint i = 0; i < f->folds->len; i++) {
         BtaFold *fold = &g_array_index(f->folds, BtaFold, i);
-        BtaRange span = { fold_first(buf, fold), fold_last(buf, fold) };
+        BtaRange span = { fold_first(buf, fold), fold_last(buf, fold), NULL };
 
         g_array_append_val(f->spans, span);
     }
@@ -1854,6 +1950,18 @@ static void bta_fold_renderer_init(BtaFoldRenderer *self)
 
 static void fold_toggle_line(BtaWidget *w, int line);
 
+/* The chip is clicked: the fold it belongs to opens. */
+static void on_chip_pressed(GtkGestureClick *g, int n_press, double x, double y,
+                            gpointer user_data)
+{
+    BtaWidget   *w    = user_data;
+    GtkWidget   *chip = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(g));
+    GtkTextMark *from = g_object_get_data(G_OBJECT(chip), "bta-fold-from");
+
+    if (from)
+        fold_toggle_line(w, mark_line(GTK_TEXT_BUFFER(buffer_of(w)), from) - 1);
+}
+
 static void on_fold_activated(GtkSourceGutterRenderer *r, GtkTextIter *iter,
                               GdkRectangle *area, guint button, GdkModifierType state,
                               gint n_presses, gpointer user_data)
@@ -1876,7 +1984,10 @@ static BtaFolds *folds_make(BtaWidget *w)
     f->folds  = g_array_new(FALSE, TRUE, sizeof(BtaFold));
     f->ranges = g_array_new(FALSE, TRUE, sizeof(BtaRange));
     f->spans  = g_array_new(FALSE, TRUE, sizeof(BtaRange));
+    f->spare  = g_ptr_array_new();
+    f->view   = w->inner;
     g_object_set_data_full(G_OBJECT(w->inner), FOLDS_KEY, f, folds_free);
+    gtk_widget_add_tick_callback(w->inner, folds_tick, f, NULL);
 
     GtkSourceView *sv  = GTK_SOURCE_VIEW(w->inner);
     GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
@@ -1951,10 +2062,54 @@ static bool fold_add(BtaWidget *w, int start, int end)
     else
         gtk_text_buffer_get_end_iter(buf, &b);
 
-    BtaFold fold;
+    BtaFold fold = { 0 };
     fold.tag  = gtk_text_buffer_create_tag(buf, NULL, "invisible", TRUE, NULL);
     fold.from = gtk_text_buffer_create_mark(buf, NULL, &a, TRUE);
     fold.to   = gtk_text_buffer_create_mark(buf, NULL, &b, TRUE);   /* left: see folds_check */
+    fold.x    = fold.y = -1;
+
+    /* The dots, and what is at the other end if the program said: `{ … }` is
+     * what a closed block reads as, where the margin's marker alone does not
+     * say that anything is there.  A click on it opens the fold. */
+    /* **Two labels in a box, and only the dots wear the chip.**  `… }` as one
+     * highlighted block read as a button with a brace in it; the brace is code,
+     * and code is not drawn on a tint, so it is plain text after the dots. */
+    const BtaRange *rg   = range_starting_at(f, start);
+    const char     *tail = rg && rg->tail ? rg->tail : "";
+
+    if (f->spare->len > 0) {
+        fold.chip = g_ptr_array_index(f->spare, f->spare->len - 1);
+        g_ptr_array_remove_index(f->spare, f->spare->len - 1);
+
+        GtkWidget *tl = g_object_get_data(G_OBJECT(fold.chip), "bta-fold-tail");
+        gtk_label_set_text(GTK_LABEL(tl), tail);
+        gtk_widget_set_visible(tl, *tail != 0);
+        gtk_widget_set_visible(fold.chip, TRUE);
+    } else {
+        fold.chip = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
+
+        GtkWidget *dots = gtk_label_new("\xE2\x80\xA6");
+        gtk_widget_add_css_class(dots, "bta-fold-chip");
+        gtk_widget_set_valign(dots, GTK_ALIGN_CENTER);
+        gtk_box_append(GTK_BOX(fold.chip), dots);
+
+        GtkWidget *tl = gtk_label_new(tail);
+        gtk_widget_add_css_class(tl, "bta-fold-tail");
+        gtk_widget_set_visible(tl, *tail != 0);
+        gtk_box_append(GTK_BOX(fold.chip), tl);
+        g_object_set_data(G_OBJECT(fold.chip), "bta-fold-tail", tl);
+
+        gtk_widget_set_cursor_from_name(fold.chip, "pointer");
+        gtk_text_view_add_overlay(GTK_TEXT_VIEW(w->inner), fold.chip, 0, 0);
+
+        GtkGesture *click = gtk_gesture_click_new();
+        g_signal_connect(click, "pressed", G_CALLBACK(on_chip_pressed), w);
+        gtk_widget_add_controller(fold.chip, GTK_EVENT_CONTROLLER(click));
+        bta_widget_watch(w, click);
+    }
+    /* The mark of the fold the chip stands for, read when it is clicked: a chip
+     * is used for one fold after another, so this is set every time. */
+    g_object_set_data(G_OBJECT(fold.chip), "bta-fold-from", fold.from);
     gtk_text_buffer_apply_tag(buf, fold.tag, &a, &b);
     g_array_append_val(f->folds, fold);
 
@@ -2182,7 +2337,7 @@ static JSValue ed_folds(JSContext *ctx, JSValueConst this_val, int argc, JSValue
 
     for (guint i = 0; f && i < f->folds->len; i++) {
         BtaFold *fold = &g_array_index(f->folds, BtaFold, i);
-        BtaRange row  = { fold_first(buf, fold), fold_last(buf, fold) };
+        BtaRange row  = { fold_first(buf, fold), fold_last(buf, fold), NULL };
 
         g_array_append_val(rows, row);
     }
@@ -2209,8 +2364,11 @@ static JSValue ed_get_fold_ranges(JSContext *ctx, JSValueConst this_val)
 
     for (guint i = 0; f && i < f->ranges->len; i++) {
         BtaRange r = g_array_index(f->ranges, BtaRange, i);
+        JSValue  row = range_row(ctx, r.start, r.end);
 
-        JS_SetPropertyUint32(ctx, out, i, range_row(ctx, r.start, r.end));
+        if (r.tail && *r.tail)
+            JS_SetPropertyStr(ctx, row, "Tail", JS_NewString(ctx, r.tail));
+        JS_SetPropertyUint32(ctx, out, i, row);
     }
     return out;
 }
@@ -2241,23 +2399,41 @@ static JSValue ed_set_fold_ranges(JSContext *ctx, JSValueConst this_val, JSValue
         JSValue row = JS_GetPropertyUint32(ctx, val, i);
         JSValue s   = JS_IsObject(row) ? JS_GetPropertyStr(ctx, row, "Start") : JS_UNDEFINED;
         JSValue e   = JS_IsObject(row) ? JS_GetPropertyStr(ctx, row, "End")   : JS_UNDEFINED;
+        JSValue tl  = JS_IsObject(row) ? JS_GetPropertyStr(ctx, row, "Tail")  : JS_UNDEFINED;
         int32_t start = 0, end = 0;
         bool    ok    = JS_IsObject(row) &&
                         bta_to_int(ctx, s, "FoldRanges Start", &start) &&
                         bta_to_int(ctx, e, "FoldRanges End", &end);
 
+        /* `Tail` is optional text: what is shown after the dots, `}` for a
+         * block.  Anything that is not text is refused with the rest. */
+        char *tail = NULL;
+        if (ok && !JS_IsUndefined(tl) && !JS_IsNull(tl)) {
+            const char *ts = JS_IsString(tl) ? JS_ToCString(ctx, tl) : NULL;
+
+            if (ts) {
+                tail = g_strdup(ts);
+                JS_FreeCString(ctx, ts);
+            } else {
+                ok = false;
+            }
+        }
+
         JS_FreeValue(ctx, row);
         JS_FreeValue(ctx, s);
         JS_FreeValue(ctx, e);
+        JS_FreeValue(ctx, tl);
 
         if (!ok || start < 1 || end <= start) {
+            g_free(tail);
+            ranges_forget(rows);
             g_array_free(rows, TRUE);
             if (ok || !JS_HasException(ctx))
-                return JS_ThrowRangeError(ctx, "FoldRanges: row %u is not { Start, End } "
+                return JS_ThrowRangeError(ctx, "FoldRanges: row %u is not { Start, End, [Tail] } "
                                                "with 1 <= Start < End", i);
             return JS_EXCEPTION;
         }
-        BtaRange r = { start, end };
+        BtaRange r = { start, end, tail };
 
         g_array_append_val(rows, r);
     }
@@ -2265,7 +2441,7 @@ static JSValue ed_set_fold_ranges(JSContext *ctx, JSValueConst this_val, JSValue
 
     BtaFolds *f = folds_make(w);
 
-    g_array_set_size(f->ranges, 0);
+    ranges_forget(f->ranges);
     g_array_append_vals(f->ranges, rows->data, rows->len);
     g_array_free(rows, TRUE);
     gtk_widget_queue_draw(GTK_WIDGET(f->renderer));
@@ -2401,8 +2577,11 @@ static const JSCFunctionListEntry source_props[] = {
      */
     JS_CFUNC_DEF("Marks",      1, ed_marks),
     /* FoldRanges
-     *   the blocks that can be folded, as `[{ Start, End }]` lines, 1-based: what
-     *   a fold of one would hide is `Start + 1` to `End`. **The program says**
+     *   the blocks that can be folded, as `[{ Start, End, [Tail] }]` lines,
+     *   1-based: what a fold of one would hide is `Start + 1` to `End`, **whole**.
+     *   A closed fold shows `…` after the line it hangs from, and `Tail` -- text,
+     *   `}` or `} else {` -- after the dots, so a block reads `function f() { … }`;
+     *   a click on the dots opens it. **The program says**
      *   -- only whoever knows the language knows where a block ends -- and the
      *   editor draws a marker beside each `Start` (`▼` open, `▶` folded) that a
      *   click toggles. Assigning is all or nothing, and a row that is not
