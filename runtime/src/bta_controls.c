@@ -3847,6 +3847,17 @@ static const JSCFunctionListEntry listbox_props[] = {
  * selected as long as there is one, so Index is -1 only while the list is
  * empty, and Text refuses a value the list does not have instead of quietly
  * showing a different one.
+ *
+ * `AllowEmpty` is the opt-in for a field that is optional: the drop-down may
+ * then show nothing, and `Index = -1`, `Text = ""` and `Key = ""` say so.  GTK
+ * cannot do that by itself -- GtkDropDown owns a GtkSingleSelection with
+ * autoselect on, which ignores GTK_INVALID_LIST_POSITION, and exposes nothing
+ * to turn it off (measured: `Index = -1` stayed where it was).  So an
+ * `AllowEmpty` combo carries a **sentinel row of "" at position 0** of the
+ * model, which is what "nothing chosen" is.  Every door below reads the model
+ * through `combo_off`, so the program never sees the sentinel: `Count`, `Items`
+ * and `Index` count the rows it put there.  The drop-down's list shows it as a
+ * blank first line, which is also how a person undoes a choice.
  */
 static void on_combo_selected(GObject *obj, GParamSpec *pspec, gpointer user_data)
 {
@@ -3866,13 +3877,69 @@ static GtkStringList *combo_model(BtaWidget *w)
     return GTK_STRING_LIST(gtk_drop_down_get_model(GTK_DROP_DOWN(w->gtk)));
 }
 
+#define COMBO_EMPTY_KEY "bta-combo-allow-empty"
+
+static gboolean combo_allows_empty(BtaWidget *w)
+{
+    return g_object_get_data(G_OBJECT(w->gtk), COMBO_EMPTY_KEY) != NULL;
+}
+
+/* How many rows of the model are ours and not the program's: 1 with the
+ * sentinel, 0 without. */
+static guint combo_off(BtaWidget *w)
+{
+    return combo_allows_empty(w) ? 1 : 0;
+}
+
+/* The model's selection as the program counts it: -1 for nothing chosen, which
+ * is the sentinel on an `AllowEmpty` combo and no rows at all otherwise. */
+static int combo_selected(BtaWidget *w)
+{
+    guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(w->gtk));
+    guint off = combo_off(w);
+
+    return (sel == GTK_INVALID_LIST_POSITION || sel < off) ? -1 : (int)(sel - off);
+}
+
+/* Brackets a mutation that may take the chosen row away, on an `AllowEmpty`
+ * combo: GTK's auto-select moves the choice to a neighbour, and the program
+ * should hear one Select, for the net change, with nothing chosen when the
+ * row it had chosen is gone. */
+static gboolean combo_quiet_begin(BtaWidget *w, int *prev)
+{
+    if (!combo_allows_empty(w))
+        return FALSE;
+    *prev = combo_selected(w);
+    g_signal_handlers_block_by_func(w->gtk, on_combo_selected, w);
+    return TRUE;
+}
+
+/* `clear`: the row that was chosen is gone, so choose the sentinel. */
+static void combo_quiet_end(BtaWidget *w, gboolean quiet, int prev, gboolean clear)
+{
+    if (!quiet)
+        return;
+    if (clear)
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), 0);
+    g_signal_handlers_unblock_by_func(w->gtk, on_combo_selected, w);
+    if (combo_selected(w) != prev)
+        bta_emit(w, "Select", 0, NULL);
+}
+
 /* The parallel array of keys; defined below, beside the four doors that keep it
  * in step with the model. */
 static GPtrArray *combo_keys(BtaWidget *w);
 
+/* The program's rows: the model's, less the sentinel. */
 static guint combo_count(BtaWidget *w)
 {
-    return g_list_model_get_n_items(G_LIST_MODEL(combo_model(w)));
+    return g_list_model_get_n_items(G_LIST_MODEL(combo_model(w))) - combo_off(w);
+}
+
+/* One of the program's rows by its own index. */
+static const char *combo_row(BtaWidget *w, guint i)
+{
+    return gtk_string_list_get_string(combo_model(w), i + combo_off(w));
 }
 
 static JSValue combo_get_items(JSContext *ctx, JSValueConst this_val)
@@ -3884,7 +3951,7 @@ static JSValue combo_get_items(JSContext *ctx, JSValueConst this_val)
     JSValue arr = JS_NewArray(ctx);
     guint   n   = combo_count(w);
     for (guint i = 0; i < n; i++) {
-        const char *s = gtk_string_list_get_string(combo_model(w), i);
+        const char *s = combo_row(w, i);
         JS_SetPropertyUint32(ctx, arr, i, JS_NewString(ctx, s ? s : ""));
     }
     return arr;
@@ -3905,7 +3972,10 @@ static JSValue combo_set_items(JSContext *ctx, JSValueConst this_val, JSValueCon
 
     /* Build the whole strv first: splicing it in one call means one selection
      * change, so a handler never sees a half-filled list. */
-    char **strv = g_new0(char *, n + 1);
+    guint  off  = combo_off(w);
+    char **strv = g_new0(char *, n + off + 1);
+    if (off)
+        strv[0] = g_strdup("");
     for (uint32_t i = 0; i < n; i++) {
         JSValue     e = JS_GetPropertyUint32(ctx, val, i);
         const char *s = JS_ToCString(ctx, e);
@@ -3915,15 +3985,21 @@ static JSValue combo_set_items(JSContext *ctx, JSValueConst this_val, JSValueCon
             g_strfreev(strv);          /* zeroed, so it stops at the first NULL */
             return JS_EXCEPTION;       /* it threw on the way; that stands */
         }
-        strv[i] = g_strdup(s);
+        strv[i + off] = g_strdup(s);
         JS_FreeCString(ctx, s);
         JS_FreeValue(ctx, e);
     }
 
     /* One splice, not a clear plus n appends: the selection then moves once,
      * so a Select handler never sees a half-filled list. */
-    gtk_string_list_splice(combo_model(w), 0, combo_count(w), (const char *const *)strv);
+    int      prev;
+    gboolean quiet = combo_quiet_begin(w, &prev);
+
+    gtk_string_list_splice(combo_model(w), 0,
+                           g_list_model_get_n_items(G_LIST_MODEL(combo_model(w))),
+                           (const char *const *)strv);
     g_strfreev(strv);
+    combo_quiet_end(w, quiet, prev, TRUE);
 
     /* The keys are a parallel array and this is one of the four doors that
      * changes the model: a list assigned as strings has no keys. */
@@ -3937,8 +4013,7 @@ static JSValue combo_get_index(JSContext *ctx, JSValueConst this_val)
     if (!w)
         return JS_EXCEPTION;
 
-    guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(w->gtk));
-    return JS_NewInt32(ctx, sel == GTK_INVALID_LIST_POSITION ? -1 : (int)sel);
+    return JS_NewInt32(ctx, combo_selected(w));
 }
 
 static JSValue combo_set_index(JSContext *ctx, JSValueConst this_val, JSValueConst val)
@@ -3951,9 +4026,12 @@ static JSValue combo_set_index(JSContext *ctx, JSValueConst this_val, JSValueCon
     if (!bta_to_int(ctx, val, "Index", &i))
         return JS_EXCEPTION;
 
-    /* Out of range leaves the selection alone, as it does on a ListBox. */
-    if (i >= 0 && (guint)i < combo_count(w))
-        gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), (guint)i);
+    /* -1 clears only where the combo says it may be empty; otherwise, like an
+     * index out of range, it leaves the selection alone, as a ListBox does. */
+    if (i == -1 && combo_allows_empty(w))
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), 0);
+    else if (i >= 0 && (guint)i < combo_count(w))
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), (guint)i + combo_off(w));
     return JS_UNDEFINED;
 }
 
@@ -3963,11 +4041,11 @@ static JSValue combo_get_text(JSContext *ctx, JSValueConst this_val)
     if (!w)
         return JS_EXCEPTION;
 
-    guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(w->gtk));
-    if (sel == GTK_INVALID_LIST_POSITION)
+    int sel = combo_selected(w);
+    if (sel < 0)
         return JS_NewString(ctx, "");
 
-    const char *s = gtk_string_list_get_string(combo_model(w), sel);
+    const char *s = combo_row(w, (guint)sel);
     return JS_NewString(ctx, s ? s : "");
 }
 
@@ -3987,10 +4065,16 @@ static JSValue combo_set_text(JSContext *ctx, JSValueConst this_val, JSValueCons
     if (!s)
         return JS_EXCEPTION;
 
+    if (!*s && combo_allows_empty(w)) {
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), 0);
+        JS_FreeCString(ctx, s);
+        return JS_UNDEFINED;
+    }
+
     guint found = GTK_INVALID_LIST_POSITION;
     guint n     = combo_count(w);
     for (guint i = 0; i < n && found == GTK_INVALID_LIST_POSITION; i++) {
-        const char *item = gtk_string_list_get_string(combo_model(w), i);
+        const char *item = combo_row(w, i);
         if (item && !strcmp(item, s))
             found = i;
     }
@@ -4002,7 +4086,7 @@ static JSValue combo_set_text(JSContext *ctx, JSValueConst this_val, JSValueCons
         return e;
     }
     if (found != GTK_INVALID_LIST_POSITION)
-        gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), found);
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), found + combo_off(w));
 
     JS_FreeCString(ctx, s);
     return JS_UNDEFINED;
@@ -4077,12 +4161,12 @@ static JSValue combo_get_key(JSContext *ctx, JSValueConst this_val)
     if (!w)
         return JS_EXCEPTION;
 
-    guint sel = gtk_drop_down_get_selected(GTK_DROP_DOWN(w->gtk));
-    if (sel == GTK_INVALID_LIST_POSITION)
+    int sel = combo_selected(w);
+    if (sel < 0)
         return JS_NewString(ctx, "");
 
     GPtrArray *keys = combo_keys(w);
-    const char *k = sel < keys->len ? g_ptr_array_index(keys, sel) : NULL;
+    const char *k = (guint)sel < keys->len ? g_ptr_array_index(keys, sel) : NULL;
 
     return JS_NewString(ctx, k ? k : "");
 }
@@ -4102,6 +4186,8 @@ static JSValue combo_set_key(JSContext *ctx, JSValueConst this_val,
      * one chosen, which is what `gtk_drop_down_set_autoselect`'s default means.
      * The same answer `Index = -1` gives: it moves nothing. */
     if (!*key) {
+        if (combo_allows_empty(w))
+            gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), 0);
         JS_FreeCString(ctx, key);
         return JS_UNDEFINED;
     }
@@ -4112,7 +4198,7 @@ static JSValue combo_set_key(JSContext *ctx, JSValueConst this_val,
         const char *k = g_ptr_array_index(keys, i);
 
         if (k && !strcmp(k, key)) {
-            gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), i);
+            gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), i + combo_off(w));
             JS_FreeCString(ctx, key);
             return JS_UNDEFINED;
         }
@@ -4166,7 +4252,11 @@ static JSValue combo_remove(JSContext *ctx, JSValueConst this_val,
     if (i < 0 || (guint)i >= combo_count(w))
         return JS_ThrowRangeError(ctx, "RemoveRow: there is no row %d", i);
 
-    gtk_string_list_splice(combo_model(w), (guint)i, 1, NULL);
+    int      prev;
+    gboolean quiet = combo_quiet_begin(w, &prev);
+
+    gtk_string_list_splice(combo_model(w), (guint)i + combo_off(w), 1, NULL);
+    combo_quiet_end(w, quiet, prev, prev == i);
     g_ptr_array_remove_index(combo_keys(w), (guint)i);
     return JS_UNDEFINED;
 }
@@ -4198,7 +4288,7 @@ static JSValue combo_set_row_text(JSContext *ctx, JSValueConst this_val,
     /* `splice` copies what it is handed, so the borrowed string is enough. */
     const char *one[2] = { s, NULL };
 
-    gtk_string_list_splice(combo_model(w), (guint)i, 1, one);
+    gtk_string_list_splice(combo_model(w), (guint)i + combo_off(w), 1, one);
     JS_FreeCString(ctx, s);
     return JS_UNDEFINED;
 }
@@ -4210,16 +4300,70 @@ static JSValue combo_clear(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    gtk_string_list_splice(combo_model(w), 0, combo_count(w), NULL);
+    /* The sentinel stays, and is what is chosen. */
+    gtk_string_list_splice(combo_model(w), combo_off(w), combo_count(w), NULL);
     g_ptr_array_set_size(combo_keys(w), 0);
     return JS_UNDEFINED;
 }
 
+static JSValue combo_get_allow_empty(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, combo_allows_empty(w));
+}
+
+static JSValue combo_set_allow_empty(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int b = JS_ToBool(ctx, val);
+    if (b < 0)
+        return JS_EXCEPTION;
+
+    if ((b != 0) == combo_allows_empty(w))
+        return JS_UNDEFINED;
+
+    /* Putting the sentinel in or taking it out moves the model's positions, not
+     * the program's rows, and a setter raises no event: so GTK's notifications
+     * are held back, and the choice is carried over by hand. */
+    int  chosen = combo_selected(w);
+    guint rows  = combo_count(w);
+
+    g_signal_handlers_block_by_func(w->gtk, on_combo_selected, w);
+    if (b) {
+        gtk_string_list_splice(combo_model(w), 0, 0, (const char *const[]){ "", NULL });
+        g_object_set_data(G_OBJECT(w->gtk), COMBO_EMPTY_KEY, GINT_TO_POINTER(1));
+        gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), (guint)(chosen + 1));
+    } else {
+        g_object_set_data(G_OBJECT(w->gtk), COMBO_EMPTY_KEY, NULL);
+        gtk_string_list_splice(combo_model(w), 0, 1, NULL);
+        /* A list with rows has one chosen, and the first is what a fresh combo
+         * would show; with none, there is nothing to choose. */
+        if (rows > 0)
+            gtk_drop_down_set_selected(GTK_DROP_DOWN(w->gtk), chosen < 0 ? 0 : (guint)chosen);
+    }
+    g_signal_handlers_unblock_by_func(w->gtk, on_combo_selected, w);
+    return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry combobox_props[] = {
+    /* AllowEmpty
+     *   `true` lets the drop-down show **nothing chosen**, for a field that is
+     *   optional: `Index = -1`, `Text = ""` and `Key = ""` then clear the
+     *   choice, `Items` and `Add` leave it empty, and removing the chosen row
+     *   empties it. Default `false`, where a drop-down with rows always has
+     *   one chosen. Set it before `Items`; a `.form` orders it already
+     */
+    JS_CGETSET_DEF("AllowEmpty", combo_get_allow_empty, combo_set_allow_empty),
     /* Items
      *   the contents, as an array of strings. Assigning replaces every row at
      *   once **and chooses the first one** — a non-empty drop-down always has
-     *   something chosen. **Translated**: a list declared in a `.form` goes
+     *   something chosen, unless `AllowEmpty` is on, which leaves nothing
+     *   chosen. **Translated**: a list declared in a `.form` goes
      *   through the catalogue
      */
     JS_CGETSET_DEF("Items", combo_get_items, combo_set_items),
@@ -4227,17 +4371,20 @@ static const JSCFunctionListEntry combobox_props[] = {
      *   the selected row's application key; assigning selects the row it
      *   belongs to, and a key nothing has is a `RangeError`. `""` moves
      *   nothing, as `Index = -1` does — a drop-down with items always has one
-     *   chosen
+     *   chosen; with `AllowEmpty` it clears the choice
      */
     JS_CGETSET_DEF("Key",   combo_get_key,   combo_set_key),
     /* Index
-     *   which is chosen; `-1` when the list is empty. Assigning chooses the
-     *   row; **assigning `-1` moves nothing**, because a drop-down with items
-     *   always has one chosen (the first, until told otherwise)
+     *   which is chosen; `-1` when the list is empty or, with `AllowEmpty`,
+     *   when nothing is chosen. Assigning chooses the row; **assigning `-1`
+     *   moves nothing** unless `AllowEmpty` is on, because a drop-down with
+     *   items always has one chosen (the first, until told otherwise)
      */
     JS_CGETSET_DEF("Index", combo_get_index, combo_set_index),
     /* Text
-     *   the chosen row's words. Reading it is reading the *translated* text
+     *   the chosen row's words, `""` when nothing is. Reading it is reading
+     *   the *translated* text. Assigning `""` clears the choice with
+     *   `AllowEmpty` on, and is a `RangeError` on a list with rows otherwise
      */
     JS_CGETSET_DEF("Text",  combo_get_text,  combo_set_text),
     /* Count

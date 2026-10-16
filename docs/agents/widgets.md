@@ -405,8 +405,18 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   state is a flag of ours (`bta-date-empty`) with the calendar left holding what
   it had, so the popover opens on a sensible month; choosing a day ends it, a
   page turn does not and raises no `Change`. **`Calendar` refuses `""`** instead
-  of sharing it: a month is drawn with a day on it. The one still open is
-  `ComboBox`, which has no empty text for the same kind of reason.
+  of sharing it: a month is drawn with a day on it. `ComboBox` was the last
+  one, and is answered the same way, opt-in: `AllowEmpty` keeps a sentinel row
+  of `""` at position 0 of the model, which *is* nothing chosen, and every door
+  reads the model through `combo_off` so the program never counts it. **GTK
+  cannot do it directly**: `GtkDropDown` owns a `GtkSingleSelection` with
+  autoselect on, which ignores `GTK_INVALID_LIST_POSITION` (measured: `Index =
+  -1` stayed put), and nothing exposes the model to change that. A mutation
+  that can take the chosen row away (`Items`, `RemoveRow`) blocks
+  `notify::selected` and raises one `Select` for the net change. The popup
+  shows the sentinel as a blank first line, which is also how a person undoes
+  a choice. Off by default, because `Index = -1` has always meant *moves
+  nothing*.
 - **`Cursor` is the same rule, arrived at from the other side.** A cursor set on
   an ancestor reaches a descendant only while the descendant has none, and the
   ones that matter have one: the `GtkText` inside a `TextBox` and a `SpinBox`

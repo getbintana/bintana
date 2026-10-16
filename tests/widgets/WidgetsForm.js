@@ -9684,6 +9684,100 @@ function Main() {
         eq("Clear lo vacia", c.Count, 0);
         eq("and then nothing is selected", c.Index, -1);
         c.Delete();
+
+        /* --- AllowEmpty: an optional field may show nothing chosen */
+        const o = new ComboBox();
+        o.Name = "Combo1";
+        this.Bar.Add(o);
+        eq("AllowEmpty is off by default", o.AllowEmpty, false);
+        o.AllowEmpty = true;
+        eq("and can be turned on", o.AllowEmpty, true);
+
+        this.comboSelects = 0;
+        o.Items = ["rojo", "verde", "azul"];
+        eq("Items leaves nothing chosen", o.Index, -1);
+        eq("so Text is empty", o.Text, "");
+        eq("the rows are all there", o.Count, 3);
+        eq("and no Select was raised for a state that did not change",
+           this.comboSelects, 0);
+
+        o.Index = 2;
+        eq("a row can still be chosen", o.Text, "azul");
+        eq("and that raises one Select", this.comboSelects, 1);
+
+        o.Index = -1;
+        eq("Index = -1 clears the choice", o.Index, -1);
+        eq("and says so once", this.comboSelects, 2);
+
+        o.Text = "verde";
+        o.Text = "";
+        eq("Text = \"\" clears it", o.Index, -1);
+        throws("a value not in the list is still refused",
+               () => { o.Text = "violeta"; });
+
+        o.Add("negro");
+        eq("Add does not choose a row", o.Index, -1);
+        o.Index = 1;
+        o.SetText(0, "rosa");
+        eq("renaming another row leaves the choice", o.Text, "verde");
+        o.RemoveRow(0);
+        eq("removing a row before it follows it", o.Text, "verde");
+        o.RemoveRow(0);
+        eq("removing the chosen row leaves nothing chosen", o.Index, -1);
+
+        o.Add("gris", "g");
+        o.Key = "g";
+        eq("Key chooses a row past the sentinel", o.Text, "gris");
+        o.Key = "";
+        eq("Key = \"\" clears it", o.Index, -1);
+        o.Index = 0;
+        this.comboSelects = 0;
+        o.Items = ["uno", "dos"];
+        eq("assigning Items drops a choice the old list had", o.Index, -1);
+        eq("and says so once", this.comboSelects, 1);
+        o.Clear();
+        eq("Clear keeps the combo empty and usable", [o.Count, o.Index].join(), "0,-1");
+        o.Add("tres");
+        o.Index = 0;
+        eq("a row added afterwards is row 0", o.Text, "tres");
+
+        const sel = o.Serialize();
+        eq("AllowEmpty is saved", sel.properties.AllowEmpty, true);
+        eq("and its Items hold none of the sentinel",
+           JSON.stringify(sel.properties.Items), '["tres"]');
+        o.AllowEmpty = false;
+        o.AllowEmpty = true;
+        eq("turning it off and on keeps the choice", o.Text, "tres");
+        o.Items = ["rojo", "verde"];
+        o.Index = 1;
+        o.AllowEmpty = false;
+        eq("turning it off keeps a choice", o.Text, "verde");
+        o.AllowEmpty = true;
+        eq("and on again", o.Text, "verde");
+        o.Items = ["rojo", "verde"];
+        o.Index = -1;
+        o.AllowEmpty = false;
+        eq("turning it off with nothing chosen picks the first", o.Text, "rojo");
+        o.AllowEmpty = true;
+        o.Items = ["rojo", "verde"];
+        o.Index = 1;
+        o.RemoveRow(0);
+        o.RemoveRow(0);
+        o.Add("a");
+        o.Add("b");
+        o.Index = 1;
+        o.RemoveRow(0);
+        eq("removing a row before the chosen one follows it", o.Text, "b");
+        o.RemoveRow(0);
+        o.Items = ["x", "y"];
+        o.Index = -1;
+        o.AllowEmpty = false;
+        eq("turning it off chooses the first row again", o.Index, 0);
+        o.Index = -1;
+        eq("and -1 moves nothing once more", o.Index, 0);
+        throws("as does the empty text on a list with rows",
+               () => { o.Text = ""; });
+        o.Delete();
     }
 
     Combo1_Select() { this.comboSelects++; }
