@@ -105,6 +105,56 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   is `source-setup` into `rtspsrc`'s `user-id`/`user-pw`, which only a pipeline
   of our own has.
 
+### The elements API (`Media.Element`)
+
+Each of these was measured while building it, and each one shaped a rule.
+
+- **`gst_element_get_bus` on a child answers the bin's *internal* bus.**
+  `gst_element_get_bus(pipeline)` and `gst_pipeline_get_bus(pipeline)` are one
+  object; a child's is a different one (`gst_bin_init` builds it,
+  `gst_bin_add_func` distributes it), and a timed pop on it refuses the way a
+  bus with no poll does -- while the application's bus answers
+  `state-changed`. `Element.Bus` walks up to the first pipeline instead.
+- **Adding an element to a bin unlinks its pads** -- "If the element's pads
+  are linked to other pads, the pads will be unlinked before the element is
+  added to the bin", its documentation. So the order is `Add` then `Link`, and
+  `Link` refuses two elements that do not share a parent rather than making a
+  link the next `Add` throws away in silence.
+- **A child added to a PLAYING pipeline stays in NULL** until
+  `gst_element_sync_state_with_parent` -- `gst_bin_add` leaves it to the
+  caller -- which `Element.Add` calls for it. Measured right after the add, and
+  reaching PLAYING with data linked.
+- **A pipeline set to NULL without EOS leaves a writer's placeholders.** A
+  one-second `wavenc` run wrote 360 kB whose header fields said ~2 GiB
+  (`0x7FFFFFE4`) in both sizes; with `Eos()` first they are exact. `Eos` exists
+  because of that, and `gst-launch-1.0` carries `-e` for the same reason.
+- **An asynchronous-only signal delivery loses `pad-added`.** Measured in C
+  and in the runtime: the emitting thread pushes into the pad before the main
+  loop gets there, and `wavparse` stops with "streaming stopped, reason
+  not-linked". The marshal runs the handler *inline* when the emission is
+  already on the main thread, and otherwise queues it and **blocks the
+  emitting thread** until it has run -- capped at two seconds, after which it
+  runs late. `source-setup` cannot be deferred either, for the credentials'
+  sake.
+- **One watch per bus, because bus sources consume what they see.** Two
+  `gst_bus_add_watch` calls on one bus *split* the messages -- a program
+  subscribed to `eos` missed it every other run, which is how it was found.
+  `media_watches` keeps one source per bus, with the playing elements and the
+  `Bus` wrappers as its listeners.
+- **`GstState` numbers VOID_PENDING 0 and NULL 1**, so the four words are not
+  a dense array from zero; `MEDIA_STATES` is indexed by the enum itself, after
+  a `State` getter answered "Ready" for `"Null"`.
+- **A subscription is a claim on the element's life.** A `decodebin` in a
+  local variable is collected the moment the function that built the graph
+  returns -- its `pad-added` subscription with it -- and the pad is never
+  linked. `On` holds the wrapper until the last signal is unsubscribed, the
+  same keepalive as `Playing`, the two reasons counted in one place.
+- **`gst_util_set_object_arg` silently returns**, and `gst_value_serialize` is
+  not its inverse (caps come back escaped in the launch form, flags as the
+  long name). `Set`/`Get` borrow the *syntax* (`ball`, `tcp+udp`, `30/1`) and
+  build the text themselves; every conversion it cannot make is a sentence.
+
+
 ## Desktop integration
 
 - **A `.desktop` entry's `Exec` is quoted twice, and the outer layer is not the

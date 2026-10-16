@@ -1,0 +1,9 @@
+{
+  "name": "Recorder",
+  "startup": "RecorderForm",
+  "sources": [
+    "RecorderForm.js"
+  ],
+  "version": "1.0",
+  "description": "The microphone to a WAV file, built by hand with Media.Element: build by name, connect, configure, subscribe -- and Eos, which is what makes the header true"
+}

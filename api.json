@@ -14022,6 +14022,29 @@
       ]
     },
     {
+      "Name": "Media",
+      "Members": [
+        {
+          "Name": "Available",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this build has GStreamer, and so whether `Element` can build anything. It says nothing about whether a *specific* element exists on the machine: that question is refused per name",
+          "Native": true
+        },
+        {
+          "Name": "Element",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(type, [props])",
+          "Returns": "Element",
+          "Doc": "builds an element by its factory name (`rtspsrc`, `tee`, `wavenc`) and applies `props` through `Set`, property by property; a name this installation has no type for refuses instead of building nothing",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Message",
       "Members": [
         {
@@ -15613,6 +15636,20 @@
       ]
     },
     {
+      "Name": "Bus",
+      "Members": [
+        {
+          "Name": "On",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(type, handler)",
+          "Returns": "Bus",
+          "Doc": "one of eight messages, named as GStreamer spells them: `error`, `warning` and `info` call `handler(message, kind)` with `kind` one of `NotFound`, `NotAuthorized`, `Unreachable`, `Decode`, `Error` -- the players' own words -- `eos`, `clock-lost` and `async-done` call `handler()`, `buffering` calls `handler(percent)`, and `state-changed` calls `handler(name, state)`. `null` takes it off. Handlers run on the main loop",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Connection",
       "Members": [
         {
@@ -15712,6 +15749,92 @@
           "Signature": "(fn)",
           "Returns": "",
           "Doc": "everything in `fn` or nothing. **Nests**, through savepoints, so a function that wraps its own work in one is safe to call from inside another",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "Element",
+      "Members": [
+        {
+          "Name": "Add",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(child)",
+          "Returns": "Element",
+          "Doc": "puts a child into this bin or pipeline and answers the child, so a call chains into its own configuration. A child added to a running pipeline follows it into its state -- the one thing `gst_bin_add` leaves to the caller -- and adding **unlinks the child's pads**, which is why `Add` comes before `Link`",
+          "Native": true
+        },
+        {
+          "Name": "Bus",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "Bus or null",
+          "Doc": "the bus of the pipeline this element is in -- a child answers its pipeline's, not the internal one `gst_element_get_bus` would -- and `null` for an element in no pipeline",
+          "Native": true
+        },
+        {
+          "Name": "Eos",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "asks the graph to finish: the end-of-stream event reaches every sink, writers flush and close their file, and the bus answers `eos` when it is done. A recorder stops with this and not with `\"Null\"` -- without it a muxer's header keeps its placeholder sizes (measured on wavenc)",
+          "Native": true
+        },
+        {
+          "Name": "Get",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(name)",
+          "Returns": "number, string or boolean",
+          "Doc": "the property in the spellings `Set` takes -- built from the class and not from GStreamer's serialised form, so caps answer as `video/x-raw, format=(string)RGB` and flags as `tcp+udp`. A property that holds an object refuses: this surface carries no such value",
+          "Native": true
+        },
+        {
+          "Name": "Link",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(other, [from], [to])",
+          "Returns": "Element",
+          "Doc": "links this element to `other` and answers `other`, so a chain walks a graph: `src.Link(conv).Link(sink)`. With pad names, that pad on each side; without, whatever pads meet. Both must already be in one pipeline, and an element whose pads appear during playback (`rtspsrc`, `decodebin`) is linked from `On(\"pad-added\")` instead. A `tee` needs a `queue` per branch or nothing ever finishes -- that is GStreamer's rule, said here because every graph meets it once",
+          "Native": true
+        },
+        {
+          "Name": "On",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(signal, handler)",
+          "Returns": "Element",
+          "Doc": "subscribes to a GObject signal, named as `gst-inspect-1.0` prints it (`pad-added`, `source-setup`); the handler is called with the signal's arguments after the emitter, and `null` takes it off. A signal that answers a value is refused, and the handler never runs inside the GStreamer callback: it is delivered on the main loop, with a reference on every element or pad it names",
+          "Native": true
+        },
+        {
+          "Name": "Pad",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(name)",
+          "Returns": "Pad or null",
+          "Doc": "the named pad if it exists *now* -- `src`, `sink`, or a dynamic name like `stream_0` once it has appeared -- and `null` when it does not. What will appear is announced by `On(\"pad-added\")`",
+          "Native": true
+        },
+        {
+          "Name": "Set",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(name, value)",
+          "Returns": "",
+          "Doc": "an element's property, by the name `gst-inspect-1.0` prints. Booleans, numbers, strings, an enum's nick, flag names joined by `+`, `n/d` fractions and caps text are carried; anything else refuses with a sentence naming the property and what it takes, where gst-launch's own setter answers nothing at all",
+          "Native": true
+        },
+        {
+          "Name": "State",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "which state was asked for: `\"Null\"`, `\"Ready\"`, `\"Paused\"` or `\"Playing\"` (any spelling on the way in). **The last asked, not what a query would answer** (the `Video.Playing` rule); what the pipeline actually did is read off the bus -- `state-changed`, `async-done`",
           "Native": true
         }
       ]
@@ -16190,6 +16313,38 @@
           "Name": "Click",
           "Signature": "([value])",
           "Doc": "it was chosen. A check item is handed its new state, a dynamic one the index and the text of the entry"
+        }
+      ]
+    },
+    {
+      "Name": "Pad",
+      "Members": [
+        {
+          "Name": "Caps",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the caps this pad can take, as text (`video/x-raw, format=(string)RGB`), or `\"\"` when there are none. What is *flowing* is a different question, and is not carried yet",
+          "Native": true
+        },
+        {
+          "Name": "Link",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(target)",
+          "Returns": "Pad",
+          "Doc": "links this pad to an `Element` (a compatible pad is found for it, or requested from a template) or to another `Pad`, and answers the far pad. A failure says why: not in the same pipeline, both facing the same way, or formats that do not meet",
+          "Native": true
+        },
+        {
+          "Name": "Name",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the pad's name: `src`, `sink`, or `stream_0` once it has appeared",
+          "Native": true
         }
       ]
     },

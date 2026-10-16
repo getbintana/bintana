@@ -1,0 +1,67 @@
+{
+  "format": "bintana-form/1",
+  "class": "RecorderForm",
+  "properties": {
+    "Text": "Recorder",
+    "Width": 440,
+    "Height": 196
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 32,
+        "Style": "title-3",
+        "Text": "Ready.",
+        "Width": 416,
+        "X": 12,
+        "Y": 12
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPath",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 24,
+        "Style": "dim-label",
+        "Text": "",
+        "Width": 416,
+        "X": 12,
+        "Y": 48
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRecord",
+      "properties": {
+        "Focusable": false,
+        "Height": 40,
+        "Shortcut": ["r"],
+        "Style": "suggested-action",
+        "Text": "Record",
+        "Tooltip": "R",
+        "Width": 130,
+        "X": 12,
+        "Y": 94
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnStop",
+      "properties": {
+        "Enabled": false,
+        "Focusable": false,
+        "Height": 40,
+        "Shortcut": ["s"],
+        "Text": "Stop",
+        "Tooltip": "S",
+        "Width": 130,
+        "X": 152,
+        "Y": 94
+      }
+    }
+  ]
+}

@@ -67,6 +67,13 @@ jobs:
       - name: The one-file documentation
         run: ./tools/llms.sh --check
 
+      # What the elements API answers, against a real GStreamer: conversions,
+      # refusals, the graph rules, the bus, signals, and the accounting that
+      # ends a console program. Console, headless, and its own timeout -- the
+      # one assertion a hang cannot make.
+      - name: The elements API
+        run: ./tests/media.sh
+
       # What `make install` produces, run out of a staging prefix under /tmp.
       # A step of this job and not one of its own: it installs the build the
       # step above just tested, and re-building it somewhere else would only
@@ -394,6 +401,58 @@ jobs:
           BINTANA: ./build-nosecret/bintana
           BINTANA_LIB_PATH: ${{ github.workspace }}/lib
         run: ./tests/run.sh widgets
+
+  # A job of its own, and the optional half the elements API cannot be trusted
+  # without: a build with no GStreamer at all. `Media` is still installed,
+  # `Available` is false, `Media.Element` refuses with a sentence naming the
+  # package, and the classes answer about themselves -- `tests/media` takes
+  # its other branch here, which is the only build that proves that branch
+  # compiles and runs.
+  #
+  # **Hiding the module rather than not installing it**, the `no-libsecret`
+  # mould: the headers arrive as a dependency of half the desktop stack, and a
+  # runner that grew them would make this job a second copy of the first one,
+  # silently. The wrapper answers "no" for that one name and CMake's own line
+  # is read back to prove it did.
+  no-gst:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgtk-4-dev libgtksourceview-5-dev \
+            libsqlite3-dev libsoup-3.0-dev \
+            xvfb \
+            librsvg2-common fonts-cantarell
+
+      - name: Build with GStreamer hidden
+        run: |
+          set -euo pipefail
+          mkdir -p fake
+          # Everything but that one name goes through to the real pkg-config.
+          printf '#!/bin/sh\ncase " $* " in *" gstreamer-1.0 "*) exit 1;; esac\nexec /usr/bin/pkg-config "$@"\n' \
+            > fake/pkg-config
+          chmod +x fake/pkg-config
+
+          cmake -S . -B build-nogst \
+                -DPKG_CONFIG_EXECUTABLE="$PWD/fake/pkg-config" 2>&1 | tee cmake.log
+          # It has to have *decided* it, not merely compiled: the same guard
+          # `no-vte`, `no-unix-print`, `no-libxml` and `no-libsecret` carry.
+          grep -q 'no gstreamer:' cmake.log \
+            || { echo "this runner has GStreamer: the job would prove nothing"; exit 1; }
+          cmake --build build-nogst -j"$(nproc)"
+
+      - name: Test
+        env:
+          BINTANA: ./build-nogst/bintana
+        run: ./tests/media.sh
 
   # A seventh job, and the fifth optional half: the profiler without
   # sysprof-capture. `--profile` refuses naming the package, `Profile` is still

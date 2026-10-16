@@ -387,7 +387,7 @@ Traps and their evidence, by area, in `docs/agents/`:
 - [`ide.md`](docs/agents/ide.md) — you change the IDE: designer, tabs, git panel, commands, recovery.
 - [`data.md`](docs/agents/data.md) — you touch `Record`, `Xml`, `Database`/`Table`, `Csv`, `Decimal` or JSON.
 - [`drawing.md`](docs/agents/drawing.md) — you touch `Painter`, `DrawingArea`, `Drawing`, printing or a drawing library.
-- [`media-desktop.md`](docs/agents/media-desktop.md) — you touch `Video`/`AudioPlayer`, `Keyring`, `Notification` or desktop entries.
+- [`media-desktop.md`](docs/agents/media-desktop.md) — you touch `Video`/`AudioPlayer`, the `Media` elements (`Media.Element` and the graph it builds), `Keyring`, `Notification` or desktop entries.
 - [`network.md`](docs/agents/network.md) — you touch `Http` or TLS.
 - [`i18n.md`](docs/agents/i18n.md) — you touch translation, the extractor or `.po` files.
 - [`packaging.md`](docs/agents/packaging.md) — you touch `lib/package`, Flatpak or the CI registry of applications.
@@ -8154,6 +8154,55 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   is `source-setup` into `rtspsrc`'s `user-id`/`user-pw`, which only a pipeline
   of our own has.
 
+### The elements API (`Media.Element`)
+
+Each of these was measured while building it, and each one shaped a rule.
+
+- **`gst_element_get_bus` on a child answers the bin's *internal* bus.**
+  `gst_element_get_bus(pipeline)` and `gst_pipeline_get_bus(pipeline)` are one
+  object; a child's is a different one (`gst_bin_init` builds it,
+  `gst_bin_add_func` distributes it), and a timed pop on it refuses the way a
+  bus with no poll does -- while the application's bus answers
+  `state-changed`. `Element.Bus` walks up to the first pipeline instead.
+- **Adding an element to a bin unlinks its pads** -- "If the element's pads
+  are linked to other pads, the pads will be unlinked before the element is
+  added to the bin", its documentation. So the order is `Add` then `Link`, and
+  `Link` refuses two elements that do not share a parent rather than making a
+  link the next `Add` throws away in silence.
+- **A child added to a PLAYING pipeline stays in NULL** until
+  `gst_element_sync_state_with_parent` -- `gst_bin_add` leaves it to the
+  caller -- which `Element.Add` calls for it. Measured right after the add, and
+  reaching PLAYING with data linked.
+- **A pipeline set to NULL without EOS leaves a writer's placeholders.** A
+  one-second `wavenc` run wrote 360 kB whose header fields said ~2 GiB
+  (`0x7FFFFFE4`) in both sizes; with `Eos()` first they are exact. `Eos` exists
+  because of that, and `gst-launch-1.0` carries `-e` for the same reason.
+- **An asynchronous-only signal delivery loses `pad-added`.** Measured in C
+  and in the runtime: the emitting thread pushes into the pad before the main
+  loop gets there, and `wavparse` stops with "streaming stopped, reason
+  not-linked". The marshal runs the handler *inline* when the emission is
+  already on the main thread, and otherwise queues it and **blocks the
+  emitting thread** until it has run -- capped at two seconds, after which it
+  runs late. `source-setup` cannot be deferred either, for the credentials'
+  sake.
+- **One watch per bus, because bus sources consume what they see.** Two
+  `gst_bus_add_watch` calls on one bus *split* the messages -- a program
+  subscribed to `eos` missed it every other run, which is how it was found.
+  `media_watches` keeps one source per bus, with the playing elements and the
+  `Bus` wrappers as its listeners.
+- **`GstState` numbers VOID_PENDING 0 and NULL 1**, so the four words are not
+  a dense array from zero; `MEDIA_STATES` is indexed by the enum itself, after
+  a `State` getter answered "Ready" for `"Null"`.
+- **A subscription is a claim on the element's life.** A `decodebin` in a
+  local variable is collected the moment the function that built the graph
+  returns -- its `pad-added` subscription with it -- and the pad is never
+  linked. `On` holds the wrapper until the last signal is unsubscribed, the
+  same keepalive as `Playing`, the two reasons counted in one place.
+- **`gst_util_set_object_arg` silently returns**, and `gst_value_serialize` is
+  not its inverse (caps come back escaped in the launch form, flags as the
+  long name). `Set`/`Get` borrow the *syntax* (`ball`, `tcp+udp`, `30/1`) and
+  build the text themselves; every conversion it cannot make is a sentence.
+
 ## Desktop integration
 
 - **A `.desktop` entry's `Exec` is quoted twice, and the outer layer is not the
@@ -11887,13 +11936,13 @@ what each of them can see:
 
 It parses rather than links, so it answers when the runtime does not build,
 which is the same bargain `tests/icons` and `tests/styles` make. The numbers
-`./tests/api.sh` prints as this is written: 13 class statics, 296 global verbs
-with their parameters named, 967 members and events saying what they are for,
+`./tests/api.sh` prints as this is written: 13 class statics, 306 global verbs
+with their parameters named, 982 members and events saying what they are for,
 in C and in JavaScript, 7 members checked for shadowing a base one, 434 members
 held to `api.json`, 49 top-level names in `lib/` with no two libraries claiming
 one (a module counts only what it exports, which is why `lib/markdown` becoming
-one took the figure from 88), all 46 globals the runtime installs accounted
-for, and 217 links over the 61 pages that stayed. Every one of them has been stale at some point in this
+one took the figure from 88), all 47 globals the runtime installs accounted
+for, and 223 links over the 62 pages that stayed. Every one of them has been stale at some point in this
 repository.
 
 **A library's events are read from the code that raises them**, which is the
@@ -11946,7 +11995,8 @@ time somebody looks for it; a signature that is confidently wrong is not.
 `MouseWheel` was written `(dx, dy, ctrl, shift)` in three documents and passes
 two, for as long as nobody counted.
 
-**`tests/api.sh` runs in CI**, which the other four scripts do not: it parses C
+**`tests/api.sh` runs in CI**, which the desk scripts (`tests/bench.sh`,
+`tests/icons.sh`, `tests/styles.sh`, `tests/pack.sh`) do not: it parses C
 and Markdown, opens no window and costs a second, and every claim it checks is
 the kind that rots without looking rotten.
 
@@ -11959,6 +12009,28 @@ example of Markdown syntax is prose about the format and not a link; a `.md`
 under `examples/` is that project's own data and outside the scope, which is
 what lets `examples/markdown/Guide.md` point at a picture that is deliberately
 not there.
+
+## The elements API, which needs no display
+
+```sh
+tests/media.sh
+```
+
+`Media.Element` and the three classes behind it are the one part of the runtime
+whose behavior is not a control's: a graph of GStreamer elements, a bus and a
+withdrawal of messages from them. `tests/media` is a console project -- no GTK,
+no window -- and `tests/media.sh` gives it a binary and, more importantly, a
+`timeout`: **a pipeline the accounting forgot to answer keeps the console loop
+alive forever, and a red run is what that has to look like.** The last scenario
+is deliberately silent (no handler at all), so a regression there is exactly
+that hang; the others assert the conversions, the refusals, the graph rules,
+the bus kinds, `Eos` flushing a WAV header whose sizes are then read back, and
+`pad-added` over the suite's own `win.wav`.
+
+It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
+`pkg-config` that answers no for `gstreamer-1.0` and runs `tests/media.sh`
+against *that*, which is the only build that proves the refusal half compiles
+and runs (`Media.Available` false, `Media.Element` naming the package).
 
 ## Two reproductions kept by hand
 

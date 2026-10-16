@@ -374,13 +374,13 @@ what each of them can see:
 
 It parses rather than links, so it answers when the runtime does not build,
 which is the same bargain `tests/icons` and `tests/styles` make. The numbers
-`./tests/api.sh` prints as this is written: 13 class statics, 296 global verbs
-with their parameters named, 967 members and events saying what they are for,
+`./tests/api.sh` prints as this is written: 13 class statics, 306 global verbs
+with their parameters named, 982 members and events saying what they are for,
 in C and in JavaScript, 7 members checked for shadowing a base one, 434 members
 held to `api.json`, 49 top-level names in `lib/` with no two libraries claiming
 one (a module counts only what it exports, which is why `lib/markdown` becoming
-one took the figure from 88), all 46 globals the runtime installs accounted
-for, and 217 links over the 61 pages that stayed. Every one of them has been stale at some point in this
+one took the figure from 88), all 47 globals the runtime installs accounted
+for, and 223 links over the 62 pages that stayed. Every one of them has been stale at some point in this
 repository.
 
 **A library's events are read from the code that raises them**, which is the
@@ -433,7 +433,8 @@ time somebody looks for it; a signature that is confidently wrong is not.
 `MouseWheel` was written `(dx, dy, ctrl, shift)` in three documents and passes
 two, for as long as nobody counted.
 
-**`tests/api.sh` runs in CI**, which the other four scripts do not: it parses C
+**`tests/api.sh` runs in CI**, which the desk scripts (`tests/bench.sh`,
+`tests/icons.sh`, `tests/styles.sh`, `tests/pack.sh`) do not: it parses C
 and Markdown, opens no window and costs a second, and every claim it checks is
 the kind that rots without looking rotten.
 
@@ -446,6 +447,28 @@ example of Markdown syntax is prose about the format and not a link; a `.md`
 under `examples/` is that project's own data and outside the scope, which is
 what lets `examples/markdown/Guide.md` point at a picture that is deliberately
 not there.
+
+## The elements API, which needs no display
+
+```sh
+tests/media.sh
+```
+
+`Media.Element` and the three classes behind it are the one part of the runtime
+whose behavior is not a control's: a graph of GStreamer elements, a bus and a
+withdrawal of messages from them. `tests/media` is a console project -- no GTK,
+no window -- and `tests/media.sh` gives it a binary and, more importantly, a
+`timeout`: **a pipeline the accounting forgot to answer keeps the console loop
+alive forever, and a red run is what that has to look like.** The last scenario
+is deliberately silent (no handler at all), so a regression there is exactly
+that hang; the others assert the conversions, the refusals, the graph rules,
+the bus kinds, `Eos` flushing a WAV header whose sizes are then read back, and
+`pad-added` over the suite's own `win.wav`.
+
+It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
+`pkg-config` that answers no for `gstreamer-1.0` and runs `tests/media.sh`
+against *that*, which is the only build that proves the refusal half compiles
+and runs (`Media.Available` false, `Media.Element` naming the package).
 
 ## Two reproductions kept by hand
 

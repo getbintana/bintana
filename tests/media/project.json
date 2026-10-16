@@ -1,0 +1,7 @@
+{
+  "name": "media",
+  "main": "Main",
+  "version": "1.0",
+  "description": "The elements API: Media.Element and the three classes behind it -- conversions, refusals, the graph rules, the bus, signals, and the accounting that ends a console program",
+  "sources": ["Main.js"]
+}
