@@ -1815,9 +1815,17 @@ msgid_plural "Throw away what was written in {0} files?"
 msgstr[0] "¿Tirar lo que se escribió en {0} archivo?"
 msgstr[1] "¿Tirar lo que se escribió en {0} archivos?"
 
-#: forms/HelpForm.js:132 forms/MainForm.js:2710
+#: forms/HelpForm.js:166
 msgid "The reference is not installed beside this build."
 msgstr "La referencia no está instalada junto a esta compilación."
+
+#: forms/HelpForm.js:194
+msgid "The reference pages are not installed beside this build, so what the tree shows is built from the runtime itself: every member, and the sentence that describes it."
+msgstr "Las páginas de la referencia no están instaladas junto a esta compilación, así que lo que muestra el árbol se construye desde el propio runtime: cada miembro y la frase que lo describe."
+
+#: forms/HelpForm.js:196
+msgid "The long form, with examples, is online:"
+msgstr "La versión completa, con ejemplos, está en línea:"
 
 #: forms/HelpForm.js:142
 msgid "Controls"

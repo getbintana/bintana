@@ -2724,6 +2724,9 @@ export class MainForm extends Form {
      * page, which is the one question this form can answer and that one cannot.
      */
     MnuReference_Click() {
+        /* What describes a name when no package is beside this build. */
+        HelpForm.source = this.completion;
+
         const at = this.helpTopic();
 
         /* A page of the reference package, when it is installed beside this
@@ -2748,7 +2751,9 @@ export class MainForm extends Form {
             HelpForm.open(File.Join(root, "README.md"));
             return;
         }
-        Message.Warning("The reference is not installed beside this build.");
+        /* No package: the index the runtime builds, which is the help that is
+         * always there. */
+        HelpForm.openIndex();
     }
 
     /* What F1 is about -- `{ name, member, page }` with the page `""` when the

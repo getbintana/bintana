@@ -705,6 +705,25 @@ export class Completion {
         return this.topicPage(name, member, lines);
     }
 
+    /*
+     * Every name the runtime can describe, for a reference with no package
+     * beside it: the controls and the globals that have members, sorted.  Asked
+     * of the runtime and not listed here, so a class added to it is in the list
+     * the day it is built; a name with nothing to say (a global that is a bare
+     * function) is left out rather than opening an empty page.
+     * The controls are globals too, and are listed once, as controls.
+     */
+    referenceNames() {
+        const speaks = (name) => {
+            try { return this.rawMembers(name).length > 0; } catch (e) { return false; }
+        };
+
+        return {
+            widgets: [...this.widgets].filter(speaks).sort(),
+            globals: Application.Globals().filter((n) => !this.widgets.has(n) && speaks(n)).sort(),
+        };
+    }
+
     topicPage(name, member, lines) {
         const where = this.whereFor(name);
         lines.push("", `[More detail](${where})`);

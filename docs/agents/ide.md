@@ -976,3 +976,20 @@ line, both through `Editor_KeyPreview` like the snippets' Tab; View has *Fold
 all* and *Unfold all*. What is folded is one editor's view and is not saved.
 The audit's other I1 suggestion, a live syntax check, was **not** built:
 `Live.js`'s header already argues against it and the argument holds.
+
+**F1 with no reference package works, and the audit that said it opened nothing
+was half out of date.** F1 on a name already fell back to the topic the runtime
+builds (`Completion.reference`); what was missing was everything around it: on
+`F1` over nothing the IDE warned and the window, opened by a topic, had an empty
+tree and a label. `HelpForm.source` (the IDE's `Completion`, set by
+`MnuReference_Click` so the form does not reach into the IDE) is what a window
+with no `root()` is built from: `fillBuilt` makes a node per control and per global
+(`topic:Name` where a page's key is its path), `index` is the page it opens on, and
+`showTopic` is what a node, a `topic:` link and Back all go through. **History is
+keys, not paths** -- `current` is a page's path or `topic:Name` or `index:` -- because
+it used to hold only `Doc.Path` and a generated page has none, so Back from one went
+nowhere. **`Application.Globals()` includes the controls' own names**, so listing
+both put `AspectFrame` in the tree twice and `Add` refused it: the globals of the
+list are those that are not controls. The no-package path cannot be run where the
+package is installed, so `p_help` stands `HelpForm.root` in for `""` and opens a
+window of its own, and is red with the tree not built.

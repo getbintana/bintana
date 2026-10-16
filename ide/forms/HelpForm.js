@@ -63,7 +63,19 @@ const SECTIONS = [
     { key: "libraries" },
 ];
 
+/* Where the long form of every page is, for the reader of a build with no pages
+ * beside it. */
+const REFERENCE_ONLINE = "https://github.com/getbintana/bintana-docs/tree/main/docs/reference";
+
 export class HelpForm extends Form {
+
+    /*
+     * What describes a name when there is no package: the IDE's `Completion`,
+     * which asks the runtime.  Set by whoever opens the window, so this form
+     * does not reach into the IDE for it.  Without a package and without this the
+     * window has nothing to show, which is the one case left that says so.
+     */
+    static source = null;
 
     /*
      * The one window, kept.
@@ -103,6 +115,21 @@ export class HelpForm extends Form {
         return help;
     }
 
+    /*
+     * The window on its index, for a reference that is not installed: a tree of
+     * every control and global the runtime can describe, and a page that says
+     * where the long form is.  With the package beside this build it is the
+     * package's own README, as it always was.
+     */
+    static openIndex() {
+        if (!HelpForm.window) HelpForm.window = new HelpForm();
+
+        const help = HelpForm.window;
+        help.Show();
+        if (!help.root && HelpForm.source) help.index();
+        return help;
+    }
+
     /* Where the reference is on this machine, or `""`. */
     static root() {
         for (const at of candidates())
@@ -126,14 +153,62 @@ export class HelpForm extends Form {
 
     Form_Open() {
         this.history = [];
+        this.current = "";
         this.root    = HelpForm.root();
 
         if (!this.root) {
-            this.LblWhere.Text = Locale.Text("The reference is not installed beside this build.");
+            /* No pages: the runtime describes itself, which is the whole of what
+             * a build with nothing but the runtime has. */
+            if (HelpForm.source) {
+                this.fillBuilt();
+                this.index();
+            } else {
+                this.LblWhere.Text = Locale.Text("The reference is not installed beside this build.");
+            }
             return;
         }
         this.fill();
         this.go(File.Join(this.root, "README.md"));
+    }
+
+    /* The tree of a reference built from the runtime: the same two sections, a
+     * node per name, keyed `topic:Name` where a page's key is its path. */
+    fillBuilt() {
+        this.Pages.Clear();
+
+        const names = HelpForm.source.referenceNames();
+        for (const key of ["widgets", "globals"]) {
+            this.Pages.Add(`cat:${key}`, this.sectionTitle(key), "", "folder-documents-symbolic");
+            for (const name of names[key])
+                this.Pages.Add(`topic:${name}`, name, `cat:${key}`, "text-x-generic-symbolic");
+        }
+        this.Pages.ExpandAll();
+    }
+
+    /* What a built reference opens on: where it comes from and where the rest
+     * is.  Prose a person reads, so it goes through the catalogue. */
+    index() {
+        const text = [
+            "# " + Locale.Text("Reference"),
+            "",
+            Locale.Text("The reference pages are not installed beside this build, so what the tree shows is built from the runtime itself: every member, and the sentence that describes it."),
+            "",
+            Locale.Text("The long form, with examples, is online:"),
+            "",
+            `[bintana-docs](${REFERENCE_ONLINE})`,
+        ].join("\n");
+
+        this.generated({ Name: Locale.Text("Reference"), Text: text, Where: REFERENCE_ONLINE }, "index:");
+    }
+
+    /* A built topic by name, in this window.  `false` when the runtime has
+     * nothing to say about it. */
+    showTopic(name, member) {
+        const topic = HelpForm.source ? HelpForm.source.reference(name, member) : null;
+        if (!topic) return false;
+
+        this.generated(topic);
+        return true;
     }
 
     /* The heading of a section, with the literal at the call site: a msgid held
@@ -180,7 +255,8 @@ export class HelpForm extends Form {
     go(path, member) {
         if (!path || !File.Exists(path)) return false;
 
-        if (this.Doc.Path && this.Doc.Path !== path) this.history.push(this.Doc.Path);
+        if (this.current && this.current !== path) this.history.push(this.current);
+        this.current = path;
         this.BtnBack.Enabled = this.history.length > 0;
 
         this.Doc.Load(path);
@@ -204,8 +280,13 @@ export class HelpForm extends Form {
      * reader can go back to the last page by choosing it (and Back, when there
      * was one, still returns there).
      */
-    generated(topic) {
-        if (this.Doc.Path) this.history.push(this.Doc.Path);
+    generated(topic, key, quiet) {
+        key = key || `topic:${topic.Name}`;
+
+        /* `current` is a page's path or a built topic's key, so Back goes between
+         * the two kinds: it used to know only paths, and a topic left no trace. */
+        if (!quiet && this.current && this.current !== key) this.history.push(this.current);
+        this.current = key;
         this.BtnBack.Enabled = this.history.length > 0;
 
         this.Doc.Path = "";
@@ -218,16 +299,26 @@ export class HelpForm extends Form {
     Pages_Select() {
         if (this.muted) return;
         const key = this.Pages.Key;
-        if (key && !key.startsWith("cat:")) this.go(key);
+        if (key && key.startsWith("topic:")) this.showTopic(key.slice("topic:".length));
+        else if (key && !key.startsWith("cat:")) this.go(key);
     }
 
     BtnBack_Click() {
         const back = this.history.pop();
         this.BtnBack.Enabled = this.history.length > 0;
 
-        if (back) {
+        if (back === "index:") {
+            this.index();
+            this.history.pop();                 /* `index` pushed what it left */
+            this.BtnBack.Enabled = this.history.length > 0;
+        } else if (back && back.startsWith("topic:")) {
+            const name  = back.slice("topic:".length);
+            const topic = HelpForm.source ? HelpForm.source.reference(name) : null;
+            if (topic) this.generated(topic, back, true);
+        } else if (back) {
             /* Not through `go`, which would push the page being left and make
              * Back a way of going round in circles between two pages. */
+            this.current = back;
             this.Doc.Load(back);
             this.LblWhere.Text = File.Name(back);
             if (this.Pages.Exists(back)) {
@@ -245,6 +336,18 @@ export class HelpForm extends Form {
      * outside the reference is somebody else's.
      */
     Doc_Link(href, text) {
+        /* A built page's link to another built page. */
+        if (href.startsWith("topic:"))
+            return this.showTopic(href.slice("topic:".length));
+
+        /* The web, for the long form: handed to whatever the desktop opens links
+         * with, and where that cannot be had the address is shown, as it was. */
+        if ((href.startsWith("https://") || href.startsWith("http://")) &&
+            Application.HasCommand("xdg-open")) {
+            Exec(["xdg-open", href], () => {}, () => {});
+            return true;
+        }
+
         const target = File.Absolute(File.Join(File.Directory(this.Doc.Path),
                                                href.replace(/#.*$/, "")));
         if (File.Exists(target) && File.IsExtension(target, "md"))

@@ -6002,6 +6002,70 @@ function* p_help(ide) {
           !!built && built.Text.includes("Load") && built.Text.includes("path"),
           built ? built.Text.slice(0, 80) : "nothing");
 
+    /* --- a reference with no package: built, browsable, with Back ---------- */
+    HelpForm.source = ide.completion;
+
+    const listed = ide.completion.referenceNames();
+    check("the runtime lists what it can describe",
+          listed.widgets.includes("Button") && listed.widgets.includes("TableView") &&
+          listed.globals.includes("File") && listed.globals.includes("Locale"),
+          JSON.stringify([listed.widgets.length, listed.globals.length]));
+    eq("sorted, so a tree of them can be read",
+       JSON.stringify(listed.globals), JSON.stringify([...listed.globals].sort()));
+
+    /* **A window opened on a machine with no package**, which is the case the
+     * rest of this cannot be: where the package is here, `root` is stood in for.
+     * It must open on the built tree and the built index, not on a label and a
+     * blank page. */
+    const realRoot = HelpForm.root;
+    HelpForm.root = () => "";
+    const bare = new HelpForm();
+    bare.Show();
+    yield* settled(ide);
+    check("with no package the tree is built from the runtime",
+          bare.Pages.Exists("topic:Button") && bare.Pages.Exists("topic:File") &&
+          bare.Pages.Exists("cat:widgets") && bare.Pages.Exists("cat:globals"));
+    eq("and the page it opens on is the index", bare.current, "index:");
+    check("which says where the long form is", bare.LblWhere.Text.includes("bintana-docs"),
+          bare.LblWhere.Text);
+    bare.Close();
+    HelpForm.root = realRoot;
+
+    /* The same window the package's pages open in, driven the way a click does
+     * (`Pages_Select`, `Doc_Link`, Back) and from a clean history, since with the
+     * package beside this build the window opens on its README. */
+    const win = HelpForm.openIndex();
+    if (!win.Pages.Exists("topic:Button")) win.fillBuilt();   // built by Form_Open when there is no package
+    win.history = [];
+    win.current = "";
+    win.BtnBack.Enabled = false;
+    win.index();
+
+    check("the tree has a node per name",
+          win.Pages.Exists("topic:Button") && win.Pages.Exists("topic:File"));
+    eq("the index is what it opened on", win.current, "index:");
+
+    eq("a name opens its topic", win.showTopic("File", "Load"), true);
+    eq("...as the page it is", win.current, "topic:File");
+    eq("a name the runtime knows nothing of is refused", win.showTopic("Nonesuch"), false);
+    eq("...and the page stays", win.current, "topic:File");
+    eq("a link between built pages goes there", win.Doc_Link("topic:Button", "Button"), true);
+    eq("...and is the page", win.current, "topic:Button");
+    eq("Back has something to go back to", win.BtnBack.Enabled, true);
+
+    win.BtnBack_Click();
+    eq("Back returns to the topic before", win.current, "topic:File");
+    win.BtnBack_Click();
+    eq("and then to the index", win.current, "index:");
+    eq("with nothing left behind it", win.BtnBack.Enabled, false);
+    win.Close();
+    HelpForm.source = null;
+    if (root) {
+        win.fill();                     // the package's own tree, which the pages below read
+        win.history = [];
+        win.current = "";
+    }
+
     /* A handler is named after the event it answers, and the event is what F1
      * should describe -- not the name, which is nobody's declaration. */
     const click = ide.completion.topic("Button_Click");
