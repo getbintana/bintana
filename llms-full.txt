@@ -5523,6 +5523,72 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   had running. A test can only assert the first half, so it drives `SHELL` at
   `/bin/cat`; the second half is a by-hand measurement and says so.
 
+**A key an editor would take is not `KeyPress`'s, and the call that proves it
+is the one a test cannot make.** `KeyPress` is a *bubbling* controller on
+`w->gtk` -- right for a form's shortcuts, "whatever has the focus gets first
+refusal" -- so on a `SourceEditor` the view has taken Tab, Enter, the arrows and
+every printable key before it is raised: a real `a` typed into one never reached
+`Editor_KeyPress` at all (measured with `xdotool` on a bare `Xvfb`, no window
+manager: the focus follows the pointer). Calling `Editor_KeyPress("Tab", ...)`
+from a test reached the handler either way, which is how the first version of
+the snippets' Tab passed its tests and did nothing in a window. **`KeyPreview`**
+(`bta_text.c`, `on_key_preview`) is the same key on a `GTK_PHASE_CAPTURE`
+controller on the *view*: the controllers of one widget run in the order they
+were added, capture ones first, and the completion's own is added when it is
+first asked for, so this one is before it and a Tab with the popup open still
+reaches the handler. `tests/widgets`' `EditorKeyPreview` runs a child under
+`xdotool` and is red with the phase changed back to bubble. **A new event for a
+key a control's own widget handles wants the capture phase and a test that sends
+a real key.**
+
+**An editor with a minimap is a box, and four helpers learned it.** A
+`GtkSourceMap` sits beside the scroller, so a `SourceEditor`'s `w->gtk` is a
+`GtkBox` holding the `GtkScrolledWindow` (and the map, built the first time
+`ShowMap` is turned on -- a hidden map still follows the buffer, so an editor
+that never shows one must not own one). Everything that took `w->gtk` for the
+scrolled window -- `bta_scroll_watch`, the adjustments `ScrollX`/`ScrollY` read
+and `on_scroller_moved` -- goes through `bta_scrolled(w)`, which finds it by the
+`"bta-scrolled"` datum on the box. A new reader of an editor's scroll position
+is `bta_scrolled`'s, never `GTK_SCROLLED_WINDOW(w->gtk)`. `tests/widgets`'
+`EditorMap` asserts the map by what it does to the room (a wrapped text gets
+taller beside it) and that the scroll survived the box.
+
+**Folding is lines made invisible, and four things about GTK shaped it.**
+GtkSourceView has no folding, so `SourceEditor` builds it from a
+`GtkTextTag` with `invisible` per fold (two marks hold the range), a
+`GtkSourceGutterRenderer` subclass for the `▾`/`▸` markers, and
+`FoldRanges` from the program -- only whoever knows the language knows where a
+block ends. *(1)* **GTK does not join two lines because the break between them
+is invisible.** Each buffer line stays a paragraph; a line whose text and break
+are both hidden has no height, and a line with only its break visible is an
+empty row. The first version hid "from the end of the start line to the end of
+the last" and left one blank row under every fold (cursor Y of lines 1..4 came
+out `0,18,18,36`); a fold hides `Start + 1` to `End` **whole, breaks included**
+(`from` = the start of the first hidden line, `to` = the start of the line
+after, or the end of the text). *(2)* **`gtk_text_buffer_get_text(..., FALSE)`
+leaves hidden text out**, so `Text` on a folded buffer was the file minus the
+fold and saving it would have deleted code: `Text`, `Selection` and `LineOf`
+ask for hidden text too, and `tests/widgets`' `EditorFold` is red with the
+getter put back. *(3)* **`GtkSourceSearchContext` does not look in invisible
+text** -- one match before a fold, none after -- so `Search` and `FindNext`
+open every fold first: *nothing found* about code that is in the file is a wrong
+answer given in silence. *(4)* **The line-number renderer draws a hidden line**,
+at the height it has, which is none, so three numbers print over each other.
+GtkSourceView offers no way to skip a line, so the first time anything is folded
+the view's numbers are switched off and a renderer of ours (the same class as
+the markers, `numbers` set) takes their place at the same position; `ShowLineNumbers` asks
+whichever is in use. A renderer that overrides `begin` must **chain to the
+parent's**, which is what creates the Pango layout the text is drawn on: without
+it every line printed `Pango-CRITICAL: assertion 'PANGO_IS_LAYOUT'` and the
+margin was empty. An edit that lands in a fold opens it (a typed character
+inside invisible text cannot be seen), but one at the end of the line the fold
+hangs from is an ordinary edit; `to` has *left* gravity so the range does not
+grow over text inserted at its edge, and the one case offsets cannot decide --
+text inserted exactly there -- asks whether it took the fold's tag.
+`bta_editor_reveal` opens what hides a line, for `GotoLine` and `Select`. The
+click is verified with `xdotool` (`EditorFoldClick`), and a screenshot (a look:
+it is the only way to see the gutter) is how the stacked numbers were found.
+
 ---
 
 # docs/agents/tables.md
@@ -6846,6 +6912,40 @@ designer was left), and letting the press through the Glass to the real strip
   a *button's* handler are gone with them, which was the clearest smell there
   was: there had been nowhere to put the command, so one of the four became its
   owner.
+
+**Snippets are a table and a key, and the key is the hard half.**
+`SourceEditor.InsertSnippet` is GtkSourceView's own (`${1:name}` places, `$0`,
+Tab and Shift+Tab by the view itself while one lasts), so `ide/modules/Snippets.js`
+is a table of triggers for `js` and the rule for *which word is one*: a whole
+word, only where a word could start (`x.for`, `before` and `$for` are names, and
+Tab there is an indent), and never with a selection, which is the Tab of a
+snippet already open. It is wired to **`Editor_KeyPreview`** and not to
+`Editor_KeyPress`: the latter never hears a Tab (see *A key an editor would take
+is not `KeyPress`'s* in [widgets.md](widgets.md)). The word is read in
+**characters**, as `Column` counts, not UTF-16 units. `Object.keys` and regex
+literals are not in this language: the module found out by running, as the
+table of triggers is read with `Dictionary.Keys` and `Dictionary.Has`. With the
+completion's popup open Tab still expands -- `for` is a word in its own right --
+and that was measured with a real keyboard, not assumed. **The minimap** is
+View > Minimap (`editor.minimap`, off by default), applied to every open tab
+and to each born later by `dressEditor`, like the other two settings.
+
+**Folding in the IDE is `Folding.js` and one rule: lines between the braces.**
+`Folding.ranges(text)` scans `Lex.blank`'s output -- strings, templates, regexes
+and comments already blanked, line breaks kept -- with a stack of `{`/`[`, and a
+block from line 3 to line 9 is the range `3..8`, so the closer stays visible
+(`foo() {` over `}`) and a `} else {` is never swallowed. Two blocks opening on
+one line are one marker, the outer; a block with nothing between its braces has
+none; an unbalanced file answers for the part that balances. It is for `js`
+only. The markers are brought up to the text where the other checks already
+run -- `Live.pass`, on the pause -- and when a tab opens (`TabSet`), so
+folding costs one more scan of a text that is read once for all of them.
+Ctrl+Shift+[ closes the block the cursor is in (the innermost not already
+closed, so twice closes the one around it) and Ctrl+Shift+] opens the one on its
+line, both through `Editor_KeyPreview` like the snippets' Tab; View has *Fold
+all* and *Unfold all*. What is folded is one editor's view and is not saved.
+The audit's other I1 suggestion, a live syntax check, was **not** built:
+`Live.js`'s header already argues against it and the argument holds.
 
 ---
 
@@ -11283,7 +11383,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 9110 assertions
+./tests/run.sh                          # all seven projects, 9264 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

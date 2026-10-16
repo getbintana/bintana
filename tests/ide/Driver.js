@@ -4316,6 +4316,188 @@ function* p_completion(ide) {
  * `Button1` was `Button1` again and silently inherited whatever
  * `Button1_Click` still did.
  */
+/*
+ * Snippets: a trigger word and Tab.  The keys go through `Editor_KeyPreview`,
+ * the handler the runtime calls before the editor acts on a key (the real
+ * key's road is `tests/widgets`' `EditorKeyPreview`), and what is asserted is
+ * the buffer afterwards --
+ * and, as much, the cases where **nothing** may happen: a Tab that expanded
+ * `x.for` or `before` would take away the indent of whoever types an identifier.
+ */
+function* p_snippets(ide) {
+    ide.openInTab("Child.js");
+    yield;
+
+    const ed     = ide.Editor;
+    const source = ed.Text;
+    const tab    = () => ide.Editor_KeyPreview("Tab", false, false);
+
+    check("the language has triggers and others have none",
+          Snippets.triggers("js").includes("for") && Snippets.triggers("json").length === 0,
+          JSON.stringify(Snippets.triggers("js")));
+    eq("a trigger is a trigger and a plain word is not",
+       [Snippets.template("js", "for") !== null, Snippets.template("js", "toString"),
+        Snippets.template("js", "forx")].join(),
+       "true,,");
+
+    /* On an indented line, the way it is used. */
+    ed.Text = "function f() {\n    for\n}\n";
+    ed.Select(2, 8, 0);
+    eq("the cursor stands after the word", ed.Column, 8);
+    eq("Tab on a trigger is taken", tab(), true);
+    eq("and the word became its snippet, indented as the line is", ed.Text,
+       "function f() {\n" +
+       "    for (let i = 0; i < n; i++) {\n" +
+       "        \n" +
+       "    }\n" +
+       "}\n");
+    eq("with the first place selected to be typed over", ed.Selection, "i");
+
+    /* Where it must not. */
+    const stays = (what, text, line, col) => {
+        ed.Text = text;
+        ed.Select(line, col, 0);
+        eq(`${what}: Tab is the editor's own`, tab(), false);
+        eq(`${what}: and nothing was written`, ed.Text, text);
+    };
+    stays("a member called for", "x.for", 1, 6);
+    stays("a word that merely ends in one", "before", 1, 7);
+    stays("a name with a dollar before it", "$for", 1, 5);
+    stays("a word that is not a trigger", "format", 1, 7);
+    stays("an empty line", "", 1, 1);
+    stays("a trigger with the cursor not at its end", "for", 1, 2);
+
+    ed.Text = "for";
+    ed.Select(1, 1, 3);
+    eq("a selection is an open snippet's, not a trigger", tab(), false);
+    ed.Select(1, 4, 0);
+    eq("and Shift+Tab is an unindent", ide.Editor_KeyPreview("Tab", false, true), false);
+    eq("Tab at the end of the word expands it", tab(), true);
+
+    /* Another language has no triggers. */
+    ed.Language = "json";
+    ed.Text = "for";
+    ed.Select(1, 4, 0);
+    eq("a JSON file has no triggers", tab(), false);
+    ed.Language = "js";
+
+    /* The two that the IDE's own code is written in. */
+    ed.Text = "Button1_Click() {}\n";
+    ed.Select(1, 1, 0);
+    eq("on a line of code, the word before is read in characters",
+       Snippets.wordBefore(ed), "");
+    ed.Text = "\u{1F600} for";
+    ed.Select(1, 7, 0);
+    eq("a word after an emoji is still a word", Snippets.wordBefore(ed), "for");
+
+    ed.Text = source;
+    ed.Modified = false;
+}
+
+/*
+ * Folding: which blocks can be closed, and what closing one does to the file.
+ *
+ * `Folding.ranges` is a pure function over a string, and it is held the way
+ * `Lex` is: with the inputs that went wrong in the scanner it stands on -- a
+ * brace in a string, in a comment, in a template -- and with the ones an editor
+ * is always in the middle of, a file that does not balance.  What is asserted
+ * about the editor is the thing a fold must never do and a test of a *flag*
+ * would not see: **`Text` is still the whole file** while a block is closed.
+ */
+function* p_folding(ide) {
+    const rs = (text) => JSON.stringify(Folding.ranges(text));
+
+    /* What a block hides is the lines between its braces, so the closer stays. */
+    eq("a block of three lines hides its middle", rs("a {\n  b\n}\n"), '[{"Start":1,"End":2}]');
+    eq("two lines have nothing between them to hide", rs("a {\n}\n"), "[]");
+    eq("and one line has none either", rs("a { }\n"), "[]");
+    eq("an array folds like a block", rs("x = [\n  1,\n  2\n]\n"), '[{"Start":1,"End":3}]');
+    eq("nested blocks are both there, outer first",
+       rs("f {\n if {\n  x\n }\n y\n}\n"),
+       '[{"Start":1,"End":5},{"Start":2,"End":3}]');
+
+    /* The scanner is what keeps a brace that is not code from being one. */
+    eq("a brace in a string is not a block",
+       rs("a {\n  s = '}';\n  t = \"{\";\n}\n"), '[{"Start":1,"End":3}]');
+    eq("nor in a comment",
+       rs("a {\n  // }\n  /* { */\n}\n"), '[{"Start":1,"End":3}]');
+    eq("nor in a template's text, while its hole is code",
+       rs("a {\n  s = `}${ {x: 1}.x }`;\n  y;\n}\n"), '[{"Start":1,"End":3}]');
+
+    /* Two that open on one line are one marker, and it is the outer's. */
+    eq("two openers on a line are one marker",
+       rs("x = [{\n  a\n}]\n"), '[{"Start":1,"End":2}]');
+    eq("the outer one, when they end on different lines",
+       rs("x = [{\n  a\n},\n  b\n]\n"), '[{"Start":1,"End":4}]');
+
+    /* A file being typed is not balanced, and the part that is should answer. */
+    eq("an opener never closed makes no range", rs("a {\n  b\n"), "[]");
+    eq("a closer with nothing to close is ignored", rs("}\n}\n"), "[]");
+    eq("the balanced inner one is still there",
+       rs("a {\n b {\n  c\n }\n"), '[{"Start":2,"End":3}]');
+    eq("a closer of the other kind is ignored",
+       rs("a {\n ]\n b\n}\n"), '[{"Start":1,"End":3}]');
+    eq("an empty file has none", rs(""), "[]");
+
+    /* Only for a language it knows. */
+    eq("js gets folding and json does not",
+       [Folding.applies("A.js"), Folding.applies("p.json"), Folding.applies("A.form"),
+        Folding.applies("")].join(),
+       "true,false,false,false");
+
+    /* --- the editor ------------------------------------------------------ */
+    ide.openInTab("Child.js");
+    yield;
+    const ed     = ide.Editor;
+    const source = ed.Text;
+
+    eq("a tab opens with the markers of its file",
+       JSON.stringify(ed.FoldRanges), rs(source));
+
+    const text = "function f() {\n    one;\n    two;\n}\nfunction g() {\n    three;\n    four;\n}\n";
+    ed.Text = text;
+    ide.live.pass();
+    eq("the pause brings the markers up to the text",
+       JSON.stringify(ed.FoldRanges), '[{"Start":1,"End":3},{"Start":5,"End":7}]');
+
+    /* The key: the block the cursor is in, and the same key again is the one
+     * around it. */
+    ed.Select(6, 1, 0);
+    eq("Ctrl+Shift+[ is taken when there is a block",
+       ide.Editor_KeyPreview("braceleft", true, true), true);
+    eq("and closes the one the cursor is in", JSON.stringify(ed.Folds()),
+       '[{"Start":5,"End":7}]');
+    eq("the cursor, which was in it, is on the line that stays", ed.Line, 5);
+    eq("**and the text is still the whole file**", ed.Text, text);
+    eq("Ctrl+Shift+] opens the one on the cursor's line",
+       ide.Editor_KeyPreview("bracketright", true, true), true);
+    eq("...and it is open", ed.Folds().length, 0);
+    eq("Ctrl+Shift+] with nothing there is not taken",
+       ide.Editor_KeyPreview("braceright", true, true), false);
+
+    ed.Select(9, 1, 0);
+    eq("outside every block the fold key is not taken",
+       ide.Editor_KeyPreview("braceleft", true, true), false);
+    eq("a bracket without both modifiers is just a bracket",
+       [ide.Editor_KeyPreview("braceleft", false, true),
+        ide.Editor_KeyPreview("braceleft", true, false)].join(), "false,false");
+
+    /* The two menu entries. */
+    ide.MnuViewFoldAll.Click();
+    eq("Fold all closes every block", ed.Folds().length, 2);
+    eq("and the text is still the whole file", ed.Text, text);
+    ide.MnuViewUnfoldAll.Click();
+    eq("Unfold all opens them", ed.Folds().length, 0);
+
+    /* A file the designer owns, or any that is not js, is not offered. */
+    Folding.refresh(ed, "data.json", text);
+    eq("a json file gets no markers", ed.FoldRanges.length, 0);
+
+    ed.Text = source;
+    Folding.refresh(ed, "Child.js", source);
+    ed.Modified = false;
+}
+
 function* p_handlers(ide) {
     const jsName = "Child.js";
     const jsPath = File.Join(TMP, jsName);
@@ -16127,12 +16309,17 @@ function* p_session(ide) {
           first.ShowLineNumbers === true);
     check("and wrap is off", first.Wrap === false);
 
+    check("and there is no minimap", first.ShowMap === false);
+
     ide.MnuViewLineNumbers.Click();
     ide.MnuViewWrap.Click();
+    ide.MnuViewMinimap.Click();
     yield* settled(ide);
 
     eq("the View item takes the gutter off", first.ShowLineNumbers, false);
     eq("...and turns wrap on", first.Wrap, true);
+    eq("...and the minimap", first.ShowMap, true);
+    eq("written down with the others", Settings.Get("editor.minimap", false), true);
     check("and both are written down",
           Settings.Get("editor.lineNumbers", true) === false &&
           Settings.Get("editor.wrap", false) === true,
@@ -16146,8 +16333,9 @@ function* p_session(ide) {
     ide.openInTab("View.js");
     yield* settled(ide);
     check("and a tab that opens next is born wearing them",
-          ide.Editor.ShowLineNumbers === false && ide.Editor.Wrap === true,
-          JSON.stringify([ide.Editor.ShowLineNumbers, ide.Editor.Wrap]));
+          ide.Editor.ShowLineNumbers === false && ide.Editor.Wrap === true &&
+          ide.Editor.ShowMap === true,
+          JSON.stringify([ide.Editor.ShowLineNumbers, ide.Editor.Wrap, ide.Editor.ShowMap]));
     check("while the one behind followed too",
           first.ShowLineNumbers === false && first.Wrap === true);
 
@@ -16193,10 +16381,11 @@ function* p_session(ide) {
     /* Back to the defaults, which is what the phases after this one read. */
     ide.MnuViewLineNumbers.Click();
     ide.MnuViewWrap.Click();
+    ide.MnuViewMinimap.Click();
     yield* settled(ide);
-    check("and both back the way the window draws them",
-          first.ShowLineNumbers === true && first.Wrap === false,
-          JSON.stringify([first.ShowLineNumbers, first.Wrap]));
+    check("and all three back the way the window draws them",
+          first.ShowLineNumbers === true && first.Wrap === false && first.ShowMap === false,
+          JSON.stringify([first.ShowLineNumbers, first.Wrap, first.ShowMap]));
 
     ide.Editor.Select(4, 5);
     yield* settled(ide);
@@ -16337,6 +16526,8 @@ const PHASES = [
     { name: "clipboard", run: p_clipboard },
     { name: "taborder", run: p_taborder },
     { name: "completion", run: p_completion },
+    { name: "snippets", run: p_snippets },
+    { name: "folding", run: p_folding },
     { name: "handlers", run: p_handlers },
     { name: "events", run: p_events },
     { name: "goto", run: p_goto },

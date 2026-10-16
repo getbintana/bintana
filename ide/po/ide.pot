@@ -713,8 +713,20 @@ msgstr ""
 msgid "Word wrap"
 msgstr ""
 
+#: forms/MainForm.form: menu MnuViewMinimap
+msgid "Minimap"
+msgstr ""
+
 #: forms/MainForm.form: menu MnuViewTheme
 msgid "Syntax theme"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuViewFoldAll
+msgid "Fold all"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuViewUnfoldAll
+msgid "Unfold all"
 msgstr ""
 
 #: forms/MainForm.form: menu MnuViewFocusEditor

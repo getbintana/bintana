@@ -527,6 +527,11 @@ const TESTS = [
     /* Blocking too, and in the same group: it runs children with `Exec.Wait`
      * to see a project's own id answered, and a bad one refused. */
     "ApplicationId",
+    "EditorMap",
+    "EditorFold",
+    "EditorFoldClick",
+    "EditorSnippet",
+    "EditorKeyPreview",
     "SingleInstance",
     /* Blocking too: a console child under `--profile`, whose capture the
      * parent reads back. */
@@ -1651,6 +1656,400 @@ class WidgetsForm extends Form {
             memo.Delete();
             ed.Delete();
         });
+    }
+
+    /*
+     * The minimap: `ShowMap`.  Its own editor on the surface, and asserted by
+     * what it *does* to the room -- the map is a column beside the text, so
+     * a wrapped text has fewer columns to wrap in and grows taller -- rather
+     * than by the flag reading back, which a map that was never drawn does too.
+     * And the scroll, which the box the editor now wears for the map's sake must
+     * not have broken: `ScrollY` is `bta_scrolled`'s answer, not `w->gtk`'s.
+     */
+    testEditorMap() {
+        const ed = new SourceEditor();
+        this.Fixed1.Add(ed);
+        ed.Wrap = true;
+        ed.Resize(320, 160);
+        eq("an editor has no map until it is asked for one", ed.ShowMap, false);
+
+        let text = "";
+        for (let i = 1; i <= 30; i++) text += `${i} ` + "word ".repeat(12) + "\n";
+        ed.Text = text;
+
+        /* The room is read once it has stopped changing -- five readings that
+         * agree -- and **compared with another stable reading, never with a
+         * number remembered**: in a full run the first layout of a wrapped text
+         * is not the settled one (488 where it is 938 alone), and a baseline
+         * taken there is not the editor's own. */
+        const stable = (then) => {
+            let last = -1, agreed = 0;
+            until("the editor's room has stopped changing", () => {
+                if (ed.Bounds().Width <= 0 || ed.ScrollMaxY <= 0) return false;
+                agreed = ed.ScrollMaxY === last ? agreed + 1 : 0;
+                last = ed.ScrollMaxY;
+                return agreed >= 5;
+            }, () => then(ed.ScrollMaxY));
+        };
+
+        stable((alone) => {
+            ed.ScrollY = Math.min(40, alone);
+            eq("scrolling reaches through the box it wears", ed.ScrollY, Math.min(40, alone));
+            ed.ScrollY = 0;
+
+            ed.ShowMap = true;
+            eq("ShowMap reads back", ed.ShowMap, true);
+            stable((beside) => {
+                check("a map beside the text leaves less to wrap in, so it is taller",
+                      beside > alone, `${alone} -> ${beside}`);
+                ed.ScrollY = 40;
+                eq("and it still scrolls", ed.ScrollY, 40);
+
+                ed.ShowMap = false;
+                eq("turned off, it reads off", ed.ShowMap, false);
+                stable((again) => {
+                    check("without the map the text has its room back",
+                          again < beside, `${beside} -> ${again}`);
+                    ed.Delete();
+                });
+            });
+        });
+    }
+
+    /*
+     * `InsertSnippet`: GtkSourceView's snippets, as a verb.  Asserted through
+     * what the buffer holds -- the expansion, where it landed, and what is
+     * selected for the first place to be typed over -- and not through the
+     * call having returned.
+     */
+    testEditorSnippet() {
+        const ed = new SourceEditor();
+        this.Fixed1.Add(ed);
+        ed.Language = "js";
+        ed.Resize(320, 160);
+
+        /* On an indented line, with the trigger selected: what the IDE does on
+         * Tab.  The trigger goes, the template takes the line's indentation, and
+         * the first place is selected so typing replaces it. */
+        ed.Text = "function f() {\n    for\n}\n";
+        ed.Select(2, 5, 3);
+        eq("the trigger is what is selected", ed.Selection, "for");
+        ed.InsertSnippet("for (let ${1:i} = 0; ${1:i} < ${2:n}; ${1:i}++) {\n    $0\n}");
+        eq("the trigger is replaced by the template, indented as the line is",
+           ed.Text,
+           "function f() {\n" +
+           "    for (let i = 0; i < n; i++) {\n" +
+           "        \n" +
+           "    }\n" +
+           "}\n");
+        eq("and the first place is selected, to be typed over", ed.Selection, "i");
+
+        /* What is *not* asserted: that typing over the selected place writes all
+         * three copies of it.  That is the view's own key handling, and `Insert`
+         * is not a key -- it adds at the cursor and replaces nothing.  And no
+         * template is asserted to fail to parse: GtkSourceView's parser takes
+         * `${1:unclosed` as text, and the few it refuses (a lone `$`) print its
+         * own CRITICAL, which is not output a passing suite should carry. */
+        ed.Select(1, 1, 0);
+        ed.InsertSnippet("// ${1:todo}");
+        eq("a snippet with no selection goes in at the cursor",
+           ed.Text.split("\n")[0], "// todofunction f() {");
+        throws("it needs text", () => ed.InsertSnippet());
+        throws("and not a number", () => ed.InsertSnippet(5));
+
+        ed.Delete();
+    }
+
+    /*
+     * `KeyPreview`: a key before the editor has acted on it.
+     *
+     * **A child with a real keyboard, because a call to the handler proves
+     * nothing about the road.**  `KeyPress` is a bubbling controller, so the
+     * view had taken Tab, Enter and every letter before it heard of them -- which
+     * is invisible from inside, where `Emit("KeyPress", ...)` reaches the
+     * handler either way.  This one types through the X server (`xdotool`, the
+     * same one `tests/install.sh` needs), with no window manager: the focus
+     * follows the pointer.  The child consumes Tab in `KeyPreview` and records
+     * what `KeyPress` hears; Return ends it with the answer in a file.
+     * Skipped, never failed, without `xdotool`.
+     */
+    testEditorKeyPreview() {
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real keys: they need xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "key-preview");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "keypreview", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 400, Height: 240 } });
+        File.Save(File.Join(proj, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        const ed = new SourceEditor();\n" +
+                  "        ed.Name = 'Ed';\n" +
+                  "        ed.Expand = true;\n" +
+                  "        this.Add(ed);\n" +
+                  "        this.ed = ed; this.preview = []; this.press = [];\n" +
+                  "        Timer.After(800, () => File.Save(Application.Directory + '/ready', '1'));\n" +
+                  "    }\n" +
+                  "    Ed_KeyPreview(key) {\n" +
+                  "        this.preview.push(key);\n" +
+                  "        if (key === 'Return') {\n" +
+                  "            File.SaveJson(Application.Directory + '/out.json',\n" +
+                  "                { text: this.ed.Text, preview: this.preview, press: this.press });\n" +
+                  "            Application.Quit(0);\n" +
+                  "            return true;\n" +
+                  "        }\n" +
+                  "        return key === 'Tab';\n" +
+                  "    }\n" +
+                  "    Ed_KeyPress(key) { this.press.push(key); return false; }\n" +
+                  "}\n");
+        for (const gone of ["ready", "out.json"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/ready\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "xdotool mousemove 120 120 click 1; sleep 0.3\n" +
+                  "xdotool type --delay 60 a\n" +
+                  "xdotool key Tab\n" +
+                  "xdotool type --delay 60 b\n" +
+                  "xdotool key Return\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the child ended by itself", ran.Output.includes("child=0"), ran.Output);
+
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("and said what it heard", got !== null, ran.Output);
+        if (!got) return;
+
+        eq("the handler is asked first, for every key, Tab and Return included",
+           got.preview.join(), "a,Tab,b,Return");
+        eq("taking Tab keeps it from the editor: no tab, no indent in the text",
+           got.text, "ab");
+        /* The other half of the reason this event exists: the view takes the
+         * letters too, so a bubbling `KeyPress` heard none of them. */
+        eq("and KeyPress, which bubbles, heard none of it: the editor took it all",
+           got.press.join(), "");
+    }
+
+    /*
+     * Folding: text made invisible, a marker in the margin for what can be
+     * folded, and the program saying where.  The assertions are the ones that
+     * would be wrong if the fold were only a flag: that the line below really
+     * moved up, that **`Text` is still the whole file** (a fold is a view and not
+     * an edit -- GTK's own getter leaves hidden text out, and a program that
+     * saved a folded buffer would have lost it), and that moving the cursor or
+     * typing into what is hidden opens it.
+     */
+    testEditorFold() {
+        const ed = new SourceEditor();
+        this.Fixed1.Add(ed);
+        ed.Language = "js";
+        ed.Resize(320, 200);
+
+        const lines = ["function a() {", "    one;", "    two;", "}",
+                       "function b() {", "    three;", "    four;", "}", "end;"];
+        const text = lines.join("\n") + "\n";
+        ed.Text = text;
+
+        eq("no ranges until the program says", JSON.stringify(ed.FoldRanges), "[]");
+        ed.FoldRanges = [{ Start: 5, End: 7 }, { Start: 1, End: 3 }];
+        eq("they read back, sorted by line",
+           JSON.stringify(ed.FoldRanges),
+           '[{"Start":1,"End":3},{"Start":5,"End":7}]');
+
+        /* Refusals leave the list as it was. */
+        throws("a range that ends before it starts is refused",
+               () => { ed.FoldRanges = [{ Start: 3, End: 2 }]; });
+        throws("so is one that is not a row", () => { ed.FoldRanges = [1]; });
+        throws("and so is one with no line", () => { ed.FoldRanges = [{ Start: 1 }]; });
+        throws("and what is not a list", () => { ed.FoldRanges = "1-3"; });
+        eq("and the list is what it was",
+           JSON.stringify(ed.FoldRanges),
+           '[{"Start":1,"End":3},{"Start":5,"End":7}]');
+
+        throws("a line that is not there is refused", () => ed.Fold(99));
+        throws("a line that starts no range, with no end, is refused", () => ed.Fold(2));
+        throws("an end that is not after the start is refused", () => ed.Fold(2, 2));
+        eq("Unfold on a line with no fold says so", ed.Unfold(1), false);
+        eq("and nothing is folded", JSON.stringify(ed.Folds()), "[]");
+
+        until("the editor is laid out", () => ed.Bounds().Width > 0, () => {
+            ed.Select(6, 1, 0);
+            const before = ed.CursorBounds().Y;
+            ed.Select(2, 1, 0);
+
+            ed.Fold(1);
+            eq("Fold hides the lines after the line", JSON.stringify(ed.Folds()),
+               '[{"Start":1,"End":3}]');
+            eq("Folded says where", [ed.Folded(1), ed.Folded(5)].join(), "true,false");
+            eq("the cursor was inside it and is put out, on the line that stays",
+               ed.Line, 1);
+            eq("**and Text is still the whole file**", ed.Text, text);
+
+            until("the lines below move up", () => {
+                ed.Select(6, 1, 0);
+                return ed.CursorBounds().Y < before;
+            }, () => {
+                ed.Select(6, 1, 0);
+                const after = ed.CursorBounds().Y;
+                check("a line below a fold is drawn higher: it takes no room",
+                      after < before, `${before} -> ${after}`);
+
+                /* The line a fold hangs from is the one that stays, so typing at
+                 * the end of it is an ordinary edit and the fold stays shut... */
+                ed.Select(1, 99, 0);
+                ed.Insert("//");
+                eq("an edit at the end of the line it hangs from leaves the fold",
+                   ed.Folded(1), true);
+                eq("and what was typed is there",
+                   ed.Text.split("\n")[0], "function a() {//");
+
+                /* ...and so is typing where the fold ends, on the line after:
+                 * that text must be somewhere one can see it, whichever way GTK
+                 * tags what is put at the edge of a range. */
+                ed.Select(1, 1, 0);
+                const line1 = ed.CursorBounds().Y;
+                ed.Select(4, 1, 0);
+                ed.Insert("after ");
+                ed.Select(4, 1, 0);
+                check("text typed where a fold ends is on a row of its own",
+                      ed.CursorBounds().Y > line1, `${line1} -> ${ed.CursorBounds().Y}`);
+                eq("and it is where it was typed", ed.Text.split("\n")[3], "after }");
+                ed.Unfold(1);
+
+                /* ...while an edit elsewhere leaves it alone, and the fold
+                 * follows its text when lines are added above it. */
+                ed.Fold(5);
+                ed.Select(1, 1, 0);
+                ed.Insert("zz\n");
+                eq("a fold follows its text", JSON.stringify(ed.Folds()),
+                   '[{"Start":6,"End":8}]');
+                ed.Select(10, 1, 0);
+                ed.Insert("tail ");
+                eq("an edit below it opens nothing", ed.Folds().length, 1);
+
+                /* Moving the cursor into it. */
+                ed.GotoLine(8);
+                eq("GotoLine into a fold opens it", ed.Folded(6), false);
+                ed.Fold(6, 8);
+                ed.Select(7, 1, 3);
+                eq("and so does Select", ed.Folded(6), false);
+
+                /* **A search opens every fold**: GtkSourceView's does not look in
+                 * hidden text (the same word is one match before a fold and none
+                 * after), and *nothing found* about code that is there is a wrong
+                 * answer in silence. */
+                ed.Fold(6, 8);
+                eq("a search finds what was in a fold", ed.Search("four"), 1);
+                eq("because it opened them", ed.Folds().length, 0);
+
+                /* And so does stepping on, to a match in a fold made since: the
+                 * library cannot find one in hidden text, so the step has to look
+                 * with them open. */
+                ed.Fold(6, 8);
+                ed.FindNext();
+                eq("FindNext opens them too", ed.Folds().length, 0);
+                eq("and lands on the match", ed.Line, 8);
+                ed.Search("");
+
+                /* All of them, and back. */
+                ed.FoldRanges = [{ Start: 2, End: 4 }, { Start: 6, End: 8 }];
+                eq("FoldAll says how many it closed", ed.FoldAll(), 2);
+                eq("...and a second time closes none", ed.FoldAll(), 0);
+                eq("they are both there", ed.Folds().length, 2);
+                eq("UnfoldAll says how many it opened", ed.UnfoldAll(), 2);
+                eq("...and nothing is left", ed.Folds().length, 0);
+
+                ed.Delete();
+            });
+        });
+    }
+
+    /*
+     * `FoldChange`: the marker in the margin, clicked.
+     *
+     * The one road to the event, and a road a call cannot take -- it is GTK's
+     * gutter delivering a press to a renderer of ours -- so a child with a real
+     * pointer, as `EditorKeyPreview` is with a real keyboard.  The margin's
+     * column is not known to the pixel (the numbers' width is the font's), so
+     * the script clicks along the first line until the marker answers; the child
+     * records the first answer and leaves, which is what makes a click that
+     * lands on nothing harmless and a second one on the marker not matter.
+     * Skipped, never failed, without `xdotool`.
+     */
+    testEditorFoldClick() {
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real click: it needs xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "fold-click");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "foldclick", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 400, Height: 240 } });
+        File.Save(File.Join(proj, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        const ed = new SourceEditor();\n" +
+                  "        ed.Name = 'Ed';\n" +
+                  "        ed.Resize(380, 200);\n" +
+                  "        this.Add(ed);\n" +
+                  "        this.ed = ed;\n" +
+                  "        ed.Text = 'a {\\n  b\\n  c\\n}\\nz\\n';\n" +
+                  "        ed.FoldRanges = [{ Start: 1, End: 3 }];\n" +
+                  "        Timer.After(800, () => File.Save(Application.Directory + '/ready', '1'));\n" +
+                  "    }\n" +
+                  "    Ed_FoldChange(line, folded) {\n" +
+                  "        File.SaveJson(Application.Directory + '/out.json',\n" +
+                  "            { line, folded, folds: this.ed.Folds(), text: this.ed.Text });\n" +
+                  "        Application.Quit(0);\n" +
+                  "    }\n" +
+                  "}\n");
+        for (const gone of ["ready", "out.json"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/ready\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "for x in 30 34 38 42 46 50 54; do\n" +
+                  "  [ -f \"$dir/out.json\" ] && break\n" +
+                  "  xdotool mousemove $x 9 click 1; sleep 0.3\n" +
+                  "done\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the child ended by itself", ran.Output.includes("child=0"), ran.Output);
+
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("a click on the marker raised FoldChange", got !== null, ran.Output);
+        if (!got) return;
+
+        eq("for that line, and what it is now", [got.line, got.folded].join(), "1,true");
+        eq("and the block really is closed", JSON.stringify(got.folds),
+           '[{"Start":1,"End":3}]');
+        eq("with the text still whole", got.text, "a {\n  b\n  c\n}\nz\n");
     }
 
     testEditorScroll() {
@@ -9395,10 +9794,10 @@ function Main() {
             (n) => !memo.PropertyNames().includes(n));
         eq("what the source editor adds, and nothing of it here",
            JSON.stringify(only),
-           JSON.stringify(["Completion", "CompletionTitle", "Language",
-                           "ShowLineNumbers", "ShowMarks", "Theme"]));
+           JSON.stringify(["Completion", "CompletionTitle", "FoldRanges", "Language",
+                           "ShowLineNumbers", "ShowMap", "ShowMarks", "Theme"]));
         for (const gone of ["Search", "FindNext", "Replace", "Mark", "ClearMarks",
-                            "ShowCompletion"])
+                            "ShowCompletion", "InsertSnippet"])
             eq(`${gone} is not a plain editor's`, typeof memo[gone], "undefined");
         /* ...and the two it does share the name of are Widget's, not the
          * editor's: `Marks` on a Calendar is a different idea again. */

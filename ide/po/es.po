@@ -666,9 +666,21 @@ msgstr "Números de línea"
 msgid "Word wrap"
 msgstr "Ajuste de línea"
 
+#: forms/MainForm.form: menu MnuViewMinimap
+msgid "Minimap"
+msgstr "Minimapa"
+
 #: forms/MainForm.form: menu MnuViewTheme
 msgid "Syntax theme"
 msgstr "Tema de sintaxis"
+
+#: forms/MainForm.form: menu MnuViewFoldAll
+msgid "Fold all"
+msgstr "Plegar todo"
+
+#: forms/MainForm.form: menu MnuViewUnfoldAll
+msgid "Unfold all"
+msgstr "Desplegar todo"
 
 #: forms/MainForm.form: menu MnuViewFocusEditor
 msgid "Focus the editor"

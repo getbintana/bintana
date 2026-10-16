@@ -158,6 +158,7 @@ const SIDE_STRIP_W = 30;
  */
 const EDITOR_LINES_KEY = "editor.lineNumbers";
 const EDITOR_WRAP_KEY  = "editor.wrap";
+const EDITOR_MAP_KEY   = "editor.minimap";
 const EDITOR_THEME_KEY = "editor.theme";
 
 /*
@@ -1918,6 +1919,32 @@ export class MainForm extends Form {
         return this.document ? this.document.follow(href, text) : false;
     }
 
+    /*
+     * A key, before the editor has acted on it -- which `Editor_KeyPress`
+     * below never is: it arrives after the view has taken Tab, Enter and every
+     * printable key (measured with a real Tab).  A trigger word and Tab becomes
+     * its snippet; anything else is the editor's own Tab (an indent, or the next
+     * place of a snippet that is open).  With the completion's popup up, Tab
+     * still expands: `for` is a word in its own right.
+     */
+    Editor_KeyPreview(key, ctrl, shift) {
+        if (!this.Editor) return false;
+
+        if (key === "Tab" && !ctrl && !shift)
+            return Snippets.expand(this.Editor);
+
+        /* Ctrl+Shift+[ closes the block the cursor is in and Ctrl+Shift+] opens
+         * the one on its line -- `braceleft` is what `[` is with Shift held on
+         * the layouts that have it there, `bracketleft` on those that do not. */
+        if (ctrl && shift) {
+            if (key === "braceleft" || key === "bracketleft")
+                return Folding.foldHere(this.Editor);
+            if (key === "braceright" || key === "bracketright")
+                return Folding.unfoldHere(this.Editor);
+        }
+        return false;
+    }
+
     /* --- teclado ----------------------------------------------------------
      * Ctrl+W (close) and Ctrl+Tab / Ctrl+Shift+Tab (cycle) are taken here;
      * anything else is delegated.  Returning true consumes the key. */
@@ -2267,6 +2294,18 @@ export class MainForm extends Form {
         this.tabs.eachEditor((ed) => { ed.Wrap = on; });
     }
 
+    /* The map of the whole file beside the text: off until asked for, since it
+     * takes a column of the room. */
+    MnuViewMinimap_Click(on) {
+        Settings.Set(EDITOR_MAP_KEY, on);
+        this.tabs.eachEditor((ed) => { ed.ShowMap = on; });
+    }
+
+    /* Every block of the file on screen, closed or open.  What is folded is the
+     * view of one editor and not a setting, so nothing is written down. */
+    MnuViewFoldAll_Click()   { if (this.Editor) this.Editor.FoldAll(); }
+    MnuViewUnfoldAll_Click() { if (this.Editor) this.Editor.UnfoldAll(); }
+
     /* The label of the entry is the theme's id -- the entries are values, see
      * `EDITOR_THEMES` -- so what is written down is what `Theme` accepts. */
     MnuViewTheme_Click(index, text) {
@@ -2348,6 +2387,7 @@ export class MainForm extends Form {
 
         this.MnuViewLineNumbers.Value = Settings.Get(EDITOR_LINES_KEY, true);
         this.MnuViewWrap.Value        = Settings.Get(EDITOR_WRAP_KEY, false);
+        this.MnuViewMinimap.Value     = Settings.Get(EDITOR_MAP_KEY, false);
 
         const chosen = Settings.Get(EDITOR_THEME_KEY, "");
         let   theme  = EDITOR_THEMES.indexOf(chosen);
@@ -2381,6 +2421,7 @@ export class MainForm extends Form {
     dressEditor(ed) {
         ed.ShowLineNumbers = Settings.Get(EDITOR_LINES_KEY, true);
         ed.Wrap            = Settings.Get(EDITOR_WRAP_KEY, false);
+        ed.ShowMap         = Settings.Get(EDITOR_MAP_KEY, false);
 
         /* A name the runtime no longer has is left alone: the editor keeps the
          * runtime's own theme and the menu marks what that is. */

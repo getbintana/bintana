@@ -56,6 +56,47 @@ static void on_cursor_moved(GtkTextBuffer *buf, GParamSpec *pspec, gpointer user
  * that outlives its widget fires into freed memory some frames later, in
  * whatever test happens to run next.
  */
+/*
+ * `KeyPreview(key, ctrl, shift, alt)` -- a key, **before the editor has acted
+ * on it**.
+ *
+ * `KeyPress` is a bubbling controller: whatever has focus gets first refusal,
+ * which is right for a form's shortcuts and wrong for an editor, whose own
+ * view takes Tab, Enter, the arrows and every printable key before anything
+ * outside it hears of them (measured: a real Tab and a real End never reached
+ * `KeyPress` of a `SourceEditor`).  A program that wants to turn Tab into a
+ * snippet, or Enter into something other than a newline, has to be asked
+ * first -- Visual Basic's `KeyPreview`, for the same reason -- so this is the
+ * capture phase of the same key, and `true` consumes it.
+ *
+ * Capture on the view itself, and not on the box around it: the controllers on
+ * one widget run in the order they were added, capture ones first, and the
+ * completion's own (added when it is first asked for) comes after this one.
+ */
+static gboolean on_key_preview(GtkEventControllerKey *c, guint keyval,
+                               guint keycode, GdkModifierType state,
+                               gpointer user_data)
+{
+    BtaWidget *w   = user_data;
+    JSContext *ctx = w->ctx;
+
+    const char *name = gdk_keyval_name(keyval);
+    JSValue argv[4] = {
+        JS_NewString(ctx, name ? name : ""),
+        JS_NewBool(ctx, (state & GDK_CONTROL_MASK) != 0),
+        JS_NewBool(ctx, (state & GDK_SHIFT_MASK) != 0),
+        JS_NewBool(ctx, (state & GDK_ALT_MASK) != 0),
+    };
+
+    JSValue  r       = bta_emit_answer(w, "KeyPreview", 4, argv, NULL);
+    gboolean handled = JS_ToBool(ctx, r) > 0;
+
+    JS_FreeValue(ctx, r);
+    for (int i = 0; i < 4; i++)
+        JS_FreeValue(ctx, argv[i]);
+    return handled;
+}
+
 void bta_text_view_setup(BtaWidget *w, GtkWidget *view)
 {
     w->inner = view;
@@ -76,6 +117,12 @@ void bta_text_view_setup(BtaWidget *w, GtkWidget *view)
      * had, under the four names `Scroller` already uses.
      */
     bta_scroll_watch(w);
+
+    /* Before the view acts on a key: see `on_key_preview`. */
+    GtkEventController *preview = gtk_event_controller_key_new();
+    gtk_event_controller_set_propagation_phase(preview, GTK_PHASE_CAPTURE);
+    g_signal_connect(preview, "key-pressed", G_CALLBACK(on_key_preview), w);
+    gtk_widget_add_controller(view, preview);
 
     GtkTextBuffer *buf = gtk_text_view_get_buffer(GTK_TEXT_VIEW(view));
     g_signal_connect(buf, "changed", G_CALLBACK(on_buffer_changed), w);
@@ -123,7 +170,7 @@ static JSValue ed_get_text(JSContext *ctx, JSValueConst this_val)
     GtkTextIter    a, b;
     gtk_text_buffer_get_bounds(buf, &a, &b);
 
-    char   *s = gtk_text_buffer_get_text(buf, &a, &b, FALSE);
+    char   *s = gtk_text_buffer_get_text(buf, &a, &b, TRUE);   /* hidden (folded) text is text */
     JSValue v = JS_NewString(ctx, s ? s : "");
     g_free(s);
     return v;
@@ -411,7 +458,7 @@ static JSValue ed_line_of(JSContext *ctx, JSValueConst this_val,
     GtkTextIter    a, b;
     gtk_text_buffer_get_bounds(buf, &a, &b);
 
-    char   *s   = gtk_text_buffer_get_text(buf, &a, &b, FALSE);
+    char   *s   = gtk_text_buffer_get_text(buf, &a, &b, TRUE);   /* as `Text`: hidden counts */
     JSValue out = JS_NewInt32(ctx, bta_line_of_utf16(s ? s : "", index));
 
     g_free(s);
@@ -553,6 +600,7 @@ static JSValue ed_goto_line(JSContext *ctx, JSValueConst this_val,
     GtkTextIter    it;
     int            last = gtk_text_buffer_get_line_count(buf) - 1;
 
+    bta_editor_reveal(w, CLAMP(line - 1, 0, last) + 1);
     gtk_text_buffer_get_iter_at_line(buf, &it, CLAMP(line - 1, 0, last));
     gtk_text_buffer_place_cursor(buf, &it);
 
@@ -646,7 +694,7 @@ static JSValue ed_get_selection(JSContext *ctx, JSValueConst this_val)
     if (!gtk_text_buffer_get_selection_bounds(buf, &a, &b))
         return JS_NewString(ctx, "");
 
-    char   *s = gtk_text_buffer_get_text(buf, &a, &b, FALSE);
+    char   *s = gtk_text_buffer_get_text(buf, &a, &b, TRUE);   /* hidden (folded) text is text */
     JSValue v = JS_NewString(ctx, s ? s : "");
     g_free(s);
     return v;
@@ -732,6 +780,8 @@ static JSValue ed_select(JSContext *ctx, JSValueConst this_val,
         int last = gtk_text_iter_get_line_offset(&eol);
         gtk_text_iter_set_line_offset(&a, CLAMP(column - 1, 0, last));
     }
+
+    bta_editor_reveal(w, gtk_text_iter_get_line(&a) + 1);
 
     b = a;
     if (length > 0)
@@ -910,8 +960,16 @@ void bta_text_register(void)
          *   and it does not loop: assigning a value it already has emits
          *   nothing
          */
+        /* KeyPreview(key, ctrl, shift, alt)
+         *   a key, **before the editor has acted on it**. `KeyPress` arrives
+         *   after: the view has taken Tab, Enter, the arrows and every
+         *   printable key by then, so it cannot turn Tab into a snippet or
+         *   Enter into something that is not a newline. Answer `true` to take
+         *   the key and the editor never sees it. `key` is a name like `Tab`,
+         *   `Return` or `a`
+         */
         BTA_CLASS("Editor", "Control", NULL, editor_props, false,
-                  "Change,Cursor,Scroll"),
+                  "Change,Cursor,Scroll,KeyPreview"),
         /*
          * **`Text` is prose here and not in a `SourceEditor`**, which is the
          * whole reason `Editor` exists (see the note at the top of this file). A

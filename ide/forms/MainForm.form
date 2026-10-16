@@ -399,10 +399,26 @@
           "check": true
         },
         {
+          "name": "MnuViewMinimap",
+          "text": "Minimap",
+          "check": true
+        },
+        {
           "name": "MnuViewTheme",
           "text": "Syntax theme",
           "dynamic": true,
           "radio": true
+        },
+        {
+          "separator": true
+        },
+        {
+          "name": "MnuViewFoldAll",
+          "text": "Fold all"
+        },
+        {
+          "name": "MnuViewUnfoldAll",
+          "text": "Unfold all"
         },
         {
           "separator": true

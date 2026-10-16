@@ -44,6 +44,8 @@
     "../../ide/modules/Changes.js",
     "../../ide/modules/Problems.js",
     "../../ide/modules/Names.js",
+    "../../ide/modules/Snippets.js",
+    "../../ide/modules/Folding.js",
     "../../ide/modules/Lex.js",
     "../../ide/modules/Refactor.js",
     "../../ide/modules/Live.js",

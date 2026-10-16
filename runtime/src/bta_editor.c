@@ -34,6 +34,27 @@ static GtkSourceBuffer *buffer_of(BtaWidget *w)
 static void on_editor_realized(GtkWidget *view, gpointer user_data);
 static void editor_attach_provider(BtaWidget *w);
 
+/*
+ * What a `SourceEditor` is to its parent: a box holding the scroller and, when
+ * asked for, the minimap.  **Its CSS node is `scrolledwindow`**, which is what the
+ * editor has always been to a stylesheet -- `CssNode()` is part of what an
+ * application's `app.css` is written against, and `tests/widgets` holds the whole
+ * table for exactly this: a build function that swaps the outer widget breaks
+ * every rule written for the old node, in silence.  So the box takes the name,
+ * the way `BtaFixed` takes `fixed`.
+ */
+typedef struct { GtkBox parent; }           BtaEditorBox;
+typedef struct { GtkBoxClass parent_class; } BtaEditorBoxClass;
+
+G_DEFINE_TYPE(BtaEditorBox, bta_editor_box, GTK_TYPE_BOX)
+
+static void bta_editor_box_class_init(BtaEditorBoxClass *klass)
+{
+    gtk_widget_class_set_css_name(GTK_WIDGET_CLASS(klass), "scrolledwindow");
+}
+
+static void bta_editor_box_init(BtaEditorBox *self) {}
+
 static void build_source_editor(BtaWidget *w)
 {
     GtkWidget     *view = gtk_source_view_new();
@@ -52,6 +73,19 @@ static void build_source_editor(BtaWidget *w)
     /* The scroller, the buffer's two events and the watch that keeps them from
      * outliving the widget: the same for both editors, so it is written once. */
     bta_text_view_setup(w, view);
+
+    /* The scroller goes in a box so a minimap can sit beside it (`ShowMap`).
+     * The box is what the widget *is* to its parent, the layout and every
+     * measurement; the scrolled window is found through `bta_scrolled`.  The
+     * map itself is built the first time it is asked for: a hidden
+     * GtkSourceMap still follows the buffer, and most editors never show one. */
+    GtkWidget *scroller = w->gtk;
+    w->gtk = g_object_new(bta_editor_box_get_type(),
+                          "orientation", GTK_ORIENTATION_HORIZONTAL, NULL);
+    gtk_widget_set_hexpand(scroller, TRUE);
+    gtk_widget_set_vexpand(scroller, TRUE);
+    gtk_box_append(GTK_BOX(w->gtk), scroller);
+    g_object_set_data(G_OBJECT(w->gtk), "bta-scrolled", scroller);
 
     /* Completion needs a window to put its popover in; this is when there is
      * one. See editor_sync_completion. */
@@ -231,10 +265,18 @@ static void on_editor_realized(GtkWidget *view, gpointer user_data)
 
 /* The three the source view adds; the five an editor of either kind has are
  * `Editor`'s (bta_text.c). */
-enum { ED_LINENUMBERS, ED_COMPLETION, ED_MARKS };
+enum { ED_LINENUMBERS, ED_COMPLETION, ED_MARKS, ED_MAP };
+
+#define MAP_KEY "bta-minimap"   /* on the box: the GtkSourceMap, once built */
 
 /* Defined with the marks, called from the `ShowMarks` setter. */
 static void mark_tooltips_on(BtaWidget *w);
+
+/* Defined with the folds: once something is folded the line numbers are ours,
+ * and `ShowLineNumbers` is asked of the renderer in use.  Each answers whether
+ * it handled it. */
+static bool folds_numbers_get(BtaWidget *w, bool *on);
+static bool folds_numbers_set(BtaWidget *w, bool on);
 
 static JSValue ed_get_flag(JSContext *ctx, JSValueConst this_val, int magic)
 {
@@ -243,12 +285,22 @@ static JSValue ed_get_flag(JSContext *ctx, JSValueConst this_val, int magic)
         return JS_EXCEPTION;
 
     switch (magic) {
-    case ED_LINENUMBERS:
+    case ED_LINENUMBERS: {
+        bool on;
+
+        if (folds_numbers_get(w, &on))
+            return JS_NewBool(ctx, on);
         return JS_NewBool(ctx, gtk_source_view_get_show_line_numbers(
                                    GTK_SOURCE_VIEW(w->inner)));
+    }
     case ED_MARKS:
         return JS_NewBool(ctx, gtk_source_view_get_show_line_marks(
                                    GTK_SOURCE_VIEW(w->inner)));
+    case ED_MAP: {
+        GtkWidget *map = g_object_get_data(G_OBJECT(w->gtk), MAP_KEY);
+
+        return JS_NewBool(ctx, map && gtk_widget_get_visible(map));
+    }
     default:
         /* What was asked for, not whether it is attached yet: the property has
          * to read back the moment it is set, window or no window. */
@@ -270,13 +322,32 @@ static JSValue ed_set_flag(JSContext *ctx, JSValueConst this_val,
 
     switch (magic) {
     case ED_LINENUMBERS:
-        gtk_source_view_set_show_line_numbers(GTK_SOURCE_VIEW(w->inner), b);
+        if (!folds_numbers_set(w, b))
+            gtk_source_view_set_show_line_numbers(GTK_SOURCE_VIEW(w->inner), b);
         break;
     case ED_MARKS:
         gtk_source_view_set_show_line_marks(GTK_SOURCE_VIEW(w->inner), b);
         if (b)
             mark_tooltips_on(w);      /* the renderer has just been made */
         break;
+    case ED_MAP: {
+        GtkWidget *map = g_object_get_data(G_OBJECT(w->gtk), MAP_KEY);
+
+        if (b && !map) {
+            map = gtk_source_map_new();
+            gtk_source_map_set_view(GTK_SOURCE_MAP(map), GTK_SOURCE_VIEW(w->inner));
+            /* Wide enough to read the shape of a file and no wider: a map
+             * is a scrollbar with a picture, and the code is what the room
+             * is for. */
+            gtk_widget_set_size_request(map, 100, -1);
+            gtk_widget_set_vexpand(map, TRUE);
+            gtk_box_append(GTK_BOX(w->gtk), map);
+            g_object_set_data(G_OBJECT(w->gtk), MAP_KEY, map);
+        }
+        if (map)
+            gtk_widget_set_visible(map, b);
+        break;
+    }
     default:
         /* A request, carried out by `editor_sync_completion` once there is a
          * window to put a popover in. */
@@ -439,6 +510,9 @@ static bool opt_bool(JSContext *ctx, JSValueConst obj, const char *key)
  * (typing versus pressing Enter), and only the caller knows which this is.
  * An empty text clears the search, highlight included.
  */
+/* Defined with the folds: a search opens them all, see `ed_search`. */
+static int folds_open_all(BtaWidget *w);
+
 static JSValue ed_search(JSContext *ctx, JSValueConst this_val,
                          int argc, JSValueConst *argv)
 {
@@ -458,6 +532,15 @@ static JSValue ed_search(JSContext *ctx, JSValueConst this_val,
     gtk_source_search_settings_set_case_sensitive(st, opt_bool(ctx, opts, "CaseSensitive"));
     gtk_source_search_settings_set_at_word_boundaries(st, opt_bool(ctx, opts, "WholeWord"));
     gtk_source_search_settings_set_regex_enabled(st, opt_bool(ctx, opts, "Regex"));
+
+    /* **A search opens every fold.**  GtkSourceView's search does not look in
+     * invisible text (measured: the same word is 1 match before a fold and 0
+     * after), so a search that left the folds shut would answer *nothing found*
+     * about code that is in the file -- a wrong answer given in silence, which is
+     * worse than losing a person's folds.  What was found is then also somewhere
+     * `FindNext` can put the cursor. */
+    if (text && *text)
+        folds_open_all(w);
 
     /* Empty means none: NULL is how the settings spell "not searching", and a
      * literal "" would otherwise match everywhere. */
@@ -515,6 +598,10 @@ static JSValue ed_find(JSContext *ctx, JSValueConst this_val,
     GtkSourceSearchContext *sc = search_of(w, false);
     if (!sc)
         return JS_NewBool(ctx, false);      /* nothing was searched for */
+
+    /* As `Search` does, and for the same reason: a match inside a fold made
+     * since is not one the library can find. */
+    folds_open_all(w);
 
     GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
     GtkTextIter    a, b, ms, me;
@@ -1419,6 +1506,825 @@ static JSValue ed_marks(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/* ----------------------------------------------------------------- Folding */
+
+/*
+ * Folding is not GtkSourceView's -- the library has no such thing -- so it is
+ * built from four pieces that are, and two things measured about GTK that shape
+ * all of them.
+ *
+ *   **A fold is lines made invisible.**  Each one is a `GtkTextTag` with
+ *   `invisible` over the lines it hides, held by two marks so it follows the text
+ *   as lines are added above it.  What is hidden is the lines `Start + 1` to
+ *   `End` **whole, line breaks included**: from the start of the first to the
+ *   start of the line after the last.  The line before stays as it was.
+ *
+ *   *Measured, and the reason it is not "from the end of the start line to the
+ *   end of the last":* GTK does **not** join two lines because the break between
+ *   them is invisible.  Each buffer line is a paragraph of its own, a line whose
+ *   text *and* break are hidden has no height, and a line with only its break
+ *   visible is an empty row -- the first version left one behind every fold.
+ *
+ *   **The program says what can be folded.**  `FoldRanges` is the list of
+ *   `{ Start, End }` lines that have a marker, because only whoever knows the
+ *   language knows where a block ends (the IDE reads it off its own lexer); the
+ *   editor draws the marker, and a click on it toggles.
+ *
+ *   **An edit inside a fold opens it.**  Typed text inside an invisible range is
+ *   invisible too, which is a program that cannot be seen to work: so a change
+ *   that lands in a fold, or that inserted text which took its tag, removes it.
+ *   An edit at the end of the start line is an ordinary edit -- that is the
+ *   line that stays.  No event for it: `Folds()` is the answer for a program
+ *   that keeps a view of them.
+ *
+ *   **The line numbers are ours once there is a fold.**  *Measured:* the
+ *   library's counter draws a number for every line in view, and a hidden line
+ *   has no height, so its number lands on the next row's and the three are
+ *   printed over each other.  So the first time anything is folded the view's
+ *   own numbers are switched off and a renderer of ours takes their place,
+ *   leaving out what is hidden; `ShowLineNumbers` follows whichever is in use.
+ *
+ * Everything lives in one struct on the view and dies with it.  Nothing here
+ * holds a `JSValue`, so there is nothing for the collector to be told about.
+ */
+#define FOLDS_KEY "bta-folds"
+
+typedef struct { GtkTextTag *tag; GtkTextMark *from, *to; } BtaFold;
+typedef struct { int start, end; } BtaRange;
+
+typedef struct {
+    GArray                  *folds;      /* BtaFold */
+    GArray                  *ranges;     /* BtaRange, sorted by start */
+    GArray                  *spans;      /* BtaRange: the folds as lines, rebuilt
+                                          * at the start of each paint */
+    GtkSourceGutterRenderer *renderer;   /* the markers */
+    GtkSourceGutterRenderer *numbers;    /* the line numbers, in place of the view's */
+    int                      digits;     /* what `numbers` is as wide as */
+} BtaFolds;
+
+static void folds_free(gpointer data)
+{
+    BtaFolds *f = data;
+
+    g_array_free(f->folds, TRUE);
+    g_array_free(f->ranges, TRUE);
+    g_array_free(f->spans, TRUE);
+    g_free(f);
+}
+
+/* Two columns of the margin, one class: the marker, drawn as text and
+ * clickable, and the numbers.  `numbers` says which. */
+typedef struct {
+    GtkSourceGutterRendererText parent;
+    BtaFolds                   *folds;
+    gboolean                    numbers;
+} BtaFoldRenderer;
+typedef struct { GtkSourceGutterRendererTextClass parent_class; } BtaFoldRendererClass;
+
+G_DEFINE_TYPE(BtaFoldRenderer, bta_fold_renderer, GTK_SOURCE_TYPE_GUTTER_RENDERER_TEXT)
+
+static BtaFolds *folds_of(BtaWidget *w)
+{
+    return g_object_get_data(G_OBJECT(w->inner), FOLDS_KEY);
+}
+
+/* The 1-based line a mark stands on. */
+static int mark_line(GtkTextBuffer *buf, GtkTextMark *m)
+{
+    GtkTextIter it;
+
+    gtk_text_buffer_get_iter_at_mark(buf, &it, m);
+    return gtk_text_iter_get_line(&it) + 1;
+}
+
+/* The line a fold hangs from: the one before the first line it hides. */
+static int fold_first(GtkTextBuffer *buf, BtaFold *fold)
+{
+    return mark_line(buf, fold->from) - 1;
+}
+
+/* The last line it hides.  `to` is where the line after it starts -- or the end
+ * of the text -- so one character back is the last hidden line's own break. */
+static int fold_last(GtkTextBuffer *buf, BtaFold *fold)
+{
+    GtkTextIter a, b;
+
+    gtk_text_buffer_get_iter_at_mark(buf, &a, fold->from);
+    gtk_text_buffer_get_iter_at_mark(buf, &b, fold->to);
+    if (gtk_text_iter_compare(&b, &a) > 0)
+        gtk_text_iter_backward_char(&b);
+    return gtk_text_iter_get_line(&b) + 1;
+}
+
+static BtaFold *fold_starting_at(GtkTextBuffer *buf, BtaFolds *f, int line)
+{
+    for (guint i = 0; i < f->folds->len; i++) {
+        BtaFold *fold = &g_array_index(f->folds, BtaFold, i);
+
+        if (fold_first(buf, fold) == line)
+            return fold;
+    }
+    return NULL;
+}
+
+static const BtaRange *range_starting_at(BtaFolds *f, int line)
+{
+    for (guint i = 0; i < f->ranges->len; i++) {
+        const BtaRange *r = &g_array_index(f->ranges, BtaRange, i);
+
+        if (r->start == line)
+            return r;
+    }
+    return NULL;
+}
+
+static void fold_drop(GtkTextBuffer *buf, BtaFolds *f, guint index)
+{
+    BtaFold     *fold = &g_array_index(f->folds, BtaFold, index);
+    GtkTextIter  a, b;
+
+    gtk_text_buffer_get_iter_at_mark(buf, &a, fold->from);
+    gtk_text_buffer_get_iter_at_mark(buf, &b, fold->to);
+    gtk_text_buffer_remove_tag(buf, fold->tag, &a, &b);
+    gtk_text_tag_table_remove(gtk_text_buffer_get_tag_table(buf), fold->tag);
+    gtk_text_buffer_delete_mark(buf, fold->from);
+    gtk_text_buffer_delete_mark(buf, fold->to);
+    g_array_remove_index(f->folds, index);
+}
+
+static void folds_redraw(BtaFolds *f)
+{
+    if (f->renderer)
+        gtk_widget_queue_draw(GTK_WIDGET(f->renderer));
+    if (f->numbers)
+        gtk_widget_queue_draw(GTK_WIDGET(f->numbers));
+}
+
+/*
+ * A change that lands in a fold opens it: see the note above.  `pos` is where
+ * it was; `at` the start of the text just inserted, for the one case offsets
+ * cannot decide -- text put exactly where a fold ends, which has the fold's tag
+ * only if GTK gave it.  `to` has *left* gravity for that: a mark that stays
+ * before what is inserted at it, so the range does not grow to cover it.
+ */
+static void folds_check(GtkTextBuffer *buf, BtaFolds *f, int pos, gboolean inserted,
+                        GtkTextIter *at)
+{
+    for (guint i = f->folds->len; i-- > 0; ) {
+        BtaFold     *fold = &g_array_index(f->folds, BtaFold, i);
+        GtkTextIter  a, b;
+
+        gtk_text_buffer_get_iter_at_mark(buf, &a, fold->from);
+        gtk_text_buffer_get_iter_at_mark(buf, &b, fold->to);
+
+        int from = gtk_text_iter_get_offset(&a);
+        int to   = gtk_text_iter_get_offset(&b);
+        gboolean hit;
+
+        if (inserted)
+            hit = (pos >= from && pos < to) ||
+                  (pos == to && gtk_text_iter_has_tag(at, fold->tag));
+        else
+            /* One before `from` is the break of the line the fold hangs from:
+             * taking it joins that line to what was hidden. */
+            hit = pos >= from - 1 && pos <= to;
+
+        if (hit)
+            fold_drop(buf, f, i);
+    }
+    folds_redraw(f);
+}
+
+/* After the text is in, `at` is at its end: the start is a length back. */
+static void folds_inserted(GtkTextBuffer *buf, GtkTextIter *at, char *text,
+                           int len, gpointer data)
+{
+    GtkTextIter start = *at;
+
+    gtk_text_iter_backward_chars(&start, g_utf8_strlen(text, len));
+    folds_check(buf, data, gtk_text_iter_get_offset(&start), TRUE, &start);
+}
+
+static void folds_deleted(GtkTextBuffer *buf, GtkTextIter *start, GtkTextIter *end,
+                          gpointer data)
+{
+    folds_check(buf, data, gtk_text_iter_get_offset(start), FALSE, start);
+}
+
+/* The numbers column as wide as the biggest number it will show -- two digits
+ * at the least, so a short file does not make the margin jump at line ten. */
+static void numbers_resize(BtaFolds *f, GtkTextBuffer *buf)
+{
+    if (!f->numbers)
+        return;
+
+    int digits = 2;
+    for (int n = gtk_text_buffer_get_line_count(buf); n >= 100; n /= 10)
+        digits++;
+    if (digits == f->digits)
+        return;
+    f->digits = digits;
+
+    char *widest = g_strnfill(digits, '8');
+    int   width  = 0;
+
+    gtk_source_gutter_renderer_text_measure(GTK_SOURCE_GUTTER_RENDERER_TEXT(f->numbers),
+                                            widest, &width, NULL);
+    g_free(widest);
+    gtk_widget_set_size_request(GTK_WIDGET(f->numbers),
+        width + 2 * gtk_source_gutter_renderer_get_xpad(f->numbers), -1);
+}
+
+static void folds_changed(GtkTextBuffer *buf, gpointer data)
+{
+    numbers_resize(data, buf);
+}
+
+/* The folds as lines, read once at the start of a paint so that asking about
+ * each of the lines in view does not walk the marks again for every one. */
+static void fold_begin(GtkSourceGutterRenderer *r, GtkSourceGutterLines *lines)
+{
+    /* The parent's first: it is what makes the Pango layout the text is drawn
+     * with, and a `begin` that replaced it left every line to be drawn on a
+     * layout that did not exist. */
+    GTK_SOURCE_GUTTER_RENDERER_CLASS(bta_fold_renderer_parent_class)->begin(r, lines);
+
+    BtaFolds      *f   = ((BtaFoldRenderer *)r)->folds;
+    GtkTextBuffer *buf = gtk_source_gutter_lines_get_buffer(lines);
+
+    g_array_set_size(f->spans, 0);
+    for (guint i = 0; i < f->folds->len; i++) {
+        BtaFold *fold = &g_array_index(f->folds, BtaFold, i);
+        BtaRange span = { fold_first(buf, fold), fold_last(buf, fold) };
+
+        g_array_append_val(f->spans, span);
+    }
+}
+
+static gboolean span_hides(BtaFolds *f, int line)
+{
+    for (guint i = 0; i < f->spans->len; i++) {
+        const BtaRange *s = &g_array_index(f->spans, BtaRange, i);
+
+        if (line > s->start && line <= s->end)
+            return TRUE;
+    }
+    return FALSE;
+}
+
+static gboolean span_starts(BtaFolds *f, int line)
+{
+    for (guint i = 0; i < f->spans->len; i++)
+        if (g_array_index(f->spans, BtaRange, i).start == line)
+            return TRUE;
+    return FALSE;
+}
+
+/* What the renderer draws on a line: the marker, or the number.  `line` is
+ * 0-based, a range's is 1-based. */
+static void fold_query_data(GtkSourceGutterRenderer *r, GtkSourceGutterLines *lines,
+                            guint line)
+{
+    BtaFoldRenderer *me = (BtaFoldRenderer *)r;
+    BtaFolds        *f  = me->folds;
+    GtkSourceGutterRendererText *t = GTK_SOURCE_GUTTER_RENDERER_TEXT(r);
+
+    if (!f) {
+        gtk_source_gutter_renderer_text_set_text(t, "", -1);
+        return;
+    }
+
+    if (me->numbers) {
+        /* A hidden line has no row, and its number would land on the next
+         * line's: say nothing for it. */
+        if (span_hides(f, (int)line + 1)) {
+            gtk_source_gutter_renderer_text_set_text(t, "", -1);
+        } else if (gtk_source_gutter_lines_is_cursor(lines, line)) {
+            char *m = g_strdup_printf("<b>%u</b>", line + 1);
+
+            gtk_source_gutter_renderer_text_set_markup(t, m, -1);
+            g_free(m);
+        } else {
+            char *s = g_strdup_printf("%u", line + 1);
+
+            gtk_source_gutter_renderer_text_set_text(t, s, -1);
+            g_free(s);
+        }
+        return;
+    }
+
+    /* ▶ closed, ▼ open, in a larger size: the small ▸ ▾ were a few pixels and
+     * could hardly be seen against the numbers beside them. */
+    const char *mark = NULL;
+    if (span_starts(f, (int)line + 1))
+        mark = "<span size=\"large\">\xE2\x96\xB6</span>";   /* ▶ */
+    else if (range_starting_at(f, (int)line + 1))
+        mark = "<span size=\"large\">\xE2\x96\xBC</span>";   /* ▼ */
+    if (mark)
+        gtk_source_gutter_renderer_text_set_markup(t, mark, -1);
+    else
+        gtk_source_gutter_renderer_text_set_text(t, "", -1);
+}
+
+static gboolean fold_query_activatable(GtkSourceGutterRenderer *r, GtkTextIter *iter,
+                                       GdkRectangle *area)
+{
+    BtaFoldRenderer *me   = (BtaFoldRenderer *)r;
+    int              line = gtk_text_iter_get_line(iter) + 1;
+
+    return !me->numbers && me->folds &&
+           (range_starting_at(me->folds, line) ||
+            fold_starting_at(gtk_text_iter_get_buffer(iter), me->folds, line));
+}
+
+static void bta_fold_renderer_class_init(BtaFoldRendererClass *klass)
+{
+    GtkSourceGutterRendererClass *k = GTK_SOURCE_GUTTER_RENDERER_CLASS(klass);
+
+    k->begin             = fold_begin;
+    k->query_data        = fold_query_data;
+    k->query_activatable = fold_query_activatable;
+}
+
+static void bta_fold_renderer_init(BtaFoldRenderer *self)
+{
+    gtk_source_gutter_renderer_set_xalign(GTK_SOURCE_GUTTER_RENDERER(self), 0.5f);
+    gtk_widget_set_size_request(GTK_WIDGET(self), 22, -1);
+}
+
+static void fold_toggle_line(BtaWidget *w, int line);
+
+static void on_fold_activated(GtkSourceGutterRenderer *r, GtkTextIter *iter,
+                              GdkRectangle *area, guint button, GdkModifierType state,
+                              gint n_presses, gpointer user_data)
+{
+    if (button == GDK_BUTTON_PRIMARY)
+        fold_toggle_line(user_data, gtk_text_iter_get_line(iter) + 1);
+}
+
+/* The state, made the first time something asks for it: the markers' column,
+ * the numbers that replace the view's, and the buffer signals that keep a fold
+ * honest. */
+static BtaFolds *folds_make(BtaWidget *w)
+{
+    BtaFolds *f = folds_of(w);
+
+    if (f)
+        return f;
+
+    f         = g_new0(BtaFolds, 1);
+    f->folds  = g_array_new(FALSE, TRUE, sizeof(BtaFold));
+    f->ranges = g_array_new(FALSE, TRUE, sizeof(BtaRange));
+    f->spans  = g_array_new(FALSE, TRUE, sizeof(BtaRange));
+    g_object_set_data_full(G_OBJECT(w->inner), FOLDS_KEY, f, folds_free);
+
+    GtkSourceView *sv  = GTK_SOURCE_VIEW(w->inner);
+    GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
+    GtkSourceGutter *gutter = gtk_source_view_get_gutter(sv, GTK_TEXT_WINDOW_LEFT);
+
+    g_signal_connect_after(buf, "insert-text",  G_CALLBACK(folds_inserted), f);
+    g_signal_connect_after(buf, "delete-range", G_CALLBACK(folds_deleted),  f);
+    g_signal_connect_after(buf, "changed",      G_CALLBACK(folds_changed),  f);
+    bta_widget_watch(w, buf);
+
+    /* The numbers: the view's are switched off, and ours stand where they stood
+     * and as visible as they were. */
+    gboolean shown = gtk_source_view_get_show_line_numbers(sv);
+    gtk_source_view_set_show_line_numbers(sv, FALSE);
+
+    GtkSourceGutterRenderer *n = g_object_new(bta_fold_renderer_get_type(), NULL);
+    ((BtaFoldRenderer *)n)->folds   = f;
+    ((BtaFoldRenderer *)n)->numbers = TRUE;
+    gtk_source_gutter_renderer_set_xalign(n, 1.0f);
+    gtk_source_gutter_renderer_set_xpad(n, 6);
+    gtk_widget_set_visible(GTK_WIDGET(n), shown);
+    f->numbers = n;
+    bta_widget_watch(w, n);
+    gtk_source_gutter_insert(gutter, n, GTK_SOURCE_VIEW_GUTTER_POSITION_LINES);
+    numbers_resize(f, buf);
+
+    GtkSourceGutterRenderer *r = g_object_new(bta_fold_renderer_get_type(), NULL);
+    ((BtaFoldRenderer *)r)->folds = f;
+    f->renderer = r;
+    g_signal_connect(r, "activate", G_CALLBACK(on_fold_activated), w);
+    bta_widget_watch(w, r);
+    gtk_source_gutter_insert(gutter, r, 10);
+    return f;
+}
+
+/* `ShowLineNumbers`, once the numbers are ours: the same question and the same
+ * answer, asked of the renderer that is in use. */
+static bool folds_numbers_get(BtaWidget *w, bool *on)
+{
+    BtaFolds *f = GTK_SOURCE_IS_VIEW(w->inner) ? folds_of(w) : NULL;
+
+    if (!f)
+        return false;
+    *on = gtk_widget_get_visible(GTK_WIDGET(f->numbers));
+    return true;
+}
+
+static bool folds_numbers_set(BtaWidget *w, bool on)
+{
+    BtaFolds *f = folds_of(w);
+
+    if (!f)
+        return false;
+    gtk_widget_set_visible(GTK_WIDGET(f->numbers), on);
+    return true;
+}
+
+/* Hides lines `start + 1` to `end`.  Returns whether anything was done: a fold
+ * already there is left as it is. */
+static bool fold_add(BtaWidget *w, int start, int end)
+{
+    BtaFolds      *f   = folds_make(w);
+    GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
+
+    if (fold_starting_at(buf, f, start))
+        return false;
+
+    GtkTextIter a, b;
+    bta_text_iter_at_line(buf, &a, start + 1);
+    if (end < gtk_text_buffer_get_line_count(buf))
+        bta_text_iter_at_line(buf, &b, end + 1);
+    else
+        gtk_text_buffer_get_end_iter(buf, &b);
+
+    BtaFold fold;
+    fold.tag  = gtk_text_buffer_create_tag(buf, NULL, "invisible", TRUE, NULL);
+    fold.from = gtk_text_buffer_create_mark(buf, NULL, &a, TRUE);
+    fold.to   = gtk_text_buffer_create_mark(buf, NULL, &b, TRUE);   /* left: see folds_check */
+    gtk_text_buffer_apply_tag(buf, fold.tag, &a, &b);
+    g_array_append_val(f->folds, fold);
+
+    /* A cursor in what is now hidden would be typing into nothing: it goes to
+     * the end of the line the fold hangs from, which is what stays.  At the very
+     * end of the text the end position is hidden too. */
+    GtkTextIter cur;
+    gtk_text_buffer_get_iter_at_mark(buf, &cur, gtk_text_buffer_get_insert(buf));
+    int at = gtk_text_iter_get_offset(&cur);
+    if (at >= gtk_text_iter_get_offset(&a) &&
+        (at < gtk_text_iter_get_offset(&b) || gtk_text_iter_is_end(&b))) {
+        GtkTextIter home;
+
+        bta_text_iter_at_line(buf, &home, start);
+        if (!gtk_text_iter_ends_line(&home))
+            gtk_text_iter_forward_to_line_end(&home);
+        gtk_text_buffer_place_cursor(buf, &home);
+    }
+
+    folds_redraw(f);
+    return true;
+}
+
+static bool fold_remove_at(BtaWidget *w, int start)
+{
+    BtaFolds      *f   = folds_of(w);
+    GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
+
+    if (!f)
+        return false;
+    for (guint i = 0; i < f->folds->len; i++) {
+        if (fold_first(buf, &g_array_index(f->folds, BtaFold, i)) == start) {
+            fold_drop(buf, f, i);
+            folds_redraw(f);
+            return true;
+        }
+    }
+    return false;
+}
+
+void bta_editor_reveal(BtaWidget *w, int line)
+{
+    if (!GTK_SOURCE_IS_VIEW(w->inner))
+        return;
+
+    BtaFolds      *f   = folds_of(w);
+    GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
+
+    for (guint i = f ? f->folds->len : 0; i-- > 0; ) {
+        BtaFold *fold = &g_array_index(f->folds, BtaFold, i);
+
+        if (line > fold_first(buf, fold) && line <= fold_last(buf, fold))
+            fold_drop(buf, f, i);
+    }
+    if (f)
+        folds_redraw(f);
+}
+
+/* A click on the marker: the one road that raises `FoldChange`, because a
+ * program that folds from code knows it did. */
+static void fold_toggle_line(BtaWidget *w, int line)
+{
+    BtaFolds *f = folds_of(w);
+    bool      folded;
+
+    if (!f)
+        return;
+    if (fold_remove_at(w, line)) {
+        folded = false;
+    } else {
+        const BtaRange *r = range_starting_at(f, line);
+
+        if (!r || !fold_add(w, r->start, r->end))
+            return;
+        folded = true;
+    }
+
+    JSValue argv[2] = { JS_NewInt32(w->ctx, line), JS_NewBool(w->ctx, folded) };
+
+    bta_emit(w, "FoldChange", 2, argv);
+}
+
+static bool fold_line_arg(JSContext *ctx, BtaWidget *w, JSValueConst v,
+                          const char *verb, int32_t *out)
+{
+    if (!bta_to_int(ctx, v, verb, out))
+        return false;
+    if (*out < 1 || *out > gtk_text_buffer_get_line_count(GTK_TEXT_BUFFER(buffer_of(w)))) {
+        JS_ThrowRangeError(ctx, "%s: there is no line %d", verb, *out);
+        return false;
+    }
+    return true;
+}
+
+static JSValue ed_fold(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Fold(line, [endLine]) needs a line");
+
+    int32_t start, end = 0;
+    if (!fold_line_arg(ctx, w, argv[0], "Fold", &start))
+        return JS_EXCEPTION;
+
+    if (argc > 1 && !JS_IsUndefined(argv[1])) {
+        if (!fold_line_arg(ctx, w, argv[1], "Fold", &end))
+            return JS_EXCEPTION;
+    } else {
+        BtaFolds       *f = folds_of(w);
+        const BtaRange *r = f ? range_starting_at(f, start) : NULL;
+
+        if (!r)
+            return JS_ThrowRangeError(ctx, "Fold: line %d starts no range -- name the "
+                                           "end line, or declare it in FoldRanges", start);
+        end = r->end;
+    }
+    if (end <= start)
+        return JS_ThrowRangeError(ctx, "Fold: the end line %d is not after line %d", end, start);
+
+    fold_add(w, start, end);
+    return JS_UNDEFINED;
+}
+
+static JSValue ed_unfold(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Unfold(line) needs a line");
+
+    int32_t line;
+    if (!fold_line_arg(ctx, w, argv[0], "Unfold", &line))
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, fold_remove_at(w, line));
+}
+
+static JSValue ed_folded(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Folded(line) needs a line");
+
+    int32_t line;
+    if (!bta_to_int(ctx, argv[0], "Folded", &line))
+        return JS_EXCEPTION;
+
+    BtaFolds *f = folds_of(w);
+    return JS_NewBool(ctx, f && fold_starting_at(GTK_TEXT_BUFFER(buffer_of(w)), f, line));
+}
+
+static JSValue ed_fold_all(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    BtaFolds *f = folds_of(w);
+    int       n = 0;
+
+    /* Ranges are copied out first: folding moves nothing in them, but the loop
+     * should not depend on that. */
+    for (guint i = 0; f && i < f->ranges->len; i++) {
+        BtaRange r = g_array_index(f->ranges, BtaRange, i);
+
+        if (fold_add(w, r.start, r.end))
+            n++;
+    }
+    return JS_NewInt32(ctx, n);
+}
+
+static int folds_open_all(BtaWidget *w)
+{
+    BtaFolds      *f   = folds_of(w);
+    GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
+    int            n   = 0;
+
+    while (f && f->folds->len > 0) {
+        fold_drop(buf, f, f->folds->len - 1);
+        n++;
+    }
+    if (f)
+        folds_redraw(f);
+    return n;
+}
+
+static JSValue ed_unfold_all(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewInt32(ctx, folds_open_all(w));
+}
+
+static int range_cmp(gconstpointer a, gconstpointer b)
+{
+    return ((const BtaRange *)a)->start - ((const BtaRange *)b)->start;
+}
+
+static JSValue range_row(JSContext *ctx, int start, int end)
+{
+    JSValue row = JS_NewObject(ctx);
+
+    JS_SetPropertyStr(ctx, row, "Start", JS_NewInt32(ctx, start));
+    JS_SetPropertyStr(ctx, row, "End",   JS_NewInt32(ctx, end));
+    return row;
+}
+
+/* `Folds()` -- what is folded now, in line order, read off the marks: so it is
+ * right after the text above a fold has grown or shrunk.  `End` is the last
+ * line hidden. */
+static JSValue ed_folds(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    BtaFolds      *f    = folds_of(w);
+    GtkTextBuffer *buf  = GTK_TEXT_BUFFER(buffer_of(w));
+    GArray        *rows = g_array_new(FALSE, FALSE, sizeof(BtaRange));
+
+    for (guint i = 0; f && i < f->folds->len; i++) {
+        BtaFold *fold = &g_array_index(f->folds, BtaFold, i);
+        BtaRange row  = { fold_first(buf, fold), fold_last(buf, fold) };
+
+        g_array_append_val(rows, row);
+    }
+    g_array_sort(rows, range_cmp);
+
+    JSValue out = JS_NewArray(ctx);
+    for (guint i = 0; i < rows->len; i++) {
+        BtaRange r = g_array_index(rows, BtaRange, i);
+
+        JS_SetPropertyUint32(ctx, out, i, range_row(ctx, r.start, r.end));
+    }
+    g_array_free(rows, TRUE);
+    return out;
+}
+
+static JSValue ed_get_fold_ranges(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    BtaFolds *f   = folds_of(w);
+    JSValue   out = JS_NewArray(ctx);
+
+    for (guint i = 0; f && i < f->ranges->len; i++) {
+        BtaRange r = g_array_index(f->ranges, BtaRange, i);
+
+        JS_SetPropertyUint32(ctx, out, i, range_row(ctx, r.start, r.end));
+    }
+    return out;
+}
+
+/*
+ * Assigning is **all or nothing**: every row is read and checked before the
+ * list is touched, so an assignment with a bad row at the end leaves the
+ * markers as they were.  A row is `{ Start, End }` with `1 <= Start < End`; a
+ * line past the end of the text is allowed -- the text moves, and the list is
+ * the program's to keep in step -- and is simply a marker that never draws.
+ */
+static JSValue ed_set_fold_ranges(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (!JS_IsArray(val))
+        return JS_ThrowTypeError(ctx, "FoldRanges expects an array of { Start, End }");
+
+    JSValue  lenv = JS_GetPropertyStr(ctx, val, "length");
+    uint32_t n    = 0;
+    JS_ToUint32(ctx, &n, lenv);
+    JS_FreeValue(ctx, lenv);
+
+    GArray *rows = g_array_new(FALSE, FALSE, sizeof(BtaRange));
+
+    for (uint32_t i = 0; i < n; i++) {
+        JSValue row = JS_GetPropertyUint32(ctx, val, i);
+        JSValue s   = JS_IsObject(row) ? JS_GetPropertyStr(ctx, row, "Start") : JS_UNDEFINED;
+        JSValue e   = JS_IsObject(row) ? JS_GetPropertyStr(ctx, row, "End")   : JS_UNDEFINED;
+        int32_t start = 0, end = 0;
+        bool    ok    = JS_IsObject(row) &&
+                        bta_to_int(ctx, s, "FoldRanges Start", &start) &&
+                        bta_to_int(ctx, e, "FoldRanges End", &end);
+
+        JS_FreeValue(ctx, row);
+        JS_FreeValue(ctx, s);
+        JS_FreeValue(ctx, e);
+
+        if (!ok || start < 1 || end <= start) {
+            g_array_free(rows, TRUE);
+            if (ok || !JS_HasException(ctx))
+                return JS_ThrowRangeError(ctx, "FoldRanges: row %u is not { Start, End } "
+                                               "with 1 <= Start < End", i);
+            return JS_EXCEPTION;
+        }
+        BtaRange r = { start, end };
+
+        g_array_append_val(rows, r);
+    }
+    g_array_sort(rows, range_cmp);
+
+    BtaFolds *f = folds_make(w);
+
+    g_array_set_size(f->ranges, 0);
+    g_array_append_vals(f->ranges, rows->data, rows->len);
+    g_array_free(rows, TRUE);
+    gtk_widget_queue_draw(GTK_WIDGET(f->renderer));
+    return JS_UNDEFINED;
+}
+
+/* ---------------------------------------------------------------- Snippets */
+
+/*
+ * `InsertSnippet(template)` -- text with places in it to move through.
+ *
+ * GtkSourceView's own snippets: `${1:name}` is a place with a default that is
+ * selected when the cursor arrives, a repeated number is the same place typed
+ * once and shown in each, and `$0` is where the cursor ends.  Tab goes to the
+ * next place and Shift+Tab to the one before; the view does that itself while
+ * a snippet is active, which is why this is a verb and not a loop over
+ * `Insert` and `Select`.  Indentation is the view's too: a template written at
+ * column 0 lands at the indentation of the line it is put on.
+ *
+ * It **replaces the selection** where `Insert` does not: a snippet is what a
+ * word typed as a *trigger* becomes, and the trigger is selected first.
+ *
+ * `gtk_source_snippet_new_parsed` is GtkSourceView 5.6, below the 5.12 of the
+ * oldest library CI builds against and the floor this project states, and a
+ * template that does not parse is a `RangeError` that does not quote GLib's
+ * translated sentence.
+ */
+static JSValue ed_insert_snippet(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (argc < 1 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx, "InsertSnippet(template) needs the template as text");
+
+    const char *s = JS_ToCString(ctx, argv[0]);
+    if (!s)
+        return JS_EXCEPTION;
+
+    GError           *err     = NULL;
+    GtkSourceSnippet *snippet = gtk_source_snippet_new_parsed(s, &err);
+    JS_FreeCString(ctx, s);
+    if (!snippet) {
+        g_clear_error(&err);
+        return JS_ThrowRangeError(ctx, "InsertSnippet: the template does not parse "
+                                       "(a place is ${1:default}, the end is $0)");
+    }
+
+    GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
+    GtkTextIter    at;
+
+    gtk_text_buffer_delete_selection(buf, TRUE, TRUE);
+    gtk_text_buffer_get_iter_at_mark(buf, &at, gtk_text_buffer_get_insert(buf));
+    gtk_source_view_push_snippet(GTK_SOURCE_VIEW(w->inner), snippet, &at);
+    g_object_unref(snippet);
+    return JS_UNDEFINED;
+}
+
 /* What the source view adds. Everything a plain text view answers -- `Text`,
  * `Line`, `Column`, `Selection`, `Modified`, `ReadOnly`, `Wrap`, `CanUndo`,
  * `CanRedo`, `GotoLine`, `Select`, `Insert`, `Append`, `Clear`, `Undo`, `Redo`
@@ -1458,6 +2364,13 @@ static const JSCFunctionListEntry source_props[] = {
      *   the gutter's marks — see `Mark`
      */
     JS_CGETSET_MAGIC_DEF("ShowMarks",       ed_get_flag, ed_set_flag, ED_MARKS),
+    /* ShowMap
+     *   a minimap of the whole file beside the text — its shape, the line
+     *   the view is on, and a drag or a click to scroll. Default `false`.
+     *   Built the first time it is turned on, so an editor that never shows
+     *   one pays nothing
+     */
+    JS_CGETSET_MAGIC_DEF("ShowMap",         ed_get_flag, ed_set_flag, ED_MAP),
     /* Completion
      *   offer the buffer's own words while typing — the floor of what an
      *   editor owes, and the whole of what can be known without being told
@@ -1487,8 +2400,61 @@ static const JSCFunctionListEntry source_props[] = {
      *   read as by the first thing that used it
      */
     JS_CFUNC_DEF("Marks",      1, ed_marks),
+    /* FoldRanges
+     *   the blocks that can be folded, as `[{ Start, End }]` lines, 1-based: what
+     *   a fold of one would hide is `Start + 1` to `End`. **The program says**
+     *   -- only whoever knows the language knows where a block ends -- and the
+     *   editor draws a marker beside each `Start` (`▼` open, `▶` folded) that a
+     *   click toggles. Assigning is all or nothing, and a row that is not
+     *   `1 <= Start < End` is a `RangeError`. Keep it in step with the text
+     */
+    JS_CGETSET_DEF("FoldRanges", ed_get_fold_ranges, ed_set_fold_ranges),
+    /* Fold(line, [endLine])
+     *   hides the lines after `line`, down to `endLine` -- or to the end of the
+     *   range `FoldRanges` has for it, which is what a missing `endLine` asks
+     *   for. The line itself stays whole. A fold is text made invisible, so
+     *   the cursor is moved out of it, and **an edit at or inside a fold opens
+     *   it**. **`RangeError`** for a line that is not there or a range
+     *   `FoldRanges` does not have
+     */
+    JS_CFUNC_DEF("Fold", 2, ed_fold),
+    /* Unfold(line)
+     *   opens the fold that starts on that line. `true` when there was one
+     */
+    JS_CFUNC_DEF("Unfold", 1, ed_unfold),
+    /* Folded(line)
+     *   whether a fold starts on that line
+     */
+    JS_CFUNC_DEF("Folded", 1, ed_folded),
+    /* FoldAll()
+     *   folds every range `FoldRanges` has. How many were closed
+     */
+    JS_CFUNC_DEF("FoldAll", 0, ed_fold_all),
+    /* UnfoldAll()
+     *   opens every fold. How many were open
+     */
+    JS_CFUNC_DEF("UnfoldAll", 0, ed_unfold_all),
+    /* Folds()
+     *   what is folded now, in line order, as `[{ Start, End }]` -- `End` the
+     *   last line hidden. Read off the text itself, so it is right after lines
+     *   were added or taken away above
+     */
+    JS_CFUNC_DEF("Folds", 0, ed_folds),
+    /* InsertSnippet(template)
+     *   text with places to move through, put at the cursor **in place of the
+     *   selection**. `${1:name}` is a place with a default that is selected
+     *   when the cursor arrives, the same number twice is one place typed once
+     *   and shown in each, and `$0` is where the cursor ends. Tab goes to the
+     *   next place and Shift+Tab to the one before, which the editor does by
+     *   itself while the snippet lasts; a template written at column 0 takes
+     *   the indentation of the line it lands on. **`RangeError`** when the
+     *   template does not parse
+     */
+    JS_CFUNC_DEF("InsertSnippet", 1, ed_insert_snippet),
     /* Search(text, [{CaseSensitive, WholeWord, Regex}])
-     *   how many there are, highlighting every one. **It does not move the
+     *   how many there are, highlighting every one. **It opens every fold**:
+     *   the search does not look in hidden text, and *nothing found* about code
+     *   that is in the file would be wrong. **It does not move the
      *   cursor**: typing in a find field and jumping to a match happen at
      *   different moments. `Regex: true` is **PCRE2** — GtkSourceView's own
      *   engine and not the language's [`Regex`](docs/llm/library.md#regex):
@@ -1499,7 +2465,8 @@ static const JSCFunctionListEntry source_props[] = {
      */
     JS_CFUNC_DEF("Search",       2, ed_search),
     /* FindNext()
-     *   moves to the next match, wrapping around
+     *   moves to the next match, wrapping around. **Opens every fold** first,
+     *   as `Search` does
      */
     JS_CFUNC_DEF("FindNext",     0, ed_find_next),
     /* FindPrevious()
@@ -1575,6 +2542,11 @@ void bta_editor_register(void)
     const BtaClass rows[] = {
         /* Change() */
         /* Cursor() */
+        /* FoldChange(line, folded)
+         *   the user clicked a fold marker in the margin. `folded` is what it is
+         *   now. **Only the click**: a fold made by `Fold` from code is not
+         *   announced, because the program that made it knows
+         */
         /* Complete(word, line, column, text)
          *   a completion was asked for. Answer with a list, or nothing. An
          *   entry is a **word**, or `{ Text, Detail }` for one that says what
@@ -1583,7 +2555,7 @@ void bta_editor_register(void)
          */
         BTA_CLASS_ENUM_TEXT("SourceEditor", "Editor", build_source_editor,
                             source_props, false, editor_options,
-                            "CompletionTitle", "Change,Cursor,Complete"),
+                            "CompletionTitle", "Change,Cursor,Complete,FoldChange"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

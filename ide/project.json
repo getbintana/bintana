@@ -45,6 +45,8 @@
     "modules/Changes.js",
     "modules/Problems.js",
     "modules/Names.js",
+    "modules/Snippets.js",
+    "modules/Folding.js",
     "modules/Lex.js",
     "modules/Refactor.js",
     "modules/Live.js",

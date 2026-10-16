@@ -110,6 +110,10 @@ export class Live {
         const text = ide.Editor.Text;
         const at   = this.caret(ide.Editor, text);
 
+        /* The blocks that can be folded move with the text, and the pause is
+         * when the markers are brought up to it. */
+        Folding.refresh(ide.Editor, name, text);
+
         /* `Names`, and not a copy of it: the project pass runs the same
          * three. What belongs to this class is the *moment*: the pause, and the
          * caret rule that goes with it. */

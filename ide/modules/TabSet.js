@@ -300,6 +300,10 @@ export class TabSet {
             ed.ReadOnly = !!state.foreign;
             state.editor = ed;
 
+            /* The blocks that can be folded, and the marker beside each: from the
+             * text as it was loaded, and kept up to date by `Live`'s pause. */
+            Folding.refresh(ed, name, state.text);
+
             /*
              * The breakpoints this file had.  They belong to the gutter and the
              * gutter belongs to the tab, so closing one would lose them: the

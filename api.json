@@ -2763,6 +2763,11 @@
           "Doc": "it was scrolled — by the wheel, a scrollbar, the keyboard or an assignment. One event for a diagonal move. Two panes locked together is `Before_Scroll(x, y) { this.After.ScrollY = y; }`, and it does not loop: assigning a value it already has emits nothing"
         },
         {
+          "Name": "KeyPreview",
+          "Signature": "(key, ctrl, shift, alt)",
+          "Doc": "a key, **before the editor has acted on it**. `KeyPress` arrives after: the view has taken Tab, Enter, the arrows and every printable key by then, so it cannot turn Tab into a snippet or Enter into something that is not a newline. Answer `true` to take the key and the editor never sees it. `key` is a name like `Tab`, `Return` or `a`"
+        },
+        {
           "Name": "MouseDown",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "coordinates are relative to the widget"
@@ -7287,7 +7292,7 @@
           "Params": 0,
           "Signature": "()",
           "Returns": "",
-          "Doc": "moves to the next match, wrapping around",
+          "Doc": "moves to the next match, wrapping around. **Opens every fold** first, as `Search` does",
           "Native": true
         },
         {
@@ -7297,6 +7302,60 @@
           "Signature": "()",
           "Returns": "",
           "Doc": "and backwards",
+          "Native": true
+        },
+        {
+          "Name": "Fold",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(line, [endLine])",
+          "Returns": "",
+          "Doc": "hides the lines after `line`, down to `endLine` -- or to the end of the range `FoldRanges` has for it, which is what a missing `endLine` asks for. The line itself stays whole. A fold is text made invisible, so the cursor is moved out of it, and **an edit at or inside a fold opens it**. **`RangeError`** for a line that is not there or a range `FoldRanges` does not have",
+          "Native": true
+        },
+        {
+          "Name": "FoldAll",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "folds every range `FoldRanges` has. How many were closed",
+          "Native": true
+        },
+        {
+          "Name": "FoldRanges",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the blocks that can be folded, as `[{ Start, End }]` lines, 1-based: what a fold of one would hide is `Start + 1` to `End`. **The program says** -- only whoever knows the language knows where a block ends -- and the editor draws a marker beside each `Start` (`▼` open, `▶` folded) that a click toggles. Assigning is all or nothing, and a row that is not `1 <= Start < End` is a `RangeError`. Keep it in step with the text",
+          "Native": true
+        },
+        {
+          "Name": "Folded",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(line)",
+          "Returns": "",
+          "Doc": "whether a fold starts on that line",
+          "Native": true
+        },
+        {
+          "Name": "Folds",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "what is folded now, in line order, as `[{ Start, End }]` -- `End` the last line hidden. Read off the text itself, so it is right after lines were added or taken away above",
+          "Native": true
+        },
+        {
+          "Name": "InsertSnippet",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(template)",
+          "Returns": "",
+          "Doc": "text with places to move through, put at the cursor **in place of the selection**. `${1:name}` is a place with a default that is selected when the cursor arrives, the same number twice is one place typed once and shown in each, and `$0` is where the cursor ends. Tab goes to the next place and Shift+Tab to the one before, which the editor does by itself while the snippet lasts; a template written at column 0 takes the indentation of the line it lands on. **`RangeError`** when the template does not parse",
           "Native": true
         },
         {
@@ -7368,7 +7427,7 @@
           "Params": 2,
           "Signature": "(text, [{CaseSensitive, WholeWord, Regex}])",
           "Returns": "",
-          "Doc": "how many there are, highlighting every one. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments. `Regex: true` is **PCRE2** — GtkSourceView's own engine and not the language's [`Regex`](docs/llm/library.md#regex): always multiline, and `\\d` `\\w` `\\b` are Unicode-aware. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments, and a find bar that jumped on every keystroke would drag the view about while somebody is still typing",
+          "Doc": "how many there are, highlighting every one. **It opens every fold**: the search does not look in hidden text, and *nothing found* about code that is in the file would be wrong. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments. `Regex: true` is **PCRE2** — GtkSourceView's own engine and not the language's [`Regex`](docs/llm/library.md#regex): always multiline, and `\\d` `\\w` `\\b` are Unicode-aware. **It does not move the cursor**: typing in a find field and jumping to a match happen at different moments, and a find bar that jumped on every keystroke would drag the view about while somebody is still typing",
           "Native": true
         },
         {
@@ -7390,6 +7449,15 @@
           "Native": true
         },
         {
+          "Name": "ShowMap",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a minimap of the whole file beside the text — its shape, the line the view is on, and a drag or a click to scroll. Default `false`. Built the first time it is turned on, so an editor that never shows one pays nothing",
+          "Native": true
+        },
+        {
           "Name": "ShowMarks",
           "Kind": "Property",
           "Params": -1,
@@ -7405,6 +7473,24 @@
           "Signature": "",
           "Returns": "",
           "Doc": "`Adwaita` `Adwaita-dark` `classic` `classic-dark` `cobalt` `cobalt-light` `kate` `kate-dark` `oblivion` `solarized-light` `solarized-dark` `tango`. Default `\"classic\"`",
+          "Native": true
+        },
+        {
+          "Name": "Unfold",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(line)",
+          "Returns": "",
+          "Doc": "opens the fold that starts on that line. `true` when there was one",
+          "Native": true
+        },
+        {
+          "Name": "UnfoldAll",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "opens every fold. How many were open",
           "Native": true
         },
         {
@@ -7434,9 +7520,19 @@
           "Doc": "a completion was asked for. Answer with a list, or nothing. An entry is a **word**, or `{ Text, Detail }` for one that says what it is beside itself — a type, a one-line description. An entry that is neither is skipped, not refused"
         },
         {
+          "Name": "FoldChange",
+          "Signature": "(line, folded)",
+          "Doc": "the user clicked a fold marker in the margin. `folded` is what it is now. **Only the click**: a fold made by `Fold` from code is not announced, because the program that made it knows"
+        },
+        {
           "Name": "Scroll",
           "Signature": "(x, y)",
           "Doc": "it was scrolled — by the wheel, a scrollbar, the keyboard or an assignment. One event for a diagonal move. Two panes locked together is `Before_Scroll(x, y) { this.After.ScrollY = y; }`, and it does not loop: assigning a value it already has emits nothing"
+        },
+        {
+          "Name": "KeyPreview",
+          "Signature": "(key, ctrl, shift, alt)",
+          "Doc": "a key, **before the editor has acted on it**. `KeyPress` arrives after: the view has taken Tab, Enter, the arrows and every printable key by then, so it cannot turn Tab into a snippet or Enter into something that is not a newline. Answer `true` to take the key and the editor never sees it. `key` is a name like `Tab`, `Return` or `a`"
         },
         {
           "Name": "MouseDown",
@@ -9783,6 +9879,11 @@
           "Name": "Scroll",
           "Signature": "(x, y)",
           "Doc": "it was scrolled — by the wheel, a scrollbar, the keyboard or an assignment. One event for a diagonal move. Two panes locked together is `Before_Scroll(x, y) { this.After.ScrollY = y; }`, and it does not loop: assigning a value it already has emits nothing"
+        },
+        {
+          "Name": "KeyPreview",
+          "Signature": "(key, ctrl, shift, alt)",
+          "Doc": "a key, **before the editor has acted on it**. `KeyPress` arrives after: the view has taken Tab, Enter, the arrows and every printable key by then, so it cannot turn Tab into a snippet or Enter into something that is not a newline. Answer `true` to take the key and the editor never sees it. `key` is a name like `Tab`, `Return` or `a`"
         },
         {
           "Name": "MouseDown",

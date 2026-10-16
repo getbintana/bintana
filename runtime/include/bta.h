@@ -1016,6 +1016,14 @@ JSValue bta_scroll_set(JSContext *ctx, JSValueConst this_val, JSValueConst val,
                        int magic);
 /* Both adjustments, reporting through one `Scroll(x, y)`. */
 void bta_scroll_watch(BtaWidget *w);
+/* The `GtkScrolledWindow` a scrolling widget reports through: `w->gtk` itself,
+ * or the one an editor keeps inside the box it wears when it has a minimap
+ * beside it (`bta_editor.c`). */
+GtkScrolledWindow *bta_scrolled(BtaWidget *w);
+/* Opens every fold of a `SourceEditor` that hides that 1-based line, so a cursor
+ * moved there is somewhere that can be seen.  Called by what moves it
+ * (`GotoLine`, `Select`, the search); a no-op on an editor with no folds. */
+void bta_editor_reveal(BtaWidget *w, int line);
 
 /* --- File / Dir / Exec -------------------------------------------------- */
 void bta_sys_init(JSContext *ctx, JSValue global);

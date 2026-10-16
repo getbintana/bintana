@@ -939,3 +939,37 @@ designer was left), and letting the press through the Glass to the real strip
   a *button's* handler are gone with them, which was the clearest smell there
   was: there had been nowhere to put the command, so one of the four became its
   owner.
+
+**Snippets are a table and a key, and the key is the hard half.**
+`SourceEditor.InsertSnippet` is GtkSourceView's own (`${1:name}` places, `$0`,
+Tab and Shift+Tab by the view itself while one lasts), so `ide/modules/Snippets.js`
+is a table of triggers for `js` and the rule for *which word is one*: a whole
+word, only where a word could start (`x.for`, `before` and `$for` are names, and
+Tab there is an indent), and never with a selection, which is the Tab of a
+snippet already open. It is wired to **`Editor_KeyPreview`** and not to
+`Editor_KeyPress`: the latter never hears a Tab (see *A key an editor would take
+is not `KeyPress`'s* in [widgets.md](widgets.md)). The word is read in
+**characters**, as `Column` counts, not UTF-16 units. `Object.keys` and regex
+literals are not in this language: the module found out by running, as the
+table of triggers is read with `Dictionary.Keys` and `Dictionary.Has`. With the
+completion's popup open Tab still expands -- `for` is a word in its own right --
+and that was measured with a real keyboard, not assumed. **The minimap** is
+View > Minimap (`editor.minimap`, off by default), applied to every open tab
+and to each born later by `dressEditor`, like the other two settings.
+
+**Folding in the IDE is `Folding.js` and one rule: lines between the braces.**
+`Folding.ranges(text)` scans `Lex.blank`'s output -- strings, templates, regexes
+and comments already blanked, line breaks kept -- with a stack of `{`/`[`, and a
+block from line 3 to line 9 is the range `3..8`, so the closer stays visible
+(`foo() {` over `}`) and a `} else {` is never swallowed. Two blocks opening on
+one line are one marker, the outer; a block with nothing between its braces has
+none; an unbalanced file answers for the part that balances. It is for `js`
+only. The markers are brought up to the text where the other checks already
+run -- `Live.pass`, on the pause -- and when a tab opens (`TabSet`), so
+folding costs one more scan of a text that is read once for all of them.
+Ctrl+Shift+[ closes the block the cursor is in (the innermost not already
+closed, so twice closes the one around it) and Ctrl+Shift+] opens the one on its
+line, both through `Editor_KeyPreview` like the snippets' Tab; View has *Fold
+all* and *Unfold all*. What is folded is one editor's view and is not saved.
+The audit's other I1 suggestion, a live syntax check, was **not** built:
+`Live.js`'s header already argues against it and the argument holds.

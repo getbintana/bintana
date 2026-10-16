@@ -905,10 +905,17 @@ static void build_scroller(BtaWidget *w)
  * gtk/inner/slot cannot find these handlers: they have to be watched, or they
  * fire into a freed `BtaWidget` after the scroller is gone.
  */
+GtkScrolledWindow *bta_scrolled(BtaWidget *w)
+{
+    GtkWidget *inside = g_object_get_data(G_OBJECT(w->gtk), "bta-scrolled");
+
+    return GTK_SCROLLED_WINDOW(inside ? inside : w->gtk);
+}
+
 void bta_scroll_watch(BtaWidget *w)
 {
-    GtkAdjustment *h = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(w->gtk));
-    GtkAdjustment *v = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(w->gtk));
+    GtkAdjustment *h = gtk_scrolled_window_get_hadjustment(bta_scrolled(w));
+    GtkAdjustment *v = gtk_scrolled_window_get_vadjustment(bta_scrolled(w));
 
     g_signal_connect(h, "value-changed", G_CALLBACK(on_scroller_moved), w);
     g_signal_connect(v, "value-changed", G_CALLBACK(on_scroller_moved), w);
@@ -992,7 +999,7 @@ static JSValue scroller_set_bars(JSContext *ctx, JSValueConst this_val,
  */
 static GtkAdjustment *scroller_adjustment(BtaWidget *w, bool vertical)
 {
-    GtkScrolledWindow *sw = GTK_SCROLLED_WINDOW(w->gtk);
+    GtkScrolledWindow *sw = bta_scrolled(w);
 
     return vertical ? gtk_scrolled_window_get_vadjustment(sw)
                     : gtk_scrolled_window_get_hadjustment(sw);
@@ -1061,8 +1068,8 @@ JSValue bta_scroll_set(JSContext *ctx, JSValueConst this_val,
 static void on_scroller_moved(GtkAdjustment *a, gpointer user_data)
 {
     BtaWidget *w = user_data;
-    GtkAdjustment *h = gtk_scrolled_window_get_hadjustment(GTK_SCROLLED_WINDOW(w->gtk));
-    GtkAdjustment *v = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(w->gtk));
+    GtkAdjustment *h = gtk_scrolled_window_get_hadjustment(bta_scrolled(w));
+    GtkAdjustment *v = gtk_scrolled_window_get_vadjustment(bta_scrolled(w));
 
     JSValueConst argv[2] = {
         JS_NewInt32(w->ctx, (int)(gtk_adjustment_get_value(h) + 0.5)),
