@@ -5756,6 +5756,7 @@ static JSValue w_get_tooltip(JSContext *ctx, JSValueConst this_val)
     if (!w)
         return JS_EXCEPTION;
 
+    /* `const char *`: GTK lends it, and it is not ours to free. */
     const char *text = gtk_widget_get_tooltip_text(w->gtk);
     return JS_NewString(ctx, text ? text : "");
 }
@@ -5774,7 +5775,224 @@ static JSValue w_set_tooltip(JSContext *ctx, JSValueConst this_val, JSValueConst
      * worse than no popup. */
     gtk_widget_set_tooltip_text(w->gtk, *text ? text : NULL);
     JS_FreeCString(ctx, text);
+    /* An icon-only button is named by its tooltip: see `bta_a11y_refresh`. */
+    bta_a11y_refresh(w);
     return JS_UNDEFINED;
+}
+
+/* ---------------------------------------------------------- accessibility
+ *
+ * What an assistive technology (Orca on Linux) says about a control.
+ *
+ * GTK names what it can: a button with words is named by them.  What it cannot
+ * name is the rest -- a button that is only an icon, a text field beside a
+ * caption, a picture -- and the runtime had no word for any of it, so an
+ * application could not meet the accessibility a public body or a bank asks for.
+ * Two properties on every control say it, and `Label.For` (bta_controls.c) is
+ * the relation a caption has to the field it captions.
+ *
+ * **Where it is put is not only `w->gtk`.**  The screen reader reads the widget
+ * that has the *focus*, and that is often inside the outer one: a `TextBox`'s
+ * is the `GtkText` within its `GtkEntry`, a `ComboBox`'s the toggle within its
+ * `GtkDropDown`.  So every change is applied to the outer widget and to the
+ * focusable ones a few levels down.  Three levels and no more: a `TableView`'s
+ * cells are widgets too, and naming ten thousand of them would be the cost of
+ * naming one control.
+ */
+#define A11Y_NAME_KEY  "bta-a11y-name"
+#define A11Y_DESC_KEY  "bta-a11y-desc"
+#define A11Y_DEPTH     3
+/* How long a tooltip may be and still be what an icon-only button is called: a
+ * sentence of advice read out on every visit to the button would be worse than
+ * the silence it fixes.  Longer than this and the author says `AccessibleName`. */
+#define A11Y_TOOLTIP_MAX 60
+
+void bta_a11y_walk(GtkWidget *wd, int depth, void (*fn)(GtkWidget *, gpointer),
+                   gpointer data)
+{
+    if (depth == 0 || gtk_widget_get_focusable(wd))
+        fn(wd, data);
+    if (depth >= A11Y_DEPTH)
+        return;
+    for (GtkWidget *c = gtk_widget_get_first_child(wd); c;
+         c = gtk_widget_get_next_sibling(c))
+        bta_a11y_walk(c, depth + 1, fn, data);
+}
+
+static void a11y_label_cb(GtkWidget *t, gpointer data)
+{
+    const char *s = data;
+
+    if (s && *s)
+        gtk_accessible_update_property(GTK_ACCESSIBLE(t), GTK_ACCESSIBLE_PROPERTY_LABEL,
+                                       s, -1);
+    else
+        gtk_accessible_reset_property(GTK_ACCESSIBLE(t), GTK_ACCESSIBLE_PROPERTY_LABEL);
+}
+
+static void a11y_description_cb(GtkWidget *t, gpointer data)
+{
+    const char *s = data;
+
+    if (s && *s)
+        gtk_accessible_update_property(GTK_ACCESSIBLE(t),
+                                       GTK_ACCESSIBLE_PROPERTY_DESCRIPTION, s, -1);
+    else
+        gtk_accessible_reset_property(GTK_ACCESSIBLE(t),
+                                      GTK_ACCESSIBLE_PROPERTY_DESCRIPTION);
+}
+
+/* Whether anything with words is drawn inside: what a button that is only an
+ * icon lacks, and the one case where the tooltip is worth borrowing. */
+static bool a11y_has_words(GtkWidget *wd)
+{
+    if (GTK_IS_LABEL(wd)) {
+        const char *t = gtk_label_get_text(GTK_LABEL(wd));
+
+        return t && *t;
+    }
+    for (GtkWidget *c = gtk_widget_get_first_child(wd); c;
+         c = gtk_widget_get_next_sibling(c))
+        if (a11y_has_words(c))
+            return true;
+    return false;
+}
+
+/*
+ * What the control is called, put on the widgets that carry it: what the author
+ * said, or -- for a button that is only an icon -- its tooltip when that is short.
+ * Called by everything that can change the answer: the name, the tooltip, and the
+ * button's own face (`button_rebuild`), since a button given words afterwards is
+ * named by them and must stop being named by a tooltip.
+ */
+void bta_a11y_refresh(BtaWidget *w)
+{
+    const char *given = g_object_get_data(G_OBJECT(w->gtk), A11Y_NAME_KEY);
+    const char *name  = given && *given ? given : NULL;
+
+    if (!name && GTK_IS_BUTTON(w->gtk) && !a11y_has_words(w->gtk)) {
+        /* Lent by GTK (`const char *`), and so not freed here: a version that
+         * freed it answered with the same address, dangling, on the next call
+         * and aborted with a double free. */
+        const char *tip = gtk_widget_get_tooltip_text(w->gtk);
+
+        if (tip && *tip && g_utf8_strlen(tip, -1) <= A11Y_TOOLTIP_MAX)
+            name = tip;
+    }
+    bta_a11y_walk(w->gtk, 0, a11y_label_cb, (gpointer)name);
+}
+
+enum { A11Y_NAME, A11Y_DESCRIPTION };
+
+static JSValue w_get_a11y(JSContext *ctx, JSValueConst this_val, int magic)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *s = g_object_get_data(G_OBJECT(w->gtk),
+                                      magic == A11Y_NAME ? A11Y_NAME_KEY : A11Y_DESC_KEY);
+
+    return JS_NewString(ctx, s ? s : "");
+}
+
+static JSValue w_set_a11y(JSContext *ctx, JSValueConst this_val, JSValueConst val,
+                          int magic)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *text = JS_ToCString(ctx, val);
+    if (!text)
+        return JS_EXCEPTION;
+
+    /* Empty is *nothing said*, which for a name hands the question back to the
+     * default (the tooltip) and for a description takes it away. */
+    g_object_set_data_full(G_OBJECT(w->gtk),
+                           magic == A11Y_NAME ? A11Y_NAME_KEY : A11Y_DESC_KEY,
+                           *text ? g_strdup(text) : NULL, g_free);
+    if (magic == A11Y_NAME)
+        bta_a11y_refresh(w);
+    else
+        bta_a11y_walk(w->gtk, 0, a11y_description_cb, (gpointer)(*text ? text : NULL));
+    JS_FreeCString(ctx, text);
+    return JS_UNDEFINED;
+}
+
+/*
+ * `AccessibleInfo()` -- what the assistive technologies are told about this
+ * control, **read back from GTK** and not from what was assigned.
+ *
+ * The difference is the point of it: `AccessibleName` reads back what it was
+ * given, and a derived name (an icon-only button's tooltip) or a caption's
+ * `For` has no assignment to read.  This asks GTK's accessibility tree, so it
+ * is also how a test, or the IDE, can tell a control is named.  GTK offers no
+ * reader for a property's value; it offers `gtk_test_accessible_check_property`,
+ * which answers NULL when the value is the one given and **the value it has**
+ * when not -- so asking with a value nothing has reads it.  That is the whole of
+ * the trick, and it is measured: with a context (the default, and
+ * `GTK_A11Y=test`) it answers, and with `GTK_A11Y=none` there is no context and
+ * the call asserts, so that case is answered with nothing before it is asked.
+ */
+static char *a11y_read(GtkAccessible *a, GtkAccessibleProperty p)
+{
+    if (!gtk_test_accessible_has_property(a, p))
+        return NULL;
+    return gtk_test_accessible_check_property(a, p, "\x01never-a-value", -1);
+}
+
+typedef struct { GtkWidget *found; } A11yPick;
+
+/* The first widget of the control that carries anything: the one the focus
+ * will be on, which is what is read. */
+static void a11y_pick_cb(GtkWidget *t, gpointer data)
+{
+    A11yPick     *pick = data;
+    GtkAccessible *a   = GTK_ACCESSIBLE(t);
+
+    if (!pick->found && gtk_accessible_get_at_context(a) &&
+        (gtk_test_accessible_has_property(a, GTK_ACCESSIBLE_PROPERTY_LABEL) ||
+         gtk_test_accessible_has_property(a, GTK_ACCESSIBLE_PROPERTY_DESCRIPTION) ||
+         gtk_test_accessible_has_relation(a, GTK_ACCESSIBLE_RELATION_LABELLED_BY)))
+        pick->found = t;
+}
+
+static JSValue w_accessible_info(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    JSValue out = JS_NewObject(ctx);
+
+    /* The role is the widget's own: it is not something an author sets. */
+    GtkAccessibleRole role = gtk_accessible_get_accessible_role(GTK_ACCESSIBLE(w->gtk));
+    GEnumClass       *kind = g_type_class_ref(GTK_TYPE_ACCESSIBLE_ROLE);
+    GEnumValue       *nick = g_enum_get_value(kind, role);
+
+    JS_SetPropertyStr(ctx, out, "Role", JS_NewString(ctx, nick ? nick->value_nick : ""));
+    g_type_class_unref(kind);
+
+    char    *label = NULL, *desc = NULL;
+    gboolean named = false;
+    A11yPick pick  = { NULL };
+
+    bta_a11y_walk(w->gtk, 0, a11y_pick_cb, &pick);
+    if (pick.found) {
+        GtkAccessible *a = GTK_ACCESSIBLE(pick.found);
+
+        label = a11y_read(a, GTK_ACCESSIBLE_PROPERTY_LABEL);
+        desc  = a11y_read(a, GTK_ACCESSIBLE_PROPERTY_DESCRIPTION);
+        named = gtk_test_accessible_has_relation(a, GTK_ACCESSIBLE_RELATION_LABELLED_BY);
+    }
+    JS_SetPropertyStr(ctx, out, "Label",       JS_NewString(ctx, label ? label : ""));
+    JS_SetPropertyStr(ctx, out, "Description", JS_NewString(ctx, desc ? desc : ""));
+    JS_SetPropertyStr(ctx, out, "LabelledBy",  JS_NewBool(ctx, named));
+    g_free(label);
+    g_free(desc);
+    return out;
 }
 
 /* ----------------------------------------------------------------- cursor
@@ -7042,6 +7260,31 @@ static const JSCFunctionListEntry widget_props[] = {
      *   **Translated**
      */
     JS_CGETSET_DEF("Tooltip",    w_get_tooltip,     w_set_tooltip),
+    /* AccessibleName
+     *   what a screen reader calls it, when the words on it are not enough or
+     *   there are none: a button that is only an icon, a picture, a field with
+     *   no caption beside it. **A button with only an icon and a `Tooltip` of 60
+     *   characters or fewer is named by the tooltip** when this is empty, so the
+     *   usual case is said once; this is what wins when it is set. `""` is
+     *   nothing said. **Translated**
+     */
+    JS_CGETSET_MAGIC_DEF("AccessibleName", w_get_a11y, w_set_a11y, A11Y_NAME),
+    /* AccessibleDescription
+     *   what a screen reader adds after the name -- the sentence of advice that
+     *   would be too long to be a name. `""` is none. **Translated**
+     */
+    JS_CGETSET_MAGIC_DEF("AccessibleDescription", w_get_a11y, w_set_a11y, A11Y_DESCRIPTION),
+    /* AccessibleInfo()
+     *   what the assistive technologies are told, **read back from GTK**:
+     *   `{ Role, Label, Description, LabelledBy }` -- the role is GTK's name for
+     *   the kind of control (`button`, `text-box`), `Label` and `Description`
+     *   are what a screen reader says (an icon-only button's tooltip included,
+     *   which no assignment shows), and `LabelledBy` is whether a caption's
+     *   `For` points at it. Read off the control that takes the focus, which is
+     *   what is read. Empty where the desktop has no accessibility at all
+     *   (`GTK_A11Y=none`)
+     */
+    JS_CFUNC_DEF("AccessibleInfo", 0, w_accessible_info),
     /* Cursor
      *   what the pointer looks like over it: `Auto` (nothing said) `Arrow`
      *   `Hand` `Grab` `Grabbing` `Text` `VerticalText` `Wait` `Progress`

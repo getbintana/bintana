@@ -530,6 +530,7 @@ const TESTS = [
     "EditorMap",
     "EditorFold",
     "EditorFoldClick",
+    "Accessible",
     "EditorSnippet",
     "EditorKeyPreview",
     "SingleInstance",
@@ -2080,6 +2081,107 @@ class WidgetsForm extends Form {
         eq("**the dots opened it again**: line 1, open, no folds left",
            JSON.stringify([said[1][0], said[1][1], said[1][2]]), "[1,false,0]");
         eq("with the text whole both times", said[0][3] + said[1][3], text + text);
+    }
+
+    /*
+     * Accessibility: what a screen reader is told, asked of GTK.
+     *
+     * `AccessibleInfo()` reads the accessibility tree back (`gtk_test_accessible_*`),
+     * so what is asserted is what an assistive technology would receive and not
+     * that a property was assigned -- the derived names have no assignment at all,
+     * and a flag would read back while nothing reached the tree.  Skipped where
+     * the desktop has no accessibility (`GTK_A11Y=none`), which answers nothing.
+     */
+    testAccessible() {
+        const probe = new Button();
+        this.Fixed1.Add(probe);
+        probe.AccessibleName = "x";
+        if (probe.AccessibleInfo().Label !== "x") {
+            print("  (skipping accessibility: this desktop has none)");
+            probe.Delete();
+            return;
+        }
+        probe.Delete();
+
+        /* A button of words is named by them, and nobody has to say so. */
+        const words = new Button();
+        this.Fixed1.Add(words);
+        words.Text = "Save";
+        eq("a button with words says no name of its own", words.AccessibleInfo().Label, "");
+        eq("and GTK knows it is a button", words.AccessibleInfo().Role, "button");
+
+        /* The default the author asked for: an icon-only button, named by a short
+         * tooltip.  Whether the icon exists in this theme does not matter -- the
+         * button has no words either way. */
+        const trash = new Button();
+        this.Fixed1.Add(trash);
+        trash.Icon = "edit-delete-symbolic";
+        eq("an icon-only button with no tooltip has no name", trash.AccessibleInfo().Label, "");
+        trash.Tooltip = "Borrar";
+        eq("**its tooltip names it**", trash.AccessibleInfo().Label, "Borrar");
+        eq("...and AccessibleName reads back only what was given", trash.AccessibleName, "");
+
+        trash.AccessibleName = "Borrar el cliente";
+        eq("what the author says wins", trash.AccessibleInfo().Label, "Borrar el cliente");
+        trash.AccessibleName = "";
+        eq("and taking it away hands it back to the tooltip", trash.AccessibleInfo().Label, "Borrar");
+
+        trash.Tooltip = "x".repeat(61);
+        eq("a tooltip past sixty characters is advice and not a name",
+           trash.AccessibleInfo().Label, "");
+        trash.Tooltip = "x".repeat(60);
+        eq("sixty is still a name", trash.AccessibleInfo().Label, "x".repeat(60));
+
+        trash.Tooltip = "Borrar";
+        trash.Text = "Eliminar";
+        eq("words given later are the name, and the tooltip stops being it",
+           trash.AccessibleInfo().Label, "");
+        trash.Text = "";
+        eq("and words taken away bring it back", trash.AccessibleInfo().Label, "Borrar");
+
+        /* A description is its own thing. */
+        trash.AccessibleDescription = "Quita al cliente de la lista";
+        eq("a description reaches GTK", trash.AccessibleInfo().Description,
+           "Quita al cliente de la lista");
+        eq("and reads back", trash.AccessibleDescription, "Quita al cliente de la lista");
+        trash.AccessibleDescription = "";
+        eq("empty takes it away", trash.AccessibleInfo().Description, "");
+
+        /* A field is read where the focus is, which is inside it. */
+        const box = new TextBox();
+        this.Fixed1.Add(box);
+        box.AccessibleName = "Nombre";
+        eq("a text box says its name", box.AccessibleInfo().Label, "Nombre");
+        eq("and it is a text box to GTK", box.AccessibleInfo().Role, "text-box");
+
+        /* --- a caption is what a field is labelled by ---------------------- */
+        const lbl = new Label();
+        lbl.Text = "Nombre";
+        this.Fixed1.Add(lbl);
+        eq("a field no caption points at is labelled by nothing",
+           box.AccessibleInfo().LabelledBy, false);
+        lbl.For = box;
+        eq("For given the control: the field is labelled by it", box.AccessibleInfo().LabelledBy, true);
+        eq("with no name to read back, it reads back the empty one", lbl.For, "");
+        box.Name = "TxtNombre";
+        lbl.For = box;
+        eq("a named control reads back its name", lbl.For, "TxtNombre");
+        lbl.For = "";
+        eq("empty lets it go", box.AccessibleInfo().LabelledBy, false);
+        throws("a thing that is not a control is refused", () => { lbl.For = { x: 1 }; });
+
+        /* The declared case: a caption that names a field built after it. */
+        const cap = new Fielded();
+        this.Fixed1.Add(cap);
+        eq("a caption's name is kept as it was written", cap.LblWho.For, "TxtWho");
+        eq("**and once the form is built the field is labelled by it**",
+           cap.TxtWho.AccessibleInfo().LabelledBy, true);
+        eq("while the caption itself is not labelled by anything",
+           cap.LblWho.AccessibleInfo().LabelledBy, false);
+        eq("the relation is saved as the name it is",
+           cap.LblWho.Serialize().properties.For, "TxtWho");
+
+        for (const c of [words, trash, box, lbl, cap]) c.Delete();
     }
 
     testEditorScroll() {
@@ -5852,7 +5954,7 @@ class WidgetsForm extends Form {
         eq("and they keep coordinates",   ex.Children[0].X, 8);
 
         eq("its caption is prose", JSON.stringify(ex.TextProperties()),
-           JSON.stringify(["Text", "Tooltip"]));
+           JSON.stringify(["Text", "Tooltip", "AccessibleName", "AccessibleDescription"]));
         ex.Delete();
     }
 
@@ -12163,7 +12265,7 @@ function Main() {
               JSON.stringify(step.PropertyOptions("constructor")));
 
         eq("which of its strings hold prose, likewise -- its own, then Widget's",
-           JSON.stringify(step.TextProperties()), '["Caption","Tooltip"]');
+           JSON.stringify(step.TextProperties()), '["Caption","Tooltip","AccessibleName","AccessibleDescription"]');
 
         /*
          * A component extending a component: the middle of the chain is a class
@@ -12182,7 +12284,7 @@ function Main() {
               JSON.stringify(chip.EventNames()));
 
         eq("prose accumulates down the same chain",
-           JSON.stringify(chip.TextProperties()), '["Legend","Caption","Tooltip"]');
+           JSON.stringify(chip.TextProperties()), '["Legend","Caption","Tooltip","AccessibleName","AccessibleDescription"]');
         eq("while a list of values is the first class that answers",
            chip.PropertyOptions("Step").join(","), "1,5,10");
         eq("and its own answers for its own",
@@ -12194,7 +12296,7 @@ function Main() {
         eq("a component that declares no events publishes what it inherits",
            quiet.EventNames()[0], "MouseDown");
         eq("and no prose of its own", JSON.stringify(quiet.TextProperties()),
-           '["Tooltip"]');
+           '["Tooltip","AccessibleName","AccessibleDescription"]');
         quiet.Delete();
         chip.Delete();
 
@@ -16176,7 +16278,7 @@ function Main() {
 
         /* Nothing to read and nothing to press: no prose of its own, and no
          * events of its own either -- what it answers is Widget's. */
-        eq("it holds no prose", JSON.stringify(s.TextProperties()), '["Tooltip"]');
+        eq("it holds no prose", JSON.stringify(s.TextProperties()), '["Tooltip","AccessibleName","AccessibleDescription"]');
         eq("and raises nothing of its own", s.EventNames()[0], "MouseDown");
 
         /*
@@ -18671,7 +18773,7 @@ function Main() {
     testTextProperties() {
         const btn = new Button();
         check("a control declares the properties that hold prose",
-              sameJson(btn.TextProperties().sort(), ["Text", "Tooltip"]),
+              sameJson(btn.TextProperties().sort(), ["Text", "Tooltip", "AccessibleName", "AccessibleDescription"].sort()),
               JSON.stringify(btn.TextProperties()));
 
         /* Accumulated along the chain, not first-match: Tooltip is Widget's and

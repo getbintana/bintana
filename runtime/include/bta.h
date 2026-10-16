@@ -1024,6 +1024,17 @@ GtkScrolledWindow *bta_scrolled(BtaWidget *w);
  * moved there is somewhere that can be seen.  Called by what moves it
  * (`GotoLine`, `Select`, the search); a no-op on an editor with no folds. */
 void bta_editor_reveal(BtaWidget *w, int line);
+/* What an assistive technology says about a control: `bta_a11y_refresh` puts
+ * its name (the author's, or an icon-only button's short tooltip) where the
+ * screen reader reads it, and `bta_a11y_walk` runs `fn` on a control's widget and
+ * on the focusable ones a few levels inside it, which is where the focus -- and
+ * so the reading -- actually is. */
+void bta_a11y_refresh(BtaWidget *w);
+/* Settles every `Label.For` of a form's tree that named a control not yet built,
+ * once the loader has built them all. */
+void bta_labels_resolve(JSContext *ctx, JSValueConst form_obj, BtaWidget *form);
+void bta_a11y_walk(GtkWidget *wd, int depth, void (*fn)(GtkWidget *, gpointer),
+                   gpointer data);
 
 /* --- File / Dir / Exec -------------------------------------------------- */
 void bta_sys_init(JSContext *ctx, JSValue global);

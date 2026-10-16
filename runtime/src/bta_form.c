@@ -855,6 +855,11 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
         rc = build_children(ctx, form_obj, w, kids);
     JS_FreeValue(ctx, kids);
 
+    /* Every control is built: a caption's `For` that named a sibling declared
+     * after it can now find it. */
+    if (rc >= 0)
+        bta_labels_resolve(ctx, form_obj, w);
+
     /*
      * The size the file drew against, before any code can have changed it.
      *

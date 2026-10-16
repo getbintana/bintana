@@ -1,0 +1,63 @@
+# Translation template for this project.
+# Written by the Bintana IDE: Project > Update translations.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: flood\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: MainForm.form: MainForm.Text
+msgid "Flood"
+msgstr ""
+
+#: MainForm.form: LblStatus.Text
+msgid "Moves left: {0}"
+msgstr ""
+
+#: MainForm.form: CmbSize.Items
+msgid "Small (10×10)"
+msgstr ""
+
+#: MainForm.form: CmbSize.Items
+msgid "Medium (14×14)"
+msgstr ""
+
+#: MainForm.form: CmbSize.Items
+msgid "Large (18×18)"
+msgstr ""
+
+#: MainForm.form: CmbSize.Tooltip
+msgid "How big the board is, and how many moves come with it"
+msgstr ""
+
+#: MainForm.form: BtnNew.Text
+msgid "New game"
+msgstr ""
+
+#: MainForm.form: Palette.Tooltip
+msgid "1–6 pick a colour"
+msgstr ""
+
+#: MainForm.js:107
+msgid "You win in {0} moves!"
+msgstr ""
+
+#: MainForm.js:108
+#: MainForm.js:176
+msgid "Out of moves"
+msgstr ""
+
+#: MainForm.js:176
+msgid "You win!"
+msgstr ""
+
+#: MainForm.js:178
+msgid "In {0} of {1} moves"
+msgstr ""
+
+#: MainForm.js:180
+msgid "{0} of {1} cells flooded"
+msgstr ""

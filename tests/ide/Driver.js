@@ -9021,7 +9021,7 @@ function* p_projects(ide) {
     /* Design mode is prose and nothing else, and a component now says which of
      * its properties that is instead of offering all of them. */
     eq("design mode offers the prose the class declares",
-       ide.designer.grid.designKeys().join(","), "Caption,Tooltip");
+       ide.designer.grid.designKeys().join(","), "Caption,Tooltip,AccessibleName,AccessibleDescription");
 
     editor(ide, "Value").Value = 12;
     yield;

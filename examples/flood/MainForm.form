@@ -1,0 +1,70 @@
+{
+  "format": "bintana-form/1",
+  "class": "MainForm",
+  "properties": {
+    "Text": "Flood",
+    "Width": 560,
+    "Height": 650,
+    "Arrangement": "Vertical",
+    "Spacing": 8,
+    "Margin": 12
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Top",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "Height": 34
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblStatus",
+          "properties": {
+            "Text": "Moves left: {0}",
+            "Expand": true
+          }
+        },
+        {
+          "type": "ComboBox",
+          "name": "CmbSize",
+          "properties": {
+            "Width": 170,
+            "Height": 34,
+            "Tooltip": "How big the board is, and how many moves come with it",
+            "Items": [
+              "Small (10×10)",
+              "Medium (14×14)",
+              "Large (18×18)"
+            ]
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnNew",
+          "properties": {
+            "Text": "New game"
+          }
+        }
+      ]
+    },
+    {
+      "type": "DrawingArea",
+      "name": "Board",
+      "properties": {
+        "Expand": true
+      }
+    },
+    {
+      "type": "DrawingArea",
+      "name": "Palette",
+      "properties": {
+        "Height": 72,
+        "Cursor": "Hand",
+        "Tooltip": "1–6 pick a colour"
+      }
+    }
+  ]
+}

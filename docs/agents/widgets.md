@@ -981,6 +981,21 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   combo a placeholder row (`Items = ["—", …]`) and selects that when there is
   no record; `Index = -1` is what an *empty* list reads, not a way to empty
   one.
+- **That autoselect is an event, and during a `.form` load it arrives before
+  the form has the `Cmb` it names.** `notify::selected` is wired straight to
+  `Select` (`on_combo_selected`), so both roads the loader takes raise it --
+  `Items`, whose one splice leaves the first row chosen, and `Index` -- while
+  the window is still being built. The handler runs, `this` is the form under
+  construction, and **the control it reaches for is not bound yet**: on
+  `examples/flood`, assigning `Items` on `CmbSize` called `CmbSize_Select` →
+  `newGame()` → `this.CmbSize.Index`, and the runtime printed
+  `TypeError: cannot read property 'Index' of undefined` with the stack naming
+  the road -- `at CmbSize_Select`, `at set Items (native)`, `at Form (native)`.
+  The window still opened; the handler was the only casualty, which is exactly
+  why this is written down. The handler guards on something only `Form_Open`
+  can have made (`this.board` there), not on the selection looking meaningful;
+  a handler installed with `On` before the `Items` it is for is the same case
+  in code.
 - **A `DatePicker`'s empty state is a flag of its own, and a `Calendar` refuses
   one.** `Value = ""` is *no date* -- the state GTK's calendar has not got -- so
   an **optional `Field.Date` round-trips through a picker**: the button reads
@@ -1090,3 +1105,37 @@ text inserted exactly there -- asks whether it took the fold's tag.
 GtkTextTag has no replacement text, and a `GtkTextChildAnchor` is a character in the buffer, which would change `Text`, so the dots are a `GtkLabel` added with `gtk_text_view_add_overlay`, whose coordinates are the buffer's and which therefore scrolls with the text. It sits after the last character of the line the fold hangs from (`gtk_text_view_get_iter_location` of the break), and nothing signals that layout moved a line -- a resize, a wrap, a font -- so a tick callback on the view puts each chip where it belongs, moving it only when the place changed, and hides one whose line is itself inside another fold (it would be drawn over the outer one's row). The text after the dots is the range's `Tail`, supplied by the program because only it knows what is at the other end; the chip is the `bta-fold-chip` class of `runtime/css/base.css`. The IDE's ranges end on the closer's line, so the closer is hidden with the rest and the chip says it. **An overlay cannot be taken out again:** `gtk_text_view_remove` on one answers `GtkLabel is not a child of GtkSourceView` and the label stays, so after the first click opened a fold its dots were still there, still clickable, with a mark that had been deleted -- the second click went through a dangling pointer (reported from the IDE as *it breaks on the second click*). A chip is therefore never removed: opening a fold hides it and puts it in a spare list, the next fold takes it back, and the view disposes of the rest when it goes. `EditorFoldClick` drives all three stages with a real pointer -- the marker closes, the dots open, and clicks on where the dots were change nothing -- and is red with the hide taken out. The chip's presence is verified by a screenshot -- there is no tree to ask for an overlay. The
 click is verified with `xdotool` (`EditorFoldClick`), and a screenshot (a look:
 it is the only way to see the gutter) is how the stacked numbers were found.
+
+**Accessibility is applied where the focus is, and four things about GTK shaped
+it** (R2 of the audit). `AccessibleName`/`AccessibleDescription` are
+`gtk_accessible_update_property` and `Label.For` is `..._update_relation`, but a
+screen reader reads the widget that has the *focus*, which is often inside the
+outer one -- the `GtkText` in a `GtkEntry`, the toggle in a `GtkDropDown` -- so
+`bta_a11y_walk` applies each to the control and to the focusable widgets up to
+three levels down (a `TableView`'s cells are widgets too; not ten thousand of
+them). *(1)* **`gtk_widget_get_tooltip_text` returns `const char *`**: GTK lends
+it. The first version freed it, and `get_tooltip_text` answered the same dangling
+address on the next call -- `free(): double free detected in tcache`, and a name
+that came back as garbage first (`s=[$\xef]`). The rule in `AGENTS.md` about the
+transfer annotation of every `get` was exactly this, and was read after.
+*(2)* **A reference list in the variable arguments is the accessibles and a
+`NULL`**, `update_relation(a, LABELLED_BY, label, NULL, -1)`, not a `GList`: a
+list is taken for one object and answers `Reference of type (null) does not
+implement GtkAccessible`. *(3)* **GTK has no reader for a property's value**, but
+`gtk_test_accessible_check_property` returns NULL when the value is the one given
+and **the value it has** when not, so asking with one nothing has reads it --
+measured, with a plain probe, against the default backend and `GTK_A11Y=test`;
+with `GTK_A11Y=none` there is no context and it asserts, so `AccessibleInfo()`
+asks `gtk_accessible_get_at_context` first and answers nothing. That is what
+makes the tests assert what a screen reader is *told* rather than that a property
+was assigned (the derived names have no assignment). *(4)* **A button is always
+`LabelledBy`**: GTK labels it by its own words, so only a field's answer says
+anything about a caption. An icon-only button is named by its `Tooltip` up to 60
+characters (`A11Y_TOOLTIP_MAX`): `bta_a11y_refresh` runs from the tooltip's
+setter, the name's and `button_rebuild`, since words given later must take the
+name back from a tooltip. A `.form` applies properties before the siblings
+exist, so `Label.For` given a name not yet built is kept and settled by
+`bta_labels_resolve` at the end of `form_build`; `tests/widgets`' `Fielded`
+component declares the caption first on purpose, and is red with the resolve
+taken out. **`Captioned` is a class of `forms.js`'s own** -- the first fixture
+was called that and the project stopped with *redeclaration*.

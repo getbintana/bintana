@@ -1862,6 +1862,173 @@ static JSValue label_set_ellipsize(JSContext *ctx, JSValueConst this_val, JSValu
     return JS_UNDEFINED;
 }
 
+/* -------------------------------------------------------------- Label.For
+ *
+ * A caption's relation to the field it captions: *labelled by*, which is what
+ * a screen reader reads out when the focus arrives on the field.  Beside it the
+ * two look like a pair; to Orca the field is a box with no name, because GTK
+ * cannot know which label belongs to which entry.
+ *
+ * `For` takes **the control's name** -- what a `.form` can write -- or the
+ * control itself, and reads back the name.  A name is resolved against the form
+ * that owns the label, and a `.form` applies its properties before the sibling
+ * exists, so a name that is not there yet is kept and settled by
+ * `bta_labels_resolve` when the form has been built.  A name nothing ever answers
+ * stays unsettled, silently: the same trade a handler named for a control that
+ * is not there makes, and what the IDE's check for names is for.
+ *
+ * Mnemonics are not part of this: they are refused on purpose (the marker lives
+ * in translated prose and a collision is silent), and Orca does not need one.
+ */
+#define LABEL_FOR_KEY "bta-label-for"
+
+typedef struct {
+    char      *name;       /* as declared, "" for none */
+    GtkWidget *target;     /* the control it is bound to, or NULL; weak */
+    gboolean   pending;    /* a name not yet found */
+} LabelFor;
+
+static void label_for_free(gpointer data)
+{
+    LabelFor *lf = data;
+
+    if (lf->target)
+        g_object_remove_weak_pointer(G_OBJECT(lf->target), (gpointer *)&lf->target);
+    g_free(lf->name);
+    g_free(lf);
+}
+
+static void relate_cb(GtkWidget *t, gpointer label)
+{
+    /* A reference list in the variable arguments is **the accessibles one after
+     * another and a NULL**, not a GList: a GList is taken for one object and
+     * answers *does not implement GtkAccessible*. */
+    gtk_accessible_update_relation(GTK_ACCESSIBLE(t), GTK_ACCESSIBLE_RELATION_LABELLED_BY,
+                                   GTK_ACCESSIBLE(label), NULL, -1);
+}
+
+static void unrelate_cb(GtkWidget *t, gpointer unused)
+{
+    gtk_accessible_reset_relation(GTK_ACCESSIBLE(t), GTK_ACCESSIBLE_RELATION_LABELLED_BY);
+}
+
+static LabelFor *label_for_of(GtkWidget *label)
+{
+    LabelFor *lf = g_object_get_data(G_OBJECT(label), LABEL_FOR_KEY);
+
+    if (!lf) {
+        lf       = g_new0(LabelFor, 1);
+        lf->name = g_strdup("");
+        g_object_set_data_full(G_OBJECT(label), LABEL_FOR_KEY, lf, label_for_free);
+    }
+    return lf;
+}
+
+/* Binds the caption to a control, letting go of the one it had. */
+static void label_for_bind(GtkWidget *label, GtkWidget *target, const char *name)
+{
+    LabelFor *lf = label_for_of(label);
+
+    if (lf->target) {
+        bta_a11y_walk(lf->target, 0, unrelate_cb, NULL);
+        g_object_remove_weak_pointer(G_OBJECT(lf->target), (gpointer *)&lf->target);
+        lf->target = NULL;
+    }
+    g_free(lf->name);
+    lf->name    = g_strdup(name ? name : "");
+    lf->pending = false;
+
+    if (target) {
+        lf->target = target;
+        g_object_add_weak_pointer(G_OBJECT(target), (gpointer *)&lf->target);
+        bta_a11y_walk(target, 0, relate_cb, label);
+    }
+}
+
+static JSValue label_get_for(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    LabelFor *lf = g_object_get_data(G_OBJECT(w->gtk), LABEL_FOR_KEY);
+
+    return JS_NewString(ctx, lf ? lf->name : "");
+}
+
+static JSValue label_set_for(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    if (JS_IsUndefined(val) || JS_IsNull(val)) {
+        label_for_bind(w->gtk, NULL, "");
+        return JS_UNDEFINED;
+    }
+
+    if (JS_IsObject(val)) {
+        BtaWidget *t = bta_widget_of(val);
+
+        if (!t)
+            return JS_ThrowTypeError(ctx, "For: that is not a control");
+        label_for_bind(w->gtk, t->gtk, t->name);
+        return JS_UNDEFINED;
+    }
+
+    const char *name = JS_ToCString(ctx, val);
+    if (!name)
+        return JS_EXCEPTION;
+
+    if (!*name) {
+        label_for_bind(w->gtk, NULL, "");
+        JS_FreeCString(ctx, name);
+        return JS_UNDEFINED;
+    }
+
+    /* A name: the control is the form's property of that name, if the form has
+     * built it yet. */
+    BtaWidget *t = NULL;
+    if (JS_IsObject(w->form)) {
+        JSValue c = JS_GetPropertyStr(ctx, w->form, name);
+
+        if (JS_IsObject(c))
+            t = bta_widget_of(c);
+        JS_FreeValue(ctx, c);
+    }
+    label_for_bind(w->gtk, t ? t->gtk : NULL, name);
+    label_for_of(w->gtk)->pending = (t == NULL);
+    JS_FreeCString(ctx, name);
+    return JS_UNDEFINED;
+}
+
+/* The unsettled names of one form's tree, settled: called when the loader has
+ * built every control, which is the first moment a name can be answered. */
+static void labels_resolve_in(JSContext *ctx, JSValueConst form_obj, GtkWidget *wd)
+{
+    LabelFor *lf = g_object_get_data(G_OBJECT(wd), LABEL_FOR_KEY);
+
+    if (lf && lf->pending && *lf->name) {
+        JSValue    c = JS_GetPropertyStr(ctx, form_obj, lf->name);
+        BtaWidget *t = JS_IsObject(c) ? bta_widget_of(c) : NULL;
+
+        if (t) {
+            char *name = g_strdup(lf->name);
+
+            label_for_bind(wd, t->gtk, name);
+            g_free(name);
+        }
+        JS_FreeValue(ctx, c);
+    }
+    for (GtkWidget *c = gtk_widget_get_first_child(wd); c; c = gtk_widget_get_next_sibling(c))
+        labels_resolve_in(ctx, form_obj, c);
+}
+
+void bta_labels_resolve(JSContext *ctx, JSValueConst form_obj, BtaWidget *form)
+{
+    labels_resolve_in(ctx, form_obj, form->gtk);
+}
+
 static const JSCFunctionListEntry label_props[] = {
     /* Text
      *   what it says. **Translated**: a label declared in a `.form` goes
@@ -1898,6 +2065,15 @@ static const JSCFunctionListEntry label_props[] = {
      *   the user may select the text with the pointer and copy it
      */
     JS_CGETSET_DEF("Selectable", label_get_selectable, label_set_selectable),
+    /* For
+     *   the control this is the caption of, **by name** in a `.form` or as the
+     *   control itself in code -- reads back the name. A screen reader says it
+     *   when the focus arrives on that control, which GTK cannot know from two
+     *   widgets standing side by side. A name is resolved against the form, once
+     *   it is built; one nothing answers stays unsettled and says nothing.
+     *   `""` is none
+     */
+    JS_CGETSET_DEF("For", label_get_for, label_set_for),
 };
 
 /* ---------------------------------------------------------------- Button */
@@ -2128,6 +2304,9 @@ static void button_rebuild(BtaWidget *w)
     } else {
         gtk_button_set_label(GTK_BUTTON(w->gtk), text);
     }
+
+    /* The face decides whether the tooltip is what it is called by. */
+    bta_a11y_refresh(w);
 }
 
 static JSValue button_store(JSContext *ctx, JSValueConst this_val,
@@ -8014,7 +8193,7 @@ void bta_core_register(void)
          *   window's own layout pass
          */
         BTA_CLASS_FULL("Widget", NULL, NULL, base, nbase, false,
-                       widget_options, "Tooltip", "MouseDown,MouseUp,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
+                       widget_options, "Tooltip,AccessibleName,AccessibleDescription", "MouseDown,MouseUp,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
         BTA_CLASS_ENUM("Container", "Widget",  NULL, container_props, false, container_options, NULL),
         BTA_CLASS_BARE("Control",   "Widget",    NULL,                            false, NULL),
         /* A window's title is prose; so is the caption of everything below. */

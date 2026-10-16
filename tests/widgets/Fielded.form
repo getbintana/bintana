@@ -1,0 +1,29 @@
+{
+  "format": "bintana-form/1",
+  "class": "Fielded",
+  "properties": {
+    "Width": 240,
+    "Height": 60
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblWho",
+      "properties": {
+        "For": "TxtWho",
+        "Text": "Who",
+        "X": 4,
+        "Y": 4
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtWho",
+      "properties": {
+        "Width": 140,
+        "X": 60,
+        "Y": 4
+      }
+    }
+  ]
+}

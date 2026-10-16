@@ -1,0 +1,10 @@
+{
+  "name": "Flood",
+  "startup": "MainForm",
+  "sources": [
+    "Flood.js",
+    "MainForm.js"
+  ],
+  "version": "1.0",
+  "description": "Flood-It: the whole board flooded from the top-left corner before the moves run out -- the game in one plain class, the form drawing it and nothing else"
+}

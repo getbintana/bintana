@@ -166,7 +166,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -378,7 +380,9 @@
       },
       "Texts": [
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -607,7 +611,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -801,7 +807,9 @@
       },
       "Texts": [
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -967,7 +975,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -1225,7 +1235,9 @@
       "Texts": [
         "Items",
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -1381,7 +1393,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -1691,7 +1705,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -1842,7 +1858,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -2027,7 +2045,9 @@
       },
       "Texts": [
         "Placeholder",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -2301,7 +2321,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -2513,7 +2535,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -2910,7 +2934,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -3091,7 +3117,9 @@
       },
       "Texts": [
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -3293,7 +3321,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -3459,7 +3489,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -3808,7 +3840,9 @@
       },
       "Texts": [
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -3975,7 +4009,9 @@
       },
       "Texts": [
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -4168,7 +4204,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -4356,7 +4394,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -4388,6 +4428,15 @@
           "Signature": "",
           "Returns": "",
           "Doc": "keep one line and end it with `…` when it does not fit. What a file name in a row wants: it gives up its tail rather than the row's shape",
+          "Native": true
+        },
+        {
+          "Name": "For",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the control this is the caption of, **by name** in a `.form` or as the control itself in code -- reads back the name. A screen reader says it when the focus arrives on that control, which GTK cannot know from two widgets standing side by side. A name is resolved against the form, once it is built; one nothing answers stays unsettled and says nothing. `\"\"` is none",
           "Native": true
         },
         {
@@ -4586,7 +4635,9 @@
       },
       "Texts": [
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -4791,7 +4842,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -4967,7 +5020,9 @@
       },
       "Texts": [
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -5301,7 +5356,9 @@
       },
       "Texts": [
         "Items",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -5575,7 +5632,9 @@
       },
       "Texts": [
         "Tabs",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -5731,7 +5790,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -5887,7 +5948,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -6099,7 +6162,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -6301,7 +6366,9 @@
       },
       "Texts": [
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -6590,7 +6657,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -6803,7 +6872,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -6986,7 +7057,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -7252,7 +7325,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -7678,7 +7753,9 @@
       },
       "Texts": [
         "CompletionTitle",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -7903,7 +7980,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -8064,7 +8143,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -8262,7 +8343,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -8428,7 +8511,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -8661,7 +8746,9 @@
       },
       "Texts": [
         "Tabs",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -9278,7 +9365,9 @@
       },
       "Texts": [
         "Columns.Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -9539,7 +9628,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -9857,7 +9948,9 @@
       "Texts": [
         "Text",
         "Placeholder",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -10029,7 +10122,9 @@
       },
       "Texts": [
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -10223,7 +10318,9 @@
       },
       "Texts": [
         "Text",
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -10556,7 +10653,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -10913,7 +11012,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     },
     {
@@ -10936,6 +11037,33 @@
           "Signature": "",
           "Returns": "",
           "Doc": "receives files dragged in from **the desktop**, which arrive as `FileDrop(paths, x, y)`. Independent of `AcceptDrop`: a control may take one, the other, or both",
+          "Native": true
+        },
+        {
+          "Name": "AccessibleDescription",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "what a screen reader adds after the name -- the sentence of advice that would be too long to be a name. `\"\"` is none. **Translated**",
+          "Native": true
+        },
+        {
+          "Name": "AccessibleInfo",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "what the assistive technologies are told, **read back from GTK**: `{ Role, Label, Description, LabelledBy }` -- the role is GTK's name for the kind of control (`button`, `text-box`), `Label` and `Description` are what a screen reader says (an icon-only button's tooltip included, which no assignment shows), and `LabelledBy` is whether a caption's `For` points at it. Read off the control that takes the focus, which is what is read. Empty where the desktop has no accessibility at all (`GTK_A11Y=none`)",
+          "Native": true
+        },
+        {
+          "Name": "AccessibleName",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "what a screen reader calls it, when the words on it are not enough or there are none: a button that is only an icon, a picture, a field with no caption beside it. **A button with only an icon and a `Tooltip` of 60 characters or fewer is named by the tooltip** when this is empty, so the usual case is said once; this is what wins when it is set. `\"\"` is nothing said. **Translated**",
           "Native": true
         },
         {
@@ -11767,7 +11895,9 @@
         ]
       },
       "Texts": [
-        "Tooltip"
+        "Tooltip",
+        "AccessibleName",
+        "AccessibleDescription"
       ]
     }
   ],

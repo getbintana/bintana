@@ -5591,6 +5591,40 @@ GtkTextTag has no replacement text, and a `GtkTextChildAnchor` is a character in
 click is verified with `xdotool` (`EditorFoldClick`), and a screenshot (a look:
 it is the only way to see the gutter) is how the stacked numbers were found.
 
+**Accessibility is applied where the focus is, and four things about GTK shaped
+it** (R2 of the audit). `AccessibleName`/`AccessibleDescription` are
+`gtk_accessible_update_property` and `Label.For` is `..._update_relation`, but a
+screen reader reads the widget that has the *focus*, which is often inside the
+outer one -- the `GtkText` in a `GtkEntry`, the toggle in a `GtkDropDown` -- so
+`bta_a11y_walk` applies each to the control and to the focusable widgets up to
+three levels down (a `TableView`'s cells are widgets too; not ten thousand of
+them). *(1)* **`gtk_widget_get_tooltip_text` returns `const char *`**: GTK lends
+it. The first version freed it, and `get_tooltip_text` answered the same dangling
+address on the next call -- `free(): double free detected in tcache`, and a name
+that came back as garbage first (`s=[$\xef]`). The rule in `AGENTS.md` about the
+transfer annotation of every `get` was exactly this, and was read after.
+*(2)* **A reference list in the variable arguments is the accessibles and a
+`NULL`**, `update_relation(a, LABELLED_BY, label, NULL, -1)`, not a `GList`: a
+list is taken for one object and answers `Reference of type (null) does not
+implement GtkAccessible`. *(3)* **GTK has no reader for a property's value**, but
+`gtk_test_accessible_check_property` returns NULL when the value is the one given
+and **the value it has** when not, so asking with one nothing has reads it --
+measured, with a plain probe, against the default backend and `GTK_A11Y=test`;
+with `GTK_A11Y=none` there is no context and it asserts, so `AccessibleInfo()`
+asks `gtk_accessible_get_at_context` first and answers nothing. That is what
+makes the tests assert what a screen reader is *told* rather than that a property
+was assigned (the derived names have no assignment). *(4)* **A button is always
+`LabelledBy`**: GTK labels it by its own words, so only a field's answer says
+anything about a caption. An icon-only button is named by its `Tooltip` up to 60
+characters (`A11Y_TOOLTIP_MAX`): `bta_a11y_refresh` runs from the tooltip's
+setter, the name's and `button_rebuild`, since words given later must take the
+name back from a tooltip. A `.form` applies properties before the siblings
+exist, so `Label.For` given a name not yet built is kept and settled by
+`bta_labels_resolve` at the end of `form_build`; `tests/widgets`' `Fielded`
+component declares the caption first on purpose, and is red with the resolve
+taken out. **`Captioned` is a class of `forms.js`'s own** -- the first fixture
+was called that and the project stopped with *redeclaration*.
+
 ---
 
 # docs/agents/tables.md
