@@ -335,6 +335,10 @@ export class MainForm extends Form {
      * open -- while folded the divider says the strip's, and coming back means
      * this number, which `Session` keeps -- and the strip's own buttons, built
      * from `sideViews()` and kept where a test can press one. */
+    /* Whether `Form_Open` has dressed the View menu: before it, a page the
+     * loader switches to has no menu to tell. */
+    viewDressed = false;
+
     sideHidden  = false;
     sideWidth   = 0;
     sideButtons = [];
@@ -384,6 +388,7 @@ export class MainForm extends Form {
          * born unticked and a radio unmarked. */
         this.dressViewEntries();
         this.dressViewMenu();
+        this.viewDressed = true;
         this.renderTabs();          /* no pages yet: no strip either */
         this.setMode(false);        /* ...and so no editor nor designer either */
         this.loadRecent();
@@ -1137,6 +1142,17 @@ export class MainForm extends Form {
      * is nobody's choice.
      */
     ConsoleBox_Switch(index) {
+        /* A tab clicked is the bottom panel moving without the menu: its mark
+         * follows, before the shell's own business below.  From `index` and not
+         * from `Current`: `Switch` is GTK's `switch-page`, which arrives while
+         * the notebook still reports the page it is leaving.  Not while the
+         * `.form` is still being loaded, which switches pages too: the toolbar
+         * the menu speaks about is not there yet. */
+        if (this.viewDressed) {
+            this.dressViewMenu();
+            this.MnuViewBottom.Value = index;
+        }
+
         if (!this.Shell || index !== this.shellPage) return;
         if (this.Shell.Running) return;
 
@@ -1596,7 +1612,25 @@ export class MainForm extends Form {
 
         const key  = this.FileTree.Key;
         const name = this.byKey[key];
-        if (!name) return;
+
+        /*
+         * **What the last row was is forgotten first, whatever this row is.**
+         * Each kind below returns as soon as it is recognised, and a row that is
+         * no file at all (a folder, a category) returned before any of them --
+         * so after a `.record` and then the *Forms* heading, a double click on
+         * the heading opened the record's dialog, and the bar still offered it.
+         */
+        const wasCatalogue = this.selectedCatalogue;
+        const wasRecord    = this.selectedRecord;
+        this.selectedCatalogue = null;
+        this.selectedImage     = null;
+        this.selectedRecord    = null;
+        this.selectedOther     = null;
+
+        if (!name) {
+            if (wasCatalogue || wasRecord) this.refresh();
+            return;
+        }
 
         /*
          * A catalogue is not opened here, so selecting one must not open a tab
@@ -1606,19 +1640,16 @@ export class MainForm extends Form {
          * gesture and the one hands already make; the status bar says so,
          * because a click that appears to do nothing is worse than either.
          */
-        const wasCatalogue = this.selectedCatalogue;
-
         if (Translations.isCatalogue(name)) {
             this.selectedCatalogue = name;
             this.refresh();
             return;
         }
-        this.selectedCatalogue = null;
 
         /* Letting go of one changes the menu and the bar, and selecting the file
          * that is *already* open does nothing else -- so without this the item
          * stays enabled for a catalogue nobody is pointing at any more. */
-        if (wasCatalogue) this.refresh();
+        if (wasCatalogue || wasRecord) this.refresh();
 
         /*
          * An image is the catalogue's case exactly: the tree shows it, nothing
@@ -1628,8 +1659,10 @@ export class MainForm extends Form {
          * open a translation editor: the arrow keys walk a tree, and a viewer
          * per row walked through is unusable.
          */
-        this.selectedImage = isImageFile(name) ? name : null;
-        if (this.selectedImage) return;
+        if (isImageFile(name)) {
+            this.selectedImage = name;
+            return;
+        }
 
         /*
          * A record's shape is the third of the family. It is a document -- the
@@ -1638,8 +1671,8 @@ export class MainForm extends Form {
          * so in the bar, for the catalogues' reason: a modal per row walked
          * through with the arrow keys is unusable.
          */
-        this.selectedRecord = File.IsExtension(name, "record") ? name : null;
-        if (this.selectedRecord) {
+        if (File.IsExtension(name, "record")) {
+            this.selectedRecord = name;
             this.refresh();
             return;
         }
@@ -1653,8 +1686,10 @@ export class MainForm extends Form {
          * type. Anything else waits for a double click and goes to whatever
          * opens it.
          */
-        this.selectedOther = this.opensAsText(name) ? null : name;
-        if (this.selectedOther) return;
+        if (!this.opensAsText(name)) {
+            this.selectedOther = name;
+            return;
+        }
 
         if (name === this.activeFile) return;
 
@@ -2161,6 +2196,10 @@ export class MainForm extends Form {
         Settings.Set("side.view", which);
         this.SideStack.Current = view.page;
         view.show(this);
+
+        /* The chooser and the strip move the view without the menu, so the
+         * View menu's mark is brought to it here, where every road ends. */
+        this.dressViewMenu();
     }
 
     /*

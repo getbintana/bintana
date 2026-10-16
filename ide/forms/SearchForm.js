@@ -113,7 +113,7 @@ export class SearchForm extends Form {
         const was = this.filters
                     ? this.filters[Math.max(this.CboFiles.Index, 0)].ext : "";
 
-        const exts = [...new Set(this.ide.files.map((f) => File.Extension(f).toLowerCase()))]
+        const exts = [...new Set(this.searchable().map((f) => File.Extension(f).toLowerCase()))]
                      .filter((e) => e)
                      .sort();
 
@@ -140,9 +140,23 @@ export class SearchForm extends Form {
      * too, and two spellings of "which files" in one program is one too many. */
     chosenFiles() {
         const pick = this.filters[Math.max(this.CboFiles.Index, 0)];
-        if (!pick || !pick.ext) return this.ide.files;
+        if (!pick || !pick.ext) return this.searchable();
 
-        return this.ide.files.filter((f) => File.IsExtension(f, pick.ext));
+        return this.searchable().filter((f) => File.IsExtension(f, pick.ext));
+    }
+
+    /*
+     * The project's files that are text, which is what a search can read.
+     *
+     * The tree lists every file of the project -- a `.wav`, a `.tar` an export
+     * left -- and `File.Load` does not refuse one: what is not UTF-8 comes back
+     * as U+FFFD. So *every file* read the bytes of a recording and answered
+     * with rows of them (`RIFF` in a `.wav` is a match), and a large video was
+     * read whole to find nothing. Which files are text is the question
+     * `MainForm.opensAsText` already answers for the tree.
+     */
+    searchable() {
+        return this.ide.files.filter((f) => this.ide.opensAsText(f));
     }
 
     /* --- the search itself -------------------------------------------------

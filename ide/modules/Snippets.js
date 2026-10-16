@@ -92,8 +92,14 @@ export class Snippets {
      * one and answers `true`; answers `false` -- and does nothing -- when there
      * is not, so the key is the editor's own (indent, or the next place of a
      * snippet that is already open).
+     *
+     * **Never in a `ReadOnly` editor.** `ReadOnly` stops the keyboard and
+     * nothing else: `InsertSnippet` writes the buffer whatever the view says,
+     * so a Tab after an `if` in a file that is not UTF-8 -- the one the IDE
+     * opens read-only so it can never become dirty -- rewrote it.
      */
     static expand(ed) {
+        if (ed.ReadOnly) return false;
         if (ed.Selection !== "") return false;
 
         const word     = Snippets.wordBefore(ed);

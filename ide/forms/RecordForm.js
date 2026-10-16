@@ -358,7 +358,7 @@ export class RecordForm extends Form {
         if ((counts[kind] || []).includes(which)) {
             const n = Number(t);
             if (!Number.isFinite(n))
-                throw new TypeError(`'${which}' is not a number: ${t}`);
+                throw new TypeError(Locale.Text("'{0}' is not a number: {1}", which, t));
             return n;
         }
         return t;
@@ -370,19 +370,19 @@ export class RecordForm extends Form {
         if (row.kind === "bool") {
             if (t === "true")  return true;
             if (t === "false") return false;
-            throw new TypeError("'Default' is true or false");
+            throw new TypeError(Locale.Text("'Default' is true or false"));
         }
         if (row.kind === "int" || row.kind === "number") {
             const n = Number(t);
             if (!Number.isFinite(n))
-                throw new TypeError(`'Default' is not a number: ${t}`);
+                throw new TypeError(Locale.Text("'Default' is not a number: {0}", t));
             return n;
         }
         if (row.kind === "record" || row.kind === "list") {
             try {
                 return JSON.parse(t);
             } catch (e) {
-                throw new TypeError(`'Default' is not what a document holds: ${e.message}`);
+                throw new TypeError(Locale.Text("'Default' is not what a document holds: {0}", e.message));
             }
         }
         return t;
@@ -426,15 +426,15 @@ export class RecordForm extends Form {
         if (takes.includes("of")) {
             const of = row.opts.of.trim();
             if (!of)
-                throw new TypeError("'Holds' is what the field holds");
+                throw new TypeError(Locale.Text("'Holds' is what the field holds"));
 
             if (of[0] === "{") {
                 if (row.kind !== "list")
-                    throw new TypeError("'Holds' is the class's name");
+                    throw new TypeError(Locale.Text("'Holds' is the class's name"));
                 try {
                     spec.of = JSON.parse(of);
                 } catch (e) {
-                    throw new TypeError("'Holds' is not a field: " + e.message);
+                    throw new TypeError(Locale.Text("'Holds' is not a field: {0}", e.message));
                 }
             } else {
                 spec.of = of;
@@ -498,7 +498,7 @@ export class RecordForm extends Form {
                 Field.Spec(spec);
                 fields[row.name.trim()] = spec;
             } catch (e) {
-                Message.Error("{0}: {1}", row.name.trim() || `Field ${i + 1}`,
+                Message.Error("{0}: {1}", row.name.trim() || Locale.Text("Field {0}", i + 1),
                               e.message);
                 this.show(i);
                 return;

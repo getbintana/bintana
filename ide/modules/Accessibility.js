@@ -85,19 +85,21 @@ export class Accessibility {
 
         /* Names a caption points at, from anywhere in the tree: a caption may sit
          * in another panel from its field. */
-        const captioned = {};
-        const actions   = {};
+        /* Sets and maps, not bags: `captioned[name]` answers for a control
+         * called `constructor` and `actions[name]` for one called `toString`. */
+        const captioned = new Set();
+        const actions   = new Map();
         const collect = (nodes) => {
             for (const node of nodes || []) {
                 const p = node.properties || {};
                 if (node.type === "Label" && typeof p.For === "string" && p.For)
-                    captioned[p.For] = true;
+                    captioned.add(p.For);
                 collect(node.children);
             }
         };
         collect(root.children);
         for (const action of root.actions || [])
-            if (action && action.name) actions[action.name] = action;
+            if (action && action.name) actions.set(action.name, action);
 
         const walk = (nodes) => {
             let before = null;                   // the sibling just above
@@ -123,7 +125,7 @@ export class Accessibility {
         const named = typeof p.AccessibleName === "string" && p.AccessibleName !== "";
 
         if (A11Y_FIELDS.includes(type)) {
-            if (named || (node.name && captioned[node.name])) return;
+            if (named || (node.name && captioned.has(node.name))) return;
 
             /* The caption just above is almost always the one: say so, which is
              * the fix and not only the complaint. */
@@ -134,7 +136,7 @@ export class Accessibility {
             out.push(`${name} is a ${type} a screen reader cannot name: give it an ` +
                      `AccessibleName, or point a Label's For at it${hint}`);
         } else if (A11Y_BUTTONS.includes(type)) {
-            const act   = typeof p.Action === "string" ? actions[p.Action] : null;
+            const act   = typeof p.Action === "string" ? actions.get(p.Action) || null : null;
             const words = (typeof p.Text === "string" && p.Text !== "") ||
                           !!(act && typeof act.text === "string" && act.text !== "");
             const tip   = typeof p.Tooltip === "string" ? p.Tooltip : "";

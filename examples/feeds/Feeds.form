@@ -110,7 +110,6 @@
       "type": "LinkButton",
       "name": "LnkItem",
       "properties": {
-        "Ellipsize": true,
         "HAlign": "Fill",
         "Height": 30,
         "VAlign": "End",

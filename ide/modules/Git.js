@@ -338,10 +338,12 @@ export class Git {
             const tree  = record[1];
             const path  = this.strip(record.slice(3));
 
-            if (porcelainRenamed(index, tree)) parts[++i];    /* the old name */
+            /* The old name, kept: unstaging a rename has to name both halves
+             * (`unstage`). */
+            const from = porcelainRenamed(index, tree) ? this.strip(parts[++i] || "") : "";
             if (index === "!") continue;                       /* ignored */
 
-            out.push({ path, index, tree,
+            out.push({ path, index, tree, from,
                        untracked: index === "?",
                        versioned: index !== "A" && index !== "?",
                        staged:    index !== " " && index !== "?" });
@@ -578,8 +580,27 @@ export class Git {
         if (!paths || !paths.length) return this.act([], paths);
 
         return this.hasHead()
-            ? this.act(["restore", "--staged", "--"], paths)
+            ? this.act(["restore", "--staged", "--"], this.withRenamed(paths))
             : this.act(["rm", "--cached", "-f", "-r", "--"], paths);
+    }
+
+    /*
+     * **A staged rename is two entries of the index, and the row names one.**
+     * `R  nuevo` is `nuevo` added *and* `viejo` deleted; `restore --staged --
+     * nuevo` takes back only the first, and what was left was `D  viejo`
+     * staged beside `?? nuevo` -- measured, after a `git mv` -- so the next
+     * commit recorded a deletion nobody asked for. Unstaging the row unstages
+     * the old name with it, which is what puts the index back where it was.
+     *
+     * Not a copy (`C`): its source is untouched in the index, and restoring
+     * that would throw away edits to it that the row does not show.
+     */
+    withRenamed(paths) {
+        const out = [...paths];
+        for (const c of this.changes())
+            if (c.index === "R" && c.from && paths.includes(c.path) && !out.includes(c.from))
+                out.push(c.from);
+        return out;
     }
 
     /* Whether the branch has a commit to point at. A question about a ref, and

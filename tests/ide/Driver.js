@@ -4381,6 +4381,15 @@ function* p_snippets(ide) {
     eq("a JSON file has no triggers", tab(), false);
     ed.Language = "js";
 
+    /* A read-only editor (a file that is not UTF-8) is never written:
+     * `InsertSnippet` itself does not ask the view, so the IDE has to. */
+    ed.Text = "for";
+    ed.Select(1, 4, 0);
+    ed.ReadOnly = true;
+    eq("a read-only editor does not take the Tab", tab(), false);
+    eq("...and its text is as it was", ed.Text, "for");
+    ed.ReadOnly = false;
+
     /* The two that the IDE's own code is written in. */
     ed.Text = "Button1_Click() {}\n";
     ed.Select(1, 1, 0);
@@ -11842,6 +11851,20 @@ function* p_records(ide) {
         refused.BtnRecCancel_Click();
         yield;
     }
+
+    /* **Leaving the row lets go of it.** A heading is no file, and the select
+     * used to return before forgetting the last one: a double click on
+     * *Records* then opened the shape the reader had walked away from. */
+    ide.FileTree.Key = file;
+    eq("the shape is selected again", ide.selectedRecord, file);
+    ide.FileTree.Key = "cat:records";
+    eq("a heading is not the shape", ide.selectedRecord, null);
+    check("and the bar stops offering it", !ide.LblStatus.Text.includes(file),
+          ide.LblStatus.Text);
+    const last = ide.recordEditor;
+    ide.FileTree_Activate();
+    check("so a double click on the heading opens no dialog",
+          ide.recordEditor === last);
 }
 
 /*
@@ -13603,6 +13626,10 @@ function* p_access(ide) {
        said([text("Label", "LblA", { For: "TxtB" }), text("TextBox", "TxtA")]).length, 1);
     eq("decoration says nothing is missing",
        said([text("TextBox", "TxtA", { AccessibleHidden: true })]).length, 0);
+    /* A name the prototype of a plain object answers for is still a name:
+     * the captions are a `Set`, not a bag. */
+    eq("a field called constructor is not captioned by Object.prototype",
+       said([text("TextBox", "constructor")]).length, 1);
 
     got = said([text("Label", "LblA", { Text: "Nombre" }), text("TextBox", "TxtA")]);
     check("the caption just above, with no For, is named as the fix",
@@ -13963,6 +13990,23 @@ function* p_search(ide) {
     eq("and no more than there were", win.Results.Exists("h:3"), false);
     check("the count is on the window", win.LblCount.Text.includes("3"),
           win.LblCount.Text);
+
+    /* A file of the project that is not text is not read: the tree lists every
+     * file now, and `File.Load` hands back the bytes of a recording as U+FFFD
+     * rather than refusing it -- so `RIFF` in a `.wav` was a match. */
+    const noise = File.Join(TMP, "Noise.wav");
+    File.Save(noise, "RIFF\u0000\u0000\u0000\u0000WAVEfmt aguja aguja");
+    ide.listFiles();
+    check("a recording is one of the project's files", ide.files.includes("Noise.wav"));
+    eq("and a search over every file does not read it", win.search(), 3);
+    eq("...so it has no node", win.Results.Exists("f:Noise.wav"), false);
+    SearchForm.find(ide, "");
+    check("nor is its extension offered as a kind of file to search",
+          !win.filters.some((f) => f.ext === "wav"),
+          JSON.stringify(win.filters.map((f) => f.label)));
+    File.Delete(noise);
+    ide.listFiles();
+    SearchForm.find(ide, "");
 
     win.TxtTerm.Text = "hormiga";
     eq("a term nowhere in the project finds nothing", win.search(), 0);
@@ -15217,6 +15261,21 @@ function* p_git(ide) {
     eq("leaving the rename staged",
        git.split().staged.map((r) => `${r.path}:${r.state}`).join(), "Dos.js:R");
 
+    /* **Unstaging a rename unstages both of its halves.** `R  Dos.js` is
+     * `Dos.js` added and `Uno.js` deleted; taking back only the first left
+     * `D  Uno.js` staged beside `?? Dos.js`, and the next commit recorded a
+     * deletion nobody had asked for. */
+    git.unstage(["Dos.js"]);
+    ide.refreshGit();
+    eq("unstaging a rename leaves nothing staged",
+       git.split().staged.map((r) => `${r.path}:${r.state}`).join(), "");
+    eq("...the old name back in the index, missing from the disk",
+       run("diff", "--cached", "--name-only").Output.trim(), "");
+    git.stage(["Dos.js", "Uno.js"]);
+    ide.refreshGit();
+    eq("and staging both puts the rename back",
+       git.split().staged.map((r) => `${r.path}:${r.state}`).join(), "Dos.js:R");
+
     /* Committed, so nothing below finds the repository mid-gesture. */
     run("commit", "-qm", "renombrado");
     ide.refreshGit();
@@ -16329,6 +16388,24 @@ function* p_session(ide) {
     ide.MnuViewSide.Click(0);
     yield* settled(ide);
     eq("and back on the project view", ide.CmbView.Index, 0);
+
+    /* **The chooser and the console's tabs move the panels without the menu**,
+     * and the marks have to follow those roads too: the menu's own Click sets
+     * its radio by itself, so only these two can catch a mark left behind. */
+    ide.CmbView.Index = 2;                               /* fires Select */
+    yield* settled(ide);
+    eq("the chooser's view takes the side panel's mark", ide.MnuViewSide.Value, 2);
+    ide.CmbView.Index = 0;
+    yield* settled(ide);
+    eq("...and back", ide.MnuViewSide.Value, 0);
+
+    const debugPage = ide.ConsoleBox.Tabs.indexOf("Debug");
+    ide.ConsoleBox.Current = debugPage;                  /* a tab clicked: Switch */
+    yield* settled(ide);
+    eq("a console tab takes the bottom panel's mark", ide.MnuViewBottom.Value, debugPage);
+    ide.ConsoleBox.Current = 0;
+    yield* settled(ide);
+    eq("...the page it is on, not the one it left", ide.MnuViewBottom.Value, 0);
 
     /*
      * The bottom panel, which is one widget's `Visible` and nothing else: the
