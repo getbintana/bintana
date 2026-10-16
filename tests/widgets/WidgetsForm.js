@@ -16807,6 +16807,19 @@ function Main() {
         eq("and its rows are untouched", tree.Count, 1);
         tree.Delete();
 
+        /* **Asked again after the rows are read**: reading a row runs the
+         * program, and one that made the table a tree in between had flat
+         * rows spliced among the tree's roots. */
+        const turns = new TableView();
+        this.Fixed1.Add(turns);
+        turns.Name    = "BatchTurns";
+        turns.Columns = [{ Text: "A" }];
+        const sly = { toString() { turns.Add(["root"], { Key: "r" }); return "x"; } };
+        throws("a table that became a tree mid-batch refuses it",
+               () => turns.AddRows([[sly]]));
+        eq("and holds only the node the program added", turns.Count, 1);
+        turns.Delete();
+
         /* On demand it does what one `Add` does: the count is dropped and the
          * table holds its own again. */
         t.Count = 5;
@@ -17426,6 +17439,48 @@ function Main() {
             t.CurrentCell = { Row: 0, Column: 1 };
             t.Clear();
             eq("Clear takes the current cell with it", t.CurrentCell, null);
+
+            /*
+             * **A handler that empties the table under the verb that raised
+             * it.** `EditCell` selects (`Select`) and moves the cell
+             * (`CellChange`) before it opens anything, and GTK destroys the
+             * drawn rows of a cleared table at once: the cell in hand was
+             * freed, and the open went on with it. Asked again, it is gone.
+             */
+            const refill = () => {
+                t.Add(["a", "1"]);
+                t.Add(["b", "2"]);
+                t.Add(["c", "3"]);
+            };
+            let armed   = false;
+            let emptied = 0;
+            refill();
+            t.On("Select", () => {
+                if (!armed) return;
+                armed = false;
+                emptied++;
+                t.Clear();
+                t.Add(["solo", "1"]);
+            });
+            armed = true;
+            eq("EditCell whose Select handler emptied the table opens nothing",
+               t.EditCell(2, 0), false);
+            check("...the handler having run", emptied > 0);
+            eq("and the table holds what the handler left", t.Count, 1);
+            eq("and no edit is open", t.EndEdit(), false);
+
+            /* `CurrentCell = …` selects first too: a row the handler took
+             * away is not left as the reader's cell. */
+            t.Clear();
+            refill();
+            emptied = 0;
+            armed   = true;
+            t.CurrentCell = { Row: 2, Column: 0 };
+            check("CurrentCell's Select handler ran", emptied > 0);
+            eq("and the row it took away is not the current cell",
+               t.CurrentCell, null);
+            t.On("Select", null);
+            t.Clear();
 
             /* A tree: a key is the address, and assigning opens the way. */
             const tree = new TableView();

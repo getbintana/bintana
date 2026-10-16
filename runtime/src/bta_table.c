@@ -920,12 +920,19 @@ static EdSpec *ed_spec_read(JSContext *ctx, JSValueConst v, const char *where,
     }
     JS_FreeValue(ctx, iv);
 
+    /* The numbers in a refusal are spelt with a point on every desktop:
+     * the printf under `JS_Throw*` writes the locale's decimal comma. */
+    char n1[G_ASCII_DTOSTR_BUF_SIZE], n2[G_ASCII_DTOSTR_BUF_SIZE];
+
     if (s->min > s->max) {
-        JS_ThrowRangeError(ctx, "%s: Min %g is above Max %g", where, s->min, s->max);
+        JS_ThrowRangeError(ctx, "%s: Min %s is above Max %s", where,
+                           g_ascii_dtostr(n1, sizeof n1, s->min),
+                           g_ascii_dtostr(n2, sizeof n2, s->max));
         goto refuse;
     }
     if (s->step <= 0) {
-        JS_ThrowRangeError(ctx, "%s: Step is above zero, not %g", where, s->step);
+        JS_ThrowRangeError(ctx, "%s: Step is above zero, not %s", where,
+                           g_ascii_dtostr(n1, sizeof n1, s->step));
         goto refuse;
     }
     if (!strcmp(s->active, s->inactive)) {
@@ -1645,8 +1652,11 @@ static gboolean on_cal_key(GtkEventControllerKey *k, guint keyval, guint keycode
     GDateTime *now  = gtk_calendar_get_date(cal);
     GDateTime *then = g_date_time_add_days(now, by);
 
-    cal_select(cal, then);
-    g_date_time_unref(then);
+    /* Past 9999-12-31 or before year one there is no day to go to. */
+    if (then) {
+        cal_select(cal, then);
+        g_date_time_unref(then);
+    }
     g_date_time_unref(now);
     return TRUE;
 }
@@ -2055,6 +2065,25 @@ static void cell_begin_free(gpointer p)
     g_free(b);
 }
 
+/*
+ * **The drawn cell for an address, asked again after a handler ran.**
+ * `CellChange` and `Select` run the program, and a handler that clears, refills
+ * or reshapes the table makes GTK unbind -- and destroy -- the drawn rows at
+ * once: the `BtaCell` in hand before the emit may be freed, or bound to another
+ * row. So the caller holds the row (and the wrapper), and asks by it: a held
+ * row only while the table still holds it, an on-demand one by its index.
+ */
+static BtaCell *cell_refind(BtaWidget *w, BtaTableRow *row, guint col)
+{
+    if (!w->inner || !row)
+        return NULL;
+    if (!row->cells)
+        return table_find_cell(w->inner, NULL, (int)row->index, (int)col);
+    if (table_still_holds(w, row) < 0)
+        return NULL;
+    return table_find_cell(w->inner, row, -1, (int)col);
+}
+
 static void cell_begin_later(BtaCell *c)
 {
     CellBegin *b;
@@ -2154,6 +2183,10 @@ static BtaCell *cell_of_selection(BtaWidget *w)
             return NULL;
         row   = gtk_tree_list_row_get_item(item);
         owned = true;
+    } else if (!((BtaTableRow *)item)->cells) {
+        /* An on-demand row: the model made this object for the selection,
+         * and the drawn cell holds another -- found by the index. */
+        index = (int)((BtaTableRow *)item)->index;
     } else {
         row   = item;
         index = table_index_in(table_state(w)->rows, row);
@@ -2218,16 +2251,25 @@ static void on_view_pressed(GtkGestureClick *g, int n, double x, double y,
     /* **The press is also what chooses the cell**, before the lock and the
      * kind decide whether it opens: a locked cell is read and a tick turns,
      * but both are the reader's cell as much as an editable one. */
-    table_current_set(w, c->row, c->col);
+    BtaTableRow *row  = g_object_ref(c->row);
+    guint        col  = c->col;
+    JSValue      self = JS_DupValue(w->ctx, w->self);
 
-    if (cell_locked(c))
-        return;
-    cell_select_row(w, c->row);
-    if (c->spec->kind == ED_CHECK)
-        return;
+    table_current_set(w, row, col);
+    c = cell_refind(w, row, col);
+
+    if (!c || cell_locked(c))
+        goto out;
+    cell_select_row(w, row);
+    c = cell_refind(w, row, col);
+    if (!c || c->editor || c->spec->kind == ED_CHECK)
+        goto out;
     gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);
     if (n == 1)
         cell_begin_later(c);
+out:
+    g_object_unref(row);
+    JS_FreeValue(w->ctx, self);
 }
 
 /* F2 on the focused cell: the editing key every grid has. Off a cell -- the
@@ -2281,8 +2323,16 @@ static gboolean on_table_key(GtkEventControllerKey *k, guint keyval, guint keyco
         c = cell_of_selection(w);
     if (!c || c->editor || c->locked || !c->row)
         return FALSE;
-    table_current_set(w, c->row, c->col);
-    cell_begin_later(c);
+
+    BtaTableRow *row  = g_object_ref(c->row);
+    guint        col  = c->col;
+    JSValue      self = JS_DupValue(w->ctx, w->self);
+
+    table_current_set(w, row, col);
+    if ((c = cell_refind(w, row, col)) && !c->editor && !c->locked)
+        cell_begin_later(c);
+    g_object_unref(row);
+    JS_FreeValue(w->ctx, self);
     return TRUE;
 }
 
@@ -3244,9 +3294,18 @@ static JSValue table_edit_cell(JSContext *ctx, JSValueConst this_val,
     /* **The click from code is a click**: the row is selected and the cell
      * becomes the current one, so `EditCell` and a pointer leave the reader in
      * the same place. */
-    if (cell && cell->row) {
-        cell_select_row(w, cell->row);
-        table_current_set(w, cell->row, cell->col);
+    /* Both raise events, and a handler may take the drawn cell away: the row
+     * is held and the cell asked for again after each. */
+    BtaTableRow *at = cell && cell->row ? g_object_ref(cell->row) : NULL;
+
+    if (at) {
+        cell_select_row(w, at);
+        if (cell_refind(w, at, (guint)c))
+            table_current_set(w, at, (guint)c);
+        cell = cell_refind(w, at, (guint)c);
+        g_object_unref(at);
+    } else {
+        cell = NULL;
     }
 
     g_clear_object(&row);
@@ -4513,8 +4572,13 @@ static JSValue table_add_rows(JSContext *ctx, JSValueConst this_val,
     if (!n)
         return JS_UNDEFINED;
 
-    gpointer *items = g_new(gpointer, n);
+    /* A sparse array can claim four billion rows: refused, not an abort. */
+    gpointer *items = g_try_new(gpointer, n);
     guint     made  = 0;
+
+    if (!items)
+        return JS_ThrowRangeError(ctx, "AddRows: %u rows is more than "
+                                       "there is memory for", (unsigned)n);
 
     for (; made < n; made++) {
         JSValue v = JS_GetPropertyUint32(ctx, argv[0], made);
@@ -4539,6 +4603,19 @@ static JSValue table_add_rows(JSContext *ctx, JSValueConst this_val,
             g_object_unref(items[i]);
         g_free(items);
         return JS_EXCEPTION;   /* the conversion's own exception stands */
+    }
+
+    /* **Asked again after the conversion**, which runs the program (a
+     * `toString`, a getter): one that made the table a tree mid-batch would
+     * have flat rows spliced among its roots. `Add` asks after it too. */
+    if (st->tree) {
+        for (guint i = 0; i < n; i++)
+            g_object_unref(items[i]);
+        g_free(items);
+        return JS_ThrowTypeError(ctx, "AddRows: this table became a tree while "
+                                      "its rows were read -- every row in one "
+                                      "is a node, so it needs a key: "
+                                      "Add(values, { Key, Parent })");
     }
 
     /* Adding rows is saying the table holds its own again, as one `Add` is. */
@@ -5532,8 +5609,11 @@ static JSValue table_set_current(JSContext *ctx, JSValueConst this_val,
     }
     JS_FreeValue(ctx, rv);
 
+    /* `Select` runs the program first, and a handler that took the row away
+     * leaves nothing to be current. */
     cell_select_row(w, row);
-    table_current_set(w, row, (guint)col);
+    if (!row->cells || table_still_holds(w, row) >= 0)
+        table_current_set(w, row, (guint)col);
     g_clear_object(&row);
     return JS_UNDEFINED;
 }
