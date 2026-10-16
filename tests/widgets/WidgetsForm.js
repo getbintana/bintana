@@ -1976,6 +1976,21 @@ class WidgetsForm extends Form {
                 eq("and lands on the match", ed.Line, 8);
                 ed.Search("");
 
+                /* **ReplaceAll opens them too.**  A block folded after the
+                 * search hid its matches from the library's search, and
+                 * ReplaceAll replaced the rest and reported a short count, in
+                 * silence. `Matches` is a property and opens nothing: it counts
+                 * what can be seen, as documented. */
+                ed.FoldRanges = [{ Start: 1, End: 3 }];
+                eq("five statements end in a semicolon", ed.Search(";"), 5);
+                ed.Fold(1);
+                check("Matches leaves out what a fold hides", ed.Matches < 5, `${ed.Matches}`);
+                eq("**ReplaceAll replaces the folded ones as well**", ed.ReplaceAll(","), 5);
+                eq("having opened the fold", ed.Folds().length, 0);
+                eq("and nothing is left to replace", ed.Text.indexOf(";"), -1);
+                ed.Search("");
+                ed.Text = text;
+
                 /* All of them, and back. */
                 ed.FoldRanges = [{ Start: 2, End: 4 }, { Start: 6, End: 8 }];
                 eq("FoldAll says how many it closed", ed.FoldAll(), 2);
@@ -2181,6 +2196,35 @@ class WidgetsForm extends Form {
         eq("the relation is saved as the name it is",
            cap.LblWho.Serialize().properties.For, "TxtWho");
 
+        /* --- a container's words stay on the container -------------------
+         * The walk that puts a name where the focus is went into the controls
+         * inside a container too: a `Panel` named "Domicilio" named its field
+         * and its button "Domicilio", and a tooltip put on it later took away
+         * the names they had been given. */
+        const pnl = new Panel();
+        this.Fixed1.Add(pnl);
+        pnl.Resize(220, 60);
+        const inner = new TextBox();
+        pnl.Add(inner);
+        inner.AccessibleName = "Correo";
+        const innerBtn = new Button();
+        pnl.Add(innerBtn);
+        innerBtn.Icon = "edit-delete-symbolic";
+        innerBtn.Tooltip = "Borrar";
+        pnl.AccessibleName = "Domicilio";
+        eq("**a container's name leaves the field inside it its own**",
+           inner.AccessibleInfo().Label, "Correo");
+        eq("and the button inside it", innerBtn.AccessibleInfo().Label, "Borrar");
+        pnl.AccessibleDescription = "Donde vive el cliente";
+        eq("a container's description is not its children's",
+           inner.AccessibleInfo().Description, "");
+        pnl.AccessibleName = "";
+        pnl.Tooltip = "Los datos del cliente";
+        eq("**and a tooltip put on the container takes nothing from them**",
+           inner.AccessibleInfo().Label, "Correo");
+        eq("from the button either", innerBtn.AccessibleInfo().Label, "Borrar");
+        pnl.Delete();
+
         for (const c of [words, trash, box, lbl, cap]) c.Delete();
 
         /* --- decorative: a screen reader skips it -------------------------- */
@@ -2202,11 +2246,13 @@ class WidgetsForm extends Form {
              * is what leaving a page and coming back does: the mark must survive. */
             logo.Visible = false;
             logo.Visible = true;
-            /* A turn, not a frame: GTK writes its own value after the signal and the
-             * runtime puts the mark back in an idle.  Counted, or the assertions
-             * below would be a smaller total and not a red line. */
-            waiting++;
-            Timer.After(60, () => {
+            /* GTK writes its own value after the `map` signal and the runtime puts
+             * the mark back in an idle after it: waited for, not a fixed time.
+             * A 60 ms timer lost in the full run, and the cause was the
+             * runtime's: a default-priority idle waited behind everything else
+             * (223-294 ms, eleven polls).  At high priority it is back by the
+             * first poll. */
+            until("the mark is put back", () => logo.AccessibleInfo().Hidden, () => {
                 eq("**and it is still hidden after being hidden and shown again**",
                    logo.AccessibleInfo().Hidden, true);
 
@@ -2217,7 +2263,6 @@ class WidgetsForm extends Form {
                    (() => { logo.AccessibleHidden = true;
                             return logo.Serialize().properties.AccessibleHidden; })(), true);
                 logo.Delete();
-                waiting--;
             });
         });
     }
@@ -10358,10 +10403,36 @@ function Main() {
         eq("and -1 moves nothing once more", o.Index, 0);
         throws("as does the empty text on a list with rows",
                () => { o.Text = ""; });
+
+        /* --- the Select a removal raises reads the keys as they now are.
+         * Removing a row above the chosen one moves the choice's index, so GTK
+         * (or, with AllowEmpty, the runtime) raises Select; the keys used to be
+         * taken out after it, and a handler reading `Key` got the key of the row
+         * that had just been removed's neighbour -- the wrong row. */
+        for (const empty of [true, false]) {
+            o.AllowEmpty = empty;
+            o.Clear();
+            o.Add("a", "ka");
+            o.Add("b", "kb");
+            o.Add("c", "kc");
+            o.Index = 2;
+            this.comboKeys  = [];
+            this.comboWatch = o;
+            o.RemoveRow(0);
+            this.comboWatch = null;
+            eq(`the removal raised Select (AllowEmpty ${empty})`, this.comboKeys.length > 0, true);
+            eq(`**and the handler read the chosen row's own key** (AllowEmpty ${empty})`,
+               this.comboKeys.join(), "kc");
+            eq(`as Key does afterwards (AllowEmpty ${empty})`, o.Key, "kc");
+        }
         o.Delete();
     }
 
-    Combo1_Select() { this.comboSelects++; }
+    Combo1_Select() {
+        this.comboSelects++;
+        if (this.comboWatch)
+            this.comboKeys.push(this.comboWatch.Key);
+    }
 
     /* --- SpinBox --------------------------------------------------------- */
     testSpin() {
@@ -16475,6 +16546,20 @@ function Main() {
          * events of its own either -- what it answers is Widget's. */
         eq("it holds no prose", JSON.stringify(s.TextProperties()), '["Tooltip","AccessibleName","AccessibleDescription"]');
         eq("and raises nothing of its own", s.EventNames()[0], "MouseDown");
+
+        /* A cell of two is no room before the rule and one after -- and turned
+         * over, that room has to move to the other axis.  The check for *the
+         * room did not change* skipped the axis whenever nothing came before,
+         * and the margin stayed below a rule that was now standing up. */
+        const sq = new Separator();
+        this.Fixed1.Add(sq);
+        sq.Resize(2, 2);
+        eq("a two-pixel cell keeps one pixel of room",
+           sq.StyleRule(), "margin-top: 0px; margin-bottom: 1px;");
+        sq.Orientation = "Vertical";
+        eq("**and turned over, the room is on the other axis**",
+           sq.StyleRule(), "margin-left: 0px; margin-right: 1px;");
+        sq.Delete();
 
         /*
          * **Its size is the room, and the rule is the pixel in the middle of

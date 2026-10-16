@@ -1177,3 +1177,27 @@ the value (`check_state(..., FALSE)` answers non-NULL when it is not false), and
 is true for a control not yet shown, which is the truth. Reading it right after
 `Add` therefore says `true`: the test waits for a frame, and counts the wait
 (`waiting++`), or the assertions after it are a smaller total and not a red line.
+**The idle is `G_PRIORITY_HIGH`, not the default idle's 200.** Any idle is late
+enough -- GTK's write happens before the signal returns -- but a default one
+waits behind every redraw and timer: in the full `tests/widgets` run the mark
+came back **223-294 ms** after the map (eleven 10 ms polls), so a screen reader
+read the logo for a quarter of a second, and a test that waited a fixed 60 ms
+failed only in the full run. At high priority it is back by the first poll
+(47 ms of a busy loop, two asks), and the test waits with `until`.
+
+**Three more things the audit after it found.** *(5)* **`gtk_accessible_get_at_context`
+returns a reference** (`transfer full` since 4.10, where it became public): used
+as a bare truth test it leaked one `GtkATContext` per widget visited on every
+`AccessibleInfo()` -- `a11y_has_context` drops it. *(6)* **The walk stops at
+another control**: `bta_a11y_walk` went into a container's children, so a
+`Panel` named "Domicilio" named the button inside it "Domicilio", and a
+`Tooltip` put on the panel afterwards reset the button's own name to nothing
+(`testAccessible` is red with the old walk). A widget tagged with a different
+`BtaWidget` is skipped with what is under it; a control's slot carries its own
+tag and is still reached. *(7)* **A reset takes away only what the runtime set**
+(`bta-a11y-label-ours`, `bta-a11y-desc-ours`), so a tooltip with no name to give
+cannot erase a label GTK put on a widget of its own control. A probe against
+GTK 4.22 found none to erase -- the spin button's two buttons, the password and
+search entries, the drop-down, colour, font and menu buttons and the calendar
+carry no `LABEL` property on any focusable child -- so this is cheap insurance
+against an older or a later GTK, not a measured fix.

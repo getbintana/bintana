@@ -673,8 +673,9 @@ static bool term_pattern(JSContext *ctx, BtaWidget *w, const char *pattern)
         VteRegex *re  = vte_regex_new_for_match(pattern, -1,
                                                 BTA_PCRE2_MULTILINE, &err);
         if (!re) {
-            JS_ThrowRangeError(ctx, "LinkPattern: %s",
-                               err ? err->message : "bad pattern");
+            /* Not `err->message`: GLib's sentence is translated. */
+            JS_ThrowRangeError(ctx, "LinkPattern: the pattern is not a valid "
+                                    "regular expression");
             g_clear_error(&err);
             return false;
         }

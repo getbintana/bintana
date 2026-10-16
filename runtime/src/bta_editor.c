@@ -487,7 +487,10 @@ static JSValue search_check_regex(JSContext *ctx, GtkSourceSearchContext *sc)
     if (!err)
         return JS_UNDEFINED;
 
-    JSValue e = JS_ThrowRangeError(ctx, "search: %s", err->message);
+    /* Not `err->message`: GLib translates it, and a sentence that changes with
+     * the desktop's language cannot be asserted or matched by a program. */
+    JSValue e = JS_ThrowRangeError(ctx, "search: the pattern is not a valid "
+                                        "regular expression");
     g_error_free(err);
     return e;
 }
@@ -660,13 +663,18 @@ static JSValue ed_replace(JSContext *ctx, JSValueConst this_val,
     GtkTextIter    a, b;
     bool           done = false;
 
+    /* As `FindNext`: the selection is a match only to a search that can see
+     * it, and the search sees no text a fold hides. */
+    folds_open_all(w);
+
     if (gtk_text_buffer_get_selection_bounds(buf, &a, &b) &&
         search_position(sc, buf) > 0) {
         GError *err = NULL;
         done = gtk_source_search_context_replace(sc, &a, &b, with, -1, &err);
         if (err) {
             JS_FreeCString(ctx, with);
-            JSValue e = JS_ThrowRangeError(ctx, "Replace: %s", err->message);
+            JSValue e = JS_ThrowRangeError(ctx, "Replace: the replacement is not "
+                                                "valid for this pattern");
             g_error_free(err);
             return e;
         }
@@ -694,12 +702,18 @@ static JSValue ed_replace_all(JSContext *ctx, JSValueConst this_val,
         return argc > 0 ? JS_EXCEPTION
                         : JS_ThrowTypeError(ctx, "ReplaceAll(text) needs the replacement text");
 
+    /* **Every fold opens first**, as for `Search`: the search does not look in
+     * hidden text, so a block folded since the search kept its matches and the
+     * count came back short -- in silence. */
+    folds_open_all(w);
+
     GError *err = NULL;
     guint   n   = gtk_source_search_context_replace_all(sc, with, -1, &err);
     JS_FreeCString(ctx, with);
 
     if (err) {
-        JSValue e = JS_ThrowRangeError(ctx, "ReplaceAll: %s", err->message);
+        JSValue e = JS_ThrowRangeError(ctx, "ReplaceAll: the replacement is not "
+                                            "valid for this pattern");
         g_error_free(err);
         return e;
     }
@@ -2525,11 +2539,15 @@ static const JSCFunctionListEntry source_props[] = {
      */
     JS_CGETSET_DEF("CompletionTitle", ed_get_completion_title, ed_set_completion_title),
     /* Matches
-     *   how many the last `Search` found
+     *   how many matches of the last `Search` there are now, counted again on
+     *   each read. **Counted in what can be seen**: reading a property opens
+     *   no fold, so a block folded since the search leaves its matches out
+     *   until `Search`, `FindNext` or `ReplaceAll` opens it
      */
     JS_CGETSET_DEF("Matches",    ed_get_matches,     NULL),
     /* MatchIndex
-     *   which one the cursor is standing on — the `3` in *3/12*
+     *   which one the cursor is standing on — the `3` in *3/12*. Counted the
+     *   way `Matches` is, in what can be seen
      */
     JS_CGETSET_DEF("MatchIndex", ed_get_match_index, NULL),
     /* ShowLineNumbers
@@ -2653,11 +2671,14 @@ static const JSCFunctionListEntry source_props[] = {
      */
     JS_CFUNC_DEF("FindPrevious", 0, ed_find_previous),
     /* Replace(text)
-     *   the match the cursor is standing on
+     *   the match the cursor is standing on. **Opens every fold** first, as
+     *   `FindNext` does
      */
     JS_CFUNC_DEF("Replace",      1, ed_replace),
     /* ReplaceAll(text)
-     *   every match
+     *   every match, and how many. **Opens every fold** first: the search
+     *   does not look in hidden text, and a folded match left unreplaced
+     *   would be a silent short count
      */
     JS_CFUNC_DEF("ReplaceAll",   1, ed_replace_all),
 };

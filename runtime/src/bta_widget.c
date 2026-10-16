@@ -5807,39 +5807,75 @@ static JSValue w_set_tooltip(JSContext *ctx, JSValueConst this_val, JSValueConst
  * the silence it fixes.  Longer than this and the author says `AccessibleName`. */
 #define A11Y_TOOLTIP_MAX 60
 
-void bta_a11y_walk(GtkWidget *wd, int depth, void (*fn)(GtkWidget *, gpointer),
-                   gpointer data)
+/*
+ * **The walk stops at another control.**  A container's widgets a few levels
+ * down are its children's, and a `Panel` named "Address" used to name every
+ * button and field inside it "Address" -- and a `Tooltip` put on it afterwards
+ * reset the names its children had been given.  A widget tagged with a
+ * `BtaWidget` other than the one the walk started from is somebody else's, and
+ * neither it nor what is under it is touched.  (A control's own slot carries its
+ * own tag, so a container still reaches its slot.)
+ */
+static void a11y_walk_in(GtkWidget *wd, int depth, gpointer owner,
+                         void (*fn)(GtkWidget *, gpointer), gpointer data)
 {
     if (depth == 0 || gtk_widget_get_focusable(wd))
         fn(wd, data);
     if (depth >= A11Y_DEPTH)
         return;
     for (GtkWidget *c = gtk_widget_get_first_child(wd); c;
-         c = gtk_widget_get_next_sibling(c))
-        bta_a11y_walk(c, depth + 1, fn, data);
+         c = gtk_widget_get_next_sibling(c)) {
+        gpointer tag = g_object_get_data(G_OBJECT(c), BTA_WIDGET_QUARK);
+
+        if (tag && tag != owner)
+            continue;
+        a11y_walk_in(c, depth + 1, owner, fn, data);
+    }
 }
+
+void bta_a11y_walk(GtkWidget *wd, int depth, void (*fn)(GtkWidget *, gpointer),
+                   gpointer data)
+{
+    a11y_walk_in(wd, depth, g_object_get_data(G_OBJECT(wd), BTA_WIDGET_QUARK), fn, data);
+}
+
+/*
+ * **Only a label the runtime put there is taken away.**  GTK names some of the
+ * widgets inside its own controls itself -- a spin button's two buttons are
+ * "Increase" and "Decrease" -- and a reset on every focusable widget inside a
+ * control, which is what a `Tooltip` with no name to give used to do, erased
+ * those.  So each label set here is marked, and a reset clears only marked ones.
+ */
+#define A11Y_OURS_KEY "bta-a11y-label-ours"
 
 static void a11y_label_cb(GtkWidget *t, gpointer data)
 {
     const char *s = data;
 
-    if (s && *s)
+    if (s && *s) {
         gtk_accessible_update_property(GTK_ACCESSIBLE(t), GTK_ACCESSIBLE_PROPERTY_LABEL,
                                        s, -1);
-    else
+        g_object_set_data(G_OBJECT(t), A11Y_OURS_KEY, GINT_TO_POINTER(1));
+    } else if (g_object_get_data(G_OBJECT(t), A11Y_OURS_KEY)) {
         gtk_accessible_reset_property(GTK_ACCESSIBLE(t), GTK_ACCESSIBLE_PROPERTY_LABEL);
+        g_object_set_data(G_OBJECT(t), A11Y_OURS_KEY, NULL);
+    }
 }
 
 static void a11y_description_cb(GtkWidget *t, gpointer data)
 {
     const char *s = data;
 
-    if (s && *s)
+    /* As the label: only a description of ours is taken away. */
+    if (s && *s) {
         gtk_accessible_update_property(GTK_ACCESSIBLE(t),
                                        GTK_ACCESSIBLE_PROPERTY_DESCRIPTION, s, -1);
-    else
+        g_object_set_data(G_OBJECT(t), "bta-a11y-desc-ours", GINT_TO_POINTER(1));
+    } else if (g_object_get_data(G_OBJECT(t), "bta-a11y-desc-ours")) {
         gtk_accessible_reset_property(GTK_ACCESSIBLE(t),
                                       GTK_ACCESSIBLE_PROPERTY_DESCRIPTION);
+        g_object_set_data(G_OBJECT(t), "bta-a11y-desc-ours", NULL);
+    }
 }
 
 /* Whether anything with words is drawn inside: what a button that is only an
@@ -5932,8 +5968,14 @@ static void on_a11y_mapped(GtkWidget *wd, gpointer data)
 
     GWeakRef *ref = g_new0(GWeakRef, 1);
 
+    /* **At high priority**, not the default idle's: GTK's own write happens
+     * before the signal returns, so any idle is late enough -- and a default
+     * one waits behind every redraw and every other source.  Measured in the
+     * full `tests/widgets` run: the mark came back **264 ms** after the map,
+     * which is a quarter of a second of a screen reader reading the logo, and
+     * what failed a test that waited 60. */
     g_weak_ref_init(ref, wd);
-    g_idle_add(a11y_reassert_idle, ref);
+    g_idle_add_full(G_PRIORITY_HIGH, a11y_reassert_idle, ref, NULL);
 }
 
 static JSValue w_get_a11y_hidden(JSContext *ctx, JSValueConst this_val)
@@ -6029,6 +6071,20 @@ static char *a11y_read(GtkAccessible *a, GtkAccessibleProperty p)
     return gtk_test_accessible_check_property(a, p, "\x01never-a-value", -1);
 }
 
+/* Whether GTK keeps an accessibility context for it -- none under
+ * `GTK_A11Y=none`, where the test readers assert.  **The getter hands back a
+ * reference** (transfer full since 4.10), which a bare truth test leaked once
+ * per widget visited on every `AccessibleInfo()`. */
+static bool a11y_has_context(GtkAccessible *a)
+{
+    GtkATContext *c = gtk_accessible_get_at_context(a);
+
+    if (!c)
+        return false;
+    g_object_unref(c);
+    return true;
+}
+
 typedef struct { GtkWidget *found; } A11yPick;
 
 /* The first widget of the control that carries anything: the one the focus
@@ -6038,7 +6094,7 @@ static void a11y_pick_cb(GtkWidget *t, gpointer data)
     A11yPick     *pick = data;
     GtkAccessible *a   = GTK_ACCESSIBLE(t);
 
-    if (!pick->found && gtk_accessible_get_at_context(a) &&
+    if (!pick->found && a11y_has_context(a) &&
         (gtk_test_accessible_has_property(a, GTK_ACCESSIBLE_PROPERTY_LABEL) ||
          gtk_test_accessible_has_property(a, GTK_ACCESSIBLE_PROPERTY_DESCRIPTION) ||
          gtk_test_accessible_has_relation(a, GTK_ACCESSIBLE_RELATION_LABELLED_BY)))
@@ -6083,7 +6139,7 @@ static JSValue w_accessible_info(JSContext *ctx, JSValueConst this_val,
     /* The state's *value*: `has_state` is true for a widget that is on screen too,
      * with the value false.  Asking whether it is not false reads it. */
     gboolean hidden = false;
-    if (gtk_accessible_get_at_context(root) &&
+    if (a11y_has_context(root) &&
         gtk_test_accessible_has_state(root, GTK_ACCESSIBLE_STATE_HIDDEN)) {
         char *v = gtk_test_accessible_check_state(root, GTK_ACCESSIBLE_STATE_HIDDEN, FALSE, -1);
 

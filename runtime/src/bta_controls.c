@@ -2101,6 +2101,13 @@ static JSValue label_set_for(JSContext *ctx, JSValueConst this_val, JSValueConst
     if (JS_IsObject(w->form)) {
         JSValue c = JS_GetPropertyStr(ctx, w->form, name);
 
+        /* A form accessor of that name can throw: that is the answer, given
+         * before anything here has been changed -- not an exception left
+         * pending for whoever calls into JavaScript next. */
+        if (JS_IsException(c)) {
+            JS_FreeCString(ctx, name);
+            return JS_EXCEPTION;
+        }
         if (JS_IsObject(c))
             t = bta_widget_of(c);
         JS_FreeValue(ctx, c);
@@ -2120,6 +2127,13 @@ static void labels_resolve_in(JSContext *ctx, JSValueConst form_obj, GtkWidget *
     if (lf && lf->pending && *lf->name) {
         JSValue    c = JS_GetPropertyStr(ctx, form_obj, lf->name);
         BtaWidget *t = JS_IsObject(c) ? bta_widget_of(c) : NULL;
+
+        /* A getter of that name that throws names no control: consumed here,
+         * since the loader goes on and the next call into JavaScript would
+         * otherwise find it pending.  The name stays unsettled, like any name
+         * nothing answers. */
+        if (JS_IsException(c))
+            JS_FreeValue(ctx, JS_GetException(ctx));
 
         if (t) {
             char *name = g_strdup(lf->name);
@@ -4543,9 +4557,13 @@ static JSValue combo_remove(JSContext *ctx, JSValueConst this_val,
     int      prev;
     gboolean quiet = combo_quiet_begin(w, &prev);
 
+    /* The key goes first: a `Select` raised by the splice (or by
+     * `combo_quiet_end`) reads `Key`, and the array has to be the model's shape
+     * by then -- after the splice, a handler asking for the row that moved up
+     * read the key of the row that was removed. */
+    g_ptr_array_remove_index(combo_keys(w), (guint)i);
     gtk_string_list_splice(combo_model(w), (guint)i + combo_off(w), 1, NULL);
     combo_quiet_end(w, quiet, prev, prev == i);
-    g_ptr_array_remove_index(combo_keys(w), (guint)i);
     return JS_UNDEFINED;
 }
 
@@ -6519,8 +6537,10 @@ void bta_separator_room(BtaWidget *w)
         after  = cell - 1 - before;
     }
 
+    /* The axis matters whenever there is any room: a cell of 2 is no room
+     * before and one after, and turned over it must move to the other axis. */
     if (before == w->room_before && after == w->room_after &&
-        (!before || vertical == w->room_vertical))
+        ((!before && !after) || vertical == w->room_vertical))
         return;
 
     w->room_before   = before;
