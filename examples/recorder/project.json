@@ -5,5 +5,5 @@
     "RecorderForm.js"
   ],
   "version": "1.0",
-  "description": "The microphone to a WAV file, built by hand with Media.Element: build by name, connect, configure, subscribe -- and Eos, which is what makes the header true"
+  "description": "The microphone to a WAV file and back, built by hand with Media.Element: build by name, connect, subscribe -- to eos, and to the level messages the meter is arithmetic on -- and Eos, which is what makes the header true, and the header is what answers how long the recording runs"
 }

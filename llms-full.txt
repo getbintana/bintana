@@ -8202,6 +8202,19 @@ Each of these was measured while building it, and each one shaped a rule.
   not its inverse (caps come back escaped in the launch form, flags as the
   long name). `Set`/`Get` borrow the *syntax* (`ball`, `tcp+udp`, `30/1`) and
   build the text themselves; every conversion it cannot make is a sentence.
+- **`level` has no signal left, only messages -- and `element` is the ninth
+  bus kind because of it.** Measured on GStreamer 1.28: `gst-inspect-1.0
+  level` lists no signals and `gi` answers "unknown signal name: level";
+  `decodebin`'s signals still print, so it is the element, not the tool. The
+  numbers arrive the modern way instead -- one `element` message per
+  `interval` (100 ms by default), `rms`/`peak`/`decay` as `GValueArray` of dB
+  doubles, one per channel. `Bus.On` dispatched eight message kinds and
+  dropped `element` at its `default: return`; the recorder's meter is why it
+  is the ninth, `handler(name, fields)` with the structure's name and its
+  fields as one object -- numbers, strings, booleans and arrays of numbers,
+  and a field this surface carries no value for is left out rather than
+  guessed at. `tests/media`'s `levels` scenario holds it to two channels'
+  peaks in dB.
 
 ## Desktop integration
 
@@ -12024,8 +12037,9 @@ no window -- and `tests/media.sh` gives it a binary and, more importantly, a
 alive forever, and a red run is what that has to look like.** The last scenario
 is deliberately silent (no handler at all), so a regression there is exactly
 that hang; the others assert the conversions, the refusals, the graph rules,
-the bus kinds, `Eos` flushing a WAV header whose sizes are then read back, and
-`pad-added` over the suite's own `win.wav`.
+the bus kinds -- the `element` message among them, held to the `level`
+element's two channels of dB numbers -- `Eos` flushing a WAV header whose
+sizes are then read back, and `pad-added` over the suite's own `win.wav`.
 
 It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 `pkg-config` that answers no for `gstreamer-1.0` and runs `tests/media.sh`

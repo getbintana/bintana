@@ -184,7 +184,7 @@ typedef struct BtaBus {
      * call, and with it held, a handler that drops the last reference to the
      * bus cannot free the struct under the dispatch that is running. */
     JSValue     self;
-    JSValue     handlers[8];    /* MEDIA_BUS_TYPES order; UNDEFINED for none */
+    JSValue     handlers[9];    /* MEDIA_BUS_TYPES order; UNDEFINED for none */
 #ifdef BTA_HAVE_GST
     GstBus     *bus;            /* one reference */
 #endif
@@ -192,7 +192,7 @@ typedef struct BtaBus {
 
 static const char *const MEDIA_BUS_TYPES[] = {
     "error", "warning", "info", "eos", "buffering", "state-changed",
-    "clock-lost", "async-done"
+    "clock-lost", "async-done", "element"
 };
 
 static GList *elements_live;
@@ -1581,13 +1581,17 @@ static const JSCFunctionListEntry pad_props[] = {
 /* type Bus */
 static const JSCFunctionListEntry bus_props[] = {
     /* On(type, handler) -> Bus
-     *   one of eight messages, named as GStreamer spells them: `error`,
+     *   one of nine messages, named as GStreamer spells them: `error`,
      *   `warning` and `info` call `handler(message, kind)` with `kind` one of
      *   `NotFound`, `NotAuthorized`, `Unreachable`, `Decode`, `Error` -- the
      *   players' own words -- `eos`, `clock-lost` and `async-done` call
-     *   `handler()`, `buffering` calls `handler(percent)`, and
-     *   `state-changed` calls `handler(name, state)`. `null` takes it off.
-     *   Handlers run on the main loop
+     *   `handler()`, `buffering` calls `handler(percent)`,
+     *   `state-changed` calls `handler(name, state)`, and `element` calls
+     *   `handler(name, fields)` for a plugin's own message: the `level`
+     *   element posts `rms`, `peak` and `decay` in dB, an array per channel.
+     *   `fields` is an object of numbers, strings, booleans and arrays of
+     *   numbers; a field carrying anything else is left out. `null` takes it
+     *   off. Handlers run on the main loop
      */
     JS_CFUNC_DEF("On", 2, bus_on),
 };
@@ -3933,6 +3937,90 @@ static void bus_call(BtaBus *b, JSValue fn, int argc, JSValueConst *argv)
     bta_drain_jobs(JS_GetRuntime(ctx));
 }
 
+/* One field of an `element` message's structure, in the spellings this
+ * surface carries; anything else answers `undefined` and the field stays out
+ * of the object rather than being guessed at. `rms`, `peak` and `decay` are
+ * one number per channel, so arrays of numbers count as carried. */
+static JSValue bus_field(JSContext *ctx, const GValue *v)
+{
+    GType t = G_VALUE_TYPE(v);
+
+    if (t == G_TYPE_BOOLEAN)
+        return JS_NewBool(ctx, g_value_get_boolean(v));
+    if (t == G_TYPE_INT)
+        return JS_NewInt32(ctx, g_value_get_int(v));
+    if (t == G_TYPE_UINT)
+        return JS_NewUint32(ctx, g_value_get_uint(v));
+    if (t == G_TYPE_INT64)
+        return JS_NewInt64(ctx, g_value_get_int64(v));
+    if (t == G_TYPE_UINT64)
+        return JS_NewFloat64(ctx, (double) g_value_get_uint64(v));
+    if (t == G_TYPE_FLOAT)
+        return JS_NewFloat64(ctx, g_value_get_float(v));
+    if (t == G_TYPE_DOUBLE)
+        return JS_NewFloat64(ctx, g_value_get_double(v));
+    if (t == G_TYPE_STRING) {
+        const gchar *s = g_value_get_string(v);
+
+        return JS_NewString(ctx, s ? s : "");
+    }
+    /* `rms`, `peak` and `decay` are a `GValueArray` — glib's deprecated
+     * spelling, and the one GStreamer carries; the guard keeps the build
+     * silent about it. */
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    if (t == G_TYPE_VALUE_ARRAY) {
+        GValueArray *arr = g_value_get_boxed(v);
+        JSValue      out;
+
+        if (!arr)
+            return JS_UNDEFINED;
+        out = JS_NewArray(ctx);
+        for (guint i = 0; i < arr->n_values; i++) {
+            const GValue *el = &arr->values[i];
+            GType         et = G_VALUE_TYPE(el);
+            double        d;
+
+            if (et == G_TYPE_DOUBLE)
+                d = g_value_get_double(el);
+            else if (et == G_TYPE_FLOAT)
+                d = g_value_get_float(el);
+            else if (et == G_TYPE_INT)
+                d = g_value_get_int(el);
+            else if (et == G_TYPE_UINT)
+                d = g_value_get_uint(el);
+            else {
+                JS_FreeValue(ctx, out);
+                return JS_UNDEFINED;
+            }
+            JS_SetPropertyUint32(ctx, out, i, JS_NewFloat64(ctx, d));
+        }
+        return out;
+    }
+    G_GNUC_END_IGNORE_DEPRECATIONS
+    return JS_UNDEFINED;
+}
+
+/* A message's structure as one object: the shape `level` arrives in --
+ * `{ rms: [...], peak: [...], decay: [...], endtime: … }`. */
+static JSValue bus_element_fields(JSContext *ctx, const GstStructure *s)
+{
+    JSValue out = JS_NewObject(ctx);
+    gint    n   = gst_structure_n_fields(s);
+
+    for (gint i = 0; i < n; i++) {
+        const char   *name = gst_structure_nth_field_name(s, i);
+        const GValue *v    = gst_structure_get_value(s, name);
+        JSValue       f;
+
+        if (!v)
+            continue;
+        f = bus_field(ctx, v);
+        if (!JS_IsUndefined(f))
+            JS_SetPropertyStr(ctx, out, name, f);
+    }
+    return out;
+}
+
 /* One bus message onto one Bus wrapper's handlers. Called from the shared
  * watch (`media_watch_cb`), which has already done the accounting; `b` may
  * be finalised by its own handler, so nothing here touches it after
@@ -4005,6 +4093,21 @@ static void bus_dispatch(BtaBus *b, GstMessage *msg)
     case GST_MESSAGE_ASYNC_DONE:
         idx = 7;
         break;
+    case GST_MESSAGE_ELEMENT: {
+        /* A plugin's own message. `level` posts one per interval, and a
+         * meter is arithmetic on its `peak`. */
+        const GstStructure *s = gst_message_get_structure(msg);
+        const gchar        *name;
+
+        if (!s)
+            return;
+        idx     = 8;
+        name    = gst_structure_get_name(s);
+        argv[0] = JS_NewString(ctx, name ? name : "");
+        argv[1] = bus_element_fields(ctx, s);
+        argc    = 2;
+        break;
+    }
     default:
         return;
     }
@@ -4064,7 +4167,8 @@ static JSValue bus_on(JSContext *ctx, JSValueConst this_val, int argc,
     if (idx < 0) {
         JSValue r = JS_ThrowRangeError(ctx,
             "On: '%s' is not a bus message -- there are error, warning, info, "
-            "eos, buffering, state-changed, clock-lost and async-done", name);
+            "eos, buffering, state-changed, clock-lost, async-done and "
+            "element", name);
 
         JS_FreeCString(ctx, name);
         return r;

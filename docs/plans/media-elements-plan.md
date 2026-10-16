@@ -316,9 +316,9 @@ element in no pipeline. `pipeline.Bus` is the same object the runtime's own
 watch listens on: one watch per pipeline, owned by the wrapper, so EOS and
 errors are seen even when the program subscribed to nothing.
 
-`Bus.On(type, handler)` takes eight type names — GStreamer's message names,
+`Bus.On(type, handler)` takes nine type names — GStreamer's message names,
 lower-case — with the arguments below; `null` takes the handler off, a second
-call replaces, and any other name refuses, listing the eight.
+call replaces, and any other name refuses, listing the nine.
 
 | type | the handler receives |
 |---|---|
@@ -328,6 +328,14 @@ call replaces, and any other name refuses, listing the eight.
 | `state-changed` | `(name, state)` — which element, and the state it moved to |
 | `clock-lost` | nothing |
 | `async-done` | nothing |
+| `element` | `(name, fields)` — the structure a plugin posts, its name and its fields as one object: numbers, strings, booleans, and arrays of numbers; a field the surface carries no value for is left out |
+
+`element` is the one the recorder's meter reads: the `level` element passes
+the audio through untouched and posts `rms`/`peak`/`decay` in dB — an array per
+channel — each interval. It is also the only road left to them: GStreamer
+removed `level`'s own signal, so a signal subscription is answered "no signal
+'level'" (measured on 1.28; see
+[`../agents/media-desktop.md`](../agents/media-desktop.md)).
 
 The kind is the players' own `media_kind_for` and the reason is
 `media_error_text`'s, so a camera that refuses a password reads the same on
@@ -458,7 +466,8 @@ on.
 
 **Stage 1 — the graph and the bus. Built.** `Media.Available`,
 `Media.Element`, `Element`, `Pad`, `Bus`; the conversion table and the
-refusals; `State`, `Eos`, `Add`, `Link`, `Pad`; `Bus.On`'s eight; the
+refusals; `State`, `Eos`, `Add`, `Link`, `Pad`; `Bus.On`'s message kinds
+(eight as built; the `element` ninth came with the recorder's meter); the
 keepalive and the pending count; the no-GStreamer half; the console tool and
 its CI line. A program has a graph it already knows how to write statically,
 running to EOS — the recorder in `examples/recorder` is the shape.
@@ -479,7 +488,7 @@ Then the picture road above, when a caller wants it.
   step of CI's `test` job.
 - Stage 1's assertions: the refusals (an unknown element, property, nick,
   number-on-string, `Get` of an object, `Add` into a non-bin, `Add` twice,
-  `Link` across graphs, an unknown message type listed against the eight); the
+  `Link` across graphs, an unknown message type listed against them); the
   round trips for every row of the conversion table; a static `audiotestsrc
   num-buffers=3 ! fakesink` reaching EOS through `Bus.On("eos")` (and ending on
   its own — the `.sh`'s timeout is the failure when the accounting is wrong);

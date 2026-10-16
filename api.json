@@ -15644,7 +15644,7 @@
           "Params": 2,
           "Signature": "(type, handler)",
           "Returns": "Bus",
-          "Doc": "one of eight messages, named as GStreamer spells them: `error`, `warning` and `info` call `handler(message, kind)` with `kind` one of `NotFound`, `NotAuthorized`, `Unreachable`, `Decode`, `Error` -- the players' own words -- `eos`, `clock-lost` and `async-done` call `handler()`, `buffering` calls `handler(percent)`, and `state-changed` calls `handler(name, state)`. `null` takes it off. Handlers run on the main loop",
+          "Doc": "one of nine messages, named as GStreamer spells them: `error`, `warning` and `info` call `handler(message, kind)` with `kind` one of `NotFound`, `NotAuthorized`, `Unreachable`, `Decode`, `Error` -- the players' own words -- `eos`, `clock-lost` and `async-done` call `handler()`, `buffering` calls `handler(percent)`, `state-changed` calls `handler(name, state)`, and `element` calls `handler(name, fields)` for a plugin's own message: the `level` element posts `rms`, `peak` and `decay` in dB, an array per channel. `fields` is an object of numbers, strings, booleans and arrays of numbers; a field carrying anything else is left out. `null` takes it off. Handlers run on the main loop",
           "Native": true
         }
       ]

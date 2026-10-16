@@ -282,6 +282,60 @@ function recorder() {
     Timer.After(600, () => pipe.Eos());
 }
 
+/* The `element` bus message, which is how `level` reports: one per interval,
+ * `(name, fields)`, and a VU meter is arithmetic on `peak`. Two channels are
+ * asked for so the arrays have something to count. */
+function levels() {
+    const settle = once((why) => {
+        if (why)
+            fail("level posts element messages", why);
+        done();
+    });
+    const pipe = Media.Element("pipeline");
+    const src  = pipe.Add(Media.Element("audiotestsrc", { "is-live": true }));
+    const cap  = pipe.Add(Media.Element("capsfilter",
+                     { caps: "audio/x-raw,channels=2" }));
+    const conv = pipe.Add(Media.Element("audioconvert"));
+    const lvl  = pipe.Add(Media.Element("level", { "post-messages": true }));
+    const sink = pipe.Add(Media.Element("fakesink"));
+    let seen  = 0;
+    let last  = null;
+
+    owed++;
+    src.Link(cap).Link(conv).Link(lvl).Link(sink);
+    pipe.Bus.On("error", (m, k) => {
+        pipe.State = "Null";
+        settle(m + " (" + k + ")");
+    });
+    pipe.Bus.On("element", (name, fields) => {
+        if (name === "level") {
+            seen++;
+            last = fields;
+        }
+    });
+    pipe.Bus.On("eos", () => {
+        pipe.State = "Null";
+        if (!last) {
+            settle("no level message arrived");
+            return;
+        }
+        check("level posts element messages", seen > 0, "saw " + seen);
+        check("the fields arrive as one object, an array per channel",
+              typeof last.peak === "object" && last.peak.length === 2,
+              "answered " + last.peak.length + " peaks");
+        check("the numbers are dB",
+              last.peak[0] <= 0 && last.peak[0] > -20 &&
+              last.peak[1] <= 0 && last.peak[1] > -20,
+              "peak " + last.peak[0] + "/" + last.peak[1]);
+        check("endtime and duration arrive as numbers",
+              typeof last.endtime === "number" && last.endtime > 0 &&
+              typeof last.duration === "number" && last.duration > 0);
+        settle();
+    });
+    pipe.State = "Playing";
+    Timer.After(600, () => pipe.Eos());
+}
+
 /* The canonical dynamic graph: decodebin has no src pad until the file is
  * typefound, and the pad must be linked before the stream pushes into it. */
 function decodebin() {
@@ -431,6 +485,7 @@ function Main() {
     plain();
     tee();
     recorder();
+    levels();
     decodebin();
     missing();
     lateChild();

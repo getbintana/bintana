@@ -4,7 +4,7 @@
   "properties": {
     "Text": "Recorder",
     "Width": 440,
-    "Height": 196
+    "Height": 230
   },
   "children": [
     {
@@ -21,16 +21,30 @@
       }
     },
     {
-      "type": "Label",
-      "name": "LblPath",
+      "type": "ProgressBar",
+      "name": "Meter",
       "properties": {
+        "AccessibleHidden": true,
+        "HAlign": "Fill",
+        "Height": 10,
+        "Visible": false,
+        "Width": 416,
+        "X": 12,
+        "Y": 48
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblWhere",
+      "properties": {
+        "Ellipsize": true,
         "HAlign": "Fill",
         "Height": 24,
         "Style": "dim-label",
         "Text": "",
         "Width": 416,
         "X": 12,
-        "Y": 48
+        "Y": 62
       }
     },
     {
@@ -43,9 +57,9 @@
         "Style": "suggested-action",
         "Text": "Record",
         "Tooltip": "R",
-        "Width": 130,
+        "Width": 132,
         "X": 12,
-        "Y": 94
+        "Y": 100
       }
     },
     {
@@ -58,9 +72,51 @@
         "Shortcut": ["s"],
         "Text": "Stop",
         "Tooltip": "S",
-        "Width": 130,
-        "X": 152,
-        "Y": 94
+        "Width": 132,
+        "X": 154,
+        "Y": 100
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnFolder",
+      "properties": {
+        "Focusable": false,
+        "Height": 40,
+        "Shortcut": ["f"],
+        "Text": "Folder…",
+        "Tooltip": "F",
+        "Width": 132,
+        "X": 296,
+        "Y": 100
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPlay",
+      "properties": {
+        "Enabled": false,
+        "Focusable": false,
+        "Height": 34,
+        "Style": "link",
+        "Text": "",
+        "Width": 416,
+        "X": 12,
+        "Y": 152
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblInfo",
+      "properties": {
+        "Alignment": "Center",
+        "HAlign": "Fill",
+        "Height": 24,
+        "Style": "dim-label",
+        "Text": "",
+        "Width": 416,
+        "X": 12,
+        "Y": 194
       }
     }
   ]

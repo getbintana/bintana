@@ -153,6 +153,19 @@ Each of these was measured while building it, and each one shaped a rule.
   not its inverse (caps come back escaped in the launch form, flags as the
   long name). `Set`/`Get` borrow the *syntax* (`ball`, `tcp+udp`, `30/1`) and
   build the text themselves; every conversion it cannot make is a sentence.
+- **`level` has no signal left, only messages -- and `element` is the ninth
+  bus kind because of it.** Measured on GStreamer 1.28: `gst-inspect-1.0
+  level` lists no signals and `gi` answers "unknown signal name: level";
+  `decodebin`'s signals still print, so it is the element, not the tool. The
+  numbers arrive the modern way instead -- one `element` message per
+  `interval` (100 ms by default), `rms`/`peak`/`decay` as `GValueArray` of dB
+  doubles, one per channel. `Bus.On` dispatched eight message kinds and
+  dropped `element` at its `default: return`; the recorder's meter is why it
+  is the ninth, `handler(name, fields)` with the structure's name and its
+  fields as one object -- numbers, strings, booleans and arrays of numbers,
+  and a field this surface carries no value for is left out rather than
+  guessed at. `tests/media`'s `levels` scenario holds it to two channels'
+  peaks in dB.
 
 
 ## Desktop integration

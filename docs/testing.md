@@ -462,8 +462,9 @@ no window -- and `tests/media.sh` gives it a binary and, more importantly, a
 alive forever, and a red run is what that has to look like.** The last scenario
 is deliberately silent (no handler at all), so a regression there is exactly
 that hang; the others assert the conversions, the refusals, the graph rules,
-the bus kinds, `Eos` flushing a WAV header whose sizes are then read back, and
-`pad-added` over the suite's own `win.wav`.
+the bus kinds -- the `element` message among them, held to the `level`
+element's two channels of dB numbers -- `Eos` flushing a WAV header whose
+sizes are then read back, and `pad-added` over the suite's own `win.wav`.
 
 It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 `pkg-config` that answers no for `gstreamer-1.0` and runs `tests/media.sh`
