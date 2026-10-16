@@ -7484,7 +7484,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "which one the cursor is standing on — the `3` in *3/12*",
+          "Doc": "which one the cursor is standing on — the `3` in *3/12*. Counted the way `Matches` is, in what can be seen",
           "Native": true
         },
         {
@@ -7493,7 +7493,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "how many the last `Search` found",
+          "Doc": "how many matches of the last `Search` there are now, counted again on each read. **Counted in what can be seen**: reading a property opens no fold, so a block folded since the search leaves its matches out until `Search`, `FindNext` or `ReplaceAll` opens it",
           "Native": true
         },
         {
@@ -7502,7 +7502,7 @@
           "Params": 1,
           "Signature": "(text)",
           "Returns": "",
-          "Doc": "the match the cursor is standing on",
+          "Doc": "the match the cursor is standing on. **Opens every fold** first, as `FindNext` does",
           "Native": true
         },
         {
@@ -7511,7 +7511,7 @@
           "Params": 1,
           "Signature": "(text)",
           "Returns": "",
-          "Doc": "every match",
+          "Doc": "every match, and how many. **Opens every fold** first: the search does not look in hidden text, and a folded match left unreplaced would be a silent short count",
           "Native": true
         },
         {
@@ -12626,7 +12626,7 @@
           "Params": 1,
           "Signature": "(other)",
           "Returns": "boolean",
-          "Doc": "whether the two are the same number. **`==` compares two objects by identity** — `new Decimal(\"1\") == new Decimal(\"1.0\")` is `false`, and `!=` is `true`, while `<=` and `>=` answer true because those are operators this type implements — so **this is the comparison**. It reads a number or machine text as the operators do, at any scale; a third is never equal to the nine-place text it rounds to",
+          "Doc": "whether the two are the same number. **`==` compares two objects by identity** — `new Decimal(\"1\") == new Decimal(\"1.0\")` is `false`, and `!=` is `true`, while `<=` and `>=` answer true because those are operators this type implements — so **this is the comparison**. It reads a number or machine text as the operators do, at any scale; a third is never equal to the nine-place text it rounds to. What is not a number (`null`, `\"\"`, `\"abc\"`) is **refused**, as the operators refuse it, and not answered `false`",
           "Native": true
         },
         {
@@ -14039,7 +14039,7 @@
           "Params": 2,
           "Signature": "(type, [props])",
           "Returns": "Element",
-          "Doc": "builds an element by its factory name (`rtspsrc`, `tee`, `wavenc`) and applies `props` through `Set`, property by property; a name this installation has no type for refuses instead of building nothing",
+          "Doc": "builds an element by its factory name (`rtspsrc`, `tee`, `wavenc`) and applies `props` through `Set`, property by property -- except one `gst-inspect-1.0` says can be set only at construction, which goes into the construction itself, the one place it is taken. A name this installation has no type for refuses instead of building nothing",
           "Native": true
         }
       ]
@@ -15644,7 +15644,7 @@
           "Params": 2,
           "Signature": "(type, handler)",
           "Returns": "Bus",
-          "Doc": "one of nine messages, named as GStreamer spells them: `error`, `warning` and `info` call `handler(message, kind)` with `kind` one of `NotFound`, `NotAuthorized`, `Unreachable`, `Decode`, `Error` -- the players' own words -- `eos`, `clock-lost` and `async-done` call `handler()`, `buffering` calls `handler(percent)`, `state-changed` calls `handler(name, state)`, and `element` calls `handler(name, fields)` for a plugin's own message: the `level` element posts `rms`, `peak` and `decay` in dB, an array per channel. `fields` is an object of numbers, strings, booleans and arrays of numbers; a field carrying anything else is left out. `null` takes it off. Handlers run on the main loop",
+          "Doc": "one of nine messages, named as GStreamer spells them: `error`, `warning` and `info` call `handler(message, kind)` with `kind` one of `NotFound`, `NotAuthorized`, `Unreachable`, `Decode`, `Error` -- the players' own words -- `eos`, `clock-lost` and `async-done` call `handler()`, `buffering` calls `handler(percent)`, `state-changed` calls `handler(name, state)`, and `element` calls `handler(name, fields)` for a plugin's own message: the `level` element posts `rms`, `peak` and `decay` in dB, an array per channel. `fields` is an object of numbers, strings, booleans and arrays of numbers; a field carrying anything else is left out. `null` takes it off. Handlers run on the main loop, and live as long as the pipeline does: while it plays, or while the program holds it",
           "Native": true
         }
       ]
@@ -15807,7 +15807,7 @@
           "Params": 2,
           "Signature": "(signal, handler)",
           "Returns": "Element",
-          "Doc": "subscribes to a GObject signal, named as `gst-inspect-1.0` prints it (`pad-added`, `source-setup`); the handler is called with the signal's arguments after the emitter, and `null` takes it off. A signal that answers a value is refused, and the handler never runs inside the GStreamer callback: it is delivered on the main loop, with a reference on every element or pad it names",
+          "Doc": "subscribes to a GObject signal, named as `gst-inspect-1.0` prints it (`pad-added`, `source-setup`); the handler is called with the signal's arguments after the emitter, and `null` takes it off. A signal that answers a value is refused, and the handler never runs inside the GStreamer callback: it is delivered on the main loop, with a reference on every element or pad it names. The subscription keeps the element for as long as its pipeline is kept -- playing, or held by the program -- and goes with it",
           "Native": true
         },
         {
@@ -16164,7 +16164,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "bytes of request body accepted. **1 MiB when nothing is said**, `0` for no limit; a declared `Content-Length` past it is answered `413` **before the handler runs**, and a body that arrives without one is read and refused the same way when it passes the number",
+          "Doc": "bytes of request body accepted. **1 MiB when nothing is said**, `0` for no limit; a declared `Content-Length` past it is answered `413` **with the body never read**, and a body that arrives without one (chunked) stops being kept once it passes the number and is refused the same way. The handler runs for neither",
           "Native": true
         },
         {

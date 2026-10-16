@@ -5677,6 +5677,30 @@ the value (`check_state(..., FALSE)` answers non-NULL when it is not false), and
 is true for a control not yet shown, which is the truth. Reading it right after
 `Add` therefore says `true`: the test waits for a frame, and counts the wait
 (`waiting++`), or the assertions after it are a smaller total and not a red line.
+**The idle is `G_PRIORITY_HIGH`, not the default idle's 200.** Any idle is late
+enough -- GTK's write happens before the signal returns -- but a default one
+waits behind every redraw and timer: in the full `tests/widgets` run the mark
+came back **223-294 ms** after the map (eleven 10 ms polls), so a screen reader
+read the logo for a quarter of a second, and a test that waited a fixed 60 ms
+failed only in the full run. At high priority it is back by the first poll
+(47 ms of a busy loop, two asks), and the test waits with `until`.
+
+**Three more things the audit after it found.** *(5)* **`gtk_accessible_get_at_context`
+returns a reference** (`transfer full` since 4.10, where it became public): used
+as a bare truth test it leaked one `GtkATContext` per widget visited on every
+`AccessibleInfo()` -- `a11y_has_context` drops it. *(6)* **The walk stops at
+another control**: `bta_a11y_walk` went into a container's children, so a
+`Panel` named "Domicilio" named the button inside it "Domicilio", and a
+`Tooltip` put on the panel afterwards reset the button's own name to nothing
+(`testAccessible` is red with the old walk). A widget tagged with a different
+`BtaWidget` is skipped with what is under it; a control's slot carries its own
+tag and is still reached. *(7)* **A reset takes away only what the runtime set**
+(`bta-a11y-label-ours`, `bta-a11y-desc-ours`), so a tooltip with no name to give
+cannot erase a label GTK put on a widget of its own control. A probe against
+GTK 4.22 found none to erase -- the spin button's two buttons, the password and
+search entries, the drop-down, colour, font and menu buttons and the calendar
+carry no `LABEL` property on any focusable child -- so this is cheap insurance
+against an older or a later GTK, not a measured fix.
 
 ---
 
@@ -8185,19 +8209,67 @@ Each of these was measured while building it, and each one shaped a rule.
   emitting thread** until it has run -- capped at two seconds, after which it
   runs late. `source-setup` cannot be deferred either, for the credentials'
   sake.
+  **Except inside a teardown the runtime started**: `elem_teardown` runs
+  from the finaliser, and taking a pipeline to Null there makes a
+  `decodebin` emit `pad-removed` on the main thread. Delivered inline, the
+  handler ran inside the QuickJS finaliser, and one that allocated (two
+  thousand small objects) segfaulted right after the EOS that let go of the
+  pipeline. `media_no_inline` counts those C-initiated state changes and
+  unrefs (the teardown, a Bus's last reference to its pipeline, the error
+  accounting), and a main-thread emission inside one is queued and not
+  waited for. `tests/media`'s `removedInTeardown` crashes without it.
+- **The closure owns a reference to its subscription.** A
+  `g_signal_handler_disconnect` on the main thread does not wait for an
+  emission another thread is already running, and the marshal read
+  `closure->data` before taking its own reference -- a decodebin announcing
+  two streams from two threads, the first handler unsubscribing, was a
+  use-after-free in the second's prologue. The count is the table's, the
+  closure's (dropped by a finalize notifier: GLib holds the closure across
+  every invocation) and one per delivery, and the detached check and the
+  delivery's reference are one step under `media_sig_mutex`.
 - **One watch per bus, because bus sources consume what they see.** Two
   `gst_bus_add_watch` calls on one bus *split* the messages -- a program
   subscribed to `eos` missed it every other run, which is how it was found.
   `media_watches` keeps one source per bus, with the playing elements and the
   `Bus` wrappers as its listeners.
+  **The dispatch walks a copy, each wrapper held.** `pipe.Bus` is a new
+  wrapper per read, so one bus has several, and a handler that took
+  *another* one off (`b3.On("eos", null)`) unlinked the very link the walk
+  had read as its next: a segfault under `MALLOC_PERTURB_`. And an element
+  answered by an EOS leaves the watch after the handlers only if none of them
+  played it again -- an `eos` handler that restarted the pipeline was taken
+  out for good, its next EOS answered nothing, and a console program never
+  ended (`busDrop` and `restart` in `tests/media`).
 - **`GstState` numbers VOID_PENDING 0 and NULL 1**, so the four words are not
   a dense array from zero; `MEDIA_STATES` is indexed by the enum itself, after
   a `State` getter answered "Ready" for `"Null"`.
-- **A subscription is a claim on the element's life.** A `decodebin` in a
-  local variable is collected the moment the function that built the graph
-  returns -- its `pad-added` subscription with it -- and the pad is never
-  linked. `On` holds the wrapper until the last signal is unsubscribed, the
-  same keepalive as `Playing`, the two reasons counted in one place.
+- **A subscription is a claim on the element's life -- held by the
+  pipeline's wrapper, not by nobody.** A `decodebin` in a local variable is
+  collected the moment the function that built the graph returns -- its
+  `pad-added` subscription with it -- and the pad is never linked; so `On`
+  (and `Bus.On`) holds the wrapper. The first version held it from C,
+  invisible to the collector, until the last handler was taken off, which no
+  program does: every recording of `examples/recorder` left its Bus
+  wrappers, its bus and watch (two descriptors) and the form its handlers
+  named, for the life of the process -- 20 pipelines, 40 descriptors. Now the
+  claim (`MediaClaim`) is held by a live wrapper of the element's pipeline,
+  which *marks* it: the subscription lives while the pipeline plays (its
+  play keepalive) or the program holds it, and the cycle a handler naming
+  `pipe` makes is one the collector breaks. An element in no pipeline holds
+  its own claim until `Add` hands it over; a pipeline's own handlers need no
+  claim at all. The pipeline's finaliser lets its claims go *first*, so its
+  children are finalised before it is taken to Null under them.
+  `subscriptionsGo` in `tests/media` counts the descriptors.
+- **`Set` validates against the spec before it sets.** `g_object_set_property`
+  answers a value outside the range with a GLib-CRITICAL and keeps the old one
+  (`volume` set to 20 read back 1); `g_param_value_validate` first makes it a
+  RangeError. A `guint` goes through a number, not `bta_to_int` (3e9 is a
+  legal `max-size-bytes`), and a construct-only property in the table of
+  `Media.Element` goes into `gst_element_factory_create_with_properties`
+  (1.20; CI has 1.24) -- the refusal of `Set` had pointed there while the
+  table refused it the same way. A signal's parameter types carry
+  `G_SIGNAL_TYPE_STATIC_SCOPE` when declared with it (typefind's
+  `have-type`), and are masked before they are compared.
 - **`gst_util_set_object_arg` silently returns**, and `gst_value_serialize` is
   not its inverse (caps come back escaped in the launch form, flags as the
   long name). `Set`/`Get` borrow the *syntax* (`ball`, `tcp+udp`, `30/1`) and
@@ -8350,12 +8422,22 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   cheap half of the answer.** `Http.Server` flattened whatever arrived, so a
   body grew until the process died (R4 of the October audit). `MaxBody` is a
   property now -- 1 MiB when nothing is said, `0` for the explicit *no limit* --
-  and both refusal points answer `413` with the limit in the body: the declared
-  `Content-Length` decides **before anything is read**, and a body that arrives
-  without one (chunked) is measured when it is here, which is the most a
-  flatten can do. The handler never runs for either. `tests/widgets`'
-  `HttpServer` holds the refusal and the property, and the check was taken out
-  to watch it go red.
+  and both refusal points answer `413` with the limit in the body. **The check
+  cannot live in the handler**: soup calls `soup_server_add_handler`'s callback
+  only once the whole body is in memory, so the first version refused a 4 GB
+  upload after holding it (twice, with the flatten). It is an *early* handler
+  (`soup_server_add_early_handler`), which runs on the headers: a declared
+  `Content-Length` past the limit gets its status there and soup then skips the
+  body and sends no `100 Continue`; a chunked body is counted in `got-chunk`
+  and, once past the limit, `soup_message_body_set_accumulate(FALSE)` stops it
+  being kept -- the bytes are read and dropped, the handler answers `413` on the
+  mark. Measured with `curl` against `MaxBody: 16` (RelWithDebInfo build): a
+  300 MB chunked body took the process's peak to 621 MB before and leaves it at
+  31 MB now, and `Content-Length: 4000000000` with `Expect: 100-continue` was
+  told `100` before and `413` now. The handler never runs for either.
+  `tests/widgets`' `HttpServer` holds
+  the refusal and the property, and the check was taken out to watch it go
+  red.
 - **libsoup3 has no session `authenticate` signal, and connecting one is a
   `GLib-GObject-CRITICAL`, not a `NULL` or a no-op.** The plan assumed the
   soup2 shape; measured, the signal is in neither `soup-session.h` nor any
@@ -8667,7 +8749,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `BtaClass.texts` cannot express it: a menu item is not a widget and has no
   class. So `Strings` knows the two keys by name, exactly as `fromMenu`
   knows the form's own `menus` block, and the reference names the control and
-  the menu (`ChangeTable.Menu MnuChStage`). Without it the IDE's own four
+  the menu (`ChangeTable.Menu MnuChDiff`). Without it the IDE's own four
   context menus were English under a Spanish window -- 13 labels in no
   catalogue, and a `po` entry written by hand came back obsolete at the next
   `msgmerge` because the template did not mention it. The `strings` phase
@@ -11576,7 +11658,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 9384 assertions
+./tests/run.sh                          # all seven projects, 9430 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -12040,6 +12122,16 @@ that hang; the others assert the conversions, the refusals, the graph rules,
 the bus kinds -- the `element` message among them, held to the `level`
 element's two channels of dB numbers -- `Eos` flushing a WAV header whose
 sizes are then read back, and `pad-added` over the suite's own `win.wav`.
+
+Four scenarios hold the lifetimes of the subscriptions, each of which crashed,
+hung or leaked before: `busDrop` (a handler takes another wrapper of the same
+bus off mid-dispatch), `restart` (an `eos` handler plays the pipeline again,
+and only the accounting can end the second run -- a regression is the
+timeout), `removedInTeardown` (a `pad-removed` handler that allocates while
+the pipeline is finalised) and `subscriptionsGo` (twenty pipelines in a row,
+with the file descriptors counted: a subscription lives with its pipeline, not
+for ever). `tests/media.sh` sets `MALLOC_PERTURB_=165`, without which
+`busDrop`'s use-after-free read stale memory and passed.
 
 It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 `pkg-config` that answers no for `gstreamer-1.0` and runs `tests/media.sh`
