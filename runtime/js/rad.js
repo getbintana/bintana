@@ -1947,7 +1947,7 @@ function buildFieldOfSpec(spec, where) {
         throw new TypeError("expected an object with a kind");
 
     const kind = spec.kind;
-    if (typeof kind !== "string" || !FIELD_KINDS[kind])
+    if (typeof kind !== "string" || !hasOwn.call(FIELD_KINDS, kind))
         throw new RangeError(`'${kind}' is not one of ` +
                              ownKeys(FIELD_KINDS).join(", "));
 
@@ -1956,7 +1956,7 @@ function buildFieldOfSpec(spec, where) {
     const simple = { text: Field.Text, int: Field.Int, number: Field.Number,
                      decimal: Field.Decimal, date: Field.Date, time: Field.Time,
                      datetime: Field.DateTime, bytes: Field.Bytes };
-    if (simple[kind]) return simple[kind](opts);
+    if (hasOwn.call(simple, kind)) return simple[kind](opts);
 
     if (kind === "bool") {
         if (opts.def !== undefined && typeof opts.def !== "boolean")
@@ -2087,7 +2087,16 @@ GLOBAL.Record = class Record {
         const fields = {};
         for (const c of chain) {
             const own  = ownDescriptor(c, "Fields");
-            const path = Record.#fileOf(c);
+            let   path = "";
+
+            /* A class that declares its fields in code is only asked whether
+             * a file claims it too; two files claiming the name are not its
+             * problem, since it reads neither. */
+            if (own) {
+                try { path = Record.#fileOf(c); } catch (e) { path = ""; }
+            } else {
+                path = Record.#fileOf(c);
+            }
 
             /* Two shapes that can disagree: the file is where the shape lives
              * when there is one, and a class that declares both is told so
@@ -2122,7 +2131,7 @@ GLOBAL.Record = class Record {
         }
 
         const naming = ctor.Naming || "same";
-        if (!NAMINGS[naming])
+        if (typeof naming !== "string" || !hasOwn.call(NAMINGS, naming))
             throw new RangeError(`${ctor.name}.Naming: '${naming}' is not one of ` +
                                  `${ownKeys(NAMINGS).join(", ")}`);
 
@@ -2228,7 +2237,7 @@ GLOBAL.Record = class Record {
             throw new RangeError(`${path}: declares class '${doc.class}'`);
 
         if (doc.naming !== undefined) {
-            if (!NAMINGS[doc.naming])
+            if (typeof doc.naming !== "string" || !hasOwn.call(NAMINGS, doc.naming))
                 throw new RangeError(`${path}: naming '${doc.naming}' is not one ` +
                                      `of ${ownKeys(NAMINGS).join(", ")}`);
             const own = ownDescriptor(ctor, "Naming");

@@ -8,12 +8,22 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   cheap half of the answer.** `Http.Server` flattened whatever arrived, so a
   body grew until the process died (R4 of the October audit). `MaxBody` is a
   property now -- 1 MiB when nothing is said, `0` for the explicit *no limit* --
-  and both refusal points answer `413` with the limit in the body: the declared
-  `Content-Length` decides **before anything is read**, and a body that arrives
-  without one (chunked) is measured when it is here, which is the most a
-  flatten can do. The handler never runs for either. `tests/widgets`'
-  `HttpServer` holds the refusal and the property, and the check was taken out
-  to watch it go red.
+  and both refusal points answer `413` with the limit in the body. **The check
+  cannot live in the handler**: soup calls `soup_server_add_handler`'s callback
+  only once the whole body is in memory, so the first version refused a 4 GB
+  upload after holding it (twice, with the flatten). It is an *early* handler
+  (`soup_server_add_early_handler`), which runs on the headers: a declared
+  `Content-Length` past the limit gets its status there and soup then skips the
+  body and sends no `100 Continue`; a chunked body is counted in `got-chunk`
+  and, once past the limit, `soup_message_body_set_accumulate(FALSE)` stops it
+  being kept -- the bytes are read and dropped, the handler answers `413` on the
+  mark. Measured with `curl` against `MaxBody: 16` (RelWithDebInfo build): a
+  300 MB chunked body took the process's peak to 621 MB before and leaves it at
+  31 MB now, and `Content-Length: 4000000000` with `Expect: 100-continue` was
+  told `100` before and `413` now. The handler never runs for either.
+  `tests/widgets`' `HttpServer` holds
+  the refusal and the property, and the check was taken out to watch it go
+  red.
 - **libsoup3 has no session `authenticate` signal, and connecting one is a
   `GLib-GObject-CRITICAL`, not a `NULL` or a no-op.** The plan assumed the
   soup2 shape; measured, the signal is in neither `soup-session.h` nor any

@@ -207,6 +207,43 @@ const char *bta_gerror_text(const GError *err)
         case G_MARKUP_ERROR_MISSING_ATTRIBUTE: return "an element is missing an attribute it needs";
         default: break;
         }
+    } else if (err->domain == G_RESOLVER_ERROR) {
+        switch ((GResolverError)err->code) {
+        case G_RESOLVER_ERROR_NOT_FOUND:         return "the host was not found";
+        case G_RESOLVER_ERROR_TEMPORARY_FAILURE: return "the host could not be looked up now";
+        case G_RESOLVER_ERROR_INTERNAL:          return "the lookup failed";
+        default: break;
+        }
+    } else if (err->domain == G_REGEX_ERROR) {
+        /* The match and the replacement have codes of their own; every
+         * other code is one way a pattern fails to compile. */
+        switch (err->code) {
+        case G_REGEX_ERROR_REPLACE: return "the replacement is not valid";
+        case G_REGEX_ERROR_MATCH:   return "the match failed";
+        case G_REGEX_ERROR_INTERNAL: return "the pattern engine failed";
+        default:                    return "the pattern is not a valid regular expression";
+        }
+    } else if (err->domain == GDK_TEXTURE_ERROR) {
+        switch ((GdkTextureError)err->code) {
+        case GDK_TEXTURE_ERROR_TOO_LARGE:           return "the image is too large";
+        case GDK_TEXTURE_ERROR_CORRUPT_IMAGE:       return "the image is damaged";
+        case GDK_TEXTURE_ERROR_UNSUPPORTED_CONTENT: return "the image holds what cannot be shown";
+        case GDK_TEXTURE_ERROR_UNSUPPORTED_FORMAT:  return "the image format is not supported";
+        default: break;
+        }
+    } else if (!strcmp(g_quark_to_string(err->domain), "soup-session-error-quark")) {
+        /* Named, not included: this file builds without libsoup. The codes
+         * are SoupSessionError's, in its order. */
+        switch (err->code) {
+        case 0: return "the response could not be parsed";
+        case 1: return "the response's encoding is not understood";
+        case 2: return "there were too many redirects";
+        case 3: return "the request was restarted too many times";
+        case 4: return "a redirect named no location";
+        case 5: return "a redirect named an address that is not valid";
+        case 6: return "the request is already being sent";
+        default: break;
+        }
     }
 
     g_snprintf(other, sizeof other, "%s %d", g_quark_to_string(err->domain),
@@ -3699,14 +3736,23 @@ int bta_app_run(BtaApp *app, int argc, char **argv)
         GError *err = NULL;
         if (g_application_register(G_APPLICATION(app->gapp), NULL, &err) &&
             g_application_get_is_remote(G_APPLICATION(app->gapp))) {
-            char  *cwd  = g_get_current_dir();
-            const char *none[] = { NULL };
+            /* **A `GVariant` string is UTF-8 or nothing**: a file name in
+             * another encoding (or a directory with one) made `g_variant_new`
+             * fail with a critical and the arguments were lost. Each is made
+             * valid on the way, the way JavaScript reads it anyway. */
+            char         *raw  = g_get_current_dir();
+            char         *cwd  = g_utf8_make_valid(raw, -1);
+            guint         n    = app->args ? g_strv_length(app->args) : 0;
+            char        **args = g_new0(char *, n + 1);
 
+            for (guint i = 0; i < n; i++)
+                args[i] = g_utf8_make_valid(app->args[i], -1);
             g_action_group_activate_action(
                 G_ACTION_GROUP(app->gapp), "bta-second-instance",
-                g_variant_new("(s^as)", cwd,
-                              app->args ? (const char *const *)app->args : none));
+                g_variant_new("(s^as)", cwd, (const char *const *)args));
+            g_strfreev(args);
             g_free(cwd);
+            g_free(raw);
             /* Fire and forget, so the message has to leave before this
              * process does.  What follows is `g_application_run` as for any
              * application: on a remote it activates the first instance (which

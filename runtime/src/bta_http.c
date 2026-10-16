@@ -3985,6 +3985,56 @@ static void http_server_too_large(HttpServerData *s, SoupServerMessage *msg)
                                      said, strlen(said));
 }
 
+/*
+ * **`MaxBody` is decided before the body is read.** soup calls the handler only
+ * once the whole body is in memory, so a check there is a check after the
+ * damage: an early handler runs on the headers. A declared length past the
+ * limit is answered `413` there, and soup then skips the body (and sends no
+ * `100 Continue`). A body with no length (chunked) is counted as it arrives
+ * and, once past the limit, no longer kept -- the bytes are read and dropped,
+ * and the handler answers `413` on the mark left on the message.
+ */
+#define HTTP_BODY_SEEN "bta-body-seen"
+#define HTTP_BODY_OVER "bta-body-over"
+
+static void on_server_chunk(SoupServerMessage *msg, GBytes *chunk, gpointer data)
+{
+    goffset limit = GPOINTER_TO_SIZE(data);
+    goffset seen  = GPOINTER_TO_SIZE(g_object_get_data(G_OBJECT(msg), HTTP_BODY_SEEN));
+
+    seen += (goffset)g_bytes_get_size(chunk);
+    g_object_set_data(G_OBJECT(msg), HTTP_BODY_SEEN, GSIZE_TO_POINTER((gsize)seen));
+    if (seen > limit && !g_object_get_data(G_OBJECT(msg), HTTP_BODY_OVER)) {
+        SoupMessageBody *body = soup_server_message_get_request_body(msg);
+
+        g_object_set_data(G_OBJECT(msg), HTTP_BODY_OVER, GINT_TO_POINTER(1));
+        soup_message_body_set_accumulate(body, FALSE);
+        soup_message_body_truncate(body);
+    }
+}
+
+static void on_server_early(SoupServer *server, SoupServerMessage *msg,
+                            const char *path, GHashTable *query, gpointer data)
+{
+    HttpServerData *s = data;
+
+    (void)server;
+    (void)path;
+    (void)query;
+    if (s->max_body <= 0)
+        return;
+
+    goffset declared = soup_message_headers_get_content_length(
+        soup_server_message_get_request_headers(msg));
+
+    if (declared > (goffset)s->max_body) {
+        http_server_too_large(s, msg);
+        return;
+    }
+    g_signal_connect(msg, "got-chunk", G_CALLBACK(on_server_chunk),
+                     GSIZE_TO_POINTER((gsize)s->max_body));
+}
+
 static void on_server_request(SoupServer *server, SoupServerMessage *msg,
                               const char *path, GHashTable *query, gpointer data)
 {
@@ -4013,25 +4063,26 @@ static void on_server_request(SoupServer *server, SoupServerMessage *msg,
     }
 
     /*
-     * **A body past `MaxBody` never reaches the handler.** The declared length
-     * decides first -- an oversized upload is answered with nothing read --
-     * and a body that arrives without one (chunked) is measured when it is
-     * here, which is the most a flatten can do. The answer is the `413` a
-     * client understands, with the limit in it.
+     * **A body past `MaxBody` never reaches the handler.** The early handler
+     * above answered a declared length past it with nothing read, and marked
+     * a chunked one that went past it while arriving (and stopped keeping it).
+     * The size is asked again here for a limit lowered in between. The answer
+     * is the `413` a client understands, with the limit in it.
      */
+    if (soup_server_message_get_status(msg) == SOUP_STATUS_REQUEST_ENTITY_TOO_LARGE)
+        return;
+    if (s->max_body > 0 && g_object_get_data(G_OBJECT(msg), HTTP_BODY_OVER)) {
+        http_server_too_large(s, msg);
+        return;
+    }
+
     SoupMessageBody *rbody = soup_server_message_get_request_body(msg);
     GBytes          *flat  = rbody ? soup_message_body_flatten(rbody) : NULL;
 
-    if (s->max_body > 0) {
-        goffset declared = soup_message_headers_get_content_length(
-            soup_server_message_get_request_headers(msg));
-
-        if ((declared > 0 && declared > (goffset)s->max_body) ||
-            (flat && g_bytes_get_size(flat) > (gsize)s->max_body)) {
-            g_clear_pointer(&flat, g_bytes_unref);
-            http_server_too_large(s, msg);
-            return;
-        }
+    if (s->max_body > 0 && flat && g_bytes_get_size(flat) > (gsize)s->max_body) {
+        g_clear_pointer(&flat, g_bytes_unref);
+        http_server_too_large(s, msg);
+        return;
     }
 
     GUri           *uri = soup_server_message_get_uri(msg);
@@ -4598,6 +4649,7 @@ static JSValue http_server_start(JSContext *ctx, JSValueConst this_val,
         g_free(detail);
         return e;
     }
+    soup_server_add_early_handler(s->server, "/", on_server_early, s, NULL);
     soup_server_add_handler(s->server, "/", on_server_request, s, NULL);
     s->running = true;
     http_server_apply_auth(s);
@@ -4720,8 +4772,9 @@ static const JSCFunctionListEntry http_server_props[] = {
     /* MaxBody
      *   bytes of request body accepted. **1 MiB when nothing is said**, `0`
      *   for no limit; a declared `Content-Length` past it is answered `413`
-     *   **before the handler runs**, and a body that arrives without one is
-     *   read and refused the same way when it passes the number
+     *   **with the body never read**, and a body that arrives without one
+     *   (chunked) stops being kept once it passes the number and is refused
+     *   the same way. The handler runs for neither
      */
     JS_CGETSET_DEF("MaxBody",    http_server_get_maxbody, http_server_set_maxbody),
     /* Running

@@ -1017,7 +1017,9 @@ static const JSCFunctionListEntry dec_proto_funcs[] = {
      *   and `!=` is `true`, while `<=` and `>=` answer true because those
      *   are operators this type implements — so **this is the comparison**.
      *   It reads a number or machine text as the operators do, at any scale;
-     *   a third is never equal to the nine-place text it rounds to
+     *   a third is never equal to the nine-place text it rounds to. What is
+     *   not a number (`null`, `""`, `"abc"`) is **refused**, as the operators
+     *   refuse it, and not answered `false`
      */
     JS_CFUNC_DEF("Equals",   1, dec_equals),
     /* Scale

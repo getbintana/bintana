@@ -5257,6 +5257,17 @@ class WidgetsForm extends Form {
                 model("class Client extends Record {}\n",
                       { ...client, fields: { Name: { kind: "tex" } } }),
                 "is not one of");
+        /* The kinds and the namings are tables: a name `Object.prototype`
+         * answers for is not one of them. `toString` as the naming mapped
+         * every field to one key, and the file lost its data on Save. */
+        refuses("a kind that is a name of Object.prototype",
+                model("class Client extends Record {}\n",
+                      { ...client, fields: { Name: { kind: "constructor" } } }),
+                "is not one of");
+        refuses("a naming that is a name of Object.prototype",
+                model("class Client extends Record {}\n",
+                      { ...client, naming: "toString" }),
+                "is not one");
         refuses("a misspelt option",
                 model("class Client extends Record {}\n",
                       { ...client, fields: { Name: { kind: "text", mx: 1 } } }),
