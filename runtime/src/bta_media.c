@@ -140,9 +140,12 @@ typedef struct BtaElem BtaElem;
  * One subscription. **The marshal runs on GStreamer's thread**, so it never
  * touches a JSValue: it takes a reference on the subscription, copies the
  * signal's arguments into C, and queues an idle for the main loop, where the
- * handler is read and called. `refs` counts the table's own reference plus
- * one per delivery on its way; the count and the calls list are under
- * `media_sig_mutex`, because that is the one place two threads meet.
+ * handler is read and called. `refs` counts the table's own reference, the
+ * closure's (dropped by GLib when the closure goes, which is after the last
+ * emission that was already running when it was disconnected -- a disconnect
+ * does not wait for another thread's emission), and one per delivery on its
+ * way; the count, `elem` and the calls list are under `media_sig_mutex`,
+ * because that is the one place two threads meet.
  */
 typedef struct ElemSub {
     BtaElem *elem;      /* borrowed; NULL once detached -- a delivery whose
@@ -153,6 +156,29 @@ typedef struct ElemSub {
     JSValue  handler;   /* the current handler, owned */
 } ElemSub;
 
+/*
+ * A claim: a wrapper's own object, held from C so that a subscription outlives
+ * every JS reference to the wrapper (`pipe.Bus.On(…)`'s Bus is nobody's local;
+ * a `decodebin` in a local is gone when the function that built the graph
+ * returns, and its `pad-added` with it).
+ *
+ * **The holder is the pipeline's wrapper, which marks it**, so a subscription
+ * lives exactly as long as the pipeline's wrapper does: held while it plays
+ * (its `self`), collectable once the program lets go of it -- the cycle a
+ * handler naming `pipe` makes is one the collector can see and break. A claim
+ * held by nobody (`owner` NULL: an element in no pipeline, a pipeline with no
+ * wrapper) is the old self-hold, invisible to the collector; `Element.Add`
+ * hands such a claim to the pipeline it lands in. Measured before this: every
+ * recording of `examples/recorder` left its three Bus wrappers, their watch
+ * and the form their handlers named, alive for the life of the process.
+ */
+typedef struct MediaClaim {
+    BtaElem            *owner;  /* borrowed; NULL for a self-hold */
+    JSContext          *ctx;
+    JSValue             value;  /* the claimant's own object, owned */
+    struct MediaClaim **slot;   /* the claimant's pointer to this */
+} MediaClaim;
+
 struct BtaElem {
     bool        dead;       /* torn down: a verb may not touch it */
     JSContext  *ctx;        /* NULL once torn down: touch no JS after */
@@ -160,7 +186,9 @@ struct BtaElem {
     bool        asked;      /* a state outside Null was asked (teardown) */
     bool        hold_play;  /* Playing asked and no EOS/error answered yet */
     bool        hold_subs;  /* a signal is subscribed (On), see below */
-    JSValue     self;       /* the keepalive (see media_hold_self) */
+    JSValue     self;       /* the play keepalive (see elem_hold_self) */
+    MediaClaim *sub_claim;  /* the subscriptions' claim on this wrapper */
+    GList      *claims;     /* MediaClaim* this wrapper holds (a pipeline's) */
     GHashTable *signals;    /* name -> ElemSub, made by On */
 #ifdef BTA_HAVE_GST
     GstElement *element;    /* one reference; NULL when none was made */
@@ -178,15 +206,16 @@ typedef struct BtaPad {
 typedef struct BtaBus {
     bool        dead;
     JSContext  *ctx;
-    /* The keepalive is not a nicety here: `pipe.Bus.On(…)`'s Bus belongs to
+    /* The claim is not a nicety here: `pipe.Bus.On(…)`'s Bus belongs to
      * nobody's local, so without it the object would be collected -- taking
      * its watch and its handlers with it -- on the first idle after the
-     * call, and with it held, a handler that drops the last reference to the
-     * bus cannot free the struct under the dispatch that is running. */
-    JSValue     self;
+     * call. It is held by the pipeline's wrapper (see MediaClaim), and the
+     * watch holds one more for the length of a dispatch. */
+    MediaClaim *claim;
     JSValue     handlers[9];    /* MEDIA_BUS_TYPES order; UNDEFINED for none */
 #ifdef BTA_HAVE_GST
     GstBus     *bus;            /* one reference */
+    GstElement *pipeline;       /* one reference: whose bus, for the claim */
 #endif
 } BtaBus;
 
@@ -288,26 +317,22 @@ static BtaBus *bus_this(JSContext *ctx, JSValueConst this_val)
  * keeps a *console* program alive, and a handler that drops the last
  * reference can no longer free the struct under the dispatch that is
  * running. Invisible to the collector on purpose (see media_hold_self).
- *
- * **A subscription is the second claim on that life**, and it was paid for:
- * a `decodebin` kept in a local variable is collected the moment the function
- * that built the graph returns -- taking its `pad-added` subscription with it
- * -- and the pad it was going to announce is then never linked. `On` holds
- * the wrapper until the last signal is unsubscribed. */
+ * Playing is the only thing it stands for; a subscription's claim is a
+ * MediaClaim, held by the pipeline's wrapper. */
 static void elem_hold_self(JSContext *ctx, BtaElem *e, JSValueConst this_val)
 {
     if (JS_IsUndefined(e->self))
         e->self = JS_DupValue(ctx, this_val);
 }
 
-/* Both claims, counted in one place. Whatever this releases may be the last
- * reference to the object, which finalises the wrapper and frees `e`: the
- * caller must not touch it afterwards. */
+/* Whatever this releases may be the last reference to the object, which
+ * finalises the wrapper and frees `e`: the caller must not touch it
+ * afterwards. */
 static void elem_release_if_idle(BtaElem *e)
 {
     JSValue self;
 
-    if (e->hold_play || e->hold_subs)
+    if (e->hold_play)
         return;
     self = e->self;
     if (JS_IsUndefined(self))
@@ -316,6 +341,97 @@ static void elem_release_if_idle(BtaElem *e)
     JS_FreeValue(e->ctx, self);
 }
 #endif /* BTA_HAVE_GST */
+
+/* ------------------------------------------------------------------ claims
+ *
+ * See MediaClaim. Four moves: make one, take one back (answering the value
+ * for the caller to free outside any walk), forget one in the claimant's own
+ * finaliser (the value *is* the object being finalised), and let every claim
+ * an owner holds go in the owner's finaliser.
+ */
+#ifdef BTA_HAVE_GST
+static void media_claim_make(JSContext *ctx, MediaClaim **slot, BtaElem *owner,
+                             JSValueConst obj)
+{
+    MediaClaim *c;
+
+    if (*slot)
+        return;
+    c        = g_new0(MediaClaim, 1);
+    c->owner = owner;
+    c->ctx   = ctx;
+    c->value = JS_DupValue(ctx, obj);
+    c->slot  = slot;
+    *slot    = c;
+    if (owner)
+        owner->claims = g_list_prepend(owner->claims, c);
+}
+
+/* A self-held claim moves to an owner that has turned up (Element.Add). */
+static void media_claim_rehome(MediaClaim *c, BtaElem *owner)
+{
+    if (!c || c->owner || !owner)
+        return;
+    c->owner      = owner;
+    owner->claims = g_list_prepend(owner->claims, c);
+}
+#endif
+
+static JSValue media_claim_take(MediaClaim **slot, JSContext **ctx)
+{
+    MediaClaim *c = *slot;
+    JSValue     v;
+
+    if (!c)
+        return JS_UNDEFINED;
+    if (c->owner)
+        c->owner->claims = g_list_remove(c->owner->claims, c);
+    *slot = NULL;
+    v     = c->value;
+    if (ctx)
+        *ctx = c->ctx;
+    g_free(c);
+    return v;
+}
+
+#ifdef BTA_HAVE_GST
+/* May finalise the claimant: the caller's last line. */
+static void media_claim_drop(MediaClaim **slot)
+{
+    JSContext *ctx = NULL;
+    JSValue    v   = media_claim_take(slot, &ctx);
+
+    if (ctx)
+        JS_FreeValue(ctx, v);
+}
+#endif
+
+static void media_claim_forget(MediaClaim **slot)
+{
+    (void)media_claim_take(slot, NULL);
+}
+
+static void media_claims_release(JSRuntime *rt, BtaElem *owner)
+{
+    GList *list = owner->claims;
+
+    owner->claims = NULL;
+    for (GList *l = list; l; l = l->next) {
+        MediaClaim *c = l->data;
+
+        c->owner = NULL;
+        *c->slot = NULL;
+    }
+    /* Detached first, freed second: a claimant finalised here finds its slot
+     * empty and leaves the list alone. */
+    for (GList *l = list; l; l = l->next) {
+        MediaClaim *c = l->data;
+
+        JS_FreeValueRT(rt, c->value);
+        g_free(c);
+    }
+    g_list_free(list);
+}
 
 static void elem_sub_unref(ElemSub *sub)
 {
@@ -327,6 +443,15 @@ static void elem_sub_unref(ElemSub *sub)
     g_mutex_unlock(&media_sig_mutex);
     g_free(sub->name);
     g_free(sub);
+}
+
+/* Cut a subscription from its element, under the lock the marshal reads it
+ * with: a delivery that has not yet taken its reference sees NULL and goes. */
+static void elem_sub_detach(ElemSub *sub)
+{
+    g_mutex_lock(&media_sig_mutex);
+    sub->elem = NULL;
+    g_mutex_unlock(&media_sig_mutex);
 }
 
 /* Detach every subscription and let the table go. **No JSValue is freed
@@ -347,12 +472,13 @@ static void elem_signals_destroy(BtaElem *e)
     while (g_hash_table_iter_next(&it, &key, &val)) {
         ElemSub *sub = val;
 
+        elem_sub_detach(sub);
 #ifdef BTA_HAVE_GST
+        /* May drop the closure's reference; the table's is still held. */
         if (sub->id && e->element)
             g_signal_handler_disconnect(e->element, sub->id);
 #endif
-        sub->id   = 0;
-        sub->elem = NULL;
+        sub->id = 0;
         g_hash_table_iter_remove(&it);
         elem_sub_unref(sub);   /* the table's own reference */
     }
@@ -1539,7 +1665,9 @@ static const JSCFunctionListEntry element_props[] = {
      *   signal's arguments after the emitter, and `null` takes it off. A
      *   signal that answers a value is refused, and the handler never runs
      *   inside the GStreamer callback: it is delivered on the main loop, with
-     *   a reference on every element or pad it names
+     *   a reference on every element or pad it names. The subscription keeps
+     *   the element for as long as its pipeline is kept -- playing, or held
+     *   by the program -- and goes with it
      */
     JS_CFUNC_DEF("On", 2, elem_on),
     /* Bus -> Bus or null
@@ -1591,7 +1719,8 @@ static const JSCFunctionListEntry bus_props[] = {
      *   element posts `rms`, `peak` and `decay` in dB, an array per channel.
      *   `fields` is an object of numbers, strings, booleans and arrays of
      *   numbers; a field carrying anything else is left out. `null` takes it
-     *   off. Handlers run on the main loop
+     *   off. Handlers run on the main loop, and live as long as the pipeline
+     *   does: while it plays, or while the program holds it
      */
     JS_CFUNC_DEF("On", 2, bus_on),
 };
@@ -1602,6 +1731,12 @@ static void element_finalizer(JSRuntime *rt, JSValue v)
 
     if (!e)
         return;
+    /* Its own claim points at this very object: forgotten, not freed. The
+     * claims it holds -- a pipeline's Buses and children -- go first, so a
+     * child is finalised (its subscriptions with it) before the pipeline is
+     * taken to Null under it. */
+    media_claim_forget(&e->sub_claim);
+    media_claims_release(rt, e);
     if (e->signals) {
         GHashTableIter it;
         gpointer key, val;
@@ -1622,14 +1757,19 @@ static void element_finalizer(JSRuntime *rt, JSValue v)
 }
 
 /* The handlers are strong references in the opaque slot, so the collector is
- * told -- the audioplayer's rule, one table over. */
+ * told -- the audioplayer's rule, one table over -- and so are the claims a
+ * pipeline's wrapper holds, which is what makes them collectable with it. */
 static void element_gc_mark(JSRuntime *rt, JSValueConst v, JS_MarkFunc *mark)
 {
     BtaElem *e = JS_GetOpaque(v, element_class_id);
     GHashTableIter it;
     gpointer key, val;
 
-    if (!e || !e->signals)
+    if (!e)
+        return;
+    for (GList *l = e->claims; l; l = l->next)
+        JS_MarkValue(rt, ((MediaClaim *)l->data)->value, mark);
+    if (!e->signals)
         return;
     g_hash_table_iter_init(&it, e->signals);
     while (g_hash_table_iter_next(&it, &key, &val)) {
@@ -1671,7 +1811,7 @@ static void bus_finalizer(JSRuntime *rt, JSValue v)
         JS_FreeValueRT(rt, b->handlers[i]);
         b->handlers[i] = JS_UNDEFINED;
     }
-    b->self = JS_UNDEFINED;
+    media_claim_forget(&b->claim);   /* it points at this very object */
     bus_teardown(b);
     g_free(b);
 }
@@ -1695,8 +1835,11 @@ static const JSClassDef bus_class = {
 static const JSCFunctionListEntry media_global_props[] = {
     /* Element(type, [props]) -> Element
      *   builds an element by its factory name (`rtspsrc`, `tee`, `wavenc`)
-     *   and applies `props` through `Set`, property by property; a name this
-     *   installation has no type for refuses instead of building nothing
+     *   and applies `props` through `Set`, property by property -- except
+     *   one `gst-inspect-1.0` says can be set only at construction, which
+     *   goes into the construction itself, the one place it is taken. A
+     *   name this installation has no type for refuses instead of building
+     *   nothing
      */
     JS_CFUNC_DEF("Element", 2, media_element),
 };
@@ -1844,6 +1987,12 @@ void bta_media_cleanup(void)
             e->self = JS_UNDEFINED;
             g_array_append_val(held, h);
         }
+        if (e->sub_claim) {
+            struct Held h = { NULL, JS_UNDEFINED };
+
+            h.value = media_claim_take(&e->sub_claim, &h.ctx);
+            g_array_append_val(held, h);
+        }
         if (e->signals) {
             GHashTableIter it;
             gpointer key, val;
@@ -1864,10 +2013,10 @@ void bta_media_cleanup(void)
     for (GList *l = buses_live; l; l = l->next) {
         BtaBus *b = l->data;
 
-        if (!JS_IsUndefined(b->self) && b->ctx) {
-            struct Held h = { b->ctx, b->self };
+        if (b->claim) {
+            struct Held h = { NULL, JS_UNDEFINED };
 
-            b->self = JS_UNDEFINED;
+            h.value = media_claim_take(&b->claim, &h.ctx);
             g_array_append_val(held, h);
         }
         for (int i = 0; i < (int)G_N_ELEMENTS(MEDIA_BUS_TYPES); i++) {
@@ -2557,15 +2706,41 @@ static void bus_watch_leave(BtaBus *b)
 
 struct MediaHeld { JSContext *ctx; JSValue value; };
 
+/*
+ * Inside a C-initiated state change or unref -- a teardown, a finaliser, the
+ * error accounting below -- a signal emitted on the main thread is *queued*,
+ * never delivered inline: `elem_teardown` runs from the finaliser, and taking
+ * a pipeline to Null there makes a `decodebin` emit `pad-removed` on this
+ * thread. Delivered inline, the handler ran inside the QuickJS finaliser, and
+ * one that allocated crashed the process (measured: a `pad-removed` handler
+ * building a thousand objects, segfault right after the EOS that released the
+ * pipeline's last reference).
+ */
+static int media_no_inline;
+
 /* The one watch. Accounting runs first and only collects -- the keepalive
  * JSValues are freed *after* the program's handlers have run, because
  * dropping one may finalise the wrapper it belongs to, and nothing may do
- * that under a list walk. */
+ * that under a list walk.
+ *
+ * **The Bus wrappers are walked from a copy, each held for the dispatch.** A
+ * handler may unsubscribe any wrapper on this bus, which unlinks it from
+ * `w->buses` -- measured: `b3.On("eos", null)` from b2's handler freed the
+ * very link the walk had read as its next, and the process died. The copy
+ * holds a reference on every wrapper, so none is finalised under the walk,
+ * and the references go with the elements' keepalives at the end.
+ *
+ * **An element answered here is held to the end too**, and leaves the watch
+ * only if no handler asked it to play again: an `eos` handler that restarts
+ * the pipeline (`State = "Null"; State = "Playing"`) re-joined a watch it
+ * had not yet left, and the leave after the handlers took it out for good --
+ * so its next EOS answered nothing and a console program never ended. */
 static gboolean media_watch_cb(GstBus *gstbus, GstMessage *msg, gpointer data)
 {
     MediaWatch      *w    = data;
     GstMessageType   type = GST_MESSAGE_TYPE(msg);
-    GArray          *held = NULL;
+    GArray          *held = g_array_new(FALSE, FALSE, sizeof(struct MediaHeld));
+    GPtrArray       *buses = g_ptr_array_new();
     GList           *leaving = NULL;
 
     (void)gstbus;
@@ -2578,39 +2753,49 @@ static gboolean media_watch_cb(GstBus *gstbus, GstMessage *msg, gpointer data)
             if (e->dead || !e->hold_play)
                 continue;
             e->hold_play = false;
-            if (type == GST_MESSAGE_ERROR && e->element)
+            if (type == GST_MESSAGE_ERROR && e->element) {
+                media_no_inline++;
                 gst_element_set_state(e->element, GST_STATE_NULL);
-            if (!e->hold_subs && !JS_IsUndefined(e->self) && e->ctx) {
+                media_no_inline--;
+            }
+            /* The play keepalive moves to `held`: released after the
+             * handlers, and holding `e` alive until the leave below. Every
+             * element on `w->elems` that plays has one (elem_set_state). */
+            if (!JS_IsUndefined(e->self) && e->ctx) {
                 struct MediaHeld h = { e->ctx, e->self };
 
-                if (!held)
-                    held = g_array_new(FALSE, FALSE, sizeof h);
                 e->self = JS_UNDEFINED;
                 g_array_append_val(held, h);
+                leaving = g_list_prepend(leaving, e);
             }
-            leaving = g_list_prepend(leaving, e);
         }
     }
-    for (GList *l = w->buses; l; ) {
-        GList  *next = l->next;
-        BtaBus *b    = l->data;
+    for (GList *l = w->buses; l; l = l->next) {
+        BtaBus *b = l->data;
 
-        bus_dispatch(b, msg);   /* may finalise `b`; `next` was read first */
-        l = next;
-    }
-    if (leaving) {
-        for (GList *l = leaving; l; l = l->next)
-            elem_watch_leave(l->data);
-        g_list_free(leaving);
-    }
-    if (held) {
-        for (guint i = 0; i < held->len; i++) {
-            struct MediaHeld *h = &g_array_index(held, struct MediaHeld, i);
+        if (b->dead || !b->claim || !b->ctx)
+            continue;
+        struct MediaHeld h = { b->ctx, JS_DupValue(b->ctx, b->claim->value) };
 
-            JS_FreeValue(h->ctx, h->value);
-        }
-        g_array_free(held, TRUE);
+        g_array_append_val(held, h);
+        g_ptr_array_add(buses, b);
     }
+    for (guint i = 0; i < buses->len; i++)
+        bus_dispatch(buses->pdata[i], msg);    /* each held: none finalised */
+    g_ptr_array_free(buses, TRUE);
+    for (GList *l = leaving; l; l = l->next) {
+        BtaElem *e = l->data;
+
+        if (!e->dead && !e->hold_play)
+            elem_watch_leave(e);
+    }
+    g_list_free(leaving);
+    for (guint i = 0; i < held->len; i++) {
+        struct MediaHeld *h = &g_array_index(held, struct MediaHeld, i);
+
+        JS_FreeValue(h->ctx, h->value);
+    }
+    g_array_free(held, TRUE);
     w->dispatch--;
     media_watch_release(w);     /* the last line: it may free w */
     return TRUE;
@@ -2657,7 +2842,8 @@ static JSValue pad_wrap_owned(JSContext *ctx, GstPad *pad)
     return obj;
 }
 
-static JSValue bus_wrap_owned(JSContext *ctx, GstBus *bus)
+/* Both references are taken. */
+static JSValue bus_wrap_owned(JSContext *ctx, GstBus *bus, GstElement *pipeline)
 {
     JSValue proto = JS_GetClassProto(ctx, bus_class_id);
     JSValue obj   = JS_NewObjectProtoClass(ctx, proto, bus_class_id);
@@ -2665,14 +2851,15 @@ static JSValue bus_wrap_owned(JSContext *ctx, GstBus *bus)
     JS_FreeValue(ctx, proto);
     if (JS_IsException(obj)) {
         gst_object_unref(bus);
+        gst_object_unref(pipeline);
         return obj;
     }
 
     BtaBus *b = g_new0(BtaBus, 1);
 
-    b->ctx  = ctx;
-    b->bus  = bus;
-    b->self = JS_UNDEFINED;
+    b->ctx      = ctx;
+    b->bus      = bus;
+    b->pipeline = pipeline;
     for (int i = 0; i < (int)G_N_ELEMENTS(MEDIA_BUS_TYPES); i++)
         b->handlers[i] = JS_UNDEFINED;
     buses_live = g_list_prepend(buses_live, b);
@@ -2699,14 +2886,11 @@ static bool state_index(JSContext *ctx, JSValueConst val, int *out)
     return false;
 }
 
-/* The bus of the pipeline this element is in. **Not `gst_element_get_bus`**:
- * measured, a child's own call answers the bin's internal child bus -- a
- * different object nothing is posted to the application's side of. The walk
- * goes up to the first pipeline, which is the one that owns the bus. */
-static GstBus *elem_find_bus(BtaElem *e)
+/* The first pipeline at or above this element, with a reference; NULL for
+ * an element in none. */
+static GstElement *elem_pipeline_of(GstElement *element)
 {
-    GstObject *node = gst_object_ref(GST_OBJECT(e->element));
-    GstBus    *bus  = NULL;
+    GstObject *node = gst_object_ref(GST_OBJECT(element));
 
     while (node && !GST_IS_PIPELINE(node)) {
         GstObject *up = gst_object_get_parent(node);
@@ -2714,11 +2898,68 @@ static GstBus *elem_find_bus(BtaElem *e)
         gst_object_unref(node);
         node = up;
     }
-    if (node) {
-        bus = gst_pipeline_get_bus(GST_PIPELINE(node));
-        gst_object_unref(node);
+    return node ? GST_ELEMENT(node) : NULL;
+}
+
+/* The bus of the pipeline this element is in. **Not `gst_element_get_bus`**:
+ * measured, a child's own call answers the bin's internal child bus -- a
+ * different object nothing is posted to the application's side of. The walk
+ * goes up to the first pipeline, which is the one that owns the bus. */
+static GstBus *elem_find_bus(BtaElem *e)
+{
+    GstElement *pipe = elem_pipeline_of(e->element);
+    GstBus     *bus  = NULL;
+
+    if (pipe) {
+        bus = gst_pipeline_get_bus(GST_PIPELINE(pipe));
+        gst_object_unref(pipe);
     }
     return bus;
+}
+
+/* Who holds a claim for something on this pipeline: a live wrapper of the
+ * pipeline itself, or NULL when there is none (the claim is then a
+ * self-hold). One that is playing first; otherwise the oldest, since a
+ * later wrapper of the same pipeline is likelier a signal's passing argument
+ * than the program's own (`elements_live` is newest first). */
+static BtaElem *media_owner_for(GstElement *pipeline)
+{
+    BtaElem *oldest = NULL;
+
+    if (!pipeline)
+        return NULL;
+    for (GList *l = elements_live; l; l = l->next) {
+        BtaElem *e = l->data;
+
+        if (e->dead || e->element != pipeline)
+            continue;
+        if (e->hold_play)
+            return e;
+        oldest = e;
+    }
+    return oldest;
+}
+
+/* The subscriptions' claim on an element: held by its pipeline's wrapper, by
+ * nobody when it is in no pipeline (Add hands it over later), and not at all
+ * when the element *is* the pipeline -- its own handlers are marked by its
+ * own object, and live exactly as long as it does. */
+static void elem_claim_subs(JSContext *ctx, BtaElem *e, JSValueConst this_val)
+{
+    GstElement *pipe;
+    BtaElem    *owner;
+
+    if (e->sub_claim)
+        return;
+    pipe = elem_pipeline_of(e->element);
+    if (pipe == e->element) {
+        gst_object_unref(pipe);
+        return;
+    }
+    owner = media_owner_for(pipe);
+    if (pipe)
+        gst_object_unref(pipe);
+    media_claim_make(ctx, &e->sub_claim, owner == e ? NULL : owner, this_val);
 }
 
 static bool element_has_sometimes(GstElement *element)
@@ -2740,30 +2981,21 @@ static JSValue elem_refuse_value(JSContext *ctx, const char *name, GType type)
         name, g_type_name(type));
 }
 
-/* A property, by name, converted to the GValue the class wants. Everything is
- * refused loudly: the silence of `gst_util_set_object_arg` -- gst-launch's
- * own setter, measured as a no-op for a name or a text it does not know -- is
- * the one thing this cannot borrow. */
-static JSValue elem_store(JSContext *ctx, BtaElem *e, const char *name,
-                          JSValueConst val)
+/* A value, converted to the GValue a property wants: `*out` is initialised
+ * and filled when this answers undefined, and untouched when it throws.
+ * Everything is refused loudly: the silence of `gst_util_set_object_arg` --
+ * gst-launch's own setter, measured as a no-op for a name or a text it does
+ * not know -- is the one thing this cannot borrow. **So is a value outside
+ * the property's own range**: `g_object_set_property` answers one with a
+ * GLib-CRITICAL and keeps the old value (measured: `volume` set to 20 read
+ * back 1), so the spec validates it here first. */
+static JSValue elem_convert(JSContext *ctx, GParamSpec *ps, const char *name,
+                            JSValueConst val, GValue *out)
 {
-    GObjectClass *klass = G_OBJECT_GET_CLASS(e->element);
-    GParamSpec   *ps    = g_object_class_find_property(klass, name);
-    GType         type;
-    GValue        gval = G_VALUE_INIT;
-    JSValue       r    = JS_UNDEFINED;
+    GType   type = G_PARAM_SPEC_VALUE_TYPE(ps);
+    GValue  gval = G_VALUE_INIT;
+    JSValue r    = JS_UNDEFINED;
 
-    if (!ps)
-        return JS_ThrowPlainError(ctx, "there is no property '%s' on a %s",
-                                  name, G_OBJECT_TYPE_NAME(e->element));
-    if (!(ps->flags & G_PARAM_WRITABLE))
-        return JS_ThrowPlainError(ctx, "the property '%s' is read-only", name);
-    if (ps->flags & G_PARAM_CONSTRUCT_ONLY)
-        return JS_ThrowPlainError(ctx,
-            "'%s' can only be given where the element is made -- pass it in "
-            "the table of Media.Element", name);
-
-    type = G_PARAM_SPEC_VALUE_TYPE(ps);
     g_value_init(&gval, type);
 
     if (type == G_TYPE_BOOLEAN) {
@@ -2784,20 +3016,21 @@ static JSValue elem_store(JSContext *ctx, BtaElem *e, const char *name,
         }
         g_value_set_int(&gval, n);
     } else if (type == G_TYPE_UINT) {
-        gint32 n;
+        /* A number and not bta_to_int: a guint runs past what an int32 holds. */
+        double d;
 
-        if (!bta_to_int(ctx, val, name, &n)) {
+        if (!bta_to_number(ctx, val, name, &d)) {
             r = JS_EXCEPTION;
             goto out;
         }
         GParamSpecUInt *nps = G_PARAM_SPEC_UINT(ps);
 
-        if (n < 0 || (guint)n > nps->maximum) {
+        if (d < (double)nps->minimum || d > (double)nps->maximum) {
             r = JS_ThrowRangeError(ctx, "'%s' runs from %u to %u",
                                    name, nps->minimum, nps->maximum);
             goto out;
         }
-        g_value_set_uint(&gval, (guint)n);
+        g_value_set_uint(&gval, (guint)d);
     } else if (type == G_TYPE_INT64 || type == G_TYPE_UINT64) {
         double d;
 
@@ -2949,10 +3182,42 @@ static JSValue elem_store(JSContext *ctx, BtaElem *e, const char *name,
         goto out;
     }
 
-    g_object_set_property(G_OBJECT(e->element), name, &gval);
+    if (g_param_value_validate(ps, &gval)) {
+        r = JS_ThrowRangeError(ctx, "'%s' is outside the range it takes -- "
+                               "gst-inspect-1.0 prints it", name);
+        goto out;
+    }
+    *out = gval;    /* moved, not copied: nothing below unsets it */
+    return JS_UNDEFINED;
 out:
     g_value_unset(&gval);
     return r;
+}
+
+/* A property, by name, onto a made element. */
+static JSValue elem_store(JSContext *ctx, BtaElem *e, const char *name,
+                          JSValueConst val)
+{
+    GObjectClass *klass = G_OBJECT_GET_CLASS(e->element);
+    GParamSpec   *ps    = g_object_class_find_property(klass, name);
+    GValue        gval  = G_VALUE_INIT;
+    JSValue       r;
+
+    if (!ps)
+        return JS_ThrowPlainError(ctx, "there is no property '%s' on a %s",
+                                  name, G_OBJECT_TYPE_NAME(e->element));
+    if (!(ps->flags & G_PARAM_WRITABLE))
+        return JS_ThrowPlainError(ctx, "the property '%s' is read-only", name);
+    if (ps->flags & G_PARAM_CONSTRUCT_ONLY)
+        return JS_ThrowPlainError(ctx,
+            "'%s' can only be given where the element is made -- pass it in "
+            "the table of Media.Element", name);
+    r = elem_convert(ctx, ps, name, val, &gval);
+    if (JS_IsException(r))
+        return r;
+    g_object_set_property(G_OBJECT(e->element), name, &gval);
+    g_value_unset(&gval);
+    return JS_UNDEFINED;
 }
 
 /* The reading road, in the spellings `Set` takes: built from the class, not
@@ -3063,12 +3328,31 @@ static JSValue elem_load(JSContext *ctx, BtaElem *e, const char *name)
     return r;
 }
 
+/*
+ * Built from the factory with the table's construct-only properties *in* the
+ * construction -- the only place GObject takes them -- and the rest through
+ * `Set` afterwards, in the table's order. Before this, the construct-only
+ * refusal told a program to pass the property here, and here refused it the
+ * same way: a sentence pointing at a door that was not there.
+ * `gst_element_factory_create_with_properties` is GStreamer 1.20 (CI's floor,
+ * Ubuntu 24.04, is 1.24); an older one refuses naming the version.
+ */
 static JSValue media_element(JSContext *ctx, JSValueConst this_val, int argc,
                              JSValueConst *argv)
 {
-    const char *type;
-    GstElement *el;
-    JSValue     obj;
+    const char        *type;
+    GstElementFactory *found;
+    GstPluginFeature  *loaded;
+    JSPropertyEnum    *tab   = NULL;
+    uint32_t           len   = 0;
+    gchar            **names = NULL;   /* the construct-only ones */
+    GValue            *vals  = NULL;
+    bool              *early = NULL;   /* per table entry: given at construction */
+    guint              n     = 0;
+    bool               table;
+    GstElement        *el;
+    JSValue            obj = JS_UNDEFINED;
+    JSValue            err = JS_UNDEFINED;
 
     (void)this_val;
     if (argc < 1)
@@ -3082,8 +3366,11 @@ static JSValue media_element(JSContext *ctx, JSValueConst this_val, int argc,
     if (!gst_is_initialized())
         gst_init(NULL, NULL);
 
-    el = gst_element_factory_make(type, NULL);
-    if (!el) {
+    found  = gst_element_factory_find(type);
+    loaded = found ? gst_plugin_feature_load(GST_PLUGIN_FEATURE(found)) : NULL;
+    if (found)
+        gst_object_unref(found);
+    if (!loaded) {
         JSValue r = JS_ThrowPlainError(ctx,
             "there is no element type '%s': its plugin is not installed, or "
             "the name is misspelled -- gst-inspect-1.0 lists what is here",
@@ -3092,51 +3379,124 @@ static JSValue media_element(JSContext *ctx, JSValueConst this_val, int argc,
         JS_FreeCString(ctx, type);
         return r;
     }
-    JS_FreeCString(ctx, type);
 
-    obj = elem_wrap_owned(ctx, gst_object_ref_sink(el));
-    if (JS_IsException(obj))
-        return obj;
-
-    if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
-        BtaElem        *e   = JS_GetOpaque(obj, element_class_id);
-        JSPropertyEnum *tab = NULL;
-        uint32_t        len = 0;
-        JSValue         err = JS_UNDEFINED;
+    table = argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1]);
+    if (table) {
+        GObjectClass *klass;
 
         if (!JS_IsObject(argv[1])) {
             err = JS_ThrowTypeError(ctx,
                 "Element: the second argument is a table of properties");
-        } else if (JS_GetOwnPropertyNames(ctx, &tab, &len, argv[1],
-                                          JS_GPN_STRING_MASK |
-                                          JS_GPN_ENUM_ONLY) < 0) {
+            goto out;
+        }
+        if (JS_GetOwnPropertyNames(ctx, &tab, &len, argv[1],
+                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0) {
             err = JS_EXCEPTION;
-        } else {
-            for (uint32_t i = 0; i < len && !JS_IsException(err); i++) {
-                const char *name = JS_AtomToCString(ctx, tab[i].atom);
-                JSValue     val;
+            goto out;
+        }
+        names = g_new0(gchar *, len + 1);
+        vals  = g_new0(GValue, len + 1);
+        early = g_new0(bool, len + 1);
+        klass = g_type_class_ref(gst_element_factory_get_element_type(
+                                     GST_ELEMENT_FACTORY(loaded)));
+        for (uint32_t i = 0; i < len && !JS_IsException(err); i++) {
+            const char *name = JS_AtomToCString(ctx, tab[i].atom);
+            GParamSpec *ps;
+            JSValue     val;
 
-                if (!name) {
-                    err = JS_EXCEPTION;
-                    break;
-                }
+            if (!name) {
+                err = JS_EXCEPTION;
+                break;
+            }
+            ps = g_object_class_find_property(klass, name);
+            if (ps && (ps->flags & G_PARAM_WRITABLE) &&
+                (ps->flags & G_PARAM_CONSTRUCT_ONLY)) {
                 val = JS_GetProperty(ctx, argv[1], tab[i].atom);
                 if (JS_IsException(val)) {
                     err = JS_EXCEPTION;
                 } else {
-                    err = elem_store(ctx, e, name, val);   /* undefined or throw */
+                    err = elem_convert(ctx, ps, name, val, &vals[n]);
                     JS_FreeValue(ctx, val);
+                    if (!JS_IsException(err)) {
+                        names[n++] = g_strdup(name);
+                        early[i]   = true;
+                    }
                 }
-                JS_FreeCString(ctx, name);
             }
-            for (uint32_t i = 0; i < len; i++)
-                JS_FreeAtom(ctx, tab[i].atom);
-            js_free(ctx, tab);
+            JS_FreeCString(ctx, name);
         }
-        if (JS_IsException(err)) {
-            JS_FreeValue(ctx, obj);
-            return err;
+        g_type_class_unref(klass);
+        if (JS_IsException(err))
+            goto out;
+    }
+
+#if GST_CHECK_VERSION(1, 20, 0)
+    el = gst_element_factory_create_with_properties(
+             GST_ELEMENT_FACTORY(loaded), n, (const gchar **)names, vals);
+#else
+    if (n) {
+        err = JS_ThrowPlainError(ctx,
+            "'%s' can only be given where the element is made, and this "
+            "GStreamer is older than 1.20, which cannot", names[0]);
+        goto out;
+    }
+    el = gst_element_factory_create(GST_ELEMENT_FACTORY(loaded), NULL);
+#endif
+    if (!el) {
+        err = JS_ThrowPlainError(ctx, "a '%s' could not be made", type);
+        goto out;
+    }
+
+    obj = elem_wrap_owned(ctx, gst_object_ref_sink(el));
+    if (JS_IsException(obj)) {
+        err = obj;
+        obj = JS_UNDEFINED;
+        goto out;
+    }
+
+    if (table) {
+        BtaElem *e = JS_GetOpaque(obj, element_class_id);
+
+        for (uint32_t i = 0; i < len && !JS_IsException(err); i++) {
+            const char *name;
+            JSValue     val;
+
+            if (early[i])
+                continue;
+            name = JS_AtomToCString(ctx, tab[i].atom);
+            if (!name) {
+                err = JS_EXCEPTION;
+                break;
+            }
+            val = JS_GetProperty(ctx, argv[1], tab[i].atom);
+            if (JS_IsException(val)) {
+                err = JS_EXCEPTION;
+            } else {
+                err = elem_store(ctx, e, name, val);   /* undefined or throw */
+                JS_FreeValue(ctx, val);
+            }
+            JS_FreeCString(ctx, name);
         }
+    }
+
+out:
+    JS_FreeCString(ctx, type);
+    for (guint i = 0; i < n; i++) {
+        g_free(names[i]);
+        g_value_unset(&vals[i]);
+    }
+    g_free(names);
+    g_free(vals);
+    g_free(early);
+    if (tab) {
+        for (uint32_t i = 0; i < len; i++)
+            JS_FreeAtom(ctx, tab[i].atom);
+        js_free(ctx, tab);
+    }
+    gst_object_unref(loaded);
+    if (JS_IsException(err)) {
+        JS_FreeValue(ctx, obj);
+        return err;
     }
     return obj;
 }
@@ -3217,6 +3577,20 @@ static JSValue elem_add(JSContext *ctx, JSValueConst this_val, int argc,
     /* The state, which gst_bin_add leaves to the caller: measured, a child
      * added to a PLAYING pipeline stays in NULL until this. */
     gst_element_sync_state_with_parent(child->element);
+
+    /* A child subscribed before it had a pipeline holds its own claim; the
+     * pipeline's wrapper takes it over now, so it is collectable with it. */
+    if (child->sub_claim && !child->sub_claim->owner) {
+        GstElement *pipe = elem_pipeline_of(child->element);
+
+        if (pipe) {
+            BtaElem *owner = media_owner_for(pipe);
+
+            if (owner && owner != child)
+                media_claim_rehome(child->sub_claim, owner);
+            gst_object_unref(pipe);
+        }
+    }
     return JS_DupValue(ctx, argv[0]);
 }
 
@@ -3390,15 +3764,15 @@ static JSValue elem_set_state(JSContext *ctx, JSValueConst this_val,
 
 static JSValue elem_get_bus(JSContext *ctx, JSValueConst this_val)
 {
-    BtaElem *e = elem_this(ctx, this_val);
-    GstBus  *bus;
+    BtaElem    *e = elem_this(ctx, this_val);
+    GstElement *pipe;
 
     if (!e)
         return JS_EXCEPTION;
-    bus = elem_find_bus(e);
-    if (!bus)
+    pipe = elem_pipeline_of(e->element);
+    if (!pipe)
         return JS_NULL;
-    return bus_wrap_owned(ctx, bus);
+    return bus_wrap_owned(ctx, gst_pipeline_get_bus(GST_PIPELINE(pipe)), pipe);
 }
 
 /* ---------------------------------------------------------------- a pad */
@@ -3443,7 +3817,7 @@ static JSValue pad_link(JSContext *ctx, JSValueConst this_val, int argc,
 {
     BtaPad         *p = pad_this(ctx, this_val);
     BtaPad         *tp;
-    BtaElem        *te;
+    BtaElem        *te = NULL;
     GstPad         *far;
     bool            owned = false;
     GstPadLinkReturn ret;
@@ -3503,8 +3877,18 @@ static JSValue pad_link(JSContext *ctx, JSValueConst this_val, int argc,
         break;
     }
     if (JS_IsException(r)) {
-        if (owned)
+        if (owned) {
+            /* A pad requested for this link (a tee's src_%u, a muxer's
+             * sink_%u) is given back: left on the element unlinked, a muxer
+             * waits on it for data that never comes. */
+            GstPadTemplate *tpl = gst_pad_get_pad_template(far);
+
+            if (tpl && GST_PAD_TEMPLATE_PRESENCE(tpl) == GST_PAD_REQUEST)
+                gst_element_release_request_pad(te->element, far);
+            if (tpl)
+                gst_object_unref(tpl);
             gst_object_unref(far);
+        }
         return r;
     }
     /* The far pad, holding a reference of its own either way. */
@@ -3545,8 +3929,17 @@ static bool elem_signal_ok(JSContext *ctx, BtaElem *e, const char *name)
             name, G_OBJECT_TYPE_NAME(e->element));
         return false;
     }
+    if (q.n_params > 8) {
+        JS_ThrowPlainError(ctx,
+            "'%s' on a %s hands over %u values, and a handler here takes at "
+            "most eight", name, G_OBJECT_TYPE_NAME(e->element), q.n_params);
+        return false;
+    }
     for (guint i = 0; i < q.n_params; i++) {
-        GType t = q.param_types[i];
+        /* The type carries G_SIGNAL_TYPE_STATIC_SCOPE when the signal was
+         * declared with it -- typefind's `have-type` caps are, and were
+         * refused as "a GstCaps" until the bit was taken off. */
+        GType t = q.param_types[i] & ~G_SIGNAL_TYPE_STATIC_SCOPE;
 
         if (t == G_TYPE_BOOLEAN || t == G_TYPE_INT || t == G_TYPE_UINT ||
             t == G_TYPE_INT64 || t == G_TYPE_UINT64 || t == G_TYPE_FLOAT ||
@@ -3559,6 +3952,16 @@ static bool elem_signal_ok(JSContext *ctx, BtaElem *e, const char *name)
         return false;
     }
     return true;
+}
+
+/* The closure's reference on its subscription. GLib holds the closure across
+ * every invocation, so this runs only after the last emission that was
+ * already under way when the handler was disconnected -- on whatever thread
+ * finished it, which is why the count is under the lock. */
+static void elem_sub_closure_gone(gpointer data, GClosure *closure)
+{
+    (void)closure;
+    elem_sub_unref(data);
 }
 
 static JSValue elem_on(JSContext *ctx, JSValueConst this_val, int argc,
@@ -3584,18 +3987,19 @@ static JSValue elem_on(JSContext *ctx, JSValueConst this_val, int argc,
         JSValue ret = JS_DupValue(ctx, this_val);
 
         if (sub) {
+            elem_sub_detach(sub);   /* a delivery on its way skips it */
             if (sub->id)
                 g_signal_handler_disconnect(e->element, sub->id);
-            sub->id   = 0;
-            sub->elem = NULL;   /* a delivery on its way skips it */
+            sub->id = 0;
             JS_FreeValue(ctx, sub->handler);
             sub->handler = JS_UNDEFINED;
             g_hash_table_remove(e->signals, sub->name);
-            elem_sub_unref(sub);
+            elem_sub_unref(sub);    /* the table's */
         }
         JS_FreeCString(ctx, name);
         e->hold_subs = g_hash_table_size(e->signals) > 0;
-        elem_release_if_idle(e);   /* the last line: it may finalise e */
+        if (!e->hold_subs)
+            media_claim_drop(&e->sub_claim);   /* `ret` holds the object */
         return ret;
     }
     if (!JS_IsFunction(ctx, argv[1])) {
@@ -3620,17 +4024,18 @@ static JSValue elem_on(JSContext *ctx, JSValueConst this_val, int argc,
     sub          = g_new0(ElemSub, 1);
     sub->elem    = e;
     sub->name    = g_strdup(name);
-    sub->refs    = 1;
+    sub->refs    = 2;   /* the table's, and the closure's */
     sub->handler = JS_DupValue(ctx, argv[1]);
     {
         GClosure *closure = g_closure_new_simple(sizeof(GClosure), sub);
 
+        g_closure_add_finalize_notifier(closure, sub, elem_sub_closure_gone);
         g_closure_set_marshal(closure, elem_signal_marshal);
         sub->id = g_signal_connect_closure(e->element, name, closure, FALSE);
     }
     g_hash_table_insert(e->signals, sub->name, sub);
     e->hold_subs = true;
-    elem_hold_self(ctx, e, this_val);
+    elem_claim_subs(ctx, e, this_val);
     JS_FreeCString(ctx, name);
     return JS_DupValue(ctx, this_val);
 }
@@ -3686,8 +4091,16 @@ static void elem_signal_marshal(GClosure *closure, GValue *ret,
     (void)ret; (void)hint; (void)md;
     if (n_params < 2 || n_params > 9)   /* the emitter, plus up to eight */
         return;
-    if (!sub->elem)
-        return;     /* detached; `disconnect` waited for exactly this emit */
+    /* `sub` is alive -- the closure holds a reference -- but it may be
+     * detached by now: checked, and the delivery's own reference taken, in
+     * one step under the lock the detach takes. */
+    g_mutex_lock(&media_sig_mutex);
+    if (!sub->elem) {
+        g_mutex_unlock(&media_sig_mutex);
+        return;
+    }
+    sub->refs++;
+    g_mutex_unlock(&media_sig_mutex);
 
     call = g_new0(ElemCall, 1);
     call->sub  = sub;
@@ -3720,18 +4133,16 @@ static void elem_signal_marshal(GClosure *closure, GValue *ret,
             a->v.s = g_value_dup_string(v);
         else if (t == GST_TYPE_PAD || t == GST_TYPE_ELEMENT)
             a->v.obj = g_value_dup_object(v);
-        else if (t == GST_TYPE_CAPS)
-            a->v.caps = gst_caps_ref(g_value_get_boxed(v));
-        else
+        else if (t == GST_TYPE_CAPS) {
+            GstCaps *caps = g_value_get_boxed(v);
+
+            a->v.caps = caps ? gst_caps_ref(caps) : NULL;
+        } else
             a->type = G_TYPE_NONE;   /* validated away at subscribe */
     }
 
-    g_mutex_lock(&media_sig_mutex);
-    sub->refs++;
-    g_mutex_unlock(&media_sig_mutex);
-
     on_main = media_main_thread && g_thread_self() == media_main_thread;
-    if (on_main) {
+    if (on_main && !media_no_inline) {
         elem_call_invoke(call);
         elem_call_unref(call);
         return;
@@ -3750,6 +4161,12 @@ static void elem_signal_marshal(GClosure *closure, GValue *ret,
     g_source_set_callback(call->source, elem_call_run, call, NULL);
     g_source_attach(call->source, NULL);
 
+    /* On the main thread (inside a teardown) there is no one else to run
+     * the delivery: it runs from the idle, and this lets go now. */
+    if (on_main) {
+        elem_call_unref(call);
+        return;
+    }
     g_mutex_lock(&call->mutex);
     while (!call->done) {
         if (!g_cond_wait_until(&call->cond, &call->mutex,
@@ -3831,16 +4248,20 @@ static void elem_call_invoke(ElemCall *call)
                 args[i] = JS_NewFloat64(ctx, a->v.d);
             else if (a->type == G_TYPE_STRING)
                 args[i] = JS_NewString(ctx, a->v.s ? a->v.s : "");
-            else if (a->type == GST_TYPE_PAD) {
-                args[i] = pad_wrap_owned(ctx, GST_PAD(a->v.obj));
-                if (!JS_IsException(args[i]))
-                    a->v.obj = NULL;   /* the wrapper's reference now */
-            } else if (a->type == GST_TYPE_ELEMENT) {
-                args[i] = elem_wrap_owned(ctx, GST_ELEMENT(a->v.obj));
-                if (!JS_IsException(args[i]))
-                    a->v.obj = NULL;
+            else if (a->type == GST_TYPE_PAD || a->type == GST_TYPE_ELEMENT) {
+                /* The reference is the wrapper's from here, made or not:
+                 * a wrap that fails has already let go of it. */
+                GstObject *obj = a->v.obj;
+
+                a->v.obj = NULL;
+                if (!obj)
+                    args[i] = JS_NULL;
+                else if (a->type == GST_TYPE_PAD)
+                    args[i] = pad_wrap_owned(ctx, GST_PAD(obj));
+                else
+                    args[i] = elem_wrap_owned(ctx, GST_ELEMENT(obj));
             } else if (a->type == GST_TYPE_CAPS) {
-                gchar *text = gst_caps_to_string(a->v.caps);
+                gchar *text = a->v.caps ? gst_caps_to_string(a->v.caps) : NULL;
 
                 args[i] = JS_NewString(ctx, text ? text : "");
                 g_free(text);
@@ -3966,9 +4387,10 @@ static JSValue bus_field(JSContext *ctx, const GValue *v)
     }
     /* `rms`, `peak` and `decay` are a `GValueArray` — glib's deprecated
      * spelling, and the one GStreamer carries; the guard keeps the build
-     * silent about it. */
+     * silent about it -- with the function and not `G_TYPE_VALUE_ARRAY`,
+     * whose deprecation is a pragma message clang prints past the guard. */
     G_GNUC_BEGIN_IGNORE_DEPRECATIONS
-    if (t == G_TYPE_VALUE_ARRAY) {
+    if (t == g_value_array_get_type()) {
         GValueArray *arr = g_value_get_boxed(v);
         JSValue      out;
 
@@ -4129,20 +4551,16 @@ static void bus_sync(JSContext *ctx, BtaBus *b, JSValueConst this_val)
             any = true;
     }
     if (any) {
-        if (JS_IsUndefined(b->self))
-            b->self = JS_DupValue(ctx, this_val);
+        if (!b->claim)
+            media_claim_make(ctx, &b->claim, media_owner_for(b->pipeline),
+                             this_val);
         bus_watch_join(b);
         return;
     }
     bus_watch_leave(b);
-    /* The bus's claim on its own object goes last: releasing it may finalise
-     * `b`, and then nothing here may touch it. */
-    if (!JS_IsUndefined(b->self)) {
-        JSValue self = b->self;
-
-        b->self = JS_UNDEFINED;
-        JS_FreeValue(ctx, self);
-    }
+    /* The claim on its own object goes last: releasing it may finalise `b`,
+     * and then nothing here may touch it. */
+    media_claim_drop(&b->claim);
 }
 
 static JSValue bus_on(JSContext *ctx, JSValueConst this_val, int argc,
@@ -4206,6 +4624,9 @@ static void elem_teardown(BtaElem *e)
     elem_signals_destroy(e);
 
     if (e->element) {
+        /* Signals this raises on the main thread are queued, not delivered:
+         * this may be a finaliser (media_no_inline). */
+        media_no_inline++;
         if (e->asked) {
             /* The state change is async, and the unref must wait for it --
              * engine_teardown's measurement, same cap. A wrapper that was
@@ -4215,6 +4636,7 @@ static void elem_teardown(BtaElem *e)
         }
         gst_object_unref(e->element);
         e->element = NULL;
+        media_no_inline--;
     }
     e->ctx = NULL;
     /* The keepalive is deliberately *not* released here: cleanup runs while
@@ -4244,6 +4666,12 @@ static void bus_teardown(BtaBus *b)
     if (b->bus) {
         gst_object_unref(b->bus);
         b->bus = NULL;
+    }
+    if (b->pipeline) {
+        media_no_inline++;      /* it may be the pipeline's last reference */
+        gst_object_unref(b->pipeline);
+        b->pipeline = NULL;
+        media_no_inline--;
     }
     b->ctx = NULL;
 }

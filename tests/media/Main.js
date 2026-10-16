@@ -125,6 +125,38 @@ function conversions() {
     refused("a Get of an object value", () => sink.Get("stats"));
     refused("text that is not a fraction", () => txt.Set("scale-pixel-aspect-ratio", "abc"));
     refused("a 64-bit number past 2^53", () => vid.Set("timestamp-offset", 9007199254740994));
+    /* Outside the spec's own range: GObject answers with a CRITICAL and
+     * keeps the old value, so the refusal has to happen first. */
+    refused("a decimal number outside its range", () => aud.Set("volume", 20));
+    check("a refused number leaves the value as it was", aud.Get("volume") === 0.5,
+          "answered " + aud.Get("volume"));
+    refused("an unsigned 64-bit number below its minimum",
+            () => Media.Element("level").Set("interval", 0));
+    const q = Media.Element("queue");
+
+    try {
+        q.Set("max-size-bytes", 3000000000);
+        check("an unsigned number past what an int32 holds",
+              q.Get("max-size-bytes") === 3000000000,
+              "answered " + q.Get("max-size-bytes"));
+    } catch (e) {
+        fail("an unsigned number past what an int32 holds", e.message);
+    }
+
+    /* A construct-only property is given where the element is made -- which
+     * is what the refusal of `Set` tells a program to do. */
+    let mixer = null;
+
+    try {
+        mixer = Media.Element("audiomixer", { "force-live": true });
+    } catch (e) {
+        fail("a construct-only property in the table of Element", e.message);
+    }
+    if (mixer) {
+        check("a construct-only property in the table of Element",
+              mixer.Get("force-live") === true);
+        refused("a construct-only property through Set", () => mixer.Set("force-live", false));
+    }
 
     print("graph:");
     const free  = Media.Element("audiotestsrc");
@@ -161,6 +193,16 @@ function conversions() {
         if (Media.Element("identity").On("handoff", () => {}) === null)
             throw new Error("unreachable");
     });
+    /* typefind declares its caps with G_SIGNAL_TYPE_STATIC_SCOPE, which a
+     * plain comparison of the type took for something else. */
+    try {
+        const tf = Media.Element("typefind");
+
+        check("a signal whose caps are static-scope", tf.On("have-type", () => {}) === tf);
+        tf.On("have-type", null);
+    } catch (e) {
+        fail("a signal whose caps are static-scope", e.message);
+    }
 }
 
 /* ------------------------------------------------------------ async half */
@@ -449,6 +491,166 @@ function lateChild() {
     });
 }
 
+/* Three Bus wrappers on one bus, and the handler that runs first takes
+ * another one off: the dispatch walks a list that handler changes, and once
+ * walked into the freed link. Wrappers are dispatched newest first. */
+function busDrop() {
+    const settle = once(() => done());
+    const pipe = Media.Element("pipeline");
+    const src  = pipe.Add(Media.Element("audiotestsrc", { "num-buffers": 2 }));
+    const sink = pipe.Add(Media.Element("fakesink"));
+    const b1   = pipe.Bus;
+    const b3   = pipe.Bus;
+    const b2   = pipe.Bus;
+    let first  = false;
+    let third  = false;
+
+    owed++;
+    src.Link(sink);
+    b1.On("eos", () => {
+        check("a Bus handler may take another Bus off mid-dispatch",
+              first && !third, "first " + first + ", third " + third);
+        pipe.State = "Null";
+        settle();
+    });
+    b3.On("eos", () => { third = true; });
+    b2.On("eos", () => {
+        first = true;
+        b3.On("eos", null);
+    });
+    pipe.State = "Playing";
+}
+
+/* An eos handler that plays the pipeline again: the second EOS must still be
+ * answered by the accounting, or a console program never ends. No `Null`
+ * after the second one -- the accounting is the only thing that can end it,
+ * so a regression is the `.sh` timeout. */
+function restart() {
+    const pipe = Media.Element("pipeline");
+    const src  = pipe.Add(Media.Element("audiotestsrc", { "num-buffers": 2 }));
+    const sink = pipe.Add(Media.Element("fakesink"));
+    let runs = 0;
+
+    owed++;
+    src.Link(sink);
+    pipe.Bus.On("eos", () => {
+        runs++;
+        if (runs === 1) {
+            pipe.State = "Null";
+            pipe.State = "Playing";
+            return;
+        }
+        check("a pipeline played again from its eos handler ends again", runs === 2);
+        done();
+    });
+    pipe.State = "Playing";
+}
+
+/* A signal raised on the main thread while the runtime takes a pipeline down
+ * -- here, from the pipeline's own finaliser, when the EOS lets go of the last
+ * reference -- is delivered from the main loop afterwards, not inside the
+ * finaliser: a handler that allocates there crashed the process. The
+ * decodebin is kept by a module variable, so it outlives the pipeline. */
+let keptDecoder = null;
+
+function removedInTeardown() {
+    const settle = once((why) => {
+        if (why)
+            fail("a signal raised by a teardown is delivered after it", why);
+        done();
+    });
+    let guard;
+
+    owed++;
+    (function build() {
+        const pipe = Media.Element("pipeline");
+        const fs   = pipe.Add(Media.Element("filesrc",
+                           { location: "examples/tictactoe/win.wav" }));
+        const dec  = pipe.Add(Media.Element("decodebin"));
+        const sink = pipe.Add(Media.Element("fakesink"));
+
+        fs.Link(dec);
+        dec.On("pad-added", pad => pad.Link(sink));
+        dec.On("pad-removed", pad => {
+            const junk = [];
+
+            for (let i = 0; i < 2000; i++)
+                junk.push({ at: [i, pad.Name] });
+            guard.Stop();
+            keptDecoder.On("pad-removed", null);
+            keptDecoder = null;
+            check("a signal raised by a teardown is delivered after it",
+                  junk.length === 2000);
+            settle();
+        });
+        pipe.Bus.On("error", (m, k) => settle(m + " (" + k + ")"));
+        keptDecoder = dec;
+        pipe.State = "Playing";
+    })();
+    guard = Timer.After(5000, () => settle("pad-removed never arrived"));
+}
+
+/* How many descriptors the process has: a GstBus holds two, so a pipeline
+ * that is never freed is two more for good. */
+function descriptors() {
+    let n = 0;
+
+    for (let i = 0; i < 1024; i++)
+        if (File.Exists("/proc/self/fd/" + i))
+            n++;
+    return n;
+}
+
+/* A subscription is held by the pipeline's wrapper and goes with it: twenty
+ * pipelines in a row, each with three Bus handlers that do not name it, and
+ * the process must end where it began. Before, each one left its Bus
+ * wrappers, its bus and its watch alive for good (two descriptors apiece).
+ * Run alone, before the rest, so their pipelines are not in the count. */
+function subscriptionsGo(then) {
+    const start = descriptors();
+    const N     = 20;
+    let   cur   = null;
+    let   runs  = 0;
+
+    owed++;
+    function one() {
+        const pipe = Media.Element("pipeline");
+        const src  = pipe.Add(Media.Element("audiotestsrc", { "num-buffers": 1 }));
+        const sink = pipe.Add(Media.Element("fakesink"));
+
+        cur = pipe;
+        src.Link(sink);
+        pipe.Bus.On("element", () => {});
+        pipe.Bus.On("error", (m, k) => finish(m + " (" + k + ")"));
+        pipe.Bus.On("eos", () => {
+            cur.State = "Null";
+            cur = null;
+            if (++runs < N)
+                Timer.After(1, one);
+            else
+                Timer.After(20, () => finish());
+        });
+        pipe.State = "Playing";
+    }
+    function finish(why) {
+        if (cur) {
+            cur.State = "Null";
+            cur = null;
+        }
+        if (why) {
+            fail("subscriptions go with their pipeline", why);
+        } else {
+            const end = descriptors();
+
+            check("subscriptions go with their pipeline", end <= start + 2,
+                  start + " descriptors before " + N + " pipelines, " + end + " after");
+        }
+        then();     /* first: the rest is owed before this answers */
+        done();
+    }
+    one();
+}
+
 /* --------------------------------------------------------------- helpers */
 
 function u32(bytes, at) {
@@ -481,7 +683,14 @@ function Main() {
     conversions();
 
     print("the graph, running:");
+    subscriptionsGo(rest);
+}
+
+function rest() {
     silent();
+    busDrop();
+    restart();
+    removedInTeardown();
     plain();
     tee();
     recorder();

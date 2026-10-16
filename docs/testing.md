@@ -466,6 +466,16 @@ the bus kinds -- the `element` message among them, held to the `level`
 element's two channels of dB numbers -- `Eos` flushing a WAV header whose
 sizes are then read back, and `pad-added` over the suite's own `win.wav`.
 
+Four scenarios hold the lifetimes of the subscriptions, each of which crashed,
+hung or leaked before: `busDrop` (a handler takes another wrapper of the same
+bus off mid-dispatch), `restart` (an `eos` handler plays the pipeline again,
+and only the accounting can end the second run -- a regression is the
+timeout), `removedInTeardown` (a `pad-removed` handler that allocates while
+the pipeline is finalised) and `subscriptionsGo` (twenty pipelines in a row,
+with the file descriptors counted: a subscription lives with its pipeline, not
+for ever). `tests/media.sh` sets `MALLOC_PERTURB_=165`, without which
+`busDrop`'s use-after-free read stale memory and passed.
+
 It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 `pkg-config` that answers no for `gstreamer-1.0` and runs `tests/media.sh`
 against *that*, which is the only build that proves the refusal half compiles

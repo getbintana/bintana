@@ -136,19 +136,67 @@ Each of these was measured while building it, and each one shaped a rule.
   emitting thread** until it has run -- capped at two seconds, after which it
   runs late. `source-setup` cannot be deferred either, for the credentials'
   sake.
+  **Except inside a teardown the runtime started**: `elem_teardown` runs
+  from the finaliser, and taking a pipeline to Null there makes a
+  `decodebin` emit `pad-removed` on the main thread. Delivered inline, the
+  handler ran inside the QuickJS finaliser, and one that allocated (two
+  thousand small objects) segfaulted right after the EOS that let go of the
+  pipeline. `media_no_inline` counts those C-initiated state changes and
+  unrefs (the teardown, a Bus's last reference to its pipeline, the error
+  accounting), and a main-thread emission inside one is queued and not
+  waited for. `tests/media`'s `removedInTeardown` crashes without it.
+- **The closure owns a reference to its subscription.** A
+  `g_signal_handler_disconnect` on the main thread does not wait for an
+  emission another thread is already running, and the marshal read
+  `closure->data` before taking its own reference -- a decodebin announcing
+  two streams from two threads, the first handler unsubscribing, was a
+  use-after-free in the second's prologue. The count is the table's, the
+  closure's (dropped by a finalize notifier: GLib holds the closure across
+  every invocation) and one per delivery, and the detached check and the
+  delivery's reference are one step under `media_sig_mutex`.
 - **One watch per bus, because bus sources consume what they see.** Two
   `gst_bus_add_watch` calls on one bus *split* the messages -- a program
   subscribed to `eos` missed it every other run, which is how it was found.
   `media_watches` keeps one source per bus, with the playing elements and the
   `Bus` wrappers as its listeners.
+  **The dispatch walks a copy, each wrapper held.** `pipe.Bus` is a new
+  wrapper per read, so one bus has several, and a handler that took
+  *another* one off (`b3.On("eos", null)`) unlinked the very link the walk
+  had read as its next: a segfault under `MALLOC_PERTURB_`. And an element
+  answered by an EOS leaves the watch after the handlers only if none of them
+  played it again -- an `eos` handler that restarted the pipeline was taken
+  out for good, its next EOS answered nothing, and a console program never
+  ended (`busDrop` and `restart` in `tests/media`).
 - **`GstState` numbers VOID_PENDING 0 and NULL 1**, so the four words are not
   a dense array from zero; `MEDIA_STATES` is indexed by the enum itself, after
   a `State` getter answered "Ready" for `"Null"`.
-- **A subscription is a claim on the element's life.** A `decodebin` in a
-  local variable is collected the moment the function that built the graph
-  returns -- its `pad-added` subscription with it -- and the pad is never
-  linked. `On` holds the wrapper until the last signal is unsubscribed, the
-  same keepalive as `Playing`, the two reasons counted in one place.
+- **A subscription is a claim on the element's life -- held by the
+  pipeline's wrapper, not by nobody.** A `decodebin` in a local variable is
+  collected the moment the function that built the graph returns -- its
+  `pad-added` subscription with it -- and the pad is never linked; so `On`
+  (and `Bus.On`) holds the wrapper. The first version held it from C,
+  invisible to the collector, until the last handler was taken off, which no
+  program does: every recording of `examples/recorder` left its Bus
+  wrappers, its bus and watch (two descriptors) and the form its handlers
+  named, for the life of the process -- 20 pipelines, 40 descriptors. Now the
+  claim (`MediaClaim`) is held by a live wrapper of the element's pipeline,
+  which *marks* it: the subscription lives while the pipeline plays (its
+  play keepalive) or the program holds it, and the cycle a handler naming
+  `pipe` makes is one the collector breaks. An element in no pipeline holds
+  its own claim until `Add` hands it over; a pipeline's own handlers need no
+  claim at all. The pipeline's finaliser lets its claims go *first*, so its
+  children are finalised before it is taken to Null under them.
+  `subscriptionsGo` in `tests/media` counts the descriptors.
+- **`Set` validates against the spec before it sets.** `g_object_set_property`
+  answers a value outside the range with a GLib-CRITICAL and keeps the old one
+  (`volume` set to 20 read back 1); `g_param_value_validate` first makes it a
+  RangeError. A `guint` goes through a number, not `bta_to_int` (3e9 is a
+  legal `max-size-bytes`), and a construct-only property in the table of
+  `Media.Element` goes into `gst_element_factory_create_with_properties`
+  (1.20; CI has 1.24) -- the refusal of `Set` had pointed there while the
+  table refused it the same way. A signal's parameter types carry
+  `G_SIGNAL_TYPE_STATIC_SCOPE` when declared with it (typefind's
+  `have-type`), and are masked before they are compared.
 - **`gst_util_set_object_arg` silently returns**, and `gst_value_serialize` is
   not its inverse (caps come back escaped in the launch form, flags as the
   long name). `Set`/`Get` borrow the *syntax* (`ball`, `tcp+udp`, `30/1`) and

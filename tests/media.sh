@@ -19,4 +19,9 @@ if [[ ! -x $BINTANA ]]; then
     exit 2
 fi
 
+# **Freed memory is filled, so a use-after-free crashes instead of reading
+# what was there**: the bus scenario that drops a wrapper from another's
+# handler passed on the old code without it, and segfaulted with it.
+export MALLOC_PERTURB_=${MALLOC_PERTURB_-165}
+
 exec timeout "${TIMEOUT:-120}" "$BINTANA" tests/media "$@"
