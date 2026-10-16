@@ -562,7 +562,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -16160,6 +16160,152 @@ function Main() {
                 both.Close();
             });
         });
+    }
+
+    /*
+     * `Decorated` and `DragToMove`: a window of only its contents, and the way
+     * to move one -- the pair a desk clock, a splash or a palette needs.
+     *
+     * **The drag goes through the X server**, as `testEditorKeyPreview`'s keys
+     * do, because the claim is about which presses reach the window and none of
+     * that is visible from inside. With no window manager GDK moves the window
+     * itself, which is the same road a manager's move would take from the
+     * runtime's side. Each gesture is the case that would be wrong:
+     *
+     *   - a click that does not move is still a click: `MouseDown` and `MouseUp`
+     *     both arrive and the window stays put;
+     *   - a drag on the form moves it;
+     *   - a click on a `Button` presses it and moves nothing;
+     *   - **a drag on a `Button` moves the window**, and that is GTK's answer and
+     *     not an oversight: `GtkButton` does not claim its press, and
+     *     `GtkWindowHandle` has no rule about its children either -- a button in
+     *     a header bar is dragged by in exactly the same way. It is no click;
+     *   - a drag in a `TextBox` selects and moves nothing: the text claims it.
+     *
+     * Skipped, never failed, without `xdotool`.
+     */
+    testFrameless() {
+        const win = new Form();
+        eq("a form has a frame by default", win.Decorated, true);
+        eq("and is not moved by its contents", win.DragToMove, false);
+        check("so neither is in the .form",
+              !("Decorated" in win.Serialize().properties) &&
+              !("DragToMove" in win.Serialize().properties),
+              JSON.stringify(win.Serialize().properties));
+
+        win.Decorated = false;
+        win.DragToMove = true;
+        eq("asking otherwise reads back", `${win.Decorated} ${win.DragToMove}`, "false true");
+        eq("and is saved", JSON.stringify([win.Serialize().properties.Decorated,
+                                           win.Serialize().properties.DragToMove]),
+           "[false,true]");
+        win.DragToMove = false;
+        win.DragToMove = false;
+        eq("and taken back, twice, is gone", win.DragToMove, false);
+
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real drag: it needs xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "frameless");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "frameless", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Text: "frameless-probe", Width: 300, Height: 200,
+                                      Decorated: false, DragToMove: true },
+                        children: [{ type: "Button", name: "Btn",
+                                     properties: { Text: "B", X: 10, Y: 10,
+                                                   Width: 80, Height: 40,
+                                                   Focusable: false } },
+                                   { type: "TextBox", name: "Txt",
+                                     properties: { Text: "some words to select here",
+                                                   X: 10, Y: 140,
+                                                   Width: 280, Height: 40 } }] });
+        /* Ended by a file and not by a key: after the last drag the focus is in
+         * the text box, which takes every letter before the form hears it. */
+        File.Save(File.Join(proj, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        this.down = 0; this.up = 0; this.clicks = 0;\n" +
+                  "        Timer.After(800, () => File.Save(Application.Directory + '/ready', '1'));\n" +
+                  "        Timer.Every(100, () => {\n" +
+                  "            if (File.Exists(Application.Directory + '/done')) this.report();\n" +
+                  "        });\n" +
+                  "    }\n" +
+                  "    Form_MouseDown() { this.down++; }\n" +
+                  "    Form_MouseUp() { this.up++; }\n" +
+                  "    Btn_Click() { this.clicks++; }\n" +
+                  "    report() {\n" +
+                  "        File.SaveJson(Application.Directory + '/out.json',\n" +
+                  "            { down: this.down, up: this.up, clicks: this.clicks,\n" +
+                  "              selected: this.Txt.Selection });\n" +
+                  "        Application.Quit(0);\n" +
+                  "    }\n" +
+                  "}\n");
+        for (const gone of ["ready", "done", "out.json"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        /* Each gesture is followed by the window's position, one `at=X,Y` line
+         * per measurement. A drag is a press, ten small moves and a release:
+         * one jump would be a single motion event and no threshold crossed. */
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/ready\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "wid=$(xdotool search --name '^frameless-probe$' | tail -1)\n" +
+                  "at() { eval \"$(xdotool getwindowgeometry --shell $wid)\"; echo \"at=$X,$Y\"; }\n" +
+                  "drag() { xdotool mousemove $1 $2 mousedown 1; sleep 0.2\n" +
+                  "    for k in 1 2 3 4 5 6 7 8 9 10; do xdotool mousemove_relative -- 6 4; sleep 0.04; done\n" +
+                  "    xdotool mouseup 1; sleep 0.5; }\n" +
+                  "here() { eval \"$(xdotool getwindowgeometry --shell $wid)\"; }\n" +
+                  "at\n" +
+                  "here; xdotool mousemove $((X+200)) $((Y+100)) click 1; sleep 0.4\n" +
+                  "at\n" +
+                  "here; drag $((X+200)) $((Y+100))\n" +
+                  "at\n" +
+                  "here; xdotool mousemove $((X+40)) $((Y+30)) click 1; sleep 0.4\n" +
+                  "at\n" +
+                  "here; drag $((X+40)) $((Y+30))\n" +
+                  "at\n" +
+                  "here; drag $((X+30)) $((Y+160))\n" +
+                  "at\n" +
+                  "touch \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the child ended by itself", ran.Output.includes("child=0"), ran.Output);
+
+        const at = ran.Output.split("\n").filter((l) => l.startsWith("at="))
+                      .map((l) => l.slice(3).split(",").map(Number));
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("and said what it heard", got !== null && at.length === 6, ran.Output);
+        if (!got || at.length !== 6) return;
+
+        const [start, clicked, dragged, pressed, buttonDrag, selecting] = at;
+        const moved = (a, b) => b[0] - a[0] >= 40 && b[1] - a[1] >= 25;
+
+        eq("a click that does not move leaves the window where it was",
+           `${clicked}`, `${start}`);
+        check("and is still a click: the form heard the press and the release",
+              got.down >= 2 && got.up >= 1, JSON.stringify(got));
+        check("a drag on the form moves the window by about the drag",
+              moved(clicked, dragged), `${clicked} -> ${dragged}`);
+        eq("a click on a button moves nothing", `${pressed}`, `${dragged}`);
+        check("a drag on a button moves the window, as in a header bar",
+              moved(pressed, buttonDrag), `${pressed} -> ${buttonDrag}`);
+        eq("and the button was pressed once, by the click and not by the drag",
+           got.clicks, 1);
+        eq("a drag in a text box moves nothing", `${selecting}`, `${buttonDrag}`);
+        check("because the text box took it and selected",
+              got.selected.length > 0, JSON.stringify(got));
     }
 
     /*

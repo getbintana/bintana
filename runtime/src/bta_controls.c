@@ -477,7 +477,89 @@ static JSValue form_get_cancel_button(JSContext *ctx, JSValueConst this_val)
  * here is `Minimize()`, a verb, which is what a thing you can request and not
  * observe should be.
  */
-enum { WIN_RESIZABLE, WIN_MAXIMIZED, WIN_FULLSCREEN, WIN_HIDEONCLOSE };
+enum { WIN_RESIZABLE, WIN_MAXIMIZED, WIN_FULLSCREEN, WIN_HIDEONCLOSE,
+       WIN_DECORATED, WIN_DRAGTOMOVE };
+
+/*
+ * `DragToMove`: a press anywhere nothing else claims, dragged past the desktop's
+ * threshold, moves the window -- what `GtkWindowHandle` does around a header
+ * bar, done by a gesture on the window instead of a widget around the content.
+ *
+ * **Not a `GtkWindowHandle` in the tree**, because the tree is the form's: the
+ * window's child is the surface and nothing in between (see `build_form`), and
+ * a wrapper there would be one more thing `Arrangement`, the menu bar and the
+ * designer's input layer all have to know about. A gesture on the window sees
+ * exactly the presses that bubbled up to it, which is the same set the handle
+ * sees: a `TextBox` claims its drag and still selects, and a `DrawingArea` --
+ * whose `MouseDown` only listens -- is a handle. **So is a `Button`, past the
+ * threshold**: `GtkButton` does not claim its press, and `GtkWindowHandle` has
+ * no rule about its children either, so a header bar's buttons drag the window
+ * the same way. Measured in `testFrameless`.
+ *
+ * The threshold is what keeps a click a click: `MouseDown`, `MouseUp` and
+ * `DblClick` still arrive for a press that never moved far, and only the one
+ * that did becomes a move. The move itself is the compositor's
+ * (`gdk_toplevel_begin_move`), so it works the same on Wayland, where nothing
+ * else can place a window.
+ *
+ * The gesture belongs to the window (`gtk_widget_add_controller`) and its
+ * handler takes nothing from us but the widget it is attached to, so there is
+ * no `BtaWidget` behind it for a finaliser to have to unhook.
+ */
+#define FORM_DRAG_KEY "bta-form-drag"
+
+static void on_form_drag_update(GtkGestureDrag *g, double dx, double dy,
+                                gpointer user_data)
+{
+    GtkEventController *c   = GTK_EVENT_CONTROLLER(g);
+    GtkWidget          *win = gtk_event_controller_get_widget(c);
+    double              sx, sy;
+
+    if (!gtk_gesture_drag_get_start_point(g, &sx, &sy) ||
+        !gtk_drag_check_threshold(win, (int)sx, (int)sy,
+                                  (int)(sx + dx), (int)(sy + dy)))
+        return;
+
+    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(win));
+    if (!surface || !GDK_IS_TOPLEVEL(surface))
+        return;
+
+    /* The start point is in the window's coordinates, and the surface's are
+     * offset from those by whatever the window draws outside itself (a CSD
+     * shadow). */
+    double nx, ny;
+    gtk_native_get_surface_transform(GTK_NATIVE(win), &nx, &ny);
+
+    gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);
+    gdk_toplevel_begin_move(GDK_TOPLEVEL(surface),
+                            gtk_gesture_get_device(GTK_GESTURE(g)),
+                            (int)gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g)),
+                            sx + nx, sy + ny,
+                            gtk_event_controller_get_current_event_time(c));
+    gtk_event_controller_reset(c);
+}
+
+static void form_set_drag_to_move(BtaWidget *w, bool on)
+{
+    GtkEventController *was = g_object_get_data(G_OBJECT(w->gtk), FORM_DRAG_KEY);
+
+    if (on == (was != NULL))
+        return;
+
+    if (!on) {
+        g_object_set_data(G_OBJECT(w->gtk), FORM_DRAG_KEY, NULL);
+        gtk_widget_remove_controller(w->gtk, was);
+        return;
+    }
+
+    GtkGesture *g = gtk_gesture_drag_new();
+    gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(g), GDK_BUTTON_PRIMARY);
+    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(g),
+                                               GTK_PHASE_BUBBLE);
+    g_signal_connect(g, "drag-update", G_CALLBACK(on_form_drag_update), NULL);
+    gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(g));
+    g_object_set_data(G_OBJECT(w->gtk), FORM_DRAG_KEY, g);
+}
 
 static JSValue form_get_state(JSContext *ctx, JSValueConst this_val, int magic)
 {
@@ -490,6 +572,9 @@ static JSValue form_get_state(JSContext *ctx, JSValueConst this_val, int magic)
     case WIN_RESIZABLE:   return JS_NewBool(ctx, gtk_window_get_resizable(win));
     case WIN_FULLSCREEN:  return JS_NewBool(ctx, gtk_window_is_fullscreen(win));
     case WIN_HIDEONCLOSE: return JS_NewBool(ctx, gtk_window_get_hide_on_close(win));
+    case WIN_DECORATED:   return JS_NewBool(ctx, gtk_window_get_decorated(win));
+    case WIN_DRAGTOMOVE:
+        return JS_NewBool(ctx, g_object_get_data(G_OBJECT(win), FORM_DRAG_KEY) != NULL);
     default:             return JS_NewBool(ctx, gtk_window_is_maximized(win));
     }
 }
@@ -515,6 +600,12 @@ static JSValue form_set_state(JSContext *ctx, JSValueConst this_val,
         break;
     case WIN_HIDEONCLOSE:
         gtk_window_set_hide_on_close(win, b);
+        break;
+    case WIN_DECORATED:
+        gtk_window_set_decorated(win, b);
+        break;
+    case WIN_DRAGTOMOVE:
+        form_set_drag_to_move(w, b);
         break;
     default:
         if (b) gtk_window_maximize(win);   else gtk_window_unmaximize(win);
@@ -720,6 +811,24 @@ static const JSCFunctionListEntry form_props[] = {
      *   Declare this, or construct the form again
      */
     JS_CGETSET_MAGIC_DEF("HideOnClose", form_get_state, form_set_state, WIN_HIDEONCLOSE),
+    /* Decorated
+     *   whether the desktop draws a title bar and a frame. `false` is a window
+     *   of only its contents — a clock, a splash, a palette — which **cannot be
+     *   moved by the user** unless it also says `DragToMove`. With a
+     *   `Background` of `"rgba(0,0,0,0)"` the desktop shows through wherever
+     *   nothing is drawn, on a compositing desktop. Default `true`
+     */
+    JS_CGETSET_MAGIC_DEF("Decorated",   form_get_state, form_set_state, WIN_DECORATED),
+    /* DragToMove
+     *   a press dragged anywhere on the form that **no control claims** moves
+     *   the window, as a header bar does. A press that does not move past the
+     *   desktop's threshold is still a click — `MouseDown`, `DblClick` and a
+     *   `Button`'s `Click` arrive — and a `TextBox` claims its drag and still
+     *   selects; a drag that starts on a `Button` moves the window, the same as
+     *   in GTK's own header bars. What a window with `Decorated` `false` needs
+     *   to be movable at all. Default `false`
+     */
+    JS_CGETSET_MAGIC_DEF("DragToMove",  form_get_state, form_set_state, WIN_DRAGTOMOVE),
     /* Minimize()
      *   a verb because there is nothing to read back — GTK reports nothing
      *   about a minimised window

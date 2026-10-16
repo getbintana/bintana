@@ -780,6 +780,29 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   window with no text view in it at all. So a box with a body commits by its
   button -- the IDE's Changes panel is what measured it -- and catching
   Ctrl+Enter *inside* a text view is a runtime feature and not a handler.
+- **`GtkButton` does not claim its press, so `DragToMove` drags a window from a
+  button.** The gesture is on the window, in the bubble phase, and moves only
+  past the drag threshold -- `GtkWindowHandle`'s own recipe, which has no rule
+  about its children either; a header bar's buttons are dragged by the same way.
+  A click on the button is still a click (no move, `Click` raised once) and the
+  drag raises no `Click`, released off it. What does claim is text: a drag in a
+  `TextBox` selects and the window stays. Measured in `testFrameless`, which
+  expected the button to stop the move and was wrong.
+- **With no window manager, `gdk_toplevel_begin_move` still moves the window**:
+  GDK's X11 backend emulates the move when nobody answers `_NET_WM_MOVERESIZE`,
+  so under the suite's bare `xvfb-run` an `xdotool` drag lands where it was
+  dragged (+60,+40 for ten steps of 6,4). That is what lets `testFrameless`
+  assert the move rather than the flag. The function is `gdk_`, not `gtk_` --
+  `GdkToplevel` is the surface's interface.
+- **`Background` takes what `gdk_rgba_parse` takes, and that is not CSS's
+  `transparent`.** A see-through window (`Decorated: false` for a clock) is
+  `"rgba(0,0,0,0)"`; `"transparent"` is refused as *not a colour*. **That the
+  desktop then shows through is not verified.** On an Xvfb with
+  `xfwm4 --compositor=on` the window's corner read `srgb(0,0,0)` -- which was the
+  root window's black and proves nothing -- and over a light root image the same
+  window showed a black square: the window paints nothing, and something between
+  it and the screen does not blend (that xfwm4 on llvmpipe, or GDK not taking an
+  ARGB visual there). Settle it on a real compositing desktop before relying on it.
 
 ## Editors
 

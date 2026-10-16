@@ -1,0 +1,23 @@
+{
+  "format": "bintana-form/1",
+  "class": "ClockForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Background": "rgba(0,0,0,0)",
+    "Decorated": false,
+    "DragToMove": true,
+    "Height": 300,
+    "Resizable": false,
+    "Text": "Clock",
+    "Width": 300
+  },
+  "children": [
+    {
+      "type": "DrawingArea",
+      "name": "Face",
+      "properties": {
+        "Expand": true
+      }
+    }
+  ]
+}

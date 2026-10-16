@@ -3553,12 +3553,30 @@
           "Native": false
         },
         {
+          "Name": "Decorated",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the desktop draws a title bar and a frame. `false` is a window of only its contents — a clock, a splash, a palette — which **cannot be moved by the user** unless it also says `DragToMove`. With a `Background` of `\"rgba(0,0,0,0)\"` the desktop shows through wherever nothing is drawn, on a compositing desktop. Default `true`",
+          "Native": true
+        },
+        {
           "Name": "DefaultButton",
           "Kind": "ReadOnly",
           "Params": -1,
           "Signature": "",
           "Returns": "",
           "Doc": "the button Enter presses, resolved from whichever declared `Default`. **`null` inside `Form_Open`** — it is settled after that handler",
+          "Native": true
+        },
+        {
+          "Name": "DragToMove",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a press dragged anywhere on the form that **no control claims** moves the window, as a header bar does. A press that does not move past the desktop's threshold is still a click — `MouseDown`, `DblClick` and a `Button`'s `Click` arrive — and a `TextBox` claims its drag and still selects; a drag that starts on a `Button` moves the window, the same as in GTK's own header bars. What a window with `Decorated` `false` needs to be movable at all. Default `false`",
           "Native": true
         },
         {

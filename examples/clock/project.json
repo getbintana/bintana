@@ -1,0 +1,9 @@
+{
+  "name": "Clock",
+  "startup": "ClockForm",
+  "sources": [
+    "ClockForm.js"
+  ],
+  "version": "1.0",
+  "description": "A desk clock: a window of only its contents, drawn, and moved by dragging it"
+}
