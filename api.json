@@ -11801,6 +11801,15 @@
           "Native": true
         },
         {
+          "Name": "OnSecondInstance",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(args, directory) => …`: called in the **first** instance of a project that declares `\"singleInstance\": true` when it is started again. `args` is what followed the project directory on the second command line, as `Arguments` is, and `directory` is where that run was started. The second process then exits `0`, and **the first's window is brought forward after the handler returns**, whether or not one was assigned. `null` until assigned",
+          "Native": true
+        },
+        {
           "Name": "Quit",
           "Kind": "Method",
           "Params": 1,

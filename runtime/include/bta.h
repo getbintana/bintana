@@ -387,6 +387,14 @@ struct BtaApp {
 
     JSValue         startup_form;
     int             exit_code;
+    /* project.json's "singleInstance": a second run of this project hands its
+     * arguments to the first and exits.  Needs an "id" -- it is the name the
+     * instances find each other by. */
+    bool            single;
+    /* `on_activate` has built the startup form.  A remote activation of a
+     * single-instance application reaches the same signal and must not build
+     * a second one. */
+    bool            activated;
 };
 
 extern JSClassID bta_widget_class_id;

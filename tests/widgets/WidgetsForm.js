@@ -527,6 +527,7 @@ const TESTS = [
     /* Blocking too, and in the same group: it runs children with `Exec.Wait`
      * to see a project's own id answered, and a bad one refused. */
     "ApplicationId",
+    "SingleInstance",
     /* Blocking too: a console child under `--profile`, whose capture the
      * parent reads back. */
     "Profile",
@@ -20908,6 +20909,76 @@ function Main() {
              * machine cannot produce. */
             eq("with no tzdata both children are UTC", east[0], west[0]);
         }
+    }
+
+    /*
+     * `"singleInstance": true`: a second run of the project hands its arguments
+     * to the first and leaves.  Two real processes on a bus of their own
+     * (`dbus-run-session`), so the suite never touches the desktop's: the
+     * first records what `Application.OnSecondInstance` was told and quits, the
+     * second must exit `0` with no window of its own.  Skipped, never failed,
+     * where there is no `dbus-run-session` to give them a bus.
+     */
+    testSingleInstance() {
+        const proj = File.Join(SCRATCH, "single-instance");
+
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "single", id: "org.bintana.SingleInstanceTest",
+                        singleInstance: true, startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 200, Height: 100 } });
+        File.Save(File.Join(proj, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        File.Save(Application.Directory + '/started', '1');\n" +
+                  "        Application.OnSecondInstance = (args, dir) => {\n" +
+                  "            File.Save(Application.Directory + '/second',\n" +
+                  "                      JSON.stringify([args, dir]));\n" +
+                  "            Application.Quit(0);\n" +
+                  "        };\n" +
+                  "    }\n" +
+                  "}\n");
+
+        /* Without an id there is nothing for instances to find each other by,
+         * and the project is refused where it loads. */
+        const bare = File.Join(SCRATCH, "single-instance-bare");
+        Directory.Make(bare);
+        File.SaveJson(File.Join(bare, "project.json"),
+                      { name: "bare", singleInstance: true, main: "Main", sources: [] });
+        eq("singleInstance without an id stops the program",
+           Exec.Wait([Application.Executable, bare], { Timeout: 30000 }).ExitCode, 2);
+        File.SaveJson(File.Join(bare, "project.json"),
+                      { name: "bare", id: "org.bintana.Bare", singleInstance: "yes",
+                        main: "Main", sources: [] });
+        eq("and so does a value that is not true or false",
+           Exec.Wait([Application.Executable, bare], { Timeout: 30000 }).ExitCode, 2);
+
+        if (!Application.HasCommand("dbus-run-session")) {
+            print("  (skipping single instance: it needs dbus-run-session for a bus of its own)");
+            return;
+        }
+
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" one &\n" +
+                  "first=$!\n" +
+                  "i=0; while [ ! -f \"$dir/started\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "(cd /usr && \"$bin\" \"$dir\" hello 'wor ld'); echo \"second=$?\"\n" +
+                  "wait $first; echo \"first=$?\"\n");
+
+        const ran = Exec.Wait(["dbus-run-session", "--", "/bin/sh", script,
+                               Application.Executable, proj], { Timeout: 60000 });
+        check("the first instance came up", File.Exists(File.Join(proj, "started")), ran.Output);
+        check("the second run exits 0", ran.Output.includes("second=0"), ran.Output);
+        check("and the first heard it and quit", ran.Output.includes("first=0"), ran.Output);
+        eq("with the arguments after the project, and the directory it ran in",
+           File.Exists(File.Join(proj, "second"))
+               ? File.Load(File.Join(proj, "second")) : "(nothing)",
+           '[["hello","wor ld"],"/usr"]');
     }
 
     /* --- Application.Id ---------------------------------------------------

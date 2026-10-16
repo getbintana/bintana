@@ -2244,6 +2244,16 @@ static bool install_globals(BtaApp *app)
      *   array
      */
     JS_SetPropertyStr(ctx, application, "Arguments", args);
+    /* OnSecondInstance
+     *   assign `(args, directory) => …`: called in the **first** instance of
+     *   a project that declares `"singleInstance": true` when it is started
+     *   again. `args` is what followed the project directory on the second
+     *   command line, as `Arguments` is, and `directory` is where that run was
+     *   started. The second process then exits `0`, and **the first's window
+     *   is brought forward after the handler returns**, whether or not one
+     *   was assigned. `null` until assigned
+     */
+    JS_SetPropertyStr(ctx, application, "OnSecondInstance", JS_NULL);
 
     JS_SetPropertyStr(ctx, global, "Application", application);
 
@@ -3125,6 +3135,16 @@ BtaApp *bta_app_new(const char *project_dir)
                                 "org.example.App\n");
                 exit(2);
             }
+            /* `singleInstance` is a boolean and nothing else: `"yes"` read as
+             * false would be two windows where one was asked for, in silence. */
+            JSValue sv = JS_GetPropertyStr(app->ctx, cfg, "singleInstance");
+            if (!JS_IsUndefined(sv) && !JS_IsBool(sv)) {
+                fprintf(stderr, "bintana: project.json singleInstance is not "
+                                "true or false\n");
+                exit(2);
+            }
+            app->single = JS_ToBool(app->ctx, sv) > 0;
+            JS_FreeValue(app->ctx, sv);
             app->startup = json_str(app->ctx, cfg, "startup", "Form1");
             /* A project declares one or the other: "startup" opens a form,
              * "main" calls a function and never touches the display. */
@@ -3154,6 +3174,15 @@ BtaApp *bta_app_new(const char *project_dir)
         fprintf(stderr,
                 "bintana: project.json id \"%s\" is not an application id "
                 "(a reverse-DNS name like org.example.App)\n", app->id);
+        exit(2);
+    }
+
+    /* The id is what instances find each other by, so a project without one
+     * cannot be single: refused, as a typo in the id is, and not ignored. */
+    if (app->single && !app->id[0]) {
+        fprintf(stderr, "bintana: project.json singleInstance needs an id (a "
+                        "reverse-DNS name like org.example.App): it is the "
+                        "name the instances find each other by\n");
         exit(2);
     }
 
@@ -3467,6 +3496,16 @@ static void on_activate(GtkApplication *gapp, gpointer user_data)
     BtaApp    *app = user_data;
     JSContext *ctx = app->ctx;
 
+    /* A second activation (a single-instance application started again, or
+     * the desktop asking for it) raises what is there and builds nothing. */
+    if (app->activated) {
+        GtkWindow *win = gtk_application_get_active_window(gapp);
+        if (win)
+            gtk_window_present(win);
+        return;
+    }
+    app->activated = true;
+
     /*
      * **GtkSourceView has to be initialised, and here rather than earlier.**
      *
@@ -3557,6 +3596,58 @@ static void on_activate(GtkApplication *gapp, gpointer user_data)
     bta_profile_startup_done(app->name);
 }
 
+/*
+ * A second run of a `singleInstance` project, arriving in the first.
+ *
+ * The second process cannot call into this one, so it activates an action the
+ * first exports (`bta-second-instance`, parameter `(sas)`: its working
+ * directory and the arguments after the project directory).  This is the
+ * receiving end: it tells the program through `Application.OnSecondInstance`
+ * -- which is the program's to answer, since opening a file in a new tab and
+ * ignoring the run are both legitimate -- and then brings the window forward,
+ * which is the one thing every application wants and the one thing a handler
+ * could not do before the window was asked for.
+ */
+static void on_second_instance(GSimpleAction *action, GVariant *param, gpointer data)
+{
+    BtaApp    *app = data;
+    JSContext *ctx = app->ctx;
+    const char *cwd  = "";
+    const char **argv = NULL;
+
+    if (!app->activated)
+        return;     /* the first window is not up: nothing to hand it to */
+
+    g_variant_get(param, "(&s^a&s)", &cwd, &argv);
+
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue jsapp  = JS_GetPropertyStr(ctx, global, "Application");
+    JSValue fn     = JS_GetPropertyStr(ctx, jsapp, "OnSecondInstance");
+
+    if (JS_IsFunction(ctx, fn)) {
+        JSValue list = JS_NewArray(ctx);
+        for (uint32_t i = 0; argv && argv[i]; i++)
+            JS_SetPropertyUint32(ctx, list, i, JS_NewString(ctx, argv[i]));
+        JSValue av[2] = { list, JS_NewString(ctx, cwd) };
+        JSValue r = JS_Call(ctx, fn, jsapp, 2, (JSValueConst *)av);
+
+        if (JS_IsException(r))
+            bta_dump_error(ctx);
+        JS_FreeValue(ctx, r);
+        JS_FreeValue(ctx, av[0]);
+        JS_FreeValue(ctx, av[1]);
+        bta_drain_jobs(app->rt);
+    }
+    JS_FreeValue(ctx, fn);
+    JS_FreeValue(ctx, jsapp);
+    JS_FreeValue(ctx, global);
+    g_free(argv);
+
+    GtkWindow *win = gtk_application_get_active_window(app->gapp);
+    if (win)
+        gtk_window_present(win);
+}
+
 int bta_app_run(BtaApp *app, int argc, char **argv)
 {
     /* A project that declares `main` never opens a display: no GtkApplication,
@@ -3589,8 +3680,47 @@ int bta_app_run(BtaApp *app, int argc, char **argv)
         g_set_prgname(app->id);
 
     app->gapp = gtk_application_new(app->id[0] ? app->id : NULL,
-                                    G_APPLICATION_NON_UNIQUE);
+                                    app->single ? G_APPLICATION_DEFAULT_FLAGS
+                                                : G_APPLICATION_NON_UNIQUE);
     g_signal_connect(app->gapp, "activate", G_CALLBACK(on_activate), app);
+
+    if (app->single) {
+        /* Exported before the application registers, which is when the bus
+         * learns what it has.  The first instance is the one that registers
+         * the id; the others find it there and are *remote*. */
+        GSimpleAction *second = g_simple_action_new("bta-second-instance",
+                                                    G_VARIANT_TYPE("(sas)"));
+        g_signal_connect(second, "activate", G_CALLBACK(on_second_instance), app);
+        g_action_map_add_action(G_ACTION_MAP(app->gapp), G_ACTION(second));
+        g_object_unref(second);
+
+        /* No session bus is not a fault: GLib then registers locally and this
+         * is the only instance there can be, which is what happens anyway. */
+        GError *err = NULL;
+        if (g_application_register(G_APPLICATION(app->gapp), NULL, &err) &&
+            g_application_get_is_remote(G_APPLICATION(app->gapp))) {
+            char  *cwd  = g_get_current_dir();
+            const char *none[] = { NULL };
+
+            g_action_group_activate_action(
+                G_ACTION_GROUP(app->gapp), "bta-second-instance",
+                g_variant_new("(s^as)", cwd,
+                              app->args ? (const char *const *)app->args : none));
+            g_free(cwd);
+            /* Fire and forget, so the message has to leave before this
+             * process does.  What follows is `g_application_run` as for any
+             * application: on a remote it activates the first instance (which
+             * raises its window -- `on_activate` builds nothing twice) and
+             * returns, and it is the call that unregisters from the bus.
+             * Unreffing the application here instead is what GLib warns
+             * about: *did not unregister from D-Bus before destruction*. */
+            GDBusConnection *bus =
+                g_application_get_dbus_connection(G_APPLICATION(app->gapp));
+            if (bus)
+                g_dbus_connection_flush_sync(bus, NULL, NULL);
+        }
+        g_clear_error(&err);
+    }
 
     int rc = g_application_run(G_APPLICATION(app->gapp), argc, argv);
 

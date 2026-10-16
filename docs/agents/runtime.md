@@ -741,3 +741,28 @@ type is a class called `Probe` -- and is four reds out of five on the old lookup
 wins now, but a name the runtime publishes is a name a program cannot reach
 while it declares its own, so `grep` the whole tree -- `examples/`, `tests/`,
 `lib/`, not only `runtime/` -- before installing one.
+
+**A second run of a `singleInstance` project is a `GApplication` remote, and
+three details were measured rather than assumed.** The id is the bus name, so
+`"singleInstance": true` without an `"id"` is refused at load (as is a value
+that is not `true` or `false`: `"yes"` read as false is two windows where one
+was asked for). The second process cannot call into the first, so the first
+exports an action, `bta-second-instance` with parameter `(sas)` -- the second's
+working directory and its `Arguments` -- and the second activates it:
+*(1)* the action has to be added **before** `g_application_register`, which is
+when the bus learns what the application has; *(2)* after sending it, the
+second goes on into `g_application_run` like any application -- on a remote
+that activates the first (so its window comes forward) and returns, and it is
+the call that unregisters from the bus: unreffing the application by hand
+instead is what GLib answers with *did not unregister from D-Bus before
+destruction*; *(3)* that remote activation reaches the first's `activate`
+signal, which would have built a second startup form, so `on_activate` is
+guarded by `app->activated`. With no session bus `g_application_register`
+succeeds locally and every run is its own instance, as before. The window is
+raised **after** `Application.OnSecondInstance` returns, always: a handler that
+opens a file wants the window, and the one that does not is not hurt by it.
+`tests/widgets`' `SingleInstance` runs two real processes under
+`dbus-run-session` (a bus of its own, so it never touches the desktop's) and is
+red with the action's name misspelt; it is skipped where `dbus-run-session` is
+absent. **`File.Join(dir, "/abs")` is `dir/abs`**, not `/abs`, which is what the
+documentation's example first got wrong.
