@@ -16899,6 +16899,52 @@ function* p_binding(ide) {
               JSON.stringify(rec.Items));
     }
 
+    /* --- the sources the drop-down offers ---------------------------------
+     *
+     * **A connection is a `.conn` file**, and its tables come from opening the
+     * database it names -- so `shop.clients` is a table called `clients` in
+     * what `shop.conn` points at, and the row offers it beside the `.json`
+     * files.
+     */
+    let hasSqlite = true;
+    try { Database.Sqlite(File.Join(TMP, "__probe.db")).Close(); }
+    catch (e) { hasSqlite = false; }
+
+    if (hasSqlite) {
+        File.SaveJson(File.Join(TMP, "shop.conn"),
+                      { kind: "sqlite", path: "__shop.db" });
+
+        const db = Database.Sqlite(File.Join(TMP, "__shop.db"));
+        db.Execute("CREATE TABLE clients (id INTEGER PRIMARY KEY, name TEXT)");
+        db.Close();
+
+        ide.listFiles();
+        yield* settled(ide);
+
+        check("a connection's table is a source the project offers",
+              ide.binding.sources().includes("shop.clients"),
+              JSON.stringify(ide.binding.sources()));
+
+        /* **A real change of selection**, because a grid already showing the
+         * form is not rebuilt by selecting the form again -- and the rows it
+         * offers are worked out when it is built. */
+        ide.designer.select(byName(ide, "TxtName"));
+        yield* settled(ide);
+        ide.designer.select(null);
+        yield* settled(ide);
+
+        const src = editor(ide, "Source");
+        check("and the row offers it beside the files",
+              src instanceof ComboBox && src.Items.includes("shop.clients"),
+              src instanceof ComboBox ? JSON.stringify(src.Items) : src.TypeName);
+
+        for (const n of ["shop.conn", "__shop.db"]) {
+            try { File.Delete(File.Join(TMP, n)); } catch (e) {}
+        }
+        ide.listFiles();
+        yield* settled(ide);
+    }
+
     for (const n of ["Bound.form", "Client.record", "Loose.js"]) {
         ide.closeTabByName(n, true);
         File.Delete(File.Join(TMP, n));

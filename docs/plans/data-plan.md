@@ -494,9 +494,10 @@ the project's other resources -- `{ "kind": "sqlite", "path": "data/clients.db" 
 icon. Anything else names a file of the project, read as JSON. The rows are
 read once and kept, and `Reload()` reads them again.
 
-What is **not** built of that row: the drop-down offers the project's `.json`
-files and not yet the connections' tables, and the `.conn` has no category, icon
-or dialog of its own. `Rows()` takes the record class because a project's class
+**The drop-down offers both** -- the project's `.json` and the tables of every
+connection, `shop.clients` beside `customers.json`, read out of the database and
+kept until that database changes. What is **not** built of that row: the `.conn`
+has no category, icon or dialog of its own. `Rows()` takes the record class because a project's class
 is a lexical binding and the prelude cannot resolve a name to one.
 
 **And the designer offers both properties now**, from the project: `Record` is

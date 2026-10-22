@@ -1321,7 +1321,8 @@ export class PropertyGrid {
     }
 
     /*
-     * The files a `Source` can name: the project's own `.json`.
+     * The sources a `Source` can name: the project's own `.json`, and the
+     * tables of every connection it declares.
      *
      * **From the project, because the source is a resource of the project**
      * and not a line of code -- a form says `customers.json` and the runtime
@@ -1333,8 +1334,8 @@ export class PropertyGrid {
      * here too, and the tables of each; that is not built.
      */
     sourceOptions() {
-        const files = this.ide.files.filter((f) => File.IsExtension(f, "json"));
-        return files.length ? files : null;
+        const sources = this.ide.binding.sources();
+        return sources.length ? sources : null;
     }
 
     /*

@@ -40,6 +40,74 @@ export class Binding {
         this.ide = ide;
         /* What each file said, and the stamp it was read at. */
         this.parsed = new Map();
+        /* The tables of each connection, kept until its database changes. */
+        this.tables = new Map();
+    }
+
+    /*
+     * The sources the project offers: its `.json` files, and the tables of
+     * every connection it declares.
+     *
+     * **A connection is a `.conn` file**, so a table's name comes from
+     * opening the database it names -- `sales.clients` is a table called
+     * `clients` in what `sales.conn` points at. The order is the runtime's:
+     * the files, then the tables, because that is the order `Rows()` tries
+     * them in and a drop-down that reads differently is a drop-down that
+     * lies about what a value means.
+     */
+    sources() {
+        const out = [];
+
+        for (const file of this.ide.classes.files)
+            if (File.IsExtension(file, "json")) out.push(file);
+
+        for (const file of this.ide.classes.files) {
+            if (!File.IsExtension(file, "conn")) continue;
+
+            const name = File.BaseName(file);
+            for (const table of this.tablesOf(file))
+                out.push(`${name}.${table}`);
+        }
+
+        return out;
+    }
+
+    /*
+     * The tables of one connection, read out of its database.
+     *
+     * **Kept until the database changes** and not until the `.conn` does: a
+     * table added to a database somebody is filling is a table the drop-down
+     * has to offer, and the file that says where the database is did not
+     * change. Opening a SQLite on every rebuild of the property grid is what
+     * this is here to avoid.
+     */
+    tablesOf(file) {
+        const conn = this.read(file, () => {
+            const doc = File.LoadJson(File.Join(this.ide.project, file));
+            return doc && doc.path ? doc : null;
+        });
+        if (!conn) return [];
+
+        const dbPath = File.Join(this.ide.project, conn.path);
+        const info   = File.Info(dbPath);
+        const stamp  = info && info.Modified
+                           ? `${info.Modified.getTime()}:${info.Size}` : "";
+        const known  = this.tables.get(dbPath);
+
+        if (stamp && known && known.stamp === stamp) return known.names;
+
+        let names = [];
+        try {
+            const db = Database.Sqlite(dbPath);
+            /* `Tables` is a **property** of the connection, not a verb. */
+            names = db.Tables;
+            db.Close();
+        } catch (e) {
+            names = [];         /* a database nobody can open offers nothing */
+        }
+
+        this.tables.set(dbPath, { stamp, names });
+        return names;
     }
 
     /*
