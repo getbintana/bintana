@@ -951,7 +951,11 @@ export class PropertyGrid {
          */
         /* A command is one of the drawn form's, which is what the control would
          * be bound to when the form runs -- and `""` is no command. */
-        const options = this.target && !this.target.__node && key === "Action"
+        const options = key === "Record"
+            ? this.recordOptions()
+            : key === "DataField"
+            ? this.fieldOptions()
+            : this.target && !this.target.__node && key === "Action"
             ? ["", ...(this.designer.drawnActions || []).map((a) => a.name)]
             : this.target && this.target.__node
             ? this.designer.componentOptions(this.target.__node.type, key)
@@ -1265,6 +1269,69 @@ export class PropertyGrid {
     }
 
     /*
+     * The record classes the project declares, for the `Record` row.
+     *
+     * **From the project, and not from a list somebody wrote out**: the shape
+     * is a file the project keeps, and the classes that declare theirs in
+     * code are offered too.
+     *
+     * Null when the project declares none, which leaves the row a text
+     * field: a name that is not in the project is legal -- a class of a
+     * library, say -- and the row must not forbid it.
+     */
+    recordOptions() {
+        const names = this.ide.records().map((r) => r.name);
+        return names.length ? names : null;
+    }
+
+    /*
+     * The fields of the record the form being designed edits, for the
+     * `DataField` row.
+     *
+     * **Of the form, and not of the control**: the field a control shows is
+     * a field of the form's record, so the list is the form's.  A form that
+     * names no record offers nothing, and a control bound before the form
+     * names one is a question the form has not answered yet.
+     */
+    fieldOptions() {
+        const record = this.formRecord();
+        if (!record) return null;
+
+        const fields = this.ide.fieldsOf(record);
+        return fields.length ? fields : null;
+    }
+
+    /*
+     * What the field row says for itself: the record it draws its fields
+     * from, and whether the field it holds is one of them.
+     */
+    fieldHint() {
+        const record = this.formRecord();
+        if (!record) return Locale.Text("The field of the record this form edits");
+
+        const value  = this.target ? this.target.DataField : "";
+        const fields = this.ide.fieldsOf(record);
+        if (!value) return Locale.Text("The field of {0} this form edits", record);
+
+        return fields.includes(value)
+            ? Locale.Text("The field of {0} this form edits", record)
+            : Locale.Text("{0} is not a field of {1}", value, record);
+    }
+
+    /*
+     * The record the form being designed edits, by its name.
+     *
+     * **From the node and not from the live form**: the node is what the
+     * file says and what the next save writes, and a form that was drawn
+     * before its `Record` was chosen has none to ask.
+     */
+    formRecord() {
+        const root  = this.designer.root;
+        const props = root && root.properties ? root.properties : null;
+        return props && props.Record ? props.Record : "";
+    }
+
+    /*
      * What the Style drop-down offers: the classes the project's own stylesheet
      * declares, then the theme's.  app.css is found by name, exactly as the
      * runtime finds it -- nothing in project.json points at it, so nothing here
@@ -1529,6 +1596,11 @@ export class PropertyGrid {
         if (lent) {
             return Locale.Text("Taken from the command {0}. Type a value to use this control's own.", lent);
         }
+        /* **A field the record does not have is said so, here and not when
+         * the program runs**: the runtime refuses it at bind time with a
+         * sentence, and a designer that cannot see it until then finds out by
+         * running the program. */
+        if (key === "DataField") return this.fieldHint();
         if (key !== "Style") return "";
 
         const node = this.styleNode();

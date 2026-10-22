@@ -179,6 +179,7 @@ needed and what it did instead.
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
+| A regular expression does not say where it matched | [ISSUE-regex-position](../issues/ISSUE-regex-position.md) |
 | A table's columns cannot be reordered by the user | [ISSUE-table-reorder](../issues/ISSUE-table-reorder.md) |
 | A table's rows cannot be filtered by a column | [ISSUE-table-filter](../issues/ISSUE-table-filter.md) |
 | A `Grid` child has no row, no column and no `RowSpan` | [ISSUE-grid-placement](../issues/ISSUE-grid-placement.md) |

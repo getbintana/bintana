@@ -247,6 +247,7 @@ export class MainForm extends Form {
     manifest  = new Manifest(this);      // project.json
     launch    = new Launch(this);        // how this project is run, in three places
     classes   = new Classes(this);       // what the project holds, and its names
+    binding   = new Binding(this);       // the record shapes a form can edit
     projectTree = new ProjectTree(this); // ...as the file tree shows it
     formFiles = new FormFiles(this);     // creating, renaming, deleting one
     strings   = new Strings(this);       // what the project shows, extracted
@@ -652,6 +653,12 @@ export class MainForm extends Form {
     get components()   { return this.classes.components; }
     get startupClass() { return this.classes.startupClass; }
     get byKey()        { return this.projectTree.byKey; }
+
+    /* The record shapes the project declares, and the fields of one.  The
+     * property grid offers `Record` and `DataField` from here, and
+     * `tests/ide` drives it by name. */
+    records()          { return this.binding.records(); }
+    fieldsOf(name)    { return this.binding.fieldsOf(name); }
 
     treeIcon(kind)  { return this.projectTree.icon(kind); }
 

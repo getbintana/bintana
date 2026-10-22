@@ -155,6 +155,24 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
 
 ## IDE traps
 
+- **A row's tooltip is set on every sync, so where the editor is built is not
+  where it goes.** `sync()` writes `editor.Tooltip = because || this.rowHint(key)`
+  on every pass -- and it says so, that it would overwrite what the editor was
+  built with. A row that has something to say for itself says it in
+  `rowHint(key)`, which is where `Style`'s hint lives. The tooltip of a
+  `DataField` row -- which record its fields come from, and whether the field
+  it holds is one of them -- is one of those.
+- **The IDE is a project, and a project does not have `Object.keys`.** The
+  hatches take it away, and the table of what replaces what is in
+  `runtime/src/bta_runtime.c`: `Dictionary.Keys(bag)` is the replacement, and
+  `Object.defineProperty` is "a get/set pair declared in a class" -- so the
+  way to change a prototype is a class of accessors mixed into it, which is
+  what the prelude does at load time.
+- **A regular expression does not say where it matched.** `Regex.Match` answers
+  what it matched and not where, so a walk that has to continue from a match
+  finds the position by hand -- and `Regex` has no `Index` and no `Length`.
+  Filed: [ISSUE-regex-position.md](../issues/ISSUE-regex-position.md).
+
 - **A form is asked whether it is closing, and the answer is a return value.**
   `on_close_request` in `bta_controls.c` hands back what `Form_Close` returned, so
   **true keeps the window open** -- `KeyPress`'s convention, and returning nothing

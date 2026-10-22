@@ -34,6 +34,7 @@
     "../../ide/forms/AppForm.js",
     "../../ide/forms/MetainfoForm.js",
     "../../ide/modules/Classes.js",
+    "../../ide/modules/Binding.js",
     "../../ide/modules/ProjectTree.js",
     "../../ide/modules/FormFiles.js",
     "../../ide/modules/Events.js",

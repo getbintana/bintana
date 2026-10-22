@@ -16790,6 +16790,123 @@ function* p_session(ide) {
     ide.listFiles();
 }
 
+/*
+ * A form that edits a record: the two properties the designer offers, and
+ * what they offer.
+ *
+ * **`Record` is a drop-down of the record classes the project declares**, and
+ * **`DataField` a drop-down of that record's fields** -- the shape as a file
+ * and the shape declared in code, both offered, because both are legal and
+ * the runtime reads both.
+ */
+function* p_binding(ide) {
+    /* A shape as a file: what the runtime reads, exactly. */
+    File.SaveJson(File.Join(TMP, "Client.record"), {
+        format: "bta-record/1", class: "Client", naming: "snake",
+        fields: {
+            Name:    { kind: "text", required: true, max: 80 },
+            Balance: { kind: "number", decimals: 2 },
+            Active:  { kind: "bool" },
+        },
+    });
+
+    /* A shape declared in code, **with options that are braces of their
+     * own** -- `Field.Text({ max: 80 })` -- which is what a pattern that
+     * stops at the first `}` stops inside. */
+    File.Save(File.Join(TMP, "Loose.js"), [
+        "class Loose extends Record {",
+        "    static Fields = {",
+        "        Label: Field.Text({ max: 80 }),",
+        "        Count: Field.Int({ min: 1, max: 9 }),",
+        "        Note:  Field.Text(),",
+        "    };",
+        "}",
+        "",
+    ].join("\n"));
+
+    ide.listFiles();
+    yield* settled(ide);
+
+    const records = ide.records();
+    const names   = records.map((r) => r.name);
+    check("the record classes the project declares are found",
+          names.includes("Client") && names.includes("Loose"),
+          JSON.stringify(names));
+
+    eq("the shape that is a file gives its fields exactly",
+       ide.fieldsOf("Client").join(","), "Name,Balance,Active");
+
+    /* **And the shape declared in code**: the keys, read out of a block
+     * whose own options are braces. */
+    eq("the shape in code gives its fields too",
+       ide.fieldsOf("Loose").join(","), "Label,Count,Note");
+
+    eq("a record the project does not declare has no fields",
+       ide.fieldsOf("NoSuchRecord").length, 0);
+
+    /* --- the two rows of the grid -----------------------------------------
+     *
+     * The form names the record, and a control names the field.  The grid
+     * offers the first from the project and the second from the record the
+     * form edits -- so a control bound before the form names a record has
+     * nothing to be offered, which is the question the form has not
+     * answered yet.
+     */
+    File.SaveJson(File.Join(TMP, "Bound.form"), {
+        format: "bintana-form/1", class: "Bound",
+        properties: { Record: "Client", Width: 320, Height: 200 },
+        children: [
+            { type: "TextBox", name: "TxtName",
+              properties: { X: 10, Y: 10, Width: 200, Height: 30, DataField: "Name" } },
+        ],
+    });
+    ide.listFiles();
+    yield* settled(ide);
+    ide.openInTab("Bound.form");
+    yield* settled(ide);
+
+    ide.designer.select(byName(ide, "TxtName"));
+    yield* settled(ide);
+
+    const field = editor(ide, "DataField");
+    check("the field row is a drop-down", field instanceof ComboBox, field.TypeName);
+    if (field instanceof ComboBox) {
+        check("and it offers the record's fields",
+              field.Items.join(",") === "Name,Balance,Active",
+              JSON.stringify(field.Items));
+    }
+
+    /* **And a field the record does not have is said so**, in the row and
+     * not when the program runs: the runtime refuses it at bind time with a
+     * sentence, and a designer that cannot see it until then finds out by
+     * running the program. */
+    check("and the row says which record the fields are from",
+          field.Tooltip.includes("Client"), field.Tooltip);
+
+    const stray = editor(ide, "DataField");
+    check("a field the record does not have is said so too",
+          stray.Tooltip.length > 0, stray.Tooltip);
+
+    /* The form's own row: the record classes the project declares. */
+    ide.designer.select(null);
+    yield* settled(ide);
+
+    const rec = editor(ide, "Record");
+    check("the record row is a drop-down", rec instanceof ComboBox, rec.TypeName);
+    if (rec instanceof ComboBox) {
+        check("and it offers the project's record classes",
+              rec.Items.includes("Client") && rec.Items.includes("Loose"),
+              JSON.stringify(rec.Items));
+    }
+
+    for (const n of ["Bound.form", "Client.record", "Loose.js"]) {
+        ide.closeTabByName(n, true);
+        File.Delete(File.Join(TMP, n));
+    }
+    ide.listFiles();
+    yield* settled(ide);
+}
+
 const PHASES = [
     { name: "welcome", run: p_welcome },
     { name: "files", run: p_files },
@@ -16841,6 +16958,11 @@ const PHASES = [
     { name: "recovery", run: p_recovery },
     { name: "unsaved",  run: p_unsaved },
     { name: "session", run: p_session },
+    /* **After the session**: this phase opens a tab and closes it, and the
+     * session remembers where the caret was in every file it had open -- so a
+     * phase that moves between tabs has to come after the one that checks
+     * what the session remembers. */
+    { name: "binding", run: p_binding },
     { name: "search", run: p_search },
     { name: "git", run: p_git },
     { name: "debug", run: p_debug },

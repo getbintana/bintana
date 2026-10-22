@@ -12,6 +12,7 @@ in the same form.
 
 | Issue | The missing capability |
 |---|---|
+| [ISSUE-regex-position.md](ISSUE-regex-position.md) | A regular expression does not say where it matched |
 | [ISSUE-table-reorder.md](ISSUE-table-reorder.md) | A table's columns cannot be reordered by the user |
 | [ISSUE-table-filter.md](ISSUE-table-filter.md) | A table's rows cannot be filtered by a column |
 | [ISSUE-grid-placement.md](ISSUE-grid-placement.md) | A `Grid` child has no row, no column and no `RowSpan` |
