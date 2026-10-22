@@ -955,6 +955,8 @@ export class PropertyGrid {
             ? this.recordOptions()
             : key === "DataField"
             ? this.fieldOptions()
+            : key === "Source"
+            ? this.sourceOptions()
             : this.target && !this.target.__node && key === "Action"
             ? ["", ...(this.designer.drawnActions || []).map((a) => a.name)]
             : this.target && this.target.__node
@@ -1316,6 +1318,23 @@ export class PropertyGrid {
         return fields.includes(value)
             ? Locale.Text("The field of {0} this form edits", record)
             : Locale.Text("{0} is not a field of {1}", value, record);
+    }
+
+    /*
+     * The files a `Source` can name: the project's own `.json`.
+     *
+     * **From the project, because the source is a resource of the project**
+     * and not a line of code -- a form says `customers.json` and the runtime
+     * reads it from the project's directory. Null when the project has none,
+     * which leaves the row a text field: a file the project will have is
+     * legal to write before it exists.
+     *
+     * A connection (`sales.conn`, the other half of the plan) would be offered
+     * here too, and the tables of each; that is not built.
+     */
+    sourceOptions() {
+        const files = this.ide.files.filter((f) => File.IsExtension(f, "json"));
+        return files.length ? files : null;
     }
 
     /*

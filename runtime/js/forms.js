@@ -471,7 +471,8 @@ Widget.Signatures = {
     SetItem:       "(of, count)",
 };
 
-Form.Signatures     = { Serialize: "()", SaveForm: "(path)", Bind: "(record)" };
+Form.Signatures     = { Serialize: "()", SaveForm: "(path)", Bind: "(record)",
+                        Rows: "(record)", Reload: "()" };
 Notebook.Signatures = { Serialize: "(parentIsFixed)" };
 Container.Signatures = { AddNode: "(node)", BuildChildren: "(node)" };
 
@@ -990,10 +991,39 @@ mixIn(DataMembers, Widget);
 /* The record a form edits, and the one it is showing, and the guard.  All
  * three are the runtime's notes; the first is a property the file carries. */
 const formRecords = new WeakMap();
+const formSources = new WeakMap();
+const formRows    = new WeakMap();
 const boundState  = new WeakMap();
 const listened    = new WeakMap();
 
 class BoundMembers {
+    /*
+     * The file the form's records come from, or `""`.
+     *
+     * **`Record` says what a record is; `Source` says which records.** They
+     * are two on purpose (`docs/plans/data-plan.md`): the same `Customer` is
+     * readable from a file, from a table and later from a reply over HTTP,
+     * and two screens over the same shape are two sources.
+     *
+     * A path relative to the project, holding an array of records -- or one
+     * object, for a source that is one record.
+     */
+    /** the file the form's records come from, or `""` */
+    get Source() {
+        return formSources.get(this) || "";
+    }
+    set Source(value) {
+        if (value === undefined || value === null || value === "") {
+            formSources.delete(this);
+            formRows.delete(this);
+            return;
+        }
+        if (typeof value !== "string")
+            throw new TypeError(`Source: expected a file, got ${typeof value}`);
+        formSources.set(this, value);
+        formRows.delete(this);
+    }
+
     /** the shape this form edits -- the name of a record class -- or `""` */
     get Record() {
         return formRecords.get(this) || "";
@@ -1197,6 +1227,50 @@ Form.prototype.Bind = function (record) {
     markErrors(this);
 
     for (const { control } of bound) listenTo(this, control);
+    return this;
+};
+
+/**
+ * the records the form's `Source` holds, as the class given
+ *
+ * **The class is the caller's**, because the prelude cannot resolve a name to
+ * a class: a project's `class Customer` is a lexical binding, and the runtime's
+ * own lookup (`Widget.New`, `Widget.Members`) answers about a name without
+ * handing the class back.  A form has the class anyway -- `Bind` refuses a
+ * record whose class is not the one `Record` names.
+ *
+ * Read once and kept: `Reload()` reads the file again.
+ */
+Form.prototype.Rows = function (recordClass) {
+    if (!recordClass || typeof recordClass.Load !== "function")
+        throw new TypeError("Rows(record) expects a Record class");
+
+    const had = formRows.get(this);
+    if (had && had.of === recordClass) return had.rows;
+
+    const source = this.Source;
+    if (!source) return [];
+
+    /* Read only here: the source is a *file* today, and a connection is the
+     * other half of the plan (`sales.conn`), which is not built. */
+    const path = File.Join(Application.Directory, source);
+    const doc  = File.LoadJson(path);
+    const docs = Array.isArray(doc) ? doc : [doc];
+
+    /* `Load` and not `new`: a file is read leniently, so a value the shape
+     * would refuse leaves its field at the start and says so in `Problems`
+     * instead of throwing the other records away. */
+    const rows = docs.map((one) => recordClass.Load(one));
+
+    formRows.set(this, { of: recordClass, rows });
+    return rows;
+};
+
+/**
+ * forgets the rows, so the next `Rows()` reads the source again
+ */
+Form.prototype.Reload = function () {
+    formRows.delete(this);
     return this;
 };
 

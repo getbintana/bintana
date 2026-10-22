@@ -46,15 +46,16 @@ class BoundForm extends Form {
     at = -1;
 
     Form_Open() {
-        const path = File.Join(Application.Directory, "customers.json");
-
         try {
-            /* `Load` and not `new`: a file is read leniently, so a value the
-             * shape would refuse today leaves its field at the start and says
-             * so in `Problems` instead of throwing the other records away. */
-            this.records = (File.LoadJson(path) || []).map((doc) => Customer.Load(doc));
+            /* **`Source` says which rows**, and it is declared in the `.form`
+             * beside `Record` -- which says what a row is. The class is the
+             * caller's because a project's `class Customer` is a lexical
+             * binding: the runtime answers about a name without handing the
+             * class back. `Rows` reads the file once and keeps it, so the two
+             * buttons below do not read it again. */
+            this.records = this.Rows(Customer);
         } catch (e) {
-            Message.Error("Cannot read {0}: {1}", path, e.message);
+            Message.Error("{0}", e.message);
             return;
         }
 

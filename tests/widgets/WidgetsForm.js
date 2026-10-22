@@ -5335,6 +5335,44 @@ class WidgetsForm extends Form {
         check("a field the record does not have is refused by name",
               bad && bad.indexOf("NoSuchField") >= 0, String(bad));
 
+        /* --- Source: which rows -----------------------------------------
+         *
+         * `Record` says what a record *is*; `Source` says which ones. The
+         * file is read once and kept, and `Reload()` reads it again.
+         */
+        const rowsPath = File.Join(Application.Directory, "__rows.json");
+        /* `Customer` is named `same`, so the file's keys are the property
+         * names -- and the second row carries only one of them, which `Load`
+         * reads leniently. */
+        File.SaveJson(rowsPath, [
+            { Name: "Row One", Category: "Wholesale" },
+            { Name: "Row Two" },
+        ]);
+
+        const h = new Form();
+        h.Source = "__rows.json";
+
+        const rows = h.Rows(Customer);
+        eq("the source gives the rows", rows.length, 2);
+        eq("and they are records of the class given", rows[0].constructor.name, "Customer");
+        eq("with their fields", rows[0].Name, "Row One");
+
+        /* Read once: an edit is not thrown away by the next question. */
+        rows[0].Name = "Changed";
+        eq("the rows are kept, not read again", h.Rows(Customer)[0].Name, "Changed");
+
+        /* And `Reload()` is the way to read the file again. */
+        h.Reload();
+        eq("reloading reads the file again", h.Rows(Customer)[0].Name, "Row One");
+
+        /* A form with no source has no rows, and that is not an error. */
+        const i = new Form();
+        eq("a form with no source has no rows", i.Rows(Customer).length, 0);
+
+        File.Delete(rowsPath);
+        h.Close();
+        i.Close();
+
         f.Close();
         g.Close();
     }

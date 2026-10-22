@@ -487,8 +487,12 @@ properties alone are a declaration and not a binding:
   the record keeps what it had: the field's setter produces the sentence, and
   the sentence names the field, and the field is the control's.
 
-What is **not** built is the half that needs a source: `Form.Source`, the
-`Source` drop-down, the `sales.conn` resource.
+**`Form.Source` is built, and so is its drop-down** -- the thin half: a file of
+the project, read once and kept, with `Reload()` to read it again. What it does
+not have is the other half of the design: **the connection as a project
+resource** (`sales.conn`), and the resolution that tries a connection's table
+before a file. `Rows()` takes the record class because a project's class is a
+lexical binding and the prelude cannot resolve a name to one.
 
 **And the designer offers both properties now**, from the project: `Record` is
 a drop-down of the record classes the project declares -- the shape as a file

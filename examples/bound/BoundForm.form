@@ -5,7 +5,8 @@
     "Text": "Bound",
     "Width": 560,
     "Height": 330,
-    "Record": "Customer"
+    "Record": "Customer",
+    "Source": "customers.json"
   },
   "children": [
     {
