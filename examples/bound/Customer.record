@@ -1,0 +1,12 @@
+{
+  "format": "bta-record/1",
+  "class": "Customer",
+  "naming": "lower",
+  "fields": {
+    "Name":    { "kind": "text", "required": true, "max": 80 },
+    "Email":   { "kind": "text", "max": 120 },
+    "Balance": { "kind": "decimal", "decimals": 2 },
+    "Active":  { "kind": "bool" },
+    "Since":   { "kind": "date" }
+  }
+}

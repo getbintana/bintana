@@ -2,6 +2,15 @@
  * A quote, and the point of it is that nothing in this file parses or checks a
  * value.
  *
+ * **This is the first rung of three, and it is the one by hand.**
+ * [`docs/plans/data-plan.md`](../../docs/plans/data-plan.md) designs a form
+ * that edits a record, and argues it on what two screens written by hand
+ * measured: this one fills its controls from the record and reads them back
+ * with a loop and two guards. [`examples/clients`](../clients) is the same by
+ * hand over a table, and [`examples/bound`](../bound) declares the whole of
+ * it -- `Record`, `DataField`, `Bind` -- and has neither the loop nor the
+ * guard.
+ *
  * The shape of the data is declared once, in [`Quote.js`](Quote.js) — which is a
  * file of its own because a shape is not a detail of the window that shows it —
  * and this whole file is a view of it.  A price typed as `hola` is refused

@@ -1,0 +1,10 @@
+{
+  "name": "Bound",
+  "startup": "BoundForm",
+  "sources": [
+    "Customer.js",
+    "BoundForm.js"
+  ],
+  "version": "1.0",
+  "description": "A form that edits a record: the shape in a file, a control per field, and the loop gone"
+}

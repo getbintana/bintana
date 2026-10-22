@@ -488,8 +488,19 @@ properties alone are a declaration and not a binding:
   the sentence names the field, and the field is the control's.
 
 What is **not** built is the half that needs a source: `Form.Source`, the
-`Source` drop-down, the `sales.conn` resource, and the drop-down that offers
-the record's fields in the designer.
+`Source` drop-down, the `sales.conn` resource.
+
+**And the designer offers both properties now**, from the project: `Record` is
+a drop-down of the record classes the project declares -- the shape as a file
+and the shape declared in code -- and `DataField` a drop-down of that record's
+fields, with a row that says so when the field a control holds is not one of
+them.
+
+**The three rungs are three examples**, and each says so at the top of its own
+file: [`examples/quote`](../../examples/quote) is the loop by hand,
+[`examples/clients`](../../examples/clients) the same by hand over a table, and
+[`examples/bound`](../../examples/bound) the same screen with the loop gone --
+`Record`, `DataField` and `Bind`, and no `showing` flag anywhere in it.
 
 And two things the binding will have to answer that this document did not
 foresee, both found by writing the screens by hand: **a guard**, because

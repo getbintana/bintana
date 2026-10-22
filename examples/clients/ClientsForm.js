@@ -1,6 +1,12 @@
 /*
  * A screen over a table, written **by hand** and on purpose.
  *
+ * **This is the second rung of three, and it is still by hand.** The first is
+ * [`examples/quote`](../quote), over a file; this one is the same move one
+ * layer down, over a table; and [`examples/bound`](../bound) is the same
+ * screen with the loop gone -- `Record`, `DataField` and `Bind`, which is what
+ * the thirteen findings below were for.
+ *
  * `docs/plans/data-plan.md` designs a binding — a form that declares which
  * record it edits, a control that declares which field it shows — and says
  * plainly why it has not been built: the value is hard to judge from the

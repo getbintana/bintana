@@ -1,0 +1,171 @@
+{
+  "format": "bintana-form/1",
+  "class": "BoundForm",
+  "properties": {
+    "Text": "Bound",
+    "Width": 560,
+    "Height": 330,
+    "Record": "Customer"
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblName",
+      "properties": {
+        "X": 14,
+        "Y": 20,
+        "Width": 80,
+        "Height": 20,
+        "Text": "Name"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtName",
+      "properties": {
+        "X": 100,
+        "Y": 14,
+        "Width": 440,
+        "Height": 34,
+        "HAlign": "Fill",
+        "DataField": "Name",
+        "Placeholder": "Who this is"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblEmail",
+      "properties": {
+        "X": 14,
+        "Y": 64,
+        "Width": 80,
+        "Height": 20,
+        "Text": "Email"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtEmail",
+      "properties": {
+        "X": 100,
+        "Y": 58,
+        "Width": 440,
+        "Height": 34,
+        "HAlign": "Fill",
+        "DataField": "Email"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblBalance",
+      "properties": {
+        "X": 14,
+        "Y": 108,
+        "Width": 80,
+        "Height": 20,
+        "Text": "Balance"
+      }
+    },
+    {
+      "type": "DecimalBox",
+      "name": "DcmBalance",
+      "properties": {
+        "X": 100,
+        "Y": 102,
+        "Width": 160,
+        "Height": 34,
+        "Decimals": 2,
+        "DataField": "Balance"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblSince",
+      "properties": {
+        "X": 14,
+        "Y": 152,
+        "Width": 80,
+        "Height": 20,
+        "Text": "Since"
+      }
+    },
+    {
+      "type": "DatePicker",
+      "name": "PckSince",
+      "properties": {
+        "X": 100,
+        "Y": 146,
+        "Width": 160,
+        "Height": 34,
+        "DataField": "Since"
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkActive",
+      "properties": {
+        "X": 100,
+        "Y": 190,
+        "Width": 200,
+        "Height": 30,
+        "Text": "Active",
+        "DataField": "Active"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "X": 14,
+        "Y": 232,
+        "Width": 526,
+        "Height": 20,
+        "Ellipsize": true
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPrev",
+      "properties": {
+        "X": 14,
+        "Y": 270,
+        "Width": 100,
+        "Height": 34,
+        "Text": "Previous"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnNext",
+      "properties": {
+        "X": 122,
+        "Y": 270,
+        "Width": 100,
+        "Height": 34,
+        "Text": "Next"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnNew",
+      "properties": {
+        "X": 230,
+        "Y": 270,
+        "Width": 100,
+        "Height": 34,
+        "Text": "New"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnSave",
+      "properties": {
+        "X": 338,
+        "Y": 270,
+        "Width": 100,
+        "Height": 34,
+        "Text": "Save"
+      }
+    }
+  ]
+}
