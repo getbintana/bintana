@@ -1005,8 +1005,9 @@ class BoundMembers {
      * readable from a file, from a table and later from a reply over HTTP,
      * and two screens over the same shape are two sources.
      *
-     * A path relative to the project, holding an array of records -- or one
-     * object, for a source that is one record.
+     * **A connection's table** -- `sales.clients`, where `sales.conn` says
+     * where the SQLite database is -- or **a file of the project**, holding an
+     * array of records or one object, for a source that is one record.
      */
     /** the file the form's records come from, or `""` */
     get Source() {
@@ -1251,20 +1252,69 @@ Form.prototype.Rows = function (recordClass) {
     const source = this.Source;
     if (!source) return [];
 
-    /* Read only here: the source is a *file* today, and a connection is the
-     * other half of the plan (`sales.conn`), which is not built. */
-    const path = File.Join(Application.Directory, source);
-    const doc  = File.LoadJson(path);
+    const rows = rowsFrom(source, recordClass);
+
+    formRows.set(this, { of: recordClass, rows });
+    return rows;
+};
+
+/*
+ * **A source is a table or a file, and it is told apart by looking.**
+ *
+ * `sales.clients` names a connection and a table in it, and a connection is a
+ * `.conn` file beside the project's other resources:
+ *
+ *     { "kind": "sqlite", "path": "data/clients.db" }
+ *
+ * Anything else names a file, read as JSON.  That is the plan's order --
+ * a declared connection first, a file of the project second -- and nothing is
+ * parsed out of the string to say which: a scheme inside a value is a small
+ * language inside a value (`docs/plans/data-plan.md`).
+ *
+ * The `.conn` is the resource the plan describes with a category, an icon and
+ * a dialog, and this is it without those three: a file that says where the
+ * database is.  The designer offers the tables of the connections it can open.
+ */
+function rowsFrom(source, recordClass) {
+    const project = Application.Directory;
+
+    /* One dot names a connection; the file's own extension is a dot too, and
+     * that is why the connection is tried first and `customers.json` falls
+     * through to the file it is. */
+    const dot = source.indexOf(".");
+    if (dot > 0) {
+        const conn = `${source.slice(0, dot)}.conn`;
+        const path = File.Join(project, conn);
+
+        if (File.Exists(path)) {
+            const spec = File.LoadJson(path);
+            if (!spec || !spec.path)
+                throw new Error(`${conn}: a connection says where its database is`);
+
+            const table = source.slice(dot + 1);
+            const db    = Database.Sqlite(File.Join(project, spec.path));
+
+            return db.Table(table, recordClass).All();
+        }
+    }
+
+    const path = File.Join(project, source);
+
+    let doc;
+    try {
+        doc = File.LoadJson(path);
+    } catch (e) {
+        throw new Error(`Rows: ${source} is neither a connection's table nor ` +
+                        `a file of the project: ${e.message}`);
+    }
+
     const docs = Array.isArray(doc) ? doc : [doc];
 
     /* `Load` and not `new`: a file is read leniently, so a value the shape
      * would refuse leaves its field at the start and says so in `Problems`
      * instead of throwing the other records away. */
-    const rows = docs.map((one) => recordClass.Load(one));
-
-    formRows.set(this, { of: recordClass, rows });
-    return rows;
-};
+    return docs.map((one) => recordClass.Load(one));
+}
 
 /**
  * forgets the rows, so the next `Rows()` reads the source again

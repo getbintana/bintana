@@ -5369,6 +5369,38 @@ class WidgetsForm extends Form {
         const i = new Form();
         eq("a form with no source has no rows", i.Rows(Customer).length, 0);
 
+        /* --- Source: a connection's table ---------------------------------
+         *
+         * **The point of a source is a table.**  `shop.clients` names a
+         * connection and a table in it, and the connection is a `.conn` file
+         * beside the project's other resources, saying where the database is
+         * -- which is the resource the plan describes, without its dialog and
+         * its icon.
+         */
+        const connPath = File.Join(Application.Directory, "__shop.conn");
+        const dbPath   = File.Join(Application.Directory, "__shop.db");
+
+        File.SaveJson(connPath, { kind: "sqlite", path: "__shop.db" });
+
+        const db = Database.Sqlite(dbPath);
+        db.Execute("CREATE TABLE clients (id INTEGER PRIMARY KEY, name TEXT, " +
+                   "balance TEXT, active INTEGER, since TEXT, postal_code TEXT)");
+        db.Execute("INSERT INTO clients VALUES (1, 'Acme', '10.00', 1, '2024-03-01', '')");
+        db.Execute("INSERT INTO clients VALUES (2, 'Globex', '0.00', 0, '2025-01-01', '')");
+
+        const k = new Form();
+        k.Source = "__shop.clients";
+
+        const fromTable = k.Rows(Client);
+        eq("a connection's table gives its rows", fromTable.length, 2);
+        eq("with the shape's own names", fromTable[0].Name, "Acme");
+        eq("and its key", fromTable[1].Id, 2);
+        k.Close();
+        db.Close();
+
+        File.Delete(connPath);
+        File.Delete(dbPath);
+
         File.Delete(rowsPath);
         h.Close();
         i.Close();
