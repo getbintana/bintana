@@ -150,6 +150,49 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `"def": "1.0005"` at three places is `1.001`, `new Decimal(def, places)`, the
   field's own rule applied to its start.
 
+## A form bound to a record
+
+- **A control does not have one "value member" and one "value event" -- the
+  class says both, and they are not the same for every class.** `Text` for a
+  `TextBox`, `Value` for a `SpinBox`, `Active` for a `CheckButton`; and the
+  value is done on `Activate` for a `TextBox`, on `Select` for a `ComboBox`,
+  on `Click` for a `CheckButton`, when the day is picked for a `DatePicker`.
+  **A binding that guessed would read the wrong member and wait for an event
+  that never comes**: `On` refuses a handler for an event the control does not
+  raise ("there is no 'Activate' event here"), so the guess fails loudly --
+  but it fails on the *second* control bound, after the first was already
+  half-bound. So the class declares it, in `BtaClass.value_member` and
+  `BtaClass.value_done`, beside the rows that declare the class, and
+  `Widget.ValueInfo(type)` answers it for any class. **The kind of the value
+  is not declared**: it is what the member holds when it is read, which
+  cannot drift from the control.
+- **`Controls` is what a form holds *by name*; `Children` is the containment
+  tree.** A binding that walked `Controls` found the controls a `.form` gives
+  a form and none of the ones a program built and added -- and the symptom was
+  a form that showed nothing and refused nothing, with no error anywhere.
+  The tree is walked all the way down, because a field is often shown by a
+  control inside a panel.
+- **The prelude is baked into the binary, and a binding that reads it is the
+  first thing to look stale.** `rad.js` and `forms.js` are compiled into the
+  executable: an edit to them needs a rebuild, and the suite then tests the
+  *previous* prelude -- where a new test fails and every assertion that
+  should fail passes. `tests/run.sh` warns when a source is newer than the
+  binary; the build is the answer.
+- **A guard is not a detail of the form: every assignment to a control raises
+  a real `Change`.** A form that shows a record reads it straight back
+  otherwise, and the read-back happens *while the record is still being
+  written* -- which is how `examples/quote` came to open its window behind
+  two error dialogs about a name nobody had been asked for yet. The binding
+  owns the guard once, and the hand-written loop keeps its own until it is
+  replaced.
+- **A refusal is marked on the control, and the record keeps what it had.**
+  The field's setter produces the sentence, and the sentence names the field,
+  and the field is the control's: `Error` is a **read-only** property (a
+  setter would put a row for it in every property grid) and the mark is gone
+  again when the value is one the field takes. `Validate()` is what asks --
+  never `Problems`, which is the report of one load and never clears, so
+  validating with it marks a field the person has already fixed.
+
 ## Numbers, JSON and bytes
 
 - **`g_ascii_dtostr` is not the shortest text of a double; it is `%.17g`.**

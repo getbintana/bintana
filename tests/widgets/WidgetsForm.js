@@ -555,7 +555,7 @@ const TESTS = [
     /* Children too: a project's own class named like a runtime global. */
     "ClassNamedLikeAGlobal",
     /* Children too: a file with `export` is a module. */
-    "Modules", "Imports", "Records",
+    "Modules", "Imports", "Records", "DataBinding",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -5145,6 +5145,89 @@ class WidgetsForm extends Form {
      * the one that finds a class's `.form`, with the other extension -- and a
      * `Task` worker builds one too, which is the case at the end.
      */
+    /*
+     * A form that edits a record: `Record`, `DataField` and `Bind`.
+     *
+     * **The three are ordinary properties**, so they are designable and
+     * serialisable with no other change -- the invariant the runtime rests on.
+     * What a `.form` cannot say is when the value moves: the write-back
+     * happens when the control is done being edited, which is the event the
+     * class declares (`Activate` for a `TextBox`, `Select` for a `ComboBox`,
+     * `Click` for a `CheckButton`), and on losing the focus.
+     *
+     * **A refusal is marked on the control**, and the record keeps what it
+     * had: the sentence names the field, and the field is the control's.
+     */
+    testDataBinding() {
+        const f = new Form();
+        f.Record = "Customer";
+
+        const name = new TextBox();
+        name.Name = "BoundName";
+        name.DataField = "Name";
+        f.Add(name);
+
+        const balance = new SpinBox();
+        balance.Name = "BoundBalance";
+        balance.DataField = "Balance";
+        f.Add(balance);
+
+        const active = new CheckButton();
+        active.Name = "BoundActive";
+        active.DataField = "Active";
+        f.Add(active);
+
+        eq("the form says which shape it edits", f.Record, "Customer");
+        eq("and a control says which field it shows", name.DataField, "Name");
+        check("and the serialiser carries both",
+              f.Serialize().properties.Record === "Customer" &&
+              name.Serialize().properties.DataField === "Name",
+              JSON.stringify(f.Serialize().properties));
+
+        const cust = new Customer({ Name: "Acme", Balance: 12, Active: true });
+        f.Bind(cust);
+
+        eq("the record is on the screen", name.Text, "Acme");
+        eq("and the number is in the spin", balance.Value, 12);
+        eq("and the tick is ticked", active.Active, true);
+
+        /* **The value moves when the control is done being edited.** */
+        name.Text = "Globex";
+        name.Emit("Activate");
+        eq("the edit went back to the record", cust.Name, "Globex");
+
+        /* **A field that refuses the value marks the control.** */
+        name.Text = "";
+        name.Emit("Activate");
+        eq("the record keeps what it had", cust.Name, "Globex");
+        check("and the control is marked with the sentence",
+              name.Error.indexOf("required") >= 0, name.Error);
+
+        /* And it gives the mark up when the value is one the field takes. */
+        name.Text = "Ok";
+        name.Emit("Activate");
+        eq("the record took it", cust.Name, "Ok");
+        eq("and the mark is gone", name.Error, "");
+
+        /* A tick is done when it is clicked. */
+        active.Active = false;
+        active.Emit("Click");
+        eq("the tick went back too", cust.Active, false);
+
+        /* **A field that is not there is refused by name**, and nothing is
+         * half-bound: the list is checked before anything is written. */
+        const g = new Form();
+        const orphan = new TextBox();
+        orphan.DataField = "NoSuchField";
+        g.Add(orphan);
+        const bad = refusal(() => { g.Bind(new Customer()); });
+        check("a field the record does not have is refused by name",
+              bad && bad.indexOf("NoSuchField") >= 0, String(bad));
+
+        f.Close();
+        g.Close();
+    }
+
     testRecords() {
         const run = (name, files, project) => {
             const dir = File.Join(SCRATCH, "record-" + name);

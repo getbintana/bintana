@@ -8484,4 +8484,26 @@ void bta_core_register(void)
                        fontbutton_props, false, "Change"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
+
+    /*
+     * **Which member of each class holds its value, and when that value is
+     * done being edited**, said here -- beside the rows that declare the
+     * classes -- so the two cannot drift.  A binding to a record's field reads
+     * and writes the member, and writes back on the event and on losing the
+     * focus.  A class that is not here has no value to bind: `Label` is a
+     * caption and `Button` is a command, and neither is a field of a record.
+     *
+     * The event is the one each class raises when the person has finished
+     * with it: a `TextBox` on `Activate` (Enter), a `ComboBox` on `Select`,
+     * a `CheckButton` on `Click`, a `DatePicker` when the day is picked.
+     */
+    bta_class_value("TextBox",     "Text",   "Activate");
+    bta_class_value("CheckButton", "Active", "Click");
+    bta_class_value("Switch",      "Active", "Click");
+    bta_class_value("ListBox",     "Text",   "Select");
+    bta_class_value("ComboBox",    "Text",   "Select");
+    bta_class_value("SpinBox",     "Value",  "Activate");
+    bta_class_value("DecimalBox",  "Value",  "Activate");
+    bta_class_value("Slider",      "Value",  "Change");
+    bta_class_value("DatePicker",  "Value",  "Change");
 }

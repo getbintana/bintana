@@ -425,6 +425,29 @@ typedef struct BtaClass {
     const char *(*options)(const char *prop);
 
     /*
+     * The member that holds this class's **value** -- the one a binding to a
+     * record's field reads and writes: `Text` for a `TextBox`, `Value` for a
+     * `SpinBox`, `Active` for a `CheckButton`.  NULL for a class that has no
+     * value to show, which is most of them.
+     *
+     * And the **event that says the value is done being edited**, which is
+     * not the same for every class: a `TextBox` is done on `Activate`, a
+     * `ComboBox` on `Select`, a `CheckButton` on `Click`, a `DatePicker` when
+     * the day is picked.  NULL for a class whose value is only ever settled by
+     * losing the focus.
+     *
+     * Both are declared per class and not guessed from the name, for the
+     * reason `texts` is: a class says which of its members is its value,
+     * because `Text` means a caption on a `Label` and the text a person typed
+     * on a `TextBox`, and a binding that read the wrong one would show the
+     * wrong thing without saying so.  The kind of the value is not declared:
+     * it is what the member holds when it is read, which is the answer that
+     * cannot drift from the control.
+     */
+    const char *value_member;
+    const char *value_done;
+
+    /*
      * The properties of this class that hold text a person reads, comma
      * separated; NULL when it has none.  This is what the .form loader looks
      * up in the catalogue, what a property editor offers a sample value for,
@@ -509,6 +532,15 @@ typedef struct BtaClass {
 void      bta_register_classes(const BtaClass *rows, int n);
 BtaClass *bta_class_table(int *count);
 BtaClass *bta_class_find(const char *name);
+/*
+ * Says which member of a class holds its value, and the event that says the
+ * value is done being edited (see `BtaClass.value_member` and
+ * `BtaClass.value_done`).  Called by the module that owns the class, beside
+ * the rows that declare it, so the two cannot drift -- and **refusing a name
+ * that is not a class**, so a class renamed without this is caught here and
+ * not by a binding that finds no value where one was promised.
+ */
+void      bta_class_value(const char *cls, const char *member, const char *done);
 
 void bta_core_register(void);      /* bta_controls.c */
 /* A radio button's group is the container it is in, so the set changes whenever

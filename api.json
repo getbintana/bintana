@@ -3508,6 +3508,15 @@
           "Native": false
         },
         {
+          "Name": "Bind",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(record)",
+          "Returns": "",
+          "Doc": "shows a record on this form: every control that names a field is filled with it, and from then on the control gives its value back when the person is done with it",
+          "Native": false
+        },
+        {
           "Name": "CancelButton",
           "Kind": "ReadOnly",
           "Params": -1,
@@ -3641,6 +3650,15 @@
           "Returns": "",
           "Doc": "blocks its parent. Made transient for the active window on `Show()`",
           "Native": true
+        },
+        {
+          "Name": "Record",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the shape this form edits -- the name of a record class -- or `\"\"`",
+          "Native": false
         },
         {
           "Name": "Resizable",
@@ -11184,6 +11202,15 @@
           "Native": true
         },
         {
+          "Name": "DataField",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the field this control shows, or `\"\"`",
+          "Native": false
+        },
+        {
           "Name": "Declared",
           "Kind": "Method",
           "Params": 1,
@@ -11245,6 +11272,15 @@
           "Returns": "",
           "Doc": "answers the mouse and the keyboard. `true` by default, and **read-only in effect while `Action` is set**: a control that points at a command takes the command's answer",
           "Native": true
+        },
+        {
+          "Name": "Error",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the sentence of the last refusal on this control, or `\"\"`.  **Read-only**: the binding sets it and the program reads it -- what a person is told about it is the program's to decide -- and a setter would put a row for it in every property grid",
+          "Native": false
         },
         {
           "Name": "EventDoc",
@@ -11739,6 +11775,15 @@
           "Signature": "",
           "Returns": "",
           "Doc": "absorbs vertical slack",
+          "Native": true
+        },
+        {
+          "Name": "ValueInfo",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "(type)",
+          "Returns": "{ Member, Done }",
+          "Doc": "the member that holds this class's **value** -- `Text` for a `TextBox`, `Value` for a `SpinBox`, `Active` for a `CheckButton` -- and the **event that says the value is done being edited**, which is not the same for every class: a `TextBox` is done on `Activate`, a `ComboBox` on `Select`, a `CheckButton` on `Click`, a `DatePicker` when the day is picked.  Both are `\"\"` for a class that has no value.\nThe question a binding to a record's field asks before it reads or writes one: **the class says which of its members it is**, and a class of the project says it with `static ValueInfo`.  The kind of the value is not asked here: it is what the member holds when it is read, which cannot drift from the control",
           "Native": true
         },
         {

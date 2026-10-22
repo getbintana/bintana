@@ -420,9 +420,9 @@ which is what Delphi does, is the wrong answer for a form with twelve fields.
    names a class the way a `.form` names a `"type"`), and **the editor over it**
    — `RecordForm`, the dialog the tree opens on a double click, asking
    `Field.Kinds` and checking every field through `Field.Spec`. `examples/quote`
-   and `examples/clients` declare their shapes in files. What is left of this
-   stage is the declarative half proper -- the three properties and the writing
-   over them, which is [below](#where-it-stands).
+   and `examples/clients` declare their shapes in files. **The declarative half
+   is built too**: `Form.Record`, `Control.DataField` and `Form.Bind()` with the
+   write-back and the mark on the field -- which is [below](#where-it-stands).
 2. **`sales.conn` and sqlite** — **half built.** `Database.Sqlite` and `Table` are
    there and tested: a record reads and writes a table, and `snake` stopped being
    unused. What is left is the declarative half, which is
@@ -466,9 +466,30 @@ list:
 | | |
 |---|---|
 | `sales.conn` | the connection as a project resource, with a category, an icon and a dialog. Not a section of `project.json` |
-| `Form.Record` / `Form.Source` / `Control.DataField` | three ordinary properties, so all three are designable and serialisable with no other change — the invariant the runtime rests on |
+| `Form.Record` / `Form.Source` / `Control.DataField` | three ordinary properties, so all three are designable and serialisable with no other change — the invariant the runtime rests on. **`Record` and `DataField` are built**; `Source` is not |
 | the drop-downs | `DataField` from the record's fields, `Source` from the declared connections' tables and the project's `.json` files, computed the way the grid's `Style` row already is |
 | the write-back | on `Activate` and `LostFocus`, with the error marked beside the field. It asks **`Validate()`** and never `Problems`, which is the report of a load and never clears |
+
+**And the first half of the writing over them is built too**, since the
+properties alone are a declaration and not a binding:
+
+- **`Form.Record`** — the name of the record class the form edits — and
+  **`Control.DataField`** — the field a control shows — are ordinary
+  properties, so both are designable, serialisable and editable with no other
+  change.
+- **`Form.Bind(record)`** puts a record on the form and takes it back: every
+  control that names a field is filled with it, and from then on the control
+  gives its value back when the person is **done being edited** — on the
+  event the class declares (`Activate` for a `TextBox`, `Select` for a
+  `ComboBox`, `Click` for a `CheckButton`) and on losing the focus. The
+  guard is here, once, and not in every form that binds something.
+- **A refusal is marked on the control** (`Error`, a read-only property) and
+  the record keeps what it had: the field's setter produces the sentence, and
+  the sentence names the field, and the field is the control's.
+
+What is **not** built is the half that needs a source: `Form.Source`, the
+`Source` drop-down, the `sales.conn` resource, and the drop-down that offers
+the record's fields in the designer.
 
 And two things the binding will have to answer that this document did not
 foresee, both found by writing the screens by hand: **a guard**, because

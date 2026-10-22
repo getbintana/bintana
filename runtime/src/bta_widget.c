@@ -2691,6 +2691,70 @@ static JSValue w_property_options(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * The member that holds a class's value -- see `BtaClass.value_member`.
+ *
+ * A class of the project says its own with `static ValueMember`, the same
+ * bargain `static Options` makes; a class the runtime holds says it in the
+ * row beside its own.  Looked up along the prototype chain, so a subclass
+ * inherits its parent's -- which is what a `ComboBox` does with `Text`.
+ */
+static JSValue class_static_value_info(JSContext *ctx, JSValueConst proto)
+{
+    JSValue ctor = class_of_proto(ctx, proto);
+    if (!JS_IsObject(ctor)) {
+        JS_FreeValue(ctx, ctor);
+        return JS_NULL;
+    }
+
+    JSValue info = own_property(ctx, ctor, "ValueInfo");
+    JS_FreeValue(ctx, ctor);
+
+    if (!JS_IsObject(info)) {
+        JS_FreeValue(ctx, info);
+        return JS_NULL;
+    }
+    return info;
+}
+
+static JSValue value_info_of_proto(JSContext *ctx, JSValueConst start)
+{
+    int       n;
+    BtaClass *table  = bta_class_table(&n);
+    JSValue   result = JS_NULL;
+
+    JSValue proto = JS_DupValue(ctx, start);
+    while (JS_IsObject(proto) && JS_IsNull(result)) {
+        bool known = false;
+
+        for (int i = 0; i < n; i++) {
+            if (!JS_IsStrictEqual(ctx, table[i].proto, proto))
+                continue;
+
+            known = true;
+            if (table[i].value_member) {
+                result = JS_NewObject(ctx);
+                JS_SetPropertyStr(ctx, result, "Member",
+                                  JS_NewString(ctx, table[i].value_member));
+                JS_SetPropertyStr(ctx, result, "Done",
+                                  table[i].value_done
+                                      ? JS_NewString(ctx, table[i].value_done)
+                                      : JS_NewString(ctx, ""));
+            }
+            break;
+        }
+
+        if (!known)
+            result = class_static_value_info(ctx, proto);
+
+        JSValue parent = JS_GetPrototype(ctx, proto);
+        JS_FreeValue(ctx, proto);
+        proto = parent;
+    }
+    JS_FreeValue(ctx, proto);
+    return result;
+}
+
+/*
  * The properties of this object's class, and of every class it inherits from,
  * that hold text a person reads.  NULL when there are none.
  *
@@ -5258,6 +5322,24 @@ static JSValue w_member_by_type(JSContext *ctx, JSValueConst this_val,
     JSValue out = member_of_proto(ctx, proto, name);
     JS_FreeValue(ctx, proto);
     JS_FreeCString(ctx, name);
+    return out;
+}
+
+static JSValue w_value_info_by_type(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    JSValue proto = class_proto_arg(ctx, argc, argv, "ValueInfo");
+    if (JS_IsException(proto))
+        return proto;
+
+    JSValue out = value_info_of_proto(ctx, proto);
+    JS_FreeValue(ctx, proto);
+
+    if (JS_IsNull(out)) {
+        out = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, out, "Member", JS_NewString(ctx, ""));
+        JS_SetPropertyStr(ctx, out, "Done", JS_NewString(ctx, ""));
+    }
     return out;
 }
 
@@ -8520,6 +8602,25 @@ BtaClass *bta_class_find(const char *name)
 }
 
 /*
+ * Says which member of a class holds its value (see `BtaClass.value_member`).
+ *
+ * Called by the module that owns the class, **beside the rows that declare
+ * it**, so the two cannot drift -- and refusing a name that is not a class, so
+ * a class renamed without this is caught here and not by a binding that finds
+ * no value where one was promised.
+ */
+void bta_class_value(const char *cls, const char *member, const char *done)
+{
+    BtaClass *c = bta_class_find(cls);
+    if (!c) {
+        g_warning("bta_class_value: there is no class named '%s'", cls);
+        return;
+    }
+    c->value_member = member;
+    c->value_done   = done;
+}
+
+/*
  * What a palette has to have in order to offer a control: the class's own
  * answer, which is a constant of the build for most of them and a question put
  * to the machine for the few that declare a probe.  One function so the class
@@ -9277,6 +9378,25 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "PropertyOptions",
                               JS_NewCFunction(ctx, w_property_options_by_type,
                                               "PropertyOptions", 2));
+            /* ValueInfo(type) -> { Member, Done }
+             *   the member that holds this class's **value** -- `Text` for a
+             *   `TextBox`, `Value` for a `SpinBox`, `Active` for a
+             *   `CheckButton` -- and the **event that says the value is done
+             *   being edited**, which is not the same for every class: a
+             *   `TextBox` is done on `Activate`, a `ComboBox` on `Select`, a
+             *   `CheckButton` on `Click`, a `DatePicker` when the day is
+             *   picked.  Both are `""` for a class that has no value.
+             *
+             *   The question a binding to a record's field asks before it
+             *   reads or writes one: **the class says which of its members it
+             *   is**, and a class of the project says it with `static
+             *   ValueInfo`.  The kind of the value is not asked here: it is
+             *   what the member holds when it is read, which cannot drift from
+             *   the control
+             */
+            JS_SetPropertyStr(ctx, ctor, "ValueInfo",
+                              JS_NewCFunction(ctx, w_value_info_by_type,
+                                              "ValueInfo", 1));
             /* Member(type, name)
              *   what the name is on that class: `Property`, `ReadOnly`,
              *   `Method`, or `""` for one it has not got. The question `in`

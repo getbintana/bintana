@@ -433,7 +433,7 @@ Widget.Signatures = {
     SetItem:       "(of, count)",
 };
 
-Form.Signatures     = { Serialize: "()", SaveForm: "(path)" };
+Form.Signatures     = { Serialize: "()", SaveForm: "(path)", Bind: "(record)" };
 Notebook.Signatures = { Serialize: "(parentIsFixed)" };
 Container.Signatures = { AddNode: "(node)", BuildChildren: "(node)" };
 
@@ -887,6 +887,344 @@ Container.prototype.BuildChildren = function (node, designing = false) {
  * complaint when it is declared rather than a property that silently is not
  * checked.
  */
+
+/* ------------------------------------------------------------------------
+ * A form that edits a record.
+ *
+ * `Record` on the form says which shape it edits; `DataField` on a control
+ * says which field of it that control shows; `Bind()` puts a record on the
+ * screen and takes it back when the person is done with a field.
+ *
+ * **The three are ordinary properties**, so all three are designable,
+ * serialisable and editable with no other change -- the invariant the runtime
+ * rests on.  What is written here is the half a `.form` cannot say: when the
+ * value moves, and what happens when the field refuses it.
+ *
+ * The design is `docs/plans/data-plan.md`, and it was argued on two screens
+ * written by hand (`examples/quote` and `examples/clients`).  Three things
+ * that plan found and this follows:
+ *
+ * - **The value moves when the control is done being edited**, on `Activate`
+ *   and on losing the focus -- not on every keystroke, which would refuse a
+ *   half-typed word and a date in the middle of being written.
+ * - **A form that shows a record reads it straight back**, because every
+ *   assignment to a control raises a real `Change`.  The guard is here, once,
+ *   and not in every form that binds something.
+ * - **A refusal belongs beside the field**, not in a dialog: twelve fields
+ *   and an exception is twelve dialogs.
+ * ------------------------------------------------------------------------ */
+
+/* The field a control shows, and the sentence it last refused.  Both are the
+ * runtime's own notes on a control, so they live in a WeakMap and not on the
+ * control: a widget's own properties are exactly its properties, and the
+ * strict mode is the test that this landed. */
+const dataFields  = new WeakMap();
+const fieldErrors = new WeakMap();
+
+class DataMembers {
+    /** the field this control shows, or `""` */
+    get DataField() {
+        return dataFields.get(this) || "";
+    }
+    set DataField(value) {
+        if (value === undefined || value === null || value === "") {
+            dataFields.delete(this);
+            fieldErrors.delete(this);
+            return;
+        }
+        if (typeof value !== "string")
+            throw new TypeError(`DataField: expected a field name, got ${typeof value}`);
+        dataFields.set(this, value);
+    }
+
+    /**
+     * the sentence of the last refusal on this control, or `""`.  **Read-only**:
+     * the binding sets it and the program reads it -- what a person is told
+     * about it is the program's to decide -- and a setter would put a row for
+     * it in every property grid
+     */
+    get Error() {
+        return fieldErrors.get(this) || "";
+    }
+}
+mixIn(DataMembers, Widget);
+
+/* The record a form edits, and the one it is showing, and the guard.  All
+ * three are the runtime's notes; the first is a property the file carries. */
+const formRecords = new WeakMap();
+const boundState  = new WeakMap();
+const listened    = new WeakMap();
+
+class BoundMembers {
+    /** the shape this form edits -- the name of a record class -- or `""` */
+    get Record() {
+        return formRecords.get(this) || "";
+    }
+    set Record(value) {
+        if (value === undefined || value === null || value === "") {
+            formRecords.delete(this);
+            return;
+        }
+        if (typeof value !== "string")
+            throw new TypeError(`Record: expected a class name, got ${typeof value}`);
+        formRecords.set(this, value);
+    }
+}
+mixIn(BoundMembers, Form);
+
+/* What kind of value a raw one is.  **The kind is observed, not declared**:
+ * it is what the member holds when it is read, which cannot drift from the
+ * control -- and the field says what it is, through `PropertyInfo`. */
+function valueKind(v) {
+    if (typeof v === "string")  return "text";
+    if (typeof v === "number")  return "number";
+    if (typeof v === "boolean") return "bool";
+    if (v instanceof Decimal)     return "decimal";
+    return "";
+}
+
+/* The value as the field of that kind wants it.  A field is strict -- it
+ * refuses a number where it wants text -- so this is where the two meet:
+ * the control's value is shaped into what the field takes, and the field's
+ * own checks have the last word. */
+function asField(kind, raw) {
+    switch (kind) {
+    case "text": case "enum": case "date": case "time": case "datetime":
+        return asText(raw);
+    case "int": case "number":
+        return asNumber(raw);
+    case "bool":
+        return asBool(raw);
+    case "decimal":
+        /* The field takes text, a number or a decimal, and takes the decimal
+         * as it is: converting it to a double would lose the very thing it
+         * exists for. */
+        return raw;
+    default:
+        return undefined;   /* bytes, record, list: not a control's value */
+    }
+}
+
+/* And the value as the control of that kind wants it -- the other
+ * direction, which is the same table read the other way round. */
+function asControl(kind, value) {
+    switch (kind) {
+    case "text":    return asText(value);
+    case "number":  return asNumber(value);
+    case "bool":    return asBool(value);
+    case "decimal": return value;
+    default:        return undefined;
+    }
+}
+
+function asText(v) {
+    if (typeof v === "string")  return v;
+    if (typeof v === "number")  return String(v);
+    if (typeof v === "boolean") return v ? "true" : "false";
+    if (v instanceof Decimal)     return String(v);
+    if (v === undefined || v === null) return "";
+    return String(v);
+}
+
+function asNumber(v) {
+    if (typeof v === "number")  return v;
+    if (typeof v === "string")  return Number(v);
+    if (typeof v === "boolean") return v ? 1 : 0;
+    if (v instanceof Decimal)     return v.Number();
+    return NaN;
+}
+
+function asBool(v) {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "string")  return v === "true" || v === "1";
+    if (typeof v === "number")  return v !== 0;
+    if (v instanceof Decimal)     return v.Sign !== 0;
+    return false;
+}
+
+/* The member that holds a control's value, the kind it holds, and the event
+ * that says the person is done with it -- or `""` for the first two when the
+ * class says it has no value.  The class says which member it is and when it
+ * is done (`Widget.ValueInfo`); the kind is what that member holds now, which
+ * is the answer that cannot drift from the control. */
+function controlValue(control) {
+    const info = Widget.ValueInfo(Widget.TypeName(control.constructor));
+    const member = info && info.Member ? info.Member : "";
+    if (!member)
+        return { member: "", kind: "", done: "" };
+    const raw = control[member];
+    return { member, kind: valueKind(raw), done: info.Done || "" };
+}
+
+/* The controls of a form that show a field, and the field each shows.
+ *
+ * **The containment tree, not the named controls**: `Controls` is what the
+ * form holds *by name*, which is what a `.form` gives it, and a control that
+ * was built in code and added to a panel is bound just the same.  The tree is
+ * walked all the way down, because a field is often shown by a control inside
+ * a panel and not by one on the form itself. */
+function boundControls(form) {
+    const out = [];
+    const walk = (node) => {
+        for (const child of node.Children || []) {
+            const field = child.DataField;
+            if (field) out.push({ control: child, field });
+            walk(child);
+        }
+    };
+    walk(form);
+    return out;
+}
+
+/* Whether a complaint is about this field.  The path of a complaint is the
+ * field's name, and a name that is the beginning of another one is not this
+ * one: "Name2 is required" is not about "Name". */
+function complaintIs(complaint, field) {
+    if (!complaint.startsWith(field)) return false;
+    const next = complaint.charAt(field.length);
+    return next === "" || next === " " || next === ":" || next === "[";
+}
+
+/*
+ * Bind(record) -- show a record on this form.
+ *
+ * Every control that names a field is filled with that field's value, and
+ * from then on **the control gives its value back** when the person is done
+ * with it: on `Activate` and on losing the focus.  A field that refuses the
+ * value marks the control with the sentence it refused with, and the control
+ * gives it up again when the value is one the field takes.
+ *
+ * The guard is here: writing the controls raises a real `Change`, and without
+ * it every display of the record would be read straight back into it.
+ */
+/**
+ * shows a record on this form: every control that names a field is filled with
+ * it, and from then on the control gives its value back when the person is
+ * done with it
+ */
+Form.prototype.Bind = function (record) {
+    if (!record || typeof record !== "object")
+        throw new TypeError("Bind(record) expects a record");
+
+    const declared = this.Record;
+    if (declared && record.constructor.name !== declared)
+        throw new TypeError(`Bind: this form edits ${declared}, not ` +
+                            `${record.constructor.name}`);
+
+    const bound = boundControls(this);
+    const state = { record, showing: true, bound };
+    boundState.set(this, state);
+
+    try {
+        for (const { control, field } of bound) {
+            const info = record.PropertyInfo ? record.PropertyInfo(field) : undefined;
+            if (!info)
+                throw new RangeError(`Bind: ${field} is not a field of ` +
+                                     `${record.constructor.name}`);
+
+            const { member, kind } = controlValue(control);
+            if (!member)
+                throw new RangeError(`Bind: ${control.Name || "a control"} has ` +
+                                     `no value to show ${field} in`);
+
+            const value = asControl(kind, record[field]);
+            if (value === undefined && kind !== "decimal")
+                throw new RangeError(`Bind: ${control.Name || "a control"} holds ` +
+                                     `a ${kind || "nothing"}, which ${field} ` +
+                                     `cannot take`);
+
+            control[member] = value;
+        }
+    } finally {
+        state.showing = false;
+    }
+
+    /* What the record complains about, marked where the person is looking. */
+    markErrors(this);
+
+    for (const { control } of bound) listenTo(this, control);
+    return this;
+};
+
+/*
+ * The write-back, on the two moments the plan names.  The handler is on the
+ * control itself, so it runs **before** the form's own `Activate` or
+ * `LostFocus` handler -- which is what lets the program read the error the
+ * binding marked in the handler it wrote for itself.
+ */
+function listenTo(form, control) {
+    if (listened.has(control)) return;
+    listened.set(control, true);
+
+    const write = () => {
+        const state = boundState.get(form);
+        if (!state || state.showing) return;
+
+        const field  = control.DataField;
+        const record = state.record;
+        if (!field || !record) return;
+
+        const { member, kind } = controlValue(control);
+        if (!member) return;
+
+        const info = record.PropertyInfo ? record.PropertyInfo(field) : undefined;
+        if (!info) return;
+
+        const value = asField(info.Kind, control[member]);
+        if (value === undefined) return;
+
+        try {
+            record[field] = value;
+        } catch (e) {
+            /* The sentence names the field, and the field is the control's:
+             * the mark goes where the person is looking. */
+            fieldErrors.set(control, e.message);
+            return;
+        }
+        fieldErrors.delete(control);
+
+        /* And the rest of the record: a field that is empty is a complaint
+         * about the control that shows it.  `Validate()` and never
+         * `Problems`, which is the report of a load and never clears. */
+        markErrors(form);
+    };
+
+    /* **The moment the value is done, and the one every control has.**  The
+     * class says which event it is -- a `TextBox` on `Activate`, a `ComboBox`
+     * on `Select`, a `CheckButton` on `Click` -- and losing the focus is the
+     * other one, which is what WinForms calls `OnValidation`. */
+    const done = controlValue(control).done;
+    if (done && !control.EventNames().includes(done))
+        throw new RangeError(`Bind: ${control.Name || "a control"} does not ` +
+                             `raise ${done}, which is where its value is done`);
+    if (done)
+        control.On(done, write);
+    control.On("LostFocus", write);
+};
+
+/*
+ * The complaints of the record, marked on the controls that show the fields
+ * they are about.  `Validate()` is the state -- recomputed every time --
+ * where `Problems` is what a load said and never clears, so validating with
+ * it marks a field the person has already fixed.
+ */
+function markErrors(form) {
+    const state = boundState.get(form);
+    if (!state) return;
+
+    let complaints = [];
+    try {
+        complaints = state.record.Validate() || [];
+    } catch (e) {
+        return;
+    }
+
+    for (const { control, field } of state.bound) {
+        const about = complaints.find((c) => complaintIs(c, field));
+        if (about) fieldErrors.set(control, about);
+        else fieldErrors.delete(control);
+    }
+};
 
 /* ---------------------------------------------------------------------
  * The window an uncaught error is shown in.
