@@ -1686,18 +1686,65 @@ class WidgetsForm extends Form {
         for (let i = 1; i <= 30; i++) text += `${i} ` + "word ".repeat(12) + "\n";
         ed.Text = text;
 
-        /* The room is read once it has stopped changing -- five readings that
-         * agree -- and **compared with another stable reading, never with a
-         * number remembered**: in a full run the first layout of a wrapped text
-         * is not the settled one (488 where it is 938 alone), and a baseline
-         * taken there is not the editor's own. */
-        const stable = (then) => {
-            let last = -1, agreed = 0;
+        /* The room is read once it has stopped changing -- and **compared with
+         * another stable reading, never with a number remembered**: in a full
+         * run the first layout of a wrapped text is not the settled one (488
+         * where it is 938 alone), and a baseline taken there is not the
+         * editor's own.
+         *
+         * **"Stopped changing" is not the same as "settled", and the
+         * difference is what made this test flaky.** A wrapped text is
+         * re-wrapped over several frames, and the editor's scroll range
+         * **converges in steps**: measured, 488, then 506, then 560, then
+         * 1478 -- each step a plateau of four to six readings. A settle that
+         * only asks for "six readings that agree" can land on a step, and
+         * under load the steps are long enough to be landed on: the reading
+         * came back at a step's value and the assertion compared it with the
+         * settled one and failed.
+         *
+         * **A step is the same length as the last one**, so nothing that
+         * compares lengths tells them apart: a step of six readings and the
+         * final plateau of six readings are the same thing by that measure.
+         * What tells them apart is that the final one **never ends** -- so the
+         * settle has to be long enough to cover more than one step, and the
+         * floor is twenty readings against a longest measured step of six.
+         *
+         * On top of that floor, two things that need no constant at all:
+         *
+         * - **The value has to have moved.** After the map is turned on, a
+         *   reading that comes back unchanged is the old one: the room has
+         *   not been given away yet.
+         * - **The value has to have been still for longer than it was still
+         *   before.** The bound grows with the plateaus this settle has seen,
+         *   so a layout slower than the floor raises the bar instead of being
+         *   let through.
+         *
+         * Measured: without these this test went red twice out of three on a
+         * loaded machine, always the same way -- a reading came back at a
+         * step's value.
+         */
+        const stable = (then, changedFrom) => {
+            let last = -1, agreed = 0, longest = 0;
             until("the editor's room has stopped changing", () => {
                 if (ed.Bounds().Width <= 0 || ed.ScrollMaxY <= 0) return false;
-                agreed = ed.ScrollMaxY === last ? agreed + 1 : 0;
-                last = ed.ScrollMaxY;
-                return agreed >= 5;
+                const value = ed.ScrollMaxY;
+                /* **The plateau is counted even when the value is refused**:
+                 * a value that has not moved is the old one, and the time it
+                 * has been still is still a plateau the bound has to know. */
+                if (value === last) {
+                    agreed++;
+                } else {
+                    if (agreed > longest) longest = agreed;
+                    agreed = 0;
+                }
+                last = value;
+                /* A value that has not moved is the old one, not a settled
+                 * one. */
+                if (changedFrom !== undefined && value === changedFrom) return false;
+                /* **Strictly longer than the longest plateau before it**: the
+                 * last one is the one that never ends, and a step that is as
+                 * long as the one before it is a step and not the end. */
+                return agreed >= 20 && agreed > longest;
             }, () => then(ed.ScrollMaxY));
         };
 
@@ -1708,6 +1755,8 @@ class WidgetsForm extends Form {
 
             ed.ShowMap = true;
             eq("ShowMap reads back", ed.ShowMap, true);
+            /* **Anchored**: the room has to have moved, because the map takes
+             * the width away and the text wraps again. */
             stable((beside) => {
                 check("a map beside the text leaves less to wrap in, so it is taller",
                       beside > alone, `${alone} -> ${beside}`);
@@ -1716,12 +1765,14 @@ class WidgetsForm extends Form {
 
                 ed.ShowMap = false;
                 eq("turned off, it reads off", ed.ShowMap, false);
+                /* And anchored again: the room comes back, and the reading
+                 * that says so is one that moved. */
                 stable((again) => {
                     check("without the map the text has its room back",
                           again < beside, `${beside} -> ${again}`);
                     ed.Delete();
-                });
-            });
+                }, beside);
+            }, alone);
         });
     }
 

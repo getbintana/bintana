@@ -92,6 +92,28 @@ until something is true instead of counting frames by hand. A text change
 re-measures on a frame of GTK's choosing, and a machine under a sanitizer takes
 more of them -- counting is what made two of these tests flaky.
 
+**And a settle that waits for a value to stop changing is waiting for a
+convergence, and a convergence has steps.** A wrapped text is re-wrapped over
+several frames, and the editor's scroll range walks up to its settled value in
+plataus: measured, 488, then 506, then 560, then 1478, each plateau four to
+six readings long. **A step is the same length as the last one**, so nothing
+that compares lengths tells them apart -- a settle that asks for "six
+readings that agree" can land on a step, and under load the steps are long
+enough to land on. What tells them apart is that the last one never ends, so
+the settle has to cover **more than one step**: the floor is twenty readings
+against a longest measured step of six, and a bound that grows with the
+plateaus the settle has seen, so a layout slower than the floor raises the
+bar rather than being let through. And the value has to have **moved** after
+a change: a reading that comes back unchanged is the old one.
+
+`tests/widgets`' `testEditorMap` was the flake, and it was this: it asked for
+"the room has stopped changing" and compared the reading with another one,
+and under load the reading came back at a step's value (560) instead of the
+settled one (938) and the assertion failed. The same way, twice out of three.
+It is the second time a **wall-clock window** has been the culprit, after the
+one `docs/testing.md` records above, and the rule is the same: a window is a
+bet, and the way to make it a good one is to measure what it has to outlast.
+
 **And the sharper version: never assert that something has *not* happened yet.**
 `until` fixes waiting for a frame; nothing fixes racing one. `tests/widgets`
 asserted `ScrollY === 0` immediately after `GotoLine(380)`, on the reasoning
