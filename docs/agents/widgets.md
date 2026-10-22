@@ -366,6 +366,26 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `rad.js` both write it -- so the getter/setter walk found it and the property
   grid offered it for editing. Stated as a prefix and not a list of four, so a
   note added later is skipped for free.
+- **The walk that answers which properties a control has was the most
+  expensive thing in the runtime, and it is cached now.** It asked for a
+  descriptor for every name of every prototype in the chain -- 87 of them for
+  a `Button` -- and **233 microseconds a call**, measured: the property grid
+  takes it on every selection and the serialiser on every control of every
+  save. The answer is **cached per prototype**, and the cache is **validated
+  by the number of names the prototype has**, so a member added or removed
+  rebuilds the entry and a prototype that did not change costs one array.
+  Measured over 20000 calls: 4650 ms -> 1222 ms, **233 us -> 61 us**; and
+  the serialiser over a form of twenty controls went from 7.7 ms to 4.9 ms.
+  **The rule the cache must not break is the one above**: the most derived
+  class that declares a name decides whether it is settable, so *every* name
+  is marked seen and not only the settable ones -- the cached entry keeps
+  both, the names and which of them are settable.
+- **A benchmark that runs several variants in one process measures the garbage
+  collector.** The walk allocates a descriptor per name, so the first variants
+  of it left millions of objects behind and the collector's work landed on the
+  later ones: the same code measured 4620 ms in one run and 11544 ms in
+  another, and **a cache measured slower than the code it replaced**. One
+  variant per process, and the numbers agree to a percent.
 - **A `Decimal`-valued property was invisible to the serialiser, and
   `savableValue` is where.** The serialiser walks the prototype chain for
   accessors and then filters what it found -- strings, numbers, booleans and

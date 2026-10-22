@@ -285,6 +285,14 @@ class NarrowForm extends Form {}
 /* --- records ------------------------------------------------------------
  * A shape with one of every kind, and one field whose name in the file is not
  * its name here. */
+/* A component of the project, for the cache test: a base that declares a
+ * property as a pair of accessors, and a subclass that may take it away. */
+class CacheBase extends Component {
+    get Alpha() { return this.__alpha; }
+    set Alpha(v) { this.__alpha = v; }
+}
+class CacheProbe extends CacheBase { }
+
 class Customer extends Record {
     static Fields = {
         Id:       Field.Int(),
@@ -555,7 +563,7 @@ const TESTS = [
     /* Children too: a project's own class named like a runtime global. */
     "ClassNamedLikeAGlobal",
     /* Children too: a file with `export` is a module. */
-    "Modules", "Imports", "Records", "DataBinding",
+    "Modules", "Imports", "Records", "DataBinding", "SettableCache",
     "Time",
     "Stopwatch",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -5158,6 +5166,44 @@ class WidgetsForm extends Form {
      * **A refusal is marked on the control**, and the record keeps what it
      * had: the sentence names the field, and the field is the control's.
      */
+    /*
+     * The walk that answers which properties a control has, and the cache it
+     * keeps of it.
+     *
+     * **The cache is validated by the number of names a prototype has**, so a
+     * member added or removed rebuilds the entry and a prototype that did not
+     * change costs nothing.  That is the whole of the bargain, and this is
+     * what holds it: a prototype that gains a member is seen, not served from
+     * a stale answer.
+     */
+    testSettableCache() {
+        const c = new CacheProbe();
+
+        check("the class's own property is in the answer",
+              c.PropertyNames().includes("Alpha"),
+              JSON.stringify(c.PropertyNames()));
+
+        /* The same answer twice: the second call is the cached one, and it
+         * must not differ. */
+        const first = c.PropertyNames().join(",");
+        const second = c.PropertyNames().join(",");
+        eq("and the second answer is the same", second, first);
+
+        /* **A prototype that changes is not served from the cache.**  The
+         * runtime's own way of changing one is a class of accessors mixed
+         * into it -- which is what the prelude does at load time, and the
+         * only way a prototype changes while the program runs. */
+        class CacheExtra {
+            get Beta() { return this.__beta; }
+            set Beta(v) { this.__beta = v; }
+        }
+        mixIn(CacheExtra, CacheProbe);
+
+        check("a member mixed into a prototype is seen at once",
+              c.PropertyNames().includes("Beta"),
+              JSON.stringify(c.PropertyNames()));
+    }
+
     testDataBinding() {
         const f = new Form();
         f.Record = "Customer";
