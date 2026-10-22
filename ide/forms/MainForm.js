@@ -11,7 +11,7 @@
  * What is left in *this* file is the window: the project it has open, the recent
  * list, `refresh` -- the one place that decides what is enabled and what the
  * status bar says -- and one line per control event.  A control's event is looked
- * up on the form (`bta_emit` asks `form.BtnRun_Click`), so every handler has to
+ * up on the form (`bta_emit` asks `form.BtnWelcomeOpen_Click`), so every handler has to
  * be a method of `MainForm` and cannot live anywhere else; what it can do is
  * hand the work to whoever owns the subject:
  *
@@ -1197,20 +1197,18 @@ export class MainForm extends Form {
         const design  = this.designing;
         const picked  = design && this.designer.selected !== null;
 
-        this.BtnSave.Enabled   = dirty;
-        this.BtnReload.Enabled = open;
-        this.BtnRun.Enabled    = open && !this.running;
 
         /* A disabled item loses its accelerator too, so this is all it takes for
          * Ctrl+S not to fire when there is nothing to save. */
-        this.MnuSave.Enabled   = dirty;
-        this.MnuSaveAll.Enabled = this.hasDirtyTabs();
-        this.MnuReload.Enabled = open;
-        this.MnuRun.Enabled    = open && !this.running;
+        this.ActSave.Enabled   = dirty;
+        this.ActSaveAll.Enabled = this.hasDirtyTabs();
+        this.ActReload.Enabled = open;
+        this.ActRun.Enabled    = open && !this.running;
+        this.ActCheck.Enabled  = open;
         /* A command: the toolbar's Stop, the Run menu's and the debug bar's
          * follow this one assignment. */
         this.ActStop.Enabled   = this.running;
-        this.MnuNewForm.Enabled = open;
+        this.ActNewForm.Enabled = open;
         this.MnuRename.Enabled  = this.activeFile !== null;
         this.MnuDelete.Enabled  = this.activeFile !== null;
         this.MnuCloseTab.Enabled = this.activeFile !== null;
@@ -1230,19 +1228,21 @@ export class MainForm extends Form {
 
         /* Aligning needs something to align against: at least two. */
         const many = design && this.designer.selection.length > 1;
-        for (const item of [this.MnuAlignLeft, this.MnuAlignRight,
-                            this.MnuAlignTop, this.MnuAlignBottom,
-                            this.MnuSameWidth, this.MnuSameHeight]) {
+        for (const item of [this.ActAlignLeft, this.ActAlignRight,
+                            this.ActAlignTop, this.ActAlignBottom,
+                            this.ActSameWidth, this.ActSameHeight]) {
             item.Enabled = many;
         }
 
         /* Distributing shares the gap between the outer two: it needs three. */
         const spread = design && this.designer.selection.length > 2;
-        this.MnuSpreadH.Enabled = spread;
-        this.MnuSpreadV.Enabled = spread;
-        this.MnuUndo.Enabled = design ? this.designer.canUndo()
+        this.ActSpreadH.Enabled = spread;
+        this.ActSpreadV.Enabled = spread;
+        this.ActTabOrder.Enabled = design;
+        this.DesignGroup.Visible = design;
+        this.ActUndo.Enabled = design ? this.designer.canUndo()
                                       : !!this.Editor && this.Editor.CanUndo;
-        this.MnuRedo.Enabled = design ? this.designer.canRedo()
+        this.ActRedo.Enabled = design ? this.designer.canRedo()
                                       : !!this.Editor && this.Editor.CanRedo;
 
         /* The tree's own menu speaks about the file that is open, so its state is
@@ -1269,7 +1269,7 @@ export class MainForm extends Form {
          * accelerator along with the item rather than doing nothing on it. */
         const searchable = !!this.Editor;
         this.MnuComplete.Enabled = searchable;
-        this.MnuFind.Enabled     = searchable;
+        this.ActFind.Enabled     = searchable;
         this.MnuReplace.Enabled  = searchable;
         this.MnuFindNext.Enabled = searchable;
         this.MnuFindPrev.Enabled = searchable;
@@ -1347,10 +1347,10 @@ export class MainForm extends Form {
         const anywhere = repo && !talking && this.git.remoteNames.length > 0;
 
         this.MnuGitFetch.Enabled = anywhere;
-        this.MnuGitPull.Enabled  = anywhere;
+        this.ActGitPull.Enabled  = anywhere;
         /* Push is the one that can create the upstream, so it does not need one
          * to already exist -- only a remote to push to. */
-        this.MnuGitPush.Enabled  = anywhere;
+        this.ActGitPush.Enabled  = anywhere;
         /* Clone is the one that does not want a project: it is how somebody
          * with an empty IDE gets one. */
         this.MnuGitClone.Enabled = this.git.available && !talking;
@@ -1405,7 +1405,7 @@ export class MainForm extends Form {
 
     /* -------------------------------------------------------------- eventos */
 
-    BtnOpen_Click() {
+    ActOpen_Execute() {
         this.leaveProject(() =>
             Dialog.SelectFolder("Open a Bintana project", (dir) => this.openProject(dir)));
     }
@@ -1416,7 +1416,7 @@ export class MainForm extends Form {
      * exists because a window with no project has nowhere else to put them, not
      * because they are different commands here.
      */
-    BtnWelcomeOpen_Click() { this.BtnOpen_Click(); }
+    BtnWelcomeOpen_Click() { this.ActOpen_Execute(); }
     BtnWelcomeNew_Click()  { this.newProject(); }
 
     /*
@@ -1442,16 +1442,8 @@ export class MainForm extends Form {
         this.leaveProject(() => this.openProject(dir));
     }
 
-    BtnReload_Click() {
+    ActReload_Execute() {
         if (this.project) this.listFiles();
-    }
-
-    BtnSave_Click() {
-        this.save();
-    }
-
-    BtnRun_Click() {
-        this.run();
     }
 
     /*
@@ -1859,7 +1851,7 @@ export class MainForm extends Form {
      * It runs on its own when a project is opened, so this is *run it again* --
      * the one command a check needs once anybody has fixed something.
      */
-    MnuCheck_Click() {
+    ActCheck_Execute() {
         const found = this.check.run();
         this.showConsole(this.problems.page);
         if (!found.length) this.log(`${Locale.Text("Nothing wrong with the project")}\n`);
@@ -2581,7 +2573,7 @@ export class MainForm extends Form {
         if (this.Editor) this.Editor.ShowCompletion();
     }
 
-    MnuFind_Click()     { this.finder.open(false); }
+    ActFind_Execute()   { this.finder.open(false); }
     MnuReplace_Click()  { this.finder.open(true); }
     MnuFindNext_Click() { this.finder.step(1); }
     MnuFindPrev_Click() { this.finder.step(-1); }
@@ -2730,13 +2722,12 @@ export class MainForm extends Form {
      * accelerators, and what shows them. */
 
     MnuNewProject_Click()   { this.newProject(); }
-    MnuNewForm_Click()      { this.newForm(); }
+    ActNewForm_Execute()    { this.newForm(); }
     MnuNewComponent_Click() { this.newComponent(); }
     MnuNewModule_Click()    { this.newModule(); }
     MnuCloseTab_Click()   { this.closeActiveTab(); }
     MnuRename_Click()     { this.renameSelectedFile(); }
     MnuDelete_Click()     { this.deleteSelectedFile(); }
-    MnuOpen_Click()   { this.BtnOpen_Click(); }
 
     /* The index comes from the entry chosen; the list may have changed in
      * between (opening another project reorders it), so it is validated. */
@@ -3043,6 +3034,11 @@ export class MainForm extends Form {
 
         this.MnuGitBranch.Enabled     = on && all.length > 0;
         this.MnuGitDropBranch.Enabled = on && this.dropNames.length > 0;
+
+        /* Where am I, on the toolbar beside Pull and Push: a branch name is not a
+         * label until somebody has been asked, so it is set here with the lists. */
+        this.LblBranch.Text    = on && here ? here : "";
+        this.LblBranch.Visible = on && !!here;
     }
 
     /*
@@ -3175,7 +3171,7 @@ export class MainForm extends Form {
      * that would need a merge stops and says so rather than opening an editor
      * for a commit message inside a child nobody is looking at.
      */
-    MnuGitPull_Click() {
+    ActGitPull_Execute() {
         this.saveAllDirty();
         this.git.pull((ok) => {
             this.refreshGit();
@@ -3185,7 +3181,7 @@ export class MainForm extends Form {
         });
     }
 
-    MnuGitPush_Click() { return this.git.push(() => this.refreshGit()); }
+    ActGitPush_Execute() { return this.git.push(() => this.refreshGit()); }
 
     /*
      * Cloning, which is the one git command that runs where there is no project.
@@ -3277,12 +3273,12 @@ export class MainForm extends Form {
         if (dir) this.leaveProject(() => this.openProject(dir));
     }
 
-    MnuReload_Click() { this.BtnReload_Click(); }
-    MnuSave_Click()   { this.save(); }
-    MnuSaveAll_Click() { this.saveAllDirty(); }
+
+    ActSave_Execute()    { this.save(); }
+    ActSaveAll_Execute() { this.saveAllDirty(); }
     MnuQuit_Click()   { if (!this.confirmQuit()) this.quit(); }
 
-    MnuRun_Click()    { this.run(); }
+    ActRun_Execute()     { this.run(); }
     /* One Stop for both: whichever of the two started a child, this is what
      * ends it -- a second button for "stop the one being debugged" would be a
      * second answer to a question with one. It is a command, so the toolbar,
@@ -3316,13 +3312,13 @@ export class MainForm extends Form {
 
     /* Undo is split by mode, so Ctrl+Z does not steal the text editor's undo
      * when the editor is what is on screen. */
-    MnuUndo_Click() {
+    ActUndo_Execute() {
         if (this.designing) this.designer.undo();
         else                this.Editor.Undo();
         this.refresh();
     }
 
-    MnuRedo_Click() {
+    ActRedo_Execute() {
         if (this.designing) this.designer.redo();
         else                this.Editor.Redo();
         this.refresh();
@@ -3370,16 +3366,16 @@ export class MainForm extends Form {
             (name) => this.openHandler(name, "Execute"));
     }
     /* Aligns against the last control touched, which is the convention. */
-    MnuAlignLeft_Click()   { this.designer.align("left"); }
-    MnuAlignRight_Click()  { this.designer.align("right"); }
-    MnuAlignTop_Click()    { this.designer.align("top"); }
-    MnuAlignBottom_Click() { this.designer.align("bottom"); }
-    MnuSameWidth_Click()   { this.designer.align("width"); }
-    MnuSameHeight_Click()  { this.designer.align("height"); }
+    ActAlignLeft_Execute()   { this.designer.align("left"); }
+    ActAlignRight_Execute()  { this.designer.align("right"); }
+    ActAlignTop_Execute()    { this.designer.align("top"); }
+    ActAlignBottom_Execute() { this.designer.align("bottom"); }
+    ActSameWidth_Execute()   { this.designer.align("width"); }
+    ActSameHeight_Execute()  { this.designer.align("height"); }
 
     /* Sharing out the gap needs three: two are already at the ends. */
-    MnuSpreadH_Click() { this.designer.distribute("h"); }
-    MnuSpreadV_Click() { this.designer.distribute("v"); }
+    ActSpreadH_Execute() { this.designer.distribute("h"); }
+    ActSpreadV_Execute() { this.designer.distribute("v"); }
 
     /*
      * The order Tab takes the controls of a container in -- Delphi's *Edit >
@@ -3390,7 +3386,7 @@ export class MainForm extends Form {
      * picker are: so a test can drive the dialog the menu opened rather than
      * the method under it.
      */
-    MnuTabOrder_Click() {
+    ActTabOrder_Execute() {
         if (!this.designing) {
             Message.Warning("Open a form's design to edit its tab order.");
             return;

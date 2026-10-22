@@ -228,7 +228,10 @@ export class SearchForm extends Form {
                  * window's business to report: the next refresh drops it. */
                 continue;
             }
-            found.push(...this.hitsIn(name, text, re));
+            /* A loop and not `push(...hits)`: a spread is an argument list, and a
+             * pattern that can match nothing gives a hit per character, past the
+             * 65535 a call takes in a file as big as a form. */
+            for (const hit of this.hitsIn(name, text, re)) found.push(hit);
         }
 
         this.fill(term, found);

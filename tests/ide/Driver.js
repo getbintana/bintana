@@ -438,6 +438,11 @@ function* p_welcome(ide) {
        ide.files.length, 6);
     eq("Save starts disabled", ide.BtnSave.Enabled, false);
     eq("Run enables with a project", ide.BtnRun.Enabled, true);
+    for (const name of ["BtnNew", "BtnOpen", "BtnSave", "BtnSaveAll", "BtnReload", "BtnUndo",
+                        "BtnRedo", "BtnFind", "BtnRun", "BtnDebug", "BtnStop", "BtnCheck",
+                        "BtnPull", "BtnPush"]) {
+        check(`${name} has a tooltip`, ide[name].Tooltip !== "", name);
+    }
     eq("Refresh enables with a project", ide.BtnReload.Enabled, true);
 
     /* --- about ------------------------------------------------------------
@@ -516,20 +521,21 @@ function* p_files(ide) {
     /* --- editing and saving --------------------------------------------- */
     ide.Editor.Text = ide.Editor.Text.replace("hello from the child", "edited hello");
     eq("editing enables Save", ide.BtnSave.Enabled, true);
-    eq("and the menu item follows it", ide.MnuSave.Enabled, true);
+    eq("and the menu item follows it", ide.ActSave.Enabled, true);
 
     /* Via the menu: exercises the action and accelerator path, not the button. */
-    ide.MnuSave.Click();
+    ide.ActSave.Execute();
     eq("saving clears the dirty flag", ide.Editor.Modified, false);
     eq("saving disables Save again", ide.BtnSave.Enabled, false);
-    eq("and disables its menu item", ide.MnuSave.Enabled, false);
+    eq("and disables its menu item", ide.ActSave.Enabled, false);
     check("the file really changed on disk",
           File.Load(File.Join(TMP, "Child.js")).includes("edited hello"));
 
-    /* A disabled item must be inert: its accelerator is gone with it. */
-    ide.MnuSave.Click();
-    check("choosing a disabled item does nothing", true);
-    eq("menu items report their own name", ide.MnuRun.Name, "MnuRun");
+    /* A disabled command refuses to run: its accelerator is gone with it. */
+    let refused = false;
+    try { ide.ActSave.Execute(); } catch (e) { refused = true; }
+    check("running a disabled command is refused", refused);
+    eq("menu items report their own name", ide.MnuQuit.Name, "MnuQuit");
     eq("Stop is off while nothing runs", ide.ActStop.Enabled, false);
 
     /* --- multiple tabs: switching preserves per-tab state ---------------- */
@@ -552,7 +558,7 @@ function* p_files(ide) {
           JSON.stringify(ide.Editor.Text.slice(-30)));
     eq("and it is still dirty", ide.isDirty(), true);
 
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
     eq("saving clears the dirty flag", ide.Editor.Modified, false);
     ide.FileTree.Key = "project.json";
     eq("switches once saved", ide.activeFile, "project.json");
@@ -571,7 +577,7 @@ function* p_files(ide) {
     ide.Editor.Text   = "uno dos tres\nDos dos\n";
 
     eq("the find bar starts hidden", ide.FindBar.Visible, false);
-    ide.MnuFind.Click();
+    ide.ActFind.Execute();
     eq("Find shows it",              ide.FindBar.Visible, true);
     eq("with no replacement row",    ide.ReplaceRow.Visible, false);
 
@@ -630,7 +636,7 @@ function* p_files(ide) {
 
     /* The search belongs to the editor and a code tab owns its editor, so the
      * bar is a view of the active tab -- and of nothing on a form tab. */
-    ide.MnuFind.Click();
+    ide.ActFind.Execute();
     ide.FindText.Text = "uno";
     eq("one match in this file", ide.LblFindCount.Text, "1");
     ide.FileTree.Key = "project.json";
@@ -640,7 +646,7 @@ function* p_files(ide) {
      * was for searching, not for keeping. */
     ide.FileTree.Key = "Child.js";
     ide.Editor.Text  = childSource;
-    ide.MnuSave.Click();
+    ide.ActSave.Execute();
 
     /* --- no file open: a message and not a blank panel -------------------- */
     check("a tab on screen takes the empty view away", ide.Tabs.Count > 0 && !ide.EmptyBox.Visible);
@@ -699,7 +705,7 @@ function* p_designer(ide) {
     yield;
 
     eq("a form has no text to search, so the bar closes", ide.FindBar.Visible, false);
-    eq("and Find is not on offer",                        ide.MnuFind.Enabled, false);
+    eq("and Find is not on offer",                        ide.ActFind.Enabled, false);
     /* The design host is shown, not created, so GTK allocates it on a frame of
      * its own choosing -- and everything below reads its geometry. Waiting for
      * the height itself rather than counting yields. */
@@ -1173,7 +1179,7 @@ function* p_designer(ide) {
           editor(ide, "Icon") instanceof TextBox && editor(ide, "Icon").Icon !== "",
           `${editor(ide, "Icon").Icon}`);
 
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
     const withModal = JSON.parse(File.Load(File.Join(TMP, "Child.form")));
     eq("and is saved with the form", withModal.properties.Modal, true);
 
@@ -1182,7 +1188,7 @@ function* p_designer(ide) {
     yield;
     editor(ide, "Modal").Text = "false";
     yield;
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
     yield;
 
     ide.designer.select(ide.Surface.Children[0]);
@@ -2257,10 +2263,10 @@ function* p_palette(ide) {
 
     /* Undo has to reach what came in by dragging too. */
     const afterDrop = ide.Surface.Children.length;
-    ide.MnuUndo.Click();
+    ide.ActUndo.Execute();
     eq("undo takes the dropped control back out",
        ide.Surface.Children.length, afterDrop - 1);
-    ide.MnuRedo.Click();
+    ide.ActRedo.Execute();
     yield* settled(ide);   // GTK has to have laid it out
     eq("and redo brings it back", ide.Surface.Children.length, afterDrop);
     ide.designer.deleteSelected();
@@ -2805,20 +2811,20 @@ function* p_palette(ide) {
     ide.Glass_KeyPress("Right", false, false);
     eq("the nudge moved it", byName(ide, "CheckButton1").X, undoX + 1);
 
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     eq("undo puts it back", byName(ide, "CheckButton1").X, undoX);
     eq("undo keeps the selection", ide.designer.selected.Name, "CheckButton1");
 
-    ide.MnuRedo_Click();
+    ide.ActRedo.Execute();
     eq("redo re-applies it", byName(ide, "CheckButton1").X, undoX + 1);
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
 
     /* Undoing a delete has to bring the control back, not just its geometry. */
     const beforeDel = ide.Surface.Children.length;
     eq("Delete is consumed", ide.Glass_KeyPress("Delete", false, false), true);
     eq("Delete removes the control", ide.Surface.Children.length, beforeDel - 1);
 
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     eq("undo brings the control back", ide.Surface.Children.length, beforeDel);
     check("with its name intact", byName(ide, "CheckButton1") !== undefined);
     eq("and its properties", byName(ide, "CheckButton1").Text, "Tildar");
@@ -2828,7 +2834,7 @@ function* p_palette(ide) {
     ide.designer.select(sel);
     typeInto(ide, "Text", "Otro");
     eq("the property changed", byName(ide, "CheckButton1").Text, "Otro");
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     eq("undo reverts the property", byName(ide, "CheckButton1").Text, "Tildar");
 
     /* A spin sends an event per click on the arrow: three clicks in a row on the
@@ -2839,26 +2845,26 @@ function* p_palette(ide) {
     for (let i = 1; i <= 3; i++) editor(ide, "Y").Value = wasY + i;
     eq("the spin applied every step", ide.designer.selected.Y, wasY + 3);
 
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     eq("but undoing once goes back to where it started",
        byName(ide, "CheckButton1").Y, wasY);
 
     /* Another property opens another edit, or undo would take both. */
     editor(ide, "Y").Value = wasY + 5;
     typeInto(ide, "Text", "Aparte");
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     eq("undo only takes back the last property", byName(ide, "CheckButton1").Text,
        "Tildar");
     eq("leaving the one before it", byName(ide, "CheckButton1").Y, wasY + 5);
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
 
-    eq("undo is offered while there is history", ide.MnuUndo.Enabled, true);
-    while (ide.designer.canUndo()) ide.MnuUndo_Click();
-    eq("undo turns itself off when the history runs out", ide.MnuUndo.Enabled, false);
-    eq("redo is available after undoing everything", ide.MnuRedo.Enabled, true);
+    eq("undo is offered while there is history", ide.ActUndo.Enabled, true);
+    while (ide.designer.canUndo()) ide.ActUndo.Execute();
+    eq("undo turns itself off when the history runs out", ide.ActUndo.Enabled, false);
+    eq("redo is available after undoing everything", ide.ActRedo.Enabled, true);
 
     /* Back to the state the save assertions expect. */
-    while (ide.designer.canRedo()) ide.MnuRedo_Click();
+    while (ide.designer.canRedo()) ide.ActRedo.Execute();
     eq("redo replays back to where we were",
        ide.Surface.Children.length, beforeDel);
 
@@ -2883,7 +2889,7 @@ function* p_palette(ide) {
     eq("and clears the selection", ide.designer.selected, null);
 
     /* --- designer: saving ----------------------------------------------- */
-    ide.BtnSave_Click();
+    ide.save();
     eq("saving clears the dirty flag", ide.designer.dirty, false);
 
     const saved = JSON.parse(File.Load(File.Join(TMP, "Child.form")));
@@ -3090,7 +3096,7 @@ function* p_pages(ide) {
           !node.design || node.design.Current === undefined, JSON.stringify(node.design));
 
     designer.showPage(book, 2);
-    ide.MnuUndo.Click();
+    ide.ActUndo.Execute();
     yield;
     node = designer.serializeForm().children.find((n) => n.name === "Tabs");
     eq("undo takes the initial page back", node.properties.Current, 1);
@@ -3182,12 +3188,12 @@ function* p_pages(ide) {
         eq("dragging from a button selects the switcher", designer.selected, stepsNow);
         check("and moves it", stepsNow.X < x0, `X ${stepsNow.X}, was ${x0}`);
         eq("on the page it was on", stepsNow.Current, 1);
-        ide.MnuUndo.Click();
+        ide.ActUndo.Execute();
         yield;
     }
 
     /* --- saved and run ------------------------------------------------------ */
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
     const saved = JSON.parse(File.Load(File.Join(TMP, "Pager.form")));
     const sb = saved.children.find((n) => n.name === "Tabs");
     eq("saved with the initial page", sb.properties.Current, 1);
@@ -3296,9 +3302,9 @@ function* p_clipboard(ide) {
           ring.Width > 1, `${ring.Width}x${ring.Height}`);
 
     /* One paste is one undo. */
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     eq("undo takes the whole paste back", ide.Surface.Children.length, before);
-    ide.MnuRedo_Click();
+    ide.ActRedo.Execute();
     eq("and redo brings it back", ide.Surface.Children.length, before + 1);
 
     /* --- duplicate: the same thing without the round trip ------------------- */
@@ -3333,7 +3339,7 @@ function* p_clipboard(ide) {
     yield* until(() => ide.Surface.Children.length > before + 2);
     check("pasting the cut a second time names the copy afresh",
           ide.designer.selected.Name !== cutName, ide.designer.selected.Name);
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     eq("(undone)", ide.Surface.Children.length, before + 2);
 
     /* --- a container brings its contents, renamed all the way down ----------
@@ -3413,7 +3419,7 @@ function* p_clipboard(ide) {
 
     ide.designer.select(null);
     ide.designer.touch();
-    ide.BtnSave_Click();
+    ide.save();
     eq("the form is back to what it was", ide.Surface.Children.length, before);
     eq("and saved", ide.designer.dirty, false);
     yield;
@@ -3450,7 +3456,7 @@ function* p_taborder(ide) {
 
     /* --- the list ---------------------------------------------------------- */
     ide.designer.select(null);
-    ide.MnuTabOrder_Click();
+    ide.ActTabOrder.Execute();
     const dlg = ide.tabOrderForm;
     yield;
 
@@ -3468,7 +3474,7 @@ function* p_taborder(ide) {
     eq("and the controls as they were", byName(ide, "Txt1").TabIndex, 0);
 
     /* --- a real move -------------------------------------------------------- */
-    ide.MnuTabOrder_Click();
+    ide.ActTabOrder.Execute();
     const moved = ide.tabOrderForm;
     yield;
 
@@ -3495,7 +3501,7 @@ function* p_taborder(ide) {
 
     /* One Ctrl+Z for the whole reorder. The controls are rebuilt by an undo, so
      * they are found by name rather than held. */
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     yield;
     eq("one undo takes the whole reorder back", byName(ide, "Txt2").TabIndex, 0);
     eq("...and the other one with it", byName(ide, "Txt3").TabIndex, 0);
@@ -3514,7 +3520,7 @@ function* p_taborder(ide) {
     yield* settled(ide);
 
     ide.designer.select(box);
-    ide.MnuTabOrder_Click();
+    ide.ActTabOrder.Execute();
     const inner = ide.tabOrderForm;
     yield;
     eq("a selected container edits its own children",
@@ -3535,7 +3541,7 @@ function* p_taborder(ide) {
 
     ide.designer.select(null);
     ide.designer.touch();
-    ide.BtnSave_Click();
+    ide.save();
     eq("the form is back to what it was", ide.Surface.Children.length, 2);
     eq("and saved", ide.designer.dirty, false);
     yield;
@@ -4286,7 +4292,7 @@ function* p_completion(ide) {
     palette(ide, "Button").Click();
     yield;
     const added = ide.designer.selected.Name;
-    ide.BtnSave_Click();
+    ide.save();
     yield;
 
     ide.openInTab("Child.js");
@@ -4299,7 +4305,7 @@ function* p_completion(ide) {
     yield* settled(ide);
     ide.designer.select(byName(ide, added));
     ide.ActDelCtl_Execute();
-    ide.BtnSave_Click();
+    ide.save();
     yield;
     eq("and the form is back to what it was", ide.Surface.Children.length, 2);
 
@@ -4597,7 +4603,7 @@ function* p_handlers(ide) {
     /* --- back to what the phases after this one expect ---------------------- */
     ide.designer.select(byName(ide, fresh));
     ide.ActDelCtl_Execute();
-    ide.BtnSave_Click();
+    ide.save();
     yield;
 
     File.Save(jsPath, wasJs);
@@ -5025,7 +5031,7 @@ function* p_events(ide) {
 
     /* --- back to what the phases after this one expect ---------------------- */
     ide.ActDelCtl_Execute();
-    ide.BtnSave_Click();
+    ide.save();
     yield;
 
     File.Save(jsPath, wasJs);
@@ -5904,7 +5910,7 @@ function* p_document(ide) {
 
     /* It is dirty the way any edited tab is, and saving it is the same verb. */
     check("an edited document is a dirty tab", ide.tabs.liveDirty(ide.tabs.activeState()));
-    ide.BtnSave_Click();
+    ide.save();
     yield;
     check("saved to the file", File.Load(File.Join(TMP, readme)).includes("Otro titulo"));
 
@@ -5930,7 +5936,7 @@ function* p_document(ide) {
     eq("and opens nothing either", ide.activeFile, readme);
 
     /* --- and the README a project opens on ----------------------------------- */
-    ide.BtnSave_Click();
+    ide.save();
     openFresh(ide, TMP);
     yield;
 
@@ -6260,7 +6266,7 @@ function* p_forms(ide) {
     palette(ide, "Label").Click();
     yield;                 // a just-created control has no layout until the next frame
     eq("a control can be added right away", ide.Surface.Children.length, 1);
-    ide.BtnSave_Click();
+    ide.save();
     const reread = JSON.parse(File.Load(File.Join(TMP, "Pantalla.form")));
     eq("and saved into the new file", reread.children.length, 1);
     eq("keeping its class", reread.class, "Pantalla");
@@ -6537,7 +6543,7 @@ function* p_forms(ide) {
 
     const fresh     = ide.designer.selected;
     const freshName = fresh.Name;
-    ide.BtnSave_Click();
+    ide.save();
 
     /* Where it is drawn, not where it was asked to be: a click placed on the
      * request lands on whatever is really there, and the handler then gets
@@ -6753,7 +6759,7 @@ function* p_forms(ide) {
     eq("at the size the component asked for", placed.Width, 200);
     eq("and its height", placed.Height, 60);
 
-    ide.BtnSave_Click();
+    ide.save();
     const withComp = JSON.parse(File.Load(File.Join(TMP, "Refactor.form")));
     const compNode = withComp.children.find((c) => c.name === "Marcador1");
     check("the .form got the component and not a Label",
@@ -6772,7 +6778,7 @@ function* p_forms(ide) {
 
     ide.designer.select(reopened);
     typeInto(ide, "Name", "Marcador9");
-    ide.BtnSave_Click();
+    ide.save();
 
     const renamedComp = JSON.parse(File.Load(File.Join(TMP, "Refactor.form")))
                             .children.find((c) => c.type === "Marcador");
@@ -6791,7 +6797,7 @@ function* p_forms(ide) {
     editor(ide, "Visible").Text = "false";
     yield;
     eq("hiding it hides the drawing", byName(ide, "Marcador9").Visible, false);
-    ide.BtnSave_Click();
+    ide.save();
     const hiddenComp = JSON.parse(File.Load(File.Join(TMP, "Refactor.form")))
                            .children.find((c) => c.type === "Marcador");
     eq("and the node carries it", hiddenComp.properties.Visible, false);
@@ -6810,7 +6816,7 @@ function* p_forms(ide) {
     editor(ide, "Visible").Text = "true";
     yield;
     eq("showing it again shows it", byName(ide, "Marcador9").Visible, true);
-    ide.BtnSave_Click();
+    ide.save();
     const shownComp = JSON.parse(File.Load(File.Join(TMP, "Refactor.form")))
                           .children.find((c) => c.type === "Marcador");
     check("and shown is not written, being the default",
@@ -6854,7 +6860,7 @@ function* p_forms(ide) {
           inside !== undefined && !!inside.__node && inside.__node.type === "Marcador",
           inside ? inside.constructor.name : "missing");
 
-    ide.BtnSave_Click();
+    ide.save();
     const nestedFile = JSON.parse(File.Load(File.Join(TMP, "Nested.form")));
     const nestedBox  = (nestedFile.children || []).find((c) => c.name === "Box");
     check("a save keeps both of them under the panel",
@@ -6915,7 +6921,7 @@ function* p_forms(ide) {
     ide.designer.pushUndo();
     ide.designer.setFormProperty("Text", "Nested edited");
     ide.designer.touch();
-    ide.BtnSave_Click();
+    ide.save();
     const edited = JSON.parse(File.Load(File.Join(TMP, "Nested.form")));
     eq("an edited save writes a nested component as itself", marcadores(edited), wanted);
     const insideNode = edited.children.find((c) => c.name === "Box")
@@ -6939,7 +6945,7 @@ function* p_forms(ide) {
     eq("all the way to the file", marcadores(ide.designer.serializeForm()), wanted);
     ide.designer.setFormProperty("Arrangement", "Fixed");
     yield* settled(ide);
-    ide.BtnSave_Click();
+    ide.save();
 
     /*
      * **A row named like a picker is not always a field.** `Icon`, `Style` and
@@ -7658,7 +7664,7 @@ function* p_nested(ide) {
     /* A set is not split across containers on drop. */
     eq("dragging a set does not reparent", ide.Surface.Children.length, 2);
 
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     eq("undo puts the whole move back", byName(ide, "Group").X, groupBefore.x);
     eq("all of it", byName(ide, "Label2").X, looseBefore.x);
 
@@ -7670,7 +7676,7 @@ function* p_nested(ide) {
     eq("the anchor is the last one selected", ide.designer.selected.Name, "Group");
 
     yield* settled(ide);   // align and distribute read drawn geometry
-    ide.MnuAlignLeft_Click();
+    ide.ActAlignLeft.Execute();
     yield* settled(ide);
 
     /*
@@ -7706,7 +7712,7 @@ function* p_nested(ide) {
 
     ide.designer.setSelection([alignLbl, alignBtn]);   /* the button is the anchor */
     yield* settled(ide);   // align and distribute read drawn geometry
-    ide.MnuAlignLeft_Click();
+    ide.ActAlignLeft.Execute();
     yield* until(() => ide.designer.rectOf(alignLbl).x ===
                        ide.designer.rectOf(alignBtn).x);
 
@@ -7717,7 +7723,7 @@ function* p_nested(ide) {
     /* Same width means the same *drawn* width, which needs different requests
      * when the insets differ. */
     yield* settled(ide);   // align and distribute read drawn geometry
-    ide.MnuSameWidth_Click();
+    ide.ActSameWidth.Execute();
     yield* settled(ide);   // GTK has to have laid it out
     eq("and same width matches what is drawn",
        ide.designer.rectOf(alignLbl).w, ide.designer.rectOf(alignBtn).w);
@@ -7775,20 +7781,20 @@ function* p_nested(ide) {
     eq("and leaves the anchor alone", anchor.X, groupBefore.x);
 
     yield* settled(ide);   // align and distribute read drawn geometry
-    ide.MnuSameWidth_Click();
+    ide.ActSameWidth.Execute();
     yield* settled(ide);   // GTK has to have laid it out
     /* The same *drawn* width, which is not the same request when the two draw
      * their faces differently: a Frame's border is two pixels of it. */
     eq("same width matches what the anchor draws",
        ide.designer.rectOf(mover).w, ide.designer.rectOf(anchor).w);
 
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     neq("aligning is undoable", byName(ide, "Label2").Width, anchor.Width);
 
-    check("aligning needs two", ide.MnuAlignLeft.Enabled);
+    check("aligning needs two", ide.ActAlignLeft.Enabled);
     ide.designer.select(anchor);
     eq("with one selected there is nothing to align to",
-       ide.MnuAlignLeft.Enabled, false);
+       ide.ActAlignLeft.Enabled, false);
 
     /* --- the form's own bounds --------------------------------------------------
      * The surface stretches with the window, so the grips on its edge are what
@@ -7864,11 +7870,11 @@ function* p_nested(ide) {
     eq("zero is refused", ide.designer.formSize().w, 300);
     eq("and the editor goes back to the real value", editor(ide, "Width").Value, 300);
 
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     yield* settled(ide);   // GTK has to have laid it out
     eq("resizing the form is undoable", ide.designer.formSize().w, 360);
 
-    ide.BtnSave_Click();
+    ide.save();
     eq("and the size is what gets written",
        JSON.parse(File.Load(File.Join(TMP, "Anidado.form"))).properties.Width, 360);
     ide.Resize(boardWas.w, boardWas.h);
@@ -7890,10 +7896,10 @@ function* p_nested(ide) {
 
     ide.designer.setSelection(spread);
     eq("three selected", ide.designer.selection.length, 3);
-    check("distributing is offered with three", ide.MnuSpreadH.Enabled);
+    check("distributing is offered with three", ide.ActSpreadH.Enabled);
 
     yield* settled(ide);   // align and distribute read drawn geometry
-    ide.MnuSpreadH_Click();
+    ide.ActSpreadH.Execute();
     eq("the left end stays put", byName(ide, "S1").X, 10);
     eq("and so does the right one", byName(ide, "S3").X, 300);
 
@@ -7903,11 +7909,11 @@ function* p_nested(ide) {
     check("the gaps come out equal", Math.abs(gapA - gapB) <= 1,
           `${gapA} contra ${gapB}`);
 
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     eq("distributing is undoable", byName(ide, "S2").X, 20);
 
     ide.designer.setSelection([byName(ide, "S1"), byName(ide, "S2")]);
-    eq("with only two there is no gap to share", ide.MnuSpreadH.Enabled, false);
+    eq("with only two there is no gap to share", ide.ActSpreadH.Enabled, false);
 
     /* --- alignment guides ------------------------------------------------------
      * Dragging near another control's edge snaps and shows the guide. */
@@ -8024,12 +8030,12 @@ function* p_nested(ide) {
     ide.ActDelCtl_Execute();
     eq("deleting removes the selected control",
        ide.Surface.Children.length, beforeMulti - 1);
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     eq("and undo brings it back", ide.Surface.Children.length, beforeMulti);
 
     ide.designer.select(null);
 
-    ide.BtnSave_Click();
+    ide.save();
     const savedNest = JSON.parse(File.Load(File.Join(TMP, "Anidado.form")));
     eq("the saved tree keeps its nesting", savedNest.children[0].children.length, 2);
     eq("with the nested move persisted, still parent-relative",
@@ -8313,7 +8319,7 @@ function* p_projects(ide) {
     editor(ide, "Background").Value = "rgb(1,2,3)";
     yield;
     eq("a colour on the form reaches the board", ide.Surface.Background, "rgb(1,2,3)");
-    ide.MnuUndo_Click();
+    ide.ActUndo.Execute();
     yield* settled(ide);
     eq("and undo puts the theme's back", ide.Surface.Background, "");
 
@@ -8487,7 +8493,7 @@ function* p_projects(ide) {
 
     /* And what is saved has no X/Y for a box's children: the serialiser already
      * knew that, and now the designer agrees with it. */
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
     const elastic = JSON.parse(File.Load(File.Join(TMP, "Elastic.form")));
 
     eq("the form keeps its arrangement", elastic.properties.Arrangement, "Vertical");
@@ -8499,7 +8505,7 @@ function* p_projects(ide) {
           JSON.stringify(elastic.children[0].children.map((c) => c.properties)));
 
     /* Undo reaches an order the same as it reaches a position. */
-    ide.MnuUndo.Click();
+    ide.ActUndo.Execute();
     yield;
     eq("undo puts the order back",
        ide.Surface.Children[0].Children.map((c) => c.Name).join(","), "Two,One,Three");
@@ -8601,7 +8607,7 @@ function* p_projects(ide) {
 
     /* All of it survives the round trip, which is what makes it designable at
      * all: tab names had nowhere to live in a .form until Tabs existed. */
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
     const withBoxes = JSON.parse(File.Load(File.Join(TMP, "Elastic.form")));
     const savedBook = withBoxes.children.find((n) => n.type === "Notebook");
     const savedPane = withBoxes.children.find((n) => n.type === "Split");
@@ -8822,7 +8828,7 @@ function* p_projects(ide) {
 
     /* All of it survives the round trip, and a layer carries no coordinates --
      * which is what the file already did silently and the grid now says. */
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
     const withStack = JSON.parse(File.Load(File.Join(TMP, "Elastic.form")));
     const savedTile = withStack.children.find((n) => n.type === "Overlay");
 
@@ -9051,7 +9057,7 @@ function* p_projects(ide) {
 
     standIn.Move(60, 90);
     ide.designer.touch();
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
 
     const kept = JSON.parse(File.Load(File.Join(TMP, "WithComp.form")));
     eq("saved back as the component it is", kept.children[0].type, "Stepper");
@@ -9258,7 +9264,7 @@ function* p_projects(ide) {
      */
     ide.designer.select(byName(ide, "Pages"));
     ide.designer.keyPress("Down", false, false);
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
 
     const selfSaved = JSON.parse(File.Load(File.Join(TMP, "SelfDesign.form")));
 
@@ -9349,7 +9355,7 @@ function* p_projects(ide) {
     ide.Glass_KeyPress("Right", false, true);          // one grid step
     eq("the form is dirty after the edit", ide.designer.dirty, true);
 
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
     const menued = JSON.parse(File.Load(File.Join(TMP, "Menued.form")));
 
     eq("the edit was saved", menued.children[0].properties.X, 14);
@@ -9419,7 +9425,7 @@ function* p_menus(ide) {
     check("a previewed item does not land on the IDE by its own name",
           !("MnuA" in ide));
     check("so the IDE's own menu is still the IDE's",
-          typeof ide.MnuOpen.Click === "function");
+          typeof ide.MnuQuit.Click === "function");
 
     const preview = bar.sanitise(ide.designer.menus()[0].children, "0", []);
 
@@ -9549,15 +9555,15 @@ function* p_menus(ide) {
           Array.isArray(edited[0].children.find((n) => n.name === "MnuC").shortcut));
     eq("and editing the menus dirties the form", ide.designer.dirty, true);
 
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
     const withMenus = JSON.parse(File.Load(File.Join(TMP, "Menued.form")));
     eq("saving writes them", withMenus.menus[0].children.length, 4);
 
     /* Undo covers them: they live in the node, not on the surface, and a
      * snapshot that ignored them would restore the controls alone. */
-    ide.MnuUndo.Click();
+    ide.ActUndo.Execute();
     eq("undo puts the menu bar back", ide.designer.menus()[0].children.length, 3);
-    ide.MnuRedo.Click();
+    ide.ActRedo.Execute();
     eq("and redo brings the edit back", ide.designer.menus()[0].children.length, 4);
 
     /* Cancelling changes nothing: the dialog works on a copy. */
@@ -9582,7 +9588,7 @@ function* p_menus(ide) {
           JSON.stringify(bad.problems()));
     bad.BtnCancel_Click();
 
-    ide.BtnSave.Click();
+    ide.ActSave.Execute();
 
     /* The RAD gesture, the same one the canvas has: double click an item and you
      * are writing what it does.  The edit is applied first, so the handler is
@@ -9780,7 +9786,7 @@ function* p_folders(ide) {
      * no layout yet, and a double click on nothing opens the form's own event
      * instead of the button's. */
     yield* until(() => ide.designer.rectOf(folderBtn).w > 0);
-    ide.BtnSave_Click();
+    ide.save();
 
     const btnAt = ide.designer.rectOf(folderBtn);
     ide.Glass_DblClick(btnAt.x + 4, btnAt.y + 4);
@@ -9897,7 +9903,7 @@ function* p_folders(ide) {
     eq("the control is named after the class, not the namespace", chip.Name, "Chip1");
     eq("but it stands in for the qualified type", chip.__node.type, "Partes.Chip");
 
-    ide.BtnSave_Click();
+    ide.save();
     const chipNode = JSON.parse(File.Load(File.Join(TMP, "Refactor.form")))
                          .children.find((c) => c.name === "Chip1");
     eq("and the .form says the qualified type", chipNode.type, "Partes.Chip");
@@ -10137,7 +10143,7 @@ function* p_folders(ide) {
 
     badge.Click();
     yield;                 // a just-created control has no layout until the next frame
-    ide.BtnSave_Click();
+    ide.save();
 
     const runnable = JSON.parse(File.Load(File.Join(TMP, "Tabs.form")));
     check("and the startup form carries it",
@@ -13807,13 +13813,13 @@ function* p_quick(ide) {
           dlg.entries.every((c) => c.path !== ""),
           JSON.stringify(dlg.entries.slice(0, 3)));
 
-    const run = dlg.entries.find((c) => c.name === "MnuRun");
+    const run = dlg.entries.find((c) => c.name === "ActRun");
     check("a command of the menu is in it", run !== undefined);
     eq("...with the accelerator it declares, as a person reads it",
        run.shortcut, "Ctrl+R");
 
     /* Nothing invented: every command answers to a menu item of the window. */
-    check("every command is a menu item that exists",
+    check("every command is a menu item or an action that exists",
           dlg.entries.every((c) => !!ide[c.name]));
     /* And a submenu is not a command: there is no row for the File menu itself. */
     check("a submenu is not a command",
@@ -14981,12 +14987,12 @@ function* p_git(ide) {
     ide.refreshGit();
 
     eq("the remote is listed once there is one", git.remoteNames.join(), "origin");
-    check("and now the remotes are on", ide.MnuGitPush.Enabled);
+    check("and now the remotes are on", ide.ActGitPush.Enabled);
     eq("a branch that follows nothing has no distance", git.distance, null);
 
     /* Pushing, which is also what makes the branch follow one: the plan's
      * `--set-upstream`, so git never answers with a command to retype. */
-    ide.MnuGitPush_Click();
+    ide.ActGitPush.Execute();
     check("a job is in flight", git.job !== null);
     check("and a second one is refused rather than queued", !ide.git.push());
     yield* until(() => git.job === null, 300);
@@ -15020,7 +15026,7 @@ function* p_git(ide) {
     eq("fetching finds the commit somebody else pushed", git.distance.behind, 1);
     check("and has not brought the file down", !File.Exists(File.Join(repo, "tres.txt")));
 
-    ide.MnuGitPull_Click();
+    ide.ActGitPull.Execute();
     yield* until(() => git.job === null, 300);
     yield* settled(ide);
 
@@ -15048,7 +15054,7 @@ function* p_git(ide) {
     ide.refreshGit();
 
     eq("two remotes are listed", git.remoteNames.slice().sort().join(), "backup,origin");
-    const which = ide.MnuGitPush_Click();
+    const which = git.push(() => ide.refreshGit());
     check("a new branch with two remotes asks which", which instanceof AskForm,
           String(which));
     check("and nothing has been pushed yet", git.job === null);
@@ -15061,7 +15067,7 @@ function* p_git(ide) {
        run("rev-parse", "--abbrev-ref", "rama@{u}").Output.trim(), "backup/rama");
 
     const heardFrom = ide.LogView.Text.length;
-    eq("a branch that follows one pushes without asking", ide.MnuGitPush_Click(), true);
+    eq("a branch that follows one pushes without asking", git.push(() => ide.refreshGit()), true);
     yield* until(() => git.job === null, 300);
     yield* settled(ide);
     check("and plainly", ide.LogView.Text.slice(heardFrom).includes("> git push\n"),
@@ -15815,7 +15821,7 @@ function* p_running(ide) {
         });
     };
 
-    ide.BtnRun.Click();
+    ide.ActRun.Execute();
     eq("Run disables while running", ide.BtnRun.Enabled, false);
     eq("Stop enables while running", ide.BtnStop.Enabled, true);
 }

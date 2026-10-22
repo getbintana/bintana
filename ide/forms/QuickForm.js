@@ -89,10 +89,11 @@ export class QuickForm extends Form {
      * and so does git -- and it is what a palette is for: seeing the command
      * without having to remember which menu it was filed under.
      *
-     * A separator has nothing to run and a submenu is not a command; an item
-     * that points at an `action` has no name of its own, so it is skipped too --
-     * the three of those in this IDE are the designer's context menu and are
-     * about a selection, which is not something a palette can have.
+     * A separator has nothing to run and a submenu is not a command. An item
+     * that points at an `action` has no name of its own: the command is the
+     * action, whose label and accelerator are read from `Form.Actions`, and it
+     * is run with `Execute`. The ones about a selection (the designer's
+     * context menu) are not in the menu bar, so a palette never meets them.
      */
     readCommands() {
         const out = [];
@@ -106,6 +107,13 @@ export class QuickForm extends Form {
 
                 if (item.children && item.children.length) {
                     walk(item.children, path ? `${path} > ${text}` : text);
+                    continue;
+                }
+                if (item.action) {
+                    const spec = ide.Actions.find((a) => a.name === item.action);
+                    if (!spec || !ide[item.action]) continue;
+                    out.push({ name: spec.name, text: Locale.Text(quickStrip(spec.text || "")),
+                               path, shortcut: quickShortcut(spec.shortcut) });
                     continue;
                 }
                 if (!item.name || !ide[item.name]) continue;
@@ -328,7 +336,8 @@ export class QuickForm extends Form {
         this.Close();
 
         if (commanding) {
-            ide[entry.name].Click();
+            const target = ide[entry.name];
+            if (target.Execute) target.Execute(); else target.Click();
             return;
         }
 

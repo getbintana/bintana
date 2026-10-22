@@ -50,6 +50,119 @@
       "enabled": false
     },
     {
+      "name": "ActNewForm",
+      "text": "New form...",
+      "shortcut": "<Control>n",
+      "enabled": false
+    },
+    {
+      "name": "ActOpen",
+      "text": "Open project...",
+      "shortcut": "<Control>o"
+    },
+    {
+      "name": "ActReload",
+      "text": "Refresh",
+      "shortcut": "F5",
+      "enabled": false
+    },
+    {
+      "name": "ActSave",
+      "text": "Save",
+      "shortcut": "<Control>s",
+      "enabled": false
+    },
+    {
+      "name": "ActSaveAll",
+      "text": "Save all",
+      "shortcut": "<Control><Shift>s",
+      "enabled": false
+    },
+    {
+      "name": "ActUndo",
+      "text": "Undo",
+      "shortcut": "<Control>z",
+      "enabled": false
+    },
+    {
+      "name": "ActRedo",
+      "text": "Redo",
+      "shortcut": "<Control>y",
+      "enabled": false
+    },
+    {
+      "name": "ActFind",
+      "text": "Find...",
+      "shortcut": "<Control>f",
+      "enabled": false
+    },
+    {
+      "name": "ActRun",
+      "text": "Run",
+      "shortcut": "<Control>r",
+      "enabled": false
+    },
+    {
+      "name": "ActCheck",
+      "text": "Check the project",
+      "enabled": false
+    },
+    {
+      "name": "ActGitPull",
+      "text": "Pull",
+      "enabled": false
+    },
+    {
+      "name": "ActGitPush",
+      "text": "Push",
+      "enabled": false
+    },
+    {
+      "name": "ActAlignLeft",
+      "text": "Align left",
+      "enabled": false
+    },
+    {
+      "name": "ActAlignRight",
+      "text": "Align right",
+      "enabled": false
+    },
+    {
+      "name": "ActAlignTop",
+      "text": "Align top",
+      "enabled": false
+    },
+    {
+      "name": "ActAlignBottom",
+      "text": "Align bottom",
+      "enabled": false
+    },
+    {
+      "name": "ActSameWidth",
+      "text": "Same width",
+      "enabled": false
+    },
+    {
+      "name": "ActSameHeight",
+      "text": "Same height",
+      "enabled": false
+    },
+    {
+      "name": "ActSpreadH",
+      "text": "Distribute horizontally",
+      "enabled": false
+    },
+    {
+      "name": "ActSpreadV",
+      "text": "Distribute vertically",
+      "enabled": false
+    },
+    {
+      "name": "ActTabOrder",
+      "text": "Tab order...",
+      "enabled": false
+    },
+    {
       "name": "ActDebug",
       "text": "Debug",
       "icon": "media-playback-start-symbolic",
@@ -153,9 +266,7 @@
           "shortcut": "<Control><Shift>n"
         },
         {
-          "name": "MnuNewForm",
-          "text": "New form...",
-          "shortcut": "<Control>n"
+          "action": "ActNewForm"
         },
         {
           "name": "MnuNewComponent",
@@ -169,9 +280,7 @@
           "separator": true
         },
         {
-          "name": "MnuOpen",
-          "text": "Open project...",
-          "shortcut": "<Control>o"
+          "action": "ActOpen"
         },
         {
           "name": "MnuRecent",
@@ -179,9 +288,7 @@
           "dynamic": true
         },
         {
-          "name": "MnuReload",
-          "text": "Refresh",
-          "shortcut": "F5"
+          "action": "ActReload"
         },
         {
           "separator": true
@@ -207,14 +314,10 @@
           "separator": true
         },
         {
-          "name": "MnuSave",
-          "text": "Save",
-          "shortcut": "<Control>s"
+          "action": "ActSave"
         },
         {
-          "name": "MnuSaveAll",
-          "text": "Save all",
-          "shortcut": "<Control><Shift>s"
+          "action": "ActSaveAll"
         },
         {
           "name": "MnuRecovery",
@@ -235,14 +338,10 @@
       "text": "_Edit",
       "children": [
         {
-          "name": "MnuUndo",
-          "text": "Undo",
-          "shortcut": "<Control>z"
+          "action": "ActUndo"
         },
         {
-          "name": "MnuRedo",
-          "text": "Redo",
-          "shortcut": "<Control>y"
+          "action": "ActRedo"
         },
         {
           "separator": true
@@ -271,9 +370,7 @@
           "separator": true
         },
         {
-          "name": "MnuFind",
-          "text": "Find...",
-          "shortcut": "<Control>f"
+          "action": "ActFind"
         },
         {
           "name": "MnuReplace",
@@ -450,9 +547,7 @@
       "text": "_Project",
       "children": [
         {
-          "name": "MnuRun",
-          "text": "Run",
-          "shortcut": "<Control>r"
+          "action": "ActRun"
         },
         {
           "action": "ActStop"
@@ -521,8 +616,7 @@
           "separator": true
         },
         {
-          "name": "MnuCheck",
-          "text": "Check the project"
+          "action": "ActCheck"
         },
         {
           "name": "MnuProblems",
@@ -579,12 +673,10 @@
           "text": "Fetch"
         },
         {
-          "name": "MnuGitPull",
-          "text": "Pull"
+          "action": "ActGitPull"
         },
         {
-          "name": "MnuGitPush",
-          "text": "Push"
+          "action": "ActGitPush"
         },
         {
           "separator": true
@@ -688,49 +780,40 @@
           "separator": true
         },
         {
-          "name": "MnuAlignLeft",
-          "text": "Align left"
+          "action": "ActAlignLeft"
         },
         {
-          "name": "MnuAlignRight",
-          "text": "Align right"
+          "action": "ActAlignRight"
         },
         {
-          "name": "MnuAlignTop",
-          "text": "Align top"
+          "action": "ActAlignTop"
         },
         {
-          "name": "MnuAlignBottom",
-          "text": "Align bottom"
+          "action": "ActAlignBottom"
         },
         {
           "separator": true
         },
         {
-          "name": "MnuSameWidth",
-          "text": "Same width"
+          "action": "ActSameWidth"
         },
         {
-          "name": "MnuSameHeight",
-          "text": "Same height"
-        },
-        {
-          "separator": true
-        },
-        {
-          "name": "MnuSpreadH",
-          "text": "Distribute horizontally"
-        },
-        {
-          "name": "MnuSpreadV",
-          "text": "Distribute vertically"
+          "action": "ActSameHeight"
         },
         {
           "separator": true
         },
         {
-          "name": "MnuTabOrder",
-          "text": "Tab order..."
+          "action": "ActSpreadH"
+        },
+        {
+          "action": "ActSpreadV"
+        },
+        {
+          "separator": true
+        },
+        {
+          "action": "ActTabOrder"
         }
       ]
     },
@@ -879,38 +962,241 @@
               "children": [
                 {
                   "type": "Button",
-                  "name": "BtnOpen",
+                  "name": "BtnNew",
                   "properties": {
+                    "Action": "ActNewForm",
                     "Height": 32,
-                    "Icon": "folder-open",
+                    "Icon": "document-new",
                     "Style": "flat",
-                    "Width": 26
+                    "Width": 30,
+                    "Tooltip": "New form (Ctrl+N)"
                   }
                 },
                 {
                   "type": "Button",
-                  "name": "BtnReload",
+                  "name": "BtnOpen",
                   "properties": {
+                    "Action": "ActOpen",
                     "Height": 32,
-                    "Icon": "view-refresh-symbolic",
+                    "Icon": "folder-open",
                     "Style": "flat",
-                    "Width": 24
+                    "Width": 30,
+                    "Tooltip": "Open project (Ctrl+O)"
                   }
                 },
                 {
                   "type": "Button",
                   "name": "BtnSave",
                   "properties": {
-                    "Enabled": false,
+                    "Action": "ActSave",
                     "Height": 32,
                     "Icon": "document-save",
                     "Style": "flat",
-                    "Width": 14
+                    "Width": 30,
+                    "Tooltip": "Save (Ctrl+S)"
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnSaveAll",
+                  "properties": {
+                    "Action": "ActSaveAll",
+                    "Height": 32,
+                    "Icon": "document-save-as",
+                    "Style": "flat",
+                    "Width": 30,
+                    "Tooltip": "Save all (Ctrl+Shift+S)"
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnReload",
+                  "properties": {
+                    "Action": "ActReload",
+                    "Height": 32,
+                    "Icon": "view-refresh-symbolic",
+                    "Style": "flat",
+                    "Width": 30,
+                    "Tooltip": "Refresh (F5)"
                   }
                 },
                 {
                   "type": "Separator",
                   "name": "ToolbarSeparator",
+                  "properties": {
+                    "HAlign": "Center",
+                    "Height": 28,
+                    "Orientation": "Vertical",
+                    "Width": 4
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnUndo",
+                  "properties": {
+                    "Action": "ActUndo",
+                    "Height": 32,
+                    "Icon": "edit-undo-symbolic",
+                    "Style": "flat",
+                    "Width": 30,
+                    "Tooltip": "Undo (Ctrl+Z)"
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnRedo",
+                  "properties": {
+                    "Action": "ActRedo",
+                    "Height": 32,
+                    "Icon": "edit-redo-symbolic",
+                    "Style": "flat",
+                    "Width": 30,
+                    "Tooltip": "Redo (Ctrl+Y)"
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnFind",
+                  "properties": {
+                    "Action": "ActFind",
+                    "Height": 32,
+                    "Icon": "edit-find-symbolic",
+                    "Style": "flat",
+                    "Width": 30,
+                    "Tooltip": "Find (Ctrl+F)"
+                  }
+                },
+                {
+                  "type": "Panel",
+                  "name": "DesignGroup",
+                  "properties": {
+                    "Arrangement": "Horizontal",
+                    "Visible": false
+                  },
+                  "children": [
+                    {
+                      "type": "Separator",
+                      "name": "ToolbarSeparator5",
+                      "properties": {
+                        "HAlign": "Center",
+                        "Height": 28,
+                        "Orientation": "Vertical",
+                        "Width": 4
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnAlignLeft",
+                      "properties": {
+                        "Action": "ActAlignLeft",
+                        "Height": 32,
+                        "Icon": "format-justify-left-symbolic",
+                        "Style": "flat",
+                        "Tooltip": "Align left",
+                        "Width": 30
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnAlignRight",
+                      "properties": {
+                        "Action": "ActAlignRight",
+                        "Height": 32,
+                        "Icon": "format-justify-right-symbolic",
+                        "Style": "flat",
+                        "Tooltip": "Align right",
+                        "Width": 30
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnAlignTop",
+                      "properties": {
+                        "Action": "ActAlignTop",
+                        "Height": 32,
+                        "Icon": "go-top-symbolic",
+                        "Style": "flat",
+                        "Tooltip": "Align top",
+                        "Width": 30
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnAlignBottom",
+                      "properties": {
+                        "Action": "ActAlignBottom",
+                        "Height": 32,
+                        "Icon": "go-bottom-symbolic",
+                        "Style": "flat",
+                        "Tooltip": "Align bottom",
+                        "Width": 30
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnSameWidth",
+                      "properties": {
+                        "Action": "ActSameWidth",
+                        "Height": 32,
+                        "Icon": "view-fullscreen-symbolic",
+                        "Style": "flat",
+                        "Tooltip": "Same width",
+                        "Width": 30
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnSameHeight",
+                      "properties": {
+                        "Action": "ActSameHeight",
+                        "Height": 32,
+                        "Icon": "view-fullscreen-symbolic",
+                        "Style": "flat",
+                        "Tooltip": "Same height",
+                        "Width": 30
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnSpreadH",
+                      "properties": {
+                        "Action": "ActSpreadH",
+                        "Height": 32,
+                        "Icon": "object-flip-horizontal-symbolic",
+                        "Style": "flat",
+                        "Tooltip": "Distribute horizontally",
+                        "Width": 30
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnSpreadV",
+                      "properties": {
+                        "Action": "ActSpreadV",
+                        "Height": 32,
+                        "Icon": "object-flip-vertical-symbolic",
+                        "Style": "flat",
+                        "Tooltip": "Distribute vertically",
+                        "Width": 30
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnTabOrder",
+                      "properties": {
+                        "Action": "ActTabOrder",
+                        "Height": 32,
+                        "Icon": "view-sort-ascending-symbolic",
+                        "Style": "flat",
+                        "Tooltip": "Tab order",
+                        "Width": 30
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "Separator",
+                  "name": "ToolbarSeparator2",
                   "properties": {
                     "HAlign": "Center",
                     "Height": 28,
@@ -930,12 +1216,23 @@
                       "type": "Button",
                       "name": "BtnRun",
                       "properties": {
-                        "Enabled": false,
                         "Height": 32,
                         "Icon": "media-playback-start",
                         "Style": "suggested-action",
-                        "Text": "Run",
-                        "Width": 76
+                        "Width": 34,
+                        "Action": "ActRun",
+                        "Tooltip": "Run (Ctrl+R)"
+                      }
+                    },
+                    {
+                      "type": "Button",
+                      "name": "BtnDebug",
+                      "properties": {
+                        "Action": "ActDebug",
+                        "Height": 32,
+                        "Icon": "system-run-symbolic",
+                        "Width": 34,
+                        "Tooltip": "Debug (Ctrl+F9)"
                       }
                     },
                     {
@@ -946,11 +1243,77 @@
                         "Height": 32,
                         "Icon": "media-playback-stop",
                         "Style": "destructive-action",
-                        "Text": "Stop",
-                        "Width": 90
+                        "Width": 34,
+                        "Tooltip": "Stop (Shift+F9)"
                       }
                     }
                   ]
+                },
+                {
+                  "type": "Separator",
+                  "name": "ToolbarSeparator3",
+                  "properties": {
+                    "HAlign": "Center",
+                    "Height": 28,
+                    "Orientation": "Vertical",
+                    "Width": 4
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnCheck",
+                  "properties": {
+                    "Action": "ActCheck",
+                    "Height": 32,
+                    "Icon": "checkbox-checked-symbolic",
+                    "Style": "flat",
+                    "Width": 30,
+                    "Tooltip": "Check the project"
+                  }
+                },
+                {
+                  "type": "Separator",
+                  "name": "ToolbarSeparator4",
+                  "properties": {
+                    "HAlign": "Center",
+                    "Height": 28,
+                    "Orientation": "Vertical",
+                    "Width": 4
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnPull",
+                  "properties": {
+                    "Action": "ActGitPull",
+                    "Height": 32,
+                    "Icon": "go-down-symbolic",
+                    "Style": "flat",
+                    "Width": 30,
+                    "Tooltip": "Pull"
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnPush",
+                  "properties": {
+                    "Action": "ActGitPush",
+                    "Height": 32,
+                    "Icon": "go-up-symbolic",
+                    "Style": "flat",
+                    "Width": 30,
+                    "Tooltip": "Push"
+                  }
+                },
+                {
+                  "type": "Label",
+                  "name": "LblBranch",
+                  "properties": {
+                    "Height": 32,
+                    "Style": "dim-label",
+                    "Text": "",
+                    "Visible": false
+                  }
                 },
                 {
                   "type": "Label",
@@ -1667,7 +2030,7 @@
                                     "Height": 30,
                                     "Icon": "media-playback-start-symbolic",
                                     "Style": "flat",
-                                    "Tooltip": "Debug, or continue when stopped (Ctrl+F9)",
+                                    "Tooltip": "Debug (Ctrl+F9)",
                                     "Width": 34
                                   }
                                 },

@@ -940,6 +940,25 @@ designer was left), and letting the press through the Glass to the real strip
   was: there had been nowhere to put the command, so one of the four became its
   owner.
 
+**The toolbar is commands, and a command is not a menu item.** File, Edit, Run,
+Check and Git share their commands (`ActSave`, `ActUndo`, `ActRun`, `ActGitPull`
+...) between the menu and the toolbar buttons (`BtnSave` ... keep their names:
+the designer tests address them), and `refresh` sets each command's `Enabled`
+once -- a bound button refuses its own. Three things found by converting: a
+test that called `MnuSave.Click()` on a disabled item was inert, while
+`ActSave.Execute()` on a disabled command **throws**; the command palette read
+only named menu items, so it silently lost every converted command until
+`QuickForm.readCommands` learned to read `Form.Actions`; and `MainForm.form`
+growing past 65535 bytes turned `found.push(...hits)` in `SearchForm` into "too
+many arguments" for a pattern like `a*` -- the spread was always a limit, the
+form just crossed it. Icons must be ones the desktop has (`./tests/icons.sh
+ide`): `document-save-all`, `bug-symbolic` and `emblem-ok-symbolic` are not in
+Adwaita; and `object-select-symbolic` *is* there but draws empty on GTK 4.20
+(`icons.sh` lists it under EMPTY, not under NOT on this desktop -- read both
+lists). The designer's alignment, size, distribution and tab-order commands
+are in `DesignGroup`, shown only while a form is designed; `LblBranch` is set in
+`showBranches`, not `refresh`, because asking git costs a child process.
+
 **Snippets are a table and a key, and the key is the hard half.**
 `SourceEditor.InsertSnippet` is GtkSourceView's own (`${1:name}` places, `$0`,
 Tab and Shift+Tab by the view itself while one lasts), so `ide/modules/Snippets.js`
