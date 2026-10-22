@@ -3797,14 +3797,45 @@ static JSValue table_set_header_menu(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * The n-th column that is shown, and its own index among the columns of the
+ * view -- or -1.
+ *
+ * The columns keep their places whether they are shown or not, so this is the
+ * walk that turns "the third title there is" into "the third column", which is
+ * the number the program knows: the columns are the ones it declared, in the
+ * order it declared them.
+ */
+static int table_shown_column(BtaWidget *w, int nth)
+{
+    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
+    int         seen = 0;
+
+    for (guint i = 0; i < g_list_model_get_n_items(cols); i++) {
+        GtkColumnViewColumn *c = g_list_model_get_item(cols, i);
+        bool                 shown = gtk_column_view_column_get_visible(c);
+
+        g_object_unref(c);
+        if (!shown)
+            continue;
+        if (seen == nth)
+            return (int)i;
+        seen++;
+    }
+    return -1;
+}
+
+/*
  * Which heading is under a point of the view, or -1.
  *
  * The heading row is the column view's **first child** and the titles are its
  * children **in column order** -- GTK's own structure, checked in 4.10 and
- * 4.22, and there is no public accessor for either. Hidden columns are not
- * children (a column's title is created and removed with its visibility), so a
- * child's index is the column's; the day `Columns[i].Visible` exists, this is
- * the walk that has to change.
+ * 4.22, and there is no public accessor for either.
+ *
+ * **A column that is not shown has no title among them** -- or a hidden one,
+ * and the walk cannot tell which without looking -- so the child's own index
+ * is the column's index no more. The walk counts the titles that are there
+ * and asks which column each one is: the n-th title is the n-th column that is
+ * shown, because a title is only there for a column that is.
  *
  * `x` and not the whole point for the column: the titles are allocated at
  * their column's x, so the first whose range contains the point is the one
@@ -3822,16 +3853,18 @@ static int table_heading_at(BtaWidget *w, double x, double y)
     if (y < r.origin.y || y >= r.origin.y + r.size.height)
         return -1;
 
-    int i = 0;
+    int shown = 0;
     for (GtkWidget *ch = gtk_widget_get_first_child(header); ch;
-         ch = gtk_widget_get_next_sibling(ch), i++) {
+         ch = gtk_widget_get_next_sibling(ch)) {
         if (!gtk_widget_is_visible(ch))
             continue;
 
         graphene_rect_t cr;
         if (gtk_widget_compute_bounds(ch, w->inner, &cr) &&
             x >= cr.origin.x && x < cr.origin.x + cr.size.width)
-            return i;
+            return table_shown_column(w, shown);
+
+        shown++;
     }
     return -1;
 }
@@ -4194,6 +4227,20 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
         }
         JS_FreeValue(ctx, lv);
 
+        /*
+         * `Visible` says whether the column is shown at all. It is a boolean
+         * or it is nothing: a word is a refusal, because a column that is
+         * "sort of visible" is a column nobody can rely on.
+         */
+        JSValue vv = JS_GetPropertyStr(ctx, col, "Visible");
+        if (!JS_IsUndefined(vv) && !JS_IsBool(vv)) {
+            JS_FreeValue(ctx, vv);
+            JS_FreeValue(ctx, col);
+            JS_ThrowTypeError(ctx, "%s: Visible is a boolean", where);
+            goto refuse;
+        }
+        JS_FreeValue(ctx, vv);
+
         bool bad = false;
         alignment_of(ctx, col, where, &bad);
         JS_FreeValue(ctx, col);
@@ -4233,6 +4280,13 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
 
         JS_FreeValue(ctx, lv);
 
+        /* Validated above, so this cannot fail; and if it ever did, the pending
+         * exception is the refusal and not something to swallow. */
+        JSValue vv     = JS_GetPropertyStr(ctx, col, "Visible");
+        bool    visible = JS_IsUndefined(vv) ? true : (JS_ToBool(ctx, vv) > 0);
+
+        JS_FreeValue(ctx, vv);
+
         GtkListItemFactory *f = gtk_signal_list_item_factory_new();
         g_object_set_data(G_OBJECT(f), COLUMN_INDEX_KEY, GUINT_TO_POINTER(i));
         if (i == 0 && table_state(w)->tree)
@@ -4269,6 +4323,16 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
                 c, GTK_SORTER(gtk_custom_sorter_new(sorter_keeps_order, NULL, NULL)));
         /* The last column takes the slack, so a table never ends in a gap. */
         gtk_column_view_column_set_expand(c, i + 1 == n);
+
+        /*
+         * **A column that is not shown stays in the view.** GTK hides the
+         * title and the cells with it, so the column keeps its place in the
+         * list -- the indices the program uses (`Cell`, `SetCell`,
+         * `SortColumn`, `HeaderClick`) are the ones it declared, and a column
+         * that comes back does not shift the ones after it. Hiding it here
+         * rather than leaving it out of the view is what keeps that true.
+         */
+        gtk_column_view_column_set_visible(c, visible);
 
         gtk_column_view_append_column(view, c);
         g_object_unref(c);
@@ -5852,9 +5916,13 @@ static JSValue table_reveal_row(JSContext *ctx, JSValueConst this_val,
 
 static const JSCFunctionListEntry table_props[] = {
     /* Columns
-     *   an array of `{ Text, Width, Alignment, Editor, Link }`. `Text` is
-     *   **translated**; `Width: 0` sizes itself and the last column takes the
-     *   slack. **`Editor` makes the cells fields**, and is a kind's name or
+     *   an array of `{ Text, Width, Alignment, Editor, Link, Visible }`. `Text`
+     *   is **translated**; `Width: 0` sizes itself and the last column takes
+     *   the slack. **`Visible: false` hides the column** -- and it keeps its
+     *   place in the list, so the numbers the program uses (`Cell`, `SetCell`,
+     *   `SortColumn`, `HeaderClick`) are the ones it declared, and a column
+     *   that comes back does not shift the ones after it. **`Editor` makes the
+     *   cells fields**, and is a kind's name or
      *   `{ Kind, ... }`: `"Text"`; `{ Kind: "Number", Min, Max, Step,
      *   Decimals }`, answering with a point and rounding a half away from
      *   zero; `"Date"`, a field with a calendar whose day is `YYYY-MM-DD` (the

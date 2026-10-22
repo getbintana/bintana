@@ -5813,7 +5813,16 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   where they are read: the heading row is the view's **first child** and its
   titles are children **in column order** (hidden columns are not children), so
   a child's index is the column's -- checked in 4.10 and 4.22, no public
-  accessor for either, and `Columns[i].Visible` would invalidate the walk.
+  accessor for either. **`Columns[i].Visible` made that false**, and the walk
+  over the titles had to change with it: it counts the titles that are there
+  and asks which column each one is, through the columns that are shown.
+  Measured by hand on an `Xvfb` with a real pointer: three columns with the
+  middle one hidden, the click on the third title reports column **2** and not
+  1, and the second title is not on the screen at all -- with the middle one
+  shown, the same click at the same place reports column 1. **The suite cannot
+  make this**: there is no synthetic pointer, so it belongs to the by-hand
+  list, and what the suite holds is the declaration and the refusal
+  (`TableColumnVisible`).
   **And the menu is built for each click**, because an item has to know which
   column it was opened over: the wrappers on the form are replaced with it, so
   `this.MnuHide.Enabled = false` set from code does not survive the next right
@@ -7057,6 +7066,25 @@ designer was left), and letting the press through the Glass to the real strip
   a *button's* handler are gone with them, which was the clearest smell there
   was: there had been nowhere to put the command, so one of the four became its
   owner.
+
+**The toolbar is commands, and a command is not a menu item.** File, Edit, Run,
+Check and Git share their commands (`ActSave`, `ActUndo`, `ActRun`, `ActGitPull`
+...) between the menu and the toolbar buttons (`BtnSave` ... keep their names:
+the designer tests address them), and `refresh` sets each command's `Enabled`
+once -- a bound button refuses its own. Three things found by converting: a
+test that called `MnuSave.Click()` on a disabled item was inert, while
+`ActSave.Execute()` on a disabled command **throws**; the command palette read
+only named menu items, so it silently lost every converted command until
+`QuickForm.readCommands` learned to read `Form.Actions`; and `MainForm.form`
+growing past 65535 bytes turned `found.push(...hits)` in `SearchForm` into "too
+many arguments" for a pattern like `a*` -- the spread was always a limit, the
+form just crossed it. Icons must be ones the desktop has (`./tests/icons.sh
+ide`): `document-save-all`, `bug-symbolic` and `emblem-ok-symbolic` are not in
+Adwaita; and `object-select-symbolic` *is* there but draws empty on GTK 4.20
+(`icons.sh` lists it under EMPTY, not under NOT on this desktop -- read both
+lists). The designer's alignment, size, distribution and tab-order commands
+are in `DesignGroup`, shown only while a form is designed; `LblBranch` is set in
+`showBranches`, not `refresh`, because asking git costs a child process.
 
 **Snippets are a table and a key, and the key is the hard half.**
 `SourceEditor.InsertSnippet` is GtkSourceView's own (`${1:name}` places, `$0`,
@@ -13165,6 +13193,27 @@ needed and what it did instead.
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
+| A table cannot hide, reorder or filter its columns | [ISSUE-table-columns](../issues/ISSUE-table-columns.md) |
+| A `Grid` child has no row, no column and no `RowSpan` | [ISSUE-grid-placement](../issues/ISSUE-grid-placement.md) |
+| `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
+| No masked input | [ISSUE-masked-input](../issues/ISSUE-masked-input.md) |
+| No property grid control for applications | [ISSUE-property-grid-control](../issues/ISSUE-property-grid-control.md) |
+| No symmetric encryption | [ISSUE-symmetric-encryption](../issues/ISSUE-symmetric-encryption.md) |
+| The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
+| No image object to scale, crop or rotate | [ISSUE-image-object](../issues/ISSUE-image-object.md) |
+| `Dialog.OpenFile` picks one path | [ISSUE-multiple-file-selection](../issues/ISSUE-multiple-file-selection.md) |
+| `Fixed` does not mirror and icons ask for LTR | [ISSUE-right-to-left](../issues/ISSUE-right-to-left.md) |
+| `Object.prototype` is writable and there is no defence | [ISSUE-object-prototype](../issues/ISSUE-object-prototype.md) |
+| `File.Join` does not normalise | [ISSUE-file-join-normalisation](../issues/ISSUE-file-join-normalisation.md) |
+| The "did you mean" sentence is lost inside a `catch` | [ISSUE-reference-hint-in-catch](../issues/ISSUE-reference-hint-in-catch.md) |
+| No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
+| The IDE has no schema browser, query console or data module | [ISSUE-ide-database-tools](../issues/ISSUE-ide-database-tools.md) |
+| Reports are code or raw text, never a designed thing | [ISSUE-ide-report-designer](../issues/ISSUE-ide-report-designer.md) |
+| The IDE has no way to write, launch and read a user project's tests | [ISSUE-ide-test-runner](../issues/ISSUE-ide-test-runner.md) |
+| The debugger's values are flat lines, and it cannot break on data | [ISSUE-ide-debugger-values](../issues/ISSUE-ide-debugger-values.md) |
+| Rename stops at top-level declarations | [ISSUE-ide-rename-locals](../issues/ISSUE-ide-rename-locals.md) |
+| No formatter and no multiple cursors | [ISSUE-ide-formatter](../issues/ISSUE-ide-formatter.md) |
+| No align-centres, no centre-in-form, and the grid is invisible | [ISSUE-ide-align-centres](../issues/ISSUE-ide-align-centres.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 
 ## One more thing

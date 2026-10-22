@@ -562,7 +562,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -17248,6 +17248,61 @@ function Main() {
         check("and the serialiser then leaves it out",
               !("HeaderMenu" in t.Serialize().properties),
               JSON.stringify(t.Serialize().properties));
+
+        t.Delete();
+    }
+
+    /*
+     * `Columns[i].Visible` -- a column that is not shown.
+     *
+     * **The column keeps its place.** A hidden column is still in the table's
+     * list, so the numbers the program uses are the ones it declared: `Cell`,
+     * `SetCell`, `SortColumn` and `HeaderClick` all speak of the column the
+     * program declared, not of the second one on the screen. A column that
+     * comes back does not shift the ones after it either.
+     *
+     * What is *not* asserted here is the heading under a pointer: the runtime
+     * has no synthetic pointer, so the walk over the titles is checked by hand
+     * on an `Xvfb` (see `docs/agents/tables.md`).
+     */
+    testTableColumnVisible() {
+        const t = new TableView();
+        this.Fixed1.Add(t);
+        t.Name = "VisT";
+        t.Columns = [{ Text: "A" }, { Text: "B", Visible: false }, { Text: "C" }];
+        t.Add(["one", "two", "three"]);
+
+        eq("a column that is not shown is declared as such",
+           t.Columns[1].Visible, false);
+        eq("and the ones that are say nothing about it",
+           t.Columns[0].Visible, undefined);
+
+        check("the serialiser keeps it, and keeps the column where it was",
+              JSON.stringify(t.Serialize().properties.Columns) ===
+              JSON.stringify([{ Text: "A" }, { Text: "B", Visible: false }, { Text: "C" }]),
+              JSON.stringify(t.Serialize().properties.Columns));
+
+        /* The place is the thing: a cell is a cell whichever column carries
+         * it, and the one after a hidden column is still the third. */
+        eq("the hidden column is still the second one", t.Cell(0, 1), "two");
+        t.SetCell(0, 1, "TWO");
+        eq("and it can still be written", t.Cell(0, 1), "TWO");
+        eq("and the one after it is still the third", t.Cell(0, 2), "three");
+
+        /* A refusal is a refusal by name, and the columns are the ones that
+         * were: the list is converted before anything is touched. */
+        const before = JSON.stringify(t.Columns);
+        const err = refusal(() => {
+            t.Columns = [{ Text: "A" }, { Text: "B", Visible: "no" }];
+        });
+        check("a Visible that is not a boolean is refused by name",
+              err && err.includes("Visible is a boolean"), String(err));
+        eq("and the columns are the ones that were", JSON.stringify(t.Columns), before);
+
+        /* And a column that says nothing is shown. */
+        t.Columns = [{ Text: "A" }, { Text: "B" }];
+        eq("a column that says nothing about it is shown",
+           t.Columns[1].Visible, undefined);
 
         t.Delete();
     }

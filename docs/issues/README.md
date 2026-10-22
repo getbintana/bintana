@@ -12,7 +12,8 @@ in the same form.
 
 | Issue | The missing capability |
 |---|---|
-| [ISSUE-table-columns.md](ISSUE-table-columns.md) | A table cannot hide, reorder or filter its columns |
+| [ISSUE-table-reorder.md](ISSUE-table-reorder.md) | A table's columns cannot be reordered by the user |
+| [ISSUE-table-filter.md](ISSUE-table-filter.md) | A table's rows cannot be filtered by a column |
 | [ISSUE-grid-placement.md](ISSUE-grid-placement.md) | A `Grid` child has no row, no column and no `RowSpan` |
 | [ISSUE-postgres-driver.md](ISSUE-postgres-driver.md) | `Database` publishes `Sqlite` alone |
 | [ISSUE-masked-input.md](ISSUE-masked-input.md) | No masked input |
@@ -35,10 +36,15 @@ in the same form.
 | [ISSUE-ide-formatter.md](ISSUE-ide-formatter.md) | No formatter and no multiple cursors |
 | [ISSUE-ide-align-centres.md](ISSUE-ide-align-centres.md) | No align-centres, no centre-in-form, and the grid is invisible |
 
-Twenty-one of them came out of the October audit
+Twenty-two of them came out of the October audit
 ([`audit-2026-10.md`](../audit-2026-10.md)), which found the gaps in the
 runtime and in the IDE and had them written in this form. The audit keeps the
 argument; these files keep the gap.
+
+**One of them was answered while this was written**: a table could not hide a
+column, and `Columns[i].Visible` hides one -- the column keeps its place, so
+the numbers the program uses are the ones it declared. What was left of that
+gap is the other two, and they are two files now.
 
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in

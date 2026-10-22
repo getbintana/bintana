@@ -73,7 +73,16 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   where they are read: the heading row is the view's **first child** and its
   titles are children **in column order** (hidden columns are not children), so
   a child's index is the column's -- checked in 4.10 and 4.22, no public
-  accessor for either, and `Columns[i].Visible` would invalidate the walk.
+  accessor for either. **`Columns[i].Visible` made that false**, and the walk
+  over the titles had to change with it: it counts the titles that are there
+  and asks which column each one is, through the columns that are shown.
+  Measured by hand on an `Xvfb` with a real pointer: three columns with the
+  middle one hidden, the click on the third title reports column **2** and not
+  1, and the second title is not on the screen at all -- with the middle one
+  shown, the same click at the same place reports column 1. **The suite cannot
+  make this**: there is no synthetic pointer, so it belongs to the by-hand
+  list, and what the suite holds is the declaration and the refusal
+  (`TableColumnVisible`).
   **And the menu is built for each click**, because an item has to know which
   column it was opened over: the wrappers on the form are replaced with it, so
   `this.MnuHide.Enabled = false` set from code does not survive the next right
