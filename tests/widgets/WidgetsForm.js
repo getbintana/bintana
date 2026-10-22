@@ -5274,6 +5274,14 @@ class WidgetsForm extends Form {
         active.DataField = "Active";
         f.Add(active);
 
+        /* A field that declares what it accepts, shown by the control that
+         * takes a list -- the one place where the shape reaches the
+         * interface. */
+        const category = new ComboBox();
+        category.Name = "BoundCategory";
+        category.DataField = "Category";
+        f.Add(category);
+
         eq("the form says which shape it edits", f.Record, "Customer");
         eq("and a control says which field it shows", name.DataField, "Name");
         check("and the serialiser carries both",
@@ -5287,6 +5295,12 @@ class WidgetsForm extends Form {
         eq("the record is on the screen", name.Text, "Acme");
         eq("and the number is in the spin", balance.Value, 12);
         eq("and the tick is ticked", active.Active, true);
+
+        /* **The values the field accepts are the ones the drop-down offers**,
+         * so the list cannot drift from the setter. */
+        eq("the drop-down is given the field's own values",
+           category.Items.join(","), "Retail,Wholesale");
+        eq("and the record's value is the one chosen", category.Text, "Retail");
 
         /* **The value moves when the control is done being edited.** */
         name.Text = "Globex";

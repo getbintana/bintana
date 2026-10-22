@@ -2739,6 +2739,10 @@ static JSValue value_info_of_proto(JSContext *ctx, JSValueConst start)
                                   table[i].value_done
                                       ? JS_NewString(ctx, table[i].value_done)
                                       : JS_NewString(ctx, ""));
+                JS_SetPropertyStr(ctx, result, "Choices",
+                                  table[i].choice_member
+                                      ? JS_NewString(ctx, table[i].choice_member)
+                                      : JS_NewString(ctx, ""));
             }
             break;
         }
@@ -5339,6 +5343,7 @@ static JSValue w_value_info_by_type(JSContext *ctx, JSValueConst this_val,
         out = JS_NewObject(ctx);
         JS_SetPropertyStr(ctx, out, "Member", JS_NewString(ctx, ""));
         JS_SetPropertyStr(ctx, out, "Done", JS_NewString(ctx, ""));
+        JS_SetPropertyStr(ctx, out, "Choices", JS_NewString(ctx, ""));
     }
     return out;
 }
@@ -8620,6 +8625,16 @@ void bta_class_value(const char *cls, const char *member, const char *done)
     c->value_done   = done;
 }
 
+void bta_class_choices(const char *cls, const char *member)
+{
+    BtaClass *c = bta_class_find(cls);
+    if (!c) {
+        g_warning("bta_class_choices: there is no class named '%s'", cls);
+        return;
+    }
+    c->choice_member = member;
+}
+
 /*
  * What a palette has to have in order to offer a control: the class's own
  * answer, which is a constant of the build for most of them and a question put
@@ -9385,7 +9400,10 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
              *   being edited**, which is not the same for every class: a
              *   `TextBox` is done on `Activate`, a `ComboBox` on `Select`, a
              *   `CheckButton` on `Click`, a `DatePicker` when the day is
-             *   picked.  Both are `""` for a class that has no value.
+             *   picked.  **`Choices` is the member that takes the list of
+             *   choices a field declares** -- `Items` for a `ComboBox` -- or
+             *   `""` for a control with no list to be given.  The three are
+             *   `""` for a class that has no value.
              *
              *   The question a binding to a record's field asks before it
              *   reads or writes one: **the class says which of its members it

@@ -8506,4 +8506,13 @@ void bta_core_register(void)
     bta_class_value("DecimalBox",  "Value",  "Activate");
     bta_class_value("Slider",      "Value",  "Change");
     bta_class_value("DatePicker",  "Value",  "Change");
+
+    /*
+     * **The two controls that take a list of choices**, and the member it goes
+     * to: a bound `Field.Enum` is handed the field's own values, so the
+     * drop-down offers exactly what the field accepts -- the same bargain
+     * `PropertyOptions` makes, one step further.
+     */
+    bta_class_choices("ComboBox", "Items");
+    bta_class_choices("ListBox",  "Items");
 }

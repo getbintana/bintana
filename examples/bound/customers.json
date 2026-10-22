@@ -1,5 +1,26 @@
 [
-  { "name": "Acme Ltd", "email": "orders@acme.example", "balance": "1250.00", "active": true,  "since": "2024-03-01" },
-  { "name": "Globex",   "email": "ap@globex.example",    "balance": "-90.50",  "active": true,  "since": "2025-11-14" },
-  { "name": "Initech",  "email": "",                     "balance": "0.00",    "active": false, "since": "2023-07-09" }
+  {
+    "name": "Acme Ltd",
+    "email": "orders@acme.example",
+    "balance": "1250.00",
+    "active": true,
+    "since": "2024-03-01",
+    "kind": "Retail"
+  },
+  {
+    "name": "Globex",
+    "email": "ap@globex.example",
+    "balance": "-90.50",
+    "active": true,
+    "since": "2025-11-14",
+    "kind": "Wholesale"
+  },
+  {
+    "name": "Initech",
+    "email": "",
+    "balance": "0.00",
+    "active": false,
+    "since": "2023-07-09",
+    "kind": "Online"
+  }
 ]

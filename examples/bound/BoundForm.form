@@ -166,6 +166,28 @@
         "Height": 34,
         "Text": "Save"
       }
+    },
+    {
+      "type": "Label",
+      "name": "LblKind",
+      "properties": {
+        "X": 280,
+        "Y": 108,
+        "Width": 60,
+        "Height": 20,
+        "Text": "Kind"
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbKind",
+      "properties": {
+        "X": 350,
+        "Y": 102,
+        "Width": 190,
+        "Height": 34,
+        "DataField": "Kind"
+      }
     }
   ]
 }

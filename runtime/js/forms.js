@@ -1089,9 +1089,10 @@ function controlValue(control) {
     const info = Widget.ValueInfo(Widget.TypeName(control.constructor));
     const member = info && info.Member ? info.Member : "";
     if (!member)
-        return { member: "", kind: "", done: "" };
+        return { member: "", kind: "", done: "", choices: "" };
     const raw = control[member];
-    return { member, kind: valueKind(raw), done: info.Done || "" };
+    return { member, kind: valueKind(raw), done: info.Done || "",
+             choices: info.Choices || "" };
 }
 
 /* The controls of a form that show a field, and the field each shows.
@@ -1170,6 +1171,21 @@ Form.prototype.Bind = function (record) {
                 throw new RangeError(`Bind: ${control.Name || "a control"} holds ` +
                                      `a ${kind || "nothing"}, which ${field} ` +
                                      `cannot take`);
+
+            /*
+             * **The choices before the value**, and inside the guard: a
+             * `Field.Enum` declares what it accepts, and a control that takes
+             * a list is handed exactly that -- so a drop-down offers what the
+             * field takes and cannot drift from it.  `Items` raises `Select`
+             * when it is assigned, which is a real signal, and that is the
+             * guard's other half.
+             */
+            const { choices } = controlValue(control);
+            if (choices) {
+                const values = record.PropertyOptions
+                    ? record.PropertyOptions(field) : null;
+                if (values && values.length) control[choices] = values;
+            }
 
             control[member] = value;
         }

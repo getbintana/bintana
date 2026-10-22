@@ -448,6 +448,19 @@ typedef struct BtaClass {
     const char *value_done;
 
     /*
+     * The member that takes **the list of choices** a record's field declares
+     * -- `Items` for a `ComboBox` and a `ListBox` -- or NULL for a control
+     * that has no list to be given.
+     *
+     * It is what makes a bound `Field.Enum` show a drop-down that offers the
+     * field's own values: the shape says what it accepts, and the control is
+     * handed exactly that, so the list and the setter cannot drift.  Declared
+     * per class for the reason the value is: a class says which of its members
+     * a list of choices goes to.
+     */
+    const char *choice_member;
+
+    /*
      * The properties of this class that hold text a person reads, comma
      * separated; NULL when it has none.  This is what the .form loader looks
      * up in the catalogue, what a property editor offers a sample value for,
@@ -541,6 +554,9 @@ BtaClass *bta_class_find(const char *name);
  * not by a binding that finds no value where one was promised.
  */
 void      bta_class_value(const char *cls, const char *member, const char *done);
+/* Says which member of a class takes the list of choices a field declares --
+ * `Items` for a `ComboBox`, and nothing for a `TextBox`. */
+void      bta_class_choices(const char *cls, const char *member);
 
 void bta_core_register(void);      /* bta_controls.c */
 /* A radio button's group is the container it is in, so the set changes whenever
