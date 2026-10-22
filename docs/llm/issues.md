@@ -179,6 +179,27 @@ needed and what it did instead.
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
+| A table cannot hide, reorder or filter its columns | [ISSUE-table-columns](../issues/ISSUE-table-columns.md) |
+| A `Grid` child has no row, no column and no `RowSpan` | [ISSUE-grid-placement](../issues/ISSUE-grid-placement.md) |
+| `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
+| No masked input | [ISSUE-masked-input](../issues/ISSUE-masked-input.md) |
+| No property grid control for applications | [ISSUE-property-grid-control](../issues/ISSUE-property-grid-control.md) |
+| No symmetric encryption | [ISSUE-symmetric-encryption](../issues/ISSUE-symmetric-encryption.md) |
+| The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
+| No image object to scale, crop or rotate | [ISSUE-image-object](../issues/ISSUE-image-object.md) |
+| `Dialog.OpenFile` picks one path | [ISSUE-multiple-file-selection](../issues/ISSUE-multiple-file-selection.md) |
+| `Fixed` does not mirror and icons ask for LTR | [ISSUE-right-to-left](../issues/ISSUE-right-to-left.md) |
+| `Object.prototype` is writable and there is no defence | [ISSUE-object-prototype](../issues/ISSUE-object-prototype.md) |
+| `File.Join` does not normalise | [ISSUE-file-join-normalisation](../issues/ISSUE-file-join-normalisation.md) |
+| The "did you mean" sentence is lost inside a `catch` | [ISSUE-reference-hint-in-catch](../issues/ISSUE-reference-hint-in-catch.md) |
+| No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
+| The IDE has no schema browser, query console or data module | [ISSUE-ide-database-tools](../issues/ISSUE-ide-database-tools.md) |
+| Reports are code or raw text, never a designed thing | [ISSUE-ide-report-designer](../issues/ISSUE-ide-report-designer.md) |
+| The IDE has no way to write, launch and read a user project's tests | [ISSUE-ide-test-runner](../issues/ISSUE-ide-test-runner.md) |
+| The debugger's values are flat lines, and it cannot break on data | [ISSUE-ide-debugger-values](../issues/ISSUE-ide-debugger-values.md) |
+| Rename stops at top-level declarations | [ISSUE-ide-rename-locals](../issues/ISSUE-ide-rename-locals.md) |
+| No formatter and no multiple cursors | [ISSUE-ide-formatter](../issues/ISSUE-ide-formatter.md) |
+| No align-centres, no centre-in-form, and the grid is invisible | [ISSUE-ide-align-centres](../issues/ISSUE-ide-align-centres.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 
 ## One more thing

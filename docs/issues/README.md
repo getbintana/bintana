@@ -12,7 +12,33 @@ in the same form.
 
 | Issue | The missing capability |
 |---|---|
+| [ISSUE-table-columns.md](ISSUE-table-columns.md) | A table cannot hide, reorder or filter its columns |
+| [ISSUE-grid-placement.md](ISSUE-grid-placement.md) | A `Grid` child has no row, no column and no `RowSpan` |
+| [ISSUE-postgres-driver.md](ISSUE-postgres-driver.md) | `Database` publishes `Sqlite` alone |
+| [ISSUE-masked-input.md](ISSUE-masked-input.md) | No masked input |
+| [ISSUE-property-grid-control.md](ISSUE-property-grid-control.md) | No property grid control for applications |
+| [ISSUE-symmetric-encryption.md](ISSUE-symmetric-encryption.md) | No symmetric encryption |
+| [ISSUE-pdf-reading.md](ISSUE-pdf-reading.md) | The runtime writes PDFs and cannot read one |
+| [ISSUE-image-object.md](ISSUE-image-object.md) | No image object to scale, crop or rotate |
+| [ISSUE-multiple-file-selection.md](ISSUE-multiple-file-selection.md) | `Dialog.OpenFile` picks one path |
+| [ISSUE-right-to-left.md](ISSUE-right-to-left.md) | `Fixed` does not mirror and icons ask for LTR |
+| [ISSUE-object-prototype.md](ISSUE-object-prototype.md) | `Object.prototype` is writable and there is no defence |
+| [ISSUE-file-join-normalisation.md](ISSUE-file-join-normalisation.md) | `File.Join` does not normalise |
+| [ISSUE-reference-hint-in-catch.md](ISSUE-reference-hint-in-catch.md) | The "did you mean" sentence is lost inside a `catch` |
+| [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
+| [ISSUE-ide-database-tools.md](ISSUE-ide-database-tools.md) | No schema browser, query console or data module |
+| [ISSUE-ide-report-designer.md](ISSUE-ide-report-designer.md) | Reports are code or raw text, never a designed thing |
+| [ISSUE-ide-test-runner.md](ISSUE-ide-test-runner.md) | No way to write, launch and read a user project's tests |
+| [ISSUE-ide-debugger-values.md](ISSUE-ide-debugger-values.md) | The debugger's values are flat lines, and it cannot break on data |
+| [ISSUE-ide-rename-locals.md](ISSUE-ide-rename-locals.md) | Rename stops at top-level declarations |
+| [ISSUE-ide-formatter.md](ISSUE-ide-formatter.md) | No formatter and no multiple cursors |
+| [ISSUE-ide-align-centres.md](ISSUE-ide-align-centres.md) | No align-centres, no centre-in-form, and the grid is invisible |
+
+Twenty-one of them came out of the October audit
+([`audit-2026-10.md`](../audit-2026-10.md)), which found the gaps in the
+runtime and in the IDE and had them written in this form. The audit keeps the
+argument; these files keep the gap.
 
 
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
