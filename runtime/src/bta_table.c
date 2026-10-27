@@ -347,15 +347,32 @@ static GListModel *table_child_model(gpointer item, gpointer user_data)
     return node->children ? G_LIST_MODEL(g_object_ref(node->children)) : NULL;
 }
 
+/*
+ * The list under the selection, whichever of GTK's two selections it is -- the
+ * store, the on-demand model or the tree's flattened list. Borrowed.
+ *
+ * **Both kinds, everywhere.** Every helper here used to ask for a
+ * `GtkSingleSelection` and answer nothing otherwise, which was true while a
+ * tree could not be `MultiSelect`; it can now, and a helper that assumed the
+ * one kind answered "not a tree" for a tree with several rows selected.
+ */
+static GListModel *table_sel_list(GtkSelectionModel *sel)
+{
+    if (GTK_IS_SINGLE_SELECTION(sel))
+        return gtk_single_selection_get_model(GTK_SINGLE_SELECTION(sel));
+    if (GTK_IS_MULTI_SELECTION(sel))
+        return gtk_multi_selection_get_model(GTK_MULTI_SELECTION(sel));
+    return NULL;
+}
+
 /* The tree model under the selection, or NULL when this table is not a tree. */
 static GtkTreeListModel *table_tree_model(BtaWidget *w)
 {
-    GtkSelectionModel *sel = table_model(w);
+    GListModel *list = table_sel_list(table_model(w));
 
-    if (!table_state(w)->tree || !GTK_IS_SINGLE_SELECTION(sel))
+    if (!table_state(w)->tree || !GTK_IS_TREE_LIST_MODEL(list))
         return NULL;
-    return GTK_TREE_LIST_MODEL(
-        gtk_single_selection_get_model(GTK_SINGLE_SELECTION(sel)));
+    return GTK_TREE_LIST_MODEL(list);
 }
 
 /*
@@ -515,42 +532,215 @@ static const char *table_what(BtaWidget *w)
     return table_state(w)->tree ? "node" : "row";
 }
 
-/* The node the highlight is on, or NULL. An owned reference. */
-static BtaTableRow *table_selected_node(BtaWidget *w)
+/*
+ * Where a row is in the list the view shows, or -1 -- a node under a closed
+ * parent has no row, and a removed one is in no store. A tree's position is
+ * the row GTK made for the node; a held flat row's is its place in the store;
+ * an on-demand row stands for its index.
+ */
+static int table_position_of(BtaWidget *w, BtaTableRow *row)
+{
+    TableState *st = table_state(w);
+
+    if (!row)
+        return -1;
+    if (st->tree) {
+        GtkTreeListRow *r  = table_row_of(w, row);
+        int             at = r ? (int)gtk_tree_list_row_get_position(r) : -1;
+
+        g_clear_object(&r);
+        return at;
+    }
+    if (!row->cells)
+        return row->index < g_list_model_get_n_items(G_LIST_MODEL(table_model(w)))
+               ? (int)row->index : -1;
+    return table_index_in(st->rows, row);
+}
+
+/*
+ * **The selected row the reader is on**, as a position, or -1 for none: the
+ * current cell's row when that row is selected, otherwise the first selected
+ * row in the order shown. With one row selected that is the row; with several
+ * it is the one F2 opens and `Key` answers, because a program asking "which
+ * one" means the one the reader's frame is in.
+ *
+ * Read off the selection's bitset, which both of GTK's selections answer,
+ * rather than `gtk_single_selection_get_selected_item`, which only one does.
+ */
+static int table_reader_position(BtaWidget *w)
 {
     GtkSelectionModel *sel = table_model(w);
+    TableState        *st  = table_state(w);
+    int                at  = st->cell ? table_position_of(w, st->cell) : -1;
 
-    if (!table_state(w)->tree || !GTK_IS_SINGLE_SELECTION(sel))
+    if (at >= 0 && gtk_selection_model_is_selected(sel, (guint)at))
+        return at;
+
+    GtkBitset *set   = gtk_selection_model_get_selection(sel);
+    int        first = gtk_bitset_is_empty(set) ? -1
+                                                : (int)gtk_bitset_get_minimum(set);
+
+    gtk_bitset_unref(set);
+    return first;
+}
+
+/* The node at a visible position of a tree, or NULL. An owned reference. */
+static BtaTableRow *table_node_at(BtaWidget *w, guint at)
+{
+    gpointer     item = g_list_model_get_item(G_LIST_MODEL(table_model(w)), at);
+    BtaTableRow *node = GTK_IS_TREE_LIST_ROW(item) ? gtk_tree_list_row_get_item(item)
+                                                   : NULL;
+
+    g_clear_object(&item);
+    return node;
+}
+
+/* The selected node the reader is on (see `table_reader_position`), or NULL.
+ * An owned reference. */
+static BtaTableRow *table_selected_node(BtaWidget *w)
+{
+    if (!table_state(w)->tree)
         return NULL;
 
-    gpointer item = gtk_single_selection_get_selected_item(GTK_SINGLE_SELECTION(sel));
-    return GTK_IS_TREE_LIST_ROW(item) ? gtk_tree_list_row_get_item(item) : NULL;
+    int at = table_reader_position(w);
+    return at < 0 ? NULL : table_node_at(w, (guint)at);
+}
+
+/* Every selected node of a tree, in the order shown. Owned references; an
+ * empty array for a flat table or nothing selected. */
+static GPtrArray *table_selected_nodes(BtaWidget *w)
+{
+    GPtrArray *out = g_ptr_array_new_with_free_func(g_object_unref);
+
+    if (!table_state(w)->tree)
+        return out;
+
+    GtkBitset    *set = gtk_selection_model_get_selection(table_model(w));
+    GtkBitsetIter it;
+    guint         at;
+
+    for (gboolean more = gtk_bitset_iter_init_first(&it, set, &at); more;
+         more = gtk_bitset_iter_next(&it, &at)) {
+        BtaTableRow *node = table_node_at(w, at);
+        if (node)
+            g_ptr_array_add(out, node);
+    }
+    gtk_bitset_unref(set);
+    return out;
+}
+
+/*
+ * The internal list GTK's column view keeps its rows in, or NULL. Read for its
+ * **actions**, which are installed on `GtkListBase` and so are not reachable
+ * from the column view above it: `gtk_widget_activate_action` looks *up* from
+ * the widget it is given. The child is found by type, not by position -- the
+ * heading row is a sibling of it.
+ */
+static GtkWidget *table_list_view(BtaWidget *w)
+{
+    for (GtkWidget *k = gtk_widget_get_first_child(w->inner); k;
+         k = gtk_widget_get_next_sibling(k))
+        if (GTK_IS_LIST_VIEW(k))
+            return k;
+    return NULL;
+}
+
+/*
+ * Selects this visible position and only it, **the way GTK's own click
+ * does** -- through the list's `list.select-item` action, which also makes it
+ * the anchor a Shift+click extends from. Selecting through the model leaves
+ * GTK's anchor where the last click of GTK's own put it, so after a press this
+ * table claimed (an editable cell) or a `Key` from code, Shift+click selected a
+ * range from somewhere else. The model is the fallback when there is no list
+ * to ask.
+ */
+static void table_select_at(BtaWidget *w, guint at)
+{
+    GtkWidget *list = table_list_view(w);
+
+    if (!list || !gtk_widget_activate_action(list, "list.select-item", "(ubb)",
+                                             at, FALSE, FALSE))
+        gtk_selection_model_select_item(table_model(w), at, TRUE);
 }
 
 /* Put the highlight on this node, opening the way to it first: a node under a
- * closed parent has no row to select. */
+ * closed parent has no row to select. Only this node: any others go. */
 static void table_select_node(BtaWidget *w, BtaTableRow *node)
 {
     table_reveal(w, node, false);
 
-    GtkTreeListRow *row = table_row_of(w, node);
-    if (!row)
-        return;
+    int at = table_position_of(w, node);
+    if (at >= 0)
+        table_select_at(w, (guint)at);
+}
 
-    GListModel *model = G_LIST_MODEL(table_tree_model(w));
-    guint       n     = g_list_model_get_n_items(model);
+static void on_selection_changed(GtkSelectionModel *model, guint pos, guint n,
+                                 gpointer user_data);
 
-    for (guint i = 0; i < n; i++) {
-        GtkTreeListRow *at = g_list_model_get_item(model, i);
-        bool            is = (at == row);
+/*
+ * Selects exactly these nodes of a tree -- the rest go -- opening the way to
+ * each first. **All of them are opened before any is looked for**, since
+ * opening one moves the positions of everything below it. A single selection
+ * takes the first one shown.
+ *
+ * One change to the selection and not one per node: `set_selection` on a
+ * multiple selection, which raises `Select` once. **`quiet` raises nothing**,
+ * which is what an assignment is (`SelectedKeys`, `MultiSelect`).
+ */
+static void table_select_nodes(BtaWidget *w, GPtrArray *nodes, bool quiet)
+{
+    for (guint i = 0; i < nodes->len; i++)
+        table_reveal(w, nodes->pdata[i], false);
 
-        g_clear_object(&at);
-        if (is) {
-            gtk_selection_model_select_item(table_model(w), i, TRUE);
+    GtkSelectionModel *sel  = table_model(w);
+    GtkBitset         *want = gtk_bitset_new_empty();
+
+    for (guint i = 0; i < nodes->len; i++) {
+        int at = table_position_of(w, nodes->pdata[i]);
+        if (at >= 0)
+            gtk_bitset_add(want, (guint)at);
+    }
+
+    if (quiet)
+        g_signal_handlers_block_by_func(sel, on_selection_changed, w);
+
+    if (GTK_IS_MULTI_SELECTION(sel)) {
+        GtkBitset *all = gtk_bitset_new_range(
+            0, g_list_model_get_n_items(G_LIST_MODEL(sel)));
+
+        gtk_selection_model_set_selection(sel, want, all);
+        gtk_bitset_unref(all);
+    } else if (gtk_bitset_is_empty(want)) {
+        /* Walked one by one: see `table_clear_selection` on why GTK's own
+         * `unselect_all` is not enough for a single selection before 4.22. */
+        guint n = g_list_model_get_n_items(G_LIST_MODEL(sel));
+        for (guint i = 0; i < n; i++)
+            if (gtk_selection_model_is_selected(sel, i))
+                gtk_selection_model_unselect_item(sel, i);
+    } else {
+        gtk_selection_model_select_item(sel, gtk_bitset_get_minimum(want), TRUE);
+    }
+
+    if (quiet)
+        g_signal_handlers_unblock_by_func(sel, on_selection_changed, w);
+    gtk_bitset_unref(want);
+}
+
+/* Puts back a selection a change to the tree cost, if it cost any: `was` is
+ * what `table_selected_nodes` answered before, and is consumed. */
+static void table_keep_selection(BtaWidget *w, GPtrArray *was)
+{
+    GtkSelectionModel *sel = table_model(w);
+
+    for (guint i = 0; i < was->len; i++) {
+        int at = table_position_of(w, was->pdata[i]);
+
+        if (at < 0 || !gtk_selection_model_is_selected(sel, (guint)at)) {
+            table_select_nodes(w, was, false);
             break;
         }
     }
-    g_object_unref(row);
+    g_ptr_array_unref(was);
 }
 
 /*
@@ -560,11 +750,12 @@ static void table_select_node(BtaWidget *w, BtaTableRow *node)
  * item it already has and the repaint has to be asked for (see the comment
  * inside on the tree half, which was missing it).
  *
- * **And a tree puts its selection back.** Telling a store an item changed costs
- * the selection there -- the tree model answers with fresh `GtkTreeListRow`
- * wrappers and the highlight was on one of those -- while a flat list keeps it,
- * because GTK's selection model follows the item. Changing a cell is not moving
- * the selection, in either mode, so the difference is paid here.
+ * **And a tree puts its selection back** -- every selected node, with
+ * `MultiSelect`. Telling a store an item changed costs the selection there --
+ * the tree model answers with fresh `GtkTreeListRow` wrappers and the
+ * highlight was on those -- while a flat list keeps it, because GTK's
+ * selection model follows the item. Changing a cell is not moving the
+ * selection, in either mode, so the difference is paid here.
  */
 static void table_row_changed(BtaWidget *w, BtaTableRow *row, int at)
 {
@@ -579,7 +770,7 @@ static void table_row_changed(BtaWidget *w, BtaTableRow *row, int at)
         return;
     }
 
-    BtaTableRow *was = table_selected_node(w);
+    GPtrArray *was = table_selected_nodes(w);
 
     table_node_changed(w, row);
     /*
@@ -591,11 +782,7 @@ static void table_row_changed(BtaWidget *w, BtaTableRow *row, int at)
      * what the bound cells listen to, so it is emitted here too.
      */
     g_signal_emit(row, row_changed_signal, 0);
-    if (was) {
-        if (!table_selected_node(w))
-            table_select_node(w, was);
-        g_object_unref(was);
-    }
+    table_keep_selection(w, was);
 }
 
 /* ------------------------------------------------------------- the cells */
@@ -2153,7 +2340,7 @@ static void cell_select_row(BtaWidget *w, BtaTableRow *row)
      * never in a store to be found.
      */
     if (row && !row->cells) {
-        gtk_selection_model_select_item(table_model(w), row->index, TRUE);
+        table_select_at(w, row->index);
         return;
     }
 
@@ -2161,7 +2348,7 @@ static void cell_select_row(BtaWidget *w, BtaTableRow *row)
     int         at    = table_index_in(store, row);
 
     if (at >= 0)
-        gtk_selection_model_select_item(table_model(w), (guint)at, TRUE);
+        table_select_at(w, (guint)at);
 }
 
 /* The current cell: the press and F2 move it, and the verbs below draw it.
@@ -2193,12 +2380,14 @@ static BtaCell *cell_under(GtkWidget *x)
  */
 static BtaCell *cell_of_selection(BtaWidget *w)
 {
-    GtkSelectionModel *sel = table_model(w);
+    /* With several selected, the one the reader is on: the current cell's row
+     * when it is one of them, else the first shown (`table_reader_position`). */
+    int at = table_reader_position(w);
 
-    if (!GTK_IS_SINGLE_SELECTION(sel))
+    if (at < 0)
         return NULL;
 
-    gpointer     item  = gtk_single_selection_get_selected_item(GTK_SINGLE_SELECTION(sel));
+    gpointer     item  = g_list_model_get_item(G_LIST_MODEL(table_model(w)), (guint)at);
     BtaTableRow *row   = NULL;
     int          index = -1;
     bool         owned = false;
@@ -2206,8 +2395,10 @@ static BtaCell *cell_of_selection(BtaWidget *w)
     if (!item)
         return NULL;
     if (table_state(w)->tree) {
-        if (!GTK_IS_TREE_LIST_ROW(item))
+        if (!GTK_IS_TREE_LIST_ROW(item)) {
+            g_object_unref(item);
             return NULL;
+        }
         row   = gtk_tree_list_row_get_item(item);
         owned = true;
     } else if (!((BtaTableRow *)item)->cells) {
@@ -2216,8 +2407,12 @@ static BtaCell *cell_of_selection(BtaWidget *w)
         index = (int)((BtaTableRow *)item)->index;
     } else {
         row   = item;
-        index = table_index_in(table_state(w)->rows, row);
+        index = at;
     }
+    /* The store holds the flat row, so dropping this reference does not free
+     * it; a tree's node is held by `owned` and an on-demand row is not
+     * needed past its index. */
+    g_object_unref(item);
 
     GListModel *cols  = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
     BtaCell    *found = NULL;
@@ -2275,6 +2470,19 @@ static void on_view_pressed(GtkGestureClick *g, int n, double x, double y,
         gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g)) != GDK_BUTTON_PRIMARY)
         return;
 
+    /*
+     * **Ctrl and Shift on a `MultiSelect` table are a selection, and GTK's.**
+     * The press is not claimed and nothing opens, so GTK's own click toggles
+     * the row (Ctrl) or selects the range from its anchor (Shift) -- which
+     * `table_select_at` keeps on the row this table last selected. The current
+     * cell stays where it is: it is the anchor's end of the range, the row
+     * `Key` answers while it is selected, and where Shift+arrow extends from.
+     */
+    if (table_state(w)->multi &&
+        (gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(g)) &
+         (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
+        return;
+
     /* **The press is also what chooses the cell**, before the lock and the
      * kind decide whether it opens: a locked cell is read and a tick turns,
      * but both are the reader's cell as much as an editable one. */
@@ -2300,6 +2508,70 @@ out:
     JS_FreeValue(w->ctx, self);
 }
 
+/* That visible position into view with the least scrolling it takes.
+ * `gtk_column_view_scroll_to` is 4.12 and the floor is 4.10, so the older GTK
+ * gets the action the function wraps. */
+static void table_scroll_to(BtaWidget *w, guint at)
+{
+#if GTK_CHECK_VERSION(4, 12, 0)
+    gtk_column_view_scroll_to(GTK_COLUMN_VIEW(w->inner), at, NULL,
+                              GTK_LIST_SCROLL_NONE, NULL);
+#else
+    gtk_widget_activate_action(w->inner, "list.scroll-to-item", "u", at);
+#endif
+}
+
+/*
+ * Shift+Up and Shift+Down on a `MultiSelect` table: the range grows or shrinks
+ * by a row, **as a sheet's does**. One end is the anchor -- the selected row
+ * the reader is on, the current cell's when it is selected -- and the other
+ * end moves: it is the far end of the selection when the selection is one run
+ * starting at the anchor, and the anchor itself otherwise, so a scattered
+ * selection made with Ctrl starts a new run from where the reader is.
+ *
+ * **Written here and not left to GTK**, whose own Shift+arrow extends from
+ * *its* keyboard focus to *its* anchor -- and neither follows a selection made
+ * from code (`Key`, `CurrentCell`, a sheet's Enter moving down), so after one
+ * the range started at a row the reader had left. Nothing is kept between two
+ * presses: the selection is the state. Answers whether the key was taken --
+ * not with an edit open (the field's keys) or nothing selected (GTK's).
+ */
+static gboolean table_extend(BtaWidget *w, int by)
+{
+    GtkSelectionModel *sel = table_model(w);
+    guint              n   = g_list_model_get_n_items(G_LIST_MODEL(sel));
+    int                anchor;
+
+    if (table_find_cell(w->inner, NULL, -1, -1) || n == 0 ||
+        (anchor = table_reader_position(w)) < 0)
+        return FALSE;
+
+    GtkBitset *set  = gtk_selection_model_get_selection(sel);
+    guint      lo   = gtk_bitset_get_minimum(set);
+    guint      hi   = gtk_bitset_get_maximum(set);
+    bool       run  = gtk_bitset_get_size(set) == (guint64)(hi - lo) + 1;
+    int        lead = !run                 ? anchor
+                    : (guint)anchor == lo  ? (int)hi
+                    : (guint)anchor == hi  ? (int)lo
+                                           : anchor;
+
+    gtk_bitset_unref(set);
+
+    int next = CLAMP(lead + by, 0, (int)n - 1);
+
+    lo = (guint)MIN(anchor, next);
+    hi = (guint)MAX(anchor, next);
+
+    GtkBitset *want = gtk_bitset_new_range(lo, hi - lo + 1);
+    GtkBitset *all  = gtk_bitset_new_range(0, n);
+
+    gtk_selection_model_set_selection(sel, want, all);
+    gtk_bitset_unref(want);
+    gtk_bitset_unref(all);
+    table_scroll_to(w, (guint)next);
+    return TRUE;
+}
+
 /* F2 on the focused cell: the editing key every grid has. Off a cell -- the
  * keyboard is on the view after a commit -- it is the selected row's first
  * field.
@@ -2313,6 +2585,8 @@ out:
  * does not happen; anything else falls through and the row activates as it
  * always did. With an edit open it is the editor's Enter (to commit), not the
  * view's.
+ *
+ * And Shift+Up/Down on a `MultiSelect` table, which `table_extend` answers.
  */
 static gboolean on_table_key(GtkEventControllerKey *k, guint keyval, guint keycode,
                              GdkModifierType state, gpointer data)
@@ -2339,6 +2613,16 @@ static gboolean on_table_key(GtkEventControllerKey *k, guint keyval, guint keyco
         for (int i = 0; i < 4; i++)
             JS_FreeValue(ctx, argv[i]);
         return handled;
+    }
+
+    /* Shift+Up/Down grows the range on a `MultiSelect` table, in the capture
+     * phase so GTK's own binding on the list below does not get it first. */
+    if (table_state(w)->multi && (state & GDK_SHIFT_MASK) &&
+        !(state & (GDK_CONTROL_MASK | GDK_ALT_MASK))) {
+        if (keyval == GDK_KEY_Up || keyval == GDK_KEY_KP_Up)
+            return table_extend(w, -1);
+        if (keyval == GDK_KEY_Down || keyval == GDK_KEY_KP_Down)
+            return table_extend(w, 1);
     }
 
     if (keyval != GDK_KEY_F2)
@@ -3681,15 +3965,13 @@ static JSValue table_sort_by(JSContext *ctx, JSValueConst this_val,
      * makes the tree model build fresh `GtkTreeListRow` wrappers, and the
      * selection was on one of those. Remembering the node and selecting it
      * again is what makes the two modes behave the same -- and it is only
-     * possible because a node has a key.
+     * possible because a node has a key -- every selected one, with
+     * `MultiSelect`.
      */
-    BtaTableRow *was = table_selected_node(w);
+    GPtrArray *was = table_selected_nodes(w);
 
     bool ok = table_sort_levels(st->rows, &key);
-    if (was) {
-        table_select_node(w, was);
-        g_object_unref(was);
-    }
+    table_keep_selection(w, was);
     return ok ? JS_UNDEFINED : JS_EXCEPTION;
 }
 
@@ -4417,10 +4699,6 @@ static bool table_become_tree(JSContext *ctx, BtaWidget *w)
         return JS_ThrowTypeError(ctx, "Add: this table already holds rows with "
                                       "no Key. A table is flat or a tree -- "
                                       "Clear() it first"), false;
-    if (st->multi)
-        return JS_ThrowTypeError(ctx, "Add: a tree is selected one node at "
-                                      "a time; turn MultiSelect off"), false;
-
     st->tree = true;
     st->keys = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 
@@ -5386,19 +5664,39 @@ static JSValue table_set_multi(JSContext *ctx, JSValueConst this_val,
 
     TableState *st = table_state(w);
 
-    /* A tree is selected one node at a time, which is what `TreeView` has
-     * always been: `Selection` answers positions, and in a tree a position is
-     * of the visible list -- a set of them would name different nodes a moment
-     * later. It can be granted when something asks for it; the other way round
-     * cannot be taken back. */
-    if (st->tree && JS_ToBool(ctx, val))
-        return JS_ThrowTypeError(ctx, "MultiSelect: a tree is selected one node "
-                                      "at a time");
     if (st->multi == (bool)b)
         return JS_UNDEFINED;
-    st->multi = b;
 
-    table_use_model(w, table_live_model(w));
+    /*
+     * **A tree takes it too, now that something asked** -- a plan whose rows
+     * are indented together. It was refused because `Selection` answers
+     * positions, and in a tree a position is of the visible list; the answer
+     * to that is `SelectedKeys`, which names the nodes.
+     *
+     * **The list under the old selection is the one carried across**, not the
+     * store: in a tree that is the `GtkTreeListModel`, and the store of roots
+     * this used to hand over would have turned a tree into a flat list of its
+     * roots. Being the same list, its positions mean the same rows, so the
+     * selection is carried across too -- quietly, since an assignment raises
+     * nothing -- and going down to one keeps the row the reader is on.
+     */
+    GtkSelectionModel *old  = table_model(w);
+    GListModel        *list = table_sel_list(old);
+    GtkBitset         *had  = gtk_selection_model_get_selection(old);
+    int                one  = table_reader_position(w);
+
+    st->multi = b;
+    table_use_model(w, list ? list : table_live_model(w));
+
+    GtkSelectionModel *sel = table_model(w);
+
+    g_signal_handlers_block_by_func(sel, on_selection_changed, w);
+    if (st->multi && !gtk_bitset_is_empty(had))
+        gtk_selection_model_set_selection(sel, had, had);
+    else if (!st->multi && one >= 0)
+        gtk_selection_model_select_item(sel, (guint)one, TRUE);
+    g_signal_handlers_unblock_by_func(sel, on_selection_changed, w);
+    gtk_bitset_unref(had);
     return JS_UNDEFINED;
 }
 
@@ -5581,6 +5879,11 @@ static JSValue table_exists(JSContext *ctx, JSValueConst this_val,
  * it moves when something above collapses, so a program that remembered one is
  * pointing at a different node a moment later. `Index` still answers -- it is
  * where the highlight is right now -- and `Key` is what to keep.
+ *
+ * **With several selected it is one of them, and which one is the reader's**:
+ * the current cell's row when that row is selected, otherwise the first
+ * selected node shown (`table_reader_position`). Assigning selects that node
+ * alone, as a click does.
  */
 static JSValue table_get_key(JSContext *ctx, JSValueConst this_val)
 {
@@ -5624,6 +5927,113 @@ static JSValue table_set_key(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, key);
 
     table_select_node(w, node);
+    return JS_UNDEFINED;
+}
+
+/*
+ * `SelectedKeys` -- every selected node's key, in the order shown, and
+ * assigning selects exactly those.
+ *
+ * **What `Selection` cannot be in a tree**, for `Key`'s reason: `Selection`
+ * answers positions of the visible list, and a set of positions names other
+ * nodes after a fold. This is the set a program keeps across a rebuild -- the
+ * rows it indented, put back as they were.
+ *
+ * **A property and not a verb**, like `Key` and `Index` beside it: the
+ * serialiser saves a value that differs from a fresh control's, and a table in
+ * a `.form` has no nodes, so this is always `[]` there and never written.
+ *
+ * Every key is read and found **before** the selection is touched, so a key
+ * that is not there refuses the whole assignment and leaves the selection as it
+ * was. **It raises no `Select`**: an assignment is the program's own doing,
+ * and a program that set four keys would otherwise hear four changes or one,
+ * depending on GTK.
+ */
+static JSValue table_get_selected_keys(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GPtrArray *nodes = table_selected_nodes(w);
+    JSValue    out   = JS_NewArray(ctx);
+
+    for (guint i = 0; i < nodes->len; i++) {
+        BtaTableRow *node = nodes->pdata[i];
+        JS_SetPropertyUint32(ctx, out, i,
+                             JS_NewString(ctx, node->key ? node->key : ""));
+    }
+    g_ptr_array_unref(nodes);
+    return out;
+}
+
+static JSValue table_set_selected_keys(JSContext *ctx, JSValueConst this_val,
+                                       JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (!table_state(w)->tree)
+        return table_not_a_tree(ctx, "SelectedKeys");
+    if (!JS_IsArray(val))
+        return JS_ThrowTypeError(ctx, "SelectedKeys: an array of keys, [] for "
+                                      "none");
+
+    JSValue  lenv = JS_GetPropertyStr(ctx, val, "length");
+    uint32_t n    = 0;
+
+    if (JS_ToUint32(ctx, &n, lenv)) {
+        JS_FreeValue(ctx, lenv);
+        return JS_EXCEPTION;
+    }
+    JS_FreeValue(ctx, lenv);
+
+    if (n > 1 && !table_state(w)->multi)
+        return JS_ThrowTypeError(ctx, "SelectedKeys: %u nodes need MultiSelect; "
+                                      "without it a tree selects one", n);
+
+    /* Held, and checked against the index once every key is read: a key's
+     * `toString` is the program's and runs in the middle of this walk. */
+    GPtrArray *nodes = g_ptr_array_new_with_free_func(g_object_unref);
+
+    for (uint32_t i = 0; i < n; i++) {
+        JSValue     v   = JS_GetPropertyUint32(ctx, val, i);
+        const char *key = JS_ToCString(ctx, v);
+
+        JS_FreeValue(ctx, v);
+        if (!key) {
+            g_ptr_array_unref(nodes);
+            return JS_EXCEPTION;        /* it threw on the way; that stands */
+        }
+
+        BtaTableRow *node = table_node(w, key);
+        if (!node) {
+            JSValue e = JS_ThrowRangeError(ctx, "SelectedKeys: there is no node "
+                                                "'%s'", key);
+            JS_FreeCString(ctx, key);
+            g_ptr_array_unref(nodes);
+            return e;
+        }
+        JS_FreeCString(ctx, key);
+        g_ptr_array_add(nodes, g_object_ref(node));
+    }
+
+    /* So the tree may have been emptied or remade under the walk above. */
+    if (!table_state(w)->tree) {
+        g_ptr_array_unref(nodes);
+        return table_not_a_tree(ctx, "SelectedKeys");
+    }
+    for (guint i = 0; i < nodes->len; i++) {
+        BtaTableRow *node = nodes->pdata[i];
+        if (table_node(w, node->key) != node) {
+            g_ptr_array_unref(nodes);
+            return JS_ThrowRangeError(ctx, "SelectedKeys: the tree changed "
+                                           "while the keys were read");
+        }
+    }
+
+    table_select_nodes(w, nodes, true);
+    g_ptr_array_unref(nodes);
     return JS_UNDEFINED;
 }
 
@@ -5882,8 +6292,7 @@ static JSValue table_activate(JSContext *ctx, JSValueConst this_val,
 
 /*
  * `Reveal(index)` -- that visible row into view, the same verb every list has.
- * `gtk_column_view_scroll_to` is 4.12 and the floor is 4.10, so the older GTK
- * gets the action the function wraps.
+ * The 4.10 floor is `table_scroll_to`'s to keep.
  */
 static JSValue table_reveal_row(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
@@ -5904,13 +6313,7 @@ static JSValue table_reveal_row(JSContext *ctx, JSValueConst this_val,
     if (index < 0 || (guint)index >= n)
         return JS_NewBool(ctx, false);
 
-#if GTK_CHECK_VERSION(4, 12, 0)
-    gtk_column_view_scroll_to(GTK_COLUMN_VIEW(w->inner), (guint)index, NULL,
-                              GTK_LIST_SCROLL_NONE, NULL);
-#else
-    gtk_widget_activate_action(w->inner, "list.scroll-to-item", "u",
-                               (guint)index);
-#endif
+    table_scroll_to(w, (guint)index);
     return JS_NewBool(ctx, true);
 }
 
@@ -5953,7 +6356,9 @@ static const JSCFunctionListEntry table_props[] = {
      */
     JS_CGETSET_DEF("Index",       table_get_index,     table_set_index),
     /* Selection
-     *   every selected row, as an array of indices in order
+     *   every selected row, as an array of indices in order. In a tree they
+     *   are positions of the rows shown, which a fold moves -- `SelectedKeys`
+     *   names the nodes
      */
     JS_CGETSET_DEF("Selection",   table_get_selection, NULL),
     /* ScrollY
@@ -5984,7 +6389,11 @@ static const JSCFunctionListEntry table_props[] = {
      */
     JS_CGETSET_DEF("HeaderMinHeight", table_get_header_min, table_set_header_min),
     /* MultiSelect
-     *   more than one row at a time. Refused on a tree
+     *   more than one row at a time, in a flat table or a tree, set before
+     *   the rows or after them. Ctrl+click adds or takes a row, Shift+click
+     *   selects a range, and Shift+Up/Down grows or shrinks the range from the
+     *   row the reader is on; a plain click or arrow goes back to one. A
+     *   Ctrl or Shift click opens no editor. Default `false`
      */
     JS_CGETSET_DEF("MultiSelect", table_get_multi,     table_set_multi),
     /* RowLines
@@ -5996,10 +6405,22 @@ static const JSCFunctionListEntry table_props[] = {
      */
     JS_CGETSET_MAGIC_DEF("ColumnLines", table_get_flag, table_set_flag, TAB_HEADERS),
     /* Key
-     *   the selected node's key; assigning selects, opening the way to it.
-     *   `""` selects nothing. A tree only
+     *   the selected node's key; assigning selects it alone, opening the way
+     *   to it. `""` selects nothing. **With several selected it is the one the
+     *   reader is on**: the `CurrentCell` row when that row is selected,
+     *   otherwise the first selected node shown. A tree only
      */
     JS_CGETSET_DEF("Key",        table_get_key,        table_set_key),
+    /* SelectedKeys -> string[]
+     *   every selected node's key, in the order shown -- `[]` for none, and
+     *   one key without `MultiSelect`. Assigning selects exactly those,
+     *   opening the way to each, and `[]` selects nothing; **it raises no
+     *   `Select`**. A key that is not there is refused before anything
+     *   changes, and so are several without `MultiSelect`. `[]` on a flat
+     *   table, which refuses the assignment. A fold drops the selection of
+     *   the rows it hides, as GTK does
+     */
+    JS_CGETSET_DEF("SelectedKeys", table_get_selected_keys, table_set_selected_keys),
     /* CurrentCell
      *   the cell the reader is on, as `{ Row, Column }` — the row is a key in
      *   a tree and an index in a flat table, the column is an index — or
@@ -6157,7 +6578,8 @@ static const JSCFunctionListEntry table_props[] = {
     JS_CGETSET_DEF("Sortable", table_get_sortable, table_set_sortable),
     /* Select(index)
      *   move the selection from code. `Select` leaves the others alone where
-     *   several are allowed
+     *   several are allowed. In a tree the index is a position of the rows
+     *   shown, as `Index` is
      */
     JS_CFUNC_MAGIC_DEF("Select",      1, table_select_one,   TB_SELECT),
     /* Deselect(index)
@@ -6165,7 +6587,8 @@ static const JSCFunctionListEntry table_props[] = {
      */
     JS_CFUNC_MAGIC_DEF("Deselect",    1, table_select_one,   TB_DESELECT),
     /* SelectAll()
-     *   with `MultiSelect`
+     *   with `MultiSelect`. In a tree, every row shown: a node under a closed
+     *   parent has no row to select
      */
     JS_CFUNC_MAGIC_DEF("SelectAll",   0, table_select_every, TB_ALL),
     /* DeselectAll()
@@ -6199,9 +6622,11 @@ void bta_table_register(void)
          * would be the permissive mistake this declaration exists to prevent.
          */
         /* Select()
-         *   the selection moved — by the user or by an assignment. Ask
-         *   `Index` for where it is and `Cell`/`Row` for what is there; `Key`
-         *   when the table is a tree
+         *   the selection moved — by the user or by an assignment to `Index`
+         *   or `Key` (not `SelectedKeys` or `MultiSelect`). Ask `Index` for
+         *   where it is and `Cell`/`Row` for what is there; `Key` when the
+         *   table is a tree, and `Selection`/`SelectedKeys` for every row of a
+         *   `MultiSelect` one
          */
         /* Activate()
          *   a double click on a row, or Enter on it. The gesture for *open

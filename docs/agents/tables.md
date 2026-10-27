@@ -286,9 +286,59 @@ with a window manager, since none of it reaches the suite:
   shut with `SetEditable(key, column, false)` draws its tick and reports
   nothing when it is pressed. That pair is what a check *list* of files is
   built on, and it is asserted in `tests/widgets`' `TableEditors`; the IDE's
-  Changes page is the application that asked. The tree is also the one shape
-  in this control that has no `MultiSelect` -- a tree carries one selection and
-  the ticks are what a program uses instead.
+  Changes page is the application that asked. A tree can be `MultiSelect`
+  too now (see *Several rows of a tree*); the ticks are for a list whose
+  choice outlives the selection, and the selection for rows acted on at once.
+
+## Several rows of a tree
+
+`MultiSelect` was refused on a tree -- `Selection` answers positions of the
+visible list, and a set of them names other nodes after a fold -- until a plan
+whose rows are indented together asked for it. The answer to the positions is
+**`SelectedKeys`**: the selected nodes' keys in the order shown, and assigning
+selects exactly those (revealing each, refusing an unknown key before anything
+changes, raising no `Select`). `Key` with several selected is the row the reader
+is on: the `CurrentCell` row when it is selected, otherwise the first selected
+shown (`table_reader_position`, which F2 off a cell uses too). `Selection`,
+`Select`, `Deselect` and `SelectAll` work on a multiple tree, by visible
+position. What bit, measured on 4.22 with `TableMultiKeys` driving a child
+through `xdotool`:
+- **Every helper read a `GtkSingleSelection` and answered nothing otherwise**
+  (`table_tree_model`, `table_selected_node`, `cell_of_selection`), so a
+  multiple tree was "not a tree" to `Key`, the fold verbs and F2.
+  `table_sel_list` answers the list under either kind. And `MultiSelect`
+  handed `table_use_model` the **store of roots**, which on a tree would have
+  made it a flat list of its roots: the swap carries the list the old selection
+  was over, and the selection with it (positions mean the same rows in the
+  same list), quietly.
+- **A change to one node costs the selection of every row its store
+  rebuilds**: the tree model answers `items-changed` with fresh
+  `GtkTreeListRow`s, and `GtkMultiSelection`'s by-identity memory of removed
+  items does not match a new wrapper. `SetCell` on a multiple tree kept one of
+  two selected rows; `table_keep_selection` puts the set back (one
+  `set_selection`, one `Select`), and `SortBy` does the same. **A fold drops
+  the rows it hides from the selection** -- GTK's answer, and documented
+  rather than undone.
+- **GTK extends a Shift+click from *its* anchor, which only *its* selections
+  move.** A press on an editable cell is claimed (see *A table cell's
+  editors*) and selected through the model, so GTK's anchor stayed on the row
+  clicked before: a plain click on row 4 and a Shift+click on row 2 selected
+  2..3, not 2..4. `table_select_at` selects through the list's own
+  `list.select-item` action, which is how GTK's click does it and moves the
+  anchor too. The action lives on `GtkListBase`, so it is activated on the
+  column view's internal `GtkListView` child (found by type):
+  `gtk_widget_activate_action` looks *up* from the widget it is given.
+- **And Ctrl/Shift presses are GTK's**: on a `MultiSelect` table the capture
+  gesture does not claim them, opens nothing and leaves the current cell where
+  it was -- the anchor's end of the range.
+- **Shift+Up/Down is the table's, not GTK's.** GTK's binding extends from its
+  keyboard focus to its anchor, and neither follows a selection made from
+  code -- a sheet's Enter moving `CurrentCell` down left Shift+Down selecting
+  from the row the reader had left (the whole tree, measured, against the two
+  rows meant). `table_extend` keeps no state: the anchor is the reader's row,
+  the moving end is the far end of the selection when it is one run from the
+  anchor, and the anchor otherwise. Plain arrows are still GTK's and go back to
+  one row; so does a plain click.
 
 ## A table beside another view: the geometry it can say
 

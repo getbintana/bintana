@@ -541,6 +541,8 @@ const TESTS = [
     "Accessible",
     "EditorSnippet",
     "EditorKeyPreview",
+    /* Blocking too: a child with a real pointer and keyboard on a tree. */
+    "TableMultiKeys",
     "SingleInstance",
     /* Blocking too: a console child under `--profile`, whose capture the
      * parent reads back. */
@@ -570,7 +572,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeMulti", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -1902,6 +1904,152 @@ class WidgetsForm extends Form {
          * letters too, so a bubbling `KeyPress` heard none of them. */
         eq("and KeyPress, which bubbles, heard none of it: the editor took it all",
            got.press.join(), "");
+    }
+
+    /*
+     * `MultiSelect` on a tree, driven by a real pointer and keyboard.
+     *
+     * What a call cannot show: GTK's own Ctrl+click and Shift+click reaching a
+     * tree with several rows, Shift+Up/Down growing and shrinking the range
+     * from the row the reader is on, a plain arrow and a plain click going back
+     * to one, and Shift+click extending from the row a **claimed** press
+     * selected -- an editable cell, which this table selects itself and GTK
+     * never saw, so GTK's anchor stayed on the row before it. F2 with several
+     * selected opens the current cell's row. A child with an X server, as
+     * `EditorKeyPreview` is; it lays the rows out and says where they are,
+     * and the script asks it for a snapshot after each gesture. Skipped, never
+     * failed, without `xdotool`.
+     */
+    testTableMultiKeys() {
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real keys: they need xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "table-multi-keys");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "tablemultikeys", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 420, Height: 300 } });
+        File.Save(File.Join(proj, "Form1.js"), `
+class Form1 extends Form {
+    Form_Open() {
+        const t = new TableView();
+        t.Name = "T";
+        t.Resize(400, 280);
+        t.Columns = [{ Text: "Name", Width: 180, Editor: "Text" }, { Text: "Size", Width: 180 }];
+        t.MultiSelect = true;
+        t.Add(["src", "3"],        { Key: "/src" });
+        t.Add(["main.c", "12 KB"], { Key: "/src/main.c", Parent: "/src" });
+        t.Add(["bta.h", "4 KB"],   { Key: "/src/bta.h",  Parent: "/src" });
+        t.Add(["docs", "1"],       { Key: "/docs" });
+        t.Add(["api.md", "40 KB"], { Key: "/docs/api.md", Parent: "/docs" });
+        this.Add(t);
+        this.t = t; this.snaps = []; this.selects = 0; this.asked = [];
+        this.dir = Application.Directory;
+        this.wait();
+    }
+    T_Select() { this.selects++; }
+    T_CellEditor(row, col) { this.asked.push([row, col]); }
+    wait() {
+        const t = this.t;
+        if (!(t.RowHeight > 0 && t.HeaderHeight > 0)) { Timer.After(50, () => this.wait()); return; }
+        const b = t.Bounds(), rh = t.RowHeight, top = b.Y + t.HeaderHeight;
+        const ys = [0, 1, 2, 3, 4].map((i) => Math.round(top + rh * i + rh / 2));
+        File.Save(this.dir + "/geom", [Math.round(b.X + 120), Math.round(b.X + 270), ...ys].join(" "));
+        this.poll(1);
+    }
+    poll(k) {
+        const ask = this.dir + "/snap" + k;
+        if (File.Exists(this.dir + "/done")) {
+            File.SaveJson(this.dir + "/out.json", { snaps: this.snaps });
+            Application.Quit(0);
+            return;
+        }
+        if (File.Exists(ask)) {
+            const t = this.t;
+            /* A snapshot can carry a selection made from code, after it. */
+            const then = File.Load(ask).trim();
+            this.snaps.push({ keys: t.SelectedKeys, key: t.Key, selects: this.selects,
+                              asked: this.asked.slice(), current: t.CurrentCell });
+            File.Delete(ask);
+            if (then) t.CurrentCell = { Row: then, Column: 0 };
+            File.Save(this.dir + "/ack" + k, "1");
+            k++;
+        }
+        Timer.After(30, () => this.poll(k));
+    }
+}
+`);
+        for (const gone of Directory.List(proj))
+            if (!gone.endsWith(".js") && !gone.endsWith(".json") && !gone.endsWith(".form"))
+                File.Delete(File.Join(proj, gone));
+        for (const gone of ["geom", "out.json"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        /* `snap k` asks the child for a snapshot and waits for it to answer, so
+         * a gesture's effect is read once GTK has had it and not on a guess. */
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/geom\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "read x0 x1 y0 y1 y2 y3 y4 < \"$dir/geom\"\n" +
+                  "n=0\n" +
+                  "snap() { n=$((n+1)); sleep 0.4; echo \"$1\" > \"$dir/snap$n\"\n" +
+                  "  j=0; while [ ! -f \"$dir/ack$n\" ] && [ $j -lt 50 ]; do sleep 0.1; j=$((j+1)); done; }\n" +
+                  "click() { xdotool mousemove $1 $2 mousedown 1; sleep 0.1; xdotool mouseup 1; }\n" +
+                  "click $x1 $y0; snap\n" +                                     /* 1 */
+                  "xdotool key shift+Down; sleep 0.2; xdotool key shift+Down; snap\n" + /* 2 */
+                  "xdotool key shift+Up; snap\n" +                              /* 3 */
+                  "xdotool key Down; snap\n" +                                  /* 4 */
+                  "xdotool keydown ctrl; click $x1 $y3; xdotool keyup ctrl; snap\n" + /* 5 */
+                  "click $x0 $y4; sleep 0.4; xdotool key Escape; snap\n" +      /* 6 */
+                  "xdotool keydown shift; click $x0 $y2; xdotool keyup shift; snap\n" + /* 7 */
+                  "xdotool key F2; sleep 0.4; xdotool key Escape; snap /src\n" + /* 8 */
+                  "xdotool key shift+Down; snap\n" +                           /* 9 */
+                  ": > \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the child ended by itself", ran.Output.includes("child=0"), ran.Output);
+
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("and said what it saw", got !== null, ran.Output);
+        if (!got) return;
+
+        const s = got.snaps;
+        const keys = (i) => s[i] ? JSON.stringify(s[i].keys) : "(no snapshot)";
+        eq("nine snapshots, one per gesture", s.length, 9);
+        eq("a click selects that row", keys(0), '["/src"]');
+        eq("Shift+Down twice grows the range by two",
+           keys(1), '["/src","/src/main.c","/src/bta.h"]');
+        check("and the keyboard raised Select", s[1] && s[1].selects > s[0].selects,
+              JSON.stringify(s.map((x) => x.selects)));
+        eq("Key is still the row the reader is on", s[1] && s[1].key, "/src");
+        eq("Shift+Up gives one back", keys(2), '["/src","/src/main.c"]');
+        eq("a plain Down goes back to one row", keys(3), '["/src/main.c"]');
+        eq("Ctrl+click adds a row", keys(4), '["/src/main.c","/docs"]');
+        eq("a click on an editable cell selects that row alone", keys(5), '["/docs/api.md"]');
+        eq("Shift+click, on an editable cell too, extends from the row that click selected",
+           keys(6), '["/src/bta.h","/docs","/docs/api.md"]');
+        eq("and the current cell stays where the plain click put it",
+           JSON.stringify(s[6] && s[6].current), '{"Row":"/docs/api.md","Column":0}');
+        const asked = s[7] ? s[7].asked : [];
+        eq("F2 with several selected opens the current cell's row",
+           JSON.stringify(asked[asked.length - 1]), '["/docs/api.md",0]');
+        eq("and the selection is still the range", keys(7),
+           '["/src/bta.h","/docs","/docs/api.md"]');
+        /* `CurrentCell` from code, where GTK's own keyboard focus is not: the
+         * range grows from the row the program put the reader on. */
+        eq("Shift+Down after a selection from code grows from that row",
+           keys(8), '["/src","/src/main.c"]');
     }
 
     /*
@@ -8713,7 +8861,13 @@ function Main() {
         throws("a parent that is not there",     () => t.Add(["x"], { Key: "/x", Parent: "/nope" }));
         throws("a node that is not there",       () => t.SetCell("/nope", 0, "x"));
         throws("Count, which a tree answers itself", () => { t.Count = 5; });
-        throws("MultiSelect on a hierarchy",     () => { t.MultiSelect = true; });
+        /* MultiSelect is taken by a tree now, and the selection crosses the
+         * swap of GTK's selection model -- it is the same list underneath. */
+        t.MultiSelect = true;
+        eq("MultiSelect on a filled tree is taken", t.MultiSelect, true);
+        eq("and the node selected before is selected after", t.Key, "/src/bta.h");
+        t.MultiSelect = false;
+        eq("and back again", t.Key, "/src/bta.h");
 
         /* Removing a node takes its subtree with it: a subtree with no parent is
          * not something this control can show. */
@@ -8742,6 +8896,175 @@ function Main() {
         flat.Delete();
 
         t.Delete();
+    }
+
+    /*
+     * `MultiSelect` on a tree, and `SelectedKeys`, which is what it needed.
+     *
+     * The tree was refused several rows because `Selection` answers positions
+     * and a fold moves them; a plan that indents three tasks together asked for
+     * it, and the answer to the positions is a set of keys. What is held here:
+     * the mode taken before and after the nodes, the keys in the order shown,
+     * the assignment and its refusals (none of which touch the selection),
+     * `Key` with several selected, which events are raised, and the
+     * selection carried across what rebuilds GTK's rows -- a `SetCell`, a sort,
+     * a fold, a `Clear` -- and an edit opened on a multiple tree. The keyboard
+     * and the pointer are `TableMultiKeys`, in a child with a real X server.
+     */
+    testTableTreeMulti() {
+        const t = new TableView();
+        t.Name = "MultiTree";
+        t.Columns = [{ Text: "Name", Editor: "Text" }, { Text: "Size" }];
+        this.geoAdd(t, 0, 260);
+
+        /* Before the first node: `Add` with a Key used to refuse this. */
+        t.MultiSelect = true;
+        eq("MultiSelect is taken before the tree exists", t.MultiSelect, true);
+        const fill = () => {
+            t.Add(["src", "3"],        { Key: "/src" });
+            t.Add(["main.c", "12 KB"], { Key: "/src/main.c", Parent: "/src" });
+            t.Add(["bta.h", "4 KB"],   { Key: "/src/bta.h",  Parent: "/src" });
+            t.Add(["docs", "1"],       { Key: "/docs" });
+            t.Add(["api.md", "40 KB"], { Key: "/docs/api.md", Parent: "/docs" });
+        };
+        fill();
+        eq("and Add with a Key works with it on", t.Count, 5);
+        eq("nothing is selected: SelectedKeys is empty",
+           JSON.stringify(t.SelectedKeys), "[]");
+        eq("and Key is empty", t.Key, "");
+
+        let selects = 0;
+        t.On("Select", () => { selects++; });
+
+        /* The assignment, in any order, answers in the order shown. */
+        t.SelectedKeys = ["/docs/api.md", "/src/main.c"];
+        eq("SelectedKeys answers the nodes in the order shown",
+           JSON.stringify(t.SelectedKeys), '["/src/main.c","/docs/api.md"]');
+        eq("they are selected rows, as Selection sees them",
+           JSON.stringify(t.Selection), "[1,4]");
+        eq("an assignment raises no Select", selects, 0);
+        eq("with no current cell, Key is the first selected shown", t.Key, "/src/main.c");
+
+        /* Refusals, each before anything changes. */
+        let range = false;
+        try { t.SelectedKeys = ["/src/bta.h", "/nope"]; }
+        catch (e) { range = e instanceof RangeError; }
+        check("a key that is not there is a RangeError", range);
+        eq("and the selection is what it was, the good key not applied",
+           JSON.stringify(t.SelectedKeys), '["/src/main.c","/docs/api.md"]');
+        throws("SelectedKeys takes an array", () => { t.SelectedKeys = "/src"; });
+        throws("of things that are text", () => {
+            t.SelectedKeys = [{ toString() { throw new Error("no"); } }];
+        });
+        eq("still as it was", JSON.stringify(t.SelectedKeys),
+           '["/src/main.c","/docs/api.md"]');
+
+        /* `Key` assigned selects that one alone, and raises Select as ever. */
+        t.Key = "/docs";
+        eq("Key assigned selects that node alone",
+           JSON.stringify(t.SelectedKeys), '["/docs"]');
+        check("and raises Select, as it always did", selects > 0, `${selects}`);
+
+        /* GTK's selection verbs, by position: they raise Select. */
+        selects = 0;
+        t.Select(0);
+        eq("Select(index) adds a row on a multiple tree",
+           JSON.stringify(t.SelectedKeys), '["/src","/docs"]');
+        check("and the change raises Select", selects > 0, `${selects}`);
+        t.Deselect(3);
+        eq("Deselect(index) takes one off", JSON.stringify(t.SelectedKeys), '["/src"]');
+        t.SelectAll();
+        eq("SelectAll selects every row shown", t.SelectedKeys.length, 5);
+        t.DeselectAll();
+        eq("DeselectAll none", JSON.stringify(t.SelectedKeys), "[]");
+
+        /* Opening the way: a node under a closed parent is revealed. */
+        t.CollapseNode("/src");
+        t.SelectedKeys = ["/docs/api.md", "/src/bta.h"];
+        eq("assigning a hidden node opens its parent", t.Expanded("/src"), true);
+        eq("and selects it with the other",
+           JSON.stringify(t.SelectedKeys), '["/src/bta.h","/docs/api.md"]');
+
+        /* What rebuilds GTK's rows keeps every selected node, not one. */
+        t.SetCell("/src/bta.h", 1, "5 KB");
+        eq("SetCell keeps the whole selection",
+           JSON.stringify(t.SelectedKeys), '["/src/bta.h","/docs/api.md"]');
+        t.SortBy(0, true);
+        eq("so does a sort, in the new order shown",
+           JSON.stringify(t.SelectedKeys), '["/docs/api.md","/src/bta.h"]');
+        /* Descending is the order the nodes were added in, which the rest of
+         * this test reads. */
+        t.SortBy(0, false);
+        eq("and sorting back", JSON.stringify(t.SelectedKeys),
+           '["/src/bta.h","/docs/api.md"]');
+
+        /* A fold drops the rows it hides, as GTK does, and the rest stay. */
+        t.SelectedKeys = ["/src", "/src/main.c", "/docs/api.md"];
+        t.CollapseNode("/src");
+        eq("a fold drops the selection of the rows it hides",
+           JSON.stringify(t.SelectedKeys), '["/src","/docs/api.md"]');
+        t.ExpandNode("/src");
+        eq("and expanding works with several selected", t.Expanded("/src"), true);
+
+        t.SelectedKeys = [];
+        eq("[] selects nothing", JSON.stringify(t.SelectedKeys), "[]");
+
+        /* Down to one keeps the row the reader is on, quietly. */
+        t.SelectedKeys = ["/src/main.c", "/docs"];
+        selects = 0;
+        t.MultiSelect = false;
+        eq("MultiSelect off keeps one node", JSON.stringify(t.SelectedKeys), '["/src/main.c"]');
+        eq("and the assignment raised nothing", selects, 0);
+        throws("several keys without MultiSelect are refused",
+               () => { t.SelectedKeys = ["/src", "/docs"]; });
+        t.SelectedKeys = ["/docs"];
+        eq("one key without it is Key's assignment", t.Key, "/docs");
+        t.MultiSelect = true;
+        eq("and on again after the nodes keeps it", JSON.stringify(t.SelectedKeys), '["/docs"]');
+
+        /* Clear keeps the mode and a rebuilt tree is a multiple one. */
+        t.Clear();
+        eq("Clear empties it", t.Count, 0);
+        eq("and keeps MultiSelect", t.MultiSelect, true);
+        fill();
+        t.SelectedKeys = ["/src", "/docs"];
+        eq("a tree built again takes several", JSON.stringify(t.SelectedKeys),
+           '["/src","/docs"]');
+
+        /* A flat table has no keys to give. */
+        const flat = new TableView();
+        this.Fixed1.Add(flat);
+        flat.Columns = [{ Text: "One" }];
+        flat.Add(["a"]);
+        eq("a flat table answers SelectedKeys with []", JSON.stringify(flat.SelectedKeys), "[]");
+        throws("and refuses the assignment", () => { flat.SelectedKeys = []; });
+        flat.Delete();
+
+        /* Drawn: the current cell picks `Key` among several, and an edit opens. */
+        this.multiEdits = [];
+        t.On("CellEdit", (row, col, text) => { this.multiEdits.push([row, col, text]); });
+        until("a multiple tree is drawn", () => t.RowHeight > 0, () => {
+            t.CurrentCell = { Row: "/docs/api.md", Column: 1 };
+            t.SelectedKeys = ["/src/main.c", "/docs/api.md"];
+            eq("Key is the current cell's row when that row is selected",
+               t.Key, "/docs/api.md");
+            t.SelectedKeys = ["/src/main.c", "/src/bta.h"];
+            eq("and the first selected shown when it is not", t.Key, "/src/main.c");
+
+            eq("EditCell opens a cell of a multiple tree", t.EditCell("/src/bta.h", 0), true);
+            eq("and selects that row, as a click does",
+               JSON.stringify(t.SelectedKeys), '["/src/bta.h"]');
+            t.EndEdit(true);
+            t.EditCell("/src/bta.h", 0);
+            t.EndEdit(false);
+            eq("an edit given up reports nothing", this.multiEdits.length, 0);
+
+            check("RowHeight measures a multiple tree", t.RowHeight > 0, `${t.RowHeight}`);
+            t.ScrollY = 0;
+            eq("ScrollY answers on it", t.ScrollY, 0);
+            t.Delete();
+            t.geoHost.Delete();
+        });
     }
 
     /* --- Bytes --------------------------------------------------------------

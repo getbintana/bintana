@@ -9049,7 +9049,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the selected node's key; assigning selects, opening the way to it. `\"\"` selects nothing. A tree only",
+          "Doc": "the selected node's key; assigning selects it alone, opening the way to it. `\"\"` selects nothing. **With several selected it is the one the reader is on**: the `CurrentCell` row when that row is selected, otherwise the first selected node shown. A tree only",
           "Native": true
         },
         {
@@ -9058,7 +9058,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "more than one row at a time. Refused on a tree",
+          "Doc": "more than one row at a time, in a flat table or a tree, set before the rows or after them. Ctrl+click adds or takes a row, Shift+click selects a range, and Shift+Up/Down grows or shrinks the range from the row the reader is on; a plain click or arrow goes back to one. A Ctrl or Shift click opens no editor. Default `false`",
           "Native": true
         },
         {
@@ -9139,7 +9139,7 @@
           "Params": 1,
           "Signature": "(index)",
           "Returns": "",
-          "Doc": "move the selection from code. `Select` leaves the others alone where several are allowed",
+          "Doc": "move the selection from code. `Select` leaves the others alone where several are allowed. In a tree the index is a position of the rows shown, as `Index` is",
           "Native": true
         },
         {
@@ -9148,7 +9148,16 @@
           "Params": 0,
           "Signature": "()",
           "Returns": "",
-          "Doc": "with `MultiSelect`",
+          "Doc": "with `MultiSelect`. In a tree, every row shown: a node under a closed parent has no row to select",
+          "Native": true
+        },
+        {
+          "Name": "SelectedKeys",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string[]",
+          "Doc": "every selected node's key, in the order shown -- `[]` for none, and one key without `MultiSelect`. Assigning selects exactly those, opening the way to each, and `[]` selects nothing; **it raises no `Select`**. A key that is not there is refused before anything changes, and so are several without `MultiSelect`. `[]` on a flat table, which refuses the assignment. A fold drops the selection of the rows it hides, as GTK does",
           "Native": true
         },
         {
@@ -9157,7 +9166,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "every selected row, as an array of indices in order",
+          "Doc": "every selected row, as an array of indices in order. In a tree they are positions of the rows shown, which a fold moves -- `SelectedKeys` names the nodes",
           "Native": true
         },
         {
@@ -9237,7 +9246,7 @@
         {
           "Name": "Select",
           "Signature": "()",
-          "Doc": "the selection moved — by the user or by an assignment. Ask `Index` for where it is and `Cell`/`Row` for what is there; `Key` when the table is a tree"
+          "Doc": "the selection moved — by the user or by an assignment to `Index` or `Key` (not `SelectedKeys` or `MultiSelect`). Ask `Index` for where it is and `Cell`/`Row` for what is there; `Key` when the table is a tree, and `Selection`/`SelectedKeys` for every row of a `MultiSelect` one"
         },
         {
           "Name": "Activate",
