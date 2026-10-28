@@ -259,7 +259,7 @@ what the shape models, which is what an interchange round trip needs. Unknown
 elements and attributes are reported in `Problems` and never silently written
 back -- an unknown node re-emitted at the end of an `xsd:sequence` is a wrong
 answer that looks right, so the lossless road is `SaveXml` and not a raw-node
-bag. Six things are worth knowing before touching either half:
+bag. Eight things are worth knowing before touching either half:
 - **A `key` is identity and is written whatever it holds, so an XML key at its
   default still matches.** `#xmlKeyText` used to answer `null` for a key equal
   to the field's default -- `Table`'s *an int key of 0 is a row never saved*,
@@ -274,6 +274,26 @@ bag. Six things are worth knowing before touching either half:
   2 and 3 -- and the regression now puts `UID 0` beside a `Milestone: false` and
   asserts `ToXml()` writes it too, so the non-key half of the rule is held.
   `Table` keeps its rule: the two media do not share it.
+- **"At its default" is not "absent" in every format, so a value can declare
+  `always: true`.** Removing a field at its start is right where the absent
+  element *means* the start, and MSPDI's resource `<Type>` does not: absent is
+  Work (1), the int's start is 0, so a Material resource lost its element and
+  Project read it back as Work with a `MaterialLabel` -- and refused the file
+  (`bintana-project`, measured on Project 2108). `def: 1` alone fixed the
+  reading and moved the loss to Work resources, which then lost the
+  `<Type>1</Type>` Project writes. `#xmlWritten` is `#xmlKeyed` or `always`,
+  and both verbs ask it; `XmlRecord` holds both halves (kept at its default,
+  added where the element had none, the option-less neighbour still removed).
+- **`xsd:boolean` allows `true`/`false` and `1`/`0`, and Project 2108 reads only
+  the digits right.** A file with `<IsNull>false</IsNull>` opened as rows with
+  no data (the blank rows Project draws for a null task), and a calendar with
+  `DayWorking` in words came up with no working time -- measured by flipping
+  one spelling at a time in `bintana-project`'s files. Writing words is the
+  schema's spelling and is still the default; a shape declares
+  `Xml.Booleans: "digits"` for `1`/`0`. The spelling travels in `#xmlText`'s
+  third argument, the shape, so every writer passes it -- a call site that
+  forgot it writes words without failing, which is why `XmlRecord` checks a
+  `ToXml`, a `SaveXml` and an unchanged `1` that must stay `1`.
 - **A node from another tree is copied in, and `Add` answers the copy.** So
   `el.Add(Xml.Element("X")).Text = "…"` is right, and writing to the element you
   built is writing to a node that is not in the tree -- `Record`'s

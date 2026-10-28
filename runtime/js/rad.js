@@ -1376,13 +1376,14 @@ function makeField(kind, opts, extra) {
     const field = { __field: true, kind, def: spec.def };
 
     /*
-     * The XML mapping's three options live where they can mean something:
-     * `attribute` on a value, and `in`/`element` on a list.  A record's element
-     * name is its class's `Xml.Root` (`as` overrides it), and a list of records
-     * takes its item name from the same place, so neither is an option here.
+     * The XML mapping's four options live where they can mean something:
+     * `attribute` and `always` on a value, and `in`/`element` on a list.  A
+     * record's element name is its class's `Xml.Root` (`as` overrides it), and
+     * a list of records takes its item name from the same place, so neither is
+     * an option here.
      */
     const common = FIELD_COMMON.slice();
-    if (kind !== "record" && kind !== "list") common.push("attribute");
+    if (kind !== "record" && kind !== "list") common.push("attribute", "always");
     if (kind === "list") common.push("in", "element");
 
     for (const key in opts || {}) {
@@ -1396,6 +1397,9 @@ function makeField(kind, opts, extra) {
 
     if (field.attribute !== undefined && field.attribute !== true)
         throw new TypeError(`${fieldName(kind)}: 'attribute' is true or it is ` +
+                            `not written`);
+    if (field.always !== undefined && field.always !== true)
+        throw new TypeError(`${fieldName(kind)}: 'always' is true or it is ` +
                             `not written`);
     if (field.in !== undefined && (typeof field.in !== "string" || !field.in))
         throw new TypeError(`${fieldName(kind)}: 'in' is the wrapper element's ` +
@@ -2787,12 +2791,14 @@ GLOBAL.Record = class Record {
             if (!own.value || typeof own.value !== "object" ||
                 Array.isArray(own.value))
                 throw new TypeError(`${c.name}.Xml must be a static object of ` +
-                                    `{ Root, Namespace, Order }`);
+                                    `{ Root, Namespace, Order, Booleans }`);
 
             for (const key in own.value) {
-                if (key !== "Root" && key !== "Namespace" && key !== "Order")
+                if (key !== "Root" && key !== "Namespace" && key !== "Order" &&
+                    key !== "Booleans")
                     throw new RangeError(`${c.name}.Xml: '${key}' is not an ` +
-                                         `XML option (Root, Namespace, Order)`);
+                                         `XML option (Root, Namespace, Order, ` +
+                                         `Booleans)`);
                 out[key] = own.value[key];
             }
         }
@@ -2800,6 +2806,15 @@ GLOBAL.Record = class Record {
         if (out.Root !== undefined &&
             (typeof out.Root !== "string" || !out.Root))
             throw new TypeError(`${ctor.name}.Xml.Root must be an element name`);
+
+        /* **How a boolean is spelled** when this shape writes one: the XML
+         * Schema's `true`/`false` unless it says `"digits"`, which is `1`/`0`
+         * -- MS Project's spelling, and the only one Project 2108 reads right:
+         * it took `<IsNull>false</IsNull>` for a blank row.  Both are read
+         * either way. */
+        if (out.Booleans !== undefined && out.Booleans !== "digits")
+            throw new RangeError(`${ctor.name}.Xml.Booleans is "digits" (1/0) ` +
+                                 `or left out (true/false)`);
 
         if (out.Order !== undefined) {
             if (!Array.isArray(out.Order) || !out.Order.length)
@@ -2943,11 +2958,13 @@ GLOBAL.Record = class Record {
     }
 
     /* One value as XML spells it.  A boolean is `true`/`false`, which is the
-     * XML Schema spelling and the one read back; MS Project writes `0`/`1` and
-     * that is read too. */
-    static #xmlText(field, v) {
+     * XML Schema spelling, or `1`/`0` in a shape that declares `Booleans:
+     * "digits"` (MS Project's); both are read back either way. `shape` is
+     * the record's, from `#xmlOf`. */
+    static #xmlText(field, v, shape) {
         switch (field.kind) {
-        case "bool":    return v ? "true" : "false";
+        case "bool":    return shape && shape.Booleans === "digits"
+                             ? (v ? "1" : "0") : (v ? "true" : "false");
         case "int":
         case "number":
         case "decimal": return `${v}`;
@@ -3149,13 +3166,14 @@ GLOBAL.Record = class Record {
             const field = fields[name];
             const v     = rec.#d[name];
 
-            /* A key is written either way -- see `#xmlKeyed`. */
-            if (!all && !Record.#xmlKeyed(field) &&
+            /* A key, and a field declared `always`, are written either way --
+             * see `#xmlWritten`. */
+            if (!all && !Record.#xmlWritten(field) &&
                 Record.#atDefault(v, field)) continue;
 
             if (field.attribute) {
                 el.SetAttr(Record.#xmlFieldName(ctor, name, field),
-                           Record.#xmlText(field, v));
+                           Record.#xmlText(field, v, shape));
                 continue;
             }
 
@@ -3171,7 +3189,7 @@ GLOBAL.Record = class Record {
                         holder.Add(child);
                     } else {
                         holder.Add(itemName).Text =
-                            Record.#xmlText(field.item, item);
+                            Record.#xmlText(field.item, item, shape);
                     }
                 }
                 continue;
@@ -3187,7 +3205,7 @@ GLOBAL.Record = class Record {
             }
 
             el.Add(Record.#xmlFieldName(ctor, name, field)).Text =
-                Record.#xmlText(field, v);
+                Record.#xmlText(field, v, shape);
         }
     }
 
@@ -3225,16 +3243,17 @@ GLOBAL.Record = class Record {
         const ctor   = rec.constructor;
         const fields = Record.#fieldsOf(ctor);
         const order  = Record.#xmlOrder(ctor, fields);
+        const shape  = Record.#xmlOf(ctor);
 
         for (const name in fields) {
             const field = fields[name];
             const v     = rec.#d[name];
-            const dflt  = !Record.#xmlKeyed(field) &&
+            const dflt  = !Record.#xmlWritten(field) &&
                           Record.#atDefault(v, field);
 
             if (field.attribute) {
                 const key  = Record.#xmlFieldName(ctor, name, field);
-                const text = Record.#xmlText(field, v);
+                const text = Record.#xmlText(field, v, shape);
 
                 if (dflt)             el.RemoveAttr(key);
                 else if (el.Attr(key) !== text) el.SetAttr(key, text);
@@ -3243,7 +3262,7 @@ GLOBAL.Record = class Record {
 
             if (field.kind === "list") {
                 if (dflt) Record.#xmlDropList(el, field);
-                else      Record.#xmlSaveList(el, field, v, order);
+                else      Record.#xmlSaveList(el, field, v, order, shape);
                 continue;
             }
 
@@ -3267,7 +3286,7 @@ GLOBAL.Record = class Record {
                 continue;
             }
 
-            const text = Record.#xmlText(field, v);
+            const text = Record.#xmlText(field, v, shape);
 
             /*
              * **An edit that changes nothing is not an edit**, here as in the
@@ -3329,7 +3348,7 @@ GLOBAL.Record = class Record {
         for (const child of el.FindAll(itemName)) child.Remove();
     }
 
-    static #xmlSaveList(el, field, v, order) {
+    static #xmlSaveList(el, field, v, order, shape) {
         const itemName = Record.#xmlItemName(field);
         const holder   = field.in
                        ? (el.Find(field.in) || Record.#xmlInsert(el, field.in, order))
@@ -3397,7 +3416,7 @@ GLOBAL.Record = class Record {
             where.push(at);
 
             if (field.item.kind === "record") Record.#xmlSave(item, found);
-            else found.Text = Record.#xmlText(field.item, item);
+            else found.Text = Record.#xmlText(field.item, item, shape);
         }
 
         existing.forEach((node, i) => { if (!used[i]) node.Remove(); });
@@ -3518,6 +3537,20 @@ GLOBAL.Record = class Record {
                field.kind !== "record" && field.kind !== "list";
     }
 
+    /* **What is written even at its default**: a key, and a value declared
+     * `always: true`.  Everything else at its default has its element removed,
+     * which is right for a format whose absent element *means* the default --
+     * and wrong for one where it means something else: MSPDI's resource
+     * `<Type>` absent is Work, so a Material one (0, the int's default) lost
+     * its element and came back Work, and Project refused the file.  `def`
+     * says what an absent element reads as; `always` says the field is written
+     * all the same. */
+    static #xmlWritten(field) {
+        return Record.#xmlKeyed(field) ||
+               (field.always === true &&
+                field.kind !== "record" && field.kind !== "list");
+    }
+
     /* The field a list is keyed by, if the item shape declares one: the same
      * `key` `Table` reads.  Unlike `Table`, a key at what it starts from is
      * matched like any other value -- an XML key of 0 is an item whose key is
@@ -3546,7 +3579,8 @@ GLOBAL.Record = class Record {
      * int key at 0 is a row never saved" is about having an INSERT to assign
      * one, and `#xmlSave` is what writes it. */
     static #xmlKeyText(item, key) {
-        return Record.#xmlText(key.field, item.#d[key.prop]);
+        return Record.#xmlText(key.field, item.#d[key.prop],
+                               Record.#xmlOf(item.constructor));
     }
 };
 

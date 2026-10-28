@@ -13920,6 +13920,99 @@ function Main() {
         check("while a default that is not the key is still removed",
               !kept.includes("<Milestone>"), kept);
 
+        /*
+         * `always: true` writes a value at its default too: MSPDI's resource
+         * `<Type>` absent means Work (1), so a Material one (0) has to be
+         * written, and Project writes a Work one as well.  `def` is what the
+         * absent element reads as, `always` that it is written regardless --
+         * by `SaveXml` into an element that had it or not, and by `ToXml`.
+         */
+        const AlwaysResource = class extends Record {
+            static Xml = { Root: "Resource" };
+            static Fields = {
+                UID:    Field.Int({ key: true }),
+                Type:   Field.Int({ def: 1, always: true }),
+                IsNull: Field.Bool(),
+            };
+        };
+        const resDoc = Xml.Parse(
+            `<Resource><UID>3</UID><Type>1</Type><IsNull>false</IsNull></Resource>`);
+        const res = AlwaysResource.LoadXml(resDoc);
+        eq("an always field reads its element", res.Type, 1);
+        res.SaveXml(resDoc);
+        const resKept = Xml.Stringify(resDoc);
+        check("an always field at its default keeps its element",
+              resKept.includes("<Type>1</Type>"), resKept);
+        check("...while one without it is removed at its default",
+              !resKept.includes("<IsNull>"), resKept);
+        res.Type = 0;
+        res.SaveXml(resDoc);
+        check("...and a value off the default is written as ever",
+              Xml.Stringify(resDoc).includes("<Type>0</Type>"),
+              Xml.Stringify(resDoc));
+        eq("an absent always field reads as its def",
+           AlwaysResource.LoadXml(Xml.Parse(
+               `<Resource><UID>4</UID></Resource>`)).Type, 1);
+        const fresh = new AlwaysResource({ UID: 5 });
+        check("ToXml writes an always field at its default",
+              Xml.Stringify(fresh.ToXml()).includes("<Type>1</Type>"),
+              Xml.Stringify(fresh.ToXml()));
+        const freshOff = Xml.Parse(`<Resource><UID>5</UID></Resource>`);
+        fresh.SaveXml(freshOff);
+        check("SaveXml adds an always field the element did not have",
+              Xml.Stringify(freshOff).includes("<Type>1</Type>"),
+              Xml.Stringify(freshOff));
+        throws("'always' is true or it is not written",
+               () => Field.Int({ always: 1 }));
+        throws("'always' is not an option of a list",
+               () => Field.List(XmlLink, { always: true }));
+
+        /*
+         * `Booleans: "digits"` spells a boolean `1`/`0`, MS Project's way --
+         * Project 2108 read `<IsNull>false</IsNull>` as a blank row.  Both
+         * spellings are still read, and an unchanged `0` from the file is not
+         * rewritten.
+         */
+        const DigitTask = class extends Record {
+            static Xml = { Root: "Task", Booleans: "digits" };
+            static Fields = {
+                UID:       Field.Int({ key: true }),
+                Summary:   Field.Bool(),
+                Milestone: Field.Bool(),
+                Critical:  Field.Bool(false, { always: true }),
+            };
+        };
+        const digitDoc = Xml.Parse(
+            `<Task><UID>1</UID><Summary>1</Summary><Milestone>true</Milestone>` +
+            `<Critical>0</Critical></Task>`);
+        const digit = DigitTask.LoadXml(digitDoc);
+        eq("digits and words both read",
+           [digit.Summary, digit.Milestone, digit.Critical].join(" "),
+           "true true false");
+        digit.SaveXml(digitDoc);
+        const digitKept = Xml.Stringify(digitDoc);
+        check("an unchanged 1 stays 1", digitKept.includes("<Summary>1</Summary>"),
+              digitKept);
+        check("a true read from words is written as a digit",
+              digitKept.includes("<Milestone>1</Milestone>"), digitKept);
+        check("an always false is written 0",
+              digitKept.includes("<Critical>0</Critical>"), digitKept);
+        const digitNew = Xml.Stringify(new DigitTask({ UID: 2, Summary: true }).ToXml(true));
+        check("ToXml spells booleans as digits",
+              digitNew.includes("<Summary>1</Summary>") &&
+              digitNew.includes("<Milestone>0</Milestone>"), digitNew);
+        check("a shape without the option still writes words",
+              Xml.Stringify(new XmlTask({ UID: 1, Milestone: true }).ToXml())
+                  .includes("<Milestone>true</Milestone>"),
+              Xml.Stringify(new XmlTask({ UID: 1, Milestone: true }).ToXml()));
+        throws("Booleans is \"digits\" or left out", () => {
+            const Bad = class extends Record {
+                static Xml = { Root: "X", Booleans: "01" };
+                static Fields = { On: Field.Bool() };
+            };
+            new Bad({ On: true }).ToXml();
+        });
+
         /* And an item with no element to match is written with its key as
          * well: identity is written whatever it holds. */
         const freshDoc = Xml.Parse(
