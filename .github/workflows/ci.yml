@@ -792,6 +792,10 @@ jobs:
           name=$(basename "$(cat zip-name.txt)" .zip)
           "stage/$name/bin/bintana.exe" --version
           BINTANA="$PWD/stage/$name/bin/bintana.exe" ./tests/api.sh
+          # The one a shortcut starts: the same runtime with a GUI header, so a
+          # menu entry opens no console (`bintanaw.exe` in CMakeLists.txt).
+          objdump -p "stage/$name/bin/bintanaw.exe" | grep -q 'Windows GUI' \
+              || { echo "bintanaw.exe is not a GUI executable" >&2; exit 1; }
 
       # The first look at the IDE on Windows, and **not a hard step**: whether
       # this runner has a desktop for a window to open on is not something this

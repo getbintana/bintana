@@ -246,7 +246,9 @@ jobs:
       # Flatpak repository runs: a `main` project never initialises GTK, so it
       # needs no desktop, and its `Decimal` is the vendored arithmetic patch
       # answering from inside the installed tree. And the application's own
-      # launcher and project have to be where the shortcut points.
+      # project has to be where the shortcut points, and `bintanaw.exe` -- what
+      # the shortcut starts -- has to be a GUI executable, or the application
+      # opens with a console behind it.
       #
       # `MSYS2_ARG_CONV_EXCL`: MSYS2 rewrites an argument that looks like a
       # path, and `/S` looks like one.
@@ -284,6 +286,7 @@ jobs:
               test -f "$into/bin/$cmd.cmd"
               test -f "$into/share/bintana/apps/$cmd/project.json"
               test -f "$into/Uninstall.exe"
+              objdump -p "$into/bin/bintanaw.exe" | grep -q 'Windows GUI'
               "$into/bin/bintana.exe" --version
               "$into/bin/bintana.exe" "$smoke"
           done

@@ -182,7 +182,10 @@ reference pages `F1` reads are a package of their own,
 [`bintana-docs`](https://github.com/getbintana/bintana-docs), which is why
 moving the tree after the fact changes nothing. On Windows the same is true and
 the launcher is `bin\bintana-ide.cmd` — the IDE, from wherever the zip was
-unzipped to. What Windows needs that Linux does not is GTK's runtime data
+unzipped to. Beside `bintana.exe` is **`bintanaw.exe`**, the same runtime with
+the header that tells Windows not to open a console: an installer's shortcuts
+start that one, and `bintana.exe` stays for a terminal, where what a program
+prints is wanted. What Windows needs that Linux does not is GTK's runtime data
 alongside: schemas, the icon themes, the gdk-pixbuf loaders and GtkSourceView's
 language specs, which the packaging script copies and arranges the way GLib's
 own prefix rule expects to find them.

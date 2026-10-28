@@ -457,6 +457,24 @@ function checkNsis(root) {
           nsi.includes(`File /r "payload\\*"`), nsi);
     check("wearing the wrapped icon",
           nsi.includes(`Icon "io.github.getbintana.Setup.ico"`), nsi);
+    /* Windows runs a `.cmd` in a console, and so a shortcut to one opens a
+     * black window behind the application: every way in starts `bintanaw.exe`
+     * on the project, with the icon after the arguments. */
+    const shortcut = `"$INSTDIR\\bin\\bintanaw.exe" ` +
+                     `'"$INSTDIR\\share\\bintana\\apps\\bintana-setup"' ` +
+                     `"$INSTDIR\\io.github.getbintana.Setup.ico"`;
+    check("the menu's shortcut starts the runtime with no console",
+          nsi.includes(`\\Setup.lnk" ${shortcut}`), nsi);
+    check("and so does the desktop's",
+          nsi.includes(`CreateShortCut "$DESKTOP\\Setup.lnk" ${shortcut}`), nsi);
+    /* Through a function: the Modern UI pastes RUN_PARAMETERS inside a
+     * double-quoted string, where the path's own quotes would end it. */
+    check("and the finish page's Run",
+          nsi.includes(`!define MUI_FINISHPAGE_RUN_FUNCTION RunApplication`) &&
+          nsi.includes(`Exec '"$INSTDIR\\bin\\bintanaw.exe" ` +
+                       `"$INSTDIR\\share\\bintana\\apps\\bintana-setup"'`) &&
+          !nsi.includes(`MUI_FINISHPAGE_RUN_PARAMETERS`), nsi);
+    check("and none of them the .cmd", !nsi.includes(`bintana-setup.cmd`), nsi);
     eq("named after the command and the version by default",
        new Regex(`^!define OUTFILE "(.*)"`, { Multiline: true }).Matches(nsi)
            .map((m) => m.Group(1)).join(),
@@ -515,6 +533,7 @@ function checkNsis(root) {
         File.Save(File.Join(prefix, rel), text);
     };
     put(File.Join("bin", "bintana.exe"), "MZ");
+    put(File.Join("bin", "bintanaw.exe"), "MZ, with a GUI header");
     put(File.Join("bin", "libgtk-4.dll"), "DLL");
     put(File.Join("bin", "bintana-ide.cmd"), "the IDE's launcher");
     put(File.Join("share", "glib-2.0", "schemas", "x.schema"), "schemas");
@@ -525,6 +544,8 @@ function checkNsis(root) {
     const staged = Nsis.Stage(dir, File.Join(root, "out-stage"), { Prefix: prefix });
     check("the executable travels",
           File.Exists(File.Join(staged, "bin", "bintana.exe")));
+    check("and the one the shortcuts start",
+          File.Exists(File.Join(staged, "bin", "bintanaw.exe")));
     check("and its DLLs",
           File.Exists(File.Join(staged, "bin", "libgtk-4.dll")));
     check("but not the IDE's launcher",
@@ -548,6 +569,14 @@ function checkNsis(root) {
            () => Nsis.Stage(dir, File.Join(root, "out-stage-bare"),
                             { Prefix: File.Join(root, "nsis-nometa") }),
            "no bin/bintana.exe");
+
+    /* A tree from before `bintanaw.exe` would install a broken menu entry. */
+    const older = File.Join(root, "prefix-older");
+    Directory.Make(File.Join(older, "bin"));
+    File.Save(File.Join(older, "bin", "bintana.exe"), "MZ");
+    throws("a tree with no bintanaw.exe is refused",
+           () => Nsis.Stage(dir, File.Join(root, "out-stage-older"), { Prefix: older }),
+           "no bin/bintanaw.exe");
     throws("the project itself as the output is refused",
            () => Nsis.Stage(dir, dir), "holds the project");
 

@@ -429,6 +429,32 @@ configure_file(tools/bintana-ide.in ${CMAKE_BINARY_DIR}/bintana-ide @ONLY)
 install(TARGETS bintana RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(PROGRAMS ${CMAKE_BINARY_DIR}/bintana-ide DESTINATION ${CMAKE_INSTALL_BINDIR})
 
+# **`bintanaw.exe` on Windows: the same runtime, without a console.** Windows
+# decides by a field of the executable's header whether starting it opens a
+# console, and `bintana.exe` is a console program -- which it has to be, for
+# `--version`, `print`, a `main` project and the suite. Started from a shortcut,
+# though, it brings a black window up behind the application's own. The
+# `pythonw.exe` / `javaw.exe` answer: a second executable whose header says
+# "GUI", for the shortcuts an installer writes (`lib/package/Nsis.js`).
+#
+# It is **the same file with that one field changed** (`objcopy --subsystem
+# windows`, what Microsoft's `editbin /SUBSYSTEM:WINDOWS` does), not a second
+# link: MinGW starts `main` the same way under either subsystem, so there is
+# nothing to compile differently -- and two targets would be every option above
+# spelled twice. What it gives up is the console: its `print` goes nowhere.
+if(WIN32)
+    if(NOT CMAKE_OBJCOPY)
+        message(FATAL_ERROR "no objcopy: bintanaw.exe is bintana.exe with its "
+                            "PE subsystem set to windows, and objcopy is what sets it")
+    endif()
+    set(BTA_GUI_EXE ${CMAKE_BINARY_DIR}/bintanaw.exe)
+    add_custom_command(TARGET bintana POST_BUILD
+        COMMAND ${CMAKE_OBJCOPY} --subsystem windows $<TARGET_FILE:bintana> ${BTA_GUI_EXE}
+        BYPRODUCTS ${BTA_GUI_EXE}
+        COMMENT "bintanaw.exe: the runtime without a console")
+    install(PROGRAMS ${BTA_GUI_EXE} DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
 # `ide/` and `examples/` whole, because a Bintana project *is* its directory:
 # listing the files here would mean a new form in the IDE silently missing from
 # every install until somebody remembered this line. The .pot is the only thing
