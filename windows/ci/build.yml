@@ -293,11 +293,16 @@ jobs:
       # repository's "latest" stays on the last final one. Then the state, so
       # the next run knows what moved -- after the releases, so a failed upload
       # is rebuilt next time rather than recorded as done.
+      #
+      # `GH_REPO`, because `gh` finds the repository from the git checkout it
+      # runs in, and the workspace's root is none -- the checkouts are `state`,
+      # `ci` and `sources/*` under it.
       - name: Publish
         if: steps.plan.outputs.apps != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           for name in ${{ steps.plan.outputs.apps }}; do
