@@ -176,6 +176,16 @@ class Form1 extends Form {
         this.showTree();
     }
 
+    /* A heading dragged to another place. The arrow goes with the name,
+     * wherever it is put, and `column` is still the index the `.form`
+     * declared -- `ColumnOrder` is what a program keeps to restore the
+     * person's order next time, with `MoveColumn`. */
+    Tree_ColumnMove(column, position) {
+        this.LblStatus.Text = Locale.Text("Moved {0} to place {1}: {2}",
+            this.Tree.Columns[column].Text, String(position + 1),
+            this.Tree.ColumnOrder.map((c) => this.Tree.Columns[c].Text).join(", "));
+    }
+
     BtnExpand_Click()   { this.Tree.ExpandAll();   this.showTree(); }
     BtnCollapse_Click() { this.Tree.CollapseAll(); this.showTree(); }
 

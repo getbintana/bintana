@@ -83,6 +83,10 @@ msgid "none"
 msgstr "ninguna"
 
 #: Form1.js
+msgid "Moved {0} to place {1}: {2}"
+msgstr "{0} pasó al lugar {1}: {2}"
+
+#: Form1.js
 msgid "Sorted by {0}, {1}"
 msgstr "Ordenado por {0}, {1}"
 

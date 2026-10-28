@@ -430,3 +430,36 @@ same number without naming what sits above it.
   `BtaWidget`. They are not the widget, so a hand-rolled `g_signal_connect` on
   the table's own adjustments would fire into freed memory at teardown — the
   failure `tests/asan.sh` is the one that reports.
+
+## A column dragged to another place
+
+- **GTK's own reorder does nothing here.** `gtk_column_view_set_reorderable`
+  is a `GtkGestureDrag` on the header row, and the title's click gesture
+  (`click_pressed_cb` in `gtkcolumnviewtitle.c`) claims the press and cancels
+  it -- measured on 4.22.5 when the issue was written, in a bare
+  `GtkColumnView` too. `Reorderable` is a drag of this runtime's own: the
+  heading press (capture, unclaimed) arms it, a capture-phase
+  `EventControllerMotion` follows the pointer, a capture-phase
+  `EventControllerLegacy` sees the release, and `gtk_column_view_insert_column`
+  moves the column -- cells and factories with it, nothing rebuilt.
+- **Consuming that release breaks the next click.** The first version returned
+  `TRUE` so the title would not sort a heading that was only being moved; the
+  title's gesture and the table's own heading press then never had their
+  release, and the next click on a heading raised `Sort` but no
+  `HeaderClick`, and the drag after it sorted instead of moving. The title's
+  `GtkGestureClick` is reset once the pointer passes the drag threshold
+  (`title_cancel_click`, found through `gtk_widget_observe_controllers`), and
+  the release goes on. `TableReorderDrag` goes red either way.
+- **A moved column's title stays where it was among the header's children.**
+  `insert_column` allocates it at its new x; the child order is the order the
+  columns were made. `table_heading_at` counted children, so after a drag a
+  press on a heading answered for the column that used to be drawn there
+  (`HeaderClick 3` for column 1). Every walk of the titles sorts them by x
+  (`table_titles_shown`).
+- **A column's index and its place are two numbers.** Each
+  `GtkColumnViewColumn` carries the index it was declared at (`DECLARED_KEY`);
+  `Sort`, `SortColumn`, `HeaderClick` and the heading's menu go through
+  `column_declared`/`table_column`, never the position in
+  `gtk_column_view_get_columns`. `ColumnOrder` is read-only on purpose: with a
+  setter the serialiser would write `[0, 1, 2]` into every `.form` with a
+  table, and the order is the person's, not the design's.

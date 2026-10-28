@@ -268,6 +268,16 @@ typedef struct {
     bool           multi;
     bool           sortable;
     bool           sort_hooked;   /* the view's sorter is being watched */
+
+    /* **A heading the person is dragging** (`Reorderable`): the declared
+     * column pressed, -1 for none; where the press was and where the pointer
+     * is; whether it has moved far enough to be a drag; and the epoch it
+     * began in, since a `HeaderClick` handler may remake the columns. */
+    bool           reorderable;
+    int            drag_col;
+    double         drag_x0, drag_x;
+    bool           dragging;
+    guint          drag_epoch;
     int            header_min;    /* a floor for the row of column headings */
 
     /* **The current cell**: the row the reader is on, held, and its column.
@@ -796,6 +806,48 @@ static void table_row_changed(BtaWidget *w, BtaTableRow *row, int at)
 /* Set on the factory of the column that carries the disclosure: the one marked
  * `Tree`, or the first, and only while the table is a tree. */
 #define TREE_COLUMN_KEY  "bta-tree-column"
+/*
+ * Set on each `GtkColumnViewColumn`: the index the program declared it at.
+ *
+ * **A column's place in the view and its index are two numbers** once the
+ * person can drag a heading (`Reorderable`): every member speaks of the
+ * declared one, as `Data(row, column)` and the row's values do, and the view's
+ * list is only where it is drawn. Every walk that turns one into the other
+ * goes through the three below.
+ */
+#define DECLARED_KEY     "bta-declared"
+
+static int column_declared(GtkColumnViewColumn *c)
+{
+    return GPOINTER_TO_INT(g_object_get_data(G_OBJECT(c), DECLARED_KEY));
+}
+
+/* The view's place of a declared column, or -1. */
+static int table_column_place(BtaWidget *w, int declared)
+{
+    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
+
+    for (guint i = 0; i < g_list_model_get_n_items(cols); i++) {
+        GtkColumnViewColumn *c     = g_list_model_get_item(cols, i);
+        bool                 found = column_declared(c) == declared;
+
+        g_object_unref(c);
+        if (found)
+            return (int)i;
+    }
+    return -1;
+}
+
+/* The column declared at that index, with a reference -- or NULL. */
+static GtkColumnViewColumn *table_column(BtaWidget *w, int declared)
+{
+    int at = table_column_place(w, declared);
+
+    return at < 0 ? NULL
+                  : g_list_model_get_item(
+                        gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner)),
+                        (guint)at);
+}
 /* The children store a bound row is watching, and the handler on it. Rows are
  * recycled, so both have to come off in `unbind`. */
 #define WATCH_MODEL_KEY   "bta-watch-model"
@@ -1979,6 +2031,12 @@ static void table_style_once(void)
         ".bta-cell-editor button, .bta-cell-editor entry, .bta-cell-editor text "
         "{ min-height: 0; margin-top: 0; margin-bottom: 0; "
         "padding-top: 0; padding-bottom: 0; }"
+        /* A heading being dragged, and the side it will land on. */
+        "columnview > header > button.bta-column-drag { opacity: 0.5; }"
+        "columnview > header > button.bta-column-drop-before "
+        "{ box-shadow: inset 2px 0 @theme_selected_bg_color; }"
+        "columnview > header > button.bta-column-drop-after "
+        "{ box-shadow: inset -2px 0 @theme_selected_bg_color; }"
 ;
 #if GTK_CHECK_VERSION(4, 12, 0)
     gtk_css_provider_load_from_string(provider, css);
@@ -3682,17 +3740,8 @@ static void on_sort_changed(GtkSorter *sorter, GtkSorterChange change,
     if (!col)
         return;
 
-    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
-    int         idx  = -1;
-
-    for (guint i = 0; idx < 0 && i < g_list_model_get_n_items(cols); i++) {
-        GtkColumnViewColumn *c = g_list_model_get_item(cols, i);
-        if (c == col)
-            idx = (int)i;
-        g_object_unref(c);
-    }
-    if (idx < 0)
-        return;
+    /* The declared index, not the place: the heading may have been dragged. */
+    int idx = column_declared(col);
 
     JSContext *ctx     = w->ctx;
     JSValue    argv[2] = {
@@ -4009,8 +4058,11 @@ static JSValue table_sort_column(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx,
             "SortColumn: the headings are not sortable; set Sortable first");
 
-    GtkColumnViewColumn *c  = g_list_model_get_item(cols, (guint)col);
+    GtkColumnViewColumn *c  = table_column(w, col);
     bool                 up = argc < 2 || JS_ToBool(ctx, argv[1]) > 0;
+
+    if (!c)
+        return JS_ThrowRangeError(ctx, "SortColumn: there is no column %d", col);
 
     gtk_column_view_sort_by_column(GTK_COLUMN_VIEW(w->inner), c,
                                    up ? GTK_SORT_ASCENDING : GTK_SORT_DESCENDING);
@@ -4080,13 +4132,12 @@ static JSValue table_set_header_menu(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
- * The n-th column that is shown, and its own index among the columns of the
- * view -- or -1.
+ * The n-th column that is shown, as the index it was declared at -- or -1.
  *
  * The columns keep their places whether they are shown or not, so this is the
  * walk that turns "the third title there is" into "the third column", which is
- * the number the program knows: the columns are the ones it declared, in the
- * order it declared them.
+ * the number the program knows: the index it declared, wherever a drag has
+ * since put the column.
  */
 static int table_shown_column(BtaWidget *w, int nth)
 {
@@ -4096,32 +4147,73 @@ static int table_shown_column(BtaWidget *w, int nth)
     for (guint i = 0; i < g_list_model_get_n_items(cols); i++) {
         GtkColumnViewColumn *c = g_list_model_get_item(cols, i);
         bool                 shown = gtk_column_view_column_get_visible(c);
+        int                  said  = column_declared(c);
 
         g_object_unref(c);
         if (!shown)
             continue;
         if (seen == nth)
-            return (int)i;
+            return said;
         seen++;
     }
     return -1;
 }
 
 /*
- * Which heading is under a point of the view, or -1.
+ * The titles that are shown, **in the order they are drawn**, left to right,
+ * each with its bounds in the view.
  *
  * The heading row is the column view's **first child** and the titles are its
- * children **in column order** -- GTK's own structure, checked in 4.10 and
- * 4.22, and there is no public accessor for either.
+ * children -- GTK's own structure, checked in 4.10 and 4.22, and there is no
+ * public accessor for either. **They are children in the order the columns
+ * were made, not the order they are drawn in**: a column moved with
+ * `gtk_column_view_insert_column` is allocated at its new x and its title
+ * stays where it was among the children -- measured on 4.22.5, where the
+ * fourth child of a moved row answered for the column dragged to the first
+ * place. So they are sorted by x, which is the one order that is the view's.
  *
  * **A column that is not shown has no title among them** -- or a hidden one,
- * and the walk cannot tell which without looking -- so the child's own index
- * is the column's index no more. The walk counts the titles that are there
- * and asks which column each one is: the n-th title is the n-th column that is
- * shown, because a title is only there for a column that is.
+ * and the walk cannot tell which without looking -- so the n-th title shown is
+ * the n-th column that is shown (`table_shown_column`), because a title is
+ * only there for a column that is.
+ */
+typedef struct {
+    GtkWidget       *title;
+    graphene_rect_t  r;
+} TableTitle;
+
+static gint title_by_x(gconstpointer a, gconstpointer b)
+{
+    float xa = ((const TableTitle *)a)->r.origin.x;
+    float xb = ((const TableTitle *)b)->r.origin.x;
+
+    return xa < xb ? -1 : xa > xb;
+}
+
+static GArray *table_titles_shown(BtaWidget *w)
+{
+    GArray    *out    = g_array_new(FALSE, FALSE, sizeof(TableTitle));
+    GtkWidget *header = gtk_widget_get_first_child(w->inner);
+
+    if (!header || !gtk_widget_is_visible(header))
+        return out;
+    for (GtkWidget *ch = gtk_widget_get_first_child(header); ch;
+         ch = gtk_widget_get_next_sibling(ch)) {
+        TableTitle t = { ch, GRAPHENE_RECT_INIT_ZERO };
+
+        if (gtk_widget_is_visible(ch) &&
+            gtk_widget_compute_bounds(ch, w->inner, &t.r))
+            g_array_append_val(out, t);
+    }
+    g_array_sort(out, title_by_x);
+    return out;
+}
+
+/*
+ * Which heading is under a point of the view, or -1.
  *
  * `x` and not the whole point for the column: the titles are allocated at
- * their column's x, so the first whose range contains the point is the one
+ * their column's x, so the one whose range contains the point is the one
  * drawn under it.
  */
 static int table_heading_at(BtaWidget *w, double x, double y)
@@ -4136,20 +4228,17 @@ static int table_heading_at(BtaWidget *w, double x, double y)
     if (y < r.origin.y || y >= r.origin.y + r.size.height)
         return -1;
 
-    int shown = 0;
-    for (GtkWidget *ch = gtk_widget_get_first_child(header); ch;
-         ch = gtk_widget_get_next_sibling(ch)) {
-        if (!gtk_widget_is_visible(ch))
-            continue;
+    GArray *titles = table_titles_shown(w);
+    int     found  = -1;
 
-        graphene_rect_t cr;
-        if (gtk_widget_compute_bounds(ch, w->inner, &cr) &&
-            x >= cr.origin.x && x < cr.origin.x + cr.size.width)
-            return table_shown_column(w, shown);
+    for (guint i = 0; found < 0 && i < titles->len; i++) {
+        TableTitle *t = &g_array_index(titles, TableTitle, i);
 
-        shown++;
+        if (x >= t->r.origin.x && x < t->r.origin.x + t->r.size.width)
+            found = table_shown_column(w, (int)i);
     }
-    return -1;
+    g_array_free(titles, TRUE);
+    return found;
 }
 
 static void on_header_pressed(GtkGestureClick *g, int n_press,
@@ -4164,6 +4253,15 @@ static void on_header_pressed(GtkGestureClick *g, int n_press,
     int button = (int)gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g));
     GdkModifierType state =
         gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(g));
+
+    /* A primary press may be the start of a drag; the motion decides. */
+    TableState *st = table_state(w);
+    if (st->reorderable && button == GDK_BUTTON_PRIMARY) {
+        st->drag_col   = column;
+        st->drag_x0    = st->drag_x = x;
+        st->dragging   = false;
+        st->drag_epoch = st->epoch;
+    }
 
     JSContext *ctx = w->ctx;
     JSValue    argv[4] = {
@@ -4202,12 +4300,11 @@ static void on_header_pressed(GtkGestureClick *g, int n_press,
                                       : JS_DupValue(ctx, w->header_menu);
     JS_FreeValue(ctx, answer);
 
-    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
-    if (column >= (int)g_list_model_get_n_items(cols)) {
+    GtkColumnViewColumn *c = table_column(w, column);
+    if (!c) {
         JS_FreeValue(ctx, spec);
         return;
     }
-    GtkColumnViewColumn *c = g_list_model_get_item(cols, (guint)column);
 
     uint32_t n = 0;
     if (JS_IsArray(spec)) {
@@ -4245,6 +4342,297 @@ static void on_header_pressed(GtkGestureClick *g, int n_press,
     g_object_unref(c);
 }
 
+/* ------------------------------------------------------- moving a column */
+
+/*
+ * **A heading dragged to another place**, which GTK's own reorder cannot do
+ * here: `gtk_column_view_set_reorderable` is a `GtkGestureDrag` on the header
+ * row, and the title's click gesture claims the press first and cancels it --
+ * measured on 4.22.5, in this runtime and in a bare `GtkColumnView`.
+ *
+ * So the drag is watched without claiming anything. The press arms it
+ * (`on_header_pressed`), a capture-phase motion controller -- which never
+ * claims -- follows the pointer and marks the titles, and a capture-phase
+ * legacy controller sees the release, which a click gesture is not told about
+ * once the pointer has moved. Past the threshold the title's own click is
+ * reset (`title_cancel_click`), so letting go does not also sort, and the
+ * release goes on to every gesture. The column is put where it was dropped with
+ * `gtk_column_view_insert_column`, which moves a column the view already has:
+ * the factories and the cells go with it, so nothing is rebuilt.
+ *
+ * Only the place in the view moves. **Every index stays the declared one** --
+ * the row's values, `Data`, `Cell`, `HeaderClick`, `Sort` -- and `ColumnOrder`
+ * says the places.
+ */
+
+/* The last column in the view takes the slack, wherever it was declared. */
+static void table_expand_last(BtaWidget *w)
+{
+    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
+    guint       n    = g_list_model_get_n_items(cols);
+
+    for (guint i = 0; i < n; i++) {
+        GtkColumnViewColumn *c = g_list_model_get_item(cols, i);
+
+        gtk_column_view_column_set_expand(c, i + 1 == n);
+        g_object_unref(c);
+    }
+}
+
+/* Puts a declared column at a place of the view; true when it moved. */
+static bool table_move_column(BtaWidget *w, int declared, int place)
+{
+    GtkColumnViewColumn *c    = table_column(w, declared);
+    int                  from = table_column_place(w, declared);
+
+    if (!c)
+        return false;
+    if (from != place)
+        gtk_column_view_insert_column(GTK_COLUMN_VIEW(w->inner), (guint)place, c);
+    g_object_unref(c);
+    table_expand_last(w);
+    return from != place;
+}
+
+/*
+ * The title drawn at `x`, or the nearest one at either end, and its declared
+ * column -- the height is not asked, so a drop just below the headings still
+ * lands. The titles are taken in the order they are drawn, as
+ * `table_heading_at` takes them.
+ */
+static GtkWidget *table_title_at_x(BtaWidget *w, double x, int *column)
+{
+    GArray    *titles = table_titles_shown(w);
+    GtkWidget *found  = NULL;
+    guint      at     = 0;
+
+    *column = -1;
+    if (titles->len) {
+        TableTitle *first = &g_array_index(titles, TableTitle, 0);
+
+        at = x < first->r.origin.x ? 0 : titles->len - 1;
+        for (guint i = 0; i < titles->len; i++) {
+            TableTitle *t = &g_array_index(titles, TableTitle, i);
+
+            if (x >= t->r.origin.x && x < t->r.origin.x + t->r.size.width) {
+                at = i;
+                break;
+            }
+        }
+        found   = g_array_index(titles, TableTitle, at).title;
+        *column = table_shown_column(w, (int)at);
+    }
+    g_array_free(titles, TRUE);
+    return found;
+}
+
+/* The title of a declared column, or NULL when it is not shown. */
+static GtkWidget *table_title_of(BtaWidget *w, int declared)
+{
+    GArray    *titles = table_titles_shown(w);
+    GtkWidget *found  = NULL;
+
+    for (guint i = 0; !found && i < titles->len; i++)
+        if (table_shown_column(w, (int)i) == declared)
+            found = g_array_index(titles, TableTitle, i).title;
+    g_array_free(titles, TRUE);
+    return found;
+}
+
+static void table_titles_unmark(BtaWidget *w)
+{
+    GtkWidget *header = gtk_widget_get_first_child(w->inner);
+
+    for (GtkWidget *ch = header ? gtk_widget_get_first_child(header) : NULL; ch;
+         ch = gtk_widget_get_next_sibling(ch)) {
+        gtk_widget_remove_css_class(ch, "bta-column-drag");
+        gtk_widget_remove_css_class(ch, "bta-column-drop-before");
+        gtk_widget_remove_css_class(ch, "bta-column-drop-after");
+    }
+}
+
+static void table_drag_end(BtaWidget *w)
+{
+    TableState *st = table_state(w);
+
+    if (st->dragging && st->drag_epoch == st->epoch)
+        table_titles_unmark(w);
+    st->drag_col = -1;
+    st->dragging = false;
+}
+
+/*
+ * The title's own click, called off once a press has become a drag: it would
+ * take the release as a click and sort by the heading that was only being
+ * moved. Reset, not outrun -- consuming the release instead left that gesture
+ * and this table's own heading press without one, and the next click on a
+ * heading raised no `HeaderClick` and the drag after it sorted (measured).
+ */
+static void title_cancel_click(GtkWidget *title)
+{
+    GListModel *ctls = gtk_widget_observe_controllers(title);
+
+    for (guint i = 0; i < g_list_model_get_n_items(ctls); i++) {
+        GtkEventController *c = g_list_model_get_item(ctls, i);
+
+        if (GTK_IS_GESTURE_CLICK(c))
+            gtk_event_controller_reset(c);
+        g_object_unref(c);
+    }
+    g_object_unref(ctls);
+}
+
+static void on_header_motion(GtkEventControllerMotion *m, double x, double y,
+                             gpointer data)
+{
+    BtaWidget  *w  = data;
+    TableState *st = table_state(w);
+
+    if (st->drag_col < 0)
+        return;
+    /* The columns were remade under the drag, or the button is up and the
+     * release went somewhere this did not see: either way it is over. */
+    GdkModifierType state =
+        gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(m));
+    if (st->drag_epoch != st->epoch || !(state & GDK_BUTTON1_MASK)) {
+        table_drag_end(w);
+        return;
+    }
+    st->drag_x = x;
+
+    if (!st->dragging) {
+        int threshold = 8;
+
+        g_object_get(gtk_widget_get_settings(w->inner),
+                     "gtk-dnd-drag-threshold", &threshold, NULL);
+        if (fabs(x - st->drag_x0) < threshold)
+            return;
+        st->dragging = true;
+
+        GtkWidget *pressed = table_title_of(w, st->drag_col);
+        if (pressed)
+            title_cancel_click(pressed);
+    }
+
+    int        over;
+    GtkWidget *drop = table_title_at_x(w, x, &over);
+    GtkWidget *held = table_title_of(w, st->drag_col);
+
+    table_titles_unmark(w);
+    if (held)
+        gtk_widget_add_css_class(held, "bta-column-drag");
+    if (drop && over >= 0 && over != st->drag_col)
+        gtk_widget_add_css_class(drop,
+            table_column_place(w, over) > table_column_place(w, st->drag_col)
+                ? "bta-column-drop-after" : "bta-column-drop-before");
+}
+
+static gboolean on_header_event(GtkEventControllerLegacy *l, GdkEvent *e,
+                                gpointer data)
+{
+    BtaWidget  *w  = data;
+    TableState *st = table_state(w);
+
+    if (st->drag_col < 0 || gdk_event_get_event_type(e) != GDK_BUTTON_RELEASE)
+        return FALSE;
+
+    bool   dragged = st->dragging && st->drag_epoch == st->epoch;
+    int    from    = st->drag_col;
+    double x       = st->drag_x;
+
+    table_drag_end(w);
+    if (!dragged)
+        return FALSE;
+
+    int over;
+    table_title_at_x(w, x, &over);
+    if (over < 0 || over == from)
+        return FALSE;
+
+    int place = table_column_place(w, over);
+    if (place < 0 || !table_move_column(w, from, place))
+        return FALSE;
+
+    JSContext *ctx     = w->ctx;
+    JSValue    argv[2] = { JS_NewInt32(ctx, from), JS_NewInt32(ctx, place) };
+
+    bta_emit(w, "ColumnMove", 2, argv);
+    /* Not consumed: every gesture sees its release and ends as it should. */
+    return FALSE;
+}
+
+static JSValue table_get_reorderable(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, table_state(w)->reorderable);
+}
+
+static JSValue table_set_reorderable(JSContext *ctx, JSValueConst this_val,
+                                     JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int b = JS_ToBool(ctx, val);
+    if (b < 0)
+        return JS_EXCEPTION;
+
+    TableState *st = table_state(w);
+    st->reorderable = b;
+    if (!b && st->drag_col >= 0)
+        table_drag_end(w);
+    if (b)
+        table_style_once();
+    return JS_UNDEFINED;
+}
+
+/* The declared indices, in the order the view shows them. */
+static JSValue table_get_column_order(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
+    JSValue     out  = JS_NewArray(ctx);
+
+    for (guint i = 0; i < g_list_model_get_n_items(cols); i++) {
+        GtkColumnViewColumn *c = g_list_model_get_item(cols, i);
+
+        JS_SetPropertyUint32(ctx, out, i, JS_NewInt32(ctx, column_declared(c)));
+        g_object_unref(c);
+    }
+    return out;
+}
+
+static JSValue table_move_column_js(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int32_t col, place;
+    if (argc < 2 || !bta_to_int(ctx, argv[0], "MoveColumn", &col) ||
+        !bta_to_int(ctx, argv[1], "MoveColumn", &place))
+        return JS_ThrowTypeError(ctx,
+            "MoveColumn(column, position) expects two numbers");
+
+    guint n = g_list_model_get_n_items(
+                  gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner)));
+
+    if (col < 0 || (guint)col >= n)
+        return JS_ThrowRangeError(ctx, "MoveColumn: there is no column %d", col);
+    if (place < 0 || (guint)place >= n)
+        return JS_ThrowRangeError(ctx, "MoveColumn: %d is not a position of "
+                                       "%u columns", place, n);
+    table_move_column(w, col, place);
+    return JS_UNDEFINED;
+}
+
 /* ------------------------------------------------------------- selection */
 
 static void on_selection_changed(GtkSelectionModel *model, guint pos, guint n,
@@ -4273,6 +4661,7 @@ static void build_table(BtaWidget *w)
     /* On, which is what a tree of folders wants and what `TreeView` does. It
      * means nothing until this table is one. */
     st->autoexpand = true;
+    st->drag_col   = -1;
 
     /* `g_object_ref` because the selection takes ownership of what it is given
      * (transfer full) and the state keeps the store too: without it the model
@@ -4321,6 +4710,18 @@ static void build_table(BtaWidget *w)
                                                GTK_PHASE_CAPTURE);
     g_signal_connect(header, "pressed", G_CALLBACK(on_header_pressed), w);
     gtk_widget_add_controller(w->inner, GTK_EVENT_CONTROLLER(header));
+
+    /* A heading dragged to another place, with `Reorderable`; see "moving a
+     * column" for why these two and not GTK's own reorder. */
+    GtkEventController *motion = gtk_event_controller_motion_new();
+    gtk_event_controller_set_propagation_phase(motion, GTK_PHASE_CAPTURE);
+    g_signal_connect(motion, "motion", G_CALLBACK(on_header_motion), w);
+    gtk_widget_add_controller(w->inner, motion);
+
+    GtkEventController *release = gtk_event_controller_legacy_new();
+    gtk_event_controller_set_propagation_phase(release, GTK_PHASE_CAPTURE);
+    g_signal_connect(release, "event", G_CALLBACK(on_header_event), w);
+    gtk_widget_add_controller(w->inner, release);
 
     /* A press on a cell that edits; see `on_view_pressed` for why here. */
     GtkGesture *cells = gtk_gesture_click_new();
@@ -4636,6 +5037,7 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
 
         GtkColumnViewColumn *c =
             gtk_column_view_column_new(title ? title : "", f);
+        g_object_set_data(G_OBJECT(c), DECLARED_KEY, GUINT_TO_POINTER(i));
 
         /* 0 is "size yourself", which is GTK's -1. A width that was asked for
          * is still draggable: the number is where it starts, not a cage. */
@@ -6630,6 +7032,22 @@ static const JSCFunctionListEntry table_props[] = {
      *   it raises `Sort`. Default `false`
      */
     JS_CGETSET_DEF("Sortable", table_get_sortable, table_set_sortable),
+    /* Reorderable
+     *   lets the person drag a heading to another place. **Only where the
+     *   column is drawn moves**: every index stays the declared one -- `Cell`,
+     *   `Data(row, column)`, `CellEdit`, `HeaderClick`, `Sort` -- and
+     *   `ColumnOrder` says the places. A drop raises `ColumnMove`; assigning
+     *   `Columns` again puts the columns back in the declared order. Default
+     *   `false`
+     */
+    JS_CGETSET_DEF("Reorderable", table_get_reorderable, table_set_reorderable),
+    /* ColumnOrder
+     *   the declared column indices, in the order the view shows them --
+     *   `[0, 1, 2]` until a heading is dragged or `MoveColumn` is called.
+     *   What a program keeps to give the person their order back: replay it
+     *   with `MoveColumn(ColumnOrder[i], i)` from the first place to the last
+     */
+    JS_CGETSET_DEF("ColumnOrder", table_get_column_order, NULL),
     /* Select(index)
      *   move the selection from code. `Select` leaves the others alone where
      *   several are allowed. In a tree the index is a position of the rows
@@ -6665,6 +7083,12 @@ static const JSCFunctionListEntry table_props[] = {
      *   `Sort` is raised
      */
     JS_CFUNC_DEF("SortColumn", 2, table_sort_column),
+    /* MoveColumn(column, position)
+     *   puts the declared column at that place of the view, `0` the first:
+     *   what a drag does, from code, and raising nothing. The indices stay the
+     *   declared ones
+     */
+    JS_CFUNC_DEF("MoveColumn", 2, table_move_column_js),
 };
 
 void bta_table_register(void)
@@ -6744,6 +7168,12 @@ void bta_table_register(void)
          *   `HeaderMenu` for that click, anything else falls back to it. A
          *   primary click also raises `Sort` when `Sortable`, on the release
          */
+        /* ColumnMove(column, position)
+         *   the person dragged a heading to another place: `column` is its
+         *   declared index and `position` its place in the view now. Raised
+         *   with `Reorderable`, after the move; `ColumnOrder` is the whole
+         *   order. Not raised by `MoveColumn`
+         */
         /* Scroll(x, y)
          *   the position moved — the wheel, a scrollbar, the keyboard or an
          *   assignment. **Both axes are reported together**, so a diagonal
@@ -6751,7 +7181,7 @@ void bta_table_register(void)
          */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
-                            "Select,Activate,Data,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,Scroll"),
+                            "Select,Activate,Data,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,ColumnMove,Scroll"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

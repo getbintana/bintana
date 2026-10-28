@@ -8909,6 +8909,15 @@
           "Native": true
         },
         {
+          "Name": "ColumnOrder",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the declared column indices, in the order the view shows them -- `[0, 1, 2]` until a heading is dragged or `MoveColumn` is called. What a program keeps to give the person their order back: replay it with `MoveColumn(ColumnOrder[i], i)` from the first place to the last",
+          "Native": true
+        },
+        {
           "Name": "Columns",
           "Kind": "Property",
           "Params": -1,
@@ -9053,6 +9062,15 @@
           "Native": true
         },
         {
+          "Name": "MoveColumn",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(column, position)",
+          "Returns": "",
+          "Doc": "puts the declared column at that place of the view, `0` the first: what a drag does, from code, and raising nothing. The indices stay the declared ones",
+          "Native": true
+        },
+        {
           "Name": "MultiSelect",
           "Kind": "Property",
           "Params": -1,
@@ -9077,6 +9095,15 @@
           "Signature": "(index)",
           "Returns": "",
           "Doc": "takes that row out. **Flat only** — a tree says `RemoveNode(key)`, and this one refuses with that sentence",
+          "Native": true
+        },
+        {
+          "Name": "Reorderable",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "lets the person drag a heading to another place. **Only where the column is drawn moves**: every index stays the declared one -- `Cell`, `Data(row, column)`, `CellEdit`, `HeaderClick`, `Sort` -- and `ColumnOrder` says the places. A drop raises `ColumnMove`; assigning `Columns` again puts the columns back in the declared order. Default `false`",
           "Native": true
         },
         {
@@ -9287,6 +9314,11 @@
           "Name": "HeaderClick",
           "Signature": "(column, button, ctrl, shift)",
           "Doc": "a column heading was pressed — the one pointer event a heading raises, because GTK claims its press before the bubble phase. `button` is `1` primary, `2` middle, `3` secondary. **The return value is the menu of the secondary click**: an array replaces `HeaderMenu` for that click, anything else falls back to it. A primary click also raises `Sort` when `Sortable`, on the release"
+        },
+        {
+          "Name": "ColumnMove",
+          "Signature": "(column, position)",
+          "Doc": "the person dragged a heading to another place: `column` is its declared index and `position` its place in the view now. Raised with `Reorderable`, after the move; `ColumnOrder` is the whole order. Not raised by `MoveColumn`"
         },
         {
           "Name": "Scroll",

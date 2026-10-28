@@ -236,6 +236,7 @@
                 "Height": 250,
                 "MinHeight": 140,
                 "MinWidth": 260,
+                "Reorderable": true,
                 "Sortable": true,
                 "VAlign": "Fill",
                 "Width": 400,

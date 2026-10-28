@@ -180,7 +180,6 @@ needed and what it did instead.
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
 | A regular expression does not say where it matched | [ISSUE-regex-position](../issues/ISSUE-regex-position.md) |
-| A table's columns cannot be reordered by the user | [ISSUE-table-reorder](../issues/ISSUE-table-reorder.md) |
 | A table's rows cannot be filtered by a column | [ISSUE-table-filter](../issues/ISSUE-table-filter.md) |
 | A `Grid` child has no row, no column and no `RowSpan` | [ISSUE-grid-placement](../issues/ISSUE-grid-placement.md) |
 | `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |

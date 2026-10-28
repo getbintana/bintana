@@ -545,6 +545,8 @@ const TESTS = [
     "TableMultiKeys",
     /* And again: the expander clicked in the column that carries it. */
     "TableTreeColumnClick",
+    /* And a heading dragged to another place. */
+    "TableReorderDrag",
     "SingleInstance",
     /* Blocking too: a console child under `--profile`, whose capture the
      * parent reads back. */
@@ -574,7 +576,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -9100,6 +9102,193 @@ class Form1 extends Form {
         eq("declared again with no Tree, the first column has it", open(5), false);
         eq("a hidden marked column hands it to the first shown", open(6), false);
         eq("and every declaration kept every row", s.map((x) => x.count).join(), "4,4,4,4,4,4,4");
+    }
+
+    /*
+     * `Reorderable`, `ColumnOrder` and `MoveColumn`: a column's place in the
+     * view and its index are two numbers.
+     *
+     * What is held here is that only the place moves -- the cells, `Sort`'s
+     * column and `SortColumn` keep speaking of the declared index --, the
+     * order read back, the refusals, that `MoveColumn` raises nothing, that
+     * declaring the columns again puts them back, and that a `.form` carries
+     * `Reorderable` and never the order. The drag itself is
+     * `TableReorderDrag`.
+     */
+    testTableReorder() {
+        const t = new TableView();
+        this.Fixed1.Add(t);
+        t.Resize(400, 160);
+        t.Columns = [{ Text: "Id" }, { Text: "Tarea" }, { Text: "Inicio" }, { Text: "Fin" }];
+        t.Add(["1", "Diseño", "lun", "mar"]);
+
+        eq("Reorderable is off by default", t.Reorderable, false);
+        t.Reorderable = true;
+        eq("and reads back", t.Reorderable, true);
+        eq("ColumnOrder is the declared order to begin with",
+           JSON.stringify(t.ColumnOrder), "[0,1,2,3]");
+
+        let moves = 0, sorted = -1;
+        t.On("ColumnMove", () => moves++);
+        t.On("Sort", (column) => { sorted = column; });
+
+        t.MoveColumn(1, 0);
+        eq("MoveColumn puts a column at a place", JSON.stringify(t.ColumnOrder), "[1,0,2,3]");
+        t.MoveColumn(0, 3);
+        eq("from either side", JSON.stringify(t.ColumnOrder), "[1,2,3,0]");
+        t.MoveColumn(2, 1);
+        eq("and to where it already is, nothing moves",
+           JSON.stringify(t.ColumnOrder), "[1,2,3,0]");
+        eq("MoveColumn raises no ColumnMove", moves, 0);
+
+        eq("a cell is still read by its declared index", t.Cell(0, 1), "Diseño");
+        eq("and so is the one that moved last", t.Cell(0, 0), "1");
+        t.Sortable = true;
+        t.SortColumn(3);
+        eq("SortColumn takes the declared index, and Sort answers it", sorted, 3);
+
+        throws("a column that is not there", () => t.MoveColumn(4, 0));
+        throws("a place that is not there",  () => t.MoveColumn(0, 4));
+        throws("a place that is negative",   () => t.MoveColumn(0, -1));
+        throws("both are needed",            () => t.MoveColumn(0));
+        eq("and none of those moved anything", JSON.stringify(t.ColumnOrder), "[1,2,3,0]");
+        throws("ColumnOrder is read, not assigned",
+               () => { "use strict"; t.ColumnOrder = [0, 1, 2, 3]; });
+
+        /* A hidden column keeps its place, and moves like any other. */
+        t.Columns = [{ Text: "Id" }, { Text: "Tarea", Visible: false }, { Text: "Inicio" }];
+        eq("declaring the columns again puts them in the declared order",
+           JSON.stringify(t.ColumnOrder), "[0,1,2]");
+        t.MoveColumn(1, 2);
+        eq("a hidden column moves too", JSON.stringify(t.ColumnOrder), "[0,2,1]");
+
+        /* The order is the person's, not the form's: never written down. */
+        const node = t.Serialize(true);
+        eq("a .form carries Reorderable", node.properties.Reorderable, true);
+        eq("and not the order", hasOwn.call(node.properties, "ColumnOrder"), false);
+        t.Delete();
+    }
+
+    /*
+     * The other half of `TableReorder`: **a heading dragged with a real
+     * pointer**, which GTK's own reorder cannot do here (its drag is cancelled
+     * by the title's click; see `docs/agents/tables.md`). A child with an X
+     * server and four columns, sortable and reorderable, logs every
+     * `HeaderClick`, `Sort` and `ColumnMove`; the script drags, clicks and
+     * drags again. What would be wrong if the drag were only half there: a
+     * drag that also sorts, a click after a drag that raises no `HeaderClick`
+     * (the release consumed and the gestures left waiting for it), and a press
+     * on a moved heading answered for the column that used to be drawn there
+     * (its title is still the child it was). Skipped, never failed, without
+     * `xdotool`.
+     */
+    testTableReorderDrag() {
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real drag: it needs xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "table-reorder-drag");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "tablereorderdrag", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 440, Height: 200 } });
+        File.Save(File.Join(proj, "Form1.js"), `
+class Form1 extends Form {
+    Form_Open() {
+        const t = new TableView();
+        t.Name = "T";
+        t.Resize(420, 180);
+        t.Columns = [{ Text: "A", Width: 100 }, { Text: "B", Width: 100 },
+                     { Text: "C", Width: 100 }, { Text: "D", Width: 100 }];
+        t.Sortable = true;
+        t.Reorderable = true;
+        t.Add(["a", "b", "c", "d"]);
+        this.Add(t);
+        this.t = t; this.log = []; this.steps = [];
+        this.dir = Application.Directory;
+        this.wait();
+    }
+    T_Sort(c) { this.log.push("Sort " + c); }
+    T_HeaderClick(c) { this.log.push("Click " + c); }
+    T_ColumnMove(c, p) { this.log.push("Move " + c + " " + p); }
+    wait() {
+        const t = this.t;
+        if (!(t.HeaderHeight > 0)) { Timer.After(50, () => this.wait()); return; }
+        const b = t.Bounds();
+        File.Save(this.dir + "/geom",
+                  [b.X, b.Y + t.HeaderHeight / 2].map(Math.round).join(" "));
+        this.poll(1);
+    }
+    poll(k) {
+        if (File.Exists(this.dir + "/done")) {
+            File.SaveJson(this.dir + "/out.json", { steps: this.steps });
+            Application.Quit(0);
+            return;
+        }
+        const ask = this.dir + "/snap" + k;
+        if (File.Exists(ask)) {
+            this.steps.push({ log: this.log.join(), order: this.t.ColumnOrder });
+            this.log = [];
+            File.Delete(ask);
+            File.Save(this.dir + "/ack" + k, "1");
+            k++;
+        }
+        Timer.After(30, () => this.poll(k));
+    }
+}
+`);
+        for (const gone of ["geom", "out.json", "done"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+        for (const gone of Directory.List(proj))
+            if (/^(snap|ack)\\d+$/.test(gone)) File.Delete(File.Join(proj, gone));
+
+        /* `drag x0 x1 y1` presses at x0 on the headings and moves there in
+         * steps, past the threshold, then lets go. */
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/geom\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "read x y < \"$dir/geom\"\n" +
+                  "n=0\n" +
+                  "snap() { n=$((n+1)); sleep 0.4; : > \"$dir/snap$n\"\n" +
+                  "  j=0; while [ ! -f \"$dir/ack$n\" ] && [ $j -lt 50 ]; do sleep 0.1; j=$((j+1)); done; }\n" +
+                  "drag() { xdotool mousemove $(($x+$1)) $y mousedown 1; sleep 0.1\n" +
+                  "  for f in 1 2 3 4 5; do xdotool mousemove $(($x+$1+($2-$1)*f/5)) $(($y+($3)*f/5)); sleep 0.05; done\n" +
+                  "  sleep 0.2; xdotool mouseup 1; }\n" +
+                  "drag 150 350 0; snap\n" +                        /* 1: B onto D */
+                  "xdotool mousemove $(($x+50)) $y click 1; snap\n" + /* 2: a click on A */
+                  "drag 50 10 0; snap\n" +                          /* 3: A past the start */
+                  "drag 350 30 40; snap\n" +                        /* 4: B, below the row */
+                  ": > \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the child ended by itself", ran.Output.includes("child=0"), ran.Output);
+
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("and said what it saw", got !== null, ran.Output);
+        if (!got) return;
+
+        const s = got.steps;
+        const at = (i, k) => s[i] ? JSON.stringify(s[i][k]) : "(no snapshot)";
+        eq("four snapshots, one per gesture", s.length, 4);
+        eq("a heading dragged onto another takes its place, and does not sort",
+           at(0, "log"), '"Click 1,Move 1 3"');
+        eq("the declared indices, in the order drawn", at(0, "order"), "[0,2,3,1]");
+        eq("a click after a drag is a click, and sorts", at(1, "log"), '"Click 0,Sort 0"');
+        eq("a drag that lands where it started moves nothing and sorts nothing",
+           at(2, "log"), '"Click 0"');
+        eq("a press on a moved heading is that heading's, dropped below the row",
+           at(3, "log"), '"Click 1,Move 1 0"');
+        eq("and it is first", at(3, "order"), "[1,0,2,3]");
     }
 
     /*
