@@ -264,6 +264,12 @@ the CI, so adding an application is adding a directory:
 [`flatpak/ci/`](../flatpak/ci/README.md) is the registry's format, the workflow
 that runs both, and the repository it publishes to.
 
+**Windows installers have the same registry's twin.**
+[`windows/ci/`](../windows/ci/README.md) takes the same `app.json` and builds
+each application's setup (`tools/pack.sh --nsis`) on a Windows runner, out of
+the portable tree, installs it silently, runs it, and attaches it to a release
+`<app>-<version>` of its own repository.
+
 **Building locally wants a flatpak that works.** flatpak 1.18.0 to 1.18.2 have a
 [regression](https://github.com/flatpak/flatpak/issues/6818) that makes
 `build-init --base` fail with `lsetxattr(security.selinux): Operation not

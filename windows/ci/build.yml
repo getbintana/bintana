@@ -1,0 +1,367 @@
+# The Windows installers: one setup executable per application in `apps/`,
+# published as the releases of the repository this runs in. Copy this file to
+# `.github/workflows/build.yml` in that repository, and `apps/` beside it; see
+# README.md for the one-time setup.
+#
+# **The same registry as the Flatpak repository** (`flatpak/ci`), and the same
+# bargain: every directory in `apps/` with an `app.json` is an application, and
+# nothing in this file names one. What differs is what is published -- a
+# `<command>-<version>-windows-x86_64.exe` attached to the release
+# `<app>-<version>`, instead of a branch in an OSTree repository -- and where
+# the state lives: `builds.json` on the `state` branch.
+#
+# What is rebuilt, decided by the "What changed" step:
+#
+#   - no state, or a run asked for everything -> every application;
+#   - the runtime, `lib/`, the vendor, the     -> every application, because
+#     packaging, the portable tree's recipe       each installer carries its
+#                                                 own copy of the runtime;
+#   - an application's `watch` paths, for one  -> it alone;
+#     that lives in the runtime's repository
+#   - an application's own repository          -> it alone, when its commit moved;
+#   - an application's registration           -> it alone, when its `app.json`
+#                                                 changed.
+#
+# A rebuild of a version that already has a release replaces its setup in
+# place (`--clobber`): a new runtime under the same application version is the
+# same release, rebuilt. A new version is a new release.
+name: windows installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      all:
+        description: "Rebuild every application, whatever changed"
+        type: boolean
+        default: false
+  schedule:
+    - cron: "47 4 * * *"
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+# Two runs at once would both read the same state and both push it.
+concurrency:
+  group: windows-installers
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: The state
+        uses: actions/checkout@v4
+        with:
+          ref: state
+          path: state
+
+      - name: This repository, for the registry
+        uses: actions/checkout@v4
+        with:
+          path: ci
+
+      - name: The runtime's source
+        uses: actions/checkout@v4
+        with:
+          repository: getbintana/bintana
+          path: sources/bintana
+          fetch-depth: 0
+          submodules: recursive
+
+      # One checkout per application with a repository of its own, named after
+      # its directory in the registry. The ones that live in the runtime's
+      # repository are the checkout above. Git Bash, not MSYS2: the runner's
+      # own git and python are on its PATH, and MSYS2 is only installed when
+      # there is something to build.
+      - name: The applications' sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          for entry in ci/apps/*/app.json; do
+              [ -e "$entry" ] || continue
+              name=$(basename "$(dirname "$entry")")
+              repo=$(python -c 'import json,sys;print(json.load(open(sys.argv[1])).get("repo",""))' "$entry")
+              [ -n "$repo" ] || continue
+
+              ref=$(python -c 'import json,sys;print(json.load(open(sys.argv[1])).get("ref",""))' "$entry")
+              echo "== $name: $repo${ref:+ at $ref}"
+              git clone --quiet ${ref:+--branch "$ref"} --depth 1 "$repo" "sources/$name"
+          done
+
+      - name: What changed
+        id: plan
+        shell: bash
+        env:
+          ALL: ${{ inputs.all && 'yes' || '' }}
+        run: |
+          set -euo pipefail
+          apps=$(python - <<'EOF'
+          import glob, hashlib, json, os, subprocess
+
+          # What every installer is made of besides the application: a change
+          # in any of these is a change in every setup.
+          RUNTIME = ["runtime", "lib", "vendor", "CMakeLists.txt",
+                     "tools/pack", "tools/windows-portable.sh"]
+
+          path  = "state/builds.json"
+          state = json.load(open(path)) if os.path.exists(path) else {}
+          seen  = state.get("apps", {})
+
+          def git(where, *args):
+              return subprocess.run(["git", "-C", where, *args],
+                                    capture_output=True, text=True)
+
+          def moved(since, paths):
+              """Whether `paths` of the runtime's source differ from `since`.
+              A commit the history no longer has (a force push) counts as a
+              change: there is nothing to compare with."""
+              if not since:
+                  return True
+              diff = git("sources/bintana", "diff", "--quiet", since, "HEAD", "--", *paths)
+              return diff.returncode != 0
+
+          everything = bool(os.environ.get("ALL")) or moved(state.get("runtime"), RUNTIME)
+
+          names = []
+          for entry in sorted(glob.glob("ci/apps/*/app.json")):
+              name = os.path.basename(os.path.dirname(entry))
+              app  = json.load(open(entry))
+              old  = seen.get(name)
+              hash = hashlib.sha256(open(entry, "rb").read()).hexdigest()
+
+              if everything or not old or old.get("entry") != hash:
+                  names.append(name)
+              elif app.get("repo"):
+                  head = git(f"sources/{name}", "rev-parse", "HEAD").stdout.strip()
+                  if head != old.get("commit"):
+                      names.append(name)
+              elif moved(old.get("commit"), app.get("watch", ["."])):
+                  names.append(name)
+
+          print(" ".join(names))
+          EOF
+          )
+          echo "decided: ${apps:-nothing}"
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+
+      - uses: msys2/setup-msys2@v2
+        if: steps.plan.outputs.apps != ''
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-gtksourceview5
+            mingw-w64-ucrt-x86_64-sqlite3
+            mingw-w64-ucrt-x86_64-libsoup3
+            mingw-w64-ucrt-x86_64-libxml2
+
+      # The runtime as a Windows user gets it: built, then laid out by
+      # `tools/windows-portable.sh` -- the DLLs, the GTK data, the icon themes
+      # -- which is the tree every installer below is staged from. The same
+      # two steps as the runtime's own `windows` job.
+      - name: The runtime tree
+        if: steps.plan.outputs.apps != ''
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          cd sources/bintana
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build -j"$(nproc)"
+          tools/windows-portable.sh build "$GITHUB_WORKSPACE/stage/runtime"
+
+      # The compiler, inside the tree where `Nsis.makensis` looks first
+      # (`share/bintana/tools/nsis`) -- the subset of the official distribution
+      # the runtime's job bundles, and for the reasons written there: `Bin` is
+      # the real compiler behind a 2 KiB forwarder, and `Contrib` is the Modern
+      # UI `MUI2.nsh` forwards to. A failed download falls back to the NSIS the
+      # runner image carries, put on the PATH.
+      - name: The NSIS compiler
+        if: steps.plan.outputs.apps != ''
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          dest=stage/runtime/share/bintana/tools/nsis
+          work=$(mktemp -d)
+          if curl -fsSL -o "$work/nsis.zip" \
+                  "https://sourceforge.net/projects/nsis/files/NSIS%203/3.12/nsis-3.12.zip/download" \
+              && (cd "$work" && cmake -E tar xf nsis.zip); then
+              exe=$(find "$work" -name makensis.exe -not -path "*/Bin/*" | head -1)
+              base=$(dirname "$exe")
+              mkdir -p "$dest"
+              for f in makensis.exe COPYING Bin Include Stubs Plugins Contrib; do
+                  [ -e "$base/$f" ] && mv "$base/$f" "$dest/"
+              done
+          fi
+          if [ -f "$dest/Bin/makensis.exe" ] && [ -f "$dest/Contrib/Modern UI 2/MUI2.nsh" ]; then
+              echo "nsis: the bundle, $(find "$dest" -type f | wc -l) files"
+          else
+              rm -rf "$dest"
+              echo "/c/Program Files (x86)/NSIS" >> "$GITHUB_PATH"
+              echo "nsis: no bundle -- the runner's own" >&2
+          fi
+
+      # One installer per application: `tools/pack.sh --nsis` writes the script
+      # out of the metainfo, stages the runtime tree and the project as the
+      # payload, and compiles it. The setup is named by the script itself
+      # (`<command>-<version>-windows-x86_64.exe`), so nothing here spells it.
+      # **Absolute paths**: `pack.sh` changes to the runtime's checkout first.
+      - name: Build
+        if: steps.plan.outputs.apps != ''
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          export PATH="$PATH:/c/Program Files (x86)/NSIS"
+          root=$PWD
+          for name in ${{ steps.plan.outputs.apps }}; do
+              entry="ci/apps/$name/app.json"
+              project=$(sed -n 's/.*"project": *"\([^"]*\)".*/\1/p' "$entry")
+              if grep -q '"repo"' "$entry"; then
+                  src="$root/sources/$name/$project"
+              else
+                  src="$root/sources/bintana/$project"
+              fi
+
+              echo "== $name: $src"
+              BINTANA="$root/stage/runtime/bin/bintana.exe" \
+                  sources/bintana/tools/pack.sh --nsis "$src" "$root/stage/apps/$name" \
+                      --prefix "$root/stage/runtime"
+              ls -l "$root"/stage/apps/"$name"/*-windows-x86_64.exe
+          done
+
+      # What was just built, installed and run -- before anything is
+      # published, so a setup that installs a program that does not start is
+      # not released either. The installer is the per-user one the script
+      # writes (`$LOCALAPPDATA`, no elevation), so `/S` installs it silently,
+      # here into a directory of the run's own (`/D=` is last and unquoted, as
+      # NSIS wants it). Then the installed runtime answers `--version` -- the
+      # DLL closure -- and runs one console project, the same smoke the
+      # Flatpak repository runs: a `main` project never initialises GTK, so it
+      # needs no desktop, and its `Decimal` is the vendored arithmetic patch
+      # answering from inside the installed tree. And the application's own
+      # launcher and project have to be where the shortcut points.
+      #
+      # `MSYS2_ARG_CONV_EXCL`: MSYS2 rewrites an argument that looks like a
+      # path, and `/S` looks like one.
+      - name: Smoke
+        if: steps.plan.outputs.apps != ''
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          smoke=$(mktemp -d)
+          cat > "$smoke/project.json" <<'EOF'
+          {
+              "name": "smoke",
+              "main": "Main",
+              "sources": ["Main.js"]
+          }
+          EOF
+          cat > "$smoke/Main.js" <<'EOF'
+          function Main() {
+              const answer = new Decimal("10") / 3 * 3;
+              print("smoke: " + answer);
+              Application.Quit(answer.toString() === "10" ? 0 : 1);
+          }
+          EOF
+
+          for name in ${{ steps.plan.outputs.apps }}; do
+              setup=$(ls stage/apps/"$name"/*-windows-x86_64.exe)
+              # `Package.commandName`: `bintana-` and the id's last element.
+              id=$(sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' "ci/apps/$name/app.json")
+              cmd=bintana-$(printf '%s' "${id##*.}" | tr 'A-Z' 'a-z' \
+                                | sed 's/[^a-z0-9]\+/-/g; s/^-*//; s/-*$//')
+              into="$RUNNER_TEMP/install/$name"
+
+              echo "-- $name: $(basename "$setup")"
+              MSYS2_ARG_CONV_EXCL='*' "$setup" /S "/D=$(cygpath -w "$into")"
+              test -f "$into/bin/$cmd.cmd"
+              test -f "$into/share/bintana/apps/$cmd/project.json"
+              test -f "$into/Uninstall.exe"
+              "$into/bin/bintana.exe" --version
+              "$into/bin/bintana.exe" "$smoke"
+          done
+
+      # A release per application version, the setup attached to it. A version
+      # with a letter in it (`0.2.0rc1`, `1.0beta`) is a prerelease, so the
+      # repository's "latest" stays on the last final one. Then the state, so
+      # the next run knows what moved -- after the releases, so a failed upload
+      # is rebuilt next time rather than recorded as done.
+      - name: Publish
+        if: steps.plan.outputs.apps != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for name in ${{ steps.plan.outputs.apps }}; do
+              setup=$(ls stage/apps/"$name"/*-windows-x86_64.exe)
+              entry="ci/apps/$name/app.json"
+              read -r src commit < <(python - "$name" "$entry" <<'EOF'
+          import json, subprocess, sys
+          name, entry = sys.argv[1], sys.argv[2]
+          app = json.load(open(entry))
+          src = f"sources/{name}" if app.get("repo") else "sources/bintana"
+          commit = subprocess.check_output(["git", "-C", src, "rev-parse", "HEAD"], text=True).strip()
+          print(f"{src}/{app['project']} {commit}")
+          EOF
+              )
+              title=$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["name"])' "$src/project.json")
+              version=$(python -c 'import json,sys;print(json.load(open(sys.argv[1])).get("version","0.0"))' "$src/project.json")
+              tag="$name-$version"
+              runtime=$(git -C sources/bintana rev-parse HEAD)
+              repo=$(python -c 'import json,sys;print(json.load(open(sys.argv[1])).get("repo","https://github.com/getbintana/bintana"))' "$entry")
+
+              pre=""
+              [[ $version =~ [A-Za-z] ]] && pre="--prerelease"
+
+              if ! gh release view "$tag" >/dev/null 2>&1; then
+                  gh release create "$tag" --target "$GITHUB_SHA" $pre \
+                      --title "$title $version" \
+                      --notes "$title $version for Windows (x86_64): built from ${repo%.git} at \`$commit\`, on the runtime getbintana/bintana at \`$runtime\`."
+              fi
+              gh release upload "$tag" "$setup" --clobber
+              echo "== $name: $(basename "$setup") in $tag"
+          done
+
+          python - ${{ steps.plan.outputs.apps }} <<'EOF'
+          import hashlib, json, os, subprocess, sys
+
+          path  = "state/builds.json"
+          state = json.load(open(path)) if os.path.exists(path) else {}
+          state.setdefault("apps", {})
+
+          def commit(where):
+              return subprocess.check_output(
+                  ["git", "-C", where, "rev-parse", "HEAD"], text=True).strip()
+
+          state["runtime"] = commit("sources/bintana")
+          bintana = "https://github.com/getbintana/bintana.git"
+          for name in sys.argv[1:]:
+              entry = f"ci/apps/{name}/app.json"
+              app   = json.load(open(entry))
+              state["apps"][name] = {
+                  "repo":   app.get("repo", bintana),
+                  "commit": commit(f"sources/{name}" if app.get("repo") else "sources/bintana"),
+                  "entry":  hashlib.sha256(open(entry, "rb").read()).hexdigest(),
+              }
+
+          json.dump(state, open(path, "w"), indent=2)
+          EOF
+
+          cd state
+          git config user.name  "bintana-windows"
+          git config user.email "noreply@github.com"
+          git add -A
+          if git diff --cached --quiet; then
+              echo "nothing new to record"
+          else
+              git commit -m "windows: ${{ steps.plan.outputs.apps }}"
+              git push
+          fi
