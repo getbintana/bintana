@@ -793,8 +793,8 @@ static void table_row_changed(BtaWidget *w, BtaTableRow *row, int at)
  * view of one of them.
  */
 #define COLUMN_INDEX_KEY "bta-column-index"
-/* Set on the factory of the column that carries the disclosure: the first one,
- * and only while the table is a tree. */
+/* Set on the factory of the column that carries the disclosure: the one marked
+ * `Tree`, or the first, and only while the table is a tree. */
 #define TREE_COLUMN_KEY  "bta-tree-column"
 /* The children store a bound row is watching, and the handler on it. Rows are
  * recycled, so both have to come off in `unbind`. */
@@ -2843,10 +2843,11 @@ static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
 
     }
 
-    /* **The first column of a tree carries the disclosure**, and the indent
-     * with it -- that is what a `GtkTreeExpander` is. It is built here, when
-     * the columns are, so a table that becomes a tree rebuilds its columns
-     * rather than growing an expander onto rows already made. */
+    /* **One column of a tree carries the disclosure** (`Tree`, or the
+     * first), and the indent with it -- that is what a `GtkTreeExpander` is.
+     * It is built here, when the columns are, so a table that becomes a tree
+     * rebuilds its columns rather than growing an expander onto rows already
+     * made. */
     if (g_object_get_data(G_OBJECT(f), TREE_COLUMN_KEY)) {
         GtkWidget *expander = gtk_tree_expander_new();
 
@@ -4420,6 +4421,11 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
      * has to leave the table exactly as it was, not half rebuilt. Each column's
      * editor is read once, here, and handed to its factory below. */
     EdSpec **specs = g_new0(EdSpec *, n ? n : 1);
+    /* The column that said `Tree: true`, and the first one shown: between them
+     * they say which column carries the expander, below. */
+    int      marked = -1;
+    int      shown  = -1;
+    bool     first_shown = true, marked_shown = true;
 
     for (uint32_t i = 0; i < n; i++) {
         JSValue col = JS_GetPropertyUint32(ctx, list, i);
@@ -4521,7 +4527,37 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
             JS_ThrowTypeError(ctx, "%s: Visible is a boolean", where);
             goto refuse;
         }
+        bool is_shown = JS_IsUndefined(vv) || JS_ToBool(ctx, vv) > 0;
+        if (shown < 0 && is_shown)
+            shown = (int)i;
+        if (i == 0)
+            first_shown = is_shown;
         JS_FreeValue(ctx, vv);
+
+        /*
+         * **`Tree` says which column carries the expander**, and one column
+         * can: the outline is drawn once per row. A flat table takes it and
+         * keeps it for the day it becomes a tree.
+         */
+        JSValue rv = JS_GetPropertyStr(ctx, col, "Tree");
+        if (!JS_IsUndefined(rv) && !JS_IsBool(rv)) {
+            JS_FreeValue(ctx, rv);
+            JS_FreeValue(ctx, col);
+            JS_ThrowTypeError(ctx, "%s: Tree is a boolean", where);
+            goto refuse;
+        }
+        bool tree_decl = JS_ToBool(ctx, rv) > 0;
+        JS_FreeValue(ctx, rv);
+        if (tree_decl && marked >= 0) {
+            JS_FreeValue(ctx, col);
+            JS_ThrowTypeError(ctx, "%s: Tree is already Columns[%d]'s -- one "
+                                   "column carries the expander", where, marked);
+            goto refuse;
+        }
+        if (tree_decl) {
+            marked       = (int)i;
+            marked_shown = is_shown;
+        }
 
         bool bad = false;
         alignment_of(ctx, col, where, &bad);
@@ -4529,6 +4565,19 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
         if (bad)
             goto refuse;
     }
+
+    /*
+     * **The expander goes to the column marked `Tree`, or to the first one.**
+     * A hidden column cannot carry it -- the outline would vanish with the
+     * column -- so it passes to the first column shown, and comes back when
+     * the marked one does. Refusing instead would make hiding a column a
+     * question about which one the tree is in. Only where it is drawn moves:
+     * every index stays the declared one.
+     */
+    int carrier = marked >= 0 ? marked : 0;
+
+    if (!(marked >= 0 ? marked_shown : first_shown) && shown >= 0)
+        carrier = shown;
 
     /* Out with the old. Walked backwards because removing shortens the list. */
     table_state(w)->epoch++;
@@ -4571,7 +4620,7 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
 
         GtkListItemFactory *f = gtk_signal_list_item_factory_new();
         g_object_set_data(G_OBJECT(f), COLUMN_INDEX_KEY, GUINT_TO_POINTER(i));
-        if (i == 0 && table_state(w)->tree)
+        if ((int)i == carrier && table_state(w)->tree)
             g_object_set_data(G_OBJECT(f), TREE_COLUMN_KEY, GINT_TO_POINTER(1));
         g_object_set_data(G_OBJECT(f), "bta-xalign",
                           GINT_TO_POINTER((int)(x * 100)));
@@ -4680,9 +4729,9 @@ static JSValue table_set_columns(JSContext *ctx, JSValueConst this_val,
  * `Key`.
  *
  * Three things move: the model becomes a `GtkTreeListModel` over the same store
- * of roots, the columns are rebuilt so the first one carries the expander, and
- * the key index comes into being. It happens once -- `Clear` puts it back --
- * and it is the only place the mode changes.
+ * of roots, the columns are rebuilt so the one marked `Tree` (or the first)
+ * carries the expander, and the key index comes into being. It happens once
+ * -- `Clear` puts it back -- and it is the only place the mode changes.
  */
 static bool table_become_tree(JSContext *ctx, BtaWidget *w)
 {
@@ -6319,7 +6368,7 @@ static JSValue table_reveal_row(JSContext *ctx, JSValueConst this_val,
 
 static const JSCFunctionListEntry table_props[] = {
     /* Columns
-     *   an array of `{ Text, Width, Alignment, Editor, Link, Visible }`. `Text`
+     *   an array of `{ Text, Width, Alignment, Editor, Link, Visible, Tree }`. `Text`
      *   is **translated**; `Width: 0` sizes itself and the last column takes
      *   the slack. **`Visible: false` hides the column** -- and it keeps its
      *   place in the list, so the numbers the program uses (`Cell`, `SetCell`,
@@ -6340,6 +6389,11 @@ static const JSCFunctionListEntry table_props[] = {
      *   "Text"`. `Link: true` makes each cell a link -- underlined, a pointer
      *   over it, a focus stop, Enter -- whose address is the cell's text unless
      *   `SetUri` or `Data` says another, and a cell with no text is plain.
+     *   **`Tree: true` puts a tree's expander** -- the arrow and the indent --
+     *   in that column instead of the first; only where it is drawn moves, every
+     *   index stays the declared one. One column at most says it, a flat table
+     *   keeps it for when it becomes a tree, and a marked column that is
+     *   `Visible: false` hands the expander to the first column shown.
      *   **A column is edited or a link, never both**, and a misspelt option is
      *   refused by name
      */

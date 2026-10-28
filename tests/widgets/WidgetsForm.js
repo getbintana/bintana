@@ -543,6 +543,8 @@ const TESTS = [
     "EditorKeyPreview",
     /* Blocking too: a child with a real pointer and keyboard on a tree. */
     "TableMultiKeys",
+    /* And again: the expander clicked in the column that carries it. */
+    "TableTreeColumnClick",
     "SingleInstance",
     /* Blocking too: a console child under `--profile`, whose capture the
      * parent reads back. */
@@ -572,7 +574,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeMulti", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -8896,6 +8898,208 @@ function Main() {
         flat.Delete();
 
         t.Delete();
+    }
+
+    /*
+     * `Tree: true` on a column: which one carries the expander.
+     *
+     * A plan shows the Id first and the task's name, indented, after it --
+     * which the first column always carrying the expander could not do. What
+     * is held here is the declaration: what is refused, and that a refusal
+     * leaves the columns as they were; that a flat table keeps it; that
+     * declaring the columns again keeps the rows and what was open; and that
+     * every index is still the declared one. Where the arrow is drawn is a
+     * pointer's question, and `TableTreeColumnClick` asks it.
+     */
+    testTableTreeColumn() {
+        const t = new TableView();
+        this.Fixed1.Add(t);
+        t.Resize(400, 200);
+
+        /* A flat table takes it: there is nothing to draw it in yet. */
+        const cols = [{ Text: "Id", Width: 40, Alignment: "Right" },
+                      { Text: "Tarea", Width: 200, Editor: "Text", Tree: true },
+                      { Text: "Duración", Alignment: "Right" }];
+        t.Columns = cols;
+        eq("a flat table takes Tree", t.Columns[1].Tree, true);
+
+        /* Two columns cannot carry one outline, and the refusal says which. */
+        let msg = "";
+        try {
+            t.Columns = [{ Text: "A", Tree: true }, { Text: "B" }, { Text: "C", Tree: true }];
+        } catch (e) { msg = e instanceof TypeError ? e.message : `not a TypeError: ${e}`; }
+        check("two columns with Tree is a TypeError naming both",
+              msg.includes("Columns[2]") && msg.includes("Columns[0]"), msg);
+        throws("Tree is a boolean", () => { t.Columns = [{ Text: "A", Tree: "yes" }]; });
+        eq("and a refused declaration leaves the one there was",
+           t.Columns[1].Text, "Tarea");
+        t.Columns = [{ Text: "A", Tree: false }, { Text: "B", Tree: false }];
+        check("Tree: false on every column is no Tree at all", true);
+        t.Columns = cols;
+
+        /* The table becomes a tree with the marked column declared. */
+        t.Add(["1", "Diseño", "5d"],   { Key: "1" });
+        t.Add(["2", "Bocetos", "2d"],  { Key: "2", Parent: "1" });
+        t.Add(["3", "Revisión", "3d"], { Key: "3", Parent: "1" });
+        t.Add(["4", "Obra", "20d"],    { Key: "4" });
+        t.Add(["5", "Cimientos", "8d"], { Key: "5", Parent: "4" });
+        eq("a flat table with Tree becomes a tree", t.Count, 5);
+        eq("and the indices are the declared ones", t.Cell("2", 1), "Bocetos");
+        eq("column 0 is still the Id", t.Cell("2", 0), "2");
+
+        /* Declared again, the expander moves and the outline stays. */
+        t.CollapseNode("4");
+        t.Key = "3";
+        t.Columns = [{ Text: "Id", Width: 40, Tree: true }, { Text: "Tarea" }, { Text: "Duración" }];
+        eq("declaring the columns again keeps the rows", t.Count, 5);
+        eq("and what was open", t.Expanded("1"), true);
+        eq("and what was closed", t.Expanded("4"), false);
+        eq("and the cells are where they were", t.Cell("5", 1), "Cimientos");
+        eq("and the selection", t.Key, "3");
+
+        /* A hidden marked column hands the expander on, and nothing refuses it. */
+        t.Columns = [{ Text: "Id" }, { Text: "Tarea", Tree: true, Visible: false }, { Text: "Duración" }];
+        eq("a hidden marked column is taken", t.Columns[1].Visible, false);
+        eq("and the tree is still the tree", t.Count, 5);
+
+        /* No Tree is what it always was, and the tree keeps working. */
+        t.Columns = [{ Text: "Id" }, { Text: "Tarea" }, { Text: "Duración" }];
+        t.ExpandNode("4");
+        eq("with no Tree the tree still opens", t.Expanded("4"), true);
+        t.Delete();
+    }
+
+    /*
+     * The other half of `TableTreeColumn`: **the arrow is where `Tree` says**,
+     * which only a click on it can show. A child with an X server lays out a
+     * table whose Id comes first and whose name carries the expander, and the
+     * script clicks where an arrow would be in each column: the one that
+     * carries it folds the node, the others select a row and fold nothing.
+     * Then the child declares the columns again -- the expander on the last
+     * column, on none (the first), on a hidden one (the first shown) -- and
+     * each is clicked the same way. The table starts flat with `Tree` declared,
+     * so the first gestures are also the table that became a tree. Skipped,
+     * never failed, without `xdotool`.
+     */
+    testTableTreeColumnClick() {
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real clicks: they need xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "table-tree-column");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "tabletreecolumn", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 420, Height: 240 } });
+        File.Save(File.Join(proj, "Form1.js"), `
+class Form1 extends Form {
+    Form_Open() {
+        const t = new TableView();
+        t.Name = "T";
+        t.Resize(400, 220);
+        t.Columns = [{ Text: "Id", Width: 100 }, { Text: "Tarea", Width: 140, Tree: true },
+                     { Text: "Duración", Width: 140 }];
+        t.Add(["1", "Diseño", "5d"],   { Key: "1" });
+        t.Add(["2", "Bocetos", "2d"],  { Key: "2", Parent: "1" });
+        t.Add(["4", "Obra", "20d"],    { Key: "4" });
+        t.Add(["5", "Cimientos", "8d"], { Key: "5", Parent: "4" });
+        this.Add(t);
+        this.t = t; this.snaps = [];
+        this.dir = Application.Directory;
+        this.wait();
+    }
+    wait() {
+        const t = this.t;
+        if (!(t.RowHeight > 0 && t.HeaderHeight > 0)) { Timer.After(50, () => this.wait()); return; }
+        const b = t.Bounds(), rh = t.RowHeight;
+        const y = Math.round(b.Y + t.HeaderHeight + rh / 2);
+        File.Save(this.dir + "/geom", [b.X, b.X + 100, b.X + 240, y].map(Math.round).join(" "));
+        this.poll(1);
+    }
+    poll(k) {
+        const ask = this.dir + "/snap" + k;
+        if (File.Exists(this.dir + "/done")) {
+            File.SaveJson(this.dir + "/out.json", { snaps: this.snaps });
+            Application.Quit(0);
+            return;
+        }
+        if (File.Exists(ask)) {
+            const t = this.t;
+            const then = File.Load(ask).trim();
+            this.snaps.push({ open: t.Expanded("1"), other: t.Expanded("4"), count: t.Count });
+            File.Delete(ask);
+            /* What the next clicks are about: the columns declared again. */
+            const C = [{ Text: "Id", Width: 100 }, { Text: "Tarea", Width: 140 },
+                       { Text: "Duración", Width: 140 }];
+            if (then === "last")   C[2].Tree = true;
+            /* The marked column hidden, and the Id too: the first shown is
+             * the name, which now starts where the Id did. */
+            if (then === "hidden") {
+                C[2].Tree = true; C[2].Visible = false; C[0].Visible = false;
+            }
+            if (then) t.Columns = C;
+            t.ExpandAll();
+            File.Save(this.dir + "/ack" + k, "1");
+            k++;
+        }
+        Timer.After(30, () => this.poll(k));
+    }
+}
+`);
+        for (const gone of ["geom", "out.json", "done"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+        for (const gone of Directory.List(proj))
+            if (/^(snap|ack)\\d+$/.test(gone)) File.Delete(File.Join(proj, gone));
+
+        /* An arrow sits at the start of its cell, past the cell's padding: 14
+         * pixels in is on it in every column. */
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/geom\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "read x0 x1 x2 y < \"$dir/geom\"\n" +
+                  "a0=$((x0+14)); a1=$((x1+14)); a2=$((x2+14))\n" +
+                  "n=0\n" +
+                  "snap() { n=$((n+1)); sleep 0.4; echo \"$1\" > \"$dir/snap$n\"\n" +
+                  "  j=0; while [ ! -f \"$dir/ack$n\" ] && [ $j -lt 50 ]; do sleep 0.1; j=$((j+1)); done; }\n" +
+                  "click() { xdotool mousemove $1 $y mousedown 1; sleep 0.1; xdotool mouseup 1; }\n" +
+                  "click $a0; snap\n" +            /* 1: the Id, which has none */
+                  "click $a2; snap\n" +            /* 2: the duration, which has none */
+                  "click $a1; snap last\n" +       /* 3: the name, which has it */
+                  "click $a1; snap\n" +            /* 4: the name, no longer */
+                  "click $a2; snap none\n" +       /* 5: the last column, now */
+                  "click $a0; snap hidden\n" +     /* 6: no Tree: the first */
+                  "click $a0; snap\n" +            /* 7: a hidden marked one: the first shown */
+                  ": > \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the child ended by itself", ran.Output.includes("child=0"), ran.Output);
+
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("and said what it saw", got !== null, ran.Output);
+        if (!got) return;
+
+        const s = got.snaps;
+        const open = (i) => s[i] ? s[i].open : "(no snapshot)";
+        eq("seven snapshots, one per click", s.length, 7);
+        eq("a click at the start of the Id folds nothing", open(0), true);
+        eq("nor one at the start of the duration", open(1), true);
+        eq("the name carries the arrow: a click on it folds the node", open(2), false);
+        eq("and only that node", s[2] && s[2].other, true);
+        eq("declared again on the last column, the name has no arrow", open(3), true);
+        eq("and the last column has it", open(4), false);
+        eq("declared again with no Tree, the first column has it", open(5), false);
+        eq("a hidden marked column hands it to the first shown", open(6), false);
+        eq("and every declaration kept every row", s.map((x) => x.count).join(), "4,4,4,4,4,4,4");
     }
 
     /*
