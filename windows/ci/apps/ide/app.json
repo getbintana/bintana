@@ -3,5 +3,10 @@
   "project": "ide",
   "watch": [
     "ide"
+  ],
+  "with": [
+    "share/bintana/examples",
+    "share/doc/bintana",
+    "share/bintana/tools/nsis"
   ]
 }

@@ -4,6 +4,7 @@
  *   ./build/bintana tools/pack <project> <out> [--finish-args <a,b,c>]
  *   tools/pack.sh <project> <out> [--finish-args <a,b,c>]
  *   tools/pack.sh --nsis <project> <out> [--exe <file>] [--prefix <tree>]
+ *                        [--with <path>]...
  *
  * The first form writes the files a Flatpak is built from -- the metainfo,
  * the `.desktop`, the icon and the manifest -- into `<out>`, which is then a
@@ -13,6 +14,11 @@
  * and the setup compiled with `makensis` -- on Windows, where both halves
  * run. What each file has to say is `lib/package`'s, and so are the refusals;
  * this is the command line.
+ *
+ * **`--with` is what an installer carries of the tree besides the runtime**,
+ * one path relative to it per flag: the IDE's takes the examples, the
+ * runtime's documentation and the bundled NSIS. A path the tree does not have
+ * is refused, never skipped.
  *
  * **`--finish-args` is how an application asks for more than a window.**  The
  * default is the four permissions an ordinary application needs, and a program
@@ -48,7 +54,7 @@ function Main() {
 
     if (!project || !out) {
         print("usage: pack <project> <out> [--finish-args <a,b,c>]");
-        print("       pack --nsis <project> <out> [--exe <file>] [--prefix <tree>]");
+        print("       pack --nsis <project> <out> [--exe <file>] [--prefix <tree>] [--with <path>]...");
         Application.Quit(2);
         return;
     }
@@ -84,12 +90,15 @@ function nsis(args) {
     let out     = "";
     let exe     = "";
     let prefix  = "";
+    const extra = [];
 
     for (let i = 0; i < args.length; i++) {
         if (args[i] === "--exe")
             exe = args[++i] || "";
         else if (args[i] === "--prefix")
             prefix = args[++i] || "";
+        else if (args[i] === "--with")
+            extra.push(args[++i] || "");
         else if (!project)
             project = args[i];
         else if (!out)
@@ -101,7 +110,8 @@ function nsis(args) {
     }
 
     if (!project || !out) {
-        print("usage: pack --nsis <project> <out> [--exe <file>] [--prefix <tree>]");
+        print("usage: pack --nsis <project> <out> [--exe <file>] [--prefix <tree>] " +
+              "[--with <path>]...");
         Application.Quit(2);
         return;
     }
@@ -109,7 +119,7 @@ function nsis(args) {
     let ctx;
     try {
         ctx = Nsis.Script(project, out);
-        Nsis.Stage(project, out, prefix ? { Prefix: prefix } : {});
+        Nsis.Stage(project, out, { Prefix: prefix || undefined, With: extra });
         if (!exe)
             exe = File.Join(out, `${ctx.Command}-` +
                                  `${ctx.Version || "0.0"}-windows-x86_64.exe`);

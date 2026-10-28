@@ -540,6 +540,9 @@ function checkNsis(root) {
     put(File.Join("share", "bintana", "lib", "x.js"), "a shipped library");
     put(File.Join("share", "bintana", "ide", "Main.js"), "the IDE");
     put(File.Join("etc", "gtk-4.0", "settings.ini"), "font");
+    put(File.Join("share", "bintana", "examples", "hello", "project.json"), "{}");
+    put(File.Join("share", "bintana", "tools", "nsis", "Bin", "makensis.exe"), "MZ");
+    put(File.Join("share", "doc", "bintana", "README.md"), "# Bintana");
 
     const staged = Nsis.Stage(dir, File.Join(root, "out-stage"), { Prefix: prefix });
     check("the executable travels",
@@ -564,6 +567,38 @@ function checkNsis(root) {
     check("with a launcher that runs the runtime on it",
           launcher.includes("bintana.exe") &&
           launcher.includes("share\\bintana\\apps\\bintana-setup"), launcher);
+
+    check("and nothing of the tree it was not asked for",
+          !File.IsDir(File.Join(staged, "share", "bintana", "examples")) &&
+          !File.IsDir(File.Join(staged, "share", "bintana", "tools")));
+
+    /* `With`: what the IDE's installer carries to be the portable zip's equal
+     * -- folders and files of the tree, each one where the tree has it. */
+    const withed = Nsis.Stage(dir, File.Join(root, "out-stage-with"), {
+        Prefix: prefix,
+        With:   [File.Join("share", "bintana", "examples"),
+                 File.Join("share", "bintana", "tools", "nsis"),
+                 File.Join("share", "doc", "bintana", "README.md")],
+    });
+    check("With carries a folder of the tree where the tree has it",
+          File.Exists(File.Join(withed, "share", "bintana", "examples", "hello", "project.json")) &&
+          File.Exists(File.Join(withed, "share", "bintana", "tools", "nsis", "Bin", "makensis.exe")));
+    check("and a single file",
+          File.Exists(File.Join(withed, "share", "doc", "bintana", "README.md")));
+    throws("a piece the tree does not have is refused, not skipped",
+           () => Nsis.Stage(dir, File.Join(root, "out-stage-missing"),
+                            { Prefix: prefix, With: [File.Join("share", "bintana", "nothing")] }),
+           "was asked to carry");
+    check("and refused before anything is staged",
+          !File.IsDir(File.Join(root, "out-stage-missing", "payload")));
+    throws("a path that leaves the tree is refused",
+           () => Nsis.Stage(dir, File.Join(root, "out-stage-up"),
+                            { Prefix: prefix, With: [File.Join("..", "elsewhere")] }),
+           "not a path inside the runtime tree");
+    throws("and so is an absolute one",
+           () => Nsis.Stage(dir, File.Join(root, "out-stage-abs"),
+                            { Prefix: prefix, With: ["/etc"] }),
+           "not a path inside the runtime tree");
 
     throws("a prefix with no staged executable is refused",
            () => Nsis.Stage(dir, File.Join(root, "out-stage-bare"),

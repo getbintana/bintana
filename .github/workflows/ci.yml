@@ -773,9 +773,14 @@ jobs:
           name=$(basename "$(cat zip-name.txt)" .zip)
           rm -f setup-name.txt
           export PATH="$PATH:/c/Program Files (x86)/NSIS"
+          # `--with`: the examples, the runtime's documentation and the bundled
+          # NSIS, which is what makes the setup the zip's equal -- the same
+          # three `windows/ci/apps/ide` names.
           if BINTANA="$PWD/stage/$name/bin/bintana.exe" tools/pack.sh --nsis ide \
               stage/installer --exe "$PWD/$name-setup.exe" \
-              --prefix "$PWD/stage/$name"; then
+              --prefix "$PWD/stage/$name" \
+              --with share/bintana/examples --with share/doc/bintana \
+              --with share/bintana/tools/nsis; then
             echo "$name-setup.exe" > setup-name.txt
             ls -l "$name-setup.exe"
           else

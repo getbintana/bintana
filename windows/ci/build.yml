@@ -147,6 +147,15 @@ jobs:
           echo "decided: ${apps:-nothing}"
           echo "apps=$apps" >> "$GITHUB_OUTPUT"
 
+          # And what each one carries of the runtime tree besides the runtime
+          # (`with`), one path a line: the MSYS2 steps have no python to read
+          # the registry with, so it is read here, where there is one.
+          mkdir -p with
+          for name in $apps; do
+              python -c 'import json,sys;print("\n".join(json.load(open(sys.argv[1])).get("with",[])))' \
+                  "ci/apps/$name/app.json" | tr -d '\r' > "with/$name"
+          done
+
       - uses: msys2/setup-msys2@v2
         if: steps.plan.outputs.apps != ''
         with:
@@ -182,7 +191,9 @@ jobs:
       # the runtime's job bundles, and for the reasons written there: `Bin` is
       # the real compiler behind a 2 KiB forwarder, and `Contrib` is the Modern
       # UI `MUI2.nsh` forwards to. A failed download falls back to the NSIS the
-      # runner image carries, put on the PATH.
+      # runner image carries, put on the PATH -- and then an application that
+      # carries `share/bintana/tools/nsis` (the IDE) is refused by name in the
+      # Build step, rather than released without it.
       - name: The NSIS compiler
         if: steps.plan.outputs.apps != ''
         shell: msys2 {0}
@@ -213,6 +224,8 @@ jobs:
       # payload, and compiles it. The setup is named by the script itself
       # (`<command>-<version>-windows-x86_64.exe`), so nothing here spells it.
       # **Absolute paths**: `pack.sh` changes to the runtime's checkout first.
+      # `with` becomes one `--with` per path, and a path the tree does not have
+      # stops the run: an installer asked to be complete is never quietly not.
       - name: Build
         if: steps.plan.outputs.apps != ''
         shell: msys2 {0}
@@ -229,10 +242,15 @@ jobs:
                   src="$root/sources/bintana/$project"
               fi
 
-              echo "== $name: $src"
+              extra=()
+              while IFS= read -r path; do
+                  [ -n "$path" ] && extra+=(--with "$path")
+              done < "with/$name"
+
+              echo "== $name: $src${extra[*]:+ ${extra[*]}}"
               BINTANA="$root/stage/runtime/bin/bintana.exe" \
                   sources/bintana/tools/pack.sh --nsis "$src" "$root/stage/apps/$name" \
-                      --prefix "$root/stage/runtime"
+                      --prefix "$root/stage/runtime" "${extra[@]}"
               ls -l "$root"/stage/apps/"$name"/*-windows-x86_64.exe
           done
 
@@ -287,6 +305,10 @@ jobs:
               test -f "$into/share/bintana/apps/$cmd/project.json"
               test -f "$into/Uninstall.exe"
               objdump -p "$into/bin/bintanaw.exe" | grep -q 'Windows GUI'
+              while IFS= read -r path; do
+                  [ -z "$path" ] || test -e "$into/$path" \
+                      || { echo "$name: installed without $path" >&2; exit 1; }
+              done < "with/$name"
               "$into/bin/bintana.exe" --version
               "$into/bin/bintana.exe" "$smoke"
           done

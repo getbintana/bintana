@@ -52,13 +52,15 @@ A directory in `apps/` whose name is the application's, with one `app.json` --
 | `ref` | the branch or tag to build. Absent means the default branch. A commit id is not a ref: put a tag on what you want |
 | `project` | the Bintana project inside that repository, packaged by `tools/pack.sh --nsis` |
 | `watch` | for an application in the runtime's repository, the paths whose change rebuilds it. Default `.` |
+| `with` | paths of the runtime tree the installer carries **besides the runtime**, relative to it (`share/bintana/examples`). One the tree does not have stops the run: it is never left out quietly |
 
 `manifest` and `finish-args` are the Flatpak's and mean nothing here. **The
-IDE is registered as the project it is** (`ide`), which is the same installer
-the runtime's own `windows` job attaches to a runtime release: the runtime and
-the IDE, and not the rest of the portable zip -- no F1 reference, no examples,
-no bundled NSIS for *Project → Windows installer…*. The zip is still the
-complete one.
+IDE is registered as the project it is** (`ide`), and carries `with` what
+makes it the portable zip's equal: the examples, the runtime's documentation
+and the bundled NSIS that *Project → Windows installer…* compiles with -- the
+same setup the runtime's own `windows` job attaches to a runtime release. The
+F1 reference is in neither: it is `bintana-docs`, and without it F1 builds the
+topic from the runtime.
 
 **What the project needs** is what the packaging step asks for: an `id`, an
 `<id>.metainfo.xml` that agrees with `project.json`, and -- for the
