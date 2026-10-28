@@ -67,6 +67,17 @@ int main(int argc, char **argv)
      */
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+
+    /*
+     * **The desktop's own title bar, as on Linux.** GTK4 draws every decorated
+     * window's title bar and frame itself on Windows unless `GTK_CSD` is "0"
+     * (`gtk_window_should_use_csd` in gtkwindow.c) -- the opposite of its X11
+     * default -- so an application came up wearing a GNOME header bar, without
+     * the system's colours, snap layouts or window menu. Asked for here, before
+     * the first window exists, because GTK reads it as each one is made; and
+     * only when unset, so `GTK_CSD=1` still gets GTK's own.
+     */
+    g_setenv("GTK_CSD", "0", FALSE);
 #endif
 
     const char *dir  = NULL;

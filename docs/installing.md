@@ -185,7 +185,9 @@ the launcher is `bin\bintana-ide.cmd` — the IDE, from wherever the zip was
 unzipped to. Beside `bintana.exe` is **`bintanaw.exe`**, the same runtime with
 the header that tells Windows not to open a console: an installer's shortcuts
 start that one, and `bintana.exe` stays for a terminal, where what a program
-prints is wanted. What Windows needs that Linux does not is GTK's runtime data
+prints is wanted. Both wear **the system's own title bar**: GTK4 draws its
+own on Windows unless `GTK_CSD` is `0`, so the runtime sets that when it is
+unset (`GTK_CSD=1` still asks for GTK's). What Windows needs that Linux does not is GTK's runtime data
 alongside: schemas, the icon themes, the gdk-pixbuf loaders and GtkSourceView's
 language specs, which the packaging script copies and arranges the way GLib's
 own prefix rule expects to find them.
