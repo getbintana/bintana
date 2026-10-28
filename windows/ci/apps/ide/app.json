@@ -1,0 +1,7 @@
+{
+  "id": "io.github.getbintana.Ide",
+  "project": "ide",
+  "watch": [
+    "ide"
+  ]
+}

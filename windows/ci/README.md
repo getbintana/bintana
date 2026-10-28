@@ -53,9 +53,12 @@ A directory in `apps/` whose name is the application's, with one `app.json` --
 | `project` | the Bintana project inside that repository, packaged by `tools/pack.sh --nsis` |
 | `watch` | for an application in the runtime's repository, the paths whose change rebuilds it. Default `.` |
 
-`manifest` and `finish-args` are the Flatpak's and mean nothing here; the IDE
-is not registered, because the runtime's own `windows` job already attaches
-its installer to every runtime release.
+`manifest` and `finish-args` are the Flatpak's and mean nothing here. **The
+IDE is registered as the project it is** (`ide`), which is the same installer
+the runtime's own `windows` job attaches to a runtime release: the runtime and
+the IDE, and not the rest of the portable zip -- no F1 reference, no examples,
+no bundled NSIS for *Project → Windows installer…*. The zip is still the
+complete one.
 
 **What the project needs** is what the packaging step asks for: an `id`, an
 `<id>.metainfo.xml` that agrees with `project.json`, and -- for the
