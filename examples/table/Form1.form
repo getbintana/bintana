@@ -218,17 +218,18 @@
               "properties": {
                 "Columns": [
                   {
+                    "Text": "Kind",
+                    "Width": 100
+                  },
+                  {
                     "Text": "Name",
-                    "Width": 220
+                    "Width": 220,
+                    "Tree": true
                   },
                   {
                     "Text": "Size",
                     "Width": 80,
                     "Alignment": "Right"
-                  },
-                  {
-                    "Text": "Kind",
-                    "Width": 110
                   }
                 ],
                 "HAlign": "Fill",

@@ -148,20 +148,33 @@ class Form1 extends Form {
      * The keys here are paths because that is what this tree is *of* -- they
      * are the application's to choose, and the only rule is that they are
      * unique. Nothing parses them.
+     *
+     * **The name is the second column and carries the arrow**, because the
+     * `.form` marks it `Tree: true`: the kind sits to its left, the way a plan
+     * puts its Id before the task. Only where the outline is drawn moves --
+     * the name is still column 1 to `Add`, `SetIcon` and `SortBy`.
      */
     growTree() {
         for (const [key, parent, name, size, kind] of TREE) {
-            this.Tree.Add([name, size, kind], parent ? { Key: key, Parent: parent }
+            this.Tree.Add([kind, name, size], parent ? { Key: key, Parent: parent }
                                                      : { Key: key });
             /* Every row in the column carries one, or none: a hidden icon takes
              * no room, so a column where only some rows have one is ragged.
              * `iconFor` is the same question the other page asks -- the first
              * name this desktop actually has. */
-            this.Tree.SetIcon(key, 0, kind === "Folder" ? "folder" : iconFor(kind));
+            this.Tree.SetIcon(key, 1, kind === "Folder" ? "folder" : iconFor(kind));
         }
     }
 
     Tree_Select() { this.showTree(); }
+
+    /* A heading clicked. In a tree `SortBy` orders the siblings under each
+     * parent -- a child above its own parent is not an order -- and the
+     * selection stays on the node it was on. */
+    Tree_Sort(column, ascending) {
+        this.Tree.SortBy(column, ascending);
+        this.showTree();
+    }
 
     BtnExpand_Click()   { this.Tree.ExpandAll();   this.showTree(); }
     BtnCollapse_Click() { this.Tree.CollapseAll(); this.showTree(); }
