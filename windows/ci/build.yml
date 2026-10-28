@@ -268,6 +268,14 @@ jobs:
       # the shortcut starts -- has to be a GUI executable, or the application
       # opens with a console behind it.
       #
+      # **On a clean machine's PATH.** This shell has `/ucrt64/bin` on its
+      # PATH, which holds every DLL and helper the tree should carry, so a run
+      # here would find a missing one there and pass -- GLib's spawn helpers
+      # went missing exactly like that. The installed tree is run with only
+      # Windows' own directories, by both executables, and the smoke project
+      # starts a child with its output piped, which is what goes through the
+      # helper: `bintana.exe` uses the `-console` one, `bintanaw.exe` the other.
+      #
       # `MSYS2_ARG_CONV_EXCL`: MSYS2 rewrites an argument that looks like a
       # path, and `/S` looks like one.
       - name: Smoke
@@ -287,10 +295,14 @@ jobs:
           function Main() {
               const answer = new Decimal("10") / 3 * 3;
               print("smoke: " + answer);
-              Application.Quit(answer.toString() === "10" ? 0 : 1);
+              /* A child with its output piped: through GLib's spawn helper. */
+              const child = Exec.Wait([Application.Executable, "--version"]);
+              print("smoke: the child said " + child.Output.trim());
+              Application.Quit(answer.toString() === "10" && child.ExitCode === 0 ? 0 : 1);
           }
           EOF
 
+          clean="/c/Windows/System32:/c/Windows"
           for name in ${{ steps.plan.outputs.apps }}; do
               setup=$(ls stage/apps/"$name"/*-windows-x86_64.exe)
               # `Package.commandName`: `bintana-` and the id's last element.
@@ -309,8 +321,12 @@ jobs:
                   [ -z "$path" ] || test -e "$into/$path" \
                       || { echo "$name: installed without $path" >&2; exit 1; }
               done < "with/$name"
-              "$into/bin/bintana.exe" --version
-              "$into/bin/bintana.exe" "$smoke"
+              PATH="$clean" "$into/bin/bintana.exe" --version
+              PATH="$clean" "$into/bin/bintana.exe" "$smoke"
+              # No console, so nothing it prints is seen: the exit code is the
+              # answer, and it is the IDE's own Run, helper and all.
+              PATH="$clean" "$into/bin/bintanaw.exe" "$smoke" \
+                  || { echo "$name: bintanaw.exe could not run the smoke" >&2; exit 1; }
           done
 
       # A release per application version, the setup attached to it. A version

@@ -795,7 +795,13 @@ jobs:
         run: |
           set -euo pipefail
           name=$(basename "$(cat zip-name.txt)" .zip)
-          "stage/$name/bin/bintana.exe" --version
+          # On Windows' own PATH: this shell's has `/ucrt64/bin`, where a DLL
+          # or a helper the tree forgot would be found anyway.
+          PATH=/c/Windows/System32:/c/Windows "stage/$name/bin/bintana.exe" --version
+          for helper in gspawn-win64-helper.exe gspawn-win64-helper-console.exe; do
+              test -f "stage/$name/bin/$helper" \
+                  || { echo "the tree has no bin/$helper: Exec with a pipe fails" >&2; exit 1; }
+          done
           BINTANA="$PWD/stage/$name/bin/bintana.exe" ./tests/api.sh
           # The one a shortcut starts: the same runtime with a GUI header, so a
           # menu entry opens no console (`bintanaw.exe` in CMakeLists.txt).

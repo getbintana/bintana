@@ -74,6 +74,17 @@ copy_deps() {
 
 copy_deps "$dest/bin/bintana.exe"
 
+# GLib's spawn helpers, which no link names: on Windows a child with its output
+# piped -- every `Exec` that reads what it printed, the IDE's Run among them --
+# is started *through* `gspawn-win64-helper.exe` (from a process with no
+# console, `bintanaw.exe`) or its `-console` twin (from `bintana.exe`). GLib
+# looks for them beside its own DLL and then on the PATH, which is why an
+# MSYS2 shell -- `/ucrt64/bin` on its PATH -- never misses them, and a machine
+# that unzipped this tree answers `Exec failed: it could not be started`.
+for helper in gspawn-win64-helper.exe gspawn-win64-helper-console.exe; do
+    cp "$ucrt/bin/$helper" "$dest/bin/"
+done
+
 # --- 3. the data GTK opens at run time ---------------------------------------
 #
 # None of it is in the exe's link closure -- it is loaded by name, later, from

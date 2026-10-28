@@ -534,6 +534,8 @@ function checkNsis(root) {
     };
     put(File.Join("bin", "bintana.exe"), "MZ");
     put(File.Join("bin", "bintanaw.exe"), "MZ, with a GUI header");
+    put(File.Join("bin", "gspawn-win64-helper.exe"), "MZ");
+    put(File.Join("bin", "gspawn-win64-helper-console.exe"), "MZ");
     put(File.Join("bin", "libgtk-4.dll"), "DLL");
     put(File.Join("bin", "bintana-ide.cmd"), "the IDE's launcher");
     put(File.Join("share", "glib-2.0", "schemas", "x.schema"), "schemas");
@@ -549,6 +551,9 @@ function checkNsis(root) {
           File.Exists(File.Join(staged, "bin", "bintana.exe")));
     check("and the one the shortcuts start",
           File.Exists(File.Join(staged, "bin", "bintanaw.exe")));
+    check("and GLib's spawn helpers, which an Exec with its output piped needs",
+          File.Exists(File.Join(staged, "bin", "gspawn-win64-helper.exe")) &&
+          File.Exists(File.Join(staged, "bin", "gspawn-win64-helper-console.exe")));
     check("and its DLLs",
           File.Exists(File.Join(staged, "bin", "libgtk-4.dll")));
     check("but not the IDE's launcher",
@@ -612,6 +617,13 @@ function checkNsis(root) {
     throws("a tree with no bintanaw.exe is refused",
            () => Nsis.Stage(dir, File.Join(root, "out-stage-older"), { Prefix: older }),
            "no bin/bintanaw.exe");
+
+    /* And one without GLib's helpers: it builds, installs, starts -- and every
+     * Run in the IDE answers "it could not be started". */
+    File.Save(File.Join(older, "bin", "bintanaw.exe"), "MZ");
+    throws("a tree with no spawn helper is refused",
+           () => Nsis.Stage(dir, File.Join(root, "out-stage-nohelper"), { Prefix: older }),
+           "no bin/gspawn-win64-helper.exe");
     throws("the project itself as the output is refused",
            () => Nsis.Stage(dir, dir), "holds the project");
 
