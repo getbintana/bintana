@@ -317,6 +317,11 @@ jobs:
               test -f "$into/share/bintana/apps/$cmd/project.json"
               test -f "$into/Uninstall.exe"
               objdump -p "$into/bin/bintanaw.exe" | grep -q 'Windows GUI'
+              # Adwaita inherits AdwaitaLegacy, where its full-colour icons are.
+              for theme in Adwaita AdwaitaLegacy hicolor; do
+                  test -f "$into/share/icons/$theme/index.theme" \
+                      || { echo "$name: installed without the $theme icon theme" >&2; exit 1; }
+              done
               while IFS= read -r path; do
                   [ -z "$path" ] || test -e "$into/$path" \
                       || { echo "$name: installed without $path" >&2; exit 1; }

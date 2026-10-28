@@ -539,6 +539,8 @@ function checkNsis(root) {
     put(File.Join("bin", "libgtk-4.dll"), "DLL");
     put(File.Join("bin", "bintana-ide.cmd"), "the IDE's launcher");
     put(File.Join("share", "glib-2.0", "schemas", "x.schema"), "schemas");
+    put(File.Join("share", "icons", "Adwaita", "index.theme"), "Inherits=AdwaitaLegacy,hicolor");
+    put(File.Join("share", "icons", "AdwaitaLegacy", "16x16", "legacy", "document-new.png"), "PNG");
     put(File.Join("share", "bintana", "lib", "x.js"), "a shipped library");
     put(File.Join("share", "bintana", "ide", "Main.js"), "the IDE");
     put(File.Join("etc", "gtk-4.0", "settings.ini"), "font");
@@ -558,6 +560,12 @@ function checkNsis(root) {
           File.Exists(File.Join(staged, "bin", "libgtk-4.dll")));
     check("but not the IDE's launcher",
           !File.Exists(File.Join(staged, "bin", "bintana-ide.cmd")));
+    /* The full-colour icons Adwaita moved out of itself, which it inherits:
+     * without them the IDE's toolbar is blank buttons, and only on Windows. */
+    check("with Adwaita and the legacy theme it inherits",
+          File.Exists(File.Join(staged, "share", "icons", "Adwaita", "index.theme")) &&
+          File.Exists(File.Join(staged, "share", "icons", "AdwaitaLegacy", "16x16",
+                                "legacy", "document-new.png")));
     check("with the data GTK opens by name",
           File.Exists(File.Join(staged, "share", "glib-2.0", "schemas", "x.schema")) &&
           File.Exists(File.Join(staged, "etc", "gtk-4.0", "settings.ini")));

@@ -802,6 +802,10 @@ jobs:
               test -f "stage/$name/bin/$helper" \
                   || { echo "the tree has no bin/$helper: Exec with a pipe fails" >&2; exit 1; }
           done
+          # The theme Adwaita inherits first, where its full-colour icons went:
+          # without it the IDE's toolbar (`document-new`...) is blank.
+          test -f "stage/$name/share/icons/AdwaitaLegacy/index.theme" \
+              || { echo "the tree has no AdwaitaLegacy: the IDE's toolbar is blank" >&2; exit 1; }
           BINTANA="$PWD/stage/$name/bin/bintana.exe" ./tests/api.sh
           # The one a shortcut starts: the same runtime with a GUI header, so a
           # menu entry opens no console (`bintanaw.exe` in CMakeLists.txt).

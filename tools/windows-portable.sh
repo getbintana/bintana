@@ -148,7 +148,12 @@ done
 
 # The icon themes.  Adwaita is what GTK falls back to and hicolor is the
 # mandatory last resort -- the IDE's own drawings resolve through those two.
-for theme in Adwaita hicolor; do
+# **And AdwaitaLegacy**, which Adwaita's `index.theme` inherits first: the
+# full-colour icons Adwaita moved out of itself (`document-new`,
+# `document-save`, `media-playback-start`...) live there now, and a tree
+# without it draws the IDE's toolbar as blank buttons. A Linux desktop has it
+# from the distribution, which is why only Windows ever showed it missing.
+for theme in Adwaita AdwaitaLegacy hicolor; do
     [ -d "$ucrt/share/icons/$theme" ] || continue
     mkdir -p "$dest/share/icons"
     cp -R "$ucrt/share/icons/$theme" "$dest/share/icons/"
