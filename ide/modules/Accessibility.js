@@ -118,7 +118,7 @@ export class Accessibility {
     static check(node, before, captioned, actions, out) {
         const p    = node.properties || {};
         const type = node.type;
-        const name = node.name || `(an unnamed ${type})`;
+        const name = node.name || Locale.Text("(an unnamed {0})", type);
 
         if (p.AccessibleHidden === true)
             return;                              // decoration: said so, and true
@@ -130,11 +130,11 @@ export class Accessibility {
             /* The caption just above is almost always the one: say so, which is
              * the fix and not only the complaint. */
             const hint = before && before.type === "Label" && !(before.properties || {}).For && before.name
-                ? ` (the Label ${before.name} just before it is probably its caption: ` +
-                  `set ${before.name}.For to "${node.name || "its name"}")`
+                ? Locale.Text(" (the Label {0} just before it is probably its caption: set {0}.For to \"{1}\")",
+                              before.name, node.name || Locale.Text("its name"))
                 : "";
-            out.push(`${name} is a ${type} a screen reader cannot name: give it an ` +
-                     `AccessibleName, or point a Label's For at it${hint}`);
+            out.push(Locale.Text("{0} is a {1} a screen reader cannot name: give it an AccessibleName, or point a Label's For at it{2}",
+                                 name, type, hint));
         } else if (A11Y_BUTTONS.includes(type)) {
             const act   = typeof p.Action === "string" ? actions.get(p.Action) || null : null;
             const words = (typeof p.Text === "string" && p.Text !== "") ||
@@ -143,13 +143,12 @@ export class Accessibility {
 
             if (words || named || (tip !== "" && Array.from(tip).length <= A11Y_TOOLTIP_MAX))
                 return;
-            out.push(`${name} is a ${type} with no words, no command with words and no ` +
-                     `Tooltip of ${A11Y_TOOLTIP_MAX} characters or fewer: a screen reader ` +
-                     `says only "button". Give it an AccessibleName`);
+            out.push(Locale.Text("{0} is a {1} with no words, no command with words and no Tooltip of {2} characters or fewer: a screen reader says only \"button\". Give it an AccessibleName",
+                                 name, type, A11Y_TOOLTIP_MAX));
         } else if (A11Y_PICTURES.includes(type)) {
             if (named) return;
-            out.push(`${name} is a ${type} with no AccessibleName: give it one, or ` +
-                     `AccessibleHidden if it is only decoration`);
+            out.push(Locale.Text("{0} is a {1} with no AccessibleName: give it one, or AccessibleHidden if it is only decoration",
+                                 name, type));
         }
     }
 }

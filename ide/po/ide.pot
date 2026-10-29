@@ -2555,6 +2555,30 @@ msgstr ""
 msgid "Only a container drawn in coordinates has a tab order to edit."
 msgstr ""
 
+#: modules/Accessibility.js:121
+msgid "(an unnamed {0})"
+msgstr ""
+
+#: modules/Accessibility.js:133
+msgid " (the Label {0} just before it is probably its caption: set {0}.For to \"{1}\")"
+msgstr ""
+
+#: modules/Accessibility.js:134
+msgid "its name"
+msgstr ""
+
+#: modules/Accessibility.js:136
+msgid "{0} is a {1} a screen reader cannot name: give it an AccessibleName, or point a Label's For at it{2}"
+msgstr ""
+
+#: modules/Accessibility.js:146
+msgid "{0} is a {1} with no words, no command with words and no Tooltip of {2} characters or fewer: a screen reader says only \"button\". Give it an AccessibleName"
+msgstr ""
+
+#: modules/Accessibility.js:150
+msgid "{0} is a {1} with no AccessibleName: give it one, or AccessibleHidden if it is only decoration"
+msgstr ""
+
 #: modules/Changes.js:75
 msgid "Show the changes view"
 msgstr ""

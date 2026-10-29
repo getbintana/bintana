@@ -2587,6 +2587,39 @@ msgstr ""
 "Solo un contenedor dibujado por coordenadas tiene un orden de tabulación "
 "para editar."
 
+#: modules/Accessibility.js:121
+msgid "(an unnamed {0})"
+msgstr "(un {0} sin nombre)"
+
+#: modules/Accessibility.js:133
+msgid ""
+" (the Label {0} just before it is probably its caption: set {0}.For to "
+"\"{1}\")"
+msgstr " (el Label {0} que está justo antes es probablemente su rótulo: poné {0}.For en \"{1}\")"
+
+#: modules/Accessibility.js:134
+msgid "its name"
+msgstr "su nombre"
+
+#: modules/Accessibility.js:136
+msgid ""
+"{0} is a {1} a screen reader cannot name: give it an AccessibleName, or "
+"point a Label's For at it{2}"
+msgstr "{0} es un {1} que un lector de pantalla no puede nombrar: dale un AccessibleName, o apuntá con el For de un Label hacia él{2}"
+
+#: modules/Accessibility.js:146
+msgid ""
+"{0} is a {1} with no words, no command with words and no Tooltip of {2} "
+"characters or fewer: a screen reader says only \"button\". Give it an "
+"AccessibleName"
+msgstr "{0} es un {1} sin texto, sin comando con texto y sin Tooltip de {2} caracteres o menos: un lector de pantalla dice solo \"botón\". Dale un AccessibleName"
+
+#: modules/Accessibility.js:150
+msgid ""
+"{0} is a {1} with no AccessibleName: give it one, or AccessibleHidden if it "
+"is only decoration"
+msgstr "{0} es un {1} sin AccessibleName: dale uno, o AccessibleHidden si es solo decoración"
+
 #: modules/Changes.js:75
 msgid "Show the changes view"
 msgstr "Mostrar la vista de cambios"
