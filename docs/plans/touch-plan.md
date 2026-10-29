@@ -109,7 +109,7 @@ that has a handler -- the controller is attached when a handler exists, the way
 
 Each is shippable alone.
 
-1. **`MouseCancel(x, y)` -- built.** `attach_mouse` connects only `pressed` and
+1. **`MouseCancel(x, y)` -- built, and verified with two fingers (`cancel=1`; a second finger ends the click gesture with `end`, not `cancel`, so the runtime listens to both).** `attach_mouse` connects only `pressed` and
    `released`; GTK's `GtkGestureClick` handles one point at a time and **by
    design** cancels its sequence when a second arrives (or a parent claims it),
    emitting `cancel` and no `released` -- documented, and no report of it as a
