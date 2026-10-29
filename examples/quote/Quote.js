@@ -48,4 +48,27 @@ class Line extends Record {
  * it.
  */
 class Quote extends Record {
+
+    /*
+     * What is charged, worked out and never stored -- the same rule as
+     * `Line.Amount`. It lives here and not in the form so that a test can ask it
+     * (`tests/QuoteTest.js`) without opening a window: a calculation tied to the
+     * labels that show it can only be checked by looking at them.
+     *
+     * Every operator is exact. The two `Round(2)` calls are the only places
+     * anything is given up, and they are where money is actually decided: a
+     * discount and a tax are amounts somebody is charged, so they are settled to
+     * the cent before the next line uses them. Rounding at the end instead would
+     * put the total a cent away from the sum of what is shown.
+     */
+    get Totals() {
+        let subtotal = new Decimal("0", 2);
+        for (const line of this.Lines) subtotal = subtotal + line.Amount;
+
+        const off     = (subtotal * this.Discount / 100).Round(2);
+        const taxable = subtotal - off;
+        const vat     = (taxable * new Decimal(this.Tax) / 100).Round(2);
+
+        return { Subtotal: subtotal, Discount: off, Tax: vat, Total: taxable + vat };
+    }
 }

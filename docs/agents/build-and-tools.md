@@ -406,3 +406,14 @@ second name is ignored and the line says `[only Hash]`.
   the module and reads CMake's own `no libsecret:` line back to prove it. The
   Windows job needs no change -- libsecret has no Windows port and the `#else`
   half is what that build compiles.
+
+## To review later
+
+- **Three files hold a third of the runtime's C**: `bta_widget.c` (9472 lines),
+  `bta_controls.c` (8611) and `bta_table.c` (7187), 25k of 79k, counted on
+  2026-10-29. The class table already registers a class by rows from each module
+  (`bta_register_classes`), so a split by widget family needs no change of
+  design -- only the includes and the `add_executable` line. Nothing is wrong
+  with them yet; the question is whether finding a widget's code has become
+  slow, and whether the split is worth the churn in `git blame`. Decide it
+  after the next feature that touches one of them, not before.

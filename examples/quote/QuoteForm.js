@@ -424,20 +424,12 @@ class QuoteForm extends Form {
 
     /* --- the money ---------------------------------------------------------
      *
-     * All of it, and every operator here is exact. The two `Round(2)` calls are
-     * the only places anything is given up, and they are where money is actually
-     * decided: a discount and a tax are amounts somebody is charged, so they are
-     * settled to the cent before the next line uses them. Rounding at the end
-     * instead would put the total a cent away from the sum of what is shown.
+     * The sum is `Quote.Totals`, in `Quote.js`: here it is only shown. It moved
+     * out of the form so `tests/QuoteTest.js` can hold it to the cent without
+     * a window.
      */
     total() {
-        let subtotal = new Decimal("0", 2);
-        for (const line of this.quote.Lines) subtotal = subtotal + line.Amount;
-
-        const off     = (subtotal * this.quote.Discount / 100).Round(2);
-        const taxable = subtotal - off;
-        const vat     = (taxable * new Decimal(this.quote.Tax) / 100).Round(2);
-        const total   = taxable + vat;
+        const { Subtotal: subtotal, Discount: off, Tax: vat, Total: total } = this.quote.Totals;
 
         this.LblSubtotal.Text = Locale.Currency(subtotal);
         /* Shown even at zero: a blank in the middle of a column of amounts reads
