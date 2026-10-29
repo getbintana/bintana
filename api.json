@@ -3670,6 +3670,15 @@
           "Native": false
         },
         {
+          "Name": "Remember",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the window comes back as the person left it: its size, whether it was maximised and where each named `Split` divider sat, kept in `Settings` under `window.<FormClass>`. Restored before `Form_Open`, so a handler that sizes the window itself still wins; written when the window closes or `Application.Quit` runs. **There is no position**: GTK4 cannot place its own window. Default `false`",
+          "Native": true
+        },
+        {
           "Name": "Resizable",
           "Kind": "Property",
           "Params": -1,
@@ -12172,6 +12181,15 @@
           "Native": true
         },
         {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(message, stack) => …` to take over uncaught errors — **two strings, not the `Error`**. Without it an uncaught error goes to the terminal and to a window of the runtime's own; with it, to the handler instead. An error raised inside the handler reaches only the terminal. `null` until assigned",
+          "Native": true
+        },
+        {
           "Name": "OnSecondInstance",
           "Kind": "Property",
           "Params": -1,
@@ -15228,6 +15246,74 @@
       ]
     },
     {
+      "Name": "Test",
+      "Members": [
+        {
+          "Name": "Check",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(cond, what)",
+          "Returns": "",
+          "Doc": "fails the test unless `cond` is true",
+          "Native": false
+        },
+        {
+          "Name": "Eq",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(got, want, what)",
+          "Returns": "",
+          "Doc": "fails the test unless `got` equals `want` -- the same value, or for arrays and plain objects the same JSON, or for a `Decimal` or a `Day` the same text. `what` names the check in the message",
+          "Native": false
+        },
+        {
+          "Name": "Fail",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(message)",
+          "Returns": "",
+          "Doc": "fails the test now, with that message",
+          "Native": false
+        },
+        {
+          "Name": "Setup",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "runs before each test method, on the instance it runs on; override it",
+          "Native": false
+        },
+        {
+          "Name": "Teardown",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "runs after each test method, passed or not; override it",
+          "Native": false
+        },
+        {
+          "Name": "Throws",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(fn, what)",
+          "Returns": "",
+          "Doc": "fails the test unless `fn` throws, and answers what it threw -- so the message can be checked too",
+          "Native": false
+        },
+        {
+          "Name": "Until",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(cond, then, options)",
+          "Returns": "",
+          "Doc": "waits: asks `cond` every 10 ms and runs `then` once it holds. The test is not over until it has; if it never holds within `ms` (default `5000`) the test fails, saying `what`",
+          "Native": false
+        }
+      ]
+    },
+    {
       "Name": "Text",
       "Members": [
         {
@@ -15418,6 +15504,137 @@
           "Signature": "()",
           "Returns": "",
           "Doc": "stops it; answers the timer",
+          "Native": false
+        }
+      ]
+    },
+    {
+      "Name": "UndoStack",
+      "Members": [
+        {
+          "Name": "Add",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(text, redo, undo)",
+          "Returns": "",
+          "Doc": "records a step that **has already happened** -- text typed, a drag that ended -- without running it. Answers the stack",
+          "Native": false
+        },
+        {
+          "Name": "CanRedo",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether there is a step to do again",
+          "Native": false
+        },
+        {
+          "Name": "CanUndo",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether there is a step to take back",
+          "Native": false
+        },
+        {
+          "Name": "Clear",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "forgets every step, both ways; what is done now counts as clean",
+          "Native": false
+        },
+        {
+          "Name": "Do",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(text, redo, undo)",
+          "Returns": "",
+          "Doc": "runs `redo` and records the step, so `Undo` runs `undo`. If `redo` throws, nothing is recorded and the error goes on. Answers the stack",
+          "Native": false
+        },
+        {
+          "Name": "Group",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(text, fn)",
+          "Returns": "",
+          "Doc": "runs `fn`, and every `Do` and `Add` inside it becomes **one** step called `text`, undone last-first. A group inside a group joins the outer one. If `fn` throws, what it had done is taken back and the error goes on",
+          "Native": false
+        },
+        {
+          "Name": "Limit",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how many steps it keeps, the oldest going first; `0` for no limit. Default `100`",
+          "Native": false
+        },
+        {
+          "Name": "MarkClean",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "what is done now is what was saved: `Modified` reads `false` until the next step, an `Undo` or a `Redo`",
+          "Native": false
+        },
+        {
+          "Name": "Modified",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether what is done now differs from what it was at `MarkClean` -- the asterisk in a title bar",
+          "Native": false
+        },
+        {
+          "Name": "OnChange",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`, called after every change to what can be undone or redone; `null` takes it off",
+          "Native": false
+        },
+        {
+          "Name": "Redo",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "does again the last step taken back; `false` when there was none",
+          "Native": false
+        },
+        {
+          "Name": "RedoText",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the text of the step `Redo` does again, or `\"\"`",
+          "Native": false
+        },
+        {
+          "Name": "Undo",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "takes the last step back; `false` when there was none",
+          "Native": false
+        },
+        {
+          "Name": "UndoText",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the text of the step `Undo` takes back, or `\"\"` -- for a menu's \"Undo Move card\"",
           "Native": false
         }
       ]

@@ -127,6 +127,8 @@ class TestForm extends Form {
         this.testContainers();
         this.testPrelude();
         this.testConsoleExit();
+        this.testLook();
+        this.testTests();
     }
 
     /* --- .form loading -------------------------------------------------- */
@@ -300,6 +302,157 @@ class TestForm extends Form {
               JSON.stringify(libs));
         eq("and a name nothing has resolves to nothing",
            Application.LibraryPath("no-such-library-here"), "");
+    }
+
+    /* --- `bintana test`: a project's own tests ------------------------------
+     *
+     * A real project with a real `tests/` folder, run as a child under the
+     * subcommand, in both shapes a project has (a startup form, and `main`):
+     * what passed and failed, the status CI reads, the JSON the IDE reads, the
+     * filter, a file whose class is missing, a wait that never holds, an error
+     * in a callback landing on the test that was running -- and the half that
+     * is easy to forget, that a normal run never loads `tests/`.
+     */
+    testTests() {
+        const dir = File.Join(Environment.TempDirectory,
+                              `bta-smoke-tests-${Environment.ProcessId}`);
+        Directory.Make(File.Join(dir, "tests"));
+        const write = (shape) => File.Save(File.Join(dir, "project.json"),
+            JSON.stringify(shape === "main"
+                ? { name: "smoke-tests", main: "Go" }
+                : { name: "smoke-tests", startup: "Main" }));
+        File.Save(File.Join(dir, "Invoice.js"),
+            "class Invoice {\n" +
+            "  constructor(l) { if (l.some((x) => x < 0)) throw new RangeError('neg'); this.l = l; }\n" +
+            "  get Total() { return this.l.reduce((a, b) => a + b, 0); }\n" +
+            "}\n" +
+            "class Main extends Form { Form_Open() { print('the program ran'); Application.Quit(); } }\n" +
+            "function Go() { print('the program ran'); }\n");
+        File.Save(File.Join(dir, "tests", "InvoiceTest.js"),
+            "class InvoiceTest extends Test {\n" +
+            "  Setup() { this.inv = new Invoice([10, 5]); }\n" +
+            "  testTotal() { this.Eq(this.inv.Total, 15); }\n" +
+            "  testWrong() { this.Eq(this.inv.Total, 16, 'total'); }\n" +
+            "  testRefuse() { this.Check(this.Throws(() => new Invoice([-1])) instanceof RangeError); }\n" +
+            "  testLater() { let d = false; Timer.After(20, () => { d = true; }); this.Until(() => d, () => this.Check(d)); }\n" +
+            "  testNever() { this.Until(() => false, () => {}, { Ms: 50, What: 'the reply' }); }\n" +
+            "  testCallback() { Timer.After(5, () => nope()); this.Until(() => false, () => {}, { Ms: 150 }); }\n" +
+            "}\n");
+        File.Save(File.Join(dir, "tests", "LostTest.js"),
+                  "print('tests were loaded');\nclass Elsewhere extends Test {}\n");
+
+        const run = (...args) => {
+            const res = Exec.Wait([Application.Executable, ...args], { Timeout: 20000 });
+            const rows = res.Output.split("\n").filter((l) => l.startsWith("{"))
+                            .map((l) => JSON.parse(l));
+            return { code: res.ExitCode, out: res.Output, rows,
+                     test: (n) => rows.find((r) => r.Event === "Test" && r.Name === n) };
+        };
+
+        try {
+            for (const shape of ["startup", "main"]) {
+                write(shape);
+                const r = run("test", "--json", dir);
+                eq(`${shape}: a failure ends the run 1`, r.code, 1);
+                const done = r.rows.find((x) => x.Event === "Done");
+                eq(`${shape}: ...and says how many of each`,
+                   done && `${done.Passed}/${done.Failed}`, "3/4");
+                eq(`${shape}: a test that holds passes`, r.test("testTotal").Ok, true);
+                eq(`${shape}: one that does not says what it got`,
+                   r.test("testWrong").Message, "total: expected 16, got 15");
+                eq(`${shape}: ...and the line it is on`, r.test("testWrong").Line, 4);
+                eq(`${shape}: a wait passes when it holds`, r.test("testLater").Ok, true);
+                eq(`${shape}: and fails by name when it never does`,
+                   r.test("testNever").Message, "the reply: never became true in 50 ms");
+                check(`${shape}: an error in a callback is the running test's`,
+                      !r.test("testCallback").Ok &&
+                      r.test("testCallback").Message.includes("nope"),
+                      JSON.stringify(r.test("testCallback")));
+                check(`${shape}: a file without its class is a red line, not a smaller total`,
+                      r.rows.some((x) => x.Class === "LostTest" && !x.Ok),
+                      JSON.stringify(r.rows.filter((x) => x.Class === "LostTest")));
+                check(`${shape}: the program itself does not run`,
+                      !r.out.includes("the program ran"), r.out.slice(0, 300));
+            }
+
+            write("startup");
+            const only = run("test", "--json", dir, "Total");
+            eq("a filter keeps the tests whose name contains it", only.rows.length, 2);
+            eq("and a run of passing tests ends 0", only.code, 0);
+
+            const plain = run(dir);
+            check("a normal run never loads tests/, even with no sources list",
+                  plain.out.includes("the program ran") && !plain.out.includes("tests were loaded"),
+                  plain.out.slice(0, 300));
+            eq("--json is refused outside test", run("--json", dir).code, 2);
+        } finally {
+            Directory.DeleteTree(dir);
+        }
+    }
+
+    /* --- a run made to look another way ------------------------------------
+     *
+     * `--form`, `--theme`, `--text-scale` and `--rtl` are options of the run,
+     * so the child is a real windowed project run under each, printing what it
+     * sees -- which form opened, whether its ink says dark, how wide a sentence
+     * comes out, which way a box lays out -- and quitting. The display is this
+     * suite's own virtual one, which the child inherits.
+     */
+    testLook() {
+        const dir = File.Join(Environment.TempDirectory,
+                              `bta-smoke-look-${Environment.ProcessId}`);
+        Directory.Make(dir);
+        File.Save(File.Join(dir, "project.json"),
+                  JSON.stringify({ name: "smoke-look", startup: "First",
+                                   singleInstance: true, id: "org.bintana.SmokeLook",
+                                   sources: ["Look.js"] }));
+        File.Save(File.Join(dir, "Look.js"),
+            "class First extends Form { Form_Open() { print('opened First'); Application.Quit(); } }\n" +
+            "class Second extends Form {\n" +
+            "  Form_Open() {\n" +
+            "    this.Arrangement = 'Horizontal'; this.Resize(300, 60);\n" +
+            "    this.A = new Label(); this.A.Text = 'Measure me please'; this.Add(this.A);\n" +
+            "    this.B = new Label(); this.B.Text = 'B'; this.Add(this.B);\n" +
+            "    Timer.After(300, () => {\n" +
+            "      print(`opened Second dark=${this.Dark} wide=${this.A.Bounds().Width}` +\n" +
+            "            ` rtl=${this.B.Bounds().X < this.A.Bounds().X}`);\n" +
+            "      Application.Quit(); });\n" +
+            "  }\n" +
+            "}\n");
+
+        const run = (...opts) => {
+            const res = Exec.Wait([Application.Executable, ...opts, dir], { Timeout: 15000 });
+            const m = /opened (\w+)(?: dark=(\w+) wide=(\d+) rtl=(\w+))?/.exec(res.Output);
+            return m ? { form: m[1], dark: m[2], wide: Number(m[3]), rtl: m[4], code: res.ExitCode }
+                     : { form: "", code: res.ExitCode, out: res.Output };
+        };
+
+        try {
+            eq("with no option the startup form opens", run().form, "First");
+
+            const plain = run("--form", "Second");
+            eq("--form opens the one it names, single-instance or not", plain.form, "Second");
+            eq("...in the desktop's own variant here", plain.dark, "false");
+            eq("...laid out left to right", plain.rtl, "false");
+
+            eq("--theme dark is the dark variant, as the ink says",
+               run("--form", "Second", "--theme", "dark").dark, "true");
+
+            const big = run("--form", "Second", "--text-scale", "2");
+            check("--text-scale 2 makes a sentence about twice as wide",
+                  big.wide > plain.wide * 1.8 && big.wide < plain.wide * 2.2,
+                  `${plain.wide} then ${big.wide}`);
+
+            eq("--rtl lays a box out the other way",
+               run("--form", "Second", "--rtl").rtl, "true");
+
+            eq("a theme that is not dark or light is refused",
+               run("--theme", "blue").code, 2);
+            eq("and a scale out of reason", run("--text-scale", "9").code, 2);
+            eq("and a form with no name", run("--form").code, 2);
+        } finally {
+            Directory.DeleteTree(dir);
+        }
     }
 
     /* --- a console program's exit status --------------------------------- */

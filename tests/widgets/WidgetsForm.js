@@ -261,6 +261,9 @@ class SizedForm extends Form {
  * it consumed -- and the count is how the test tells "it was asked" from "it
  * closed anyway".
  */
+/* A class of its own, because what `Remember` keeps is keyed by the class. */
+class RememberForm extends Form {}
+
 class VetoForm extends Form {
     Form_Close() {
         this.asked = (this.asked || 0) + 1;
@@ -571,12 +574,12 @@ const TESTS = [
     /* Children too: a file with `export` is a module. */
     "Modules", "Imports", "Records", "DataBinding", "SettableCache",
     "Time",
-    "Stopwatch",
+    "Stopwatch", "UndoStack",
     "Shortcut", "Decimal", "FieldDecimal",
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -655,6 +658,8 @@ const NEEDS = {
     DragDrop:       ["Exec"],
     /* Its second window has to be shown, closed and shown again. */
     HideOnClose:    ["Exec"],
+    /* Two windows, one after the other, each shown and closed. */
+    Remember:       ["Exec"],
     /* Its events arrive from the filesystem, which is not this turn of the
      * loop: the run has to still be going when they do. */
     FileWatch:      ["Exec"],
@@ -6373,6 +6378,69 @@ class Form1 extends Form {
 
                 kept.HideOnClose = false;
                 kept.Close();
+            });
+        });
+    }
+
+    /* --- the window as it was left -----------------------------------------
+     *
+     * One window is resized and its divider dragged, then closed; a second of
+     * the same class comes back at that size with the divider where it was.
+     * The key is the suite's own and is taken away at both ends.
+     */
+    testRemember() {
+        const KEY = "window.RememberForm";
+        Settings.Delete(KEY);
+
+        const build = () => {
+            const f = new RememberForm();
+            f.Text = "remembered";
+            f.Arrangement = "Vertical";
+            const split = new Split();
+            split.Name = "Divider";
+            f.Divider = split;
+            f.Add(split);
+            split.Fill = true;
+            split.Add(new Panel());
+            split.Add(new Panel());
+            f.Resize(360, 240);
+            return f;
+        };
+
+        const first = build();
+        eq("a window forgets itself until told otherwise", first.Remember, false);
+        check("so that stays out of the .form",
+              !("Remember" in first.Serialize().properties),
+              JSON.stringify(first.Serialize().properties));
+        first.Remember = true;
+        eq("asking otherwise reads back", first.Remember, true);
+        eq("and is saved", first.Serialize().properties.Remember, true);
+
+        first.Show();
+        until("the first window is up", () => first.Bounds().Width > 0, () => {
+            first.Resize(420, 260);
+            until("it takes the new size", () => first.Bounds().Width === 420, () => {
+                first.Divider.Position = 150;
+                first.Close();
+
+                const saved = Settings.Get(KEY, null);
+                check("closing writes the window down", saved && typeof saved === "object",
+                      JSON.stringify(saved));
+                eq("with the size it was left at",
+                   saved && `${saved.width}x${saved.height}`, "420x260");
+                eq("and the divider by name", saved && saved.splits && saved.splits.Divider, 150);
+
+                const second = build();
+                second.Remember = true;
+                second.Show();
+                until("the second window is up", () => second.Bounds().Width > 0, () => {
+                    eq("it comes back at that size, not the declared one",
+                       `${second.Bounds().Width}x${second.Bounds().Height}`, "420x260");
+                    eq("with the divider where it was", second.Divider.Position, 150);
+                    second.Remember = false;
+                    second.Close();
+                    Settings.Delete(KEY);
+                });
             });
         });
     }
@@ -22527,6 +22595,94 @@ class Form1 extends Form {
      *
      * `examples/stopwatch` is the whole of it running.
      */
+    /* --- what Edit > Undo takes back ----------------------------------------
+     *
+     * A document of one number, so every assertion is exact: the state after a
+     * step, after its undo, after a redo, and after each of the ways a step can
+     * go wrong -- a redo that throws records nothing, an undo that throws stays
+     * on the list, and a new step after an undo forgets what could be redone.
+     */
+    testUndoStack() {
+        let n = 0;
+        let told = 0;
+        const add = (k) => [() => { n += k; }, () => { n -= k; }];
+        const u = new UndoStack();
+        u.OnChange = () => { told++; };
+
+        eq("an empty stack has nothing to take back", u.CanUndo, false);
+        eq("nor to do again", u.CanRedo, false);
+        eq("and nothing to call it", u.UndoText, "");
+        eq("and is not modified", u.Modified, false);
+        eq("it keeps a hundred steps unless told", u.Limit, 100);
+
+        u.Do("Add one", ...add(1));
+        eq("Do runs the step", n, 1);
+        eq("and records it", u.UndoText, "Add one");
+        eq("which is a change", u.Modified, true);
+        eq("and says so", told, 1);
+
+        u.MarkClean();
+        u.Do("Add ten", ...add(10));
+        eq("two steps", n, 11);
+        eq("Undo answers that it took one back", u.Undo(), true);
+        eq("...and takes it back", n, 1);
+        eq("back at the clean point", u.Modified, false);
+        eq("the step is now Redo's", u.RedoText, "Add ten");
+        eq("Redo answers", u.Redo(), true);
+        eq("...and does it again", n, 11);
+
+        u.Undo();
+        u.Do("Add a hundred", ...add(100));
+        eq("a new step after an undo forgets the future", u.CanRedo, false);
+        eq("...and the result is the new step's", n, 101);
+
+        u.Undo(); u.Undo();
+        eq("everything taken back", n, 0);
+        eq("and Undo with nothing left answers false", u.Undo(), false);
+        eq("not clean: the clean point was the state after one", u.Modified, true);
+        u.Redo();
+
+        throws("a redo that throws goes on throwing",
+               () => u.Do("Broken", () => { throw new Error("no"); }, () => {}));
+        eq("...and records nothing", u.UndoText, "Add one");
+
+        u.Add("Typed", () => { n = 5; }, () => { n = 1; });
+        eq("Add records without running", n, 1);
+        u.Undo();
+        eq("but its undo is the one that runs", n, 1);
+        u.Redo();
+        eq("and its redo", n, 5);
+
+        u.Add("Stuck", () => {}, () => { throw new Error("stuck"); });
+        throws("an undo that throws goes on throwing", () => u.Undo());
+        eq("...and the step stays where it was", u.UndoText, "Stuck");
+        u.Clear();
+        eq("Clear forgets both ways", u.CanUndo || u.CanRedo, false);
+        eq("and what is now counts as clean", u.Modified, false);
+
+        n = 0;
+        u.Group("Paste", () => { u.Do("a", ...add(1)); u.Do("b", ...add(2)); });
+        eq("a group is one step", u.UndoText, "Paste");
+        eq("having done all of it", n, 3);
+        u.Undo();
+        eq("and undone all at once", n, 0);
+        eq("with nothing of it left behind", u.CanUndo, false);
+        throws("a group that throws goes on throwing",
+               () => u.Group("Half", () => { u.Do("c", ...add(4)); throw new Error("half"); }));
+        eq("...and what it had done is taken back", n, 0);
+        eq("...and nothing recorded", u.CanUndo, false);
+
+        throws("a step that records from inside itself is refused",
+               () => u.Do("Nested", () => u.Do("inner", () => {}, () => {}), () => {}));
+
+        const small = new UndoStack(2);
+        small.Do("1", () => {}, () => {}); small.Do("2", () => {}, () => {}); small.Do("3", () => {}, () => {});
+        small.Undo(); small.Undo();
+        eq("the limit drops the oldest step", small.CanUndo, false);
+        throws("and is a whole number", () => { small.Limit = -1; });
+        throws("OnChange takes a function or null", () => { u.OnChange = 3; });
+    }
+
     testStopwatch() {
         const watch = new Stopwatch();
 

@@ -16,6 +16,7 @@
 static void usage(void)
 {
     fputs("usage: bintana [run] <project-dir> [args...]\n"
+          "       bintana test [--json] <project-dir> [filter]\n"
           "\n"
           "Runs the Bintana project in <project-dir>: evaluates its .js\n"
           "sources, then instantiates and shows the startup form named in\n"
@@ -36,7 +37,22 @@ static void usage(void)
           "  --profile <file>  write a Sysprof capture of the runtime's own\n"
           "            marks to <file>, with no Sysprof installed.  Running\n"
           "            under `sysprof-cli` or the Sysprof application instead\n"
-          "            needs no flag and carries the samples too.\n",
+          "            needs no flag and carries the samples too.\n"
+          "  --form <Class>  open that form instead of project.json's\n"
+          "            \"startup\", and as an instance of its own even if the\n"
+          "            project is single-instance.  How one dialog is looked\n"
+          "            at without walking the program to it.\n"
+          "  --text-scale <factor>  text as the desktop's Large Text makes\n"
+          "            it: 1.25, 1.5, 2.  Between 0.5 and 4.\n"
+          "  --theme dark|light  the theme's dark or light variant.\n"
+          "  --rtl     lay out right to left, as an Arabic or Hebrew\n"
+          "            desktop would.\n"
+          "\n"
+          "`bintana test` runs the project's tests/*Test.js instead: each\n"
+          "file a class extending Test, each method named test... one test.\n"
+          "Only the tests whose Class.method contains <filter> run.  It ends\n"
+          "0 when every test passed and 1 when one did not.\n"
+          "  --json    one JSON line per test, and one at the end.\n",
           stderr);
 }
 
@@ -82,11 +98,28 @@ int main(int argc, char **argv)
 
     const char *dir  = NULL;
     const char *profile = NULL;
+    const char *form = NULL;
+    bool        testing = false;
+    bool        json = false;
+    const char *theme = NULL;
+    double      text_scale = 0;
+    bool        rtl = false;
     GPtrArray  *rest = g_ptr_array_new();
 
     for (int i = 1; i < argc; i++) {
         if (!dir && !strcmp(argv[i], "run"))
             continue;
+        /* `bintana test <project> [filter]`: the project's tests instead of
+         * the project. A word and not an option, like `run`, because it says
+         * what to do rather than how. */
+        if (!dir && !testing && !strcmp(argv[i], "test")) {
+            testing = true;
+            continue;
+        }
+        if (!dir && !strcmp(argv[i], "--json")) {
+            json = true;
+            continue;
+        }
         if (!dir && (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))) {
             usage();
             g_ptr_array_unref(rest);
@@ -132,6 +165,44 @@ int main(int argc, char **argv)
             profile = argv[++i];
             continue;
         }
+        /*
+         * How the run is to look, and where it starts: each a property of the
+         * run and not of the project, for `--strict`'s reason. The IDE's
+         * preview is these four; see `apply_look` in bta_runtime.c.
+         */
+        if (!dir && (!strcmp(argv[i], "--form") || !strcmp(argv[i], "--text-scale") ||
+                     !strcmp(argv[i], "--theme"))) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "bintana: %s needs a value\n", argv[i]);
+                g_ptr_array_unref(rest);
+                return 2;
+            }
+            const char *opt = argv[i], *val = argv[++i];
+            if (!strcmp(opt, "--form")) {
+                form = val;
+            } else if (!strcmp(opt, "--theme")) {
+                if (strcmp(val, "dark") && strcmp(val, "light")) {
+                    fprintf(stderr, "bintana: --theme is dark or light, not '%s'\n", val);
+                    g_ptr_array_unref(rest);
+                    return 2;
+                }
+                theme = val;
+            } else {
+                char *end = NULL;
+                text_scale = g_ascii_strtod(val, &end);
+                if (!end || *end || !(text_scale >= 0.5 && text_scale <= 4)) {
+                    fprintf(stderr, "bintana: --text-scale is a number between 0.5 "
+                                    "and 4, not '%s'\n", val);
+                    g_ptr_array_unref(rest);
+                    return 2;
+                }
+            }
+            continue;
+        }
+        if (!dir && !strcmp(argv[i], "--rtl")) {
+            rtl = true;
+            continue;
+        }
         if (!dir && argv[i][0] == '-') {
             fprintf(stderr, "bintana: unknown option '%s'\n", argv[i]);
             g_ptr_array_unref(rest);
@@ -163,6 +234,39 @@ int main(int argc, char **argv)
 
     BtaApp *app = bta_app_new(dir);
     app->args = (char **)rest->pdata;
+
+    if (form) {
+        if (app->entry) {
+            fprintf(stderr, "bintana: --form opens a form, and this project "
+                            "declares \"main\": it has none to open\n");
+            bta_app_free(app);
+            bta_profile_finish();
+            g_ptr_array_unref(rest);
+            return 2;
+        }
+        /* A form looked at on its own is not *the* program started again: a
+         * single-instance project would hand it to the running one, which
+         * would raise its own window and open nothing. */
+        g_free(app->startup);
+        app->startup = g_strdup(form);
+        app->single  = false;
+    }
+    if (json && !testing) {
+        fprintf(stderr, "bintana: --json is for `bintana test`\n");
+        bta_app_free(app);
+        bta_profile_finish();
+        g_ptr_array_unref(rest);
+        return 2;
+    }
+    if (testing) {
+        app->testing     = true;
+        app->test_json   = json;
+        app->test_filter = rest->len > 1 ? g_strdup(rest->pdata[0]) : NULL;
+        app->single      = false;
+    }
+    app->text_scale = text_scale;
+    app->theme      = g_strdup(theme);
+    app->rtl        = rtl;
 
     /* GApplication would try to parse our arguments as its own. */
     char *fake_argv[] = { argv[0], NULL };

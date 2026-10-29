@@ -6,6 +6,7 @@
   "sources": [
     "forms/AskForm.js",
     "forms/BreakpointForm.js",
+    "forms/PreviewForm.js",
     "forms/ConfirmForm.js",
     "forms/AboutForm.js",
     "forms/NewProjectForm.js",
@@ -45,6 +46,7 @@
     "modules/Git.js",
     "modules/Changes.js",
     "modules/Problems.js",
+    "modules/Tests.js",
     "modules/Names.js",
     "modules/Snippets.js",
     "modules/Folding.js",

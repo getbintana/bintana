@@ -28,7 +28,8 @@
  *     a key nothing reads           ignored; `"format"` was in one of this
  *                                   repository's own examples
  *     a member or a handler         `Names`, over every pair, not just the
- *                                   one on screen
+ *                                   one on screen -- and a handler whose
+ *                                   control was renamed or deleted
  *     a call to a name taken away   `setTimeout(fn, 100)` runs into a
  *                                   ReferenceError at the next run, and the
  *                                   replacement was nowhere in the project.
@@ -153,6 +154,8 @@ export class Check {
         for (const file of this.ide.classes.files) {
             if (!File.IsExtension(file, "js")) continue;
             if (listed.includes(file)) continue;
+            /* `bintana test`'s, which a run never loads on purpose. */
+            if (Tests.isTest(file)) continue;
 
             found.push({
                 kind: "Warning", file, line: 0,

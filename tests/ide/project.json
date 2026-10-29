@@ -5,6 +5,7 @@
   "sources": [
     "../../ide/forms/AskForm.js",
     "../../ide/forms/BreakpointForm.js",
+    "../../ide/forms/PreviewForm.js",
     "../../ide/forms/ConfirmForm.js",
     "../../ide/forms/AboutForm.js",
     "../../ide/forms/NewProjectForm.js",
@@ -44,6 +45,7 @@
     "../../ide/modules/Git.js",
     "../../ide/modules/Changes.js",
     "../../ide/modules/Problems.js",
+    "../../ide/modules/Tests.js",
     "../../ide/modules/Names.js",
     "../../ide/modules/Snippets.js",
     "../../ide/modules/Folding.js",

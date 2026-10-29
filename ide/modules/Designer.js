@@ -2552,7 +2552,12 @@ export class Designer {
              * all, and the error would come out of the running program rather
              * than out of the designer that put it there. */
             const spec = this.components.find((c) => c.name === type);
-            if (spec && spec.source) this.ide.registerSource(spec.source);
+            /* **A library's component is loaded by `uses`, not by `sources`**,
+             * and its path is absolute and outside the project: written into
+             * the list it loaded the class twice, and a relative-path list
+             * with an absolute path in it is one the runtime joins onto the
+             * project directory and cannot read. */
+            if (spec && spec.source && !spec.library) this.ide.registerSource(spec.source);
 
             return this.standIn(target, { type, name: this.uniqueName(type),
                                           properties: {} });

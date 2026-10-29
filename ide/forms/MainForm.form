@@ -277,6 +277,10 @@
           "text": "New module..."
         },
         {
+          "name": "MnuNewTest",
+          "text": "New test..."
+        },
+        {
           "separator": true
         },
         {
@@ -553,6 +557,11 @@
           "action": "ActStop"
         },
         {
+          "name": "MnuRunTests",
+          "text": "Run tests",
+          "shortcut": "<Control><Shift>t"
+        },
+        {
           "name": "MnuStrict",
           "text": "Strict checks while running",
           "check": true
@@ -742,6 +751,14 @@
       "name": "MnuFormMenu",
       "text": "F_orm",
       "children": [
+        {
+          "name": "MnuPreview",
+          "text": "Preview...",
+          "shortcut": "<Control><Shift>v"
+        },
+        {
+          "separator": true
+        },
         {
           "name": "MnuMenus",
           "text": "Edit menus...",
@@ -1979,7 +1996,8 @@
                         "Tabs": [
                           "Output",
                           "Debug",
-                          "Problems"
+                          "Problems",
+                          "Tests"
                         ]
                       },
                       "design": {
@@ -2213,6 +2231,18 @@
                         {
                           "type": "TableView",
                           "name": "ProblemView",
+                          "properties": {
+                            "Expand": true,
+                            "HAlign": "Fill",
+                            "HExpand": true,
+                            "RowLines": false,
+                            "VAlign": "Fill",
+                            "VExpand": true
+                          }
+                        },
+                        {
+                          "type": "TableView",
+                          "name": "TestView",
                           "properties": {
                             "Expand": true,
                             "HAlign": "Fill",

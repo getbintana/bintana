@@ -287,6 +287,13 @@ export class Names {
             if (underCaret(m, caret)) continue;
 
             const type   = typeOf(controls, m.Group(1));
+            if (!type) {
+                const orphan = this.orphan(text, m.Group(1), m.Group(2));
+                if (orphan)
+                    yield { kind: "Warning", file, line: Text.LineOf(text, m.Index),
+                            text: orphan };
+                continue;
+            }
             const events = this.eventsOf(type);
             if (!events || events.includes(m.Group(2))) continue;
 
@@ -298,6 +305,43 @@ export class Names {
                       `be called`,
             };
         }
+    }
+
+    /*
+     * `Btn1_Click()` after `Btn1` was renamed or deleted: a handler for a
+     * control the form no longer has.
+     *
+     * The paragraph above refuses `Btnn_Click` as indistinguishable from any
+     * method with an underscore in it, and for *any* method it is. What makes
+     * this one answerable is the second half: only a word **some control
+     * raises** -- `Click`, `Change`, `Select` -- is read as an event, which is
+     * the shape no helper method is given by accident. And a name the file
+     * itself spells as a string or assigns as `this.Name =` is a control built
+     * in code, which binds by `Name` like a declared one, so it is left alone.
+     * `Form_` is the form's own and never a control.
+     */
+    orphan(text, name, event) {
+        if (name === "Form") return "";
+        if (!this.raisedEvents().has(event)) return "";
+
+        const built = new Regex(
+            `["'\`]${name}["'\`]|\\bthis\\.${name}[ \\t]*=[^=]`);
+        if (built.IsMatch(text)) return "";
+
+        return `no control is named ${name}: ${name}_${event} will never be called`;
+    }
+
+    /* Every event some runtime class raises, worked out once: the class list
+     * does not change while the IDE runs.  A command's `Execute` is the one a
+     * widget does not raise. */
+    raisedEvents() {
+        if (this.allEvents) return this.allEvents;
+
+        const all = new Set(["Execute"]);
+        for (const type of this.widgets)
+            for (const ev of Widget.EventNames(type) || []) all.add(ev);
+        this.allEvents = all;
+        return all;
     }
 
     /* --- what a type really has ---------------------------------------------- */

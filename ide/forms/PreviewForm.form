@@ -1,0 +1,90 @@
+{
+  "format": "bintana-form/1",
+  "class": "PreviewForm",
+  "properties": {
+    "Text": "Preview",
+    "Width": 380,
+    "Height": 236,
+    "Resizable": false
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblWhat",
+      "properties": {
+        "X": 12, "Y": 12, "Width": 356, "Height": 20,
+        "Text": "", "HAlign": "Fill", "Style": "dim-label"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblLanguage",
+      "properties": {
+        "X": 12, "Y": 48, "Width": 120, "Height": 30,
+        "Text": "Language:", "For": "CmbLanguage"
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbLanguage",
+      "properties": {
+        "X": 140, "Y": 48, "Width": 228, "Height": 30, "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblScale",
+      "properties": {
+        "X": 12, "Y": 86, "Width": 120, "Height": 30,
+        "Text": "Text size:", "For": "CmbScale"
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbScale",
+      "properties": {
+        "X": 140, "Y": 86, "Width": 228, "Height": 30, "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblTheme",
+      "properties": {
+        "X": 12, "Y": 124, "Width": 120, "Height": 30,
+        "Text": "Theme:", "For": "CmbTheme"
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbTheme",
+      "properties": {
+        "X": 140, "Y": 124, "Width": 228, "Height": 30, "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkRtl",
+      "properties": {
+        "X": 140, "Y": 160, "Width": 228, "Height": 24,
+        "Text": "Right to left"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "X": 170, "Y": 192, "Width": 90, "Height": 32,
+        "Text": "Cancel", "HAlign": "End", "VAlign": "End", "Cancel": true
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPreview",
+      "properties": {
+        "X": 268, "Y": 192, "Width": 100, "Height": 32,
+        "Text": "Preview", "HAlign": "End", "VAlign": "End",
+        "Style": "suggested-action", "Default": true
+      }
+    }
+  ]
+}

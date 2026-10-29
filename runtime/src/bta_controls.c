@@ -86,6 +86,78 @@ void bta_forms_cleanup(void)
 }
 
 /*
+ * `Remember`: the window as the person left it, kept in `Settings`.
+ *
+ * The bookkeeping is `rememberWindow` in `forms.js` -- which key, which numbers,
+ * what a hand-edited file may and may not say -- and this file only says
+ * *when*: before `Form_Open` (so a handler can still overrule it), on every
+ * resize (noted, not written), and when the window goes, which is an allowed
+ * close or an `Application.Quit` with the window still up -- the second closes
+ * nothing, so it walks the forms that are shown.  The IDE's `Session` did all
+ * of this by hand for its own window, and this is that, for every form.
+ *
+ * The flag lives on the window like `DragToMove`'s gesture: a fact about the
+ * window that nothing in `BtaWidget` needs to carry.
+ */
+#define FORM_REMEMBER_KEY "bta-form-remember"
+
+static bool form_remembers(BtaWidget *w)
+{
+    return w && w->is_form && w->gtk &&
+           g_object_get_data(G_OBJECT(w->gtk), FORM_REMEMBER_KEY) != NULL;
+}
+
+/* A name in the prelude that C looks up, as `showError` is: lower case, outside
+ * the surface.  A failure is printed and consumed -- a window that cannot be
+ * remembered is not a reason for the window to fail. */
+static void form_remember(BtaWidget *w, const char *what, int cw, int ch)
+{
+    if (!form_remembers(w))
+        return;
+
+    JSContext *ctx    = w->ctx;
+    JSValue    global = JS_GetGlobalObject(ctx);
+    JSValue    fn     = JS_GetPropertyStr(ctx, global, "rememberWindow");
+
+    if (JS_IsFunction(ctx, fn)) {
+        JSValue argv[4] = { JS_DupValue(ctx, w->self), JS_NewString(ctx, what),
+                            JS_NewInt32(ctx, cw), JS_NewInt32(ctx, ch) };
+        JSValue r = JS_Call(ctx, fn, JS_UNDEFINED, 4, (JSValueConst *)argv);
+
+        if (JS_IsException(r)) {
+            JSValue     e = JS_GetException(ctx);
+            const char *m = JS_ToCString(ctx, e);
+
+            fprintf(stderr, "bintana: Remember failed: %s\n", m ? m : "?");
+            if (!m)
+                JS_FreeValue(ctx, JS_GetException(ctx));
+            JS_FreeCString(ctx, m);
+            JS_FreeValue(ctx, e);
+        }
+        JS_FreeValue(ctx, r);
+        for (int i = 0; i < 4; i++)
+            JS_FreeValue(ctx, argv[i]);
+    }
+    JS_FreeValue(ctx, fn);
+    JS_FreeValue(ctx, global);
+}
+
+/* `Application.Quit` closes nothing, so the windows still up are written down
+ * here.  The list is copied first: what runs is JavaScript, and a handler of
+ * its own is free to close a form, which takes it off `held_forms`. */
+void bta_forms_remember_all(void)
+{
+    GList *shown = g_list_copy(held_forms);
+
+    for (GList *l = shown; l; l = l->next) {
+        BtaWidget *w = l->data;
+        if (g_list_find(held_forms, w))
+            form_remember(w, "save", 0, 0);
+    }
+    g_list_free(shown);
+}
+
+/*
  * A form is *asked* whether it is closing, and answers by returning.
  *
  * The convention is `KeyPress`'s, for the same reason: **returning true from
@@ -124,6 +196,9 @@ static gboolean on_close_request(GtkWindow *win, gpointer user_data)
      * *destroyed*, so `closed` stays false and a later `Show` still works.
      */
     if (!stay) {
+        /* Before the drop: the size is the form's last word, and a window
+         * put away by `HideOnClose` is remembered the same as one closed. */
+        form_remember(w, "save", 0, 0);
         form_drop(w);
         if (!gtk_window_get_hide_on_close(win))
             w->closed = true;
@@ -382,6 +457,9 @@ static JSValue form_show(JSContext *ctx, JSValueConst this_val,
 
     if (!w->opened) {
         w->opened = true;
+        /* Before `Form_Open`, so a handler that sizes the window itself has
+         * the last word over what was remembered. */
+        form_remember(w, "restore", 0, 0);
         bta_emit(w, "Open", 0, NULL);
     }
 
@@ -478,7 +556,7 @@ static JSValue form_get_cancel_button(JSContext *ctx, JSValueConst this_val)
  * observe should be.
  */
 enum { WIN_RESIZABLE, WIN_MAXIMIZED, WIN_FULLSCREEN, WIN_HIDEONCLOSE,
-       WIN_DECORATED, WIN_DRAGTOMOVE };
+       WIN_DECORATED, WIN_DRAGTOMOVE, WIN_REMEMBER };
 
 /*
  * `DragToMove`: a press anywhere nothing else claims, dragged past the desktop's
@@ -575,7 +653,8 @@ static JSValue form_get_state(JSContext *ctx, JSValueConst this_val, int magic)
     case WIN_DECORATED:   return JS_NewBool(ctx, gtk_window_get_decorated(win));
     case WIN_DRAGTOMOVE:
         return JS_NewBool(ctx, g_object_get_data(G_OBJECT(win), FORM_DRAG_KEY) != NULL);
-    default:             return JS_NewBool(ctx, gtk_window_is_maximized(win));
+    case WIN_REMEMBER:    return JS_NewBool(ctx, form_remembers(w));
+    default:            return JS_NewBool(ctx, gtk_window_is_maximized(win));
     }
 }
 
@@ -606,6 +685,9 @@ static JSValue form_set_state(JSContext *ctx, JSValueConst this_val,
         break;
     case WIN_DRAGTOMOVE:
         form_set_drag_to_move(w, b);
+        break;
+    case WIN_REMEMBER:
+        g_object_set_data(G_OBJECT(win), FORM_REMEMBER_KEY, b ? GINT_TO_POINTER(1) : NULL);
         break;
     default:
         if (b) gtk_window_maximize(win);   else gtk_window_unmaximize(win);
@@ -686,6 +768,8 @@ static void on_surface_size(GdkSurface *surface, int cw, int ch, gpointer user_d
     if (was && GPOINTER_TO_UINT(was) == now)
         return;
     g_object_set_data(G_OBJECT(w->gtk), LAST_SIZE_KEY, GUINT_TO_POINTER(now));
+
+    form_remember(w, "size", cw, ch);
 
     JSValue argv[2] = { JS_NewInt32(w->ctx, cw), JS_NewInt32(w->ctx, ch) };
     JSValue r = bta_emit_answer(w, "Resize", 2, argv, NULL);
@@ -811,6 +895,15 @@ static const JSCFunctionListEntry form_props[] = {
      *   Declare this, or construct the form again
      */
     JS_CGETSET_MAGIC_DEF("HideOnClose", form_get_state, form_set_state, WIN_HIDEONCLOSE),
+    /* Remember
+     *   the window comes back as the person left it: its size, whether it was
+     *   maximised and where each named `Split` divider sat, kept in
+     *   `Settings` under `window.<FormClass>`. Restored before `Form_Open`,
+     *   so a handler that sizes the window itself still wins; written when
+     *   the window closes or `Application.Quit` runs. **There is no
+     *   position**: GTK4 cannot place its own window. Default `false`
+     */
+    JS_CGETSET_MAGIC_DEF("Remember",    form_get_state, form_set_state, WIN_REMEMBER),
     /* Decorated
      *   whether the desktop draws a title bar and a frame. `false` is a window
      *   of only its contents — a clock, a splash, a palette — which **cannot be

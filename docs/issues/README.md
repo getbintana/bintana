@@ -30,7 +30,6 @@ in the same form.
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
 | [ISSUE-ide-database-tools.md](ISSUE-ide-database-tools.md) | No schema browser, query console or data module |
 | [ISSUE-ide-report-designer.md](ISSUE-ide-report-designer.md) | Reports are code or raw text, never a designed thing |
-| [ISSUE-ide-test-runner.md](ISSUE-ide-test-runner.md) | No way to write, launch and read a user project's tests |
 | [ISSUE-ide-debugger-values.md](ISSUE-ide-debugger-values.md) | The debugger's values are flat lines, and it cannot break on data |
 | [ISSUE-ide-rename-locals.md](ISSUE-ide-rename-locals.md) | Rename stops at top-level declarations |
 | [ISSUE-ide-formatter.md](ISSUE-ide-formatter.md) | No formatter and no multiple cursors |

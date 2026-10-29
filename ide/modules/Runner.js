@@ -30,6 +30,8 @@ export class Runner {
         this.ide = ide;
         /* The child, while there is one: an Exec handle. */
         this.job = null;
+        /* The form being previewed, while one is: see `preview`. */
+        this.previewJob = null;
         /* Lines waiting for the end of the turn: see `log`. */
         this.pending  = [];
         this.flushJob = null;
@@ -99,6 +101,46 @@ export class Runner {
                         plan.options,
                         (line) => this.log(`${line}\n`),
                         (code) => this.finished(code));
+    }
+
+    /*
+     * One form, run the way the look says (`PreviewForm.plan`).
+     *
+     * **A child of its own, beside Run and not instead of it**: a preview is
+     * looked at and closed, often while the program itself is running, so it
+     * neither clears the console nor takes the Stop button. One at a time --
+     * a second preview replaces the first, which is what pressing Preview again
+     * after a change means. The chosen configuration's environment is kept
+     * under the look's language, so a project that needs `DATA_DIR` to start
+     * still starts.
+     */
+    preview(formName, look) {
+        const ide = this.ide;
+        if (!ide.project) return;
+
+        ide.saveAllDirty();
+        if (this.previewJob && this.previewJob.Running) this.previewJob.Stop();
+
+        const plan    = ide.launch.plan();
+        const wanted  = PreviewForm.plan(formName, look);
+        const options = { Directory: plan.options.Directory,
+                          Environment: { ...(plan.options.Environment || {}),
+                                         ...wanted.environment } };
+        const argv    = [...wanted.args, ide.project, ...plan.arguments];
+
+        ide.log(`> LANGUAGE=${wanted.environment.LANGUAGE} bintana ${argv.join(" ")}\n`);
+        const job = Exec([Application.Executable, ...argv], options,
+                         (line) => this.log(`${line}\n`),
+                         (code) => {
+                             if (this.previewJob === job) this.previewJob = null;
+                             if (code !== 0) this.log(`[preview ended with code ${code}]\n`);
+                         });
+        this.previewJob = job;
+    }
+
+    stopPreview() {
+        if (this.previewJob && this.previewJob.Running) this.previewJob.Stop();
+        this.previewJob = null;
     }
 
     /*

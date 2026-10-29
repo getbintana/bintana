@@ -609,6 +609,465 @@ GLOBAL.Stopwatch = class Stopwatch {
 };
 
 /* ------------------------------------------------------------------------
+ * UndoStack -- what Edit > Undo takes back.
+ *
+ * Every editor an application writes -- a drawing, a board of cards, a sheet --
+ * needs the same twenty lines, and gets three of them wrong: a redo list that
+ * survives a new edit, a step whose undo threw and left half of itself on the
+ * list, and "modified" worked out by comparing against a copy of the document.
+ * The IDE keeps its own for the designer; this is the same idea for everyone.
+ *
+ *   const undo = new UndoStack();
+ *   undo.Do("Move card", () => card.Move(x, y), () => card.Move(oldX, oldY));
+ *   undo.Undo();                 // and Redo()
+ *   undo.Group("Paste", () => { ...several Do... });   // one step
+ *
+ * **A step is two functions, not a snapshot.** A snapshot of the whole
+ * document per edit is what the designer pays for, and it costs the size of
+ * the document every time; a pair costs what the edit costs.
+ *
+ * **Undo is honest about failure.** A step whose function throws stays where
+ * it was, so the list never says something happened that did not.
+ * ---------------------------------------------------------------------- */
+
+GLOBAL.UndoStack = class UndoStack {
+
+    #done    = [];
+    #undone  = [];
+    #group   = null;      /* the step being gathered by `Group`, or null */
+    #limit   = 100;
+    #cleanAt = 0;         /* how many steps were done at `MarkClean`; -1: gone */
+    #busy    = false;
+    #change  = null;
+
+    /** @param {number} [limit] how many steps it keeps, `0` for no limit; default `100` */
+    constructor(limit) {
+        if (limit !== undefined) this.Limit = limit;
+    }
+
+    /** whether there is a step to take back */
+    get CanUndo() { return this.#done.length > 0; }
+    /** whether there is a step to do again */
+    get CanRedo() { return this.#undone.length > 0; }
+    /** the text of the step `Undo` takes back, or `""` -- for a menu's "Undo Move card" */
+    get UndoText() { return this.#done.length ? this.#done[this.#done.length - 1].text : ""; }
+    /** the text of the step `Redo` does again, or `""` */
+    get RedoText() { return this.#undone.length ? this.#undone[this.#undone.length - 1].text : ""; }
+
+    /** whether what is done now differs from what it was at `MarkClean` -- the asterisk in a title bar */
+    get Modified() { return this.#cleanAt !== this.#done.length; }
+
+    /** how many steps it keeps, the oldest going first; `0` for no limit. Default `100` */
+    get Limit() { return this.#limit; }
+    set Limit(n) {
+        if (typeof n !== "number" || !Number.isInteger(n) || n < 0)
+            throw new RangeError(`UndoStack.Limit: expected a whole number of steps, 0 or more, got ${n}`);
+        this.#limit = n;
+        this.#trim();
+    }
+
+    /** assign `() => …`, called after every change to what can be undone or redone; `null` takes it off */
+    get OnChange() { return this.#change; }
+    set OnChange(fn) {
+        if (fn !== null && typeof fn !== "function")
+            throw new TypeError("UndoStack.OnChange: expected a function, or null");
+        this.#change = fn;
+    }
+
+    /**
+     * runs `redo` and records the step, so `Undo` runs `undo`. If `redo` throws,
+     * nothing is recorded and the error goes on. Answers the stack
+     * @param {string} text what the step is called
+     * @param {function} redo
+     * @param {function} undo
+     */
+    Do(text, redo, undo) {
+        this.#check("Do", text, redo, undo);
+        this.#busy = true;
+        try { redo(); } finally { this.#busy = false; }
+        this.#record({ text, redo, undo });
+        return this;
+    }
+
+    /**
+     * records a step that **has already happened** -- text typed, a drag that
+     * ended -- without running it. Answers the stack
+     * @param {string} text
+     * @param {function} redo
+     * @param {function} undo
+     */
+    Add(text, redo, undo) {
+        this.#check("Add", text, redo, undo);
+        this.#record({ text, redo, undo });
+        return this;
+    }
+
+    /**
+     * runs `fn`, and every `Do` and `Add` inside it becomes **one** step called
+     * `text`, undone last-first. A group inside a group joins the outer one.
+     * If `fn` throws, what it had done is taken back and the error goes on
+     * @param {string} text
+     * @param {function} fn
+     */
+    Group(text, fn) {
+        if (typeof text !== "string")
+            throw new TypeError("UndoStack.Group(text, fn): text is what the step is called");
+        if (typeof fn !== "function")
+            throw new TypeError("UndoStack.Group(text, fn): fn is a function");
+        if (this.#group) { fn(); return this; }
+
+        const parts = [];
+        this.#group = parts;
+        try {
+            fn();
+        } catch (e) {
+            this.#group = null;
+            for (let i = parts.length - 1; i >= 0; i--) parts[i].undo();
+            throw e;
+        }
+        this.#group = null;
+        if (parts.length)
+            this.#record({ text,
+                           redo: () => { for (const p of parts) p.redo(); },
+                           undo: () => { for (let i = parts.length - 1; i >= 0; i--) parts[i].undo(); } });
+        return this;
+    }
+
+    /** takes the last step back; `false` when there was none */
+    Undo() {
+        if (this.#busy) throw new Error("UndoStack.Undo: called from inside a step");
+        if (!this.#done.length) return false;
+        const step = this.#done[this.#done.length - 1];
+        this.#busy = true;
+        try { step.undo(); } finally { this.#busy = false; }
+        this.#undone.push(this.#done.pop());
+        this.#changed();
+        return true;
+    }
+
+    /** does again the last step taken back; `false` when there was none */
+    Redo() {
+        if (this.#busy) throw new Error("UndoStack.Redo: called from inside a step");
+        if (!this.#undone.length) return false;
+        const step = this.#undone[this.#undone.length - 1];
+        this.#busy = true;
+        try { step.redo(); } finally { this.#busy = false; }
+        this.#done.push(this.#undone.pop());
+        this.#changed();
+        return true;
+    }
+
+    /** forgets every step, both ways; what is done now counts as clean */
+    Clear() {
+        this.#done    = [];
+        this.#undone  = [];
+        this.#cleanAt = 0;
+        this.#changed();
+    }
+
+    /** what is done now is what was saved: `Modified` reads `false` until the next step, an `Undo` or a `Redo` */
+    MarkClean() {
+        this.#cleanAt = this.#done.length;
+        this.#changed();
+    }
+
+    #check(verb, text, redo, undo) {
+        if (this.#busy)
+            throw new Error(`UndoStack.${verb}: called from inside a step, which would record the undo itself`);
+        if (typeof text !== "string")
+            throw new TypeError(`UndoStack.${verb}(text, redo, undo): text is what the step is called`);
+        if (typeof redo !== "function" || typeof undo !== "function")
+            throw new TypeError(`UndoStack.${verb}(text, redo, undo): redo and undo are functions`);
+    }
+
+    #record(step) {
+        if (this.#group) { this.#group.push(step); return; }
+        this.#done.push(step);
+        /* A new step after an undo is a new future: what was undone cannot be
+         * redone over it, and a clean point that was among it is gone. */
+        if (this.#cleanAt > this.#done.length - 1 && this.#undone.length) this.#cleanAt = -1;
+        this.#undone = [];
+        this.#trim();
+        this.#changed();
+    }
+
+    #trim() {
+        if (!this.#limit) return;
+        const over = this.#done.length - this.#limit;
+        if (over <= 0) return;
+        this.#done.splice(0, over);
+        this.#cleanAt = this.#cleanAt >= over ? this.#cleanAt - over : -1;
+    }
+
+    #changed() {
+        if (this.#change) this.#change();
+    }
+};
+
+/* ------------------------------------------------------------------------
+ * Test -- what `bintana test` runs.
+ *
+ * A project's tests live in `tests/`, one class per file named like it,
+ * extending this:
+ *
+ *   class InvoiceTest extends Test {
+ *       testTotal()  { this.Eq(new Invoice([10, 5]).Total, 15); }
+ *       testRefuse() { this.Throws(() => new Invoice([-1])); }
+ *   }
+ *
+ * `bintana test <project>` loads the project's sources, then every
+ * `tests/*Test.js`, and calls each method whose name starts with `test`, in the
+ * order written, on a new instance -- `Setup()` before, `Teardown()` after.
+ * The run ends `0` when every test passed and `1` when one did not, which is
+ * what CI reads; `--json` writes a line per test, which is what the IDE reads.
+ *
+ * **A test fails alone.** An assertion throws, and so may the code under test;
+ * either way that test is marked and the next one runs. An error nobody caught
+ * in a callback while a test is running -- a `Timer`, an `Http` answer -- is
+ * that test's too, through `Application.OnError`, which the run holds for its
+ * length.
+ *
+ * **Waiting is counted, never assumed.** `Until(cond, then)` asks `cond` every
+ * 10 ms and runs `then` when it holds; a test is over when its last wait is.
+ * One that never holds fails the test by name -- a smaller total with nothing
+ * red is the failure a suite cannot afford, and `tests/widgets`' own `until`
+ * says why at length.
+ *
+ * The folder is fixed: a normal run never loads `tests/`, with or without a
+ * `sources` list, and the IDE's check knows it.
+ * ---------------------------------------------------------------------- */
+
+/* The test that is running, so an uncaught error and a wait know whose they
+ * are. Module-level because there is one run per process. */
+let testCurrent = null;
+
+class TestFailure extends Error {
+    constructor(message) { super(message); this.name = "TestFailure"; }
+}
+
+/* How a value reads in a failure message: what was got, against what was
+ * wanted. JSON for data, so `[1,2]` against `[1,3]` says which. */
+function testShow(v) {
+    if (typeof v === "string") return JSON.stringify(v);
+    if (v === undefined) return "undefined";
+    if (typeof v === "function") return `function ${v.name || ""}`.trim();
+    try { return JSON.stringify(v); } catch (e) { return String(v); }
+}
+
+function testSame(a, b) {
+    if (a === b) return true;
+    if (a === null || b === null || typeof a !== "object" || typeof b !== "object")
+        return Number.isNaN(a) && Number.isNaN(b);
+    if (typeof a.toString === "function" && a.constructor === b.constructor &&
+        a.constructor !== Object && a.constructor !== Array)
+        return String(a) === String(b);       /* a Decimal, a Day: their text */
+    try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; }
+}
+
+GLOBAL.Test = class Test {
+
+    /** runs before each test method, on the instance it runs on; override it */
+    Setup() {}
+
+    /** runs after each test method, passed or not; override it */
+    Teardown() {}
+
+    /**
+     * fails the test unless `got` equals `want` -- the same value, or for
+     * arrays and plain objects the same JSON, or for a `Decimal` or a `Day` the
+     * same text. `what` names the check in the message
+     * @param {*} got
+     * @param {*} want
+     * @param {string} [what]
+     */
+    Eq(got, want, what) {
+        if (!testSame(got, want))
+            this.Fail(`${what ? `${what}: ` : ""}expected ${testShow(want)}, got ${testShow(got)}`);
+    }
+
+    /**
+     * fails the test unless `cond` is true
+     * @param {boolean} cond
+     * @param {string} [what]
+     */
+    Check(cond, what) {
+        if (cond !== true) this.Fail(what || `expected true, got ${testShow(cond)}`);
+    }
+
+    /**
+     * fails the test unless `fn` throws, and answers what it threw -- so the
+     * message can be checked too
+     * @param {function} fn
+     * @param {string} [what]
+     */
+    Throws(fn, what) {
+        try {
+            fn();
+        } catch (e) {
+            if (e instanceof TestFailure) throw e;
+            return e;
+        }
+        this.Fail(what || "expected a throw, none happened");
+    }
+
+    /** fails the test now, with that message */
+    Fail(message) {
+        throw new TestFailure(String(message));
+    }
+
+    /**
+     * waits: asks `cond` every 10 ms and runs `then` once it holds. The test
+     * is not over until it has; if it never holds within `ms` (default
+     * `5000`) the test fails, saying `what`
+     * @param {function} cond
+     * @param {function} then
+     * @param {{Ms?: number, What?: string}} [options]
+     */
+    Until(cond, then, options) {
+        const run = testCurrent;
+        if (!run) throw new Error("Test.Until: called outside a running test");
+        const opts  = options || {};
+        const limit = opts.Ms === undefined ? 5000 : opts.Ms;
+        const from  = monotonicNow();
+        /* Where the wait was asked for, so a wait that never holds points at
+         * its own line and not at the timer that gave up on it. */
+        const where = new Error().stack;
+        run.waits++;
+        const step = () => {
+            if (run.over) return;
+            let held = false;
+            try { held = !!cond(); } catch (e) { run.fail(e); return run.waited(); }
+            if (!held && monotonicNow() - from < limit) { Timer.After(10, step); return; }
+            if (!held) {
+                const e = new TestFailure(`${opts.What || "Until"}: never became true in ${limit} ms`);
+                e.stack = where;
+                run.fail(e);
+                return run.waited();
+            }
+            try { then(); } catch (e) { run.fail(e); }
+            run.waited();
+        };
+        Timer.After(0, step);
+    }
+};
+
+/* Where in the test's own file an error was raised: the first frame of the
+ * stack that is in it. */
+function testLine(e, file) {
+    const stack = String((e && e.stack) || "");
+    for (const line of stack.split("\n")) {
+        const at = line.lastIndexOf(file);
+        if (at < 0) continue;
+        const m = /:(\d+)(?::\d+)?\)?\s*$/.exec(line.slice(at + file.length));
+        if (m) return Number(m[1]);
+    }
+    return 0;
+}
+
+/* The test methods of a class, in the order written, a base class's after the
+ * class's own -- and each name once, so an override runs once. */
+function testMethods(klass) {
+    const out  = [];
+    const seen = new Set();
+    for (let p = klass.prototype; p && p !== Test.prototype && p !== objectProto; p = prototypeOf(p)) {
+        for (const name of ownNames(p)) {
+            if (seen.has(name)) continue;
+            seen.add(name);
+            const d = ownDescriptor(p, name);
+            if (/^test/.test(name) && d && typeof d.value === "function") out.push(name);
+        }
+    }
+    return out;
+}
+
+/*
+ * The run: called by the runtime with the classes it found, never by a project.
+ * A name in the prelude that C looks up, as `showError` is.
+ */
+function runTests(found, filter, json) {
+    const queue  = [];
+    let passed   = 0, failed = 0;
+    const say    = (o) => print(JSON.stringify(o));
+    const rel    = (f) => File.Within(f, Application.Directory)
+                         ? f.slice(Application.Directory.length).replace(/^[\\/]/, "") : f;
+
+    for (const t of found) {
+        if (!t.Class) {
+            if (filter && !t.Name.includes(filter)) continue;
+            failed++;
+            if (json) say({ Event: "Test", Class: t.Name, Name: "", Ok: false, File: rel(t.File),
+                            Line: 0, Ms: 0, Message: t.Error });
+            else print(`  FAIL  ${t.Name}: ${t.Error}`);
+            continue;
+        }
+        for (const name of testMethods(t.Class)) {
+            const full = `${t.Name}.${name}`;
+            if (!filter || full.includes(filter)) queue.push({ ...t, Method: name, Full: full });
+        }
+    }
+
+    const was = Application.OnError;
+    Application.OnError = (message, stack) => {
+        if (testCurrent) testCurrent.fail({ message, stack });
+        else print(`uncaught: ${message}`);
+    };
+
+    const finish = () => {
+        Application.OnError = was;
+        if (json) say({ Event: "Done", Passed: passed, Failed: failed });
+        else print(`tests: ${passed} passed, ${failed} failed`);
+        Application.Quit(failed ? 1 : 0);
+    };
+
+    const next = () => {
+        const t = queue.shift();
+        if (!t) return finish();
+
+        const run = {
+            waits: 0, over: false, error: null, from: monotonicNow(),
+            fail(e) { if (!this.error) this.error = e; },
+            waited() { this.waits--; if (this.waits === 0) done(); },
+        };
+        let instance = null;
+        let ended = false;
+        const done = () => {
+            if (ended) return;
+            ended = true;
+            try { if (instance) instance.Teardown(); } catch (e) { run.fail(e); }
+            run.over = true;
+            testCurrent = null;
+
+            const ms  = Math.round(monotonicNow() - run.from);
+            const e   = run.error;
+            const msg = e ? String(e.message || e) : "";
+            const line = e ? testLine(e, t.File) : 0;
+            if (e) failed++; else passed++;
+            if (json) {
+                say({ Event: "Test", Class: t.Name, Name: t.Method, Ok: !e, File: rel(t.File),
+                      Line: line, Ms: ms, Message: msg });
+            } else if (e) {
+                print(`  FAIL  ${t.Full}: ${msg}${line ? ` (${rel(t.File)}:${line})` : ""}`);
+            } else {
+                print(`  ok    ${t.Full} (${ms} ms)`);
+            }
+            Timer.After(0, next);
+        };
+
+        testCurrent = run;
+        try {
+            instance = new t.Class();
+            instance.Setup();
+            instance[t.Method]();
+        } catch (e) {
+            run.fail(e);
+        }
+        if (run.waits === 0) done();
+    };
+
+    next();
+}
+
+/* ------------------------------------------------------------------------
  * Dictionary -- what a bag of data holds.
  *
  * `Object.keys` is the only member of the curated surface that reads like the

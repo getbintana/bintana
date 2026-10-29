@@ -395,6 +395,26 @@ struct BtaApp {
      * single-instance application reaches the same signal and must not build
      * a second one. */
     bool            activated;
+
+    /*
+     * How this run is to look, from the command line and never from the
+     * project: `--text-scale`, `--theme` and `--rtl`. What the IDE's preview
+     * asks for, and what anybody checking a form against a long translation,
+     * a large font or the other direction can ask for by hand. Applied in
+     * `on_activate`, once GTK is up and before the first widget exists.
+     * `text_scale` 0 and `theme` NULL mean *as the desktop says*.
+     */
+    double          text_scale;
+    char           *theme;
+    bool            rtl;
+
+    /* `bintana test`: run `tests/*Test.js` instead of the startup form or
+     * `main` (`run_tests`), print a line per test, or a JSON line with
+     * `--json`, and keep only the tests whose `Class.method` contains
+     * `test_filter` when there is one. */
+    bool            testing;
+    bool            test_json;
+    char           *test_filter;
 };
 
 extern JSClassID bta_widget_class_id;
@@ -783,6 +803,9 @@ void       bta_widgets_cleanup(JSContext *ctx);
 /* Drops the keepalive every shown form holds.  A strong reference the collector
  * cannot see, so it has to go before JS_FreeRuntime -- see `BtaWidget.held`. */
 void       bta_forms_cleanup(void);
+/* Writes down every shown form that says `Remember`: `Application.Quit` closes
+ * no window, so no close-request would do it. */
+void       bta_forms_remember_all(void);
 BtaWidget *bta_widget_of(JSValueConst v);
 /* Unwraps `this`, throwing a TypeError when it is not a widget. */
 BtaWidget *bta_this(JSContext *ctx, JSValueConst this_val);

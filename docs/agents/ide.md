@@ -155,6 +155,21 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
 
 ## IDE traps
 
+- **A library's component is loaded by `uses`, never by `sources`.**
+  `Designer.newControl` registered every placed component's `.js` in the
+  manifest, and a library's is absolute and outside the project: the palette
+  phase of `tests/ide` left `/tmp/…/lib/gadgets/Dial.js` in the fixture's
+  `sources`, and the runtime joins a source onto the project directory, so the
+  next run of that project failed with `cannot read /tmp/…/tmp/…/Dial.js`.
+  Nothing ran the fixture after the palette phase until *Preview* did. A spec
+  with `library` set is not registered now, and the palette phase asserts the
+  manifest is left alone.
+- **A preview is a second child, not a second `Run`.** `Runner.preview` keeps
+  its own `previewJob` and never touches `ide.running`, the console's contents
+  or `job`: Stop, the debugger and the run's error-to-line all read those, and
+  a form looked at while the program runs must not take them over.
+  `MainForm.leaving` stops it, since nobody is left to close its window.
+
 - **A row's tooltip is set on every sync, so where the editor is built is not
   where it goes.** `sync()` writes `editor.Tooltip = because || this.rowHint(key)`
   on every pass -- and it says so, that it would overwrite what the editor was

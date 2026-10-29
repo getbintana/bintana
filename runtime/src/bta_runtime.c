@@ -1740,8 +1740,12 @@ static JSValue js_quit(JSContext *ctx, JSValueConst this_val,
 
     if (g_app) {
         g_app->exit_code = code;
-        if (g_app->gapp)
+        if (g_app->gapp) {
+            /* Quitting closes no window, so a form that remembers itself
+             * would never hear its close-request. */
+            bta_forms_remember_all();
             g_application_quit(G_APPLICATION(g_app->gapp));
+        }
 
         /* A console project's loop is ours, and `main` can quit before it has
          * started -- which is the ordinary shape of a program that decides it
@@ -2291,6 +2295,14 @@ static bool install_globals(BtaApp *app)
      *   was assigned. `null` until assigned
      */
     JS_SetPropertyStr(ctx, application, "OnSecondInstance", JS_NULL);
+    /* OnError
+     *   assign `(message, stack) => …` to take over uncaught errors — **two
+     *   strings, not the `Error`**. Without it an uncaught error goes to the
+     *   terminal and to a window of the runtime's own; with it, to the
+     *   handler instead. An error raised inside the handler reaches only the
+     *   terminal. `null` until assigned
+     */
+    JS_SetPropertyStr(ctx, application, "OnError", JS_NULL);
 
     JS_SetPropertyStr(ctx, global, "Application", application);
 
@@ -2652,7 +2664,9 @@ static char *json_str(JSContext *ctx, JSValueConst obj, const char *key,
 /* Every .js under a directory, subdirectories included: a project is allowed to
  * organise its classes in folders, and one that lists no sources still means
  * "all of my code". */
-static void collect_js(GPtrArray *out, const char *dir)
+/* `root` is the project directory: its `tests/` is `bintana test`'s and is
+ * never loaded by a run, listed or not (see `Test` in rad.js). */
+static void collect_js(GPtrArray *out, const char *dir, bool root)
 {
     GDir *d = g_dir_open(dir, 0, NULL);
     if (!d)
@@ -2662,10 +2676,12 @@ static void collect_js(GPtrArray *out, const char *dir)
     while ((name = g_dir_read_name(d))) {
         if (name[0] == '.')
             continue;   /* .git and whatever else a project keeps to itself */
+        if (root && g_str_equal(name, "tests"))
+            continue;
 
         char *path = g_build_filename(dir, name, NULL);
         if (g_file_test(path, G_FILE_TEST_IS_DIR)) {
-            collect_js(out, path);
+            collect_js(out, path, false);
             g_free(path);
         } else if (g_str_has_suffix(name, ".js")) {
             g_ptr_array_add(out, path);
@@ -2972,7 +2988,7 @@ GPtrArray *bta_library_sources(JSContext *ctx, const char *dir)
     /* No list, an empty one, or a file that would not parse: every `.js` in it,
      * sorted by path -- the same fallback and the same limit a project has. */
     if (out->len == 0) {
-        collect_js(out, dir);
+        collect_js(out, dir, true);
         g_ptr_array_sort_values(out, (GCompareFunc)g_strcmp0);
     }
     return out;
@@ -3004,7 +3020,7 @@ static GPtrArray *collect_sources(BtaApp *app, JSValueConst cfg)
     JS_FreeValue(ctx, arr);
 
     if (out->len == 0) {
-        collect_js(out, app->dir);
+        collect_js(out, app->dir, true);
         /* By path, so that a project without a "sources" list at least loads
          * the same way twice.  Which is all sorting can promise: a class that
          * extends another has to be loaded after it, and only an explicit list
@@ -3267,6 +3283,8 @@ void bta_app_free(BtaApp *app)
     g_free(app->version);
     g_free(app->id);
     g_free(app->startup);
+    g_free(app->theme);
+    g_free(app->test_filter);
     g_free(app->entry);
     /* Owns its paths (collect_libs builds it with g_free as the element free
      * func), and only bta_plugins_load reads it -- which is long done. */
@@ -3456,6 +3474,89 @@ static void entry_not_found(JSContext *ctx, const char *name, const char *how)
                 "too: `%s %s`\n", name, how, name);
 }
 
+/*
+ * `bintana test`: the project's `tests/*Test.js`, each evaluated after the
+ * project's own sources, handed to `runTests` in rad.js with the class each
+ * file declares -- one per file, named like it, which is the convention that
+ * lets this find it without a registry. A file whose class cannot be found is
+ * handed over too, as a failure with the reason, so it is a red line and not a
+ * smaller total. Answers false when the run could not start at all.
+ */
+static bool run_tests(BtaApp *app)
+{
+    JSContext *ctx  = app->ctx;
+    char      *dir  = g_build_filename(app->dir, "tests", NULL);
+    GPtrArray *files = g_ptr_array_new_with_free_func(g_free);
+    GDir      *d    = g_dir_open(dir, 0, NULL);
+
+    if (d) {
+        const char *name;
+        while ((name = g_dir_read_name(d)))
+            if (g_str_has_suffix(name, "Test.js"))
+                g_ptr_array_add(files, g_build_filename(dir, name, NULL));
+        g_dir_close(d);
+    }
+    g_ptr_array_sort_values(files, (GCompareFunc)g_strcmp0);
+    g_free(dir);
+
+    JSValue found = JS_NewArray(ctx);
+    for (guint i = 0; i < files->len; i++) {
+        const char *path = files->pdata[i];
+        char       *base = g_path_get_basename(path);
+        base[strlen(base) - 3] = '\0';                 /* InvoiceTest */
+
+        JSValue t = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, t, "Name", JS_NewString(ctx, base));
+        JS_SetPropertyStr(ctx, t, "File", JS_NewString(ctx, path));
+
+        if (bta_eval_file(ctx, path) < 0) {
+            JS_SetPropertyStr(ctx, t, "Error",
+                              JS_NewString(ctx, "the file did not load; the error is above"));
+        } else {
+            JSValue klass = bta_lookup_global(ctx, base);
+            if (JS_IsException(klass)) {
+                JS_FreeValue(ctx, JS_GetException(ctx));
+                klass = JS_UNDEFINED;
+            }
+            if (JS_IsFunction(ctx, klass)) {
+                JS_SetPropertyStr(ctx, t, "Class", klass);
+            } else {
+                JS_FreeValue(ctx, klass);
+                char *why = g_strdup_printf("the file declares no class %s", base);
+                JS_SetPropertyStr(ctx, t, "Error", JS_NewString(ctx, why));
+                g_free(why);
+            }
+        }
+        JS_SetPropertyUint32(ctx, found, i, t);
+        g_free(base);
+    }
+    g_ptr_array_free(files, TRUE);
+
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue fn     = JS_GetPropertyStr(ctx, global, "runTests");
+    bool    ok     = JS_IsFunction(ctx, fn);
+
+    if (ok) {
+        JSValue argv[3] = {
+            found,
+            app->test_filter ? JS_NewString(ctx, app->test_filter) : JS_NewString(ctx, ""),
+            JS_NewBool(ctx, app->test_json),
+        };
+        JSValue r = JS_Call(ctx, fn, JS_UNDEFINED, 3, (JSValueConst *)argv);
+        if (JS_IsException(r)) {
+            bta_dump_error(ctx);
+            ok = false;
+        }
+        JS_FreeValue(ctx, r);
+        JS_FreeValue(ctx, argv[1]);
+    }
+    JS_FreeValue(ctx, found);
+    JS_FreeValue(ctx, fn);
+    JS_FreeValue(ctx, global);
+    bta_drain_jobs(app->rt);
+    return ok;
+}
+
 static int run_console(BtaApp *app)
 {
     JSContext *ctx = app->ctx;
@@ -3470,6 +3571,12 @@ static int run_console(BtaApp *app)
     if (bta_modules_check(ctx) < 0) {
         bta_dump_error(ctx);
         return 1;
+    }
+
+    if (app->testing) {
+        if (!run_tests(app))
+            return 2;
+        goto wait;
     }
 
     JSValue fn = bta_lookup_global(ctx, app->entry);
@@ -3496,6 +3603,7 @@ static int run_console(BtaApp *app)
      * `main`, which for a console project is the whole of its start. */
     bta_profile_startup_done(app->name);
 
+wait:
     /*
      * A poll and not a signal from each of the three places work can finish:
      * this only decides *when to notice* that there is nothing left, and
@@ -3526,6 +3634,55 @@ static int run_console(BtaApp *app)
         return 1;
 
     return app->exit_code;
+}
+
+/*
+ * `--text-scale`, `--theme`, `--rtl`: the run made to look another way.
+ *
+ * All three are **settings of the toolkit, not of the project**, which is why
+ * they are command-line options and not project.json keys: the same form is
+ * looked at under each, and what decides is whoever asked.
+ *
+ * - The text scale multiplies `gtk-xft-dpi`, which is what the desktop's own
+ *   *Large Text* does -- so a form is seen exactly as a person with that
+ *   setting sees it, labels and all, rather than zoomed as a picture.
+ * - The theme asks for the dark or light variant both ways GTK offers:
+ *   `gtk-application-prefer-dark-theme` (every GTK 4), and
+ *   `gtk-interface-color-scheme` where this GTK has it (4.20), looked up by
+ *   name because the floor is 4.10. `Widget.Dark` reads the ink that results,
+ *   so it answers the variant asked for.
+ * - The direction is GTK's default, set before the first widget exists:
+ *   boxes mirror; a `Fixed` form does not (see docs/issues/ISSUE-right-to-left.md),
+ *   which is exactly what looking at it this way is for.
+ */
+static void apply_look(BtaApp *app)
+{
+    GtkSettings *settings = gtk_settings_get_default();
+
+    if (settings && app->text_scale > 0) {
+        int dpi = 0;
+        g_object_get(settings, "gtk-xft-dpi", &dpi, NULL);
+        if (dpi <= 0)
+            dpi = 96 * 1024;
+        g_object_set(settings, "gtk-xft-dpi", (int)(dpi * app->text_scale), NULL);
+    }
+
+    if (settings && app->theme) {
+        bool dark = g_str_equal(app->theme, "dark");
+        g_object_set(settings, "gtk-application-prefer-dark-theme", dark, NULL);
+
+        GParamSpec *scheme = g_object_class_find_property(G_OBJECT_GET_CLASS(settings),
+                                                          "gtk-interface-color-scheme");
+        if (scheme && (scheme->flags & G_PARAM_WRITABLE) && G_IS_PARAM_SPEC_ENUM(scheme)) {
+            GEnumValue *v = g_enum_get_value_by_nick(G_PARAM_SPEC_ENUM(scheme)->enum_class,
+                                                     dark ? "dark" : "light");
+            if (v)
+                g_object_set(settings, "gtk-interface-color-scheme", v->value, NULL);
+        }
+    }
+
+    if (app->rtl)
+        gtk_widget_set_default_direction(GTK_TEXT_DIR_RTL);
 }
 
 static void on_activate(GtkApplication *gapp, gpointer user_data)
@@ -3563,6 +3720,7 @@ static void on_activate(GtkApplication *gapp, gpointer user_data)
      */
     gtk_source_init();
 
+    apply_look(app);
     register_app_icons(app);
     register_app_styles(app);
     if (!install_globals(app)) {
@@ -3591,6 +3749,18 @@ static void on_activate(GtkApplication *gapp, gpointer user_data)
         bta_dump_error(ctx);
         app->exit_code = 1;
         g_application_quit(G_APPLICATION(gapp));
+        return;
+    }
+
+    /* `bintana test`: no startup form. The application is held, because a run
+     * that builds no window would otherwise end the moment this returns;
+     * `runTests` ends it with `Application.Quit` once the last test is over. */
+    if (app->testing) {
+        g_application_hold(G_APPLICATION(gapp));
+        if (!run_tests(app)) {
+            app->exit_code = 2;
+            g_application_quit(G_APPLICATION(gapp));
+        }
         return;
     }
 

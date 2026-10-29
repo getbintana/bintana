@@ -281,6 +281,7 @@ export class MainForm extends Form {
      * it collects is what the save, the lint and the failed run already found
      * and had nowhere to say. */
     problems  = new Problems(this);
+    tests     = new Tests(this);         // the project's own tests, and their answer
     /* And the one thing that puts rows in it on its own: the names a file uses,
      * checked against the form beside it while it is being written. */
     /* The two checks that read a name against the `.form` beside it, shared by
@@ -982,6 +983,9 @@ export class MainForm extends Form {
      */
     leaving() {
         this.stopShell();
+        /* A preview is a window about this IDE's project, and nobody is left
+         * to close it once the IDE is gone. */
+        this.runner.stopPreview();
         this.session.save();
         /* Nothing unsaved is an answer too. The snapshot used to go only in
          * `quit()` or on a tick that found nothing dirty, so saving and closing
@@ -1255,6 +1259,9 @@ export class MainForm extends Form {
         /* The tree's own menu speaks about the file that is open, so its state is
          * decided here with everything else that does. */
         this.MnuFtStartup.Enabled = this.formOf(this.activeFile) !== null;
+        this.MnuPreview.Enabled   = this.formOf(this.activeFile) !== null;
+        this.MnuNewTest.Enabled   = !!this.project;
+        this.MnuRunTests.Enabled  = !!this.project;
         this.MnuFtRename.Enabled  = this.activeFile !== null;
         this.MnuFtDelete.Enabled  = this.activeFile !== null;
         /* Editing is for a translation; starting one is for the template. The
@@ -1471,6 +1478,10 @@ export class MainForm extends Form {
      * read it must not open a file per row, which is the same mistake `Cursor`
      * would have been above. */
     ProblemView_Activate() { this.problems.activated(); }
+    TestView_Activate()    { this.tests.activated(); }
+
+    MnuNewTest_Click()  { this.tests.newTest(); }
+    MnuRunTests_Click() { this.tests.run(); }
 
     /* Both delegate to `Runner`, and these two are here because `tests/ide`
      * drives them by name -- as good a reason as a handler's. */
@@ -3342,6 +3353,26 @@ export class MainForm extends Form {
      * Reached from the Form menu, from Ctrl+M, and from a double or right click
      * on the bar itself.
      */
+    /*
+     * The form open in the active tab, run the way somebody else will see it:
+     * another language, a larger text, the other theme, the other direction.
+     * See `PreviewForm`.
+     */
+    MnuPreview_Click() {
+        const form = this.formOf(this.activeFile);
+        if (!form) {
+            Message.Warning("Open a form to preview it.");
+            return;
+        }
+        const name = this.qualifiedName(form);
+        const dir  = File.Join(this.project, "po");
+        const langs = File.Exists(dir)
+            ? Directory.List(dir, "*.po").map((f) => f.replace(/\.po$/, "")).sort()
+            : [];
+        this.previewDialog = PreviewForm.ask(name, langs,
+                                             (look) => this.runner.preview(name, look));
+    }
+
     MnuMenus_Click() {
         if (!this.designing) {
             Message.Warning("Open a form's design to edit its menus.");

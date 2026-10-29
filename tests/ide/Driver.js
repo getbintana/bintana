@@ -2158,6 +2158,9 @@ function* p_palette(ide) {
     eq("pressing it puts one on the form",
        ide.designer.selected.__node ? ide.designer.selected.__node.type : "",
        "Dial");
+    check("and leaves sources alone, since `uses` is what loads a library",
+          !File.Load(File.Join(TMP, "project.json")).includes("Dial.js"),
+          File.Load(File.Join(TMP, "project.json")));
     ide.designer.deleteSelected();
     yield;
 
@@ -3437,6 +3440,120 @@ function* p_clipboard(ide) {
  * It runs on the form `p_clipboard` left saved and puts it back exactly as it
  * found it: `p_completion` and everything after reads that file.
  */
+/*
+ * Form > Preview: the open form, run the way somebody else will see it.
+ *
+ * The dialog offers the project's catalogues, the run it starts is the real
+ * one with the runtime's own options (`--form`, `--text-scale`, `--theme`,
+ * `--rtl`, and `LANGUAGE`), it is a child beside Run and not instead of it,
+ * and what was chosen is offered again next time.
+ */
+function* p_preview(ide) {
+    Settings.Delete("preview.look");
+    ide.openInTab("Child.form");
+    yield* settled(ide);
+    ide.refresh();
+    eq("Preview is offered for an open form", ide.MnuPreview.Enabled, true);
+
+    ide.MnuPreview_Click();
+    const dlg = ide.previewDialog;
+    yield;
+    check("the preview dialog opens", dlg !== undefined && dlg !== null);
+    check("naming the form it will run", dlg.LblWhat.Text.endsWith("Child"), dlg.LblWhat.Text);
+    eq("the first language is the one the form is written in",
+       dlg.CmbLanguage.Items[0], "As written");
+    eq("and nothing changes until asked", dlg.CmbScale.Index + dlg.CmbTheme.Index, 0);
+
+    dlg.CmbScale.Index = 2;            /* 150% */
+    dlg.CmbTheme.Index = 2;            /* Dark */
+    dlg.ChkRtl.Active  = true;
+
+    const said = ide.LogView.Text.length;
+    dlg.BtnPreview_Click();
+    yield;
+
+    const line = ide.LogView.Text.slice(said);
+    check("the run is the real one, with the runtime's own options",
+          line.includes(`--form ${dlg.LblWhat.Text} --text-scale 1.5 --theme dark --rtl`),
+          JSON.stringify(line.slice(0, 200)));
+    check("and as written means no catalogue at all", line.includes("LANGUAGE=C "),
+          JSON.stringify(line.slice(0, 200)));
+    check("a child is running", ide.runner.previewJob !== null && ide.runner.previewJob.Running);
+    eq("beside Run, not instead of it", ide.running, false);
+
+    yield* until(() => !ide.runner.previewJob || ide.LogView.Text.slice(said).includes("[preview ended"), 20);
+    check("and it did not fall over on the way up",
+          !ide.LogView.Text.slice(said).includes("[preview ended"),
+          JSON.stringify(ide.LogView.Text.slice(said, said + 400)));
+    ide.runner.stopPreview();
+    eq("Stop takes it away", ide.runner.previewJob, null);
+
+    ide.MnuPreview_Click();
+    const again = ide.previewDialog;
+    yield;
+    eq("the dialog offers what was chosen last", again.CmbTheme.Index, 2);
+    eq("...the size too", again.CmbScale.Index, 2);
+    eq("...and the direction", again.ChkRtl.Active, true);
+    again.BtnCancel_Click();
+
+    const plan = PreviewForm.plan("Ns.Main", { language: "es", scale: 0, theme: "", rtl: false });
+    eq("a language is LANGUAGE", plan.environment.LANGUAGE, "es");
+    eq("and a look that changes nothing is the form alone",
+       plan.args.join(" "), "--form Ns.Main");
+
+    Settings.Delete("preview.look");
+}
+
+/*
+ * A project's own tests: File > New test writes one, Project > Run tests runs
+ * `bintana test --json` and fills the Tests page, a failed row goes to its
+ * line, and Check leaves `tests/` alone although `sources` does not list it.
+ */
+function* p_tests(ide) {
+    const dir = File.Join(TMP, "tests");
+    if (File.Exists(dir)) Directory.DeleteTree(dir);
+
+    const made = ide.tests.create("Invoice");
+    eq("New test writes tests/<Name>Test.js", made, "tests/InvoiceTest.js");
+    check("and opens it", ide.activeFile === made, String(ide.activeFile));
+    eq("a name that already ends in Test is not doubled",
+       ide.tests.create("OtherTest"), "tests/OtherTest.js");
+    ide.closeTabByName("tests/OtherTest.js", true);
+    File.Delete(File.Join(TMP, "tests", "OtherTest.js"));
+    ide.listFiles();
+
+    File.Save(File.Join(TMP, "tests", "InvoiceTest.js"),
+              "class InvoiceTest extends Test {\n" +
+              "    testAdds() { this.Eq(1 + 1, 2); }\n" +
+              "    testBroken() { this.Eq(1 + 1, 3, \"sum\"); }\n" +
+              "}\n");
+    ide.closeTabByName(made, true);
+
+    ide.MnuRunTests_Click();
+    yield* until(() => ide.tests.job === null, 300);
+    eq("the run fills the page, a row per test", ide.tests.rows.length, 2);
+    eq("...counting both", `${ide.tests.passed}/${ide.tests.failed}`, "1/1");
+    eq("failures come first", ide.TestView.Count && ide.tests.shown[0].Name, "testBroken");
+    eq("with the message the runtime gave", ide.tests.shown[0].Message, "sum: expected 3, got 2");
+    eq("the tab says how many failed", ide.tests.tab.Text, "1 test failed");
+    eq("and the page is the one on show", ide.ConsoleBox.Current, ide.tests.page);
+
+    ide.TestView.Index = 0;
+    ide.TestView_Activate();
+    yield;
+    eq("a failed row goes to its file", ide.activeFile, "tests/InvoiceTest.js");
+    eq("...at its line", ide.Editor.Line, 3);
+
+    ide.check.run();
+    check("Check does not ask for tests/ to be in sources",
+          !ide.problems.of("project").some((p) => p.file === "tests/InvoiceTest.js"),
+          JSON.stringify(ide.problems.of("project").filter((p) => (p.file || "").startsWith("tests"))));
+
+    ide.closeTabByName("tests/InvoiceTest.js", true);
+    Directory.DeleteTree(dir);
+    ide.listFiles();
+}
+
 function* p_taborder(ide) {
     ide.openInTab("Child.form");
     yield* settled(ide);
@@ -12292,14 +12409,14 @@ function* p_errors(ide) {
     eq("...and the tab says what it is", ide.ConsoleBox.Tabs[0], "Output");
 
     /*
-     * *Output*, *Debug* and *Problems* are declared in the `.form`; the terminal
-     * is a fourth page that exists only where a child can be run in it, which is
+     * *Output*, *Debug*, *Problems* and *Tests* are declared in the `.form`; the
+     * terminal is a fifth page that exists only where a child can be run in it, which is
      * `Widget.Available`'s question -- a runtime built without VTE gets no tab
      * promising a terminal that would refuse.  This build has VTE, so both
      * branches are stated and the one that holds here is checked.
      */
     eq("there is a terminal page exactly when this build can run one",
-       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 4 : 3);
+       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 5 : 4);
     eq("...and a Shell to go with it", ide.Shell !== null, Widget.Available("Terminal"));
 
     if (Widget.Available("Terminal")) {
@@ -13365,6 +13482,10 @@ function* p_check(ide) {
               "class Bad extends Form {\n" +
               "    Btn_Clik() { }\n" +                    /* Button raises Click */
               "    MnuOk_Chose() { }\n" +                 /* an item raises Click */
+              "    Gone_Click() { }\n" +                  /* no control is Gone */
+              "    Built_Click() { }\n" +                 /* made in code, below */
+              "    save_draft() { }\n" +                  /* a helper, not a handler */
+              "    Form_Load() { this.Built = new Button(); this.Built.Name = \"Built\"; }\n" +
               "    Form_Open() { this.Btn.Txt = \"x\"; this.MnuOk.Enabld = 1; }\n" +
               "}\n");
 
@@ -13387,6 +13508,17 @@ function* p_check(ide) {
           has("Button has no Txt"), JSON.stringify(said));
     check("a handler for an event it does not raise is reported",
           has("does not raise Clik"), JSON.stringify(said));
+    /*
+     * A handler whose control is gone -- renamed or deleted in the designer --
+     * is called by nobody, and the event half is a word some control raises,
+     * which is what tells it from a helper with an underscore in its name.
+     */
+    check("a handler for a control the form does not have is reported",
+          has("no control is named Gone"), JSON.stringify(said));
+    check("...but not one for a control the file builds itself",
+          !has("named Built"), JSON.stringify(said));
+    check("...nor a method whose second half is no event at all",
+          !has("named save"), JSON.stringify(said));
     check("...and so is the member, in a file nobody has open",
           said.some((r) => r.file === "Bad.js" && r.text.includes("has no Txt")),
           JSON.stringify(said));
@@ -16961,6 +17093,8 @@ const PHASES = [
     { name: "pages", run: p_pages },
     { name: "clipboard", run: p_clipboard },
     { name: "taborder", run: p_taborder },
+    { name: "preview", run: p_preview },
+    { name: "tests", run: p_tests },
     { name: "completion", run: p_completion },
     { name: "snippets", run: p_snippets },
     { name: "folding", run: p_folding },

@@ -222,6 +222,7 @@ character of a word is the one just pressed.
 ```
 this.Btn.Txt       Btn is a Button, and a Button has no Txt
 Btn_Clik()         Btn is a Button, and a Button does not raise Clik
+Gone_Click()       no control is named Gone, and Click is an event
 ```
 
 Both go through **`Completion`**'s lookups — `controls()`, `typeOf()`,
@@ -238,9 +239,13 @@ What it deliberately does *not* report:
 
 - **A control whose class this process does not have** — a component of the
   project, which the IDE never loads. Skipped rather than guessed at.
-- **`Btnn_Click`, the control misspelled rather than the event.** `Btnn` is not a
-  control, so this is a method with an underscore in it and nothing here can tell
-  it from any other. Warning about those is how a check gets switched off.
+- **`save_draft`, a method with an underscore in it.** A name that is not a
+  control is reported only when the half after the underscore is **an event some
+  runtime class raises** (`Names.raisedEvents`) -- `Gone_Click` is a handler whose
+  control was renamed or deleted, `save_draft` is a helper. And a name the file
+  spells as a string or assigns as `this.Name =` is a control built in code, which
+  binds by `Name` like a declared one, so it is left alone. Warning about every
+  underscore is how a check gets switched off.
 - **A menu item's members.** `Completion.controls()` flattens a form's
   `children`, and a menu is not among them — so `this.MnuSave.Enabled` is not
   checked rather than wrongly flagged. Teaching that lookup about menus would fix

@@ -1511,3 +1511,88 @@ function showError(message, stack) {
     errorWindowOpen = true;
     form.Show();
 }
+
+/* ------------------------------------------------------------------------
+ * `Remember`: the window as it was left.
+ *
+ * C says when (`form_remember` in bta_controls.c): `"restore"` before
+ * `Form_Open`, `"size"` on every resize, `"save"` when the window goes.  This
+ * says what, and it is the IDE's `Session` made general -- the same three
+ * lessons, paid for there first:
+ *
+ * - **The size kept is the last one seen un-maximised.**  A maximised window
+ *   reports the screen, and that size restored un-maximised is a window with no
+ *   frame left to grab.  The flag is written beside it.
+ * - **Nothing is written per resize.**  A drag is a hundred frames; the size is
+ *   noted and written once, when the window goes.
+ * - **A settings file is a file a person edits**, so every number is checked
+ *   rather than trusted, and the dividers are read by the names this form has --
+ *   a file cannot name a control into being moved.
+ *
+ * One key per form class, `window.<Class>`: the window is the person's, not the
+ * project's, and two instances of one dialog are one preference.  A name in the
+ * prelude that C looks up, so lower case and outside the surface.
+ * ------------------------------------------------------------------- */
+const REMEMBER_MIN = 50;   /* under this it never came from a resize */
+const rememberedSize = new WeakMap();
+
+function rememberKey(form) {
+    return `window.${Widget.TypeName(form.constructor)}`;
+}
+
+function rememberSane(n) {
+    return Number.isFinite(n) && n >= REMEMBER_MIN && n <= 100000;
+}
+
+function rememberSplits(form) {
+    return form.Controls.filter(c => c instanceof Split && c.Name);
+}
+
+function rememberWindow(form, what, width, height) {
+    if (what === "size") {
+        if (form.Maximized || form.FullScreen) return;
+        if (rememberSane(width) && rememberSane(height))
+            rememberedSize.set(form, { width, height });
+        return;
+    }
+
+    const key = rememberKey(form);
+
+    if (what === "restore") {
+        const saved = Settings.Get(key, null);
+        if (!saved || typeof saved !== "object" || Array.isArray(saved)) return;
+
+        const w = Number(saved.width), h = Number(saved.height);
+        if (rememberSane(w) && rememberSane(h)) {
+            /* Before `Maximized` and not instead of it: this is the size
+             * un-maximising gives back. */
+            form.Resize(w, h);
+            rememberedSize.set(form, { width: w, height: h });
+        }
+        if (saved.maximized === true) form.Maximized = true;
+
+        const at = saved.splits && typeof saved.splits === "object" ? saved.splits : {};
+        for (const split of rememberSplits(form)) {
+            if (!hasOwn.call(at, split.Name)) continue;
+            const where = Number(at[split.Name]);
+            if (Number.isFinite(where) && where > 0) split.Position = Math.round(where);
+        }
+        return;
+    }
+
+    if (what === "save") {
+        const saved  = { maximized: !!form.Maximized };
+        const size   = rememberedSize.get(form);
+        if (size) {
+            saved.width  = size.width;
+            saved.height = size.height;
+        }
+        const splits = {};
+        let any = false;
+        for (const split of rememberSplits(form)) {
+            if (split.Position > 0) { splits[split.Name] = split.Position; any = true; }
+        }
+        if (any) saved.splits = splits;
+        Settings.Set(key, saved);
+    }
+}

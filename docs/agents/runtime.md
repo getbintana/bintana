@@ -175,6 +175,23 @@ used to read as no id at all; a project that declares none keeps the old answer,
 program's own name. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
+### `bintana test`, and an application with no window
+
+- **A `GtkApplication` that has built no window ends as soon as `activate`
+  returns.** `bintana test` builds no startup form, so `on_activate` takes
+  `g_application_hold` before `run_tests`, and `runTests` (rad.js) ends the run
+  with `Application.Quit` after the last test. Without the hold a project with
+  a startup form exited 0 having run nothing that waited.
+- **`tests/` is skipped by `collect_js` at the project root and at a library's
+  root**, so a project with no `sources` list does not load its tests on a
+  normal run -- `tests/smoke`'s `testTests` plants a `print` in a test file and
+  goes red with the skip taken away. The IDE's Check skips the folder for the
+  same reason (`Tests.isTest`).
+- **A test file's class is found by the file's name** (`bta_lookup_global` of
+  `InvoiceTest` for `InvoiceTest.js`), which is what lets the runner need no
+  registry; a file that declares something else is handed to `runTests` as a
+  failure with the reason, never dropped.
+
 ## Plugins
 
 - **A plugin is a table and not a link, and every corner of that decision was
