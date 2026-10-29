@@ -159,6 +159,16 @@ class GpxForm extends Form {
         this.fit    = this.fitZoom(width, height);
         if (this.zoom < 0) this.zoom = this.fit;
 
+        /* A pinch in progress: everything below is drawn at the level the view
+         * has and shown scaled and moved, about where the fingers began. */
+        const live = this.pinch ? this.pinch.Live : null;
+
+        if (live) {
+            p.Translate(this.pinch.X + live.DX, this.pinch.Y + live.DY);
+            p.Scale(live.S, live.S);
+            p.Translate(-this.pinch.X, -this.pinch.Y);
+        }
+
         const painted = this.drawMap(p, width, height);
 
         this.drawTrack(p);
@@ -377,52 +387,61 @@ class GpxForm extends Form {
     }
 
     /*
-     * Two fingers, on glass or on a touchpad: the centre between them drags the
-     * map and the distance zooms it **about that centre**, which is the same
-     * pivot the wheel zooms about.  `Transform` is the change since `Begin`, so
-     * the pan is taken a step at a time (the world under the fingers follows
-     * them, as it does under a mouse) and the zoom is the *level* the scale has
-     * reached: the tiles exist at whole levels, so a pinch crosses them one by
-     * one -- twice as far apart is one level.  A mouse never raises it and the
-     * wheel is kept, so the map zooms on every input there is.
+     * Two fingers, on glass or on a touchpad: the map **follows them while they
+     * are down** and settles on a whole level when they lift.
+     *
+     * A pinch that jumped a level each time the scale crossed a threshold felt
+     * like a switch.  What a finger expects is the map under it, so during the
+     * gesture the picture is *scaled and moved as it is* -- tiles and track
+     * together, by `Area_Draw`'s transform, about the point where the fingers
+     * began -- and nothing about the view changes.  `End` is where the view is
+     * rebuilt: the nearest whole level (the tiles exist at whole levels; twice
+     * as far apart is one), with the world point that was under the fingers at
+     * the start left under where they ended.  The wheel and the mouse are as
+     * they were.
      */
     Area_Transform(phase, dx, dy, scale, angle, x, y) {
         if (!this.points.length) return;
 
         if (phase === "Begin") {
             this.zoomBy(0);                 /* starts the view, if nothing has */
-            this.pinch = { Z0: this.zoom, DX: 0, DY: 0 };
+            this.pinch = { Z0: this.zoom, OX: this.originX, OY: this.originY,
+                           X: x, Y: y, Live: null };
             this.drag  = null;
             return;
         }
-        if (!this.pinch) return;
-        if (phase === "End") {
-            this.pinch = null;
-            return;
-        }
 
-        const stepX = dx - this.pinch.DX, stepY = dy - this.pinch.DY;
+        const g = this.pinch;
+        if (!g) return;
 
-        this.pinch.DX = dx;
-        this.pinch.DY = dy;
-        if (stepX || stepY) {
-            const k = Math.pow(2, this.zoom);
+        /* Never past the levels there are, even on the way. */
+        const s = Math.max(Math.pow(2, -g.Z0), Math.min(Math.pow(2, MAX_ZOOM - g.Z0), scale));
 
-            this.cx0     -= stepX / k;
-            this.cy0     -= stepY / k;
-            this.originX -= stepX;          /* what the zoom below measures from */
-            this.originY -= stepY;
-            this.panned   = true;
+        if (phase === "Update") {
+            g.Live = { S: s, DX: dx, DY: dy };
             if (this.hover >= 0) {
                 this.hover = -1;
                 this.showHover();
             }
+            this.Area.Redraw();
+            return;
         }
 
-        const level = Math.max(0, Math.min(MAX_ZOOM,
-                                           this.pinch.Z0 + Math.round(Math.log2(scale))));
-        if (level !== this.zoom) this.zoomBy(level - this.zoom, { X: x, Y: y });
-        else this.Area.Redraw();
+        /* End: the view takes what the picture showed. */
+        this.pinch = null;
+
+        const k0    = Math.pow(2, g.Z0);
+        const level = Math.max(0, Math.min(MAX_ZOOM, g.Z0 + Math.round(Math.log2(s))));
+        const kTo   = Math.pow(2, level);
+        const wx0   = (g.OX + g.X) / k0;     /* the world point the fingers began on */
+        const wy0   = (g.OY + g.Y) / k0;
+
+        this.zoom   = level;
+        this.cx0    = wx0 + (this.frameW / 2 - (g.X + dx)) / kTo;
+        this.cy0    = wy0 + (this.frameH / 2 - (g.Y + dy)) / kTo;
+        this.panned = true;
+        this.showStats();
+        this.Area.Redraw();
     }
 
     /*
