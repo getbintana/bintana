@@ -1249,6 +1249,8 @@ export class MainForm extends Form {
         const spread = design && this.designer.selection.length > 2;
         this.ActSpreadH.Enabled = spread;
         this.ActSpreadV.Enabled = spread;
+        /* Several siblings placed by coordinate, one such Panel, or the form. */
+        this.ActArrange.Enabled = design && this.designer.canArrange();
         this.ActTabOrder.Enabled = design;
         this.DesignGroup.Visible = design;
         this.ActUndo.Enabled = design ? this.designer.canUndo()
@@ -3414,6 +3416,7 @@ export class MainForm extends Form {
     /* Sharing out the gap needs three: two are already at the ends. */
     ActSpreadH_Execute() { this.designer.distribute("h"); }
     ActSpreadV_Execute() { this.designer.distribute("v"); }
+    ActArrange_Execute() { this.designer.arrangeSelection(); }
 
     /*
      * The order Tab takes the controls of a container in -- Delphi's *Edit >

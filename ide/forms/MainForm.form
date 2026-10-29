@@ -158,6 +158,11 @@
       "enabled": false
     },
     {
+      "name": "ActArrange",
+      "text": "Arrange in boxes",
+      "enabled": false
+    },
+    {
       "name": "ActTabOrder",
       "text": "Tab order...",
       "enabled": false
@@ -825,6 +830,12 @@
         },
         {
           "action": "ActSpreadV"
+        },
+        {
+          "separator": true
+        },
+        {
+          "action": "ActArrange"
         },
         {
           "separator": true

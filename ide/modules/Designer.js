@@ -41,6 +41,33 @@ export const GRID = 4;                 // moves snap to this grid
  * far enough to see there are two. */
 const PASTE_STEP = 12;
 
+/*
+ * What `arrangeSelection` tells `Arrange` about a control: a view of something
+ * takes the room along its box, and a field the room across its row. Class
+ * names, because a box cannot tell a list from a label by its rectangle.
+ */
+const ARRANGE_GROWS  = ["TextEditor", "SourceEditor", "TableView", "TreeView", "ListBox",
+                        "RowList", "Scroller", "DrawingArea", "Picture", "Video", "Terminal",
+                        "Notebook", "Split", "Switcher", "Flow"];
+const ARRANGE_FIELDS = ["TextBox", "ComboBox", "SpinBox", "DecimalBox", "DatePicker", "Slider",
+                        "ProgressBar", "LevelBar"];
+
+function topLeft(items) {
+    const x = Math.min(...items.map((it) => it.x));
+    const y = Math.min(...items.map((it) => it.y));
+    return { x, y };
+}
+
+/* The node by that name in a `.form` tree, at any depth. */
+function findNode(nodes, name) {
+    for (const n of nodes || []) {
+        if (n.name === name) return n;
+        const deeper = findNode(n.children, name);
+        if (deeper) return deeper;
+    }
+    return null;
+}
+
 const FORM_MIN         = 40;    // px: a form smaller than this cannot be aimed at
 const MIN_SIZE = 12;
 
@@ -1623,6 +1650,158 @@ export class Designer {
         this.chrome.position();
         this.grid.fill();
         this.touch();
+    }
+
+    /* --- de coordenadas a cajas -----------------------------------------------
+     *
+     * Controls placed by hand, turned into the rows, columns and grids they
+     * were a drawing of (`Arrange` reads the rectangles). Two gestures, one
+     * command:
+     *
+     * - **Several siblings selected** in a container that places by coordinate
+     *   are wrapped in a new container where they were, and the rest of the
+     *   form is left alone -- one region at a time, which is how a `Fixed`
+     *   form becomes boxes with a `Fixed` per region.
+     * - **Nothing selected, or one `Panel`**, converts that container in place:
+     *   the form (or the panel) itself becomes the box.
+     *
+     * It is done on the `.form` and not on the live controls -- the snapshot
+     * the undo keeps, rewritten and restored -- so it is one undo, and every
+     * control keeps its name and with it the handlers the `.js` holds.
+     */
+
+    /* What is converted, or null: `{ parent, chosen, inPlace }`. */
+    arrangeTarget() {
+        const sel = this.selection;
+        const whole = (c) => c && (c === this.surface || c.constructor.name === "Panel") &&
+                             this.isFixed(c) && c.Children.length > 0;
+        if (!sel.length)
+            return whole(this.surface)
+                ? { parent: this.surface, chosen: this.surface.Children.slice(), inPlace: true }
+                : null;
+        if (sel.length === 1)
+            return whole(sel[0]) ? { parent: sel[0], chosen: sel[0].Children.slice(), inPlace: true }
+                                 : null;
+        const parent = this.parentOf(sel[0]);
+        if (!parent || !this.isFixed(parent) || sel.some((c) => this.parentOf(c) !== parent))
+            return null;
+        return { parent, chosen: sel.slice(), inPlace: false };
+    }
+
+    canArrange() {
+        return !!this.path && this.arrangeTarget() !== null;
+    }
+
+    arrangeSelection() {
+        const target = this.arrangeTarget();
+        if (!target) return false;
+        const { parent, chosen, inPlace } = target;
+
+        /* The slots the drawing gave them, not what is drawn inside: a Button
+         * declared 80x32 draws its face 46x24, and the box has to keep the 80
+         * for the row to come out as wide as it was. */
+        const items = [];
+        for (const c of chosen) {
+            items.push({ key: c.Name, x: c.X, y: c.Y, w: c.Width, h: c.Height,
+                         grows: ARRANGE_GROWS.includes(c.constructor.name),
+                         field: ARRANGE_FIELDS.includes(c.constructor.name) });
+        }
+        if (items.length < (inPlace ? 1 : 2)) return false;
+
+        let frame = null, margin = 0;
+        if (inPlace) {
+            const at = topLeft(items);
+            margin = Math.max(0, Math.min(at.x, at.y));
+            const w = parent === this.surface ? this.clientSize().w : parent.Width;
+            const h = parent === this.surface ? this.clientSize().h : parent.Height;
+            frame = { x: margin, y: margin, w: w - 2 * margin, h: h - 2 * margin };
+        }
+        const plan = Arrange.plan(items, frame);
+        if (!plan || plan.kind === "Fixed") {
+            this.ide.log("Nothing to arrange: those controls overlap, so no row or column can be read from them.\n");
+            return false;
+        }
+
+        const snap = JSON.parse(this.snapshot());
+        const list = parent === this.surface ? snap.children
+                                             : findNode(snap.children, parent.Name).children;
+        const byName = {};
+        for (const n of list) byName[n.name] = n;
+
+        const claimed = [];
+        const build = (p) => {
+            if (p.kind === "Leaf") {
+                const n = JSON.parse(JSON.stringify(byName[p.key]));
+                const props = n.properties || (n.properties = {});
+                for (const k of ["X", "Y", "HAlign", "VAlign", "HExpand", "VExpand", "Expand"])
+                    delete props[k];
+                for (const k in p.props) props[k] = p.props[k];
+                return n;
+            }
+            const name = this.uniqueName(p.kind === "Grid" ? "Grid" : "Panel", claimed);
+            claimed.push(name);
+            const props = { ...p.props };
+            if (p.kind === "Box") {
+                props.Arrangement = p.horizontal ? "Horizontal" : "Vertical";
+                if (p.spacing) props.Spacing = p.spacing;
+            } else if (p.kind === "Grid") {
+                props.Columns = p.columns;
+                if (p.columnSpacing) props.ColumnSpacing = p.columnSpacing;
+                if (p.rowSpacing) props.RowSpacing = p.rowSpacing;
+            } else {
+                props.Width  = p.rect.w;
+                props.Height = p.rect.h;
+            }
+            const children = p.kind === "Fixed"
+                ? p.children.map((c) => {
+                      const n = JSON.parse(JSON.stringify(byName[c.key]));
+                      n.properties = { ...(n.properties || {}), X: c.x, Y: c.y };
+                      return n;
+                  })
+                : p.children.map(build);
+            return { type: p.kind === "Grid" ? "Grid" : "Panel", name, properties: props, children };
+        };
+
+        this.pushUndo();
+        let made;
+        if (inPlace) {
+            /* The container itself becomes the box; a grid at the top goes in a
+             * column of one, since only a Panel and a form take `Arrangement`. */
+            const top = plan.kind === "Box" ? plan
+                      : { kind: "Box", horizontal: false, spacing: 0, props: {},
+                          children: [{ ...plan, props: { HAlign: "Fill", VAlign: "Start" } }] };
+            const box = build(top);
+            const props = parent === this.surface ? snap.properties
+                                                  : findNode(snap.children, parent.Name).properties;
+            props.Arrangement = box.properties.Arrangement;
+            if (box.properties.Spacing) props.Spacing = box.properties.Spacing;
+            else delete props.Spacing;
+            /* A form insets its contents with Margin; a Panel's Margin is room
+             * outside it, so its inside is Padding. */
+            if (margin) props[parent === this.surface ? "Margin" : "Padding"] = margin;
+            list.splice(0, list.length, ...box.children);
+            made = parent === this.surface ? [] : [parent.Name];
+        } else {
+            const wrapper = build(plan);
+            wrapper.properties = { ...wrapper.properties, X: plan.rect.x, Y: plan.rect.y,
+                                   Width: plan.rect.w, Height: plan.rect.h };
+            const at = list.findIndex((n) => items.some((it) => it.key === n.name));
+            const kept = list.filter((n) => !items.some((it) => it.key === n.name));
+            kept.splice(list.slice(0, at).filter((n) => !items.some((it) => it.key === n.name)).length,
+                        0, wrapper);
+            list.splice(0, list.length, ...kept);
+            made = [wrapper.name];
+        }
+        snap.selected = made;
+        this.restore(JSON.stringify(snap));
+        this.touch();
+
+        const left = Arrange.fixedCount(plan);
+        this.ide.log(`Arranged ${items.length} controls` +
+                     (made.length ? ` into ${made[0]}` : " on the form") +
+                     (left ? `; ${left} overlapping ones stay placed by coordinate in a panel of their own` : "") +
+                     ".\n");
+        return true;
     }
 
     /* --- alinear ------------------------------------------------------------

@@ -85,9 +85,15 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   (broken at that size) to 1100, which is what `SideBar` 260, `SidePanel` 280 and
   the rest add up to. Lowering it means expressing those as split **positions**
   rather than child widths, which is a separate piece of work.
-- **`MinWidth`/`MinHeight` mean nothing in a box.** They are the floor for a
-  *stretched* control on a surface; in a box the floor is `Height`/`Width`
-  itself, and `Expand` is what makes the control take more. `PoForm`'s editors
+- **`MinWidth`/`MinHeight` mean nothing in a box -- unless the axis says
+  `Fill`.** They are the floor for a *stretched* control on a surface; in a box,
+  with the alignment left `Auto`, the floor is `Height`/`Width` itself, and
+  `Expand` is what makes the control take more. **An explicit `Fill` in a box
+  turns it round**: `bta_widget_relayout` requests `MinWidth` for a `Fill` axis
+  wherever the control is, so `Width` stops being asked for. A `Grid` column of
+  labels set `HAlign: "Fill", Width: 80` came out 38 wide -- the text -- and the
+  designer's *Arrange in boxes* writes the drawn size as `MinWidth` on a grid
+  cell that fills for that reason (2026-10-29). `PoForm`'s editors
   got `MinHeight` first and were squeezed to 46px; `Height` plus `Expand` is the
   pair that gives a floor of 64 and growth to whatever there is.
 - **A `Fixed` inside a hidden page that declares no size latches the wrong design

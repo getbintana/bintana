@@ -60,7 +60,7 @@ msgstr ""
 #: forms/ConfirmForm.form: BtnYes.Text
 #: forms/MenuForm.form: BtnDelete.Text
 #: forms/RecordForm.form: BtnRecDel.Text
-#: forms/MainForm.js:3126
+#: forms/MainForm.js:3128
 #: modules/FormFiles.js:726
 msgid "Delete"
 msgstr ""
@@ -982,6 +982,10 @@ msgstr ""
 msgid "Distribute vertically"
 msgstr ""
 
+#: forms/MainForm.form: action ActArrange
+msgid "Arrange in boxes"
+msgstr ""
+
 #: forms/MainForm.form: action ActTabOrder
 msgid "Tab order..."
 msgstr ""
@@ -1109,7 +1113,7 @@ msgid "Stop (Shift+F9)"
 msgstr ""
 
 #: forms/MainForm.form: LblStatus.Text
-#: forms/MainForm.js:1375
+#: forms/MainForm.js:1377
 msgid "No project"
 msgstr ""
 
@@ -1185,7 +1189,7 @@ msgid "Commit what is staged, with the button below. Enter writes a line"
 msgstr ""
 
 #: forms/MainForm.form: BtnTakeDisk.Text
-#: forms/MainForm.js:2552
+#: forms/MainForm.js:2554
 msgid "Reload"
 msgstr ""
 
@@ -1493,7 +1497,7 @@ msgid "Base folder:"
 msgstr ""
 
 #: forms/NewProjectForm.form: BtnCreate.Text
-#: forms/MainForm.js:2989
+#: forms/MainForm.js:2991
 msgid "Create"
 msgstr ""
 
@@ -2039,115 +2043,115 @@ msgstr ""
 msgid "the shell ended"
 msgstr ""
 
-#: forms/MainForm.js:1380
+#: forms/MainForm.js:1382
 msgid "{0}   double click to edit"
 msgstr ""
 
-#: forms/MainForm.js:1382
+#: forms/MainForm.js:1384
 msgid "{0}   double click to edit its fields"
 msgstr ""
 
-#: forms/MainForm.js:1391
+#: forms/MainForm.js:1393
 msgid "   read-only: not UTF-8"
 msgstr ""
 
-#: forms/MainForm.js:1401
+#: forms/MainForm.js:1403
 msgid "   form {0}x{1}"
 msgstr ""
 
-#: forms/MainForm.js:1404
+#: forms/MainForm.js:1406
 msgid "   Ln {0}, Col {1}"
 msgstr ""
 
-#: forms/MainForm.js:1875
+#: forms/MainForm.js:1877
 msgid "Nothing wrong with the project"
 msgstr ""
 
-#: forms/MainForm.js:2528
+#: forms/MainForm.js:2530
 msgid "{0} is no longer on disk."
 msgstr ""
 
-#: forms/MainForm.js:2530
+#: forms/MainForm.js:2532
 msgid "{0} changed on disk, and there are unsaved changes here."
 msgstr ""
 
-#: forms/MainForm.js:2532
+#: forms/MainForm.js:2534
 msgid "{0} changed on disk."
 msgstr ""
 
-#: forms/MainForm.js:2553
+#: forms/MainForm.js:2555
 msgid "{0} changed on disk. Take the newer file and lose what is unsaved here?"
 msgstr ""
 
-#: forms/MainForm.js:2554
+#: forms/MainForm.js:2556
 msgid "Reload without saving"
 msgstr ""
 
-#: forms/MainForm.js:2880
-#: forms/MainForm.js:2902
+#: forms/MainForm.js:2882
+#: forms/MainForm.js:2904
 #: modules/Navigator.js:72
 msgid "Put the cursor on a name first."
 msgstr ""
 
-#: forms/MainForm.js:2907
+#: forms/MainForm.js:2909
 #: forms/RefsForm.js:105
 msgid "Rename symbol"
 msgstr ""
 
-#: forms/MainForm.js:2907
+#: forms/MainForm.js:2909
 #: forms/RefsForm.js:105
 msgid "New name:"
 msgstr ""
 
-#: forms/MainForm.js:2987
+#: forms/MainForm.js:2989
 msgid "Start a repository"
 msgstr ""
 
-#: forms/MainForm.js:2988
+#: forms/MainForm.js:2990
 msgid "Create a git repository in {0}?"
 msgstr ""
 
-#: forms/MainForm.js:3044
+#: forms/MainForm.js:3046
 msgid "(no branches yet)"
 msgstr ""
 
-#: forms/MainForm.js:3051
+#: forms/MainForm.js:3053
 msgid "(no other branch)"
 msgstr ""
 
-#: forms/MainForm.js:3085
+#: forms/MainForm.js:3087
 msgid "Switch branch"
 msgstr ""
 
-#: forms/MainForm.js:3089
+#: forms/MainForm.js:3091
 msgid "Switch"
 msgstr ""
 
-#: forms/MainForm.js:3104
+#: forms/MainForm.js:3106
 msgid "New branch"
 msgstr ""
 
-#: forms/MainForm.js:3104
+#: forms/MainForm.js:3106
 msgid "Called"
 msgstr ""
 
-#: forms/MainForm.js:3124
+#: forms/MainForm.js:3126
 msgid "Delete a branch"
 msgstr ""
 
-#: forms/MainForm.js:3125
+#: forms/MainForm.js:3127
 msgid "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr ""
 
-#: forms/MainForm.js:3217
+#: forms/MainForm.js:3219
 msgid "Clone a repository"
 msgstr ""
 
-#: forms/MainForm.js:3217
+#: forms/MainForm.js:3219
 msgid "From"
 msgstr ""
 
-#: forms/MainForm.js:3225
+#: forms/MainForm.js:3227
 msgid "Clone into"
 msgstr ""
 
@@ -2160,27 +2164,27 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:1385
+#: forms/MainForm.js:1387
 #: forms/QuickForm.js:265
 msgid "{0} file"
 msgid_plural "{0} files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:3086
+#: forms/MainForm.js:3088
 msgid "There is {0} change here. Switching keeps it, unless the two branches disagree about the same file."
 msgid_plural "There are {0} changes here. Switching keeps them, unless the two branches disagree about the same file."
 msgstr[0] ""
 msgstr[1] ""
 
 #: forms/MainForm.js:873
-#: forms/MainForm.js:1614
+#: forms/MainForm.js:1616
 #: modules/Exporter.js:38
 #: modules/Installer.js:27
 msgid "Open a project first."
 msgstr ""
 
-#: forms/MainForm.js:1839
+#: forms/MainForm.js:1841
 msgid "There is no template yet. Run Project > Update translations first: it gathers every string the project shows and writes the .pot a translation starts from."
 msgstr ""
 
@@ -2190,25 +2194,25 @@ msgid ""
 "It can still be edited, but it will not be able to run."
 msgstr ""
 
-#: forms/MainForm.js:1453
+#: forms/MainForm.js:1455
 msgid ""
 "{0}\n"
 "is not there any more."
 msgstr ""
 
-#: forms/MainForm.js:3364
+#: forms/MainForm.js:3366
 msgid "Open a form to preview it."
 msgstr ""
 
-#: forms/MainForm.js:3378
+#: forms/MainForm.js:3380
 msgid "Open a form's design to edit its menus."
 msgstr ""
 
-#: forms/MainForm.js:3397
+#: forms/MainForm.js:3399
 msgid "Open a form's design to edit its commands."
 msgstr ""
 
-#: forms/MainForm.js:3429
+#: forms/MainForm.js:3432
 msgid "Open a form's design to edit its tab order."
 msgstr ""
 
@@ -2226,26 +2230,26 @@ msgstr ""
 msgid "{0} is already a project."
 msgstr ""
 
-#: forms/MainForm.js:1757
+#: forms/MainForm.js:1759
 msgid ""
 "Cannot open {0}:\n"
 "{1}"
 msgstr ""
 
-#: forms/MainForm.js:1777
+#: forms/MainForm.js:1779
 #: forms/MetainfoForm.js:58
 msgid ""
 "Cannot read {0}:\n"
 "{1}"
 msgstr ""
 
-#: forms/MainForm.js:1788
+#: forms/MainForm.js:1790
 msgid ""
 "Cannot edit {0}:\n"
 "{1}"
 msgstr ""
 
-#: forms/MainForm.js:3242
+#: forms/MainForm.js:3244
 #: modules/FormFiles.js:429
 #: modules/FormFiles.js:610
 #: modules/Tests.js:72
@@ -2619,39 +2623,39 @@ msgstr ""
 msgid "Run to cursor needs a program being debugged."
 msgstr ""
 
-#: modules/Designer.js:3004
+#: modules/Designer.js:3183
 msgid "the menu bar"
 msgstr ""
 
-#: modules/Designer.js:957
+#: modules/Designer.js:984
 msgid "{0} holds controls of its own, so there is nothing to draw an item in."
 msgstr ""
 
-#: modules/Designer.js:1197
+#: modules/Designer.js:1224
 msgid ""
 "An aspect frame holds one child.\n"
 "Put a container in it to hold more."
 msgstr ""
 
-#: modules/Designer.js:1204
-#: modules/Designer.js:2827
+#: modules/Designer.js:1231
+#: modules/Designer.js:3006
 msgid ""
 "A split holds exactly two children.\n"
 "Put a container in one of its halves to hold more."
 msgstr ""
 
-#: modules/Designer.js:3059
-#: modules/Designer.js:3141
+#: modules/Designer.js:3238
+#: modules/Designer.js:3320
 msgid ""
 "The code already has handlers for {0}: {1}.\n"
 "Rename or delete them first."
 msgstr ""
 
-#: modules/Designer.js:3123
+#: modules/Designer.js:3302
 msgid "\"{0}\" is not usable as a control name."
 msgstr ""
 
-#: modules/Designer.js:3128
+#: modules/Designer.js:3307
 msgid "There is already a control named {0}."
 msgstr ""
 

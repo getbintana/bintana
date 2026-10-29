@@ -3554,6 +3554,182 @@ function* p_tests(ide) {
     ide.listFiles();
 }
 
+/*
+ * Controls placed by coordinate, turned into boxes: the form as a whole, and a
+ * region of it. What is asserted is the tree that comes out, that **nothing
+ * moved** (the boxes reproduce the drawing at the size it was drawn), that the
+ * names -- and with them the handlers -- are the ones the controls had, and
+ * that it is one undo.
+ *
+ * It opens a form of its own, a dialog of the commonest shape, and goes back
+ * to the one it found.
+ */
+function* p_arrange(ide) {
+    const was = ide.activeFile;
+
+    /* --- the reading, with no form: rectangles in, a tree out --------------- */
+    const it = (key, x, y, w, h, more = {}) => ({ key, x, y, w, h, ...more });
+    let plan = Arrange.plan([it("a", 0, 0, 80, 30), it("b", 40, 10, 80, 30), it("c", 200, 0, 80, 30)]);
+    eq("two that overlap and one beside: a row", [plan.kind, plan.horizontal].join(), "Box,true");
+    eq("whose first part stays placed by coordinate, the part not done",
+       plan.children.map((c) => c.kind).join(), "Fixed,Leaf");
+    eq("and says how many it left", Arrange.fixedCount(plan), 2);
+    eq("keeping where they were, relative to their panel",
+       JSON.stringify(plan.children[0].children[1]), '{"key":"b","x":40,"y":10}');
+
+    plan = Arrange.plan([it("list", 0, 0, 200, 150, { grows: true }),
+                         it("ok", 0, 220, 200, 30)]);
+    eq("a column with a break: the part after it keeps to the end",
+       [plan.children[1].props.VExpand, plan.children[1].props.VAlign].join(), "true,End");
+    eq("and a list takes the height", plan.children[0].props.VExpand, true);
+
+    plan = Arrange.plan([it("l1", 0, 0, 60, 20), it("f1", 70, 0, 100, 24, { field: true }),
+                         it("l2", 0, 30, 90, 20), it("f2", 70, 30, 100, 24, { field: true })]);
+    check("a label wider than its neighbours' gap is not a grid it would overlap",
+          plan.kind !== "Grid", plan.kind);
+    const at = (name, x, y, w, h, extra = {}) => ({ X: x, Y: y, Width: w, Height: h, ...extra });
+
+    File.Save(File.Join(TMP, "Dialogo.form"), JSON.stringify({
+        format: "bintana-form/1",
+        class: "Dialogo",
+        properties: { Text: "Dialogo", Width: 400, Height: 260 },
+        children: [
+            { type: "Label",   name: "LblName",  properties: at("", 12, 14, 80, 20, { Text: "Name" }) },
+            { type: "TextBox", name: "TxtName",  properties: at("", 100, 12, 288, 24) },
+            { type: "Label",   name: "LblMail",  properties: at("", 12, 46, 80, 20, { Text: "Mail" }) },
+            { type: "TextBox", name: "TxtMail",  properties: at("", 100, 44, 288, 24) },
+            { type: "TextEditor", name: "TxtNotes", properties: at("", 12, 80, 376, 120) },
+            { type: "Button",  name: "BtnHelp",   properties: at("", 12, 216, 80, 32, { Text: "Help" }) },
+            { type: "Button",  name: "BtnOk",     properties: at("", 220, 216, 80, 32, { Text: "OK" }) },
+            { type: "Button",  name: "BtnCancel", properties: at("", 308, 216, 80, 32, { Text: "Cancel" }) },
+        ],
+    }, null, 2));
+    File.Save(File.Join(TMP, "Dialogo.js"),
+              "class Dialogo extends Form {\n    BtnOk_Click() {\n    }\n}\n");
+
+    ide.listFiles();
+    ide.openNamed("Dialogo.form");
+    yield* settled(ide);
+
+    const designer = ide.designer;
+    const NAMES = ["LblName", "TxtName", "LblMail", "TxtMail", "TxtNotes",
+                   "BtnHelp", "BtnOk", "BtnCancel"];
+    const where = () => {
+        const out = {};
+        /* In the window's coordinates: the form's Margin moves where the
+         * surface's own coordinates start, and must not move the controls. */
+        for (const n of NAMES) {
+            const b = byName(ide, n).Bounds(ide);
+            out[n] = { x: b.X, y: b.Y, w: b.Width, h: b.Height };
+        }
+        return out;
+    };
+    const near = (a, b) => Math.abs(a.x - b.x) <= 6 && Math.abs(a.y - b.y) <= 6;
+    const before = where();
+
+    /* --- what is offered ---------------------------------------------------- */
+    designer.select(null);
+    yield;
+    eq("with nothing selected, the form itself can be arranged", ide.ActArrange.Enabled, true);
+    designer.select(byName(ide, "BtnOk"));
+    yield;
+    eq("one control alone is not a region", ide.ActArrange.Enabled, false);
+    designer.setSelection([byName(ide, "BtnOk"), byName(ide, "BtnCancel")]);
+    yield;
+    eq("two siblings are", ide.ActArrange.Enabled, true);
+
+    /* --- the whole form ----------------------------------------------------- */
+    designer.select(null);
+    ide.ActArrange.Execute();
+    yield* settled(ide);
+
+    eq("the form is a column now", ide.Surface.Arrangement, "Vertical");
+    eq("inset by the margin it was drawn with", designer.root.properties.Margin, 12);
+    const kids = ide.Surface.Children;
+    eq("a grid, the notes, and the row of buttons",
+       kids.map((c) => c.constructor.name).join(","), "Grid,TextEditor,Panel");
+
+    const grid = kids[0];
+    eq("the labels and fields are a grid of two columns", grid.Columns, 2);
+    eq("in reading order", grid.Children.map((c) => c.Name).join(","),
+       "LblName,TxtName,LblMail,TxtMail");
+    eq("its fields take the width a wider window brings",
+       [byName(ide, "TxtName").HExpand, byName(ide, "TxtName").HAlign].join(), "true,Fill");
+    eq("and the grid with them", grid.HAlign, "Fill");
+    eq("the editor takes the height", byName(ide, "TxtNotes").VExpand, true);
+
+    const row = kids[2];
+    eq("the buttons are a row", row.Arrangement, "Horizontal");
+    eq("Help on its own, and OK and Cancel together",
+       row.Children.map((c) => c.Name === "BtnHelp" ? "Help" : c.constructor.name).join(),
+       "Help,Panel");
+    const end = row.Children[1];
+    eq("the pair keeps to the end", [end.HExpand, end.HAlign].join(), "true,End");
+    eq("in its order", end.Children.map((c) => c.Name).join(), "BtnOk,BtnCancel");
+
+    /*
+     * **Nothing moved sideways, and the first row and the buttons did not move
+     * at all.** Down the middle a row can grow: a TextBox drawn 24 tall is 32
+     * by nature, which a coordinate let it overflow and a box does not, so the
+     * rows under it come down by the difference and the editor -- the one
+     * that takes the height -- gives it back. That is the box being right.
+     */
+    const after = where();
+    for (const n of NAMES)
+        check(`${n} kept its x`, Math.abs(after[n].x - before[n].x) <= 6,
+              `${JSON.stringify(after[n])} against ${JSON.stringify(before[n])}`);
+    for (const n of ["LblName", "TxtName", "BtnHelp", "BtnOk", "BtnCancel"])
+        check(`${n} is where it was drawn`, near(after[n], before[n]),
+              `${JSON.stringify(after[n])} against ${JSON.stringify(before[n])}`);
+    check("and the order down the form is the drawn one",
+          after.TxtName.y < after.TxtMail.y && after.TxtMail.y < after.TxtNotes.y &&
+          after.TxtNotes.y + after.TxtNotes.h <= after.BtnOk.y,
+          JSON.stringify(after));
+
+    eq("every name is the one it had", NAMES.every((n) => byName(ide, n)), true);
+    eq("so the handler still answers for BtnOk", FormFiles.handlersIn(
+        ide.formFiles.siblingSource(), "BtnOk").join(), "Click");
+
+    ide.ActUndo.Execute();
+    yield* settled(ide);
+    eq("one undo puts the drawing back", ide.Surface.Arrangement, "Fixed");
+    eq("with every control at its coordinates", byName(ide, "BtnOk").X, 220);
+    eq("and nothing left over", ide.Surface.Children.length, NAMES.length);
+
+    /* --- a region ------------------------------------------------------------ */
+    designer.setSelection([byName(ide, "BtnOk"), byName(ide, "BtnCancel")]);
+    ide.ActArrange.Execute();
+    yield* settled(ide);
+
+    eq("the form stays drawn", ide.Surface.Arrangement, "Fixed");
+    eq("two controls became one", ide.Surface.Children.length, NAMES.length - 1);
+    const box = designer.selected;
+    eq("the new row is what is selected", box && box.constructor.name, "Panel");
+    eq("a row", box.Arrangement, "Horizontal");
+    eq("placed where the pair was", [box.X, box.Y].join(), "220,216");
+    eq("holding them", box.Children.map((c) => c.Name).join(), "BtnOk,BtnCancel");
+    eq("apart as they were drawn", box.Spacing, 8);
+    yield* settled(ide);
+    check("and OK did not move", near(where().BtnOk, before.BtnOk),
+          JSON.stringify(where().BtnOk));
+    ide.ActUndo.Execute();
+    yield;
+
+    /* --- what cannot be read ------------------------------------------------- */
+    byName(ide, "BtnCancel").Move(240, 220);
+    designer.setSelection([byName(ide, "BtnOk"), byName(ide, "BtnCancel")]);
+    const n = ide.Surface.Children.length;
+    eq("two overlapping controls are refused", designer.arrangeSelection(), false);
+    eq("and nothing changed", ide.Surface.Children.length, n);
+
+    ide.tabs.closeByName("Dialogo.form", true);
+    File.Delete(File.Join(TMP, "Dialogo.form"));
+    File.Delete(File.Join(TMP, "Dialogo.js"));
+    ide.listFiles();
+    if (was) ide.openNamed(was);
+    yield; yield;
+}
+
 function* p_taborder(ide) {
     ide.openInTab("Child.form");
     yield* settled(ide);
@@ -17092,6 +17268,7 @@ const PHASES = [
     { name: "palette", run: p_palette },
     { name: "pages", run: p_pages },
     { name: "clipboard", run: p_clipboard },
+    { name: "arrange", run: p_arrange },
     { name: "taborder", run: p_taborder },
     { name: "preview", run: p_preview },
     { name: "tests", run: p_tests },

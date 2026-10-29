@@ -18,6 +18,7 @@
     "modules/MenuBar.js",
     "modules/ControlTree.js",
     "modules/PropertyGrid.js",
+    "modules/Arrange.js",
     "modules/Designer.js",
     "forms/IconForm.js",
     "modules/Sheet.js",

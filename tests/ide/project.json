@@ -17,6 +17,7 @@
     "../../ide/modules/MenuBar.js",
     "../../ide/modules/ControlTree.js",
     "../../ide/modules/PropertyGrid.js",
+    "../../ide/modules/Arrange.js",
     "../../ide/modules/Designer.js",
     "../../ide/forms/IconForm.js",
     "../../ide/modules/Sheet.js",
