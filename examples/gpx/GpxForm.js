@@ -39,6 +39,7 @@
 "use strict";
 
 const MAX_ZOOM  = 17;
+const SNAP_DEG  = 5;       /* a bearing this close to north settles on it */
 const SETTLE_MS = 160;     /* how long a pinch takes to arrive on its level */
 /*
  * The track's own colour, not the theme's: it is data, and it has to read over
@@ -74,6 +75,7 @@ class GpxForm extends Form {
     pointer    = null;
     wheel      = 0;
     pinch      = null;                  /* a two-finger gesture in progress */
+    bearing    = 0;                     /* how far the map is turned, degrees clockwise */
     frameW     = 0;
     frameH     = 0;
     originX    = 0;
@@ -112,6 +114,8 @@ class GpxForm extends Form {
         this.hover    = -1;
         this.panned   = false;
         this.drag     = null;
+        this.bearing  = 0;
+        this.showNorth();
         this.bounds   = this.boundsOf(track.Points);
         this.marks    = trackMarks(track.Points);
 
@@ -167,7 +171,16 @@ class GpxForm extends Form {
         if (live) {
             p.Translate(this.pinch.X + live.DX, this.pinch.Y + live.DY);
             p.Scale(live.S, live.S);
+            p.Rotate(live.A);
             p.Translate(-this.pinch.X, -this.pinch.Y);
+        }
+
+        /* The map's own turn, about the middle of the frame: applied first to
+         * the picture, so it is *inside* the fingers' transform above. */
+        if (this.bearing) {
+            p.Translate(width / 2, height / 2);
+            p.Rotate(this.bearing);
+            p.Translate(-width / 2, -height / 2);
         }
 
         const painted = this.drawMap(p, width, height);
@@ -186,6 +199,51 @@ class GpxForm extends Form {
          * the text changes, so a frame does not relayout a label for saying
          * the same thing. */
         this.showStats();
+    }
+
+    /* A point turned about the middle of the frame, `degrees` clockwise (the
+     * way `Painter.Rotate` turns). */
+    turn(x, y, degrees) {
+        const a  = degrees * Math.PI / 180;
+        const c  = Math.cos(a), n = Math.sin(a);
+        const cx = this.frameW / 2, cy = this.frameH / 2;
+        const dx = x - cx, dy = y - cy;
+
+        return { X: cx + dx * c - dy * n, Y: cy + dx * n + dy * c };
+    }
+
+    /* A point on the screen, in the frame the map is laid out in: the turn taken
+     * back.  What the pointer means is a point of *that* frame. */
+    unturn(x, y) {
+        return this.bearing ? this.turn(x, y, -this.bearing) : { X: x, Y: y };
+    }
+
+    /* The window's corners, taken back through the fingers' transform and the
+     * map's turn, and the box that holds them: where the tiles have to be. */
+    visibleBox(width, height) {
+        const live = this.pinch ? this.pinch.Live : null;
+        const out  = { L: Infinity, T: Infinity, R: -Infinity, B: -Infinity };
+
+        for (const [cx, cy] of [[0, 0], [width, 0], [0, height], [width, height]]) {
+            let X = cx, Y = cy;
+
+            if (live) {
+                /* Live(q) = F + d + S R(A) (q - F), so q = F + R(-A)(p - F - d) / S */
+                const a  = -live.A * Math.PI / 180;
+                const px = (X - this.pinch.X - live.DX) / live.S;
+                const py = (Y - this.pinch.Y - live.DY) / live.S;
+
+                X = this.pinch.X + px * Math.cos(a) - py * Math.sin(a);
+                Y = this.pinch.Y + px * Math.sin(a) + py * Math.cos(a);
+            }
+            const q = this.unturn(X, Y);
+
+            out.L = Math.min(out.L, q.X + this.originX);
+            out.R = Math.max(out.R, q.X + this.originX);
+            out.T = Math.min(out.T, q.Y + this.originY);
+            out.B = Math.max(out.B, q.Y + this.originY);
+        }
+        return out;
     }
 
     /* The largest zoom whose tile grid still shows the whole track. */
@@ -212,11 +270,15 @@ class GpxForm extends Form {
         this.originX = this.cx0 * k - width / 2;
         this.originY = this.cy0 * k - height / 2;
 
+        /* What is on screen, in the frame the tiles are laid out in: with the map
+         * turned, or a pinch scaling it, that is a tilted rectangle and not the
+         * window, and the tiles that cover its bounding box are the ones needed. */
+        const box    = this.visibleBox(width, height);
         const count  = Math.pow(2, z);
-        const firstX = Math.max(0, Math.floor(this.originX / TILE_PX));
-        const lastX  = Math.min(count - 1, Math.floor((this.originX + width) / TILE_PX));
-        const firstY = Math.max(0, Math.floor(this.originY / TILE_PX));
-        const lastY  = Math.min(count - 1, Math.floor((this.originY + height) / TILE_PX));
+        const firstX = Math.max(0, Math.floor(box.L / TILE_PX));
+        const lastX  = Math.min(count - 1, Math.floor(box.R / TILE_PX));
+        const firstY = Math.max(0, Math.floor(box.T / TILE_PX));
+        const lastY  = Math.min(count - 1, Math.floor(box.B / TILE_PX));
         let   painted = 0;
 
         for (let ty = firstY; ty <= lastY; ty++) {
@@ -351,8 +413,12 @@ class GpxForm extends Form {
             const k = Math.pow(2, this.zoom);
 
             this.panned = true;
-            this.cx0 = this.drag.CX - (x - this.drag.X) / k;
-            this.cy0 = this.drag.CY - (y - this.drag.Y) / k;
+            /* The pointer's movement is on the screen; the world is turned. */
+            const a  = this.bearing * Math.PI / 180;
+            const mx = x - this.drag.X, my = y - this.drag.Y;
+
+            this.cx0 = this.drag.CX - (mx * Math.cos(a) + my * Math.sin(a)) / k;
+            this.cy0 = this.drag.CY - (my * Math.cos(a) - mx * Math.sin(a)) / k;
 
             if (this.hover >= 0) {
                 this.hover = -1;
@@ -389,17 +455,18 @@ class GpxForm extends Form {
 
     /*
      * Two fingers, on glass or on a touchpad: the map **follows them while they
-     * are down** and settles on a whole level when they lift.
+     * are down** -- moved, scaled and turned -- and settles when they lift.
      *
      * A pinch that jumped a level each time the scale crossed a threshold felt
      * like a switch.  What a finger expects is the map under it, so during the
-     * gesture the picture is *scaled and moved as it is* -- tiles and track
-     * together, by `Area_Draw`'s transform, about the point where the fingers
-     * began -- and nothing about the view changes.  `End` is where the view is
-     * rebuilt: the nearest whole level (the tiles exist at whole levels; twice
-     * as far apart is one), with the world point that was under the fingers at
-     * the start left under where they ended.  The wheel and the mouse are as
-     * they were.
+     * gesture the picture is transformed *as it is* -- tiles and track together,
+     * by `Area_Draw`, about the point where the fingers began -- and nothing
+     * about the view changes.  `End` is where the view is rebuilt: the nearest
+     * whole level (the tiles exist at whole levels; twice as far apart is one),
+     * the turn the fingers made added to the map's bearing -- freely, and onto
+     * north when it ends within `SNAP_DEG` of it -- and the world point that was
+     * under the fingers at the start left under where they ended.  The wheel and
+     * the mouse are as they were, and the mouse never turns the map.
      */
     Area_Transform(phase, dx, dy, scale, angle, x, y) {
         if (!this.points.length) return;
@@ -407,7 +474,7 @@ class GpxForm extends Form {
         if (phase === "Begin") {
             this.commitPinch();             /* one still settling is done */
             this.zoomBy(0);                 /* starts the view, if nothing has */
-            this.pinch = { Z0: this.zoom, OX: this.originX, OY: this.originY,
+            this.pinch = { Z0: this.zoom, B0: this.bearing, V0X: this.cx0, V0Y: this.cy0,
                            X: x, Y: y, Live: null };
             this.drag  = null;
             return;
@@ -416,11 +483,13 @@ class GpxForm extends Form {
         const g = this.pinch;
         if (!g) return;
 
-        /* Never past the levels there are, even on the way. */
-        const s = Math.max(Math.pow(2, -g.Z0), Math.min(Math.pow(2, MAX_ZOOM - g.Z0), scale));
+        /* Never past the levels there are, even on the way -- and not so far out
+         * that the tiles asked for to fill the window are a flood. */
+        const s = Math.max(Math.max(0.4, Math.pow(2, -g.Z0)),
+                           Math.min(Math.pow(2, MAX_ZOOM - g.Z0), scale));
 
         if (phase === "Update") {
-            g.Live = { S: s, DX: dx, DY: dy };
+            g.Live = { S: s, A: angle, DX: dx, DY: dy };
             if (this.hover >= 0) {
                 this.hover = -1;
                 this.showHover();
@@ -437,19 +506,32 @@ class GpxForm extends Form {
          * screen the frame the picture stops being scaled. */
         const level = Math.max(0, Math.min(MAX_ZOOM, g.Z0 + Math.round(Math.log2(s))));
 
-        g.Level = level;
-        g.From  = s;
-        g.To    = Math.pow(2, level - g.Z0);
-        g.DX    = dx;
-        g.DY    = dy;
-        g.Start = Date.now();
+        /* The bearing the turn leaves, in -180..180, and the turn to arrive on
+         * it: north if it is that close. */
+        let bearing = ((g.B0 + angle) % 360 + 540) % 360 - 180;
+        let turn    = angle;
+
+        if (Math.abs(bearing) < SNAP_DEG) {
+            turn   -= bearing;
+            bearing = 0;
+        }
+
+        g.Level   = level;
+        g.Bearing = bearing;
+        g.From    = s;
+        g.To      = Math.pow(2, level - g.Z0);
+        g.A0      = angle;
+        g.A1      = turn;
+        g.DX      = dx;
+        g.DY      = dy;
+        g.Start   = Date.now();
         this.warm(g);
         g.Timer = Timer.Every(16, () => this.settle());
     }
 
     /* One frame of the settling: the scale runs from where the fingers left it
      * to the level's, slowing as it arrives, in the log domain so that it is the
-     * same speed whether it is going in or out. */
+     * same speed whether it is going in or out; the turn runs to its bearing. */
     settle() {
         const g = this.pinch;
         if (!g) return;
@@ -457,47 +539,89 @@ class GpxForm extends Form {
         const t = Math.min(1, (Date.now() - g.Start) / SETTLE_MS);
         const e = 1 - Math.pow(1 - t, 3);
 
-        g.Live = { S: g.From * Math.pow(g.To / g.From, e), DX: g.DX, DY: g.DY };
+        g.Live = { S: g.From * Math.pow(g.To / g.From, e),
+                   A: g.A0 + (g.A1 - g.A0) * e, DX: g.DX, DY: g.DY };
         if (t >= 1) this.commitPinch();
         else this.Area.Redraw();
     }
 
-    /* The view takes what the picture shows: the level, with the world point the
-     * fingers began on left under where they ended. */
+    /*
+     * Where the view's centre has to be so that the world point the fingers began
+     * on is under where they ended, at this level and this bearing.
+     *
+     *     screen = C + R(bearing) * k * (world - centre)
+     *
+     * is how a frame is laid out, so the point under `F` at the start is
+     * `V0 + R(-B0)(F - C) / k0`, and the centre that puts it under `F + d` at the
+     * end is that point `- R(-bearing)(F + d - C) / k`.
+     */
+    viewAfter(g, level, bearing) {
+        const k0 = Math.pow(2, g.Z0);
+        const kTo = Math.pow(2, level);
+        const cx = this.frameW / 2, cy = this.frameH / 2;
+        const turnBy = (px, py, deg) => {
+            const a = deg * Math.PI / 180;
+
+            return [px * Math.cos(a) - py * Math.sin(a), px * Math.sin(a) + py * Math.cos(a)];
+        };
+        const [bx, by] = turnBy(g.X - cx, g.Y - cy, -g.B0);
+        const wx = g.V0X + bx / k0;
+        const wy = g.V0Y + by / k0;
+        const [ex, ey] = turnBy(g.X + g.DX - cx, g.Y + g.DY - cy, -bearing);
+
+        return { X: wx - ex / kTo, Y: wy - ey / kTo };
+    }
+
+    /* The view takes what the picture shows. */
     commitPinch() {
         const g = this.pinch;
         if (!g || !g.Timer) return;   /* only one that is settling */
 
-        if (g.Timer) g.Timer.Stop();
+        g.Timer.Stop();
         this.pinch = null;
 
-        const k0  = Math.pow(2, g.Z0);
-        const kTo = Math.pow(2, g.Level);
-        const wx0 = (g.OX + g.X) / k0;       /* the world point the fingers began on */
-        const wy0 = (g.OY + g.Y) / k0;
+        const v = this.viewAfter(g, g.Level, g.Bearing);
 
-        this.zoom   = g.Level;
-        this.cx0    = wx0 + (this.frameW / 2 - (g.X + g.DX)) / kTo;
-        this.cy0    = wy0 + (this.frameH / 2 - (g.Y + g.DY)) / kTo;
-        this.panned = true;
+        this.zoom    = g.Level;
+        this.bearing = g.Bearing;
+        this.cx0     = v.X;
+        this.cy0     = v.Y;
+        this.panned  = true;
+        this.showNorth();
         this.showStats();
         this.Area.Redraw();
     }
 
     /* Ask for the tiles the settled view will show, without painting them. */
     warm(g) {
+        const v   = this.viewAfter(g, g.Level, g.Bearing);
         const kTo = Math.pow(2, g.Level);
-        const wx0 = (g.OX + g.X) / Math.pow(2, g.Z0);
-        const wy0 = (g.OY + g.Y) / Math.pow(2, g.Z0);
-        const ox  = (wx0 + (this.frameW / 2 - (g.X + g.DX)) / kTo) * kTo - this.frameW / 2;
-        const oy  = (wy0 + (this.frameH / 2 - (g.Y + g.DY)) / kTo) * kTo - this.frameH / 2;
+        const ox  = v.X * kTo - this.frameW / 2;
+        const oy  = v.Y * kTo - this.frameH / 2;
+        const th  = g.Bearing * Math.PI / 180;
+        const hw  = (Math.abs(this.frameW * Math.cos(th)) + Math.abs(this.frameH * Math.sin(th))) / 2;
+        const hh  = (Math.abs(this.frameW * Math.sin(th)) + Math.abs(this.frameH * Math.cos(th))) / 2;
         const n   = kTo;
+        const l = ox + this.frameW / 2 - hw, r = ox + this.frameW / 2 + hw;
+        const t = oy + this.frameH / 2 - hh, b = oy + this.frameH / 2 + hh;
 
-        for (let ty = Math.max(0, Math.floor(oy / TILE_PX));
-             ty <= Math.min(n - 1, Math.floor((oy + this.frameH) / TILE_PX)); ty++)
-            for (let tx = Math.max(0, Math.floor(ox / TILE_PX));
-                 tx <= Math.min(n - 1, Math.floor((ox + this.frameW) / TILE_PX)); tx++)
+        for (let ty = Math.max(0, Math.floor(t / TILE_PX)); ty <= Math.min(n - 1, Math.floor(b / TILE_PX)); ty++)
+            for (let tx = Math.max(0, Math.floor(l / TILE_PX)); tx <= Math.min(n - 1, Math.floor(r / TILE_PX)); tx++)
                 this.tiles.get(g.Level, tx, ty, () => this.Area.Redraw());
+    }
+
+    /* The compass: shown only while the map is turned, and one press puts north
+     * back up. */
+    showNorth() {
+        const turned = Math.abs(this.bearing) > 0.01;
+
+        if (this.BtnNorth.Visible !== turned) this.BtnNorth.Visible = turned;
+    }
+
+    BtnNorth_Click() {
+        this.bearing = 0;
+        this.showNorth();
+        this.Area.Redraw();
     }
 
     /*
@@ -533,7 +657,8 @@ class GpxForm extends Form {
         this.Area.Redraw();
     }
 
-    nearest(x, y) {
+    nearest(sx, sy) {
+        const { X: x, Y: y } = this.unturn(sx, sy);
         const z    = this.zoom;
         const near = 18 * 18;          /* squared: past this the pointer is off */
         let   best = -1;
@@ -666,6 +791,7 @@ class GpxForm extends Form {
         if (this.zoom === from) return;
 
         if (anchor && this.frameW > 1) {
+            anchor = this.unturn(anchor.X, anchor.Y);    /* the frame the map is laid out in */
             const kFrom = Math.pow(2, from);
             const wx0   = (this.originX + anchor.X) / kFrom;
             const wy0   = (this.originY + anchor.Y) / kFrom;

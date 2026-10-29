@@ -153,7 +153,7 @@ Each is shippable alone.
    there until a real tablet says otherwise. **`examples/gpx` is its first
    consumer**: the map follows the fingers while they are down (picture scaled and moved) and settles, in 160 ms, on a whole level at `End`
    (the tiles exist at whole levels; twice as far is one) about where they began, the
-   wheel is kept, and `Area_MouseCancel` lets go of a mouse drag when a second
+   wheel is kept, **the map also turns with the fingers** (a bearing, free, onto north within 5 deg, an `N` button to put it back; checked on captures: tiles cover the corners and the commit does not move the picture), and `Area_MouseCancel` lets go of a mouse drag when a second
    finger arrives. Driven with `Emit` in a scratch copy (levels, pan sign and
    magnitude, `End` ending it); the real pinch is for a person with a touchpad.
    **A touchscreen measured it** (virtual device, `run.sh`): pinch ends at scale

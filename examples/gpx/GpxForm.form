@@ -70,6 +70,20 @@
     },
     {
       "type": "Button",
+      "name": "BtnNorth",
+      "properties": {
+        "Height": 34,
+        "Text": "N",
+        "Tooltip": "The map is turned: put north back up",
+        "VAlign": "Start",
+        "Visible": false,
+        "Width": 40,
+        "X": 752,
+        "Y": 56
+      }
+    },
+    {
+      "type": "Button",
       "name": "BtnZoomOut",
       "properties": {
         "Height": 34,
