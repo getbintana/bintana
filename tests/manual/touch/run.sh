@@ -91,8 +91,22 @@ sleep 1
 # says where it landed in the area's own coordinates.
 cx=$((gx + gw / 2)); cy=$((gy + gh / 2))
 n=$(lines "$OUT/gtk.log")
-drive tap "$cx" "$cy"
-hit=$(await "$OUT/gtk.log" "click-press" "$n") || die "the first tap reached GTK as nothing (see $OUT/gtk.log): the server does not take the virtual touch screen"
+echo "  window $gid at $gx,$gy ${gw}x${gh}; first tap at $cx,$cy"
+hit=
+for try in 1 2 3; do
+    drive tap "$cx" "$cy"
+    hit=$(await "$OUT/gtk.log" "click-press" "$n") && break
+    echo "  tap $try: nothing yet"
+done
+if [[ -z $hit ]]; then
+    {
+        echo "window: $(xdotool getwindowgeometry $gid | tr '\n' ' ')"
+        echo "active: $(xdotool getactivewindow getwindowname 2>&1)"
+        echo "--- gtk.log"; cat "$OUT/gtk.log"
+        echo "--- Xorg.0.log"; grep -i touchsim /var/log/Xorg.0.log ~/.local/share/xorg/Xorg.0.log 2>/dev/null | tail -20
+    } >"$OUT/diagnosis.txt" 2>&1
+    die "three taps reached GTK as nothing; see $OUT/diagnosis.txt (the server took the device, or the touches went elsewhere)"
+fi
 lx=$(field "$hit" x); ly=$(field "$hit" y)
 ox=$(( cx - ${lx%.*} )); oy=$(( cy - ${ly%.*} ))
 size=$(grep ' size ' "$OUT/gtk.log" | tail -1); aw=$(awk '{print $3}' <<<"$size"); ah=$(awk '{print $4}' <<<"$size")
