@@ -76,6 +76,7 @@ class GpxForm extends Form {
     wheel      = 0;
     pinch      = null;                  /* a two-finger gesture in progress */
     bearing    = 0;                     /* how far the map is turned, degrees clockwise */
+    turning    = null;                  /* the animation of putting north back up */
     frameW     = 0;
     frameH     = 0;
     originX    = 0;
@@ -495,6 +496,7 @@ class GpxForm extends Form {
                 this.showHover();
             }
             this.Area.Redraw();
+            this.showNorth();
             return;
         }
 
@@ -542,7 +544,10 @@ class GpxForm extends Form {
         g.Live = { S: g.From * Math.pow(g.To / g.From, e),
                    A: g.A0 + (g.A1 - g.A0) * e, DX: g.DX, DY: g.DY };
         if (t >= 1) this.commitPinch();
-        else this.Area.Redraw();
+        else {
+            this.Area.Redraw();
+            this.showNorth();
+        }
     }
 
     /*
@@ -610,18 +615,78 @@ class GpxForm extends Form {
                 this.tiles.get(g.Level, tx, ty, () => this.Area.Redraw());
     }
 
-    /* The compass: shown only while the map is turned, and one press puts north
-     * back up. */
+    /* The compass is redrawn whenever the bearing is: while the fingers turn the
+     * map (`Live`), as it settles, and when it is put back. */
     showNorth() {
-        const turned = Math.abs(this.bearing) > 0.01;
-
-        if (this.BtnNorth.Visible !== turned) this.BtnNorth.Visible = turned;
+        this.Compass.Redraw();
     }
 
-    BtnNorth_Click() {
-        this.bearing = 0;
-        this.showNorth();
-        this.Area.Redraw();
+    /*
+     * The compass: a disc with a needle that points to **north**, whatever way
+     * the map is turned -- so it turns the other way round to the map, and its
+     * `N` stays upright.  It follows the fingers while they turn the map, not
+     * only after.  A click puts north back up.
+     */
+    Compass_Draw(p, width, height) {
+        const live = this.pinch ? this.pinch.Live : null;
+        const b    = this.bearing + (live ? live.A : 0);
+        const cx   = width / 2, cy = height / 2;
+        const r    = Math.min(width, height) / 2 - 2;
+
+        p.Antialias = true;
+        p.Color = "rgba(255,255,255,0.88)";
+        p.Arc(cx, cy, r, 0, 360);
+        p.Fill();
+        p.Color = "#3d3846";
+        p.LineWidth = 1.5;
+        p.Arc(cx, cy, r, 0, 360);
+        p.Stroke();
+
+        /* The needle, turned with the map: north end red, south end grey. */
+        p.Push();
+        p.Translate(cx, cy);
+        p.Rotate(b);
+        p.Color = "#e01b24";
+        p.Polygon([0, -r * 0.62, 6, 0, -6, 0]);
+        p.Fill();
+        p.Color = "#77767b";
+        p.Polygon([0, r * 0.62, 6, 0, -6, 0]);
+        p.Fill();
+        p.Pop();
+
+        /* The letter sits on the north side of the disc and is never turned. */
+        const a  = b * Math.PI / 180;
+        const tx = cx + Math.sin(a) * r * 0.8;
+        const ty = cy - Math.cos(a) * r * 0.8;
+
+        p.Color = "#3d3846";
+        p.Text("N", tx - p.TextWidth("N") / 2, ty - p.TextHeight("N") / 2);
+    }
+
+    Compass_MouseDown() {
+        this.turnTo(0);
+    }
+
+    /* The bearing runs to `target` the short way round, slowing as it arrives. */
+    turnTo(target) {
+        if (this.turning) this.turning.Stop();
+
+        const from = this.bearing;
+        const by   = ((target - from) % 360 + 540) % 360 - 180;
+        const t0   = Date.now();
+
+        this.turning = Timer.Every(16, () => {
+            const t = Math.min(1, (Date.now() - t0) / 220);
+            const e = 1 - Math.pow(1 - t, 3);
+
+            this.bearing = t < 1 ? from + by * e : target;
+            if (t >= 1) {
+                this.turning.Stop();
+                this.turning = null;
+            }
+            this.showNorth();
+            this.Area.Redraw();
+        });
     }
 
     /*

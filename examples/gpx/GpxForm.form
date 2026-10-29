@@ -70,20 +70,6 @@
     },
     {
       "type": "Button",
-      "name": "BtnNorth",
-      "properties": {
-        "Height": 34,
-        "Text": "N",
-        "Tooltip": "The map is turned: put north back up",
-        "VAlign": "Start",
-        "Visible": false,
-        "Width": 40,
-        "X": 752,
-        "Y": 56
-      }
-    },
-    {
-      "type": "Button",
       "name": "BtnZoomOut",
       "properties": {
         "Height": 34,
@@ -133,6 +119,19 @@
             "Style": "frame",
             "VAlign": "Fill",
             "VExpand": true
+          }
+        },
+        {
+          "type": "DrawingArea",
+          "name": "Compass",
+          "properties": {
+            "Cursor": "Hand",
+            "HAlign": "End",
+            "Height": 64,
+            "Margin": 12,
+            "Tooltip": "Where north is. Click to turn the map back so north is up",
+            "VAlign": "Start",
+            "Width": 64
           }
         },
         {
