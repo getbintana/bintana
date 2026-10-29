@@ -12509,17 +12509,18 @@ It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 against *that*, which is the only build that proves the refusal half compiles
 and runs (`Media.Available` false, `Media.Element` naming the package).
 
-## Two reproductions kept by hand
+## Reproductions kept by hand
 
-`tests/manual/` holds two standalone C programs. Neither runs in the suite and
-both earned their place by settling a question the suite could not:
+`tests/manual/` holds two standalone C programs and one Bintana project. None runs
+in the suite and each earned its place by settling a question the suite could not:
 
 | | |
 |---|---|
 | `cairo-cost.c` | what a frame of drawing costs, per figure and per point, straight against cairo. It was written before there was any binding to measure through, and it is what says the cost is in **covered pixels** -- 5,000 points as a readable curve 2.15 ms, the same 5,000 as a zigzag 109 ms. The numbers are in [widgets.md](https://github.com/getbintana/bintana-docs/blob/main/docs/widgets.md#drawingarea-and-painter) |
 | `completion-popover.c` | sixty lines of plain GTK, with `gtk_source_init()` on one line that can be commented out, which is the shortest demonstration that the completion popover's collapse is a **missing initialisation** and not a bug in whatever provider is loaded. Being plain GTK with no `GApplication` of its own, it also shows that *where* the call goes matters |
+| `touch/` | a Bintana project that logs every pointer event with the milliseconds since the last, on screen and in `probe.log`, and `inject.ps1`, which makes a Windows guest with no touch screen believe it has one (`InjectTouchInput`: tap, long press, swipe, pinch, two-finger pan). It answers *what does a finger reach a window as* before any gesture is designed. **`inject.ps1` has not been run**: it was written from the API's documentation, and a first run on Windows is its test |
 
-Both are compiled by the comment at the top of each file. They are kept rather
+The C ones are compiled by the comment at the top of each file. They are kept rather
 than deleted because the question each answers comes back: the first every time
 somebody proposes drawing more points, the second every time a popover misbehaves.
 

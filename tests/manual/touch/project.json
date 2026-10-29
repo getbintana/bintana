@@ -1,0 +1,6 @@
+{
+  "name": "TouchProbe",
+  "startup": "TouchProbe",
+  "sources": ["TouchProbe.js"],
+  "description": "What a touch screen reaches a Bintana window as: every pointer event, with the time it came, on screen and in a file"
+}

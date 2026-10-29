@@ -1,0 +1,41 @@
+{
+  "format": "bintana-form/1",
+  "class": "TouchProbe",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 640,
+    "Text": "Touch probe",
+    "Width": 520
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblInfo",
+      "properties": {
+        "Alignment": "Start",
+        "HAlign": "Fill",
+        "Padding": 8,
+        "Wrap": true
+      }
+    },
+    {
+      "type": "Panel",
+      "name": "Area",
+      "properties": {
+        "Background": "#dfe6f2",
+        "Expand": true,
+        "HAlign": "Fill",
+        "VAlign": "Fill"
+      }
+    },
+    {
+      "type": "TextEditor",
+      "name": "Log",
+      "properties": {
+        "Height": 220,
+        "HAlign": "Fill",
+        "ReadOnly": true
+      }
+    }
+  ]
+}
