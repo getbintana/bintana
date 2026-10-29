@@ -8,6 +8,7 @@
 #   .\inject.ps1 pinch            # two fingers apart: a zoom in
 #   .\inject.ps1 pinch -Closing   # two fingers together: a zoom out
 #   .\inject.ps1 pan2             # two fingers moving together
+#   .\inject.ps1 pinch -Trace     # prints every frame and the error Windows gave it
 #
 # It uses `InitializeTouchInjection` and `InjectTouchInput` (user32, Windows 8
 # and later), which add synthetic touch contacts to the session's input -- so
@@ -29,6 +30,7 @@ param(
     [string] $Gesture,
     [string] $Title = 'Touch probe',
     [switch] $Closing,
+    [switch] $Trace,
     [int] $HoldMs = 1200
 )
 
@@ -87,6 +89,8 @@ public static class Touch {
     /* One frame: every contact that is down, in the phase it is in (0 down,
      * 1 move, 2 up).  A contact missing from a frame is a contact that vanished,
      * so a two-finger gesture sends both fingers in every frame. */
+    public static bool Trace = false;
+
     public static void Frame(int[] ids, int[] xs, int[] ys, int[] phases) {
         var list = new POINTER_TOUCH_INFO[ids.Length];
         for (int i = 0; i < ids.Length; i++) {
@@ -106,13 +110,23 @@ public static class Touch {
             c.rcContact.top = ys[i] - 4;  c.rcContact.bottom = ys[i] + 4;
             list[i] = c;
         }
-        if (!InjectTouchInput((uint)list.Length, list))
-            throw new Exception("InjectTouchInput failed: " + Marshal.GetLastWin32Error());
+        bool ok = InjectTouchInput((uint)list.Length, list);
+        int err = ok ? 0 : Marshal.GetLastWin32Error();
+        if (Trace) {
+            var parts = new string[ids.Length];
+            for (int i = 0; i < ids.Length; i++)
+                parts[i] = "#" + ids[i] + (phases[i] == 0 ? " down " : phases[i] == 1 ? " move " : " up   ")
+                         + xs[i] + "," + ys[i];
+            Console.WriteLine((ok ? "ok  " : "ERR " + err + " ") + string.Join(" | ", parts));
+        }
+        if (!ok)
+            throw new Exception("InjectTouchInput failed: " + err);
     }
 }
 '@
 
 Add-Type -TypeDefinition $code -Language CSharp
+[Touch]::Trace = [bool] $Trace
 [Touch]::Init()
 
 $centre = [Touch]::Centre($Title)
@@ -128,7 +142,10 @@ function Step([int[]] $ids, [int[]] $xs, [int[]] $ys, [int[]] $phases, [int] $ms
 
 switch ($Gesture) {
     'tap' {
-        Step @(0) @($cx) @($cy) @(0) 60
+        # A contact that goes down and up with nothing between may be dropped as
+        # never having existed: one update frame in the middle makes it a touch.
+        Step @(0) @($cx) @($cy) @(0) 40
+        Step @(0) @($cx) @($cy) @(1) 40
         Step @(0) @($cx) @($cy) @(2)
     }
     'longpress' {
