@@ -206,6 +206,8 @@ bplay() {
 
 bplay tap       tap "$bcx" "$bcy"
 bplay longpress hold "$bcx" "$bcy" 1500
+# The menu the long press opened holds the screen until it is dismissed.
+xdotool key Escape; sleep 0.8
 bplay swipe     swipe $((bcx - 150)) "$bcy" $((bcx + 150)) "$bcy" 300
 bplay pinch     pinch "$bcx" "$bcy" 40 140 700
 bplay pan2      pan2 $((bcx - 100)) "$bcy" $((bcx + 100)) "$bcy" 700
