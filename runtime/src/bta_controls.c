@@ -8410,10 +8410,14 @@ void bta_core_register(void)
          *   and left — the question motion cannot answer, since there is no
          *   `MouseMove` for having gone
          */
-        /* MouseWheel(dx, dy)
+        /* MouseWheel(dx, dy, touch)
          *   how far the wheel turned, in GTK's units: one notch is `1.0` on a
-         *   wheel and a fraction on a touchpad. **Returning `true` consumes
-         *   it**, which stops the scroller around it from also moving
+         *   wheel and a fraction on a touchpad. `touch` is `true` for **fingers**
+         *   -- a touchpad's two-finger scroll -- and `false` for a wheel: a notch
+         *   means *a step*, fingers mean *move the content*. GTK does not say
+         *   which, so it is **inferred**: a fraction, or one in the last 200 ms.
+         *   **Returning `true` consumes it**, which stops the scroller around it
+         *   from also moving
          */
         /* DblClick(x, y, button, ctrl, shift)
          *   two clicks

@@ -8327,13 +8327,33 @@ static gboolean on_mouse_scroll(GtkEventControllerScroll *c, double dx, double d
                                 gpointer user_data)
 {
     BtaWidget *w = user_data;
-    JSValue argv[2] = { JS_NewFloat64(w->ctx, dx), JS_NewFloat64(w->ctx, dy) };
-    JSValue r = bta_emit_answer(w, "MouseWheel", 2, argv, NULL);
+
+    /*
+     * Fingers or a wheel: a touchpad's two-finger scroll is the same event as a
+     * wheel's notch and means something else -- *move the content*, where a notch
+     * is *a step*.  GTK 4 does not say which: the event's device is the master
+     * pointer (a pad's scroll answered `mouse`, measured) and its unit is `wheel`
+     * for both.  What does tell them apart is the number: a wheel turns whole
+     * notches and a pad reports fractions, a pad's stream is dense (7 ms), and a
+     * whole number inside one is still the pad.  So it is *inferred*, from a
+     * fraction now or one in the last 200 ms.
+     */
+    static gint64 last_fraction;
+    gint64   now  = g_get_monotonic_time();
+    gboolean frac = fabs(dx - round(dx)) > 0.001 || fabs(dy - round(dy)) > 0.001;
+
+    if (frac)
+        last_fraction = now;
+    gboolean touch = frac || (last_fraction && now - last_fraction < 200000);
+
+    JSValue argv[3] = { JS_NewFloat64(w->ctx, dx), JS_NewFloat64(w->ctx, dy),
+                        JS_NewBool(w->ctx, touch) };
+    JSValue r = bta_emit_answer(w, "MouseWheel", 3, argv, NULL);
 
     gboolean handled = JS_ToBool(w->ctx, r) > 0;
     JS_FreeValue(w->ctx, r);
-    JS_FreeValue(w->ctx, argv[0]);
-    JS_FreeValue(w->ctx, argv[1]);
+    for (int i = 0; i < 3; i++)
+        JS_FreeValue(w->ctx, argv[i]);
     return handled ? GDK_EVENT_STOP : GDK_EVENT_PROPAGATE;
 }
 

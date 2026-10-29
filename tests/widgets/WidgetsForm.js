@@ -17541,6 +17541,7 @@ class Form1 extends Form {
                   "    }\n" +
                   "    On_Swipe(vx, vy, fingers)  { this.log.push('on ' + (vx > 500 ? 'right' : 'slow') + ' ' + typeof vy + ' ' + fingers); }\n" +
                   "    Off_Swipe(vx, vy) { this.log.push('off'); }\n" +
+                  "    On_MouseWheel(dx, dy, touch) { this.log.push('wheel ' + dy + ' ' + typeof touch + ' ' + touch); }\n" +
                   "    report() {\n" +
                   "        File.SaveJson(Application.Directory + '/out.json', { log: this.log });\n" +
                   "        Application.Quit(0);\n" +
@@ -17564,6 +17565,7 @@ class Form1 extends Form {
                   "xdotool mousemove $((X+40)) $((Y+60)) click 1; sleep 0.5\n" +
                   "flick $((X+40)) $((Y+60))\n" +
                   "flick $((X+280)) $((Y+60))\n" +
+                  "xdotool mousemove $((X+40)) $((Y+60)) click 4; sleep 0.4\n" +
                   "touch \"$dir/done\"\n" +
                   "wait $child; echo \"child=$?\"\n");
 
@@ -17577,6 +17579,8 @@ class Form1 extends Form {
 
         eq("a click on a pad with Gestures on is not a flick, and a flick is heard, fast and to the right, with the velocity and one finger",
            got.log.filter((l) => l.startsWith("on")).join(","), "on right number 1");
+        eq("a wheel's notch says it is not fingers: touch is false, and a boolean",
+           got.log.filter((l) => l.startsWith("wheel")).join(","), "wheel -1 boolean false");
         eq("and on a pad with them off, not at all",
            got.log.filter((l) => l.startsWith("off")).length, 0);
     }

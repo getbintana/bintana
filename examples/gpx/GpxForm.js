@@ -39,6 +39,7 @@
 "use strict";
 
 const MAX_ZOOM  = 17;
+const PAN_PX    = 30;      /* pixels a pad's scroll of one unit moves the map */
 const SNAP_DEG  = 5;       /* a bearing this close to north settles on it */
 const SETTLE_MS = 160;     /* how long a pinch takes to arrive on its level */
 /*
@@ -690,19 +691,48 @@ class GpxForm extends Form {
     }
 
     /*
-     * The wheel zooms **about the pointer**: the street under the cursor stays
-     * under the cursor, which is what every map does and the reason the turn
-     * is worth consuming.  `MouseWheel` carries the turn and not the position,
-     * so the anchor is the last `MouseMove` -- updated even while dragging, or
-     * a wheel after a pan would zoom about wherever the pointer used to be.
+     * A wheel zooms and fingers on a pad move the map.
      *
-     * GTK says a notch is 1 and up is **negative**, and a touchpad gives
-     * fractions: they accumulate, so a slow two-finger drag zooms one level
-     * and not one per event.
+     * **The wheel zooms about the pointer**: the street under the cursor stays
+     * under the cursor, which is what every map does and the reason the turn is
+     * worth consuming.  `MouseWheel` carries the turn and not the position, so
+     * the anchor is the last `MouseMove` -- updated even while dragging, or a
+     * wheel after a pan would zoom about wherever the pointer used to be.  GTK
+     * says a notch is 1 and up is **negative**.
+     *
+     * **Two fingers on a touchpad are the same event and the opposite verb**: with
+     * the pinch zooming, what they are left to say is *move*, and a map that
+     * zoomed when dragged would fight the pinch.  `touch` is what tells them apart
+     * (the runtime infers it from the fractions a pad reports), and the content
+     * follows the fingers the way a scrolled page does -- with the user's own
+     * natural-scrolling setting, which the pad has already applied to the sign.
      */
-    Area_MouseWheel(dx, dy) {
-        if (!this.points.length || !dy) return false;
+    Area_MouseWheel(dx, dy, touch) {
+        if (!this.points.length) return false;
 
+        if (touch) {
+            if (this.pinch || !(dx || dy)) return true;
+
+            const k = Math.pow(2, this.zoom);
+            const a = this.bearing * Math.PI / 180;
+            const mx = dx * PAN_PX, my = dy * PAN_PX;
+
+            this.zoomBy(0);                     /* starts the view, if nothing has */
+            this.cx0 += (mx * Math.cos(a) + my * Math.sin(a)) / k;
+            this.cy0 += (my * Math.cos(a) - mx * Math.sin(a)) / k;
+            this.panned = true;
+            if (this.hover >= 0) {
+                this.hover = -1;
+                this.showHover();
+            }
+            this.Area.Redraw();
+            return true;
+        }
+
+        if (!dy) return false;
+
+        /* A notch accumulates, so a slow wheel zooms one level and not one per
+         * event. */
         this.wheel += dy;
         if (Math.abs(this.wheel) < 1) return true;
 
