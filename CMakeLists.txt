@@ -242,6 +242,7 @@ add_executable(bintana
     runtime/src/bta_sqlite.c
     runtime/src/bta_xml.c
     runtime/src/bta_keyring.c
+    runtime/src/bta_network.c
     runtime/src/bta_locale.c
     runtime/src/bta_bytes.c
     runtime/src/bta_decimal.c

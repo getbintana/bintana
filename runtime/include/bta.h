@@ -1069,6 +1069,9 @@ guint bta_media_pending(void);  /* players owed an answer (console loop) */
 void  bta_keyring_init(JSContext *ctx, JSValue global);
 void  bta_keyring_cleanup(void); /* cancels calls still in flight */
 guint bta_keyring_pending(void); /* vault calls owed an answer (console loop) */
+void  bta_network_init(JSContext *ctx, JSValue global);
+void  bta_network_cleanup(void); /* cancels Reach calls, drops OnChange */
+guint bta_network_pending(void); /* Reach calls owed an answer (console loop) */
 
 /* --- Scrolling, shared by Scroller and Editor -------------------------- */
 /*

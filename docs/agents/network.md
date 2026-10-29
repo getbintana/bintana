@@ -184,3 +184,46 @@ assertion that can, and it is red with the call removed. The step now does
 every handshake the feature needs -- a bare client refused, `Ca` and `Cert`
 accepted, a wrong `Ca` and a wrong `Cert` refused, and a bare client after an
 acceptance still refused.
+
+## Network: what the monitor knows, measured
+
+`Network` (`runtime/src/bta_network.c`) sits on `GNetworkMonitor`, and stage 0
+of [docs/plans/network-plan.md](../plans/network-plan.md) is the evidence for
+each rule below; read it before changing a level.
+
+- **Every backend said FULL on a half-broken network** (one DNS server dead:
+  `github.com` resolved, `example.com` did not). So `"Full"` is reported only
+  where somebody checked: NetworkManager with `ConnectivityCheckEnabled`
+  (read from NM itself over the system bus), or the portal inside a sandbox.
+  Everything else with a route is `"Routed"`, and `Online` is `false` there.
+- **Force a backend with `GIO_USE_NETWORK_MONITOR`** (`networkmanager`,
+  `netlink`, `base`) to see what each answers on the same machine. `portal` is
+  refused outside a sandbox and falls back silently.
+- **The portal backend's first read is false/LOCAL**, filled by an async
+  `GetStatus` a few milliseconds later: `"Unknown"` until the first notify. A
+  Flatpak without `--share=network` never gets an answer (GLib ignores the
+  portal's signals then), so `/.flatpak-info` is read for `shared=network`, as
+  GLib's private `glib_network_available_in_sandbox` does, and the answer is
+  `"None"`.
+- **Running a build inside Flatpak to check this**: the host binary needs the
+  libraries of `io.github.getbintana.Hello`'s sandbox, which has no VTE and
+  another libxml2 soname. A scratch build with both hidden (the `pkg-config`
+  wrapper of [build-and-tools.md](build-and-tools.md)) runs there with
+  `flatpak run --filesystem=<dir> --command=<binary> io.github.getbintana.Hello <project>`.
+- **`Reach` is a real connection**, because the inherited `can_reach` (netlink
+  and NM) is a route lookup that said yes to a host whose name did not
+  resolve. Inside the sandbox the portal's `CanReach` is the road, and it
+  answers *unreachable* for a name that does not exist.
+- **`Probe` must not follow redirects**: the redirect is the answer. Put
+  `FollowRedirects: true` back in it and `testNetwork` goes red on the portal
+  rows.
+- **A `Task` worker runs `rad.js` and has no `Network`** (nor `Http`): the
+  first `Network.Probe = …` stopped every worker at load, and the xlsx and task
+  tests went red with *Network is not defined*. Anything `rad.js` hangs on a C
+  global is guarded with `typeof … !== "undefined"`.
+- **A timeout in a `tests/widgets` test is measured against the whole suite's
+  blocking calls.** Tests run in order but their waits overlap, and later tests
+  hold the main loop for seconds in `*Wait`; a connection that completed and a
+  timeout that expired during the block are both ready afterwards, and the
+  timeout was dispatched first. `testNetwork` passed alone and read `Timeout`
+  on every row in the full run until its timeouts became a minute.

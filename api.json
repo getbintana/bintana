@@ -14249,6 +14249,65 @@
       ]
     },
     {
+      "Name": "Network",
+      "Members": [
+        {
+          "Name": "Connectivity",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "what the network reaches, as far as this machine can know: `\"Unknown\"` (not answered yet), `\"None\"`, `\"Local\"` (a network with no way out), `\"Routed\"` (a way out that nobody checked reaches the internet -- what most backends can honestly say), `\"Limited\"`, `\"Portal\"` (a captive portal: a sign-in page first) or `\"Full\"` (the internet, checked). Advice, not a guarantee: whether a server answers is a request to it, or `Reach`",
+          "Native": true
+        },
+        {
+          "Name": "Metered",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the connection costs by the byte or is capped -- a phone's hotspot -- so a large upload can wait. `false` where the system cannot tell",
+          "Native": true
+        },
+        {
+          "Name": "OnChange",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: called when `Connectivity` or `Metered` changed, once per change however many notices it took. Read them again inside; `null` takes it off",
+          "Native": true
+        },
+        {
+          "Name": "Online",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`Connectivity` is `\"Full\"`, and nothing weaker -- never *an interface is up*",
+          "Native": true
+        },
+        {
+          "Name": "Probe",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(callback, options)",
+          "Returns": "",
+          "Doc": "asks whether the internet answers or a captive portal does instead, and calls `callback({ Connectivity, Url, Why })`: `\"Full\"` (it answered 204), `\"Portal\"` with `Url` the sign-in page (a redirect, or another page in its place), `\"Limited\"` (an error status where the internet would have said 204) or `\"None\"` with `Why` the `Http` error kind (`Dns`, `Timeout`, `Refused`…). A plain-HTTP request to `Url` (default Google's `generate_204`), which must answer `204`; `Timeout` in ms, default `5000`. Needs `Http`",
+          "Native": false
+        },
+        {
+          "Name": "Reach",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(host, port, callback, [options])",
+          "Returns": "",
+          "Doc": "whether `host` answers on `port`, which no global property can say: calls `callback(ok, why)` with `why` `\"\"`, `\"NotFound\"` (the name did not resolve), `\"Refused\"`, `\"Unreachable\"`, `\"Timeout\"`, `\"NotAllowed\"` or `\"Error\"`. A real connection, closed at once -- inside a sandbox the desktop portal asks instead. `{ Timeout }` in ms, default `5000`",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Notification",
       "Members": [
         {

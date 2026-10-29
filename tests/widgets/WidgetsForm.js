@@ -574,7 +574,7 @@ const TESTS = [
     /* Children too: a file with `export` is a module. */
     "Modules", "Imports", "Records", "DataBinding", "SettableCache",
     "Time",
-    "Stopwatch", "UndoStack",
+    "Stopwatch", "UndoStack", "Network",
     "Shortcut", "Decimal", "FieldDecimal",
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
@@ -688,6 +688,8 @@ const NEEDS = {
     Task:           ["Exec"],
     HttpStream:     ["Exec"],
     HttpServer:     ["Exec"],
+    /* Its answers come from a local server and a resolver, later turns. */
+    Network:        ["Exec"],
     /* Its round trip happens once the window is up, which is not now: Form_Open
      * runs before the window is presented and a completion asked for off screen
      * is asked of nothing. */
@@ -25420,6 +25422,94 @@ class Form1 extends Form {
             eq("...and that reference really was the last", srv, null);
             done();
         }, (e) => done(`a server dropped in its handler cut the answer: ${e.Message}`));
+    }
+
+    /* --- whether there is a network, and whether a host answers -------------
+     *
+     * Nothing here asks the internet: the suite runs where there may be none.
+     * The levels are asserted as words and as a relation (`Online` is `Full`
+     * and nothing weaker), and `Reach` and `Probe` are driven against a server
+     * on loopback -- answering 204, a redirect, a page in place of 204 and an
+     * error -- and a port nobody listens on. What the backends say on a real
+     * network is docs/plans/network-plan.md's stage 0.
+     */
+    testNetwork() {
+        const LEVELS = ["Unknown", "None", "Local", "Routed", "Limited", "Portal", "Full"];
+        check("Connectivity is one of the seven words",
+              LEVELS.includes(Network.Connectivity), Network.Connectivity);
+        eq("Online is Full and nothing weaker",
+           Network.Online, Network.Connectivity === "Full");
+        eq("Metered is a yes or a no", typeof Network.Metered, "boolean");
+
+        eq("nobody hears a change until asked", Network.OnChange, undefined);
+        const fn = () => {};
+        Network.OnChange = fn;
+        eq("a handler reads back", Network.OnChange, fn);
+        throws("and is a function", () => { Network.OnChange = 3; });
+        Network.OnChange = null;
+        eq("null takes it off", Network.OnChange, undefined);
+
+        throws("Reach needs a host", () => Network.Reach(3, 80, () => {}));
+        throws("and a port that is one", () => Network.Reach("h", 70000, () => {}));
+        throws("and a callback", () => Network.Reach("h", 80));
+        throws("and refuses an option it does not have",
+               () => Network.Reach("h", 80, () => {}, { Timout: 5 }));
+        throws("Probe needs a callback", () => Network.Probe());
+        throws("and a plain http address, since a portal cannot answer https",
+               () => Network.Probe(() => {}, { Url: "https://x/" }));
+
+        let server = null;
+        try {
+            server = Http.Server({ Port: 0 });
+        } catch (e) {
+            check("without libsoup there is no server to ask", /libsoup/.test(e.message), e.message);
+            return;
+        }
+        server.Request = (req) => {
+            if (req.Path === "/204")      req.Answer(204);
+            else if (req.Path === "/go")  req.Answer(302, "", { Headers: { Location: "http://portal.example/login" } });
+            else if (req.Path === "/500") req.Answer(500, "no");
+            else                          req.Answer(200, "<html>sign in</html>");
+        };
+        server.Start();
+        const base = `http://127.0.0.1:${server.Port}`;
+
+        /*
+         * **The timeouts are a minute, and that is about the suite, not about
+         * the network.** Tests run one after another but their waits overlap,
+         * and later tests block the main loop for seconds in their `*Wait`
+         * calls. A connection that completed during such a block and a
+         * timeout that expired during it are both ready when the loop comes
+         * back, and the timeout was dispatched first: in the whole run every
+         * row read `Timeout` while the test alone passed. A minute is never
+         * reached by a loopback answer and always outlasts the blocks.
+         */
+        const LONG = 60000;
+        const got = {};
+        Network.Reach("127.0.0.1", server.Port, (ok, why) => { got.open = [ok, why]; }, { Timeout: LONG });
+        Network.Reach("127.0.0.1", 1, (ok, why) => { got.closed = [ok, why]; }, { Timeout: LONG });
+        Network.Reach("no-such-host.invalid", 80, (ok, why) => { got.nameless = [ok, why]; }, { Timeout: LONG });
+        for (const path of ["204", "go", "page", "500"])
+            Network.Probe((r) => { got[path] = r; }, { Url: `${base}/${path}`, Timeout: LONG });
+
+        until("every answer arrived",
+              () => ["open", "closed", "nameless", "204", "go", "page", "500"].every((k) => got[k]), () => {
+            eq("a listening port is reached", JSON.stringify(got.open), '[true,""]');
+            eq("a closed one is refused", JSON.stringify(got.closed), '[false,"Refused"]');
+            eq("a name that does not resolve says so", JSON.stringify(got.nameless), '[false,"NotFound"]');
+            eq("204 is the internet", got["204"].Connectivity, "Full");
+            eq("a redirect is a portal", got.go.Connectivity, "Portal");
+            eq("...and hands back where it sends", got.go.Url, "http://portal.example/login");
+            eq("a page in place of 204 is a portal too", got.page.Connectivity, "Portal");
+            eq("an error status is not the internet", got["500"].Connectivity, "Limited");
+            server.Stop();
+            Network.Probe((r) => {
+                got.down = r;
+            }, { Url: `${base}/204`, Timeout: LONG });
+            until("a probe with nobody listening answers", () => got.down, () => {
+                eq("...None, with the Http kind", `${got.down.Connectivity} ${got.down.Why}`, "None Refused");
+            }, 6000);
+        }, 6000);
     }
 
     testHttpServer() {

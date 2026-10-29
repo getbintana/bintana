@@ -1068,6 +1068,72 @@ function runTests(found, filter, json) {
 }
 
 /* ------------------------------------------------------------------------
+ * Network.Probe -- finding a captive portal by asking, the way NetworkManager,
+ * Android, Apple and Windows do.
+ *
+ * `Network.Connectivity` can say `"Portal"` only through NetworkManager with
+ * its connectivity check on (docs/plans/network-plan.md, stage 0): netlink,
+ * Windows and macOS cannot say it at all, and NM with the check off reports
+ * FULL. This is the check itself, as a verb: a plain-HTTP request to a URL
+ * that answers `204 No Content` and nothing else. A portal answers it with a
+ * redirect to its sign-in page, or with that page; the internet answers 204.
+ *
+ * **A verb the program calls, never something done behind its back**: it
+ * costs a request and it asks a third party. Google's `generate_204` is the
+ * default because it answered fastest from the machine it was measured on;
+ * `Url` takes any other endpoint that answers 204
+ * (`http://connectivity-check.ubuntu.com/`, for one). Plain HTTP on purpose:
+ * a portal cannot intercept HTTPS without breaking it, which is the point.
+ * ---------------------------------------------------------------------- */
+const PROBE_URL = "http://connectivitycheck.gstatic.com/generate_204";
+
+/**
+ * asks whether the internet answers or a captive portal does instead, and
+ * calls `callback({ Connectivity, Url, Why })`: `"Full"` (it answered 204),
+ * `"Portal"` with `Url` the sign-in page (a redirect, or another page in its
+ * place), `"Limited"` (an error status where the internet would have said
+ * 204) or `"None"` with `Why` the `Http` error kind (`Dns`, `Timeout`,
+ * `Refused`…). A plain-HTTP request to `Url` (default Google's
+ * `generate_204`), which must answer `204`; `Timeout` in ms, default `5000`.
+ * Needs `Http`
+ * @param {function} callback
+ * @param {{Url?: string, Timeout?: number}} [options]
+ */
+/* A `Task` worker runs this file too and has no `Network` -- nor `Http` --
+ * so the verb is put on it only where it exists. */
+if (typeof Network !== "undefined") Network.Probe = function (callback, options) {
+    if (typeof callback !== "function")
+        throw new TypeError("Network.Probe(callback, [options]): callback is a function");
+    const opts = options === undefined ? {} : options;
+    if (opts === null || typeof opts !== "object")
+        throw new TypeError("Network.Probe: options is an object, { Url, Timeout }");
+    for (const k of ownKeys(opts))
+        if (k !== "Url" && k !== "Timeout")
+            throw new TypeError(`Network.Probe: no option called '${k}'; there are Url and Timeout`);
+    const url     = opts.Url === undefined ? PROBE_URL : opts.Url;
+    const timeout = opts.Timeout === undefined ? 5000 : opts.Timeout;
+    if (typeof url !== "string" || !/^http:\/\//.test(url))
+        throw new TypeError("Network.Probe: Url is a plain http:// address that answers 204 -- a portal cannot answer https");
+    if (typeof timeout !== "number" || !(timeout >= 1))
+        throw new RangeError("Network.Probe: Timeout is milliseconds, 1 or more");
+
+    /* Its own client, because the one thing it must not do is follow the
+     * redirect: the redirect is the answer. */
+    const client = Http.Client({ FollowRedirects: false, Timeout: timeout });
+    client.Get(url, {}, (r) => {
+        if (r.Status === 204)
+            return callback({ Connectivity: "Full", Url: "", Why: "" });
+        if (r.Status >= 300 && r.Status < 400)
+            return callback({ Connectivity: "Portal", Url: (r.Headers && r.Headers.location) || url, Why: "" });
+        if (r.Status >= 200 && r.Status < 300)
+            return callback({ Connectivity: "Portal", Url: url, Why: "" });
+        callback({ Connectivity: "Limited", Url: "", Why: `HTTP ${r.Status}` });
+    }, (e) => {
+        callback({ Connectivity: "None", Url: "", Why: e.Kind || "Error" });
+    });
+};
+
+/* ------------------------------------------------------------------------
  * Dictionary -- what a bag of data holds.
  *
  * `Object.keys` is the only member of the curated surface that reads like the

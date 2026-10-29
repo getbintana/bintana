@@ -1,6 +1,6 @@
 # Keeping the machine awake, on every desktop
 
-**Not started; a plan to discuss.** Asked for by the owner on 2026-10-28, with
+**Not started; the shape chosen (`Application.Inhibit`), stage 0 to measure.** Asked for by the owner on 2026-10-28, with
 the condition that it be argued across desktops the way
 [keyring-plan.md](keyring-plan.md) argues a store: *what the application
 needed* is one verb, and *who answers it* is different on every platform.
@@ -75,41 +75,37 @@ The pattern: **two intents** (keep running / keep the screen on) rather than
 GTK's four flags, an **id to release**, and the honest ones say **whether and
 how** it took.
 
-## A shape to argue about
+## The shape, as the owner chose it (2026-10-28)
 
-**Where: `System.Inhibit`**, the owner's choice of 2026-10-28 — `System` is
-the machine and the session as they are now, and requests to them (see
-[network-plan.md](network-plan.md#the-shape-as-the-owner-chose-it-2026-10-28)),
-not `Application`, which is facts about the program.
+**`Application.Inhibit`**, because it is a request **by the application to the
+session**: GTK makes it a method of `GtkApplication`, every platform releases
+it when the program exits, Windows' logout block needs one of the
+application's windows and macOS implements it by cancelling the application's
+own termination. Considered and left: `Power` (the inhibit is half session,
+`LOGOUT` and `SWITCH`), `Session` (a word applications already use for a
+signed-in session with tokens) and `System`.
 
 ```js
-const awake = System.Inhibit("Backing up 3 GB", { Display: false });
-// awake.Active   -- whether anything on this machine agreed
-// awake.By       -- "Portal", "Logind", "PowerRequest", "IOKit", ""
-// ...
-awake.Release();
+const hold = Application.Inhibit("Backing up 3 GB", ["Suspend", "Logout"]);
+hold.Active    // whether anything on this machine agreed
+hold.By        // who: "Portal", "Logind", "PowerRequest", "IOKit", ""
+hold.Release();
 ```
 
-- **An object, not a cookie.** `Release()` cannot be called with somebody
-  else's number, and `Active`/`By` say what the platform agreed to — the
-  `Keyring.Provider` lesson: what a careful caller decides with is *who*.
-- **Two intents.** Suspend is always asked; `Display: true` adds idle/screen.
-  `LOGOUT` and `SWITCH` are left out until an application asks: GTK honours
-  them unevenly, and *don't let the user log out* is a different question
-  (it is a form's `Form_Close` veto, which exists).
-- **`Active: false` is an answer, never a throw.** A backup that cannot keep the
-  machine awake still runs; it may want to say so.
+- **The four reasons GTK has**: `"Suspend"`, `"Idle"` (the screen blanking),
+  `"Logout"`, `"Switch"` (switching user); `["Suspend"]` when none is given.
+- **An object, not a cookie**: `Release()` cannot be called with somebody
+  else's number, and `Active`/`By` say what the platform agreed to — on macOS,
+  where GTK honours only `"Logout"`, that is the difference between a backup
+  that is protected and one that believes it is.
+- **`Active: false` is an answer, never a throw.**
 - Released on exit, as every platform does anyway.
 
-## Decisions for the owner
+## Decisions still open
 
 1. **GTK first, or our own roads first?** GTK alone is one call and wrong on
-   macOS and old GTK; our own is logind + ScreenSaver on Linux (portal inside
-   Flatpak), `PowerSetRequest` on Windows, IOKit on macOS — the same per-platform
-   C that `Keyring` already plans.
-2. **The two intents**, or GTK's four flags.
-3. **An object or a cookie.**
-4. ~~Where~~: decided, `System.Inhibit`.
+   macOS and on old GTK; our own is logind + ScreenSaver on Linux (the portal
+   inside Flatpak), `PowerSetRequest` on Windows, IOKit on macOS.
 
 ## Stage 0, before any code
 

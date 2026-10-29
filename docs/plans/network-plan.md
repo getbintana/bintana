@@ -1,6 +1,10 @@
 # Whether there is a network, and what kind
 
-**Not started; stage 0 measured, the shape chosen (`System.Network`), three details open.** Asked for by the owner
+**Built on Linux (2026-10-28): `Network` with `Connectivity`, `Online`,
+`Metered`, `OnChange`, `Reach` and `Probe` (`runtime/src/bta_network.c`,
+`Probe` in `rad.js`), measured on the host and inside Flatpak, and held by
+`tests/widgets`' `testNetwork` on loopback. What is left is below, under
+*still to measure*: a real captive portal, Windows and macOS on a desktop.** Asked for by the owner
 on 2026-10-28 with the condition that the shape be compared with what other
 languages offer before anything is built, and that **discovering captive
 portals** be treated as part of it. The first caller is the owner's
@@ -129,33 +133,23 @@ answers `NotAllowed`.
 
 ## The shape, as the owner chose it (2026-10-28)
 
-**A new global `System`, and this is its first member.** Chosen over a global
-`Network` of its own, over `Desktop.Network` (the `Desktop.Entries`
-precedent) and over `Environment`, after comparing VB.NET's `My.Computer`
-(which groups `Network`, `Screen`, `Clipboard`, `Audio`…) and Gambas' `System`.
-What goes in it, so the next member does not have to re-argue it:
-
-- **`System` is the machine and the session as they are now** — live state
-  with a change event, and requests to the system (the inhibit plan's
-  `System.Inhibit` is the second member).
-- **`Environment` stays what it is**: a snapshot of what the program was
-  started with (variables, directories, `OS`, `HostName`). Nothing there
-  changes while the program runs.
-- **`Desktop` stays the user's places**: the XDG directories and the menu
-  entries.
-- **`Screen` and `Clipboard` stay where they are.** Moving them into `System`
-  would break every program that uses them for a name; an alias would be two
-  answers to one question. Revisit only if `System` grows to the point where
-  their absence from it confuses.
+**A global `Network` of its own**, one subject per global as `Screen`,
+`Clipboard`, `Keyring`, `Notification` and `Http` already are. Considered and
+left: a new `System` global (VB.NET's `My.Computer`, Gambas' `System`) — a
+name that says nothing about what is in it, which overlaps `Environment` in
+meaning, and which `Screen` and `Clipboard` would already be missing from;
+`Power` for this and the inhibit together — the inhibit is half session
+(`LOGOUT`, `SWITCH`), not power; `Desktop.Network`; and `Environment`, which is
+a snapshot of the start and never changes while the program runs.
 
 ```js
-System.Network.Connectivity   // "Unknown", "None", "Local", "Routed", "Limited", "Portal", "Full"
-System.Network.Online         // Connectivity === "Full", and nothing weaker
-System.Network.Metered        // a hotspot or a metered Wi-Fi
-System.Network.OnChange = () => { if (System.Network.Online) this.retryQueued(); };
+Network.Connectivity   // "Unknown", "None", "Local", "Routed", "Limited", "Portal", "Full"
+Network.Online         // Connectivity === "Full", and nothing weaker
+Network.Metered        // a hotspot or a metered Wi-Fi
+Network.OnChange = () => { if (Network.Online) this.retryQueued(); };
 
-System.Network.Reach("cam.local", 554, (ok, why) => …)   // the honest answer, per host
-System.Network.Probe((result) => …)                      // { Connectivity: "Full" | "Portal" | "None", Url }
+Network.Reach("cam.local", 554, (ok, why) => …)   // the honest answer, per host
+Network.Probe((result) => …)                      // { Connectivity: "Full" | "Portal" | "None", Url }
 ```
 
 - **`"Unknown"`** until the first answer: the Flatpak portal backend's first
