@@ -22,6 +22,7 @@
       "type": "Panel",
       "name": "Area",
       "properties": {
+        "Gestures": true,
         "Menu": [
           { "name": "MnuProbe", "text": "The menu a long press opens" }
         ],

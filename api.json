@@ -39,6 +39,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -265,6 +275,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -509,6 +529,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -714,6 +744,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -891,6 +931,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -1161,6 +1211,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -1324,6 +1384,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -1648,6 +1718,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -1814,6 +1894,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -2010,6 +2100,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -2295,6 +2395,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -2521,6 +2631,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -2932,6 +3052,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -3117,6 +3247,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -3334,6 +3474,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -3515,6 +3665,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -3959,6 +4119,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -4136,6 +4306,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -4344,6 +4524,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -4547,6 +4737,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -4794,6 +4994,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -5009,6 +5219,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -5202,6 +5422,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -5550,6 +5780,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -5824,6 +6064,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -6000,6 +6250,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -6166,6 +6426,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -6391,6 +6661,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -6604,6 +6884,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -6907,6 +7197,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -7126,6 +7426,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -7326,6 +7636,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -7598,6 +7918,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -8047,6 +8377,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -8285,6 +8625,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -8456,6 +8806,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -8658,6 +9018,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -8844,6 +9214,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -9076,6 +9456,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -9760,6 +10150,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -10032,6 +10432,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -10348,6 +10758,16 @@
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
         },
         {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -10545,6 +10965,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -10751,6 +11181,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -11097,6 +11537,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -11460,6 +11910,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",
@@ -11922,6 +12382,15 @@
           "Signature": "",
           "Returns": "",
           "Doc": "likewise, for the text",
+          "Native": true
+        },
+        {
+          "Name": "Gestures",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "listens for two-finger gestures and flicks: `Transform` and `Swipe` are raised only while it is `true`. Off by default -- it adds three controllers -- and claims two fingers on this control so a scroller or a click above does not also take them",
           "Native": true
         },
         {
@@ -12395,6 +12864,16 @@
           "Name": "LongPress",
           "Signature": "(x, y)",
           "Doc": "a press held still for about half a second, with **any** pointer, at the point it began. A touch or a pen's long press also opens the control's `PopupMenu` (the nearest one outward, as the secondary button does) and cancels the click that would follow; a mouse's does not open it -- it has a button for that -- so a program that wants one on a held mouse opens it here"
+        },
+        {
+          "Name": "Transform",
+          "Signature": "(phase, dx, dy, scale, angle, x, y)",
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+        },
+        {
+          "Name": "Swipe",
+          "Signature": "(vx, vy)",
+          "Doc": "a one-finger flick, as it lifts, while `Gestures` is on: the velocity in pixels per second. A mouse drag released while moving is one too"
         },
         {
           "Name": "MouseMove",

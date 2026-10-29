@@ -193,7 +193,7 @@ bplay() {
     local n; n=$(lines "$probe")
     drive "$@"; sleep 1.2
     tail -n +$((n + 1)) "$probe" >"$OUT/bintana.$name.log"
-    local down up b3 move wheel hold cancel
+    local down up b3 move wheel hold cancel swipes xf
     down=$(grep -c ' area down' "$OUT/bintana.$name.log")
     up=$(grep -c ' area up' "$OUT/bintana.$name.log")
     b3=$(grep -c 'button=3' "$OUT/bintana.$name.log")
@@ -201,7 +201,9 @@ bplay() {
     wheel=$(grep -c ' wheel' "$OUT/bintana.$name.log")
     hold=$(grep -c " area longpress" "$OUT/bintana.$name.log")
     cancel=$(grep -c " area cancel" "$OUT/bintana.$name.log")
-    verdict "bintana $name" "down=$down up=$up button3=$b3 move=$move wheel=$wheel longpress=$hold cancel=$cancel"
+    swipes=$(grep -c " area swipe" "$OUT/bintana.$name.log")
+    xf=$(grep -c " area transform" "$OUT/bintana.$name.log")
+    verdict "bintana $name" "down=$down up=$up button3=$b3 move=$move wheel=$wheel longpress=$hold cancel=$cancel swipe=$swipes transform=$xf"
 }
 
 bplay tap       tap "$bcx" "$bcy"
@@ -210,8 +212,17 @@ bplay longpress hold "$bcx" "$bcy" 1500
 xdotool key Escape; sleep 0.8
 bplay swipe     swipe $((bcx - 150)) "$bcy" $((bcx + 150)) "$bcy" 300
 bplay pinch     pinch "$bcx" "$bcy" 40 140 700
+bplay rotate    rotate "$bcx" "$bcy" 100 60 700
 bplay pan2      pan2 $((bcx - 100)) "$bcy" $((bcx + 100)) "$bcy" 700
 
+echo
+echo "  Transform, the last update and the End of each (what to expect in brackets):"
+for g in pinch:"scale 3.5, angle 0, dx 0" rotate:"scale 1, angle 60, dx 0" pan2:"scale 1, angle 0, dx 200"; do
+    name=${g%%:*}
+    echo "  $name  [${g#*:}]"
+    grep ' area transform' "$OUT/bintana.$name.log" | grep -E 'Begin|End' | sed 's/^/      /'
+    grep ' area transform Update' "$OUT/bintana.$name.log" | tail -1 | sed 's/^/      last: /'
+done
 echo
 echo "Done.  Send $OUT (gtk.log, gtk.*.log, bintana.*.log, probe.log) or the lines above."
 printf '%s\n' "${results[@]}" >"$OUT/summary.txt"

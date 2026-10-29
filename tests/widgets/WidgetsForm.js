@@ -583,7 +583,7 @@ const TESTS = [
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
-    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Record", "Nested", "Database", "Action", "Groups",
+    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
@@ -17482,6 +17482,102 @@ class Form1 extends Form {
                 both.Close();
             });
         });
+    }
+
+    /*
+     * `Gestures`, `Swipe` and `Transform`.
+     *
+     * **Swipe makes the round trip through the X server** with a mouse, which is
+     * what an `Xvfb` has: a quick drag released while moving is a flick, heard
+     * only where `Gestures` is on (a second pad beside the first, with it off,
+     * hears nothing). **`Transform` cannot be played here** -- two fingers need a
+     * touch device, which the virtual display has not and `/dev/uinput` is root's
+     * -- so its half is `tests/manual/touch/run.sh`; what is asserted is the
+     * declaration, the property, and that the file carries it.
+     *
+     * Skipped, never failed, without `xdotool`.
+     */
+    testGestures() {
+        const b = new Button();
+        this.Fixed1.Add(b);
+        for (const e of ["Transform", "Swipe"])
+            check(`a control says it raises ${e}`, b.EventNames().includes(e));
+        eq("gestures are off by default", b.Gestures, false);
+        check("and so are not in the file", !("Gestures" in b.Serialize().properties));
+        b.Gestures = true;
+        eq("asked for, they read back", b.Gestures, true);
+        eq("and are saved", b.Serialize().properties.Gestures, true);
+        b.Gestures = true;
+        b.Gestures = false;
+        eq("and taken back, after being asked twice, are off", b.Gestures, false);
+        b.Delete();
+
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real flick: it needs xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "gestures");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "gestures", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Text: "flick-probe", Width: 500, Height: 240 },
+                        children: [{ type: "Label", name: "On",
+                                     properties: { Text: "on", Gestures: true, X: 20, Y: 20,
+                                                   Width: 200, Height: 100 } },
+                                   { type: "Label", name: "Off",
+                                     properties: { Text: "off", X: 260, Y: 20,
+                                                   Width: 200, Height: 100 } }] });
+        File.Save(File.Join(proj, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        this.log = [];\n" +
+                  "        Timer.After(800, () => File.Save(Application.Directory + '/ready', '1'));\n" +
+                  "        Timer.Every(100, () => {\n" +
+                  "            if (File.Exists(Application.Directory + '/done')) this.report();\n" +
+                  "        });\n" +
+                  "    }\n" +
+                  "    On_Swipe(vx, vy)  { this.log.push('on ' + (vx > 500 ? 'right' : 'slow') + ' ' + typeof vy); }\n" +
+                  "    Off_Swipe(vx, vy) { this.log.push('off'); }\n" +
+                  "    report() {\n" +
+                  "        File.SaveJson(Application.Directory + '/out.json', { log: this.log });\n" +
+                  "        Application.Quit(0);\n" +
+                  "    }\n" +
+                  "}\n");
+        for (const gone of ["ready", "done", "out.json"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/ready\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "wid=$(xdotool search --name '^flick-probe$' | tail -1)\n" +
+                  "eval \"$(xdotool getwindowgeometry --shell $wid)\"\n" +
+                  "flick() { xdotool mousemove $1 $2 mousedown 1; sleep 0.1\n" +
+                  "    for k in 1 2 3 4 5 6 7 8 9 10; do xdotool mousemove_relative -- 14 0; sleep 0.012; done\n" +
+                  "    xdotool mouseup 1; sleep 0.6; }\n" +
+                  "flick $((X+40)) $((Y+60))\n" +
+                  "flick $((X+280)) $((Y+60))\n" +
+                  "touch \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the child ended by itself", ran.Output.includes("child=0"), ran.Output);
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("and said what it heard", got !== null, ran.Output);
+        if (!got) return;
+
+        eq("a flick on a pad with Gestures on is heard, fast and to the right, with both numbers",
+           got.log.filter((l) => l.startsWith("on")).join(","), "on right number");
+        eq("and on a pad with them off, not at all",
+           got.log.filter((l) => l.startsWith("off")).length, 0);
     }
 
     /*

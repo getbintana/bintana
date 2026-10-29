@@ -8374,6 +8374,21 @@ void bta_core_register(void)
          *   not open it -- it has a button for that -- so a program that wants one
          *   on a held mouse opens it here
          */
+        /* Transform(phase, dx, dy, scale, angle, x, y)
+         *   two fingers, as **one stream** for pan, zoom and rotate, while
+         *   `Gestures` is on. `phase` is `"Begin"`, `"Update"` or `"End"`; the rest
+         *   are the change **since `Begin`** -- `dx`/`dy` how far the centre between
+         *   the fingers moved, `scale` how much farther apart they are (`1` at the
+         *   start, `2` twice as far), `angle` how far they turned in degrees
+         *   (positive is clockwise) -- and `x`/`y` is that centre, in the control's
+         *   own coordinates. The first finger's click ends in `MouseCancel`.
+         *   **Only where the toolkit delivers a second finger**: Linux does; the
+         *   Windows backend, measured, delivers one finger as a mouse
+         */
+        /* Swipe(vx, vy)
+         *   a one-finger flick, as it lifts, while `Gestures` is on: the velocity in
+         *   pixels per second. A mouse drag released while moving is one too
+         */
         /* MouseMove(x, y, button, ctrl, shift)
          *   the pointer moved over it. `button` is `0` here
          */
@@ -8471,7 +8486,7 @@ void bta_core_register(void)
          *   window's own layout pass
          */
         BTA_CLASS_FULL("Widget", NULL, NULL, base, nbase, false,
-                       widget_options, "Tooltip,AccessibleName,AccessibleDescription", "MouseDown,MouseUp,MouseCancel,LongPress,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
+                       widget_options, "Tooltip,AccessibleName,AccessibleDescription", "MouseDown,MouseUp,MouseCancel,LongPress,Transform,Swipe,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
         BTA_CLASS_ENUM("Container", "Widget",  NULL, container_props, false, container_options, NULL),
         BTA_CLASS_BARE("Control",   "Widget",    NULL,                            false, NULL),
         /* A window's title is prose; so is the caption of everything below. */

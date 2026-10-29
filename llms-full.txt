@@ -5080,6 +5080,13 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `MouseCancel`, `DragEnd` -- the cancel arrives from an idle, a gesture being
   reset when its widget is hidden or disposed -- and no `MouseUp`. A plain click
   beside it gives `MouseDown`, `MouseUp` and nothing else (`testMouseCancel`).
+- **A second finger *ends* a click gesture; it does not cancel it.** Measured with
+  a virtual touch screen (`tests/manual/touch/run.sh`): `end`, and neither
+  `released` nor `cancel`, while a drag and drop that claims the sequence gives
+  `cancel`. `MouseCancel` listens to both (`end` connected after the class
+  handler, so a click that did finish has already cleared its mark) and the
+  GTK documentation, which names only `cancel`, would have left it silent for
+  the commonest case.
 - **No drag starts inside a `RowList`, in either phase.** A `GtkListBox` claims
   the press for its own selection, so a card with `DragData` set selects and
   nothing else -- measured with a one-row probe that printed `SELECTED` and no
@@ -12035,7 +12042,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 9860 assertions
+./tests/run.sh                          # all seven projects, 9868 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

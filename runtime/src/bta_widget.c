@@ -6818,6 +6818,214 @@ static JSValue w_set_accept_drop(JSContext *ctx, JSValueConst this_val, JSValueC
     return JS_UNDEFINED;
 }
 
+/* ---------------------------------------------------------------- gestures */
+
+/*
+ * `Gestures`: what two fingers and a flick say, for a control that asked.
+ *
+ * `Transform(phase, dx, dy, scale, angle, x, y)` is **one stream** for pan, zoom
+ * and rotate -- two fingers read three ways -- and not three events: a map or a
+ * drawing wants them together, and GTK's own two-point drag, grouped beside zoom
+ * and rotate, begins and ends in the same instant because the others claim the
+ * sequence.  So it is made from the zoom and rotate gestures, grouped, and from
+ * the centre between the fingers.
+ *
+ * **Every number is a change since `Begin`, and the baseline is the first update,
+ * not what GTK says at the start**: measured, GTK's rotate reports about 90
+ * degrees and its zoom 0.95 for two fingers that have not moved yet (it takes
+ * the second finger's position before it is known), so a consumer that read the
+ * absolute values would start every gesture with a jump.
+ *
+ * Off by default and a property, because three more controllers on every widget
+ * is a cost the IDE would pay for nothing.
+ */
+#define GESTURES_KEY "bta-gestures"
+
+typedef struct {
+    BtaWidget  *w;
+    GtkGesture *zoom, *rotate, *swipe;
+    gboolean    pending;                /* recognised, the baseline not yet taken */
+    gboolean    begun;
+    double      cx0, cy0, scale0, prev, angle;   /* angle: radians, unwrapped */
+    double      cx, cy, scale;                    /* the last, for End */
+} GestureState;
+
+static void transform_emit(BtaWidget *w, const char *phase, double dx, double dy,
+                           double scale, double angle_rad, double x, double y)
+{
+    JSContext *ctx = w->ctx;
+    JSValue    argv[7] = {
+        JS_NewString(ctx, phase),
+        JS_NewFloat64(ctx, dx), JS_NewFloat64(ctx, dy),
+        JS_NewFloat64(ctx, scale),
+        JS_NewFloat64(ctx, angle_rad * 180.0 / G_PI),
+        JS_NewFloat64(ctx, x), JS_NewFloat64(ctx, y),
+    };
+
+    bta_emit(w, "Transform", 7, argv);
+    for (int i = 0; i < 7; i++)
+        JS_FreeValue(ctx, argv[i]);
+}
+
+static void gestures_update(GtkGesture *g, GdkEventSequence *seq, gpointer data)
+{
+    GestureState *st = data;
+    double cx, cy;
+
+    if (!gtk_gesture_get_bounding_box_center(g, &cx, &cy))
+        return;
+
+    double s = gtk_gesture_zoom_get_scale_delta(GTK_GESTURE_ZOOM(st->zoom));
+    double a = gtk_gesture_rotate_get_angle_delta(GTK_GESTURE_ROTATE(st->rotate));
+
+    if (st->pending) {
+        st->pending = FALSE;
+        st->begun   = TRUE;
+        st->cx0 = cx;
+        st->cy0 = cy;
+        st->scale0 = s > 0 ? s : 1;
+        st->prev   = a;
+        st->angle  = 0;
+        st->cx = cx; st->cy = cy; st->scale = 1;
+        /* Two fingers on a control that listens are for it: a parent's scroller
+         * or a click must not also take them. */
+        gtk_gesture_set_state(g, GTK_EVENT_SEQUENCE_CLAIMED);
+        gtk_gesture_set_state(st->rotate, GTK_EVENT_SEQUENCE_CLAIMED);
+        transform_emit(st->w, "Begin", 0, 0, 1, 0, cx, cy);
+        return;
+    }
+    if (!st->begun)
+        return;
+
+    /* The change since the last sample, wrapped: GTK's angle jumps at +-pi. */
+    double step = a - st->prev;
+    while (step >  G_PI) step -= 2 * G_PI;
+    while (step < -G_PI) step += 2 * G_PI;
+    st->prev   = a;
+    st->angle += step;
+    st->cx = cx; st->cy = cy;
+    st->scale = s / st->scale0;
+
+    transform_emit(st->w, "Update", cx - st->cx0, cy - st->cy0, st->scale, st->angle, cx, cy);
+}
+
+typedef struct { GWeakRef widget; double dx, dy, scale, angle, x, y; } TransformEndJob;
+
+/* From an idle, as `MouseCancel` is: a gesture ends when its widget is hidden
+ * or disposed, and no JavaScript runs inside a signal that does either. */
+static gboolean transform_end_idle(gpointer data)
+{
+    TransformEndJob *job = data;
+    GtkWidget       *wd  = g_weak_ref_get(&job->widget);
+
+    if (wd) {
+        BtaWidget *w = g_object_get_data(G_OBJECT(wd), BTA_WIDGET_QUARK);
+        if (w)
+            transform_emit(w, "End", job->dx, job->dy, job->scale, job->angle, job->x, job->y);
+        g_object_unref(wd);
+    }
+    g_weak_ref_clear(&job->widget);
+    g_free(job);
+    return G_SOURCE_REMOVE;
+}
+
+static void gestures_end(GtkGesture *g, GdkEventSequence *seq, gpointer data)
+{
+    GestureState *st = data;
+
+    st->pending = FALSE;
+    if (!st->begun)
+        return;
+    st->begun = FALSE;
+
+    TransformEndJob *job = g_new0(TransformEndJob, 1);
+    job->dx = st->cx - st->cx0;
+    job->dy = st->cy - st->cy0;
+    job->scale = st->scale;
+    job->angle = st->angle;
+    job->x = st->cx;
+    job->y = st->cy;
+    g_weak_ref_init(&job->widget, st->w->gtk);
+    g_idle_add_full(G_PRIORITY_HIGH, transform_end_idle, job, NULL);
+}
+
+static void gestures_begin(GtkGesture *g, GdkEventSequence *seq, gpointer data)
+{
+    GestureState *st = data;
+
+    st->pending = TRUE;
+    st->begun   = FALSE;
+}
+
+static void gestures_swiped(GtkGestureSwipe *g, double vx, double vy, gpointer data)
+{
+    GestureState *st = data;
+    JSContext    *ctx = st->w->ctx;
+    JSValue       argv[2] = { JS_NewFloat64(ctx, vx), JS_NewFloat64(ctx, vy) };
+
+    bta_emit(st->w, "Swipe", 2, argv);
+    JS_FreeValue(ctx, argv[0]);
+    JS_FreeValue(ctx, argv[1]);
+}
+
+static JSValue w_get_gestures(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, g_object_get_data(G_OBJECT(w->gtk), GESTURES_KEY) != NULL);
+}
+
+static JSValue w_set_gestures(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int on = JS_ToBool(ctx, val);
+    if (on < 0)
+        return JS_EXCEPTION;
+
+    GtkGesture *zoom = g_object_get_data(G_OBJECT(w->gtk), GESTURES_KEY);
+
+    if (on && !zoom) {
+        GestureState *st = g_new0(GestureState, 1);
+
+        st->w      = w;
+        st->zoom   = gtk_gesture_zoom_new();
+        st->rotate = gtk_gesture_rotate_new();
+        st->swipe  = gtk_gesture_swipe_new();
+        gtk_gesture_group(st->zoom, st->rotate);
+
+        g_signal_connect(st->zoom, "begin",  G_CALLBACK(gestures_begin), st);
+        g_signal_connect_after(st->zoom, "update", G_CALLBACK(gestures_update), st);
+        g_signal_connect(st->zoom, "end",    G_CALLBACK(gestures_end), st);
+        g_signal_connect(st->zoom, "cancel", G_CALLBACK(gestures_end), st);
+        g_signal_connect(st->swipe, "swipe", G_CALLBACK(gestures_swiped), st);
+
+        /* The state lives as long as the zoom gesture, whose signals are the
+         * only thing that reads it; the widget owns all three controllers. */
+        g_object_set_data_full(G_OBJECT(st->zoom), "bta-gesture-state", st, g_free);
+        gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(st->zoom));
+        gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(st->rotate));
+        gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(st->swipe));
+        g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY, st->zoom);
+        g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY "-swipe", st->swipe);
+        g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY "-rotate", st->rotate);
+    } else if (!on && zoom) {
+        GtkGesture *rotate = g_object_get_data(G_OBJECT(w->gtk), GESTURES_KEY "-rotate");
+        GtkGesture *swipe  = g_object_get_data(G_OBJECT(w->gtk), GESTURES_KEY "-swipe");
+
+        g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY, NULL);
+        g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY "-rotate", NULL);
+        g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY "-swipe", NULL);
+        gtk_widget_remove_controller(w->gtk, GTK_EVENT_CONTROLLER(swipe));
+        gtk_widget_remove_controller(w->gtk, GTK_EVENT_CONTROLLER(rotate));
+        gtk_widget_remove_controller(w->gtk, GTK_EVENT_CONTROLLER(zoom));
+    }
+    return JS_UNDEFINED;
+}
+
 /*
  * How many of a Grid's columns this control takes.
  *
@@ -7574,6 +7782,13 @@ static const JSCFunctionListEntry widget_props[] = {
      *   `Drop(data, x, y)`
      */
     JS_CGETSET_DEF("AcceptDrop", w_get_accept_drop, w_set_accept_drop),
+    /* Gestures
+     *   listens for two-finger gestures and flicks: `Transform` and `Swipe` are
+     *   raised only while it is `true`. Off by default -- it adds three
+     *   controllers -- and claims two fingers on this control so a scroller or
+     *   a click above does not also take them
+     */
+    JS_CGETSET_DEF("Gestures", w_get_gestures, w_set_gestures),
     /* AcceptFiles
      *   receives files dragged in from **the desktop**, which arrive as
      *   `FileDrop(paths, x, y)`. Independent of `AcceptDrop`: a control may
