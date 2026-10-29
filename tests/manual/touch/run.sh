@@ -46,6 +46,18 @@ read -r -t 30 -u "${SIM[0]}" line && [[ $line == ready ]] || die "touchsim did n
 
 drive() { echo "$*" >&"${SIM[1]}"; read -r -t 30 -u "${SIM[0]}" _ || die "touchsim stopped answering"; }
 
+# Where does the server really put a touch?  A tap at a known point moves the
+# pointer there (the touch is also a pointer to X), so measure the scale: on
+# this machine a tap at x=403 arrived at x=805.
+drive tap $((SW / 4)) $((SH / 2)); sleep 0.5
+read -r px py < <(xdotool getmouselocation --shell | awk -F= '/^X=/{x=$2} /^Y=/{y=$2} END{print x, y}')
+kx=$(awk -v p="$px" -v w="$SW" 'BEGIN{printf "%.4f", p / (w / 4)}')
+ky=$(awk -v p="$py" -v h="$SH" 'BEGIN{printf "%.4f", p / (h / 2)}')
+echo "  a tap at $((SW / 4)),$((SH / 2)) put the pointer at $px,$py: scale $kx x $ky"
+if awk -v a="$kx" -v b="$ky" 'BEGIN{exit !(a < 0.98 || a > 1.02 || b < 0.98 || b > 1.02)}'; then
+    drive scale "$kx" "$ky"
+fi
+
 # Start a program, return its window id, placed at a known corner.
 open_window() {                     # <pid>
     local id n=0

@@ -15,6 +15,7 @@
  *     pinch CX CY R1 R2 MS            two fingers, apart R1 -> R2 (half distance)
  *     rotate CX CY R DEGREES MS       two fingers on a circle of radius R
  *     pan2 X1 Y1 X2 Y2 MS             two fingers, 80 px apart, moving together
+ *     scale KX KY                     the server maps the range KX, KY times larger than the screen
  *     quit
  */
 #define _GNU_SOURCE
@@ -32,6 +33,7 @@
 
 static int fd, width, height;
 static int ids[SLOTS], next_id = 1, down_count;
+static double kx = 1, ky = 1;   /* what the server makes of the device range: screen = device * k */
 
 static void ev(int type, int code, int value)
 {
@@ -49,7 +51,7 @@ static int clampi(double v, int hi) { return v < 0 ? 0 : v > hi ? hi : (int)lrou
 /* A finger is on the glass at (x, y): first contact or an update. */
 static void put(int slot, double x, double y)
 {
-    int px = clampi(x, width - 1), py = clampi(y, height - 1);
+    int px = clampi(x / kx, width - 1), py = clampi(y / ky, height - 1);
     ev(EV_ABS, ABS_MT_SLOT, slot);
     if (!ids[slot]) {
         ids[slot] = next_id++;
@@ -181,6 +183,7 @@ int main(int argc, char **argv)
     while (fgets(line, sizeof line, stdin)) {
         double a, b, c, d; int ms;
         if (!strncmp(line, "quit", 4)) break;
+        else if (sscanf(line, "scale %lf %lf", &a, &b) == 2) { kx = a; ky = b; }
         else if (sscanf(line, "tap %lf %lf", &a, &b) == 2) tap(a, b);
         else if (sscanf(line, "hold %lf %lf %d", &a, &b, &ms) == 3) hold(a, b, ms);
         else if (sscanf(line, "swipe %lf %lf %lf %lf %d", &a, &b, &c, &d, &ms) == 5) swipe(a, b, c, d, ms);
