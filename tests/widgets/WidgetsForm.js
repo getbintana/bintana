@@ -615,6 +615,8 @@ const TESTS = [
     "HttpServerStop",
     "HttpServerDropped",
     "DebuggerOrders",
+    /* Async: the debugger in a module, plain and brought in by an import. */
+    "ModulesDebugger",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -5129,6 +5131,17 @@ class Form1 extends Form {
             eq(`...at the word`, no && no.Column, column);
         }
 
+    }
+
+    /*
+     * Apart from `Modules`, and in the asynchronous tail: each run is a
+     * conversation with a child, and a reply only arrives on a turn of the main
+     * loop. Run from `Modules`, in the synchronous part, every `Exec.Wait` after
+     * it froze the loop for seconds at a time and its 20 s `Timeout` -- a wall
+     * clock -- killed the child mid-conversation once the suite had grown enough
+     * of them (the child stood in `read` with the `break` order still queued).
+     */
+    testModulesDebugger() {
         this.modulesDebugger(false);
         this.modulesDebugger(true);
     }

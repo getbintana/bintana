@@ -244,6 +244,15 @@ Three things that will waste your time:
   asking for the tail brings those two; asking for one of them alone does not bring
   the tail. A test whose deferred half lives in the tail and does not
   say so answers with half its assertions and looks complete.
+- **A conversation with a child belongs in the async tail of `TESTS`, never in
+  the synchronous part.** Every `Exec.Wait` after it freezes the main loop for
+  as long as its child runs, and the `Timeout` of an asynchronous `Exec` is a
+  wall clock. `modulesDebugger` ran from `testModules`: alone it passed, and in
+  the whole project it lost 12 assertions once the touch tests added enough
+  `Exec.Wait` children after it (`frameless`, `mousecancel`) -- the debugged
+  child sat in `read` with the `break` order still queued in the parent until
+  the 20 s were up. Found with `eu-stack` on the parent, whose main thread was
+  in `sys_exec_wait`. It is `testModulesDebugger` now, beside `DebuggerOrders`.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
   427 assertions against 3139 for the whole project -- 9.5 s against 409 to 624 on this
