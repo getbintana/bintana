@@ -8389,7 +8389,8 @@ void bta_core_register(void)
          */
         /* Swipe(vx, vy, fingers)
          *   a flick as the fingers lift, while `Gestures` is on: the velocity in
-         *   pixels per second and **how many fingers made it** -- `1` (a mouse
+         *   pixels per second (a touchpad's are its own, accelerated units: a fast
+         *   flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse
          *   drag released while moving is one too), `3` or `4`; two fingers
          *   moving are `Transform`'s pan. A touchpad's three- and four-finger
          *   swipe is the same event, its velocity taken from the last 100 ms of
