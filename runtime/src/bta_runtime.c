@@ -1836,6 +1836,131 @@ static JSValue js_has_icon(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * Application.Inhibit(reason, what): keep the session from suspending, blanking,
+ * logging out or switching user while something runs.  See
+ * docs/plans/inhibit-plan.md for the measurements behind every line.
+ *
+ * **GTK does the asking**, and GTK answers differently per platform: on Linux
+ * it goes to the Inhibit portal (and answers a cookie before the portal has
+ * said yes or no), on Windows to PowerSetRequest, which has no Switch, and on
+ * macOS it honours Logout alone and answers a cookie for the rest anyway.  So
+ * a request this platform's GTK cannot hold in full is not made at all, and
+ * answers `Active: false` -- a backup believing it is protected is the one
+ * answer worse than *no*.
+ *
+ * The live cookies are kept here because `gtk_application_uninhibit` warns on
+ * one it does not know, and a Release called twice is not an error.
+ */
+static GHashTable *inhibit_cookies;
+
+static const struct {
+    const char                 *name;
+    GtkApplicationInhibitFlags  flag;
+} inhibit_reasons[] = {
+    { "Suspend", GTK_APPLICATION_INHIBIT_SUSPEND },
+    { "Idle",    GTK_APPLICATION_INHIBIT_IDLE    },
+    { "Logout",  GTK_APPLICATION_INHIBIT_LOGOUT  },
+    { "Switch",  GTK_APPLICATION_INHIBIT_SWITCH  },
+};
+
+#if defined(G_OS_WIN32)
+#define INHIBIT_BY       "PowerRequest"
+#define INHIBIT_HONOURED (GTK_APPLICATION_INHIBIT_SUSPEND | GTK_APPLICATION_INHIBIT_IDLE | \
+                          GTK_APPLICATION_INHIBIT_LOGOUT)
+#elif defined(__APPLE__)
+#define INHIBIT_BY       "AppKit"
+#define INHIBIT_HONOURED GTK_APPLICATION_INHIBIT_LOGOUT
+#else
+#define INHIBIT_BY       "Portal"
+#define INHIBIT_HONOURED (GTK_APPLICATION_INHIBIT_SUSPEND | GTK_APPLICATION_INHIBIT_IDLE | \
+                          GTK_APPLICATION_INHIBIT_LOGOUT | GTK_APPLICATION_INHIBIT_SWITCH)
+#endif
+
+static JSValue inhibit_release(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv, int magic,
+                               JSValueConst *data)
+{
+    uint32_t cookie = 0;
+    JS_ToUint32(ctx, &cookie, data[0]);
+    if (cookie && inhibit_cookies &&
+        g_hash_table_remove(inhibit_cookies, GUINT_TO_POINTER(cookie)) &&
+        g_app && g_app->gapp)
+        gtk_application_uninhibit(g_app->gapp, cookie);
+    if (JS_IsObject(this_val))
+        JS_SetPropertyStr(ctx, (JSValue)this_val, "Active", JS_FALSE);
+    return JS_UNDEFINED;
+}
+
+static JSValue js_inhibit(JSContext *ctx, JSValueConst this_val,
+                          int argc, JSValueConst *argv)
+{
+    if (argc < 1 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx,
+            "Application.Inhibit(reason, [what]) needs a reason the user will read");
+
+    GtkApplicationInhibitFlags flags = 0;
+    if (argc < 2 || JS_IsUndefined(argv[1])) {
+        flags = GTK_APPLICATION_INHIBIT_SUSPEND;
+    } else {
+        if (!JS_IsArray(argv[1]))
+            return JS_ThrowTypeError(ctx,
+                "Application.Inhibit: what is an array of \"Suspend\", \"Idle\", \"Logout\", \"Switch\"");
+        int64_t n = 0;
+        JSValue len = JS_GetPropertyStr(ctx, argv[1], "length");
+        JS_ToInt64(ctx, &n, len);
+        JS_FreeValue(ctx, len);
+        for (int64_t i = 0; i < n; i++) {
+            JSValue v = JS_GetPropertyInt64(ctx, argv[1], i);
+            const char *s = JS_IsString(v) ? JS_ToCString(ctx, v) : NULL;
+            JS_FreeValue(ctx, v);
+            GtkApplicationInhibitFlags f = 0;
+            for (size_t k = 0; s && k < G_N_ELEMENTS(inhibit_reasons); k++)
+                if (strcmp(s, inhibit_reasons[k].name) == 0)
+                    f = inhibit_reasons[k].flag;
+            if (!f) {
+                JSValue e = JS_ThrowTypeError(ctx,
+                    "Application.Inhibit: \"%s\" is not one of \"Suspend\", \"Idle\", \"Logout\", \"Switch\"",
+                    s ? s : "(not a string)");
+                if (s) JS_FreeCString(ctx, s);
+                return e;
+            }
+            JS_FreeCString(ctx, s);
+            flags |= f;
+        }
+        if (!flags)
+            return JS_ThrowTypeError(ctx,
+                "Application.Inhibit: an empty list inhibits nothing; leave it out for [\"Suspend\"]");
+    }
+
+    const char *reason = JS_ToCString(ctx, argv[0]);
+    if (!reason)
+        return JS_EXCEPTION;
+
+    /* No GtkApplication is a console project, and nothing there to ask with. */
+    guint cookie = 0;
+    if (g_app && g_app->gapp && (flags & ~INHIBIT_HONOURED) == 0) {
+        cookie = gtk_application_inhibit(g_app->gapp,
+                                         gtk_application_get_active_window(g_app->gapp),
+                                         flags, reason);
+        if (cookie) {
+            if (!inhibit_cookies)
+                inhibit_cookies = g_hash_table_new(NULL, NULL);
+            g_hash_table_add(inhibit_cookies, GUINT_TO_POINTER(cookie));
+        }
+    }
+    JS_FreeCString(ctx, reason);
+
+    JSValue out = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, out, "Active", JS_NewBool(ctx, cookie != 0));
+    JS_SetPropertyStr(ctx, out, "By", JS_NewString(ctx, cookie ? INHIBIT_BY : ""));
+    JSValue id = JS_NewUint32(ctx, cookie);
+    JS_SetPropertyStr(ctx, out, "Release",
+                      JS_NewCFunctionData(ctx, inhibit_release, 0, 0, 1, &id));
+    JS_FreeValue(ctx, id);
+    return out;
+}
+
+/*
  * Application.HasCommand(name): is there such a program on the PATH?
  *
  * The same question `HasIcon` answers about an icon, and it exists for the same
@@ -2058,6 +2183,24 @@ static bool install_globals(BtaApp *app)
      */
     JS_SetPropertyStr(ctx, application, "Quit",
                       JS_NewCFunction(ctx, js_quit, "Quit", 1));
+    /* Inhibit(reason, [what]) -> object
+     *   keep the session from doing something while work runs — a backup, an
+     *   export, a long download. `what` is any of `"Suspend"`, `"Idle"` (the
+     *   screen blanking), `"Logout"`, `"Switch"` (switching user), and
+     *   `["Suspend"]` when left out; `reason` is what the desktop shows the
+     *   user. Answers `{ Active, By, Release() }`: **`Active` says whether this
+     *   machine agreed**, and `false` is an answer, never a throw — a console
+     *   project, or a platform that cannot hold all of `what` (macOS holds only
+     *   `"Logout"`, Windows has no `"Switch"`), asks nothing and answers
+     *   `false`. `By` is `"Portal"` on Linux, `"PowerRequest"` on Windows,
+     *   `"AppKit"` on macOS, `""` when not active. **On Linux the portal's
+     *   refusal is not visible**: `Active` is *asked*, and a desktop whose
+     *   portal has no Inhibit (XFCE's, by default) refuses it silently.
+     *   `Release()` lets go, and twice is harmless; quitting releases
+     *   everything
+     */
+    JS_SetPropertyStr(ctx, application, "Inhibit",
+                      JS_NewCFunction(ctx, js_inhibit, "Inhibit", 2));
 
     /* A directory of its own under the user's config, created up front so
      * saving a setting is one File.Save and no ceremony.  Named after the

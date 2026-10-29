@@ -12154,6 +12154,15 @@
           "Native": true
         },
         {
+          "Name": "Inhibit",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(reason, [what])",
+          "Returns": "object",
+          "Doc": "keep the session from doing something while work runs — a backup, an export, a long download. `what` is any of `\"Suspend\"`, `\"Idle\"` (the screen blanking), `\"Logout\"`, `\"Switch\"` (switching user), and `[\"Suspend\"]` when left out; `reason` is what the desktop shows the user. Answers `{ Active, By, Release() }`: **`Active` says whether this machine agreed**, and `false` is an answer, never a throw — a console project, or a platform that cannot hold all of `what` (macOS holds only `\"Logout\"`, Windows has no `\"Switch\"`), asks nothing and answers `false`. `By` is `\"Portal\"` on Linux, `\"PowerRequest\"` on Windows, `\"AppKit\"` on macOS, `\"\"` when not active. **On Linux the portal's refusal is not visible**: `Active` is *asked*, and a desktop whose portal has no Inhibit (XFCE's, by default) refuses it silently. `Release()` lets go, and twice is harmless; quitting releases everything",
+          "Native": true
+        },
+        {
           "Name": "Libraries",
           "Kind": "Method",
           "Params": 1,

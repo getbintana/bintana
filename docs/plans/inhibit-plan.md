@@ -1,7 +1,8 @@
 # Keeping the machine awake, on every desktop
 
-**Not started; the shape chosen (`Application.Inhibit`), stage 0 measured on
-Linux/XFCE (GTK answers a cookie for an inhibit the portal refused).** Asked for by the owner on 2026-10-28, with
+**Stage 1 done (2026-10-29): `Application.Inhibit` on `gtk_application_inhibit`.
+Stage 2, our own roads, is the improvement still to make** -- because GTK
+answers a cookie for an inhibit the portal refused, measured below. Asked for by the owner on 2026-10-28, with
 the condition that it be argued across desktops the way
 [keyring-plan.md](keyring-plan.md) argues a store: *what the application
 needed* is one verb, and *who answers it* is different on every platform.
@@ -102,11 +103,39 @@ hold.Release();
 - **`Active: false` is an answer, never a throw.**
 - Released on exit, as every platform does anyway.
 
-## Decisions still open
+## Stage 1, as built (2026-10-29)
 
-1. **GTK first, or our own roads first?** GTK alone is one call and wrong on
-   macOS and on old GTK; our own is logind + ScreenSaver on Linux (the portal
-   inside Flatpak), `PowerSetRequest` on Windows, IOKit on macOS.
+`js_inhibit` in `runtime/src/bta_runtime.c`, over `gtk_application_inhibit`
+with the active window:
+
+- A list of what to hold that this platform's GTK cannot hold **in full** is
+  not asked at all, and answers `Active: false`: the honoured set is all four
+  on Linux, everything but `Switch` on Windows, and `Logout` alone on macOS,
+  where GTK would answer a cookie for a suspend it does not prevent.
+- `By` is `"Portal"`, `"PowerRequest"` or `"AppKit"`, and `""` when not active.
+- A console project (no `GtkApplication`) answers `Active: false`.
+- Live cookies are kept so a second `Release()` does nothing, since
+  `gtk_application_uninhibit` warns about a cookie it does not know.
+- **Known wrong answer, left for stage 2**: on Linux `Active` is *asked*, since
+  GTK does not report the portal's `Response`. Measured with the built runtime
+  on this desktop, on the user's bus and on a private one: `Active: true,
+  By: "Portal"`, and the portal logged "Inhibiting other than idle not
+  supported".
+- Tests (`testInhibit` in tests/widgets) cover only the refusals: an inhibit
+  that is made is made on the suite's session bus, which on a desktop is the
+  user's.
+
+## Stage 2, the improvement
+
+The roads in "What this decided" above, replacing GTK on Linux first, since
+that is where its answer is wrong on a default install: logind for `Suspend`
+(and `idle` as the floor), `org.freedesktop.PowerManagement` or
+`org.freedesktop.ScreenSaver` for `Idle`, the portal **with its `Response`
+read** inside a sandbox, and `By` naming which one took (`"Logind"`,
+`"PowerManagement"`, `"ScreenSaver"`, `"Portal"`). Then IOKit on macOS, which
+turns its `Active: false` for `Suspend`/`Idle` into a real hold, and
+`PowerSetRequest` of our own on Windows for builds against a GTK older than
+its implementation. The JavaScript shape does not change.
 
 ## Stage 0, before any code
 
@@ -126,10 +155,14 @@ with `SUSPEND`, `IDLE` and `LOGOUT`, `dbus-monitor` watching the calls:
 - **GTK goes to the portal even outside a sandbox**, with or without
   `GDK_DEBUG=portals`: `CreateMonitor`, then `org.freedesktop.portal.Inhibit.Inhibit`.
 - **The portal fails, and GTK answers a cookie anyway.** `xdg-desktop-portal-gtk`
-  (the only backend in `portals.conf` here) replies
-  `org.freedesktop.portal.Error.Failed` -- it forwards to
-  `org.gnome.SessionManager`, which XFCE does not have (it owns
-  `org.xfce.SessionManager`). `gtk_application_inhibit` had already returned
+  1.15.3 (the only backend in `portals.conf` here) replies
+  `org.freedesktop.portal.Error.Failed`. It uses `org.gnome.SessionManager`
+  **only when that name exists**, which on XFCE it does not; otherwise it falls
+  back to `org.freedesktop.ScreenSaver`, and for anything but `Idle` it answers
+  "Inhibiting other than idle not supported" (both in its strings and in the
+  journal). On XFCE nothing owns `org.freedesktop.ScreenSaver` either, so even
+  `Idle` fails ("el proxy no tiene dueño", in the user journal).
+  `gtk_application_inhibit` had already returned
   cookie `1`, for all three flags. Nothing appeared in `systemd-inhibit --list`
   or in xfce4-power-manager's `GetInhibitors`.
   **So the silent wrong answer is not only macOS: it is every desktop whose
@@ -151,7 +184,8 @@ with `SUSPEND`, `IDLE` and `LOGOUT`, `dbus-monitor` watching the calls:
     missing here too.
   - Windows and macOS.
 
-**What this decides** (decision 1, proposed): **our own roads**, with GTK
+**What this decided** (decision 1, the owner, 2026-10-29): **GTK now, as
+stage 1, and our own roads as stage 2.** Stage 2 is: our own roads, with GTK
 playing no part. On Linux outside a sandbox, logind for `Suspend`, with
 `Idle` through `org.freedesktop.ScreenSaver` or `PowerManagement`, whichever
 is owned, and through logind `idle` as the floor. Inside a sandbox the portal,

@@ -574,7 +574,7 @@ const TESTS = [
     /* Children too: a file with `export` is a module. */
     "Modules", "Imports", "Records", "DataBinding", "SettableCache",
     "Time",
-    "Stopwatch", "UndoStack", "Network",
+    "Stopwatch", "UndoStack", "Network", "Inhibit",
     "Shortcut", "Decimal", "FieldDecimal",
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
@@ -25422,6 +25422,22 @@ class Form1 extends Form {
             eq("...and that reference really was the last", srv, null);
             done();
         }, (e) => done(`a server dropped in its handler cut the answer: ${e.Message}`));
+    }
+
+    /* --- keeping the session awake ------------------------------------------
+     *
+     * Only the refusals: an inhibit that is made is made on whatever session
+     * bus the suite runs on, which on a desktop is the user's own, and no test
+     * suspends anybody's screensaver. What GTK and the portal answer is
+     * docs/plans/inhibit-plan.md's stage 0.
+     */
+    testInhibit() {
+        throws("Inhibit needs a reason", () => Application.Inhibit());
+        throws("that is a string", () => Application.Inhibit(3));
+        throws("a reason it does not have is refused",
+               () => Application.Inhibit("x", ["Suspend", "Nap"]));
+        throws("what is a list", () => Application.Inhibit("x", "Suspend"));
+        throws("and an empty one inhibits nothing", () => Application.Inhibit("x", []));
     }
 
     /* --- whether there is a network, and whether a host answers -------------
