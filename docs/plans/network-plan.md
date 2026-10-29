@@ -1,6 +1,6 @@
 # Whether there is a network, and what kind
 
-**Not started; stage 0 measured, the API to discuss.** Asked for by the owner
+**Not started; stage 0 measured, the shape chosen (`System.Network`), three details open.** Asked for by the owner
 on 2026-10-28 with the condition that the shape be compared with what other
 languages offer before anything is built, and that **discovering captive
 portals** be treated as part of it. The first caller is the owner's
@@ -36,6 +36,9 @@ the fact: an `Http` error's `kind` is `Unreachable` (see `HttpClient`).
 | **Windows** Network List Manager / WinRT `ConnectionProfile` | `NLM_CONNECTIVITY` | IPv4/IPv6 *Internet* vs *LocalNetwork* vs *Subnet* | via NCSI | `NetworkCostType`: `Unrestricted`, `Fixed`, `Variable` | `NetworkStatusChanged` |
 | **Android** `ConnectivityManager` | an active network | `NET_CAPABILITY_VALIDATED` | `CAPTIVE_PORTAL` | `NOT_METERED` | callbacks |
 | **.NET** | `NetworkInterface.GetIsNetworkAvailable()` | — | — | — | `NetworkAvailabilityChanged` — *some interface is up*, the weakest answer of all |
+| **VB.NET** `My.Computer.Network` | `IsAvailable` (the same *an interface is up*) | — | — | — | `NetworkAvailabilityChanged`; `Ping(host)` over ICMP |
+| **WinRT** (`Windows.Networking.Connectivity`, .NET on Windows) | `GetInternetConnectionProfile()` | `GetNetworkConnectivityLevel()`: `None`, `LocalAccess`, `ConstrainedInternetAccess`, `InternetAccess` — answered by NCSI's HTTP check | `ConstrainedInternetAccess` | `ConnectionCost`: `NetworkCostType`, `Roaming`, `OverDataLimit` | `NetworkStatusChanged` |
+| **.NET MAUI** (not on Linux) | `Connectivity.NetworkAccess` | `Unknown`, `None`, `Local`, `ConstrainedInternet`, `Internet` | in `ConstrainedInternet` | — | `ConnectivityChanged`; `ConnectionProfiles` for the medium |
 | **The web** | `navigator.onLine` | — | — | `navigator.connection.saveData` (Chromium) | `online`/`offline` events |
 | **Electron** | `net.isOnline()` | — | — | — | — (the web's events) |
 | **Flutter** `connectivity_plus` | a list of `wifi`, `mobile`, `ethernet`, `none`… | — | — | — | a stream; its README warns it says nothing about internet access |
@@ -124,34 +127,72 @@ answers `NotAllowed`.
    optional), costs a request, and asks a third party — it is a verb a program
    calls, never something done behind its back.
 
-## A shape to argue about
+## The shape, as the owner chose it (2026-10-28)
+
+**A new global `System`, and this is its first member.** Chosen over a global
+`Network` of its own, over `Desktop.Network` (the `Desktop.Entries`
+precedent) and over `Environment`, after comparing VB.NET's `My.Computer`
+(which groups `Network`, `Screen`, `Clipboard`, `Audio`…) and Gambas' `System`.
+What goes in it, so the next member does not have to re-argue it:
+
+- **`System` is the machine and the session as they are now** — live state
+  with a change event, and requests to the system (the inhibit plan's
+  `System.Inhibit` is the second member).
+- **`Environment` stays what it is**: a snapshot of what the program was
+  started with (variables, directories, `OS`, `HostName`). Nothing there
+  changes while the program runs.
+- **`Desktop` stays the user's places**: the XDG directories and the menu
+  entries.
+- **`Screen` and `Clipboard` stay where they are.** Moving them into `System`
+  would break every program that uses them for a name; an alias would be two
+  answers to one question. Revisit only if `System` grows to the point where
+  their absence from it confuses.
 
 ```js
-Network.Connectivity   // "None", "Local", "Limited", "Portal", "Full"
-Network.Online         // Connectivity === "Full", and nothing weaker
-Network.Metered        // true on a hotspot or a metered Wi-Fi
-Network.OnChange = () => { if (Network.Online) this.retryQueued(); };
+System.Network.Connectivity   // "Unknown", "None", "Local", "Routed", "Limited", "Portal", "Full"
+System.Network.Online         // Connectivity === "Full", and nothing weaker
+System.Network.Metered        // a hotspot or a metered Wi-Fi
+System.Network.OnChange = () => { if (System.Network.Online) this.retryQueued(); };
+
+System.Network.Reach("cam.local", 554, (ok, why) => …)   // the honest answer, per host
+System.Network.Probe((result) => …)                      // { Connectivity: "Full" | "Portal" | "None", Url }
 ```
 
-- **`Online` means the internet**, never *an interface is up*; the weaker
-  levels are spelled out in `Connectivity` for the program that wants them.
-- **One event, not one per property**, as GLib's `network-changed`: what a
-  program does on a change is look again.
-- **A new global `Network`**, not members of `Http`: `Http` is optional
-  (libsoup) and this is GIO, always there; and a program that talks to a
-  serial port or a database server over the LAN asks the same question.
-- **It is advice, not a guarantee**, and the page says so in its first line:
-  the answer to *can I reach my server* is a request to it. `Online` decides
-  whether to try and what to show, never whether a request will succeed.
+- **`"Unknown"`** until the first answer: the Flatpak portal backend's first
+  read is *offline* (stage 0), and a program must be able to tell *not known
+  yet* from *no*.
+- **`"Routed"`**: a default route and nobody checked the internet. What netlink,
+  the Win32 and base backends and NetworkManager **with its check off** can
+  honestly say instead of their FULL — the last one told apart by reading NM's
+  `ConnectivityCheckEnabled`. .NET has no such level because Windows' NCSI
+  always checks; Linux needs it.
+- **`Online` means the internet** (`Full` only), never *an interface is up* —
+  the trap .NET's `GetIsNetworkAvailable` and VB's `My.Computer.Network.IsAvailable`
+  document.
+- **One event**, as GLib's `network-changed`: what a program does on a change
+  is look again.
+- **`Reach(host, port, callback)`** answers for one host: the portal's
+  `CanReach` inside a sandbox, otherwise a real TCP connection with a short
+  timeout — the question `eneverre-btn` has (*is it the camera or the
+  network?*), and the one stage 0 showed is the only one answered honestly.
+  Not ICMP, which .NET's `Ping` and VB's `My.Computer.Network.Ping` use and
+  which is blocked often enough that *no* proves nothing.
+- **`Probe(callback)`** discovers a captive portal the way NM, Android, Apple
+  and Windows do: a plain-HTTP request to a known URL, compared with the
+  expected answer; a redirect or another page is a portal, and its URL is
+  handed back. A verb the program calls — it needs `Http` (optional), costs a
+  request and asks a third party, so it never runs behind the program's back.
+- **It is advice, not a guarantee**, and the page says so first: the answer to
+  *can I reach my server* is a request to it.
 
-## Decisions for the owner
+## Decisions still open
 
-1. **The levels**: GLib's four plus `None`, or Qt's (`Disconnected`, `Local`,
-   `Site`, `Online`)?
-2. **`Online` as *Full* only**, or as *anything but None* like the web?
-3. **Transport medium**: leave out until asked (the plan's view), or include?
-4. **Where**: a global `Network`, or `Desktop.Network`, or under `Http`?
-5. **macOS**: accept GLib's base answer, or `NWPathMonitor` from the start?
+1. **`Probe`'s default URL**, and whether it is configurable (stage 0: Google's
+   `generate_204` answered in 0.4 s here, Fedora's and Ubuntu's fast too,
+   GNOME's and Microsoft's took 5 s through the DNS fallback).
+2. **macOS**: accept GLib's base answer (which would be `"Routed"` under this
+   shape, honestly) or `NWPathMonitor` from the start.
+3. **Transport medium** (Wi-Fi, cellular): left out until asked.
 
 ## Still to measure
 

@@ -77,8 +77,13 @@ how** it took.
 
 ## A shape to argue about
 
+**Where: `System.Inhibit`**, the owner's choice of 2026-10-28 — `System` is
+the machine and the session as they are now, and requests to them (see
+[network-plan.md](network-plan.md#the-shape-as-the-owner-chose-it-2026-10-28)),
+not `Application`, which is facts about the program.
+
 ```js
-const awake = Application.Inhibit("Backing up 3 GB", { Display: false });
+const awake = System.Inhibit("Backing up 3 GB", { Display: false });
 // awake.Active   -- whether anything on this machine agreed
 // awake.By       -- "Portal", "Logind", "PowerRequest", "IOKit", ""
 // ...
@@ -104,6 +109,7 @@ awake.Release();
    C that `Keyring` already plans.
 2. **The two intents**, or GTK's four flags.
 3. **An object or a cookie.**
+4. ~~Where~~: decided, `System.Inhibit`.
 
 ## Stage 0, before any code
 
