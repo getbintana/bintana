@@ -1,0 +1,7 @@
+{
+  "id": "io.github.getbintana.Gpx",
+  "project": "examples/gpx",
+  "watch": [
+    "examples/gpx"
+  ]
+}

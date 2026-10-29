@@ -1,5 +1,6 @@
 {
   "name": "Gpx",
+  "id": "io.github.getbintana.Gpx",
   "startup": "GpxForm",
   "sources": [
     "Tiles.js",
