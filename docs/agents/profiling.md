@@ -168,15 +168,24 @@ program). Four things measured with it, after the eleventh and twelfth patches:
   top-level function 514 against 477 ms over 1e7, a top-level `const` 292
   against 271, `new` of a top-level class no difference. Every Bintana program
   is globals, and it is not worth changing.
-- **The debugger's per-opcode check shows in `perf annotate`** (`movq
-  0x500(%r12)` and a `testq` before each dispatch), and its cost is the number
-  in patch 4's note: 0 % on arithmetic, about 10 % on property reads. Taking
-  it out of the loop means a second dispatch table swapped in when a debugger
-  attaches -- worth a few points, and measured as noise on a loaded machine
-  (a browser tab at 99 % moved the whole bench from 30 to 39 s, with spreads
-  of 900 ms). **Check `uptime` before believing a bench run.**
+- **The debugger's per-opcode check showed in `perf annotate`** (`movq
+  0x500(%r12)` and a `testq` before each dispatch), and is gone from the
+  ordinary road: a second dispatch table is chosen when a handler is installed
+  (stage 1 of the interpreter plan, built 2026-10-29: 9-13 % on a loop, measured
+  interleaved on one pinned core). **Check `uptime` before believing a bench
+  run** -- a browser tab at 99 % once moved the whole bench from 30 to 39 s,
+  with spreads of 900 ms -- and pin a core (`taskset -c 2`) for a comparison of
+  two binaries: interleaved runs on one core spread 1-2 ms.
+- **What a program pays under the IDE is the hook, not the dispatch.**
+  Attached with nothing armed, a loop ran 13 to 30 times slower than without
+  `--debug`: `find_line_num` per opcode (it decodes pc2line from the start of
+  the function) and a `poll` per line. Both are gone (`debug-plan.md`, *What
+  the debugger costs while it is attached*); 4 to 8 times is what is left, the
+  C call per opcode. Measure it by feeding the child a `continue` on stdin and
+  sending descriptor 3 to `/dev/null`:
+  `(sleep 0.3; echo '{"do":"continue"}'; sleep 60) | build-rwd/bintana --debug <project> 3>/dev/null`.
 
-**What to do about it, and in what order, is [`docs/plans/interpreter-plan.md`](../plans/interpreter-plan.md)**: measure a real workload first, the debugger's check second, inline caches last and only past a gate -- upstream had them and took them out (`7de6d46`).
+**What to do about it, and in what order, is [`docs/plans/interpreter-plan.md`](../plans/interpreter-plan.md)**: measure a real workload first, the debugger's check second (built), inline caches last and only past a gate -- upstream had them and took them out (`7de6d46`).
 
 **And QuickJS is compiled with `-funsigned-char` now**, as upstream's CMake
 and Bellard's Makefile always did -- this tree passed `-w` alone, so the

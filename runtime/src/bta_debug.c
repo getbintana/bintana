@@ -89,8 +89,17 @@ static struct {
      */
     bool        evaluating;
     bool        stop_on_throw;
+    gint64      polled;         /* when the channel was last asked, monotonic µs */
 
 } dbg;
+
+/*
+ * How often a running program asks the IDE whether it said anything. Asking at
+ * every new line was a `poll` per line: half of what a loop paid under the IDE
+ * with nothing armed (14 -> 423 ms, measured; see docs/agents/profiling.md). A
+ * *Pause* that waits 5 ms is one nobody can see.
+ */
+#define POLL_EVERY_US 5000
 
 /* Declared here because `bta_debug_compiled` is the entry point and reads like
  * one: what a file just compiled means for the breakpoints already armed is the
@@ -939,6 +948,27 @@ static BtaBreak *break_at(const char *file, int line)
     return fallback;
 }
 
+/* Is anything armed on this line number, in any file? The question before
+ * `break_at`, which needs the file as a string to answer. */
+static bool break_on_line(int line)
+{
+    for (guint i = 0; i < dbg.breaks->len; i++)
+        if (((BtaBreak *)g_ptr_array_index(dbg.breaks, i))->line == line)
+            return true;
+    return false;
+}
+
+/* Is it time to ask the IDE whether it said anything? See POLL_EVERY_US. */
+static bool channel_due(void)
+{
+    gint64 now = g_get_monotonic_time();
+
+    if (now - dbg.polled < POLL_EVERY_US)
+        return false;
+    dbg.polled = now;
+    return true;
+}
+
 static bool step_wants_this(int depth_now)
 {
     switch (dbg.mode) {
@@ -953,9 +983,10 @@ static bool step_wants_this(int depth_now)
 /*
  * Has the IDE said anything while the program was running?
  *
- * Asked only where the program has just moved to a new line, which is rare
- * enough to be free and often enough that *Pause* answers in no time a person
- * can measure. Without it a pause would have to wait for a breakpoint, which is
+ * Asked where the program has just moved to a new line, and at most once every
+ * POLL_EVERY_US: once per line was a `poll` per line, which was not free, and
+ * this is still often enough that *Pause* answers in no time a person can
+ * measure. Without it a pause would have to wait for a breakpoint, which is
  * exactly the situation somebody presses Pause in: a program that is not going
  * to reach one.
  */
@@ -1013,6 +1044,7 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
     BtaBreak *bp;
     int       depth_now;
     bool      wanted;
+    bool      ask;
 
     (void)opaque;
 
@@ -1046,14 +1078,23 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
      * **What it still cannot see** is a loop written entirely on one line --
      * `for (let i = 0; i < 3; i++) total += i;` never leaves the line, so a
      * breakpoint on it stops once. Telling those apart wants the pc rather
-     * than the line, which is where stage 5 of docs/plans/debug-plan.md
-     * would go. */
+     * than the line. */
     if (!JS_DebugPosition(ctx, pc, &file_atom, &line))
+        return;
+
+    /*
+     * The cheap half of a new line: running, nothing armed on this line number
+     * and the channel not due, which is nearly every line of a program under
+     * the IDE. The depth is a walk of the whole stack and the file a string, so
+     * neither is worked out for a line that cannot stop.
+     */
+    ask = dbg.attached && channel_due();
+    if (!ask && dbg.mode == RUN && !break_on_line(line))
         return;
 
     depth_now = JS_DebugDepth(JS_GetRuntime(ctx));
 
-    if (dbg.attached)
+    if (ask)
         take_messages(ctx, depth_now);
 
     wanted = step_wants_this(depth_now);

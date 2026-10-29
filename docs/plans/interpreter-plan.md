@@ -1,6 +1,6 @@
 # The interpreter: what is left to make faster, and in what order
 
-**Not started** (2026-10-10). The cheap half is done: the GCC 14+ fix
+**Stage 1 built** (2026-10-29), stages 0 and 2 not started. The cheap half is done: the GCC 14+ fix
 (`2f0aa72`, two to three times faster), the release builds optimised
 (`RelWithDebInfo`), and the eleventh and twelfth fork patches (`string2`
 34.8 -> 3.9 s, `string1` 10.3 -> 5.5 s). `tests/bench` went **65.5 -> 30.0 s**
@@ -50,47 +50,60 @@ number that ended it.
 Stage 1 does not wait for the gate: it is small, measured already, and costs
 nothing a program can see.
 
-## Stage 1: the debugger's check out of the loop
+## Stage 1: the debugger's check out of the loop -- **built**
 
-Patch 4 puts `if (unlikely(rt->debug_handler))` before every opcode
-(`BTA_DEBUG_STEP` in the `SWITCH` macro). Measured after the GCC fix: **0 % on
-arithmetic, about 10 % on property reads** (507-510 against 565-570 ms), with
-no debugger attached.
+**Built 2026-10-29**, as the third commit of patch 4 (not a nineteenth patch: it
+changes how patch 4's hook is reached, not what the fork offers). Patch 4 had
+put `if (unlikely(rt->debug_handler))` before every opcode (`BTA_DEBUG_STEP` in
+the `SWITCH` macro).
 
 **The shape**: with `DIRECT_DISPATCH` the loop jumps through
-`dispatch_table[256]`. A second table whose every entry is one trampoline
-label -- call the hook, then `goto *dispatch_table[opcode]` -- and a local
-`const void * const *table` chosen once at the top of `JS_CallInternal` from
-`rt->debug_handler`. The plain road then has no check at all; the debug road
-pays one extra indirect jump, which next to a hook that runs C per opcode is
-nothing.
+`dispatch_table[256]`. A second table, `debug_table`, has every entry pointing
+at one trampoline label -- call the hook with `pc - 1`, then
+`goto *dispatch_table[opcode]` -- and a local `table` is chosen once at the top
+of `JS_CallInternal` from `rt->debug_handler`. The plain road has no check at
+all; the debug road pays one extra indirect jump.
 
 **Why choosing at entry is enough**: `bta_debug.c` installs the handler once,
 before the first line runs, and never removes it (detaching disarms the
 breakpoints, not the handler). So the handler is a constant of the process,
-and a frame cannot start under one table and need the other. **That is the
-invariant to write beside the code**, because a future *attach to a running
-program* breaks it -- and then the table has to be re-read on a backward jump
-and at a call, which is where the check would go.
+and a frame cannot start under one table and need the other. **That invariant
+is written beside the code**, because a future *attach to a running program*
+breaks it -- and then the table has to be re-read on a backward jump and at a
+call. The `switch` spelling (`!DIRECT_DISPATCH`, MSVC's) keeps the branch;
+MinGW has computed goto, so no platform this tree ships loses anything.
 
-Things to settle while doing it:
+**Measured**, `RelWithDebInfo`, the binary before against after, built from the
+same tree, interleaved four times on one pinned core (`taskset -c 2`), best of
+five per run, 3 000 000 turns. The spread between runs was 1-2 ms:
 
-- The `switch` spelling (`!DIRECT_DISPATCH`, which is MSVC's) keeps the branch
-  as it is. Windows builds with MinGW, which has computed goto, so no platform
-  this tree ships loses anything.
-- **How to assert it without a clock**, which the patch rule demands (*dropping
-  it does not fail to build*). The ratio trick of patch 12 needs two roads of
-  one machine; here the two roads are *with a debugger* and *without*, and both
-  exist before the patch too. Candidate: a child under `--debug` with no
-  breakpoint against the same loop without, where the patch should widen the
-  ratio. If no ratio is stable enough, say so in `docs/agents/profiling.md` and let the bench
-  be the record -- an assertion that flakes is worse than none.
-- Re-measure with `tests/bench`, and the property-read microbenchmark from
-  patch 4's note, back to back.
+| loop | before | after | |
+|---|---|---|---|
+| arithmetic | 71-72 ms | 62-63 ms | **-13 %** |
+| a call per turn | 105-106 ms | 96-97 ms | **-9 %** |
+| three property reads | 108-109 ms | 98-100 ms | **-9 %** |
+| the same, under `--debug`, nothing armed | 938-944 / 1667-1676 / 1314-1320 | 958-965 / 1674-1679 / 1330-1340 | +1.5 % |
 
-Expected: a few points on property-heavy code (`btree`, `nbody`, the IDE),
-nothing on arithmetic. It becomes patch 13, and stage 5 of
-`debug-plan.md` (the bytecode patch) is retired by it.
+Arithmetic gained more than the 0 % patch 4's note predicted: that note
+measured the hook compiled out against compiled in, on another day; why the
+branch cost the integer loop this time was not looked into (`perf` could not
+open events on the machine this was measured on).
+
+**No assertion holds it, on purpose.** The patch rule asks for one that goes
+red when the patch is dropped, and the only thing dropping it changes is a
+clock: both roads exist before the patch and after it, the debugger's tests
+pass on both (they exercise the trampoline, which is the half that can be
+*wrong*), and a 10 % ratio between two children is inside what a loaded machine
+moves (a browser tab once moved the bench 30 %). The table above is the record.
+
+**Measuring it found the bigger cost, on the debugger's side**: under the IDE,
+nothing armed, a loop ran 13 to 30 times slower than without a debugger --
+the hook decoded pc2line from the start of the function per opcode and polled
+the channel per line. That is fixed too (the fourth commit of patch 4 and
+`bta_debug.c`), with the numbers in
+[`debug-plan.md`](debug-plan.md#what-the-debugger-costs-while-it-is-attached).
+
+Stage 5 of `debug-plan.md` (the bytecode patch) is retired by this.
 
 ## Stage 2: inline caches for `get_field` and `put_field` -- only past the gate
 
@@ -178,7 +191,7 @@ Recorded so they are not tried again:
 | stage | what | size | risk | waits for |
 |---|---|---|---|---|
 | 0 | the table, and `perf` over real workloads | an afternoon | none | nothing |
-| 1 | a second dispatch table for the debugger | a day | low: one macro, and the debugger's tests | nothing |
+| 1 | a second dispatch table for the debugger | a day | low: one macro, and the debugger's tests | **built** 2026-10-29 |
 | 2 | monomorphic inline caches, own properties | days | high: wrong values, not crashes | the gate in stage 0 |
 | 2b | the prototype half | days | high | stage 2 paying |
 

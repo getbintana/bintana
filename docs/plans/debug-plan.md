@@ -5,9 +5,10 @@ breakpoints and logpoints, stopping, stopping where a throw happens, the call
 stack, standing in a frame further up, its arguments and variables by name,
 step into / over / out, run to the cursor, an immediate window, watches, and
 changing a value. **Ten of the eleven.**
-What is left is stage 5 — the bytecode patch, which is about what the hook costs
-and not about what the debugger does — and the one thing deliberately not built
-first is [at the end](#dap-the-plan-to-evaluate).
+Stage 5 -- the bytecode patch, which was about what the hook costs and not about
+what the debugger does -- is [retired](#stage-5-retired-by-a-second-dispatch-table):
+a second dispatch table took the hook out of the ordinary road (2026-10-29). The
+one thing deliberately not built first is [at the end](#dap-the-plan-to-evaluate).
 
 This document is the design as well as the record: what *is* settled is recorded
 as settled, with the number or the prior art that settled it, so that whoever
@@ -150,6 +151,8 @@ So **technique 1 is scaffolding and cannot stay**, and technique 2 is what gets
 built: zero cost while nothing is armed, because bytecode with no breakpoints in
 it is byte for byte today's. Technique 1 is still worth writing first — it is an
 afternoon, and it is what technique 2 is then compared against for correctness.
+**It stayed in the end, behind a table rather than a branch** -- see
+[stage 5](#stage-5-retired-by-a-second-dispatch-table).
 
 ## Where the program runs, and how it stops
 
@@ -262,7 +265,7 @@ useless exactly where it matters. Expanding is a second `locals` against a path.
 | **3** | an object shown by what is in it, watches, the immediate window, changing a value | 8–10 | **built** |
 | **4** | conditional breakpoints and logpoints — the condition is evaluated in the frame and only for the breakpoint that matched, and a `log` records an expression without stopping | 2 | **built** |
 | **6** | stopping where a throw happens, with the frame that built it still alive | 3 (see below) | **built** |
-| **5** | technique 2, the bytecode patch, measured against the same benchmark | — | the one left |
+| **5** | technique 2, the bytecode patch, measured against the same benchmark | — | **retired**: a second dispatch table bought back the cost |
 
 Three things stages 3, 4 and 6 turned out to need, none of them foreseen here:
 
@@ -301,7 +304,7 @@ running it:
   of lines is the whole file's, so a breakpoint past the last statement of a
   method moves into the next one. Visible rather than silent -- the mark moves
   and the log says so -- and the fix wants the line ranges per function, which
-  is the same table stage 5 needs to patch a pc.
+  is the same table a pc-level breakpoint would need.
 - **"Have we left this line?" is a question about a frame, not about the
   program.** A single "last line seen" stopped a breakpoint inside a function
   called three times from firing more than once, and then made a line that
@@ -309,42 +312,52 @@ running it:
   `JSStackFrame` grew a `debug_line` of its own; the memory belongs to the frame
   because the question does.
 
-## Stage 5, which is the one left
+## Stage 5, retired by a second dispatch table
 
-It is about what the hook **costs** and not about what the debugger does, which
-is why it is last: everything in the eleven points works without it, and what it
-buys back is the +12 to +16 % measured above.
+Stage 5 was about what the hook **costs** and not about what the debugger does,
+and the cost it was meant to buy back is gone without it (2026-10-29). With
+computed goto, `JS_CallInternal` now jumps through one of two tables chosen once
+at entry: the ordinary `dispatch_table` when no handler is installed, with no
+check in front of the jump, and a `debug_table` whose every entry is one
+trampoline -- call the handler with the opcode's pc, then jump where the
+ordinary table would have. It is the third commit of patch 4 and stage 1 of
+[`interpreter-plan.md`](interpreter-plan.md), which has the numbers: **the
+ordinary road 9 to 13 % faster**, the debugger's road 1.5 % slower, which is one
+indirect jump next to a C call per opcode.
 
-The shape is settled, and working through it while building the rest answered
-the question that made it look hard:
+**Choosing at entry is enough because the handler is a constant of the
+process**: `bta_debug_start` installs it before a line of the project runs and
+nothing removes it (detaching disarms the breakpoints, not the handler). An
+*attach* to a program already running would break that, and the table would
+then have to be read again at a call and on a backward jump -- the comment
+beside the macro says so.
 
-- **An opcode is one byte; its operands are the rest.** So replacing the opcode
-  *byte* of an instruction with one of our own is safe at any instruction, and
-  the alignment scare -- "you cannot put a 1-byte opcode where a 5-byte one was"
-  -- is about the whole instruction and not about the byte that names it.
-- So `OP_bta_break` calls the hook and then **dispatches to the opcode it
-  replaced**, with the pc already past the opcode byte, which is exactly where
-  that opcode expects its operands. No restore-step-rearm dance; the interpreter
-  does what it would have done, one indirect jump later.
-- Which means a table of `(pc → opcode it replaced)` per armed breakpoint, and
-  nothing at all when none is armed: **the bytecode with no breakpoints in it is
-  byte for byte today's**, and the branch in `SWITCH` goes away with it.
+**The bytecode patch is not built and no longer has a reason to be.** What it
+would still buy is the one thing a line cannot tell apart, a loop written on one
+line, which wants the pc rather than the line; that is a question about what
+the debugger *does*, and it waits for somebody to ask it.
 
-Two things to work out that are not yet answered, and they are the real cost:
+### What the debugger costs while it is attached
 
-- **Holding on to a `JSFunctionBytecode`.** Today `JS_DebugLines` walks the
-  compiled form and lets it go; arming a breakpoint needs to keep the function
-  that owns the line, which means a reference the collector honours and a way to
-  hear about one being freed.
-- **Adding an opcode.** `quickjs-opcode.h` is read by more than the dispatch --
-  the bytecode reader and writer among them -- so the new one has to be placed
-  where it cannot renumber anything that is serialised. This is the part to
-  measure twice: an interpreter that is subtly wrong is the failure mode this
-  whole patch already had to be careful about once, in the arithmetic.
+Measured the same day, on the way: **a loop under the IDE with nothing armed ran
+30 times slower than without the debugger** (a three-line loop body, 300 000
+turns: 14 against 428 ms, `RelWithDebInfo`). Not the dispatch -- the hook.
+Per opcode, `JS_DebugPosition` ran `find_line_num`, which decodes pc2line from
+the start of the function every time; and per new line `on_step` asked the
+channel with a `poll`, walked the whole stack for its depth and made a string of
+the file name, for a line that could not stop. Now:
 
-Until it is built, `--debug` is what pays: a program run under the debugger is
-not a program being timed, and the branch is what an ordinary run pays for
-having the feature at all.
+- the frame keeps the pcs of the pc2line entry it was last found in
+  (`debug_pc_lo`/`debug_pc_hi`, beside `debug_line`), and the table is decoded
+  only when the pc leaves it -- the fourth commit of patch 4;
+- the channel is asked at most every 5 ms (`POLL_EVERY_US`), not at every line;
+- the depth and the file are worked out only when the line can stop: a step
+  is in progress, the channel is due, or something is armed on that line
+  number in some file (`break_on_line`).
+
+**428 -> 101 ms** for the three-line loop, and **940 -> 474 ms** for one written
+on a single line, against 13 and 62 ms with no debugger. What is left is the C
+call per opcode, which is what a per-opcode hook is.
 
 ## What it costs outside the code
 

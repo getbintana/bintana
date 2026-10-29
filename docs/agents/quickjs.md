@@ -148,18 +148,28 @@ refusal is still a refusal. The message goes back to the vague one, and
 `JS_DebugEval` and `JS_DebugSetLocal` -- and `JSStackFrame` gains two fields. Everything that *decides* anything is in
 `runtime/src/bta_debug.c`; the vendor only exposes what its own frames already
 hold. `docs/plans/debug-plan.md` is the design and the measurements.
-- **The hook is a branch in the `SWITCH` macro of `JS_CallInternal`**, both
-  spellings of it (the `switch` and the computed-goto one). With no handler
-  installed it is one predictable branch, and what that costs is the number in
-  the plan: **+12.5 % on tight arithmetic and +16.4 % on property reads**, off,
-  against the same tree built without it and measured back to back. That is why stage 5
-  of the plan is the bytecode patch and why this one is called scaffolding in
-  its own comment. **Those numbers predate the GCC fix above and no longer
-  hold**: measured again with it, Release, the hook compiled out against
-  compiled in and off, it is **0 %** on the integer loop (572-582 against
-  577-587 ms) and **about 10 %** on property reads (507-510 against 565-570 ms).
-  Most of what was charged to the branch was the partial-`JSValue` codegen it
-  sat beside, which makes stage 5 much less pressing than the plan argues.
+- **The hook is reached through a second dispatch table**, not a branch
+  (2026-10-29, the third commit). With computed goto, `JS_CallInternal` picks
+  `dispatch_table` or `debug_table` once at entry from `rt->debug_handler`;
+  every entry of `debug_table` is the trampoline `case_debug_step`, which calls
+  the handler with `pc - 1` and jumps where `dispatch_table` would have. The
+  `switch` spelling keeps the old branch. **What it rests on**: the handler is
+  installed before any code runs and never removed, so a frame cannot need the
+  other table halfway -- an *attach* would break that, and the comment beside
+  the macro says where the table would then be re-read. Dropping it does not
+  fail to build and fails no test: what it changes is a clock (the ordinary
+  road 9-13 % faster), and the record is the table in
+  `docs/plans/interpreter-plan.md`, stage 1. Before it, the hook was a branch
+  in both spellings of `SWITCH`, measured at **+12.5 % / +16.4 %** before the
+  GCC fix and **0 % / about 10 %** after (arithmetic / property reads).
+- **`JS_DebugPosition` decodes pc2line once per entry** (the fourth commit):
+  the frame keeps `debug_pc_lo`/`debug_pc_hi`, the pcs of the entry
+  `debug_line` was read from, and `bta_line_range` -- `find_line_num`'s decoder
+  answering the range too -- runs only when the pc leaves it. Per opcode it had
+  decoded from the start of the function, which with the IDE attached and
+  nothing armed made a loop 30 times slower; the numbers are in
+  `docs/plans/debug-plan.md`, *What the debugger costs while it is attached*.
+  Dropping it fails no test either: the debugger's tests pass on both, slower.
 - **`JSStackFrame.this_obj`** exists because `this` is a *parameter* of the call
   and had no slot on the frame: a debugger could read every local of a method
   and not the one name its body uses most. Borrowed like `cur_func` -- the
