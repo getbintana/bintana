@@ -137,11 +137,21 @@ Each is shippable alone.
    a real tablet is the measurement. The cost is one more controller per widget
    (six), which is what the plan's *opt-in by handler* would have saved --
    not worth a per-widget switch until a measurement of the IDE says so.
-3. **`Transform` and `Swipe`.** Only after a real tablet has been measured:
-   if its multi-touch reaches GTK on Windows, both ship everywhere; if not,
-   they ship documented as Linux/macOS-only (macOS is unmeasured). `examples/gpx`
-   is the first consumer and the proof (zoom and pan with two fingers, wheel
-   kept).
+3. **`Transform` and `Swipe` -- built, behind a property; the two-finger half
+   awaits its first run.** `Gestures = true` on a control attaches a grouped
+   zoom and rotate (the centre between the fingers gives the pan, read from the
+   gesture's `update` so a pan with constant distance still raises it) and a
+   swipe. `Transform(phase, dx, dy, scale, angle, x, y)` is deltas since `Begin`,
+   the baseline taken from the **first update** and the angle unwrapped, because
+   GTK's own start values are wrong (about 90 deg, 0.95); it claims the two
+   fingers. A property and not a controller on every widget: three more would
+   be nine. `Swipe` is tested with a real mouse flick; `Transform` cannot be
+   played on an `Xvfb`, so its round trip is `tests/manual/touch/run.sh`, whose
+   probe has `Gestures` on and prints the Begin/End and the last update of a
+   pinch (expect scale 3.5), a rotate (60 deg) and a pan (dx 200). **Windows
+   stays as measured**: one finger as a mouse, so `Transform` is never raised
+   there until a real tablet says otherwise; `examples/gpx` (zoom with two
+   fingers, wheel kept) is not converted yet and should wait for that.
 4. **Documentation**, in the same change as each stage: the description beside
    each event in C, `api.json`, `bintana-docs`, and a paragraph in
    `docs/testing.md` on what is manual.
