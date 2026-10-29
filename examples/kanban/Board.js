@@ -123,6 +123,15 @@
  * question. The check is `columnDeletable`, so the rule is one function and
  * the dialog only asks once it holds.
  *
+ * ## The data is another file
+ *
+ * `BoardData.js` holds the columns, the tasks, the file and the rules about
+ * where a task may go -- `move` works out a drop's order, `addColumn` picks an
+ * id, `load` reads leniently -- and this form holds what is *shown*: the
+ * widgets, the selection, the filter, the drag feedback. The split is the one
+ * between methods that need a window and methods that do not, and it is what
+ * lets `tests/BoardDataTest.js` hold the second kind without opening one.
+ *
  * ## The file holds user data, not prose
  *
  * `kanban.json` lives in `Application.ConfigDirectory` (a project directory
@@ -159,9 +168,9 @@ const COLW = 300;
 
 class Board extends Form {
 
-    /* The board: column defs `{ id, title }` in order, and the tasks. */
-    cols  = [];
-    tasks = [];
+    /* The data: columns, tasks, the file. See `BoardData.js`; this form holds
+     * what is *shown* and asks the model what is *so*. */
+    model = null;
 
     /* The live columns: `{ id, box, list, rows, cards, lblTitle, lblCount }`,
      * with `list` the column's own `Scroller` — the cards are in it, see
@@ -179,26 +188,18 @@ class Board extends Form {
     priFilter = 0;
     priNames  = [];
 
-    /* A note from loading (rows left out, lenient reads), shown in the
-     * status line until the next change rewrites it. */
-    note = "";
-
     /* Set once there is a board: the guard the `.form` loader needs, since
      * it assigns before `Form_Open`. */
     loaded  = false;
-
-    nextTaskId = 1;
-    nextColN   = 1;
-    path       = "";
 
     Form_Open() {
         const was = Settings.Get("size", null);
         if (was) this.Resize(was.width, was.height);
 
-        this.path = File.Join(Application.ConfigDirectory, "kanban.json");
+        this.model = new BoardData(File.Join(Application.ConfigDirectory, "kanban.json"));
         this.priNames = new Task().PropertyOptions("Priority");
 
-        this.load();
+        this.model.load();
         this.loaded = true;
         this.buildColumns();
         this.rebuildAll();
@@ -210,125 +211,12 @@ class Board extends Form {
         Settings.Set("size", { width: this.Width, height: this.Height });
     }
 
-    /* --- loading, seeding, saving ---------------------------------------- */
-
-    load() {
-        let data = null;
-        if (File.Exists(this.path)) {
-            try {
-                data = File.LoadJson(this.path);
-            } catch (e) {
-                Message.Error("Cannot read {0}: {1}", this.path, e.message);
-            }
-        }
-        if (!data || !data.columns || !data.tasks) {
-            this.seed();
-            return;
-        }
-
-        this.cols = [];
-        for (const c of data.columns) {
-            if (!c || typeof c.id !== "string" || !c.id ||
-                typeof c.title !== "string" || !c.title.trim())
-                continue;
-            this.cols.push({ id: c.id, title: c.title });
-        }
-        if (!this.cols.length) {
-            this.seed();
-            return;
-        }
-
-        const ids = {};
-        for (const c of this.cols) ids[c.id] = true;
-
-        this.tasks = [];
-        const wrong = [];
-        for (const raw of data.tasks) {
-            let t = null;
-            try {
-                t = Task.Load(raw);
-            } catch (e) {
-                wrong.push(e.message);
-                continue;
-            }
-            for (const p of t.Problems) wrong.push(p);
-            if (!ids[t.Column]) {
-                wrong.push(Locale.Text("One task names no column and was left out."));
-                continue;
-            }
-            this.tasks.push(t);
-        }
-
-        this.nextTaskId = 1;
-        for (const t of this.tasks)
-            if (t.Id >= this.nextTaskId) this.nextTaskId = t.Id + 1;
-
-        this.nextColN = 1;
-        for (const c of this.cols) {
-            const m = new Regex("^c(\\d+)$").Match(c.id);
-            if (m && Number(m.Group(1)) >= this.nextColN)
-                this.nextColN = Number(m.Group(1)) + 1;
-        }
-
-        this.note = wrong.length
-            ? Locale.Text("{0} rows could not be read as they are.", wrong.length)
-            : "";
-    }
-
-    /* Something to look at on a first run. An empty board cannot be told
-     * from a broken one — and one overdue card shows what the red meta
-     * line means without a paragraph about it. The titles go through the
-     * catalogue here and never again: see the header. */
-    seed() {
-        this.cols = [
-            { id: "todo",  title: Locale.Text("To do") },
-            { id: "doing", title: Locale.Text("Doing") },
-            { id: "done",  title: Locale.Text("Done") },
-        ];
-        this.nextTaskId = 1;
-        this.nextColN = 1;
-
-        const T = Day.Today;
-        const mk = (o) => {
-            const t = new Task(o);
-            t.Id = this.nextTaskId;
-            this.nextTaskId++;
-            return t;
-        };
-        this.tasks = [
-            mk({ Title: Locale.Text("Draw the board"), Notes: Locale.Text("Cards, columns, and the drag between them."),
-                 Priority: "High", Due: Day.Add(T, 2), Column: "todo", Order: 0 }),
-            mk({ Title: Locale.Text("Write the seed"), Notes: "",
-                 Priority: "Medium", Due: "", Column: "todo", Order: 1 }),
-            mk({ Title: Locale.Text("Drag a card across"), Notes: Locale.Text("It lands where you drop it — between two cards, or past the last one."),
-                 Priority: "Low", Due: "", Column: "doing", Order: 0 }),
-            mk({ Title: Locale.Text("Answer the overdue mail"), Notes: "",
-                 Priority: "Urgent", Due: Day.Add(T, -2), Column: "doing", Order: 1 }),
-            mk({ Title: Locale.Text("First board that saved itself"), Notes: "",
-                 Priority: "Low", Due: Day.Add(T, -30), Column: "done", Order: 0 }),
-        ];
-        this.note = "";
-        this.save();
-    }
-
-    save() {
-        const data = {
-            columns: this.cols.map((c) => ({ id: c.id, title: c.title })),
-            tasks: this.tasks.map((t) => t.Serialize(true)),
-        };
-        try {
-            File.SaveJson(this.path, data);
-        } catch (e) {
-            Message.Error("Cannot write {0}: {1}", this.path, e.message);
-        }
-    }
-
     /* --- the columns, built from data ------------------------------------- */
 
     buildColumns() {
         this.Cols.Clear();
         this.views = [];
-        for (const c of this.cols) this.views.push(this.buildColumn(c));
+        for (const c of this.model.cols) this.views.push(this.buildColumn(c));
     }
 
     buildColumn(c) {
@@ -416,35 +304,10 @@ class Board extends Form {
         return null;
     }
 
-    colDef(id) {
-        for (const c of this.cols)
-            if (c.id === id) return c;
-        return null;
-    }
-
-    colIndex(id) {
-        for (let i = 0; i < this.cols.length; i++)
-            if (this.cols[i].id === id) return i;
-        return -1;
-    }
-
-    taskById(id) {
-        for (const t of this.tasks)
-            if (t.Id === id) return t;
-        return null;
-    }
-
-    endOrder(colId) {
-        let top = -1;
-        for (const t of this.tasks)
-            if (t.Column === colId && t.Order > top) top = t.Order;
-        return top + 1;
-    }
-
     /* --- the columns, and the rows parallel to them ------------------------ */
 
     rebuildAll() {
-        const sorted = this.tasks.slice().sort((a, b) => (a.Order - b.Order) || (a.Id - b.Id));
+        const sorted = this.model.tasks.slice().sort((a, b) => (a.Order - b.Order) || (a.Id - b.Id));
         for (const v of this.views) {
             v.list.Clear();
             v.rows = [];
@@ -579,7 +442,7 @@ class Board extends Form {
     }
 
     restoreSelection() {
-        const t = this.selTask === null ? null : this.taskById(this.selTask);
+        const t = this.selTask === null ? null : this.model.taskById(this.selTask);
         if (!t) {
             this.selCol = null;
             this.selTask = null;
@@ -593,11 +456,11 @@ class Board extends Form {
     }
 
     updateActions() {
-        const t = this.selTask === null ? null : this.taskById(this.selTask);
-        const at = t ? this.colIndex(t.Column) : -1;
+        const t = this.selTask === null ? null : this.model.taskById(this.selTask);
+        const at = t ? this.model.colIndex(t.Column) : -1;
 
         this.BtnLeft.Enabled = t !== null && at > 0;
-        this.BtnRight.Enabled = t !== null && at >= 0 && at < this.cols.length - 1;
+        this.BtnRight.Enabled = t !== null && at >= 0 && at < this.model.cols.length - 1;
         this.BtnEdit.Enabled = t !== null;
         this.BtnDel.Enabled = t !== null;
         this.LblSel.Text = t ? t.Title : Locale.Text("No task selected");
@@ -606,59 +469,27 @@ class Board extends Form {
     /* --- moving ------------------------------------------------------------ */
 
     moveSelected(dir) {
-        const t = this.selTask === null ? null : this.taskById(this.selTask);
+        const t = this.selTask === null ? null : this.model.taskById(this.selTask);
         if (!t) return;
 
-        const to = this.colIndex(t.Column) + dir;
-        if (to < 0 || to >= this.cols.length) return;
-        this.moveTask(t.Id, this.cols[to].id);
+        const to = this.model.colIndex(t.Column) + dir;
+        if (to < 0 || to >= this.model.cols.length) return;
+        this.moveTask(t.Id, this.model.cols[to].id);
     }
 
     BtnLeft_Click()  { this.moveSelected(-1); }
     BtnRight_Click() { this.moveSelected(1); }
 
-    /* What a drop and the two arrow buttons share. `before` is the task the
-     * moved one lands *above*, or null for the end of the column — which is
-     * what the buttons always pass, and a drop below the last card too.
-     *
-     * The column is rebuilt as a list and renumbered from zero, so `Order`
-     * stays dense and the file stays readable. The column it *left* keeps
-     * its gaps: `Order` is only a sort key, and renumbering a column nobody
-     * touched would rewrite rows for nothing. */
+    /* What a drop and the two arrow buttons share: the model works out where
+     * the card lands (`BoardData.move`), and this repaints and saves when it
+     * moved. `before` is the task the moved one lands *above*, or null for the
+     * end of the column. */
     moveTask(id, target, before = null) {
-        const t = this.taskById(id);
-        const cdef = this.colDef(target);
-        if (!t || !cdef) return false;
-
-        const order = [];
-        for (const one of this.tasks)
-            if (one.Column === target && one.Id !== id) order.push(one);
-        order.sort((a, b) => (a.Order - b.Order) || (a.Id - b.Id));
-
-        let at = order.length;
-        if (before !== null) {
-            for (let i = 0; i < order.length; i++)
-                if (order[i].Id === before) { at = i; break; }
-        }
-        order.splice(at, 0, t);
-
-        /* An edit that changes nothing is not an edit: a card dropped back
-         * where it already was must not mark the board or rebuild it. */
-        if (t.Column === target) {
-            let same = true;
-            const was = this.viewOf(target);
-            if (!was || was.rows.length !== order.length) same = false;
-            else for (let i = 0; i < order.length; i++)
-                if (was.rows[i] !== order[i].Id) { same = false; break; }
-            if (same) return false;
-        }
-
-        t.Column = target;
-        for (let i = 0; i < order.length; i++) order[i].Order = i;
+        if (!this.model.move(id, target, before)) return false;
 
         this.selCol = target;
         this.selTask = id;
-        this.save();
+        this.model.save();
         this.rebuildAll();
         this.refilter();
         return true;
@@ -796,7 +627,7 @@ class Board extends Form {
         this.readFilters();
         for (const v of this.views) {
             for (const id of v.rows) {
-                const t = this.taskById(id);
+                const t = this.model.taskById(id);
                 const card = v.cards[id];
                 if (t && card) card.Visible = this.shows(t);
             }
@@ -817,7 +648,7 @@ class Board extends Form {
         for (const v of this.views) {
             let shown = 0;
             for (const id of v.rows) {
-                const t = this.taskById(id);
+                const t = this.model.taskById(id);
                 if (t && this.shows(t)) shown++;
             }
             shownTotal += shown;
@@ -826,11 +657,11 @@ class Board extends Form {
                 : String(v.rows.length);
         }
 
-        const total = this.tasks.length;
+        const total = this.model.tasks.length;
         let status = this.filtering()
             ? Locale.Text("{0} of {1} shown", shownTotal, total)
             : Locale.Plural("{0} task", "{0} tasks", total);
-        if (this.note) status += " · " + this.note;
+        if (this.model.note) status += " · " + this.model.note;
         this.LblStatus.Text = status;
     }
 
@@ -842,63 +673,52 @@ class Board extends Form {
     /* --- tasks -------------------------------------------------------------- */
 
     colTitles() {
-        return this.cols.map((c) => c.title);
+        return this.model.cols.map((c) => c.title);
     }
 
     BtnNew_Click() {
-        TaskDialog.create(this.cols, this.selCol || this.cols[0].id,
+        TaskDialog.create(this.model.cols, this.selCol || this.model.cols[0].id,
                           (data) => this.addTask(data));
     }
 
     addTask(data) {
-        const t = new Task(data);
-        t.Id = this.nextTaskId;
-        this.nextTaskId++;
-        t.Order = this.endOrder(t.Column);
-        this.tasks.push(t);
+        const t = this.model.addTask(data);
         this.selCol = t.Column;
         this.selTask = t.Id;
-        this.note = "";
-        this.save();
+        this.model.note = "";
+        this.model.save();
         this.rebuildAll();
         this.refilter();
         this.say(Locale.Text("Added {0}", t.Title));
     }
 
     editSelected() {
-        const t = this.selTask === null ? null : this.taskById(this.selTask);
+        const t = this.selTask === null ? null : this.model.taskById(this.selTask);
         if (!t) return;
-        TaskDialog.edit(t, this.cols, (data) => this.applyEdit(t.Id, data));
+        TaskDialog.edit(t, this.model.cols, (data) => this.applyEdit(t.Id, data));
     }
 
     BtnEdit_Click() { this.editSelected(); }
 
     applyEdit(id, data) {
-        const t = this.taskById(id);
-        if (!t) return;
-        const moved = data.Column !== t.Column;
-        t.Apply(data);
-        if (moved) t.Order = this.endOrder(t.Column);
-        this.note = "";
-        this.save();
+        if (!this.model.applyEdit(id, data)) return;
+        this.model.note = "";
+        this.model.save();
         this.rebuildAll();
         this.refilter();
     }
 
     BtnDel_Click() {
-        const t = this.selTask === null ? null : this.taskById(this.selTask);
+        const t = this.selTask === null ? null : this.model.taskById(this.selTask);
         if (!t) return;
         Confirm.Ask(Locale.Text("Delete {0}?", t.Title), () => {
-            const kept = [];
-            for (const one of this.tasks)
-                if (one.Id !== t.Id) kept.push(one);
-            this.tasks = kept;
+            this.model.removeTask(t.Id);
             if (this.selTask === t.Id) {
                 this.selTask = null;
                 this.selCol = null;
             }
-            this.note = "";
-            this.save();
+            this.model.note = "";
+            this.model.save();
             this.rebuildAll();
             this.refilter();
             this.say(Locale.Text("Deleted {0}", t.Title));
@@ -910,11 +730,9 @@ class Board extends Form {
     BtnAddCol_Click() {
         ColumnDialog.ask(Locale.Text("Name for the column"), "",
                          this.colTitles(), (name) => {
-            const id = "c" + this.nextColN;
-            this.nextColN++;
-            this.cols.push({ id: id, title: name });
-            this.note = "";
-            this.save();
+            this.model.addColumn(name);
+            this.model.note = "";
+            this.model.save();
             this.buildColumns();
             this.rebuildAll();
             this.refilter();
@@ -922,18 +740,18 @@ class Board extends Form {
     }
 
     renameColumn(id) {
-        const cdef = this.colDef(id);
+        const cdef = this.model.colDef(id);
         if (!cdef) return;
         const taken = [];
-        for (const c of this.cols)
+        for (const c of this.model.cols)
             if (c.id !== id) taken.push(c.title);
         ColumnDialog.ask(Locale.Text("Name for the column"), cdef.title,
                          taken, (name) => {
             cdef.title = name;
             const v = this.viewOf(id);
             if (v) v.lblTitle.Text = name;
-            this.note = "";
-            this.save();
+            this.model.note = "";
+            this.model.save();
         });
     }
 
@@ -947,12 +765,12 @@ class Board extends Form {
     }
 
     deleteColumn(id) {
-        const cdef = this.colDef(id);
+        const cdef = this.model.colDef(id);
         if (!cdef) return;
 
         /* One column is the floor: a board with nowhere to put a task cannot
          * take one, and `BtnNew_Click` would have no column to offer. */
-        if (this.cols.length <= 1) {
+        if (this.model.cols.length <= 1) {
             Message.Error(Locale.Text("{0} is the only column, and the board keeps it.", cdef.title));
             return;
         }
@@ -965,16 +783,13 @@ class Board extends Form {
             return;
         }
         Confirm.Ask(Locale.Text("Delete {0}?", cdef.title), () => {
-            const kept = [];
-            for (const c of this.cols)
-                if (c.id !== id) kept.push(c);
-            this.cols = kept;
+            this.model.removeColumn(id);
             if (this.selCol === id) {
                 this.selCol = null;
                 this.selTask = null;
             }
-            this.note = "";
-            this.save();
+            this.model.note = "";
+            this.model.save();
             this.buildColumns();
             this.rebuildAll();
             this.refilter();

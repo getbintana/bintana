@@ -3,6 +3,7 @@
   "startup": "Board",
   "sources": [
     "Task.js",
+    "BoardData.js",
     "ColumnDialog.js",
     "TaskDialog.js",
     "Board.js"
