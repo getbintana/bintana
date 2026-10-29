@@ -583,7 +583,7 @@ const TESTS = [
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
-    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "Record", "Nested", "Database", "Action", "Groups",
+    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
@@ -6239,6 +6239,33 @@ class Form1 extends Form {
               !b.EventNames().includes("ThemeChange"),
               b.EventNames().join(","));
 
+        b.Delete();
+    }
+
+    /*
+     * `Activate`, `Deactivate` and `StateChange`: what a window says about
+     * itself that the program did not cause.
+     *
+     * **That they fire is not here and cannot be**: the suite runs on a bare
+     * `Xvfb`, and with no window manager nothing ever activates a window or
+     * maximises one. Measured on an `Xvfb` of its own with `xfwm4`, showing a
+     * second form gives `A deactivate` then `B activate`; `Maximized = true`
+     * gives one `StateChange` and `false` another; and closing a form raises
+     * no `Deactivate` on the way out, because a window that is not mapped has
+     * nothing to report (JavaScript in the signal of a hiding window was the
+     * thing to avoid). What is held is that they are declared, which is what
+     * the designer offers and `EventNames` answers.
+     */
+    testWindowEvents() {
+        const names = this.EventNames();
+        for (const e of ["Activate", "Deactivate", "StateChange"])
+            check(`a form says it raises ${e}`, names.includes(e), names.join(","));
+
+        const b = new Button();
+        this.Fixed1.Add(b);
+        for (const e of ["Deactivate", "StateChange"])
+            check(`...and a control does not raise ${e}: it is the window's`,
+                  !b.EventNames().includes(e), b.EventNames().join(","));
         b.Delete();
     }
 

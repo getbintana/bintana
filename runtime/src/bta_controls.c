@@ -236,6 +236,44 @@ static void on_theme_change(GObject *settings, GParamSpec *spec, gpointer data)
     bta_emit(data, "ThemeChange", 0, NULL);
 }
 
+/*
+ * The window gained or lost the user's attention.
+ *
+ * `is-active` is the window manager's word for it, and it changes for reasons
+ * the program did not cause -- a click on another window, alt-tab, a dialog
+ * of its own taking the focus -- which is why it is an event and not something
+ * to poll. A modal dialog opened *from* this form deactivates it, so a form that
+ * pauses its timer on `Deactivate` pauses it behind its own dialogs too.
+ *
+ * **Only while it is on screen.** A window that is being closed or put away
+ * loses its activity on the way out, and no JavaScript runs in a signal that is
+ * part of hiding; what is not mapped has nothing to report.
+ */
+static void on_form_active(GObject *win, GParamSpec *spec, gpointer data)
+{
+    BtaWidget *w = data;
+
+    if (!gtk_widget_get_mapped(GTK_WIDGET(win)))
+        return;
+    bta_emit(w, gtk_window_is_active(GTK_WINDOW(win)) ? "Activate" : "Deactivate", 0, NULL);
+}
+
+/*
+ * It was maximized, restored or put in full screen -- by the title bar, a
+ * keyboard shortcut or the program's own `Maximized`/`FullScreen`. The event
+ * carries nothing: the handler reads the two properties, so one that fires for
+ * both at once (leaving full screen straight into a maximized window) is
+ * answered by the same read.
+ */
+static void on_form_state(GObject *win, GParamSpec *spec, gpointer data)
+{
+    BtaWidget *w = data;
+
+    if (!gtk_widget_get_mapped(GTK_WIDGET(win)))
+        return;
+    bta_emit(w, "StateChange", 0, NULL);
+}
+
 static void build_form(BtaWidget *w)
 {
     w->gtk = gtk_window_new();
@@ -278,6 +316,9 @@ static void build_form(BtaWidget *w)
     gtk_window_set_default_size(GTK_WINDOW(w->gtk), w->w, w->h);
 
     g_signal_connect(w->gtk, "close-request", G_CALLBACK(on_close_request), w);
+    g_signal_connect(w->gtk, "notify::is-active",   G_CALLBACK(on_form_active), w);
+    g_signal_connect(w->gtk, "notify::maximized",   G_CALLBACK(on_form_state),  w);
+    g_signal_connect(w->gtk, "notify::fullscreened", G_CALLBACK(on_form_state), w);
 }
 
 /*
@@ -8439,8 +8480,25 @@ void bta_core_register(void)
          *   for one change**, so a handler re-reads and restyles rather than
          *   counting
          */
+        /* Activate()
+         *   the window became the one the user is working in: a click on
+         *   it, alt-tab, or a dialog of its own closing. Where a form
+         *   re-reads what another program may have changed, or resumes
+         *   what `Deactivate` paused
+         */
+        /* Deactivate()
+         *   the window stopped being that one — another program's window,
+         *   or **a dialog this form opened**. Raised only while the window
+         *   is on screen, never as it closes
+         */
+        /* StateChange()
+         *   [`Maximized`](docs/reference/widgets/Form.md) or
+         *   [`FullScreen`](docs/reference/widgets/Form.md) changed, by the
+         *   title bar, a key or the program itself. Carries nothing: read
+         *   the two properties. **May fire twice for one gesture**
+         */
         BTA_CLASS_TEXT("Form",      "Container", build_form,     form_props,      true, "Text",
-                       "Open,Close,Resize,ThemeChange"),
+                       "Open,Close,Resize,ThemeChange,Activate,Deactivate,StateChange"),
         BTA_CLASS_BARE("Panel",     "Container", build_panel,                     false, NULL),
         BTA_CLASS_BARE("Component", "Container", build_component,                 false, NULL),
         BTA_CLASS_ENUM_TEXT("Label", "Control",  build_label,    label_props, false,
