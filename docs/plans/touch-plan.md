@@ -137,7 +137,7 @@ Each is shippable alone.
    a real tablet is the measurement. The cost is one more controller per widget
    (six), which is what the plan's *opt-in by handler* would have saved --
    not worth a per-widget switch until a measurement of the IDE says so.
-3. **`Transform` and `Swipe` -- built, behind a property; the two-finger half
+3. **`Transform` and `Swipe` -- built, and verified with a touchpad (Linux, X11); the touchscreen half awaits its first run.**
    awaits its first run.** `Gestures = true` on a control attaches a grouped
    zoom and rotate (the centre between the fingers gives the pan, read from the
    gesture's `update` so a pan with constant distance still raises it) and a
@@ -152,6 +152,14 @@ Each is shippable alone.
    stays as measured**: one finger as a mouse, so `Transform` is never raised
    there until a real tablet says otherwise; `examples/gpx` (zoom with two
    fingers, wheel kept) is not converted yet and should wait for that.
+   **A touchpad measured it** (FTCS0038 on Xorg 21.1, libinput 1.31, GTK 4.22): a
+   pinch raises `Begin`, about 15 `Update`s and `End`, the scale running from 1 to
+   2.04 and back to 0.57, a rotation reaching 45 deg with the scale near 1, and
+   `dx`/`dy` following the fingers' drift. A touchpad does not move the pointer,
+   so `x`/`y` start at it and drift with the fingers: the pivot to zoom about, which
+   is what `examples/gpx` wants. GTK also delivers a touchpad's three- and
+   four-finger **swipe** as an event no gesture collects (`GDK_TOUCHPAD_SWIPE`,
+   with the finger count): not built, and a separate event if a caller asks.
 4. **Documentation**, in the same change as each stage: the description beside
    each event in C, `api.json`, `bintana-docs`, and a paragraph in
    `docs/testing.md` on what is manual.

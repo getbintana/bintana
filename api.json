@@ -41,7 +41,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -279,7 +279,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -531,7 +531,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -746,7 +746,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -935,7 +935,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -1213,7 +1213,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -1388,7 +1388,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -1720,7 +1720,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -1898,7 +1898,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -2104,7 +2104,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -2397,7 +2397,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -2635,7 +2635,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -3054,7 +3054,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -3251,7 +3251,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -3476,7 +3476,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -3669,7 +3669,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -4121,7 +4121,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -4310,7 +4310,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -4526,7 +4526,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -4741,7 +4741,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -4996,7 +4996,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -5221,7 +5221,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -5426,7 +5426,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -5782,7 +5782,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -6066,7 +6066,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -6252,7 +6252,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -6430,7 +6430,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -6663,7 +6663,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -6888,7 +6888,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -7199,7 +7199,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -7428,7 +7428,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -7640,7 +7640,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -7922,7 +7922,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -8379,7 +8379,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -8627,7 +8627,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -8810,7 +8810,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -9020,7 +9020,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -9218,7 +9218,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -9460,7 +9460,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -10152,7 +10152,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -10436,7 +10436,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -10760,7 +10760,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -10969,7 +10969,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -11185,7 +11185,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -11541,7 +11541,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -11914,7 +11914,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",
@@ -12868,7 +12868,7 @@
         {
           "Name": "Transform",
           "Signature": "(phase, dx, dy, scale, angle, x, y)",
-          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates. The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
+          "Doc": "two fingers, as **one stream** for pan, zoom and rotate, while `Gestures` is on. `phase` is `\"Begin\"`, `\"Update\"` or `\"End\"`; the rest are the change **since `Begin`** -- `dx`/`dy` how far the centre between the fingers moved, `scale` how much farther apart they are (`1` at the start, `2` twice as far), `angle` how far they turned in degrees (positive is clockwise) -- and `x`/`y` is that centre, in the control's own coordinates (on a touchpad the pointer does not move, so the centre starts at the pointer and follows the fingers' drift: the pivot to zoom about). The first finger's click ends in `MouseCancel`. **Only where the toolkit delivers a second finger**: Linux does; the Windows backend, measured, delivers one finger as a mouse"
         },
         {
           "Name": "Swipe",

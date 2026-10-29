@@ -8381,7 +8381,9 @@ void bta_core_register(void)
          *   the fingers moved, `scale` how much farther apart they are (`1` at the
          *   start, `2` twice as far), `angle` how far they turned in degrees
          *   (positive is clockwise) -- and `x`/`y` is that centre, in the control's
-         *   own coordinates. The first finger's click ends in `MouseCancel`.
+         *   own coordinates (on a touchpad the pointer does not move, so the
+         *   centre starts at the pointer and follows the fingers' drift: the
+         *   pivot to zoom about). The first finger's click ends in `MouseCancel`.
          *   **Only where the toolkit delivers a second finger**: Linux does; the
          *   Windows backend, measured, delivers one finger as a mouse
          */
