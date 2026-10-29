@@ -583,7 +583,7 @@ const TESTS = [
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
-    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "Record", "Nested", "Database", "Action", "Groups",
+    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
@@ -17482,6 +17482,109 @@ class Form1 extends Form {
                 both.Close();
             });
         });
+    }
+
+    /*
+     * `LongPress`, and `Screen.Touch`.
+     *
+     * **The round trip goes through the X server** with a mouse, which is what an
+     * `Xvfb` has: a press held still raises `LongPress` once, with the point, and
+     * is *not* a touch -- so it opens no menu, claims nothing, and the release
+     * still arrives as a `MouseUp`. A click, and a press that moves, raise
+     * nothing. **The half that a mouse cannot reach** -- a finger's or a pen's
+     * long press opening the `PopupMenu` and cancelling the click -- is
+     * `tests/manual/touch/run.sh`, on a screen with a (virtual) touch device.
+     *
+     * Skipped, never failed, without `xdotool`.
+     */
+    testLongPress() {
+        check("a control says it raises LongPress",
+              new Label().EventNames().includes("LongPress"));
+        eq("Screen.Touch is a yes or a no", typeof Screen.Touch, "boolean");
+
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real press: it needs xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "longpress");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "longpress", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Text: "hold-probe", Width: 400, Height: 240 },
+                        children: [{ type: "Label", name: "Pad",
+                                     properties: { Text: "pad", X: 20, Y: 20,
+                                                   Width: 200, Height: 100 } }] });
+        File.Save(File.Join(proj, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        this.log = [];\n" +
+                  "        Timer.After(800, () => File.Save(Application.Directory + '/ready', '1'));\n" +
+                  "        Timer.Every(100, () => {\n" +
+                  "            if (File.Exists(Application.Directory + '/done')) this.report();\n" +
+                  "        });\n" +
+                  "    }\n" +
+                  "    Pad_MouseDown()  { this.log.push('down'); }\n" +
+                  "    Pad_MouseUp()    { this.log.push('up'); }\n" +
+                  "    Pad_MouseCancel() { this.log.push('cancel'); }\n" +
+                  "    Pad_LongPress(x, y) { this.log.push('long ' + Math.round(x) + ',' + Math.round(y)); }\n" +
+                  "    mark(s) { this.log.push(s); }\n" +
+                  "    report() {\n" +
+                  "        File.SaveJson(Application.Directory + '/out.json', { log: this.log });\n" +
+                  "        Application.Quit(0);\n" +
+                  "    }\n" +
+                  "}\n");
+        for (const gone of ["ready", "done", "out.json", "marks"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        /* The three presses are told apart in the log by a marker the script
+         * writes between them, through a file the form reads on a timer. */
+        File.Save(File.Join(proj, "Form1.js"),
+                  File.Load(File.Join(proj, "Form1.js")).replace(
+                      "Timer.Every(100, () => {",
+                      "Timer.Every(100, () => {\n" +
+                      "            const m = Application.Directory + '/mark';\n" +
+                      "            if (File.Exists(m)) { this.mark('--' + File.Load(m).trim()); File.Delete(m); }"));
+
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/ready\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "wid=$(xdotool search --name '^hold-probe$' | tail -1)\n" +
+                  "eval \"$(xdotool getwindowgeometry --shell $wid)\"\n" +
+                  "mark() { echo \"$1\" > \"$dir/mark\"; sleep 0.4; }\n" +
+                  "mark click\n" +
+                  "xdotool mousemove $((X+60)) $((Y+60)) click 1; sleep 0.6\n" +
+                  "mark hold\n" +
+                  "xdotool mousemove $((X+60)) $((Y+60)) mousedown 1; sleep 1.2; xdotool mouseup 1; sleep 0.6\n" +
+                  "mark drag\n" +
+                  "xdotool mousemove $((X+60)) $((Y+60)) mousedown 1; sleep 0.1\n" +
+                  "for k in 1 2 3 4 5 6 7 8; do xdotool mousemove_relative -- 8 0; sleep 0.04; done\n" +
+                  "sleep 1.0; xdotool mouseup 1; sleep 0.6\n" +
+                  "touch \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the child ended by itself", ran.Output.includes("child=0"), ran.Output);
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("and said what it heard", got !== null, ran.Output);
+        if (!got) return;
+
+        const parts = got.log.join(",").split(/,?--/).slice(1).map((s) => s.replace(/^[a-z]+,?/, "")),
+              said  = got.log.join(" | ");
+        eq("a click raises no LongPress", parts[0], "down,up");
+        check("a press held still raises it once, at the point, and still ends in a MouseUp",
+              /^down,long \d+,\d+,up$/.test(parts[1] || ""), said);
+        eq("a press that moves raises none", (parts[2] || "").includes("long"), false);
+        check("and a mouse's long press cancels nothing: it opened no menu",
+              !said.includes("cancel"), said);
     }
 
     /*

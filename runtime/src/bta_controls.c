@@ -8366,6 +8366,14 @@ void bta_core_register(void)
          *   what the press was doing; `x` and `y` are the last point it was seen
          *   at. Raised once per press, and never without a `MouseDown` before it
          */
+        /* LongPress(x, y)
+         *   a press held still for about half a second, with **any** pointer, at
+         *   the point it began. A touch or a pen's long press also opens the
+         *   control's `PopupMenu` (the nearest one outward, as the secondary
+         *   button does) and cancels the click that would follow; a mouse's does
+         *   not open it -- it has a button for that -- so a program that wants one
+         *   on a held mouse opens it here
+         */
         /* MouseMove(x, y, button, ctrl, shift)
          *   the pointer moved over it. `button` is `0` here
          */
@@ -8463,7 +8471,7 @@ void bta_core_register(void)
          *   window's own layout pass
          */
         BTA_CLASS_FULL("Widget", NULL, NULL, base, nbase, false,
-                       widget_options, "Tooltip,AccessibleName,AccessibleDescription", "MouseDown,MouseUp,MouseCancel,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
+                       widget_options, "Tooltip,AccessibleName,AccessibleDescription", "MouseDown,MouseUp,MouseCancel,LongPress,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
         BTA_CLASS_ENUM("Container", "Widget",  NULL, container_props, false, container_options, NULL),
         BTA_CLASS_BARE("Control",   "Widget",    NULL,                            false, NULL),
         /* A window's title is prose; so is the caption of everything below. */

@@ -1436,7 +1436,7 @@ static JSValue w_set_menu(JSContext *ctx, JSValueConst this_val, JSValueConst va
 }
 
 /* Defined with the mouse handlers, which is the other caller. */
-static void popup_nearest(BtaWidget *w, double x, double y);
+static gboolean popup_nearest(BtaWidget *w, double x, double y);
 
 static JSValue w_popup_menu(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
@@ -7739,10 +7739,10 @@ static void emit_mouse(BtaWidget *w, const char *event, double x, double y,
  * The point comes along, translated into whichever widget ends up showing the
  * menu, so it still opens where the pointer is.
  */
-static void popup_nearest(BtaWidget *w, double x, double y)
+static gboolean popup_nearest(BtaWidget *w, double x, double y)
 {
     if (!w)
-        return;
+        return FALSE;
 
     for (GtkWidget *at = w->gtk; at; at = gtk_widget_get_parent(at)) {
         BtaWidget *cw = g_object_get_data(G_OBJECT(at), BTA_WIDGET_QUARK);
@@ -7756,8 +7756,9 @@ static void popup_nearest(BtaWidget *w, double x, double y)
             continue;
 
         bta_menu_popup_show(cw, p.x, p.y);
-        return;
+        return TRUE;
     }
+    return FALSE;
 }
 
 /*
@@ -7809,6 +7810,46 @@ static void on_mouse_released(GtkGestureClick *g, int n_press,
     emit_mouse(user_data, "MouseUp", x, y,
                (int)gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g)),
                gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(g)));
+}
+
+/*
+ * LongPress(x, y): a press held still for about half a second, from **any**
+ * pointer -- a program that listens asked for it.  What is *not* for any
+ * pointer is the context menu: a mouse has a button for it, a finger and a pen
+ * do not, so only a long press that began as a touch or with a pen's tool opens
+ * the menu of the nearest widget that has one, as the secondary button does.
+ * The menu taking it claims the sequence, so the click that would otherwise
+ * follow the release is cancelled (`MouseCancel`) and nothing underneath fires.
+ */
+static void on_long_pressed(GtkGestureLongPress *g, double x, double y, gpointer user_data)
+{
+    BtaWidget        *w   = user_data;
+    GtkWidget        *wd  = w->gtk;
+    GdkEventSequence *seq = gtk_gesture_single_get_current_sequence(GTK_GESTURE_SINGLE(g));
+    GdkEvent         *ev  = gtk_gesture_get_last_event(GTK_GESTURE(g), seq);
+    gboolean          finger = FALSE;
+
+    if (ev) {
+        GdkEventType t = gdk_event_get_event_type(ev);
+        finger = t == GDK_TOUCH_BEGIN || t == GDK_TOUCH_UPDATE || t == GDK_TOUCH_END ||
+                 gdk_event_get_device_tool(ev) != NULL;
+    }
+
+    /* The handler can delete what raised it: hold the widget across it. */
+    g_object_ref(wd);
+
+    JSContext *ctx = w->ctx;
+    JSValue    argv[2] = { JS_NewFloat64(ctx, x), JS_NewFloat64(ctx, y) };
+
+    bta_emit(w, "LongPress", 2, argv);
+    JS_FreeValue(ctx, argv[0]);
+    JS_FreeValue(ctx, argv[1]);
+
+    if (finger && g_object_get_data(G_OBJECT(wd), BTA_WIDGET_QUARK) == w &&
+        popup_nearest(w, x, y))
+        gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);
+
+    g_object_unref(wd);
 }
 
 typedef struct { GWeakRef widget; double x, y; } MouseCancelJob;
@@ -8032,6 +8073,11 @@ static void attach_mouse(BtaWidget *w)
     g_signal_connect(click, "cancel",   G_CALLBACK(on_mouse_cancelled), w);
     g_object_set_data_full(G_OBJECT(click), MOUSE_STATE_KEY, g_new0(MouseState, 1), g_free);
     gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(click));
+
+    GtkGesture *hold = gtk_gesture_long_press_new();
+    gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(hold), GTK_PHASE_BUBBLE);
+    g_signal_connect(hold, "pressed", G_CALLBACK(on_long_pressed), w);
+    gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(hold));
 
     GtkEventController *motion = gtk_event_controller_motion_new();
     gtk_event_controller_set_propagation_phase(motion, GTK_PHASE_BUBBLE);

@@ -122,10 +122,21 @@ Each is shippable alone.
    (`vector`, `gpx`; not `kanban`, which drags with `DragData`) are updated in the same change. A `tests/widgets`
    assertion `Emit`s the path; the two-finger round trip is the manual run.
    Argued for on its own: **it is wrong today for any touch screen**.
-2. **`LongPress` and the touch context menu.** The event, the menu on a long
-   press from a touch or pen, `Screen.Touch`. Portable: it works on Windows
-   from the held pointer. `api.json`, `llms-full.txt`, rows in `bintana-docs`
-   (`llm/controls.md`, `reference/widgets/*`, `widgets.md`).
+2. **`LongPress` and the touch context menu -- built.** `LongPress(x, y)` is
+   raised for **any** pointer (a program that listens asked for it) from a
+   `GtkGestureLongPress` every widget carries; the **menu** opens only when the
+   press began as a touch or with a pen's tool, claims the sequence (so the click
+   that would follow is cancelled: `MouseCancel`), and walks outward to the
+   nearest `PopupMenu` as the secondary button does. `Screen.Touch` says whether
+   the seat has a touch device. Tested with a real mouse (a held press raises it
+   once, a click and a drag raise none, nothing is cancelled); the half a mouse
+   cannot reach is `tests/manual/touch/run.sh`, whose probe now carries a menu
+   and logs `longpress` and `cancel`. **Unverified on Windows**: the guest
+   delivered the finger as a mouse, so the event arrives there but the menu does
+   not open from it, and nothing in the toolkit says the press was a touch;
+   a real tablet is the measurement. The cost is one more controller per widget
+   (six), which is what the plan's *opt-in by handler* would have saved --
+   not worth a per-widget switch until a measurement of the IDE says so.
 3. **`Transform` and `Swipe`.** Only after a real tablet has been measured:
    if its multi-touch reaches GTK on Windows, both ship everywhere; if not,
    they ship documented as Linux/macOS-only (macOS is unmeasured). `examples/gpx`

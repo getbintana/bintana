@@ -193,13 +193,15 @@ bplay() {
     local n; n=$(lines "$probe")
     drive "$@"; sleep 1.2
     tail -n +$((n + 1)) "$probe" >"$OUT/bintana.$name.log"
-    local down up b3 move wheel
+    local down up b3 move wheel hold cancel
     down=$(grep -c ' area down' "$OUT/bintana.$name.log")
     up=$(grep -c ' area up' "$OUT/bintana.$name.log")
     b3=$(grep -c 'button=3' "$OUT/bintana.$name.log")
     move=$(grep -c ' area move' "$OUT/bintana.$name.log")
     wheel=$(grep -c ' wheel' "$OUT/bintana.$name.log")
-    verdict "bintana $name" "down=$down up=$up button3=$b3 move=$move wheel=$wheel"
+    hold=$(grep -c " area longpress" "$OUT/bintana.$name.log")
+    cancel=$(grep -c " area cancel" "$OUT/bintana.$name.log")
+    verdict "bintana $name" "down=$down up=$up button3=$b3 move=$move wheel=$wheel longpress=$hold cancel=$cancel"
 }
 
 bplay tap       tap "$bcx" "$bcy"

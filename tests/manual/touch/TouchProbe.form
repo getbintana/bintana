@@ -22,6 +22,9 @@
       "type": "Panel",
       "name": "Area",
       "properties": {
+        "Menu": [
+          { "name": "MnuProbe", "text": "The menu a long press opens" }
+        ],
         "Background": "#dfe6f2",
         "Expand": true,
         "HAlign": "Fill",

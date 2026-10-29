@@ -72,6 +72,9 @@ class TouchProbe extends Form {
     Area_MouseMove(x, y)          { this.heard("area", "move", x, y); }
     Area_DblClick(x, y, button)   { this.heard("area", "dbl", x, y, `button=${button}`); }
     Area_MouseWheel(dx, dy)       { this.say("area wheel", `dx=${dx} dy=${dy}`); }
+    Area_LongPress(x, y)          { this.heard("area", "longpress", x, y); }
+    Area_MouseCancel(x, y)        { this.heard("area", "cancel", x, y); }
+    MnuProbe_Click()              { this.say("menu", "the item was chosen"); }
 
     Form_MouseDown(x, y, button)  { this.heard("form", "down", x, y, `button=${button}`); }
     Form_MouseUp(x, y, button)    { this.heard("form", "up", x, y, `button=${button}`); }

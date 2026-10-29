@@ -3023,6 +3023,15 @@ static JSValue screen_get_height(JSContext *ctx, JSValueConst t)
 static JSValue screen_get_scale(JSContext *ctx, JSValueConst t)
 { return screen_geometry(ctx, t, SCREEN_SCALE); }
 
+static JSValue screen_get_touch(JSContext *ctx, JSValueConst t)
+{
+    GdkDisplay *display = gdk_display_get_default();
+    GdkSeat    *seat    = display ? gdk_display_get_default_seat(display) : NULL;
+
+    return JS_NewBool(ctx, seat &&
+                      (gdk_seat_get_capabilities(seat) & GDK_SEAT_CAPABILITY_TOUCH));
+}
+
 static const JSCFunctionListEntry screen_props[] = {
     /* Width
      *   the width of the monitor the application's **active window** is on —
@@ -3038,6 +3047,13 @@ static const JSCFunctionListEntry screen_props[] = {
      *   that monitor's scale factor, `1` unless the panel is HiDPI
      */
     JS_CGETSET_DEF("Scale",  screen_get_scale,  NULL),
+    /* Touch
+     *   whether the display has a touch screen at all (the seat reports one),
+     *   which is not whether the person is using it: a laptop with one is `true`
+     *   under a mouse. It is for choosing bigger targets, never for hiding the
+     *   mouse's way
+     */
+    JS_CGETSET_DEF("Touch",  screen_get_touch,  NULL),
     /* Monitors()
      *   every monitor: `X`/`Y` are where it sits in the desktop's
      *   coordinates, `Width`/`Height`/`Scale` are its own, and `Name` is the
