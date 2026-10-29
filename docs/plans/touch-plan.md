@@ -150,8 +150,12 @@ Each is shippable alone.
    probe has `Gestures` on and prints the Begin/End and the last update of a
    pinch (expect scale 3.5), a rotate (60 deg) and a pan (dx 200). **Windows
    stays as measured**: one finger as a mouse, so `Transform` is never raised
-   there until a real tablet says otherwise; `examples/gpx` (zoom with two
-   fingers, wheel kept) is not converted yet and should wait for that.
+   there until a real tablet says otherwise. **`examples/gpx` is its first
+   consumer**: the centre drags the map, the distance zooms it by whole levels
+   (the tiles exist at whole levels; twice as far is one) about that centre, the
+   wheel is kept, and `Area_MouseCancel` lets go of a mouse drag when a second
+   finger arrives. Driven with `Emit` in a scratch copy (levels, pan sign and
+   magnitude, `End` ending it); the real pinch is for a person with a touchpad.
    **A touchpad measured it** (FTCS0038 on Xorg 21.1, libinput 1.31, GTK 4.22): a
    pinch raises `Begin`, about 15 `Update`s and `End`, the scale running from 1 to
    2.04 and back to 0.57, a rotation reaching 45 deg with the scale near 1, and

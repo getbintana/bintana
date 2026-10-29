@@ -113,6 +113,7 @@
           "name": "Area",
           "properties": {
             "Expand": true,
+            "Gestures": true,
             "HAlign": "Fill",
             "HExpand": true,
             "Style": "frame",

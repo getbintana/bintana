@@ -72,6 +72,7 @@ class GpxForm extends Form {
     drag       = null;
     pointer    = null;
     wheel      = 0;
+    pinch      = null;                  /* a two-finger gesture in progress */
     frameW     = 0;
     frameH     = 0;
     originX    = 0;
@@ -373,6 +374,55 @@ class GpxForm extends Form {
     /* A second finger or a drag took the press: the map is not being held. */
     Area_MouseCancel() {
         this.drag = null;
+    }
+
+    /*
+     * Two fingers, on glass or on a touchpad: the centre between them drags the
+     * map and the distance zooms it **about that centre**, which is the same
+     * pivot the wheel zooms about.  `Transform` is the change since `Begin`, so
+     * the pan is taken a step at a time (the world under the fingers follows
+     * them, as it does under a mouse) and the zoom is the *level* the scale has
+     * reached: the tiles exist at whole levels, so a pinch crosses them one by
+     * one -- twice as far apart is one level.  A mouse never raises it and the
+     * wheel is kept, so the map zooms on every input there is.
+     */
+    Area_Transform(phase, dx, dy, scale, angle, x, y) {
+        if (!this.points.length) return;
+
+        if (phase === "Begin") {
+            this.zoomBy(0);                 /* starts the view, if nothing has */
+            this.pinch = { Z0: this.zoom, DX: 0, DY: 0 };
+            this.drag  = null;
+            return;
+        }
+        if (!this.pinch) return;
+        if (phase === "End") {
+            this.pinch = null;
+            return;
+        }
+
+        const stepX = dx - this.pinch.DX, stepY = dy - this.pinch.DY;
+
+        this.pinch.DX = dx;
+        this.pinch.DY = dy;
+        if (stepX || stepY) {
+            const k = Math.pow(2, this.zoom);
+
+            this.cx0     -= stepX / k;
+            this.cy0     -= stepY / k;
+            this.originX -= stepX;          /* what the zoom below measures from */
+            this.originY -= stepY;
+            this.panned   = true;
+            if (this.hover >= 0) {
+                this.hover = -1;
+                this.showHover();
+            }
+        }
+
+        const level = Math.max(0, Math.min(MAX_ZOOM,
+                                           this.pinch.Z0 + Math.round(Math.log2(scale))));
+        if (level !== this.zoom) this.zoomBy(level - this.zoom, { X: x, Y: y });
+        else this.Area.Redraw();
     }
 
     /*
