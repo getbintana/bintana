@@ -105,6 +105,15 @@ if [[ -z $hit ]]; then
         echo "--- gtk.log"; cat "$OUT/gtk.log"
         echo "--- Xorg.0.log"; grep -i touchsim /var/log/Xorg.0.log ~/.local/share/xorg/Xorg.0.log 2>/dev/null | tail -20
     } >"$OUT/diagnosis.txt" 2>&1
+    {
+        echo "--- a tap, seen by libinput and by the pointer"
+        ev=$(awk '/bintana-touchsim/{f=1} f&&/Handlers=/{for(i=1;i<=NF;i++)if($i~/^event/)print $i; exit}' /proc/bus/input/devices)
+        echo "device: /dev/input/$ev; pointer before: $(xdotool getmouselocation)"
+        sudo timeout 5 libinput debug-events --device "/dev/input/$ev" >"$OUT/libinput.txt" 2>&1 & lp=$!
+        sleep 1.5; drive tap "$cx" "$cy"; sleep 1.5; wait "$lp"
+        echo "pointer after: $(xdotool getmouselocation)"
+        echo "libinput said:"; cat "$OUT/libinput.txt"
+    } >>"$OUT/diagnosis.txt" 2>&1
     die "three taps reached GTK as nothing; see $OUT/diagnosis.txt (the server took the device, or the touches went elsewhere)"
 fi
 lx=$(field "$hit" x); ly=$(field "$hit" y)
