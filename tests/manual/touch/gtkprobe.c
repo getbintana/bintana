@@ -77,9 +77,9 @@ static gboolean raw(GtkEventControllerLegacy *c, GdkEvent *e, gpointer data)
                 gdk_touchpad_event_get_pinch_scale(e),
                 gdk_touchpad_event_get_pinch_angle_delta(e) * 180.0 / G_PI, dx, dy);
         else
-            say("touchpad %s %s fingers=%d dx=%.1f dy=%.1f",
+            say("touchpad %s %s fingers=%d dx=%.1f dy=%.1f stamp=%u",
                 t == GDK_TOUCHPAD_SWIPE ? "SWIPE" : "HOLD", phases[ph],
-                gdk_touchpad_event_get_n_fingers(e), dx, dy);
+                gdk_touchpad_event_get_n_fingers(e), dx, dy, gdk_event_get_time(e));
         return FALSE;
     }
     default: return FALSE;
