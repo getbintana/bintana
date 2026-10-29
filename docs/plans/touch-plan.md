@@ -151,7 +151,7 @@ Each is shippable alone.
    pinch (expect scale 3.5), a rotate (60 deg) and a pan (dx 200). **Windows
    stays as measured**: one finger as a mouse, so `Transform` is never raised
    there until a real tablet says otherwise. **`examples/gpx` is its first
-   consumer**: the map follows the fingers while they are down (picture scaled and moved) and settles on a whole level at `End`
+   consumer**: the map follows the fingers while they are down (picture scaled and moved) and settles, in 160 ms, on a whole level at `End`
    (the tiles exist at whole levels; twice as far is one) about where they began, the
    wheel is kept, and `Area_MouseCancel` lets go of a mouse drag when a second
    finger arrives. Driven with `Emit` in a scratch copy (levels, pan sign and

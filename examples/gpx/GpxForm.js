@@ -39,6 +39,7 @@
 "use strict";
 
 const MAX_ZOOM  = 17;
+const SETTLE_MS = 160;     /* how long a pinch takes to arrive on its level */
 /*
  * The track's own colour, not the theme's: it is data, and it has to read over
  * the base map.  **Purple, and not the orange a sports app reaches for** --
@@ -404,6 +405,7 @@ class GpxForm extends Form {
         if (!this.points.length) return;
 
         if (phase === "Begin") {
+            this.commitPinch();             /* one still settling is done */
             this.zoomBy(0);                 /* starts the view, if nothing has */
             this.pinch = { Z0: this.zoom, OX: this.originX, OY: this.originY,
                            X: x, Y: y, Live: null };
@@ -427,21 +429,75 @@ class GpxForm extends Form {
             return;
         }
 
-        /* End: the view takes what the picture showed. */
+        /* End: the picture settles on the nearest whole level, and only then
+         * does the view take it.  Releasing straight onto the level made the
+         * map jump from a scale of 1.3 to 1; what a finger expects is the map
+         * *arriving*, so the scale runs on to the level in a few frames, and the
+         * tiles of that level are asked for while it does -- they have to be on
+         * screen the frame the picture stops being scaled. */
+        const level = Math.max(0, Math.min(MAX_ZOOM, g.Z0 + Math.round(Math.log2(s))));
+
+        g.Level = level;
+        g.From  = s;
+        g.To    = Math.pow(2, level - g.Z0);
+        g.DX    = dx;
+        g.DY    = dy;
+        g.Start = Date.now();
+        this.warm(g);
+        g.Timer = Timer.Every(16, () => this.settle());
+    }
+
+    /* One frame of the settling: the scale runs from where the fingers left it
+     * to the level's, slowing as it arrives, in the log domain so that it is the
+     * same speed whether it is going in or out. */
+    settle() {
+        const g = this.pinch;
+        if (!g) return;
+
+        const t = Math.min(1, (Date.now() - g.Start) / SETTLE_MS);
+        const e = 1 - Math.pow(1 - t, 3);
+
+        g.Live = { S: g.From * Math.pow(g.To / g.From, e), DX: g.DX, DY: g.DY };
+        if (t >= 1) this.commitPinch();
+        else this.Area.Redraw();
+    }
+
+    /* The view takes what the picture shows: the level, with the world point the
+     * fingers began on left under where they ended. */
+    commitPinch() {
+        const g = this.pinch;
+        if (!g || !g.Timer) return;   /* only one that is settling */
+
+        if (g.Timer) g.Timer.Stop();
         this.pinch = null;
 
-        const k0    = Math.pow(2, g.Z0);
-        const level = Math.max(0, Math.min(MAX_ZOOM, g.Z0 + Math.round(Math.log2(s))));
-        const kTo   = Math.pow(2, level);
-        const wx0   = (g.OX + g.X) / k0;     /* the world point the fingers began on */
-        const wy0   = (g.OY + g.Y) / k0;
+        const k0  = Math.pow(2, g.Z0);
+        const kTo = Math.pow(2, g.Level);
+        const wx0 = (g.OX + g.X) / k0;       /* the world point the fingers began on */
+        const wy0 = (g.OY + g.Y) / k0;
 
-        this.zoom   = level;
-        this.cx0    = wx0 + (this.frameW / 2 - (g.X + dx)) / kTo;
-        this.cy0    = wy0 + (this.frameH / 2 - (g.Y + dy)) / kTo;
+        this.zoom   = g.Level;
+        this.cx0    = wx0 + (this.frameW / 2 - (g.X + g.DX)) / kTo;
+        this.cy0    = wy0 + (this.frameH / 2 - (g.Y + g.DY)) / kTo;
         this.panned = true;
         this.showStats();
         this.Area.Redraw();
+    }
+
+    /* Ask for the tiles the settled view will show, without painting them. */
+    warm(g) {
+        const kTo = Math.pow(2, g.Level);
+        const wx0 = (g.OX + g.X) / Math.pow(2, g.Z0);
+        const wy0 = (g.OY + g.Y) / Math.pow(2, g.Z0);
+        const ox  = (wx0 + (this.frameW / 2 - (g.X + g.DX)) / kTo) * kTo - this.frameW / 2;
+        const oy  = (wy0 + (this.frameH / 2 - (g.Y + g.DY)) / kTo) * kTo - this.frameH / 2;
+        const n   = kTo;
+
+        for (let ty = Math.max(0, Math.floor(oy / TILE_PX));
+             ty <= Math.min(n - 1, Math.floor((oy + this.frameH) / TILE_PX)); ty++)
+            for (let tx = Math.max(0, Math.floor(ox / TILE_PX));
+                 tx <= Math.min(n - 1, Math.floor((ox + this.frameW) / TILE_PX)); tx++)
+                this.tiles.get(g.Level, tx, ty, () => this.Area.Redraw());
     }
 
     /*
@@ -595,6 +651,7 @@ class GpxForm extends Form {
      */
     zoomBy(delta, anchor) {
         if (!this.points.length) return;
+        this.commitPinch();
 
         if (this.zoom < 0) {
             const box = this.Area.Bounds();
