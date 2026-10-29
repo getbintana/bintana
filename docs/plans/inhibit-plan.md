@@ -1,6 +1,7 @@
 # Keeping the machine awake, on every desktop
 
-**Not started; the shape chosen (`Application.Inhibit`), stage 0 to measure.** Asked for by the owner on 2026-10-28, with
+**Not started; the shape chosen (`Application.Inhibit`), stage 0 measured on
+Linux/XFCE (GTK answers a cookie for an inhibit the portal refused).** Asked for by the owner on 2026-10-28, with
 the condition that it be argued across desktops the way
 [keyring-plan.md](keyring-plan.md) argues a store: *what the application
 needed* is one verb, and *who answers it* is different on every platform.
@@ -115,3 +116,46 @@ the real session), under the CI image (4.14), inside the Flatpak runtime, and
 read the answer back with `systemd-inhibit --list` and
 `gnome-session-inhibit --list`. The table above is source code; this is what
 it does.
+
+### Measured on this machine (2026-10-29: Fedora 44, XFCE, X11, GTK 4.22.5)
+
+A twenty-line `GtkApplication` (`io.github.getbintana.InhibitProbe`, under
+`xvfb-run` but on the user's session bus) calling `gtk_application_inhibit`
+with `SUSPEND`, `IDLE` and `LOGOUT`, `dbus-monitor` watching the calls:
+
+- **GTK goes to the portal even outside a sandbox**, with or without
+  `GDK_DEBUG=portals`: `CreateMonitor`, then `org.freedesktop.portal.Inhibit.Inhibit`.
+- **The portal fails, and GTK answers a cookie anyway.** `xdg-desktop-portal-gtk`
+  (the only backend in `portals.conf` here) replies
+  `org.freedesktop.portal.Error.Failed` -- it forwards to
+  `org.gnome.SessionManager`, which XFCE does not have (it owns
+  `org.xfce.SessionManager`). `gtk_application_inhibit` had already returned
+  cookie `1`, for all three flags. Nothing appeared in `systemd-inhibit --list`
+  or in xfce4-power-manager's `GetInhibitors`.
+  **So the silent wrong answer is not only macOS: it is every desktop whose
+  portal backend has no Inhibit**, and on this one that is the default install.
+- **The other roads answered at once**:
+  - logind, as `systemd-inhibit --what=sleep:idle --mode=block`, was listed
+    with its who and why while held and gone after.
+  - `org.freedesktop.PowerManagement.Inhibit.Inhibit` (owned by
+    xfce4-power-manager) answered cookie `14`, and `GetInhibitors` listed
+    `BintanaProbe` until `UnInhibit`. Firefox uses this road on this desktop
+    for "Reproduciendo video".
+  - `org.freedesktop.ScreenSaver` is not owned here (only
+    `org.xfce.ScreenSaver`); xfce4-screensaver turns idle inhibitors into a
+    logind `idle` block of its own (`libxfce4ui`).
+- **Not measured**:
+  - Flatpak: inside the sandbox the portal is the only road, so on this
+    desktop it would fail the same way.
+  - GTK 4.14: by its source it tries `org.gnome.SessionManager` first, which is
+    missing here too.
+  - Windows and macOS.
+
+**What this decides** (decision 1, proposed): **our own roads**, with GTK
+playing no part. On Linux outside a sandbox, logind for `Suspend`, with
+`Idle` through `org.freedesktop.ScreenSaver` or `PowerManagement`, whichever
+is owned, and through logind `idle` as the floor. Inside a sandbox the portal,
+with `Active` taken from its `Response` and not from a cookie.
+`PowerSetRequest` on Windows and IOKit on macOS. `Logout` and `Switch` go
+through the session manager where there is one, and are otherwise
+`Active: false`.
