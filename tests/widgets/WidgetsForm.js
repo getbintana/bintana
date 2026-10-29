@@ -583,7 +583,7 @@ const TESTS = [
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
-    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "Record", "Nested", "Database", "Action", "Groups",
+    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
@@ -17482,6 +17482,110 @@ class Form1 extends Form {
                 both.Close();
             });
         });
+    }
+
+    /*
+     * `MouseCancel`: a press that something took, and the order it comes in.
+     *
+     * A click gesture follows one point and cancels its sequence, with no
+     * `released`, when a drag and drop begins from the control (or a second
+     * finger arrives, or a scroller claims a touch drag). What a program needs
+     * is to be told, so a drag it was tracking by hand does not stay open.
+     *
+     * **The drag goes through the X server**, as `testFrameless`'s does, because
+     * it is the real gesture that claims the sequence; two fingers cannot be
+     * played on an `Xvfb` (`tests/manual/touch/run.sh` plays them on a real
+     * screen). A plain click beside it is the case that must *not* cancel: a
+     * `MouseUp` and no `MouseCancel`.
+     *
+     * Skipped, never failed, without `xdotool`.
+     */
+    testMouseCancel() {
+        const names = this.EventNames();
+        check("a control says it raises MouseCancel",
+              new Label().EventNames().includes("MouseCancel"), names.join(","));
+
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real drag: it needs xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "mousecancel");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "mousecancel", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Text: "cancel-probe", Width: 400, Height: 240 },
+                        children: [{ type: "Label", name: "Card",
+                                     properties: { Text: "card", DragData: "x",
+                                                   X: 20, Y: 20, Width: 100, Height: 40 } },
+                                   { type: "Label", name: "Zone",
+                                     properties: { Text: "zone", AcceptDrop: true,
+                                                   X: 260, Y: 20, Width: 100, Height: 40 } },
+                                   { type: "Label", name: "Plain",
+                                     properties: { Text: "plain",
+                                                   X: 20, Y: 140, Width: 100, Height: 40 } }] });
+        File.Save(File.Join(proj, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        this.log = [];\n" +
+                  "        Timer.After(800, () => File.Save(Application.Directory + '/ready', '1'));\n" +
+                  "        Timer.Every(100, () => {\n" +
+                  "            if (File.Exists(Application.Directory + '/done')) this.report();\n" +
+                  "        });\n" +
+                  "    }\n" +
+                  "    note(s) { this.log.push(s); }\n" +
+                  "    Card_MouseDown()   { this.note('card down'); }\n" +
+                  "    Card_MouseUp()     { this.note('card up'); }\n" +
+                  "    Card_MouseCancel(x, y) { this.note('card cancel ' + (typeof x) + (typeof y)); }\n" +
+                  "    Card_DragBegin()   { this.note('card dragbegin'); }\n" +
+                  "    Card_DragEnd()     { this.note('card dragend'); }\n" +
+                  "    Plain_MouseDown()  { this.note('plain down'); }\n" +
+                  "    Plain_MouseUp()    { this.note('plain up'); }\n" +
+                  "    Plain_MouseCancel() { this.note('plain cancel'); }\n" +
+                  "    report() {\n" +
+                  "        File.SaveJson(Application.Directory + '/out.json', { log: this.log });\n" +
+                  "        Application.Quit(0);\n" +
+                  "    }\n" +
+                  "}\n");
+        for (const gone of ["ready", "done", "out.json"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        /* A drag is a press, ten small moves and a release: one jump would be
+         * a single motion event and no threshold crossed. */
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/ready\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "wid=$(xdotool search --name '^cancel-probe$' | tail -1)\n" +
+                  "eval \"$(xdotool getwindowgeometry --shell $wid)\"\n" +
+                  "xdotool mousemove $((X+40)) $((Y+160)) click 1; sleep 0.4\n" +
+                  "xdotool mousemove $((X+40)) $((Y+40)) mousedown 1; sleep 0.2\n" +
+                  "for k in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do\n" +
+                  "    xdotool mousemove_relative -- 11 0; sleep 0.04; done\n" +
+                  "xdotool mouseup 1; sleep 0.8\n" +
+                  "touch \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the child ended by itself", ran.Output.includes("child=0"), ran.Output);
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("and said what it heard", got !== null, ran.Output);
+        if (!got) return;
+
+        const said = got.log.join(" | ");
+        eq("a plain click is a press and a release, and no cancel",
+           got.log.filter((l) => l.startsWith("plain")).join(","), "plain down,plain up");
+        eq("a drag that starts here says so, in this order: pressed, the drag begins, the press is cancelled",
+           got.log.filter((l) => l.startsWith("card")).join(","),
+           "card down,card dragbegin,card cancel numbernumber,card dragend");
+        check("and the press was never released", !said.includes("card up"), said);
     }
 
     /*

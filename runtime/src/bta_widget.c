@@ -7760,6 +7760,26 @@ static void popup_nearest(BtaWidget *w, double x, double y)
     }
 }
 
+/*
+ * What a press leaves behind for a cancel to read: a `GtkGestureClick` follows
+ * one point at a time and, **by design**, cancels its sequence -- `cancel`, and
+ * no `released` -- when a second finger arrives or a parent or a drag source
+ * claims it.  So `MouseDown` without `MouseUp` is a sequence taken away, and
+ * `MouseCancel` is how a program is told.
+ */
+typedef struct { double x, y; gboolean down; } MouseState;
+#define MOUSE_STATE_KEY "bta-mouse-state"
+
+static void mouse_state_note(GtkGesture *g, double x, double y, gboolean down)
+{
+    MouseState *ms = g_object_get_data(G_OBJECT(g), MOUSE_STATE_KEY);
+    if (!ms)
+        return;
+    ms->x = x;
+    ms->y = y;
+    ms->down = down;
+}
+
 static void on_mouse_pressed(GtkGestureClick *g, int n_press,
                              double x, double y, gpointer user_data)
 {
@@ -7767,6 +7787,7 @@ static void on_mouse_pressed(GtkGestureClick *g, int n_press,
     GdkModifierType state =
         gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(g));
 
+    mouse_state_note(GTK_GESTURE(g), x, y, TRUE);
     emit_mouse(user_data, "MouseDown", x, y, button, state);
 
     /* GTK reports the first press too, so MouseDown always fires before
@@ -7784,9 +7805,59 @@ static void on_mouse_pressed(GtkGestureClick *g, int n_press,
 static void on_mouse_released(GtkGestureClick *g, int n_press,
                               double x, double y, gpointer user_data)
 {
+    mouse_state_note(GTK_GESTURE(g), x, y, FALSE);
     emit_mouse(user_data, "MouseUp", x, y,
                (int)gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g)),
                gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(g)));
+}
+
+typedef struct { GWeakRef widget; double x, y; } MouseCancelJob;
+
+/* The event is raised from an idle and not from the signal: a gesture is reset
+ * when its widget is hidden or disposed, and no JavaScript runs inside a GTK
+ * signal that does either.  The job holds a weak reference and nothing of
+ * ours; a control gone in the meantime is just gone. */
+static gboolean mouse_cancel_idle(gpointer data)
+{
+    MouseCancelJob *job = data;
+    GtkWidget      *wd  = g_weak_ref_get(&job->widget);
+
+    if (wd) {
+        BtaWidget *w = g_object_get_data(G_OBJECT(wd), BTA_WIDGET_QUARK);
+        if (w) {
+            JSContext *ctx = w->ctx;
+            JSValue    argv[2] = { JS_NewFloat64(ctx, job->x), JS_NewFloat64(ctx, job->y) };
+
+            bta_emit(w, "MouseCancel", 2, argv);
+            JS_FreeValue(ctx, argv[0]);
+            JS_FreeValue(ctx, argv[1]);
+        }
+        g_object_unref(wd);
+    }
+    g_weak_ref_clear(&job->widget);
+    g_free(job);
+    return G_SOURCE_REMOVE;
+}
+
+static void on_mouse_cancelled(GtkGesture *g, GdkEventSequence *sequence,
+                               gpointer user_data)
+{
+    MouseState *ms = g_object_get_data(G_OBJECT(g), MOUSE_STATE_KEY);
+    BtaWidget  *w  = user_data;
+
+    /* A cancel with no press before it is not something to report. */
+    if (!ms || !ms->down)
+        return;
+    ms->down = FALSE;
+
+    MouseCancelJob *job = g_new0(MouseCancelJob, 1);
+    double x = ms->x, y = ms->y;
+
+    gtk_gesture_get_point(g, sequence, &x, &y);     /* the last point, when it still has one */
+    job->x = x;
+    job->y = y;
+    g_weak_ref_init(&job->widget, w->gtk);
+    g_idle_add_full(G_PRIORITY_HIGH, mouse_cancel_idle, job, NULL);
 }
 
 static void on_mouse_motion(GtkEventControllerMotion *c,
@@ -7958,6 +8029,8 @@ static void attach_mouse(BtaWidget *w)
                                                GTK_PHASE_BUBBLE);
     g_signal_connect(click, "pressed",  G_CALLBACK(on_mouse_pressed),  w);
     g_signal_connect(click, "released", G_CALLBACK(on_mouse_released), w);
+    g_signal_connect(click, "cancel",   G_CALLBACK(on_mouse_cancelled), w);
+    g_object_set_data_full(G_OBJECT(click), MOUSE_STATE_KEY, g_new0(MouseState, 1), g_free);
     gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(click));
 
     GtkEventController *motion = gtk_event_controller_motion_new();

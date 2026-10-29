@@ -8359,6 +8359,13 @@ void bta_core_register(void)
         /* MouseUp(x, y, button, ctrl, shift)
          *   and came up
          */
+        /* MouseCancel(x, y)
+         *   the press that began with a `MouseDown` is not going to end in a
+         *   `MouseUp`: something took it -- a second finger, a drag and drop that
+         *   began from this control, a scroller that claimed a touch drag. Drop
+         *   what the press was doing; `x` and `y` are the last point it was seen
+         *   at. Raised once per press, and never without a `MouseDown` before it
+         */
         /* MouseMove(x, y, button, ctrl, shift)
          *   the pointer moved over it. `button` is `0` here
          */
@@ -8456,7 +8463,7 @@ void bta_core_register(void)
          *   window's own layout pass
          */
         BTA_CLASS_FULL("Widget", NULL, NULL, base, nbase, false,
-                       widget_options, "Tooltip,AccessibleName,AccessibleDescription", "MouseDown,MouseUp,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
+                       widget_options, "Tooltip,AccessibleName,AccessibleDescription", "MouseDown,MouseUp,MouseCancel,MouseMove,MouseEnter,MouseLeave,MouseWheel,DblClick,KeyPress,KeyRelease,GotFocus,LostFocus,Drop,FileDrop,DragEnter,DragOver,DragLeave,DragBegin,DragEnd,Allocated"),
         BTA_CLASS_ENUM("Container", "Widget",  NULL, container_props, false, container_options, NULL),
         BTA_CLASS_BARE("Control",   "Widget",    NULL,                            false, NULL),
         /* A window's title is prose; so is the caption of everything below. */

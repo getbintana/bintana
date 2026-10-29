@@ -925,6 +925,29 @@ class VectorForm extends Form {
         this.commit();
     }
 
+    /* The press was taken away -- a second finger, a drag and drop -- and no
+     * `MouseUp` will come: what the press was doing is dropped, not filed, so
+     * nothing is left following a pointer that is no longer pressed. */
+    Canvas_MouseCancel() {
+        if (this.resizing) {
+            const was = this.resizing;
+
+            this.resizing = null;
+            this.pageW = was.W;
+            this.pageH = was.H;
+            this.Canvas.Resize(this.pageW, this.pageH);
+            this.showSize();
+        } else if (this.editing) {
+            const e = this.editing;
+
+            this.editing = null;
+            this.shapes[e.At] = e.Start;      /* back to where it was */
+        }
+        this.marquee = null;
+        this.drag    = null;
+        this.Canvas.Redraw();
+    }
+
     /* A double click ends the polyline, the point it landed having already
      * been placed by the second press -- `finishPolyline` drops the
      * duplicate. */

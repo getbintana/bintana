@@ -109,7 +109,7 @@ that has a handler -- the controller is attached when a handler exists, the way
 
 Each is shippable alone.
 
-1. **`MouseCancel(x, y)`.** `attach_mouse` connects only `pressed` and
+1. **`MouseCancel(x, y)` -- built.** `attach_mouse` connects only `pressed` and
    `released`; GTK's `GtkGestureClick` handles one point at a time and **by
    design** cancels its sequence when a second arrives (or a parent claims it),
    emitting `cancel` and no `released` -- documented, and no report of it as a
@@ -119,7 +119,7 @@ Each is shippable alone.
    applies a crop) would confirm what was abandoned. It does not touch the
    ordinary road (a button's `Click` never sees it), so nothing that works today
    changes; a program that drags adopts it, and the ones here that do
-   (`kanban`, `vector`, `gpx`) are updated in the same change. A `tests/widgets`
+   (`vector`, `gpx`; not `kanban`, which drags with `DragData`) are updated in the same change. A `tests/widgets`
    assertion `Emit`s the path; the two-finger round trip is the manual run.
    Argued for on its own: **it is wrong today for any touch screen**.
 2. **`LongPress` and the touch context menu.** The event, the menu on a long

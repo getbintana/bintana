@@ -370,6 +370,11 @@ class GpxForm extends Form {
         this.drag = null;
     }
 
+    /* A second finger or a drag took the press: the map is not being held. */
+    Area_MouseCancel() {
+        this.drag = null;
+    }
+
     /*
      * The wheel zooms **about the pointer**: the street under the cursor stays
      * under the cursor, which is what every map does and the reason the turn

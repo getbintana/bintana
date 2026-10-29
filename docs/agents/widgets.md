@@ -484,6 +484,14 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   third row shown can be the seventh the list holds. Written down in
   `llm/controls.md`'s `Drop` row and in `reference/widgets/Widget.md`, which
   said only `Drop(data, x, y)` while this was being guessed at.
+- **A drag that starts from a control cancels its click, and the program hears
+  `MouseCancel`.** The source claims the press in the capture phase (which is
+  also what stops the click firing at the end), and a claimed sequence makes the
+  widget's `GtkGestureClick` emit `cancel` with no `released`. Measured with a
+  real pointer on a `Label` with `DragData`: `MouseDown`, `DragBegin`,
+  `MouseCancel`, `DragEnd` -- the cancel arrives from an idle, a gesture being
+  reset when its widget is hidden or disposed -- and no `MouseUp`. A plain click
+  beside it gives `MouseDown`, `MouseUp` and nothing else (`testMouseCancel`).
 - **No drag starts inside a `RowList`, in either phase.** A `GtkListBox` claims
   the press for its own selection, so a card with `DragData` set selects and
   nothing else -- measured with a one-row probe that printed `SELECTED` and no

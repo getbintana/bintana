@@ -29,6 +29,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -245,6 +250,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -479,6 +489,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -674,6 +689,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -841,6 +861,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -1101,6 +1126,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -1254,6 +1284,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -1568,6 +1603,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -1724,6 +1764,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -1910,6 +1955,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -2185,6 +2235,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -2401,6 +2456,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -2802,6 +2862,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -2977,6 +3042,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -3184,6 +3254,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -3355,6 +3430,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -3789,6 +3869,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -3956,6 +4041,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -4154,6 +4244,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -4347,6 +4442,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -4584,6 +4684,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -4789,6 +4894,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -4972,6 +5082,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -5310,6 +5425,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -5574,6 +5694,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -5740,6 +5865,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -5896,6 +6026,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -6111,6 +6246,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -6314,6 +6454,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -6607,6 +6752,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -6816,6 +6966,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -7006,6 +7161,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -7268,6 +7428,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -7707,6 +7872,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -7935,6 +8105,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -8096,6 +8271,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -8288,6 +8468,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -8464,6 +8649,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -8686,6 +8876,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -9360,6 +9555,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -9622,6 +9822,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -9928,6 +10133,11 @@
           "Doc": "and came up"
         },
         {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
+        },
+        {
           "Name": "MouseMove",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "the pointer moved over it. `button` is `0` here"
@@ -10115,6 +10325,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -10311,6 +10526,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -10647,6 +10867,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -11000,6 +11225,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
@@ -11925,6 +12155,11 @@
           "Name": "MouseUp",
           "Signature": "(x, y, button, ctrl, shift)",
           "Doc": "and came up"
+        },
+        {
+          "Name": "MouseCancel",
+          "Signature": "(x, y)",
+          "Doc": "the press that began with a `MouseDown` is not going to end in a `MouseUp`: something took it -- a second finger, a drag and drop that began from this control, a scroller that claimed a touch drag. Drop what the press was doing; `x` and `y` are the last point it was seen at. Raised once per press, and never without a `MouseDown` before it"
         },
         {
           "Name": "MouseMove",
