@@ -41,6 +41,7 @@ static const char *source_name(GdkDevice *d)
     }
 }
 
+/* Scroll events too, whose unit and source tell a touchpad's two fingers from a wheel. */
 static gboolean raw(GtkEventControllerLegacy *c, GdkEvent *e, gpointer data)
 {
     GdkEventType t = gdk_event_get_event_type(e);
@@ -51,8 +52,36 @@ static gboolean raw(GtkEventControllerLegacy *c, GdkEvent *e, gpointer data)
     case GDK_TOUCH_CANCEL: name = "TOUCH_CANCEL"; break;
     case GDK_BUTTON_PRESS: name = "BUTTON_PRESS"; break;
     case GDK_BUTTON_RELEASE: name = "BUTTON_RELEASE"; break;
-    case GDK_SCROLL:       name = "SCROLL"; break;
+    case GDK_SCROLL: {
+        double dx = 0, dy = 0;
+        gdk_scroll_event_get_deltas(e, &dx, &dy);
+        say("raw SCROLL src=%s unit=%d dir=%d dx=%.2f dy=%.2f", source_name(gdk_event_get_device(e)),
+            gdk_scroll_event_get_unit(e), gdk_scroll_event_get_direction(e), dx, dy);
+        return FALSE;
+    }
     case GDK_TOUCH_UPDATE: updates++; return FALSE;
+    case GDK_TOUCHPAD_PINCH:
+    case GDK_TOUCHPAD_SWIPE:
+    case GDK_TOUCHPAD_HOLD: {
+        /* A touchpad's gestures are events of their own, not touches: the
+         * server (XI 2.4) or the compositor recognises them. */
+        static const char *phases[] = { "BEGIN", "UPDATE", "END", "CANCEL" };
+        GdkTouchpadGesturePhase ph = gdk_touchpad_event_get_gesture_phase(e);
+        double dx = 0, dy = 0;
+
+        if (t != GDK_TOUCHPAD_HOLD)
+            gdk_touchpad_event_get_deltas(e, &dx, &dy);
+        if (t == GDK_TOUCHPAD_PINCH)
+            say("touchpad PINCH %s fingers=%d scale=%.3f angle=%.1f dx=%.1f dy=%.1f",
+                phases[ph], gdk_touchpad_event_get_n_fingers(e),
+                gdk_touchpad_event_get_pinch_scale(e),
+                gdk_touchpad_event_get_pinch_angle_delta(e) * 180.0 / G_PI, dx, dy);
+        else
+            say("touchpad %s %s fingers=%d dx=%.1f dy=%.1f",
+                t == GDK_TOUCHPAD_SWIPE ? "SWIPE" : "HOLD", phases[ph],
+                gdk_touchpad_event_get_n_fingers(e), dx, dy);
+        return FALSE;
+    }
     default: return FALSE;
     }
     flush_updates();
