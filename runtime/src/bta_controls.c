@@ -8388,7 +8388,9 @@ void bta_core_register(void)
          *   Windows backend, measured, delivers one finger as a mouse
          */
         /* Swipe(vx, vy, fingers)
-         *   a flick as the fingers lift, while `Gestures` is on: the velocity in
+         *   a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per
+         *   second or more** (GTK reports a swipe at the end of every press, a
+         *   tap included, with a velocity of nothing): the velocity in
          *   pixels per second (a touchpad's are its own, accelerated units: a fast
          *   flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse
          *   drag released while moving is one too), `3` or `4`; two fingers

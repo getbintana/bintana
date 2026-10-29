@@ -6960,8 +6960,17 @@ static void gestures_begin(GtkGesture *g, GdkEventSequence *seq, gpointer data)
     st->begun   = FALSE;
 }
 
+/* Below this a finger that lifted was not flicking: GTK reports a swipe at the
+ * end of *every* press, a tap and a click included, with a velocity of nothing
+ * (measured: one per tap, long press and pinch), and a touchpad's slow swipe
+ * ends at rest. */
+#define SWIPE_MIN_SPEED 100.0
+
 static void swipe_emit(BtaWidget *w, double vx, double vy, int fingers)
 {
+    if (hypot(vx, vy) < SWIPE_MIN_SPEED)
+        return;
+
     JSContext *ctx = w->ctx;
     JSValue    argv[3] = { JS_NewFloat64(ctx, vx), JS_NewFloat64(ctx, vy),
                            JS_NewInt32(ctx, fingers) };

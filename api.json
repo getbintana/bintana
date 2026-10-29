@@ -46,7 +46,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -284,7 +284,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -536,7 +536,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -751,7 +751,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -940,7 +940,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -1218,7 +1218,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -1393,7 +1393,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -1725,7 +1725,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -1903,7 +1903,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -2109,7 +2109,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -2402,7 +2402,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -2640,7 +2640,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -3059,7 +3059,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -3256,7 +3256,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -3481,7 +3481,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -3674,7 +3674,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -4126,7 +4126,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -4315,7 +4315,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -4531,7 +4531,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -4746,7 +4746,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -5001,7 +5001,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -5226,7 +5226,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -5431,7 +5431,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -5787,7 +5787,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -6071,7 +6071,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -6257,7 +6257,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -6435,7 +6435,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -6668,7 +6668,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -6893,7 +6893,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -7204,7 +7204,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -7433,7 +7433,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -7645,7 +7645,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -7927,7 +7927,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -8384,7 +8384,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -8632,7 +8632,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -8815,7 +8815,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -9025,7 +9025,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -9223,7 +9223,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -9465,7 +9465,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -10157,7 +10157,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -10441,7 +10441,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -10765,7 +10765,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -10974,7 +10974,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -11190,7 +11190,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -11546,7 +11546,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -11919,7 +11919,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",
@@ -12873,7 +12873,7 @@
         {
           "Name": "Swipe",
           "Signature": "(vx, vy, fingers)",
-          "Doc": "a flick as the fingers lift, while `Gestures` is on: the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
+          "Doc": "a flick as the fingers lift, while `Gestures` is on, **at 100 pixels per second or more** (GTK reports a swipe at the end of every press, a tap included, with a velocity of nothing): the velocity in pixels per second (a touchpad's are its own, accelerated units: a fast flick reads in the tens of thousands) and **how many fingers made it** -- `1` (a mouse drag released while moving is one too), `3` or `4`; two fingers moving are `Transform`'s pan. A touchpad's three- and four-finger swipe is the same event, its velocity taken from the last 100 ms of the gesture; **there is no long press with fingers on a touchpad on X11**, which has no hold gesture"
         },
         {
           "Name": "MouseMove",

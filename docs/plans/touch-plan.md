@@ -156,6 +156,13 @@ Each is shippable alone.
    wheel is kept, and `Area_MouseCancel` lets go of a mouse drag when a second
    finger arrives. Driven with `Emit` in a scratch copy (levels, pan sign and
    magnitude, `End` ending it); the real pinch is for a person with a touchpad.
+   **A touchscreen measured it** (virtual device, `run.sh`): pinch ends at scale
+   3.415 for a requested 3.5, a rotation at 59.1 deg for 60, a pan at dx 198 for
+   200 -- each short by the **first step**, the baseline being taken at the first
+   update (about 2 %) -- and `Transform` arrives for two fingers moving in any
+   direction, 87 events each, with `MouseCancel` for the first finger. Also
+   measured: GTK reports a swipe at the end of **every** press, a tap included, with
+   no velocity, so `Swipe` is raised only from 100 px/s.
    **A touchpad measured it** (FTCS0038 on Xorg 21.1, libinput 1.31, GTK 4.22): a
    pinch raises `Begin`, about 15 `Update`s and `End`, the scale running from 1 to
    2.04 and back to 0.57, a rotation reaching 45 deg with the scale near 1, and

@@ -17561,6 +17561,7 @@ class Form1 extends Form {
                   "flick() { xdotool mousemove $1 $2 mousedown 1; sleep 0.1\n" +
                   "    for k in 1 2 3 4 5 6 7 8 9 10; do xdotool mousemove_relative -- 14 0; sleep 0.012; done\n" +
                   "    xdotool mouseup 1; sleep 0.6; }\n" +
+                  "xdotool mousemove $((X+40)) $((Y+60)) click 1; sleep 0.5\n" +
                   "flick $((X+40)) $((Y+60))\n" +
                   "flick $((X+280)) $((Y+60))\n" +
                   "touch \"$dir/done\"\n" +
@@ -17574,7 +17575,7 @@ class Form1 extends Form {
         check("and said what it heard", got !== null, ran.Output);
         if (!got) return;
 
-        eq("a flick on a pad with Gestures on is heard, fast and to the right, with the velocity and one finger",
+        eq("a click on a pad with Gestures on is not a flick, and a flick is heard, fast and to the right, with the velocity and one finger",
            got.log.filter((l) => l.startsWith("on")).join(","), "on right number 1");
         eq("and on a pad with them off, not at all",
            got.log.filter((l) => l.startsWith("off")).length, 0);
