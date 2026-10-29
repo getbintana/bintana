@@ -52,8 +52,9 @@ three things a person expects and cannot do:
   already recognised it; a one-finger swipe is 19 `move`s; a pinch and a pan are
   `down=1`, 44 `move`s and **`up=0`**.
 - **That last row is a bug of its own, with or without gestures.** When the
-  second finger arrives GTK cancels the first's click, and `MouseUp` never
-  comes: a program that drags something with the mouse is left holding it.
+  second finger arrives GTK cancels the first's click (`cancel`, by design) and
+  `MouseUp` never comes: a program that drags something with the mouse is left
+  holding it.
 - **GTK on Windows 11 (the Win32 backend) delivers a mouse.** In a QEMU guest
   with injected touch (`inject.ps1`): a tap is a click, a long press is a held
   button (no `button=3`: Windows makes the right click from `WM_CONTEXTMENU`,
@@ -108,10 +109,18 @@ that has a handler -- the controller is attached when a handler exists, the way
 
 Each is shippable alone.
 
-1. **The orphan `MouseUp`.** When GTK cancels a click because a second finger
-   arrived, the widget gets a `MouseUp` (or a cancel the program can read), so a
-   drag ends. A C change in `attach_mouse` with a `tests/widgets` assertion
-   that `Emit`s the cancel path; the multi-touch round trip is the manual run.
+1. **`MouseCancel(x, y)`.** `attach_mouse` connects only `pressed` and
+   `released`; GTK's `GtkGestureClick` handles one point at a time and **by
+   design** cancels its sequence when a second arrives (or a parent claims it),
+   emitting `cancel` and no `released` -- documented, and no report of it as a
+   bug was found on gitlab.gnome.org. The runtime connects `cancel` and raises
+   `MouseCancel` with the last point. **A new event and not a `MouseUp`**: a
+   program that confirms a drag in `MouseUp` (drops a card, closes a stroke,
+   applies a crop) would confirm what was abandoned. It does not touch the
+   ordinary road (a button's `Click` never sees it), so nothing that works today
+   changes; a program that drags adopts it, and the ones here that do
+   (`kanban`, `vector`, `gpx`) are updated in the same change. A `tests/widgets`
+   assertion `Emit`s the path; the two-finger round trip is the manual run.
    Argued for on its own: **it is wrong today for any touch screen**.
 2. **`LongPress` and the touch context menu.** The event, the menu on a long
    press from a touch or pen, `Screen.Touch`. Portable: it works on Windows
