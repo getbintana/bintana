@@ -1087,6 +1087,10 @@ function runTests(found, filter, json) {
  * ---------------------------------------------------------------------- */
 const PROBE_URL = "http://connectivitycheck.gstatic.com/generate_204";
 
+/* A `Task` worker runs this file too and has no `Network` -- nor `Http` --
+ * so the verb is put on it only where it exists. */
+if (typeof Network !== "undefined") {
+
 /**
  * asks whether the internet answers or a captive portal does instead, and
  * calls `callback({ Connectivity, Url, Why })`: `"Full"` (it answered 204),
@@ -1099,9 +1103,7 @@ const PROBE_URL = "http://connectivitycheck.gstatic.com/generate_204";
  * @param {function} callback
  * @param {{Url?: string, Timeout?: number}} [options]
  */
-/* A `Task` worker runs this file too and has no `Network` -- nor `Http` --
- * so the verb is put on it only where it exists. */
-if (typeof Network !== "undefined") Network.Probe = function (callback, options) {
+Network.Probe = function (callback, options) {
     if (typeof callback !== "function")
         throw new TypeError("Network.Probe(callback, [options]): callback is a function");
     const opts = options === undefined ? {} : options;
@@ -1132,6 +1134,8 @@ if (typeof Network !== "undefined") Network.Probe = function (callback, options)
         callback({ Connectivity: "None", Url: "", Why: e.Kind || "Error" });
     });
 };
+
+}
 
 /* ------------------------------------------------------------------------
  * Dictionary -- what a bag of data holds.
