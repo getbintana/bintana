@@ -49,34 +49,35 @@ class TouchProbe extends Form {
     }
 
     say(what, detail) {
+        /* Not `Form_MouseMove`: a handler that writes into a control the pointer
+         * is over is a handler that makes more events to log. */
         const now  = Date.now() - this.start;
-        const line = `${String(now).padStart(7)} +${String(now - this.last).padStart(5)}  ${what.padEnd(10)} ${detail}\n`;
+        const line = `${String(now).padStart(7)} +${String(now - this.last).padStart(5)}  ${what.padEnd(13)} ${detail}\n`;
         this.last = now;
         this.Log.Append(line);
         this.Log.ScrollY = this.Log.ScrollMaxY;
         try { File.Append(this.path, line); } catch (e) { /* the screen still has it */ }
     }
 
-    Area_MouseDown(x, y, button, ctrl, shift) {
-        this.say("down", `x=${Math.round(x)} y=${Math.round(y)} button=${button}`);
+    /* The same six events from three places, because *where* an event arrives
+     * is the answer to half the questions: the blue area, the form under it,
+     * and the log editor (whose own gestures may claim a press and keep it from
+     * ever reaching a handler). `where` says which one heard it. */
+    heard(where, what, x, y, extra) {
+        this.say(`${where} ${what}`, `x=${Math.round(x)} y=${Math.round(y)}${extra ? " " + extra : ""}`);
     }
 
-    Area_MouseUp(x, y, button, ctrl, shift) {
-        this.say("up", `x=${Math.round(x)} y=${Math.round(y)} button=${button}`);
-    }
+    Area_MouseDown(x, y, button)  { this.heard("area", "down", x, y, `button=${button}`); }
+    Area_MouseUp(x, y, button)    { this.heard("area", "up", x, y, `button=${button}`); }
+    Area_MouseMove(x, y)          { this.heard("area", "move", x, y); }
+    Area_DblClick(x, y, button)   { this.heard("area", "dbl", x, y, `button=${button}`); }
+    Area_MouseWheel(dx, dy)       { this.say("area wheel", `dx=${dx} dy=${dy}`); }
 
-    Area_MouseMove(x, y, button, ctrl, shift) {
-        this.say("move", `x=${Math.round(x)} y=${Math.round(y)}`);
-    }
+    Form_MouseDown(x, y, button)  { this.heard("form", "down", x, y, `button=${button}`); }
+    Form_MouseUp(x, y, button)    { this.heard("form", "up", x, y, `button=${button}`); }
+    Form_MouseWheel(dx, dy)       { this.say("form wheel", `dx=${dx} dy=${dy}`); }
 
-    Area_DblClick(x, y, button, ctrl, shift) {
-        this.say("dblclick", `x=${Math.round(x)} y=${Math.round(y)} button=${button}`);
-    }
-
-    Area_MouseWheel(dx, dy) {
-        this.say("wheel", `dx=${dx} dy=${dy}`);
-    }
-
-    Area_MouseEnter(x, y) { this.say("enter", `x=${Math.round(x)} y=${Math.round(y)}`); }
-    Area_MouseLeave()     { this.say("leave", ""); }
+    Log_MouseDown(x, y, button)   { this.heard("log", "down", x, y, `button=${button}`); }
+    Log_MouseUp(x, y, button)     { this.heard("log", "up", x, y, `button=${button}`); }
+    Log_MouseWheel(dx, dy)        { this.say("log wheel", `dx=${dx} dy=${dy}`); }
 }
