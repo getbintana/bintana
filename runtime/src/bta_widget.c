@@ -8071,6 +8071,11 @@ static void attach_mouse(BtaWidget *w)
     g_signal_connect(click, "pressed",  G_CALLBACK(on_mouse_pressed),  w);
     g_signal_connect(click, "released", G_CALLBACK(on_mouse_released), w);
     g_signal_connect(click, "cancel",   G_CALLBACK(on_mouse_cancelled), w);
+    /* A second finger does not cancel the click, it *ends* it: measured with a
+     * virtual touch screen, `end` arrives and neither `released` nor `cancel`
+     * does.  After the class handler, which is what raises `released` on a
+     * click that did finish, so only a press still marked down is reported. */
+    g_signal_connect_after(click, "end", G_CALLBACK(on_mouse_cancelled), w);
     g_object_set_data_full(G_OBJECT(click), MOUSE_STATE_KEY, g_new0(MouseState, 1), g_free);
     gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(click));
 
