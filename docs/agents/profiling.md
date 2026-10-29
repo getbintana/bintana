@@ -151,6 +151,16 @@ layout; none had anything to do with it.
 `perf record` over `tests/bench --child <program>` against a `RelWithDebInfo`
 build is the profile of the engine (Sysprof's marks are the profile of a
 program). Four things measured with it, after the eleventh and twelfth patches:
+- **At `perf_event_paranoid` 2, `-g` is what fails**: `perf record -g` (and
+  `--call-graph dwarf`) answers *Failure to open any events for recording*,
+  which reads as "perf does not work here", while a flat
+  `perf record -e cpu_core/cycles/u` works. I concluded the first and wrote it
+  into a plan before trying the second. A flat profile by `--sort dso` and
+  then `--dsos bintana --sort sym` is enough to split a workload between the
+  interpreter and GTK; to profile a suite, put a script in `BINTANA=` that
+  `exec`s `perf record ... build-rwd/bintana "$@"`, and read it per process
+  (`--sort pid`, then `--pid`), since `perf` follows the children the tests start.
+  What that split found is in `docs/plans/interpreter-plan.md`, stage 0.
 - **On a hybrid CPU (performance and efficiency cores) `perf` records two events.** Without
   `-e cpu_core/cycles/u` the report shows `cpu_atom/cycles` first, and its 23
   samples -- start-up, on an efficiency core -- put `do_lookup_x` in the

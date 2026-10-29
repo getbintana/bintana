@@ -1,6 +1,6 @@
 # The interpreter: what is left to make faster, and in what order
 
-**Stage 1 built** (2026-10-29), stages 0 and 2 not started. The cheap half is done: the GCC 14+ fix
+**Stages 0 and 1 done** (2026-10-29); **stage 2 does not go ahead**: the gate in stage 0 measured property access at half a percent of a real workload. The cheap half is done: the GCC 14+ fix
 (`2f0aa72`, two to three times faster), the release builds optimised
 (`RelWithDebInfo`), and the eleventh and twelfth fork patches (`string2`
 34.8 -> 3.9 s, `string1` 10.3 -> 5.5 s). `tests/bench` went **65.5 -> 30.0 s**
@@ -31,11 +31,8 @@ to attack it at all.
 The spreads `bench.sh` printed were 8-341 ms; the two string programs spend
 their time in the C library, not the loop, and moved within theirs.
 
-**Stage 0's first step is done by that table; its second is not**: `perf
-record` could not open any event on the machine it was measured on (`Failure
-to open any events for recording`, `perf_event_paranoid` 2), so the split of a
-real workload between `JS_CallInternal` and GTK, which is the gate for stage 2,
-is still unmeasured.
+**Stage 0 is done**: this table is its first step, and the split of three real
+workloads below is the rest -- which closes the gate on stage 2.
 
 ## Stage 0: is the interpreter what a Bintana program waits for?
 
@@ -55,6 +52,31 @@ number that ended it.
 3. Write the split here. **The gate**: stage 2 goes ahead only if property
    access (`find_own_property` and the `JS_*PropertyInternal*` family) is a
    visible share of a real workload, not only of `btree`.
+
+### The split, measured 2026-10-29 -- and the gate is not passed
+
+`perf record -e cpu_core/cycles/u` (flat: `-g` is refused at
+`perf_event_paranoid` 2 and a flat profile answers this), `RelWithDebInfo`,
+stage 1 in. "Compiling" is the parser, the scope resolver and the atom table;
+"executing" is `JS_CallInternal` and the property functions.
+
+| workload | samples | `bintana` in all | compiling | executing | property access | the rest |
+|---|---|---|---|---|---|---|
+| the IDE starting on a copy of `examples/clients`, 25 s | 2K | 16.8 % | 8.5 % | 2.2 % | ~0 % | GL (llvmpipe) 19 %, `ld.so` 11 %, libc 13 %, GTK 8 % |
+| `tests/ide` up to `designer` | 16K | 7.3 % | 1.7 % | 2.3 % | 0.5 % | GTK 33 % (CSS selector matching the first two symbols), GObject 17 %, GLib 15 % |
+| `tests/widgets`, its own process | 71K in all | -- | -- | 11.6 % | 0.6 % | the interpreter share is the fork patches' assertions, which run tight loops on purpose |
+
+**Property access is half a percent of a real workload**, so stage 2 does not go
+ahead: days of work where a mistake answers a wrong value, to buy back at most
+that. What a Bintana program waits for is GTK -- the designer's time is CSS
+selector matching and GObject's type checks -- and, at start-up, **compiling**:
+half of what the IDE spends in its own binary while it opens is the parser,
+which is what [`bundle-plan.md`](bundle-plan.md)'s bytecode would remove.
+
+Two things that read wrong and are not: `tests/widgets` under `perf` is mostly
+two children -- a debugged one spinning on `Date.now` while it waits to be
+paused (`DebuggerOrders`), and `ld.so` from the dozens of children the suite
+starts -- so read it per process (`perf report --sort pid`, then `--pid`).
 
 Stage 1 does not wait for the gate: it is small, measured already, and costs
 nothing a program can see.
@@ -95,8 +117,7 @@ five per run, 3 000 000 turns. The spread between runs was 1-2 ms:
 
 Arithmetic gained more than the 0 % patch 4's note predicted: that note
 measured the hook compiled out against compiled in, on another day; why the
-branch cost the integer loop this time was not looked into (`perf` could not
-open events on the machine this was measured on).
+branch cost the integer loop this time was not looked into.
 
 **No assertion holds it, on purpose.** The patch rule asks for one that goes
 red when the patch is dropped, and the only thing dropping it changes is a
@@ -199,9 +220,9 @@ Recorded so they are not tried again:
 
 | stage | what | size | risk | waits for |
 |---|---|---|---|---|
-| 0 | the table, and `perf` over real workloads | an afternoon | none | nothing |
+| 0 | the table, and `perf` over real workloads | an afternoon | none | **done** 2026-10-29 |
 | 1 | a second dispatch table for the debugger | a day | low: one macro, and the debugger's tests | **built** 2026-10-29 |
-| 2 | monomorphic inline caches, own properties | days | high: wrong values, not crashes | the gate in stage 0 |
+| 2 | monomorphic inline caches, own properties | days | high: wrong values, not crashes | **not going ahead**: the gate measured 0.5 % |
 | 2b | the prototype half | days | high | stage 2 paying |
 
 Each fork change follows the rule the twelve patches follow: one commit in
