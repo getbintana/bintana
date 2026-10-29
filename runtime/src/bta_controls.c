@@ -8387,9 +8387,14 @@ void bta_core_register(void)
          *   **Only where the toolkit delivers a second finger**: Linux does; the
          *   Windows backend, measured, delivers one finger as a mouse
          */
-        /* Swipe(vx, vy)
-         *   a one-finger flick, as it lifts, while `Gestures` is on: the velocity in
-         *   pixels per second. A mouse drag released while moving is one too
+        /* Swipe(vx, vy, fingers)
+         *   a flick as the fingers lift, while `Gestures` is on: the velocity in
+         *   pixels per second and **how many fingers made it** -- `1` (a mouse
+         *   drag released while moving is one too), `3` or `4`; two fingers
+         *   moving are `Transform`'s pan. A touchpad's three- and four-finger
+         *   swipe is the same event, its velocity taken from the last 100 ms of
+         *   the gesture; **there is no long press with fingers on a touchpad on X11**,
+         *   which has no hold gesture
          */
         /* MouseMove(x, y, button, ctrl, shift)
          *   the pointer moved over it. `button` is `0` here

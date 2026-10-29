@@ -6843,7 +6843,10 @@ static JSValue w_set_accept_drop(JSContext *ctx, JSValueConst this_val, JSValueC
 
 typedef struct {
     BtaWidget  *w;
-    GtkGesture *zoom, *rotate, *swipe;
+    GtkGesture *zoom, *rotate, *swipes[3];     /* a flick with 1, 3 and 4 fingers */
+    GtkEventController *pad;                   /* a touchpad's own swipe events */
+    struct { guint32 t; double dx, dy; } samples[16];
+    int         nsamples;
     gboolean    pending;                /* recognised, the baseline not yet taken */
     gboolean    begun;
     double      cx0, cy0, scale0, prev, angle;   /* angle: radians, unwrapped */
@@ -6957,15 +6960,78 @@ static void gestures_begin(GtkGesture *g, GdkEventSequence *seq, gpointer data)
     st->begun   = FALSE;
 }
 
+static void swipe_emit(BtaWidget *w, double vx, double vy, int fingers)
+{
+    JSContext *ctx = w->ctx;
+    JSValue    argv[3] = { JS_NewFloat64(ctx, vx), JS_NewFloat64(ctx, vy),
+                           JS_NewInt32(ctx, fingers) };
+
+    bta_emit(w, "Swipe", 3, argv);
+    for (int i = 0; i < 3; i++)
+        JS_FreeValue(ctx, argv[i]);
+}
+
 static void gestures_swiped(GtkGestureSwipe *g, double vx, double vy, gpointer data)
 {
     GestureState *st = data;
-    JSContext    *ctx = st->w->ctx;
-    JSValue       argv[2] = { JS_NewFloat64(ctx, vx), JS_NewFloat64(ctx, vy) };
 
-    bta_emit(st->w, "Swipe", 2, argv);
-    JS_FreeValue(ctx, argv[0]);
-    JS_FreeValue(ctx, argv[1]);
+    swipe_emit(st->w, vx, vy, GPOINTER_TO_INT(g_object_get_data(G_OBJECT(g), "bta-fingers")));
+}
+
+/*
+ * A touchpad's three- and four-finger swipe is an event of its own
+ * (`GDK_TOUCHPAD_SWIPE`, with the finger count) that no gesture collects, and it
+ * carries deltas and no velocity.  The velocity a flick needs is made here from
+ * the last 100 ms of them, so the same `Swipe` says it for a finger on glass and
+ * for fingers on a pad.  **X11 has only begin, update and end**: there is no
+ * touchpad *hold* (XI 2.4 does not define one -- measured: three fingers held
+ * still raise nothing), so a long press with fingers on a pad is not something
+ * this display can say.
+ */
+static gboolean gestures_pad(GtkEventControllerLegacy *c, GdkEvent *e, gpointer data)
+{
+    GestureState *st = data;
+
+    if (gdk_event_get_event_type(e) != GDK_TOUCHPAD_SWIPE)
+        return FALSE;
+
+    GdkTouchpadGesturePhase phase = gdk_touchpad_event_get_gesture_phase(e);
+    guint32 now = gdk_event_get_time(e);
+
+    if (phase == GDK_TOUCHPAD_GESTURE_PHASE_BEGIN ||
+        phase == GDK_TOUCHPAD_GESTURE_PHASE_CANCEL) {
+        st->nsamples = 0;
+    } else if (phase == GDK_TOUCHPAD_GESTURE_PHASE_UPDATE) {
+        double dx, dy;
+
+        gdk_touchpad_event_get_deltas(e, &dx, &dy);
+        if (st->nsamples == 16) {
+            memmove(st->samples, st->samples + 1, 15 * sizeof st->samples[0]);
+            st->nsamples = 15;
+        }
+        st->samples[st->nsamples].t  = now;
+        st->samples[st->nsamples].dx = dx;
+        st->samples[st->nsamples].dy = dy;
+        st->nsamples++;
+    } else if (phase == GDK_TOUCHPAD_GESTURE_PHASE_END) {
+        double  sx = 0, sy = 0;
+        guint32 first = now;
+
+        for (int i = 0; i < st->nsamples; i++) {
+            if (now - st->samples[i].t > 100)
+                continue;
+            if (st->samples[i].t < first)
+                first = st->samples[i].t;
+            sx += st->samples[i].dx;
+            sy += st->samples[i].dy;
+        }
+        double secs = (now - first > 16 ? now - first : 16) / 1000.0;
+        int    n    = (int)gdk_touchpad_event_get_n_fingers(e);
+
+        st->nsamples = 0;
+        swipe_emit(st->w, sx / secs, sy / secs, n);
+    }
+    return FALSE;
 }
 
 static JSValue w_get_gestures(JSContext *ctx, JSValueConst this_val)
@@ -6994,33 +7060,44 @@ static JSValue w_set_gestures(JSContext *ctx, JSValueConst this_val, JSValueCons
         st->w      = w;
         st->zoom   = gtk_gesture_zoom_new();
         st->rotate = gtk_gesture_rotate_new();
-        st->swipe  = gtk_gesture_swipe_new();
         gtk_gesture_group(st->zoom, st->rotate);
+
+        /* A flick with one finger, and with three or four. Two are not one of
+         * these: two fingers moving are `Transform`'s pan, and the same
+         * movement cannot be both. */
+        static const int counts[3] = { 1, 3, 4 };
+
+        for (int i = 0; i < 3; i++) {
+            st->swipes[i] = g_object_new(GTK_TYPE_GESTURE_SWIPE, "n-points", counts[i], NULL);
+            g_object_set_data(G_OBJECT(st->swipes[i]), "bta-fingers", GINT_TO_POINTER(counts[i]));
+            g_signal_connect(st->swipes[i], "swipe", G_CALLBACK(gestures_swiped), st);
+        }
+        st->pad = gtk_event_controller_legacy_new();
+        g_signal_connect(st->pad, "event", G_CALLBACK(gestures_pad), st);
 
         g_signal_connect(st->zoom, "begin",  G_CALLBACK(gestures_begin), st);
         g_signal_connect_after(st->zoom, "update", G_CALLBACK(gestures_update), st);
         g_signal_connect(st->zoom, "end",    G_CALLBACK(gestures_end), st);
         g_signal_connect(st->zoom, "cancel", G_CALLBACK(gestures_end), st);
-        g_signal_connect(st->swipe, "swipe", G_CALLBACK(gestures_swiped), st);
 
         /* The state lives as long as the zoom gesture, whose signals are the
          * only thing that reads it; the widget owns all three controllers. */
         g_object_set_data_full(G_OBJECT(st->zoom), "bta-gesture-state", st, g_free);
         gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(st->zoom));
         gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(st->rotate));
-        gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(st->swipe));
+        for (int i = 0; i < 3; i++)
+            gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(st->swipes[i]));
+        gtk_widget_add_controller(w->gtk, st->pad);
         g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY, st->zoom);
-        g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY "-swipe", st->swipe);
-        g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY "-rotate", st->rotate);
     } else if (!on && zoom) {
-        GtkGesture *rotate = g_object_get_data(G_OBJECT(w->gtk), GESTURES_KEY "-rotate");
-        GtkGesture *swipe  = g_object_get_data(G_OBJECT(w->gtk), GESTURES_KEY "-swipe");
+        GestureState *st = g_object_get_data(G_OBJECT(zoom), "bta-gesture-state");
 
         g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY, NULL);
-        g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY "-rotate", NULL);
-        g_object_set_data(G_OBJECT(w->gtk), GESTURES_KEY "-swipe", NULL);
-        gtk_widget_remove_controller(w->gtk, GTK_EVENT_CONTROLLER(swipe));
-        gtk_widget_remove_controller(w->gtk, GTK_EVENT_CONTROLLER(rotate));
+        /* The state dies with the zoom gesture: the others come out first. */
+        gtk_widget_remove_controller(w->gtk, st->pad);
+        for (int i = 0; i < 3; i++)
+            gtk_widget_remove_controller(w->gtk, GTK_EVENT_CONTROLLER(st->swipes[i]));
+        gtk_widget_remove_controller(w->gtk, GTK_EVENT_CONTROLLER(st->rotate));
         gtk_widget_remove_controller(w->gtk, GTK_EVENT_CONTROLLER(zoom));
     }
     return JS_UNDEFINED;

@@ -17539,7 +17539,7 @@ class Form1 extends Form {
                   "            if (File.Exists(Application.Directory + '/done')) this.report();\n" +
                   "        });\n" +
                   "    }\n" +
-                  "    On_Swipe(vx, vy)  { this.log.push('on ' + (vx > 500 ? 'right' : 'slow') + ' ' + typeof vy); }\n" +
+                  "    On_Swipe(vx, vy, fingers)  { this.log.push('on ' + (vx > 500 ? 'right' : 'slow') + ' ' + typeof vy + ' ' + fingers); }\n" +
                   "    Off_Swipe(vx, vy) { this.log.push('off'); }\n" +
                   "    report() {\n" +
                   "        File.SaveJson(Application.Directory + '/out.json', { log: this.log });\n" +
@@ -17574,8 +17574,8 @@ class Form1 extends Form {
         check("and said what it heard", got !== null, ran.Output);
         if (!got) return;
 
-        eq("a flick on a pad with Gestures on is heard, fast and to the right, with both numbers",
-           got.log.filter((l) => l.startsWith("on")).join(","), "on right number");
+        eq("a flick on a pad with Gestures on is heard, fast and to the right, with the velocity and one finger",
+           got.log.filter((l) => l.startsWith("on")).join(","), "on right number 1");
         eq("and on a pad with them off, not at all",
            got.log.filter((l) => l.startsWith("off")).length, 0);
     }

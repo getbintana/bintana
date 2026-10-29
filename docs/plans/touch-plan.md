@@ -157,9 +157,15 @@ Each is shippable alone.
    2.04 and back to 0.57, a rotation reaching 45 deg with the scale near 1, and
    `dx`/`dy` following the fingers' drift. A touchpad does not move the pointer,
    so `x`/`y` start at it and drift with the fingers: the pivot to zoom about, which
-   is what `examples/gpx` wants. GTK also delivers a touchpad's three- and
-   four-finger **swipe** as an event no gesture collects (`GDK_TOUCHPAD_SWIPE`,
-   with the finger count): not built, and a separate event if a caller asks.
+   **`Swipe` carries the finger count** (`Swipe(vx, vy, fingers)`): `1`, `3` or
+   `4`. A touchpad's three- and four-finger swipe is the same event, its velocity
+   made from the last 100 ms of the pad's deltas, which carry none; a touchscreen's
+   three or four fingers are a `GtkGestureSwipe` per count. **Two fingers are not
+   one**: two fingers moving are `Transform`'s pan and cannot be both. **A
+   long press with several fingers is not built**: the touchpad on X11 has no hold
+   gesture (XI 2.4 does not define one -- measured, three fingers held still
+   raise nothing; Wayland's does, from GTK 4.6, unmeasured), and two fingers on
+   glass would compete with `Transform`, which claims them at the first update.
 4. **Documentation**, in the same change as each stage: the description beside
    each event in C, `api.json`, `bintana-docs`, and a paragraph in
    `docs/testing.md` on what is manual.
