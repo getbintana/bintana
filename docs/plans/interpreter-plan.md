@@ -12,21 +12,30 @@ to attack it at all.
 
 ## Where the numbers stand
 
-`RelWithDebInfo`, best of three, this machine, after patch 12:
+`RelWithDebInfo`, best of three, this machine, pinned to one core
+(`taskset -c 2`), load average 2.2, 2026-10-29. *Before* is after patch 12,
+*after* is with stage 1; the two were run back to back.
 
-| program | what it is | ms | what `perf` says |
-|---|---|---|---|
-| `btree` | allocation, `this.left` | -- | `find_own_property`, `JS_SetPropertyInternal2`, the arena |
-| `mandelbrot` | floating point | -- | beats CPython |
-| `nbody` | objects of numbers | -- | beats CPython |
-| `polynom` | an array of doubles | -- | 90 % `JS_CallInternal`, spread over every opcode |
-| `primes` | an 80 MB array | -- | 27 % `set_value`: cache misses on 16-byte values |
-| `sort` | compares and swaps | -- | 90 % `JS_CallInternal` |
-| `string1` | `replaceAll` on a growing string | 5505 | copying, which `memcpy` already does |
-| `string2` | 26 million appends | 3938 | linear since patch 11 |
+| program | what it is | before, ms | after, ms | | what `perf` says |
+|---|---|---|---|---|---|
+| `btree` | allocation, `this.left` | 3978 | 3676 | -8 % | `find_own_property`, `JS_SetPropertyInternal2`, the arena |
+| `mandelbrot` | floating point | 2124 | 1951 | -8 % | beats CPython |
+| `nbody` | objects of numbers | 1799 | 1630 | -9 % | beats CPython |
+| `polynom` | an array of doubles | 7045 | 6274 | -11 % | 90 % `JS_CallInternal`, spread over every opcode |
+| `primes` | an 80 MB array | 4733 | 4576 | -3 % | 27 % `set_value`: cache misses on 16-byte values |
+| `sort` | compares and swaps | 2749 | 2430 | -12 % | 90 % `JS_CallInternal` |
+| `string1` | `replaceAll` on a growing string | 5763 | 5904 | noise | copying, which `memcpy` already does |
+| `string2` | 26 million appends | 4164 | 4298 | noise | linear since patch 11 |
+| | **in all** | 32355 | 30739 | -5 % | |
 
-**Stage 0 fills the dashes** -- the per-program column was never written down
-in one place, and every stage below is judged against it.
+The spreads `bench.sh` printed were 8-341 ms; the two string programs spend
+their time in the C library, not the loop, and moved within theirs.
+
+**Stage 0's first step is done by that table; its second is not**: `perf
+record` could not open any event on the machine it was measured on (`Failure
+to open any events for recording`, `perf_event_paranoid` 2), so the split of a
+real workload between `JS_CallInternal` and GTK, which is the gate for stage 2,
+is still unmeasured.
 
 ## Stage 0: is the interpreter what a Bintana program waits for?
 
@@ -36,7 +45,7 @@ grid rebuilt, the IDE's own 110 KB `MainForm.js`. **If that time is in GTK,
 no interpreter work below is worth its risk**, and the plan ends here with the
 number that ended it.
 
-1. Fill the table above (`BINTANA=build-rwd/bintana ./tests/bench.sh`, with
+1. **Done 2026-10-29.** Fill the table above (`BINTANA=build-rwd/bintana ./tests/bench.sh`, with
    `uptime` checked first -- a browser tab at 99 % moved the whole bench from
    30 to 39 s once).
 2. `perf record -e cpu_core/cycles/u` over three real workloads, each against a
