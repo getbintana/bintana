@@ -6996,7 +6996,10 @@ static gboolean gestures_pad(GtkEventControllerLegacy *c, GdkEvent *e, gpointer 
         return FALSE;
 
     GdkTouchpadGesturePhase phase = gdk_touchpad_event_get_gesture_phase(e);
-    guint32 now = gdk_event_get_time(e);
+    /* When it arrived, not the event's own stamp: one clock for a velocity. The
+     * first version used the stamp and answered exactly `0` for both swipes of a
+     * touchpad run; the stamp is the suspect, not yet shown to be the cause. */
+    guint32 now = (guint32)(g_get_monotonic_time() / 1000);
 
     if (phase == GDK_TOUCHPAD_GESTURE_PHASE_BEGIN ||
         phase == GDK_TOUCHPAD_GESTURE_PHASE_CANCEL) {
