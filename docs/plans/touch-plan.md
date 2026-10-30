@@ -1,10 +1,11 @@
 # Touch: what a finger can do in a Bintana window
 
-**Not started, measured, with the first stage argued for.** Written on
-2026-10-29 after the same touches were played at plain GTK and at the runtime on
-two platforms (Linux with a virtual touch screen, a Windows 11 guest with
-injected touch). The decision is *a few high-level gestures, opt-in per widget,
-and the platform's limit stated in the docs* -- not a general touch API.
+**Stages 1 to 3 built on Linux (2026-10-30); the touchscreen half on Windows
+still awaits its first run.** Written on 2026-10-29 after the same touches were
+played at plain GTK and at the runtime on two platforms (Linux with a virtual
+touch screen, a Windows 11 guest with injected touch). The decision is *a few
+high-level gestures, opt-in per widget, and the platform's limit stated in the
+docs* -- not a general touch API.
 
 ## What is wanted
 
@@ -137,8 +138,7 @@ Each is shippable alone.
    a real tablet is the measurement. The cost is one more controller per widget
    (six), which is what the plan's *opt-in by handler* would have saved --
    not worth a per-widget switch until a measurement of the IDE says so.
-3. **`Transform` and `Swipe` -- built, and verified with a touchpad (Linux, X11); the touchscreen half awaits its first run.**
-   awaits its first run.** `Gestures = true` on a control attaches a grouped
+3. **`Transform` and `Swipe` -- built, and verified with a touchpad (Linux, X11); the touchscreen half awaits its first run.** `Gestures = true` on a control attaches a grouped
    zoom and rotate (the centre between the fingers gives the pan, read from the
    gesture's `update` so a pan with constant distance still raises it) and a
    swipe. `Transform(phase, dx, dy, scale, angle, x, y)` is deltas since `Begin`,
@@ -177,8 +177,8 @@ Each is shippable alone.
    gesture (XI 2.4 does not define one -- measured, three fingers held still
    raise nothing; Wayland's does, from GTK 4.6, unmeasured), and two fingers on
    glass would compete with `Transform`, which claims them at the first update.
-4. **Documentation**, in the same change as each stage: the description beside
-   each event in C, `api.json`, `bintana-docs`, and a paragraph in
+4. **Documentation -- built in the same change as each stage**: the description
+   beside each event in C, `api.json`, `bintana-docs`, and a paragraph in
    `docs/testing.md` on what is manual.
 
 GTK floor: `GtkGestureLongPress`, `Swipe`, `Zoom`, `Rotate`, `Drag` (with

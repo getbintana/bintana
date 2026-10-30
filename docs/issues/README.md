@@ -35,12 +35,6 @@ Seventeen of them came out of the October audit
 runtime and in the IDE and had them written in this form. The audit keeps the
 argument; these files keep the gap.
 
-**One of them was answered while this was written**: a table could not hide a
-column, and `Columns[i].Visible` hides one -- the column keeps its place, so
-the numbers the program uses are the ones it declared. What was left of that
-gap is the other two, and they are two files now.
-
-
 **A gap that is filled is deleted, not archived.** What the runtime can do is in
 [`llm/`](https://github.com/getbintana/bintana-llm/blob/main/docs/llm/README.md), which is where anybody looks for it; an issue kept
 past its answer is a second description of the same feature, written by somebody

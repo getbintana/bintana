@@ -38,6 +38,17 @@ export class Tests {
         this.failed = 0;
     }
 
+    /* Whether the child is still running: what Stop and `leaving` read. */
+    get running() {
+        return !!(this.job && this.job.Running);
+    }
+
+    /* Stops the child, as `Runner.stop` does. The exit callback clears
+     * `this.job`; setting it here would lose the last lines it printed. */
+    stop() {
+        if (this.running) this.job.Stop();
+    }
+
     /* Whether a project-relative file is one of the tests, which a normal run
      * never loads and `sources` therefore never lists. */
     static isTest(file) {
@@ -114,6 +125,7 @@ export class Tests {
                          (line) => this.line(line),
                          (code) => this.finished(job, code));
         this.job = job;
+        ide.refresh();
     }
 
     /* One line of the child's: a result, or something for Output. */
@@ -143,6 +155,7 @@ export class Tests {
         else
             this.ide.log(`[tests: ${this.passed} passed, ${this.failed} failed]\n`);
         this.show();
+        this.ide.refresh();
     }
 
     /* --- the view ---------------------------------------------------------- */

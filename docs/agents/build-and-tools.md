@@ -409,9 +409,9 @@ second name is ignored and the line says `[only Hash]`.
 
 ## To review later
 
-- **Three files hold a third of the runtime's C**: `bta_widget.c` (9472 lines),
-  `bta_controls.c` (8611) and `bta_table.c` (7187), 25k of 79k, counted on
-  2026-10-29. The class table already registers a class by rows from each module
+- **Three files hold a third of the runtime's C**: `bta_widget.c` (9959 lines),
+  `bta_controls.c` (8713) and `bta_table.c` (7470), 26k of 80k, counted on
+  2026-10-30. The class table already registers a class by rows from each module
   (`bta_register_classes`), so a split by widget family needs no change of
   design -- only the includes and the `add_executable` line. Nothing is wrong
   with them yet; the question is whether finding a widget's code has become

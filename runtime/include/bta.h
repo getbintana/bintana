@@ -408,7 +408,7 @@ struct BtaApp {
     char           *theme;
     bool            rtl;
 
-    /* `bintana test`: run `tests/*Test.js` instead of the startup form or
+    /* `bintana test`: run the `*Test.js` files in `tests/` instead of the startup form or
      * `main` (`run_tests`), print a line per test, or a JSON line with
      * `--json`, and keep only the tests whose `Class.method` contains
      * `test_filter` when there is one. */

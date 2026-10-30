@@ -516,11 +516,20 @@ static void on_rows_changed(GListModel *rows, guint pos, guint removed,
     BtaWidget  *w  = user_data;
     TableState *st = table_state(w);
 
-    (void)removed;
-    if (st->hidden && g_list_model_get_n_items(rows) == 0)
-        g_hash_table_remove_all(st->hidden);
-    if (added)
+    /*
+     * **A removal rebuilds the answers.** The set is keyed by the row object,
+     * and the signal does not hand back the objects that went -- so the only
+     * safe answer is to forget every one and ask the rows that are left. A
+     * pointer that is gone cannot then answer for a new row that happens to
+     * reuse its address, and the set cannot grow with rows nobody can see.
+     */
+    if (removed) {
+        if (st->hidden)
+            g_hash_table_remove_all(st->hidden);
+        table_ask_filter(w, 0, g_list_model_get_n_items(rows));
+    } else if (added) {
         table_ask_filter(w, pos, added);
+    }
 }
 
 /*
@@ -4270,36 +4279,8 @@ static JSValue table_set_header_menu(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
- * The n-th column that is shown, as the index it was declared at -- or -1.
- *
- * The columns keep their places whether they are shown or not, so this is the
- * walk that turns "the third title there is" into "the third column", which is
- * the number the program knows: the index it declared, wherever a drag has
- * since put the column.
- */
-static int table_shown_column(BtaWidget *w, int nth)
-{
-    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
-    int         seen = 0;
-
-    for (guint i = 0; i < g_list_model_get_n_items(cols); i++) {
-        GtkColumnViewColumn *c = g_list_model_get_item(cols, i);
-        bool                 shown = gtk_column_view_column_get_visible(c);
-        int                  said  = column_declared(c);
-
-        g_object_unref(c);
-        if (!shown)
-            continue;
-        if (seen == nth)
-            return said;
-        seen++;
-    }
-    return -1;
-}
-
-/*
- * The titles that are shown, **in the order they are drawn**, left to right,
- * each with its bounds in the view.
+ * The titles that are shown, each with **the column it was declared at** and
+ * its bounds in the view.
  *
  * The heading row is the column view's **first child** and the titles are its
  * children -- GTK's own structure, checked in 4.10 and 4.22, and there is no
@@ -4308,15 +4289,22 @@ static int table_shown_column(BtaWidget *w, int nth)
  * `gtk_column_view_insert_column` is allocated at its new x and its title
  * stays where it was among the children -- measured on 4.22.5, where the
  * fourth child of a moved row answered for the column dragged to the first
- * place. So they are sorted by x, which is the one order that is the view's.
+ * place.
  *
- * **A column that is not shown has no title among them** -- or a hidden one,
- * and the walk cannot tell which without looking -- so the n-th title shown is
- * the n-th column that is shown (`table_shown_column`), because a title is
- * only there for a column that is.
+ * **So a title is paired by the words it draws, not by its place.** A move
+ * reorders both the child list and the allocations, and the private header
+ * accessor GTK has for the title of a column is not in its public API; the one
+ * thing that stays with the title through both is its text. The columns are
+ * read in model order and a title claims the first visible column with its
+ * words -- a column title is unique in practice, and two with the same words
+ * are the same heading to the person clicking. Sorting the result by x is only
+ * for the hit test; the index a handler receives is `declared`, which is also
+ * what makes a right-to-left table answer for the column under the pointer
+ * instead of the one at that offset from the left.
  */
 typedef struct {
     GtkWidget       *title;
+    int              declared;
     graphene_rect_t  r;
 } TableTitle;
 
@@ -4328,21 +4316,80 @@ static gint title_by_x(gconstpointer a, gconstpointer b)
     return xa < xb ? -1 : xa > xb;
 }
 
+/* The text a title draws: the label inside GTK's own title widget. The header
+ * has no public accessor for its titles (or for the title of a column), and
+ * this is the one thing that survives a move: the child order and the x
+ * positions both change under `gtk_column_view_insert_column`, but a title's
+ * words do not. */
+static char *table_title_text(GtkWidget *w)
+{
+    if (GTK_IS_LABEL(w))
+        return g_strdup(gtk_label_get_text(GTK_LABEL(w)));
+    for (GtkWidget *c = gtk_widget_get_first_child(w); c;
+         c = gtk_widget_get_next_sibling(c)) {
+        char *text = table_title_text(c);
+        if (text)
+            return text;
+    }
+    return NULL;
+}
+
 static GArray *table_titles_shown(BtaWidget *w)
 {
     GArray    *out    = g_array_new(FALSE, FALSE, sizeof(TableTitle));
     GtkWidget *header = gtk_widget_get_first_child(w->inner);
+    GListModel *cols  = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
+    GList     *unused = NULL;
 
     if (!header || !gtk_widget_is_visible(header))
         return out;
+
+    for (guint i = 0; i < g_list_model_get_n_items(cols); i++) {
+        GtkColumnViewColumn *c = g_list_model_get_item(cols, i);
+
+        if (gtk_column_view_column_get_visible(c))
+            unused = g_list_append(unused, c);
+        else
+            g_object_unref(c);
+    }
+
     for (GtkWidget *ch = gtk_widget_get_first_child(header); ch;
          ch = gtk_widget_get_next_sibling(ch)) {
-        TableTitle t = { ch, GRAPHENE_RECT_INIT_ZERO };
+        if (!gtk_widget_is_visible(ch))
+            continue;
 
-        if (gtk_widget_is_visible(ch) &&
-            gtk_widget_compute_bounds(ch, w->inner, &t.r))
+        char *text = table_title_text(ch);
+        int   declared = -1;
+
+        for (GList *l = unused; l; l = l->next) {
+            const char *said = gtk_column_view_column_get_title(l->data);
+
+            if (g_strcmp0(said, text ? text : "") == 0) {
+                declared = column_declared(l->data);
+                g_object_unref(l->data);
+                unused = g_list_delete_link(unused, l);
+                break;
+            }
+        }
+        g_free(text);
+
+        /* A title this runtime did not write: take the next column rather than
+         * losing the heading altogether. */
+        if (declared < 0 && unused) {
+            declared = column_declared(unused->data);
+            g_object_unref(unused->data);
+            unused = g_list_delete_link(unused, unused);
+        }
+
+        TableTitle t = { ch, declared, GRAPHENE_RECT_INIT_ZERO };
+
+        if (declared >= 0 && gtk_widget_compute_bounds(ch, w->inner, &t.r))
             g_array_append_val(out, t);
     }
+
+    for (GList *l = unused; l; l = l->next)
+        g_object_unref(l->data);
+    g_list_free(unused);
     g_array_sort(out, title_by_x);
     return out;
 }
@@ -4373,7 +4420,7 @@ static int table_heading_at(BtaWidget *w, double x, double y)
         TableTitle *t = &g_array_index(titles, TableTitle, i);
 
         if (x >= t->r.origin.x && x < t->r.origin.x + t->r.size.width)
-            found = table_shown_column(w, (int)i);
+            found = t->declared;
     }
     g_array_free(titles, TRUE);
     return found;
@@ -4533,10 +4580,10 @@ static bool table_move_column(BtaWidget *w, int declared, int place)
 }
 
 /*
- * The title drawn at `x`, or the nearest one at either end, and its declared
- * column -- the height is not asked, so a drop just below the headings still
- * lands. The titles are taken in the order they are drawn, as
- * `table_heading_at` takes them.
+ * The title drawn at `x`, or the nearest one -- in a gap, or past either end --
+ * and its declared column. The height is not asked, so a drop just below the
+ * headings still lands. The titles are sorted by x, which is the order they
+ * are drawn in, and each carries the column it is.
  */
 static GtkWidget *table_title_at_x(BtaWidget *w, double x, int *column)
 {
@@ -4546,19 +4593,27 @@ static GtkWidget *table_title_at_x(BtaWidget *w, double x, int *column)
 
     *column = -1;
     if (titles->len) {
-        TableTitle *first = &g_array_index(titles, TableTitle, 0);
+        float best = -1;
 
-        at = x < first->r.origin.x ? 0 : titles->len - 1;
         for (guint i = 0; i < titles->len; i++) {
             TableTitle *t = &g_array_index(titles, TableTitle, i);
+            float       d;
 
-            if (x >= t->r.origin.x && x < t->r.origin.x + t->r.size.width) {
+            if (x < t->r.origin.x)
+                d = t->r.origin.x - x;
+            else if (x >= t->r.origin.x + t->r.size.width)
+                d = x - (t->r.origin.x + t->r.size.width);
+            else {
                 at = i;
                 break;
             }
+            if (best < 0 || d < best) {
+                best = d;
+                at   = i;
+            }
         }
         found   = g_array_index(titles, TableTitle, at).title;
-        *column = table_shown_column(w, (int)at);
+        *column = g_array_index(titles, TableTitle, at).declared;
     }
     g_array_free(titles, TRUE);
     return found;
@@ -4571,7 +4626,7 @@ static GtkWidget *table_title_of(BtaWidget *w, int declared)
     GtkWidget *found  = NULL;
 
     for (guint i = 0; !found && i < titles->len; i++)
-        if (table_shown_column(w, (int)i) == declared)
+        if (g_array_index(titles, TableTitle, i).declared == declared)
             found = g_array_index(titles, TableTitle, i).title;
     g_array_free(titles, TRUE);
     return found;

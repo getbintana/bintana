@@ -983,9 +983,10 @@ export class MainForm extends Form {
      */
     leaving() {
         this.stopShell();
-        /* A preview is a window about this IDE's project, and nobody is left
-         * to close it once the IDE is gone. */
+        /* A preview and a test run are children of this process, and nobody is
+         * left to stop them once the IDE is gone. */
         this.runner.stopPreview();
+        this.tests.stop();
         this.session.save();
         /* Nothing unsaved is an answer too. The snapshot used to go only in
          * `quit()` or on a tick that found nothing dirty, so saving and closing
@@ -1218,8 +1219,9 @@ export class MainForm extends Form {
         this.MnuProfile.Enabled = open && !this.running;
         this.ActCheck.Enabled  = open;
         /* A command: the toolbar's Stop, the Run menu's and the debug bar's
-         * follow this one assignment. */
-        this.ActStop.Enabled   = this.running;
+         * follow this one assignment -- and a test run is a child like the
+         * others, even though it is not a program run. */
+        this.ActStop.Enabled   = this.running || this.tests.running;
         this.ActNewForm.Enabled = open;
         this.MnuRename.Enabled  = this.activeFile !== null;
         this.MnuDelete.Enabled  = this.activeFile !== null;
@@ -3327,6 +3329,7 @@ export class MainForm extends Form {
     stopRun() {
         this.runner.stop();
         this.debugger_.stop();
+        this.tests.stop();
         /* A fetch over a slow link is a child like any other, and Stop is the
          * one button that ends whichever of them is going. */
         this.git.stop();
@@ -3349,15 +3352,6 @@ export class MainForm extends Form {
     MnuAdd_Click()   { this.addFromPalette(); }
 
     /*
-     * The menu bar of the form being designed.  The board shows it -- a preview
-     * built out of ordinary widgets, which is `MenuBar` -- but a menu is a
-     * model wired to actions and not a tree of widgets to drag, so what reorders
-     * and renames is this dialog, on the spec.
-     *
-     * Reached from the Form menu, from Ctrl+M, and from a double or right click
-     * on the bar itself.
-     */
-    /*
      * The form open in the active tab, run the way somebody else will see it:
      * another language, a larger text, the other theme, the other direction.
      * See `PreviewForm`.
@@ -3377,6 +3371,15 @@ export class MainForm extends Form {
                                              (look) => this.runner.preview(name, look));
     }
 
+    /*
+     * The menu bar of the form being designed.  The board shows it -- a preview
+     * built out of ordinary widgets, which is `MenuBar` -- but a menu is a
+     * model wired to actions and not a tree of widgets to drag, so what reorders
+     * and renames is this dialog, on the spec.
+     *
+     * Reached from the Form menu, from Ctrl+M, and from a double or right click
+     * on the bar itself.
+     */
     MnuMenus_Click() {
         if (!this.designing) {
             Message.Warning("Open a form's design to edit its menus.");

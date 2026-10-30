@@ -3620,7 +3620,7 @@ static void entry_not_found(JSContext *ctx, const char *name, const char *how)
 }
 
 /*
- * `bintana test`: the project's `tests/*Test.js`, each evaluated after the
+ * `bintana test`: the project's `*Test.js` files in `tests/`, each evaluated after the
  * project's own sources, handed to `runTests` in rad.js with the class each
  * file declares -- one per file, named like it, which is the convention that
  * lets this find it without a registry. A file whose class cannot be found is

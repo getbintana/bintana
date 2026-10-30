@@ -12404,7 +12404,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "listens for two-finger gestures and flicks: `Transform` and `Swipe` are raised only while it is `true`. Off by default -- it adds three controllers -- and claims two fingers on this control so a scroller or a click above does not also take them",
+          "Doc": "listens for two-finger gestures and flicks: `Transform` and `Swipe` are raised only while it is `true`. Off by default -- it adds six controllers -- and claims two fingers on this control so a scroller or a click above does not also take them",
           "Native": true
         },
         {
@@ -16327,7 +16327,7 @@
           "Params": 3,
           "Signature": "(got, want, what)",
           "Returns": "",
-          "Doc": "fails the test unless `got` equals `want` -- the same value, or for arrays and plain objects the same JSON, or for a `Decimal` or a `Day` the same text. `what` names the check in the message",
+          "Doc": "fails the test unless `got` equals `want` -- the same value, or for arrays and plain objects the same JSON, a `Date` with the same instant, or a `Decimal` with the same text (a `Day` is already a string, so it compares as one). A class of the project's own is compared by identity. `what` names the check in the message",
           "Native": false
         },
         {

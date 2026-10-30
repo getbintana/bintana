@@ -3549,6 +3549,22 @@ function* p_tests(ide) {
           !ide.problems.of("project").some((p) => p.file === "tests/InvoiceTest.js"),
           JSON.stringify(ide.problems.of("project").filter((p) => (p.file || "").startsWith("tests"))));
 
+    /* A test that waits is a child like a run: Stop must see it, end it, and
+     * go off when it is gone. */
+    File.Save(File.Join(TMP, "tests", "SlowTest.js"),
+              "class SlowTest extends Test {\n" +
+              "    testSlow() { this.Until(() => false, () => {}, { Ms: 5000 }); }\n" +
+              "}\n");
+    ide.listFiles();
+    ide.MnuRunTests_Click();
+    check("a test run is a child Stop can see",
+          ide.tests.running && ide.ActStop.Enabled);
+    ide.stopRun();
+    yield* until(() => ide.tests.job === null, 300);
+    eq("Stop ends the test run", ide.tests.running, false);
+    eq("...and the button goes off with it", ide.ActStop.Enabled, false);
+    File.Delete(File.Join(TMP, "tests", "SlowTest.js"));
+
     ide.closeTabByName("tests/InvoiceTest.js", true);
     Directory.DeleteTree(dir);
     ide.listFiles();

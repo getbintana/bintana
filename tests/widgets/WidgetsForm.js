@@ -550,6 +550,8 @@ const TESTS = [
     "TableTreeColumnClick",
     /* And a heading dragged to another place. */
     "TableReorderDrag",
+    /* And a heading clicked in a right-to-left table. */
+    "TableRtlHeadings",
     "SingleInstance",
     /* Blocking too: a console child under `--profile`, whose capture the
      * parent reads back. */
@@ -574,7 +576,7 @@ const TESTS = [
     /* Children too: a file with `export` is a module. */
     "Modules", "Imports", "Records", "DataBinding", "SettableCache",
     "Time",
-    "Stopwatch", "UndoStack", "Network", "Inhibit",
+    "Stopwatch", "UndoStack", "TestEq", "Network", "Inhibit",
     "Shortcut", "Decimal", "FieldDecimal",
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
@@ -9405,6 +9407,92 @@ class Form1 extends Form {
         eq("a press on a moved heading is that heading's, dropped below the row",
            at(3, "log"), '"Click 1,Move 1 0"');
         eq("and it is first", at(3, "order"), "[1,0,2,3]");
+    }
+
+    /*
+     * **A heading is the column drawn under the pointer, in RTL too.** The
+     * titles are children in the order the columns were made, and in a
+     * right-to-left table the x order is the reverse of the declaration, so a
+     * hit test that counted titles by x answered for the column at that offset
+     * from the left. Three headings, a real pointer at the left, middle and
+     * right: the declared indices have to come back 2, 1, 0.
+     */
+    testTableRtlHeadings() {
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the RTL heading clicks: they need xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "table-rtl-headings");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "tablertl", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 460, Height: 200 } });
+        File.Save(File.Join(proj, "Form1.js"), `
+class Form1 extends Form {
+    Form_Open() {
+        const t = new TableView();
+        t.Name = "T";
+        t.Resize(440, 160);
+        t.Columns = [{ Text: "A", Width: 100 }, { Text: "B", Width: 100 },
+                     { Text: "C", Width: 100 }];
+        this.Add(t);
+        this.t = t; this.log = []; this.dir = Application.Directory;
+        this.wait();
+    }
+    T_HeaderClick(c) { this.log.push(c); }
+    wait() {
+        if (!(this.t.HeaderHeight > 0)) { Timer.After(50, () => this.wait()); return; }
+        const b = this.t.Bounds();
+        File.Save(this.dir + "/geom",
+                  [b.X, b.Y + this.t.HeaderHeight / 2].map(Math.round).join(" "));
+        this.poll();
+    }
+    poll() {
+        if (File.Exists(this.dir + "/done")) {
+            File.SaveJson(this.dir + "/out.json", this.log);
+            Application.Quit(0);
+            return;
+        }
+        Timer.After(30, () => this.poll());
+    }
+}
+`);
+        for (const gone of ["geom", "out.json", "done"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" --rtl \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/geom\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "read x y < \"$dir/geom\"\n" +
+                  /* A direction with no window manager places the window at a
+                   * negative x (GTK's own initial position), so put it at the
+                   * origin before aiming at the headings. */
+                  "win=$(xdotool search --pid $child --onlyvisible 2>/dev/null | tail -1)\n" +
+                  "[ -n \"$win\" ] && xdotool windowmove \"$win\" 0 0; sleep 0.2\n" +
+                  /* C is at the left, B in the middle, A at the right: the
+                   * columns are allocated from the right in an RTL table. */
+                  "xdotool mousemove $(($x+100)) $y click 1; sleep 0.2\n" +
+                  "xdotool mousemove $(($x+290)) $y click 1; sleep 0.2\n" +
+                  "xdotool mousemove $(($x+390)) $y click 1; sleep 0.2\n" +
+                  ": > \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the RTL child ended by itself", ran.Output.includes("child=0"), ran.Output);
+
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("and said which headings were clicked", got !== null, ran.Output);
+        if (got) eq("a right-to-left heading answers for the column drawn there",
+                    JSON.stringify(got), "[2,1,0]");
     }
 
     /*
@@ -18644,10 +18732,34 @@ class Form1 extends Form {
         eq("after a sort, the shown rows are still the ones the filter keeps",
            shown.join(","), "Ana6,Ana4,Ana2,Ana0");
 
+        /*
+         * A row removed while the filter is on: the answers are rebuilt from
+         * the rows that are left, so a pointer that is gone cannot answer for
+         * one that comes after it. The rows here are small, but the shape is
+         * the one a search over a table that keeps being edited uses.
+         */
+        want = "Ana";
+        t.Refilter();
+        t.RemoveRow(1);                     /* a hidden Bea */
+        t.SelectAll();
+        eq("a hidden row removed, the visible ones are the same filter's",
+           t.Selection.map((i) => t.Cell(i, 0) + t.Cell(i, 1)).join(),
+           "Ana6,Ana4,Ana2,Ana0");
+        t.RemoveRow(0);                     /* a shown Ana */
+        t.SelectAll();
+        eq("a shown row removed leaves the rest",
+           t.Selection.map((i) => t.Cell(i, 0) + t.Cell(i, 1)).join(),
+           "Ana4,Ana2,Ana0");
+        t.Add(["Ana", "8"]);
+        t.SelectAll();
+        eq("one added after a removal is asked about too",
+           t.Selection.map((i) => t.Cell(i, 0) + t.Cell(i, 1)).join(),
+           "Ana4,Ana2,Ana0,Ana8");
+
         want = "";
         t.Refilter();
         t.SelectAll();
-        eq("emptied, every row is back", t.Selection.length, 7);
+        eq("emptied, every row that is left is back", t.Selection.length, 6);
 
         t.Clear();
         t.Count = 3;
@@ -23157,6 +23269,38 @@ class Form1 extends Form {
         eq("the limit drops the oldest step", small.CanUndo, false);
         throws("and is a whole number", () => { small.Limit = -1; });
         throws("OnChange takes a function or null", () => { u.OnChange = 3; });
+    }
+
+    /*
+     * `Test.Eq` is the assertion every project's suite is built on, so a value
+     * that compares equal to a different one is a green run that says nothing.
+     * A class of the project's own has no text that means its value --
+     * `String(pair)` is `[object Object]` for every instance -- and only the
+     * value types (`Decimal`, `Day`) answer by text. This is the regression
+     * that was found by a pair of instances passing.
+     */
+    testTestEq() {
+        class Pair { constructor(a, b) { this.a = a; this.b = b; } }
+        class SameText { toString() { return "same"; } }
+
+        const t = new Test();
+        const fails = (what, fn) => {
+            try { fn(); }
+            catch (e) { return e && e.name === "TestFailure"; }
+            return false;
+        };
+
+        check("two instances of one class are not the same value",
+              fails("pair", () => t.Eq(new Pair(1, 2), new Pair(9, 9))));
+        check("...even when the class writes a toString of its own",
+              fails("text", () => t.Eq(new SameText(), new SameText())));
+        check("an array and a plain object still compare by their JSON",
+              (() => { t.Eq([1, 2], [1, 2]); t.Eq({ a: 1 }, { a: 1 }); return true; })());
+        check("and their difference is seen",
+              fails("json", () => t.Eq([1, 2], [1, 3])));
+        const one = new Pair(1, 2);
+        check("the same object is the same value",
+              (() => { t.Eq(one, one); return true; })());
     }
 
     testStopwatch() {

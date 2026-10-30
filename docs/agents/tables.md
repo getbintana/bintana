@@ -46,9 +46,13 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `items-changed` asks about the rows that arrived -- **connected before the
   filter model exists**, since handlers run in the order they were connected,
   so new rows are answered before the model looks them up -- and `Refilter()`
-  asks every row. `testTableFilter` holds both numberings, a sort and GTK's own
-  `activate`, and goes red with the crossing turned off. A tree and a table
-  answering `Data` refuse `Refilter()`, the line the sort draws.
+  asks every row. **A removal rebuilds the answers** from the rows that are
+  left, since the signal does not hand back the objects that went: a pointer
+  that is gone cannot answer for a new row that reuses its address, and the set
+  cannot grow with rows nobody can see. `testTableFilter` holds both numberings,
+  a sort, a removal and GTK's own `activate`, and goes red with the crossing
+  turned off. A tree and a table answering `Data` refuse `Refilter()`, the line
+  the sort draws.
 - **A table sorts the text it shows, so the order has to know about numbers
   without knowing the format.** `SortBy` compared cells with `g_utf8_collate`,
   and every column of numbers came out `10, 100, 9`. A per-column type was the
@@ -474,7 +478,10 @@ same number without naming what sits above it.
   columns were made. `table_heading_at` counted children, so after a drag a
   press on a heading answered for the column that used to be drawn there
   (`HeaderClick 3` for column 1). Every walk of the titles sorts them by x
-  (`table_titles_shown`).
+  (`table_titles_shown`) and **pairs each title with the declared column by the
+  words it draws** -- the one thing a move leaves with it, since GTK has no
+  public accessor for a column's header. So the answer is also right in RTL,
+  where x order is the reverse of the declaration, and so is the drop target.
 - **A column's index and its place are two numbers.** Each
   `GtkColumnViewColumn` carries the index it was declared at (`DECLARED_KEY`);
   `Sort`, `SortColumn`, `HeaderClick` and the heading's menu go through

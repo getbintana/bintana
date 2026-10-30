@@ -6864,7 +6864,7 @@ static JSValue w_set_accept_drop(JSContext *ctx, JSValueConst this_val, JSValueC
  * the second finger's position before it is known), so a consumer that read the
  * absolute values would start every gesture with a jump.
  *
- * Off by default and a property, because three more controllers on every widget
+ * Off by default and a property, because six more controllers on every widget
  * is a cost the IDE would pay for nothing.
  */
 #define GESTURES_KEY "bta-gestures"
@@ -7122,7 +7122,7 @@ static JSValue w_set_gestures(JSContext *ctx, JSValueConst this_val, JSValueCons
         g_signal_connect(st->zoom, "cancel", G_CALLBACK(gestures_end), st);
 
         /* The state lives as long as the zoom gesture, whose signals are the
-         * only thing that reads it; the widget owns all three controllers. */
+         * only thing that reads it; the widget owns all six controllers. */
         g_object_set_data_full(G_OBJECT(st->zoom), "bta-gesture-state", st, g_free);
         gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(st->zoom));
         gtk_widget_add_controller(w->gtk, GTK_EVENT_CONTROLLER(st->rotate));
@@ -7902,7 +7902,7 @@ static const JSCFunctionListEntry widget_props[] = {
     JS_CGETSET_DEF("AcceptDrop", w_get_accept_drop, w_set_accept_drop),
     /* Gestures
      *   listens for two-finger gestures and flicks: `Transform` and `Swipe` are
-     *   raised only while it is `true`. Off by default -- it adds three
+     *   raised only while it is `true`. Off by default -- it adds six
      *   controllers -- and claims two fingers on this control so a scroller or
      *   a click above does not also take them
      */
@@ -8103,6 +8103,11 @@ static gboolean popup_nearest(BtaWidget *w, double x, double y)
  */
 typedef struct { double x, y; gboolean down; } MouseState;
 #define MOUSE_STATE_KEY "bta-mouse-state"
+/* When this control's scroll last carried a fraction: a pad's two-finger
+ * scroll and a wheel's notch are the same event, and only the stream tells
+ * them apart. Per controller, so one control's pad cannot colour another's
+ * wheel. */
+#define WHEEL_TOUCH_KEY "bta-wheel-touch"
 
 static void mouse_state_note(GtkGesture *g, double x, double y, gboolean down)
 {
@@ -8364,15 +8369,18 @@ static gboolean on_mouse_scroll(GtkEventControllerScroll *c, double dx, double d
      * for both.  What does tell them apart is the number: a wheel turns whole
      * notches and a pad reports fractions, a pad's stream is dense (7 ms), and a
      * whole number inside one is still the pad.  So it is *inferred*, from a
-     * fraction now or one in the last 200 ms.
+     * fraction now or one in the last 200 ms -- **on this control's own
+     * controller**, since a pad scroll here must not make the next wheel notch
+     * over another control read as fingers.
      */
-    static gint64 last_fraction;
+    gint64  *last_fraction = g_object_get_data(G_OBJECT(c), WHEEL_TOUCH_KEY);
     gint64   now  = g_get_monotonic_time();
     gboolean frac = fabs(dx - round(dx)) > 0.001 || fabs(dy - round(dy)) > 0.001;
 
-    if (frac)
-        last_fraction = now;
-    gboolean touch = frac || (last_fraction && now - last_fraction < 200000);
+    if (frac && last_fraction)
+        *last_fraction = now;
+    gboolean touch = frac ||
+        (last_fraction && *last_fraction && now - *last_fraction < 200000);
 
     JSValue argv[3] = { JS_NewFloat64(w->ctx, dx), JS_NewFloat64(w->ctx, dy),
                         JS_NewBool(w->ctx, touch) };
@@ -8450,6 +8458,8 @@ static void attach_mouse(BtaWidget *w)
         gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_BOTH_AXES);
     gtk_event_controller_set_propagation_phase(scroll, GTK_PHASE_BUBBLE);
     g_signal_connect(scroll, "scroll", G_CALLBACK(on_mouse_scroll), w);
+    g_object_set_data_full(G_OBJECT(scroll), WHEEL_TOUCH_KEY,
+                           g_new0(gint64, 1), g_free);
     gtk_widget_add_controller(w->gtk, scroll);
 
     /* Bubble, so whatever has focus gets first refusal: typing in a text box

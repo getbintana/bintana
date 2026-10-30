@@ -47,14 +47,16 @@ const ICON_OPEN = ["pan-down-symbolic", "go-down-symbolic"];
  * the runtime is asked to `expand`, and a path of names has no side effect.
  */
 function childPath(owner, name) {
-    if (name.length > 0 && isDigits(name)) return `${owner}[${name}]`;
+    if (isIndex(name)) return `${owner}[${name}]`;
     if (isIdentifier(name)) return `${owner}.${name}`;
     return `${owner}[${JSON.stringify(name)}]`;
 }
 
-function isDigits(s) {
-    for (const c of s) if (c < "0" || c > "9") return false;
-    return true;
+/* A canonical array index and not merely digits: `[01]` is a legacy octal
+ * literal, and the source is compiled in strict mode, so a field named "01"
+ * would make an expansion fail instead of answering. */
+function isIndex(s) {
+    return s.length > 0 && String(Number(s)) === s && Number.isSafeInteger(Number(s));
 }
 
 function isIdentifier(s) {
@@ -403,6 +405,11 @@ export class Debugger {
         this.job     = null;
         this.stopped = null;
         this.fieldWatches.clear();
+        /* What was opened is the run's objects, and the next run's are not
+         * them: keeping the paths would ask a removed watch's expression again
+         * at the first stop of a program that has nothing to do with it. */
+        this.opened.clear();
+        this.children.clear();
         this.ide.running = false;
         this.clearHere();
         this.ide.log(code === 0 ? "\n[finished ok]\n"
@@ -601,11 +608,23 @@ export class Debugger {
         this.fillValues();
     }
 
+    /* A value and everything reached through it: `parent.field` and
+     * `parent[0]` are both under `parent`, and neither is under `parentx`. */
+    dropOpened(path) {
+        for (const key of [...this.opened]) {
+            if (key === path || key.startsWith(path + ".") ||
+                key.startsWith(path + "[")) {
+                this.opened.delete(key);
+                this.children.delete(key);
+            }
+        }
+        this.children.delete(path);
+    }
+
     /* A triangle clicked: the value opens or closes. */
     toggleOpen(path) {
         if (this.opened.has(path)) {
-            this.opened.delete(path);
-            this.children.delete(path);
+            this.dropOpened(path);
         } else {
             this.opened.add(path);
             if (this.halted) this.send({ do: "expand", frame: this.frame, text: path });
@@ -858,6 +877,9 @@ export class Debugger {
     unwatch(text) {
         this.watches = this.watches.filter((w) => w !== text);
         this.answers.delete(text);
+        /* Its fields went with it: a removed watch must stop asking the
+         * runtime to expand an expression nobody is watching. */
+        this.dropOpened(`(${text})`);
         this.fillValues();
     }
 

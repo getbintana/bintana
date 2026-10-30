@@ -854,14 +854,35 @@ function testShow(v) {
     try { return JSON.stringify(v); } catch (e) { return String(v); }
 }
 
+function testPlain(v) {
+    const proto = prototypeOf(v);
+    return proto === objectProto || proto === null;
+}
+
+/* The value type whose text is its value.  The test is by class and not by
+ * "has a toString": every class inherits one, and `String(pair)` is
+ * `[object Object]` for every instance -- two different pairs would then be
+ * the same value, which is the one false green a test framework cannot have.
+ * A class of the project's own is compared by identity. */
+function testTextValue(v) {
+    return GLOBAL.Decimal && typeof GLOBAL.Decimal === "function" &&
+           v instanceof GLOBAL.Decimal;
+}
+
 function testSame(a, b) {
     if (a === b) return true;
     if (a === null || b === null || typeof a !== "object" || typeof b !== "object")
         return Number.isNaN(a) && Number.isNaN(b);
-    if (typeof a.toString === "function" && a.constructor === b.constructor &&
-        a.constructor !== Object && a.constructor !== Array)
-        return String(a) === String(b);       /* a Decimal, a Day: their text */
-    try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; }
+    if (a instanceof Date && b instanceof Date)
+        return a.getTime() === b.getTime();
+    if (a.constructor === b.constructor && testTextValue(a) && testTextValue(b))
+        return String(a) === String(b);       /* a Decimal: its text */
+    if ((Array.isArray(a) && Array.isArray(b)) ||
+        (testPlain(a) && testPlain(b))) {
+        try { return JSON.stringify(a) === JSON.stringify(b); }
+        catch (e) { return false; }
+    }
+    return false;
 }
 
 GLOBAL.Test = class Test {
@@ -874,8 +895,10 @@ GLOBAL.Test = class Test {
 
     /**
      * fails the test unless `got` equals `want` -- the same value, or for
-     * arrays and plain objects the same JSON, or for a `Decimal` or a `Day` the
-     * same text. `what` names the check in the message
+     * arrays and plain objects the same JSON, a `Date` with the same instant,
+     * or a `Decimal` with the same text (a `Day` is already a string, so it
+     * compares as one). A class of the project's own is compared by identity.
+     * `what` names the check in the message
      * @param {*} got
      * @param {*} want
      * @param {string} [what]

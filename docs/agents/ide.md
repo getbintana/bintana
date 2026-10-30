@@ -169,6 +169,11 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   or `job`: Stop, the debugger and the run's error-to-line all read those, and
   a form looked at while the program runs must not take them over.
   `MainForm.leaving` stops it, since nobody is left to close its window.
+- **A test run is a child too, and Stop is its Stop.** `Tests.running` is
+  `job.Running`, `MainForm.stopRun` and `leaving` call `Tests.stop()`, and
+  `ActStop` is enabled while either a program or a test run is going. Without
+  it a test that never answered could only be ended by quitting the IDE, which
+  left the child behind as well.
 
 - **A row's tooltip is set on every sync, so where the editor is built is not
   where it goes.** `sync()` writes `editor.Tooltip = because || this.rowHint(key)`
