@@ -626,6 +626,33 @@ static JSValue notebook_set_strip(JSContext *ctx, JSValueConst this_val,
     if (show)
         gtk_notebook_set_tab_pos(nb, at);
     gtk_notebook_set_show_tabs(nb, show);
+
+    /*
+     * **GTK 4.22 leaves the mnemonic handler of a default tab label behind**
+     * when the strip is hidden.  `gtk_notebook_set_show_tabs(FALSE)` unparents
+     * the default labels and sets `page->tab_label = NULL` without
+     * disconnecting the `mnemonic-activate` signal or clearing its id; showing
+     * the strip again makes fresh labels, but `page->mnemonic_activate_signal`
+     * still holds the id of the old one.  At dispose GTK then disconnects that
+     * id from the new label and GLib says *no handler with id* -- twice, at
+     * process teardown, which is exactly the noise `testTabAction` used to
+     * leave.  Swapping a label in and out once clears the id while the strip is
+     * hidden; the default labels come back, renumbered, when it is shown.
+     * Only pages GTK took the default label from are touched: an explicit
+     * label kept its handler and stays.
+     */
+    if (!show) {
+        int pages = gtk_notebook_get_n_pages(nb);
+
+        for (int i = 0; i < pages; i++) {
+            GtkWidget *page = gtk_notebook_get_nth_page(nb, i);
+
+            if (gtk_notebook_get_tab_label(nb, page))
+                continue;
+            gtk_notebook_set_tab_label(nb, page, gtk_label_new(NULL));
+            gtk_notebook_set_tab_label(nb, page, NULL);
+        }
+    }
     return JS_UNDEFINED;
 }
 

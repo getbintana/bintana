@@ -4560,28 +4560,11 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   surround (`rgba(0,0,0,0.13)`, the `OUTSIDE_COLOR` of `Designer.js`) and the
   `frame` class; a colour is the exception this project reserves for what a class
   cannot say, and the theme has no class for *the room around a drawing*.
-- **Open: two `GLib-GObject-CRITICAL: instance has no handler with id` at
-  teardown.** Reproducible, and not ours to explain yet. It fires only after
-  `testTabAction`'s exact sequence — a notebook action widget adopted, replaced,
-  cleared, then re-adopted at the other end, then the notebook deleted — and
-  **only when the process tears down**, never during a step. `SetAction` on its
-  own, `Strip` through every value, and deleting a notebook, a switcher or an
-  action widget each emit nothing. What produces that message is
-  `g_signal_handler_disconnect(instance, id)`, and the calls by id in this
-  repository are `bta_tree.c:on_unbind_row` — instrumented, and it never fires for
-  this — and two list-item unwatches in `bta_table.c` (`on_unbind_cell`,
-  `cell_unwatch_row`) -- and the backtrace below names GTK's own caller instead. **The caller is now named, and it is GTK's own.** From a backtrace under
-  the suite's exact child invocation — which is the part that had been getting in
-  the way, because the project does not run its tests unless it is started the way
-  the runner starts it:
-
-      xvfb-run -a env G_DEBUG=fatal-criticals \
-          gdb -batch -ex run -ex "bt 30" \
-          --args ./build/bintana --strict tests/widgets 99999
-
-  `--strict` and the pid argument are both required; without them the process
-  opens and exits without running anything, and the critical never comes. It
-  reproduces on the first try, and the frames are:
+- **The two `GLib-GObject-CRITICAL: instance has no handler with id` at teardown
+  were GTK 4.22's, and `Strip` works around them.** They fired only after
+  `testTabAction`'s exact sequence — a notebook taken through `Strip: "None"`
+  and back, then deleted — and only when the process tore down. The backtrace
+  named GTK's own caller:
 
       g_signal_handler_disconnect
       gtk_notebook_remove_tab_label
@@ -4590,17 +4573,17 @@ The traps and decisions of this area, each with what it cost and the rule it lef
       g_object_unref
       widget_finalizer            ← the unref of w->gtk
 
-  So the handler is `page->mnemonic_activate_signal`, which GTK connects on a
-  page's **tab label** and disconnects when the page goes, and the id is already
-  stale when dispose reaches it. Two things narrow what remains: the teardown is
-  driven from `widget_finalizer`, so it runs **inside a QuickJS collection cycle,
-  in no particular order** — the same hazard `widget_disconnect_tree` above was
-  written for — and `tests/asan.sh` is clean over this path, which says the
-  instance is a live object that has lost the handler rather than freed memory.
-  Still open, and still two lines with nothing failing; but it starts from the
-  frames above now, and **not** from `_by_data`, which this note used to blame and
-  which the backtrace clears: our sweeps pass the `BtaWidget` as data and GTK's
-  handler carries the notebook, so they cannot be reaching it.
+  The handler is `page->mnemonic_activate_signal`, which GTK connects on a
+  page's **tab label**. `gtk_notebook_set_show_tabs (FALSE)` unparents a default
+  tab label and sets `page->tab_label = NULL` **without disconnecting that
+  signal or clearing its id**; showing the strip again makes fresh labels, but
+  the id still belongs to the old one, and dispose then disconnects it from the
+  new label. `notebook_set_strip` clears it while the strip is hidden: for a
+  page GTK took the default label from, a temporary label is set and then `NULL`
+  again, which runs `gtk_notebook_remove_tab_label` on a page whose label is the
+  one being swapped out; the default labels come back, renumbered, when the
+  strip is shown. Explicit labels keep their handler and are not touched.
+  `G_DEBUG=fatal-criticals` over the whole `tests/widgets` project is clean now.
 
 ## Laying out a form: which of the two models
 
