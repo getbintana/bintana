@@ -1729,6 +1729,21 @@ void bta_widget_style_apply(BtaWidget *w)
     GString *body = g_string_new(NULL);
     widget_style_write(w, body);
 
+    /*
+     * **A rule that comes out the same is not written again.** Reloading the
+     * sheet restyles every widget on the display, and the commonest assignment
+     * is the value a control already has: the IDE's designer gave its selection
+     * outline and its eight grips their colour on every relayout -- every click
+     * and every step of a drag -- and `styles_rebuild` was 13 % of a designer
+     * session, measured with `perf` (docs/agents/profiling.md). Nothing reads
+     * the sheet for a rule that did not change.
+     */
+    const char *had = g_hash_table_lookup(style_rules, w->style_class);
+    if (had && !strcmp(had, body->str)) {
+        g_string_free(body, TRUE);
+        return;
+    }
+
     g_hash_table_insert(style_rules, g_strdup(w->style_class),
                         g_string_free(body, FALSE));
     styles_touch();
@@ -5870,6 +5885,19 @@ static JSValue w_set_tooltip(JSContext *ctx, JSValueConst this_val, JSValueConst
     const char *text = JS_ToCString(ctx, val);
     if (!text)
         return JS_EXCEPTION;
+
+    /*
+     * **The same text is not set again.** GTK answers every set with a tooltip
+     * query that picks the widget under the pointer, which brings the styles of
+     * the whole window up to date to do it -- 44 of the restyle samples of a
+     * designer session were that, the IDE refreshing a tooltip it already had
+     * (docs/agents/profiling.md).
+     */
+    const char *had = gtk_widget_get_tooltip_text(w->gtk);
+    if (g_strcmp0(had, *text ? text : NULL) == 0) {
+        JS_FreeCString(ctx, text);
+        return JS_UNDEFINED;
+    }
 
     /* Empty means none, not an empty tooltip: an always-blank popup would be
      * worse than no popup. */

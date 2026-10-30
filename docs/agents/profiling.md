@@ -155,11 +155,16 @@ layout; none had anything to do with it.
 `perf record` over `tests/bench --child <program>` against a `RelWithDebInfo`
 build is the profile of the engine (Sysprof's marks are the profile of a
 program). Four things measured with it, after the eleventh and twelfth patches:
-- **At `perf_event_paranoid` 2, `-g` is what fails**: `perf record -g` (and
-  `--call-graph dwarf`) answers *Failure to open any events for recording*,
-  which reads as "perf does not work here", while a flat
-  `perf record -e cpu_core/cycles/u` works. I concluded the first and wrote it
-  into a plan before trying the second. A flat profile by `--sort dso` and
+- **At `perf_event_paranoid` 2, the kernel half of a call chain is what is
+  refused**: `perf record -g` (and `--call-graph dwarf`) answers *Failure to
+  open any events for recording*, which reads as "perf does not work here" --
+  and I wrote that into a plan twice, first about perf and then about call
+  graphs. **`--user-callchains` is the whole fix**: `perf record -e
+  cpu_core/cycles/u --call-graph dwarf,16384 --user-callchains` works, and
+  user space is all there is to see here. DWARF and not frame pointers, since
+  the runtime is not built with them; read the stacks with `perf script` and
+  aggregate by the frame you want (the caller of `styles_rebuild` was found
+  that way). A flat profile by `--sort dso` and
   then `--dsos bintana --sort sym` is enough to split a workload between the
   interpreter and GTK; to profile a suite, put a script in `BINTANA=` that
   `exec`s `perf record ... build-rwd/bintana "$@"`, and read it per process
@@ -225,6 +230,31 @@ handling reads `uint8_t`), which is why it is alignment and not a fix.
   control's Foreground* -- and two of `tests/ide`'s designer assertions agree.
   The rule generalises past CSS: **before deferring anything, ask what reads it
   back and whether that reader waits for a frame.**
+- **And the same value reloaded it too, which was the commonest case.** A
+  `perf` with call graphs over `tests/ide` up to `designer` put
+  `styles_rebuild` at **13 %** of the run, 480 of its ~690 samples under
+  `w_set_color`: the designer's selection chrome (`ide/modules/Chrome.js`)
+  gives its four outline bars and eight grips their colour on every relayout,
+  and the colour is nearly always the one they have. With 300 styled controls
+  on the display one such assignment cost **4.5 ms**. `bta_widget_style_apply`
+  now compares the rule it built with the one the control has and stops there
+  when they match: `styles_rebuild` 13 % -> 4.3 %, the phase **10.0 -> 7.7
+  billion cycles (-23 %)**. In the runtime and not the IDE, since every
+  application assigns what it already has. `testStyleSameValue` holds it by
+  ratio (907 against 903 ms before, the same value nearly free after).
+- **A tooltip set brings the window's styles up to date.**
+  `gtk_widget_set_tooltip_text` answers every set with a tooltip query that
+  picks the widget under the pointer (`_gtk_widget_find_at_coords`), and the
+  pick validates CSS: 44 of a designer session's restyle samples were
+  `w_set_tooltip`. The same text is not set again now. What is left (about
+  2 %) is the property grid giving the editors it builds per selection their
+  first tooltip -- a real set, and the query looks at the window under the
+  pointer whether or not the widget is in one yet, so it is GTK's to pay.
+- **What the rest of a designer session's restyling is**, attributed by the
+  first runtime frame on each stack: the frame clock's own validation after a
+  change (most of it), `bta_fixed_layout_measure` asking a child its size, and
+  `bta_container_attach` styling a child it adds. Each needs the styles it
+  computes; none was a value set to what it already was.
 - **The other four cost claims were measured and are fine, and the numbers are
   here so nobody has to guess again.** An external audit named five places the
   runtime is slow; one of them was real and is the paragraph above. These are

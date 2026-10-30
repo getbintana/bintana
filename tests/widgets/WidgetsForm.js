@@ -588,7 +588,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "LongAppend", "StringSearch", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -15170,6 +15170,40 @@ class Form1 extends Form {
         check("twice the appends take about twice as long",
               whole.ms < Math.max(half.ms, 20) * 3,
               `${whole.ms} ms against ${half.ms} ms`);
+    }
+
+    /* --- a colour set to what it already is ----------------------------------
+     *
+     * Every appearance property reloads the display's whole sheet of per-control
+     * rules, which restyles every widget -- and the commonest assignment is the
+     * value a control already has: the IDE's designer recoloured its selection
+     * outline and its grips on every relayout, and the reload was 13 % of a
+     * designer session. A rule that comes out the same is not written again
+     * now. Without a clock: the same assignment, the same value against two
+     * values in turn, with three hundred styled controls in the sheet -- equal
+     * before, and the same value is nearly free after.
+     */
+    testStyleSameValue() {
+        const host = new Panel();
+        this.Add(host);
+        for (let i = 0; i < 300; i++) {
+            const l = new Label();
+            l.Background = `rgb(${i % 256}, 10, 20)`;
+            host.Add(l);
+        }
+        const one  = host.Children[0];
+        const time = (colours) => {
+            const t = Date.now();
+            for (let i = 0; i < 200; i++) one.Background = colours[i % 2];
+            return Date.now() - t;
+        };
+        const same     = time(["rgb(1,2,3)", "rgb(1,2,3)"]);
+        const changing = time(["rgb(1,2,3)", "rgb(4,5,6)"]);
+
+        eq("the colour is the last one set", one.Background, "rgb(4,5,6)");
+        check("setting the value a control already has reloads nothing",
+              same * 4 < Math.max(changing, 20), `${same} ms against ${changing} ms`);
+        host.Remove();
     }
 
     /* --- a string search, the twelfth fork patch ------------------------------
