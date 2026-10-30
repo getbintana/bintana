@@ -1,8 +1,18 @@
 # `bintana check`: the IDE's project check, from a shell
 
-**Not started, decided, waiting for its turn.** Written on 2026-10-29 after
-measuring what the check depends on; the decision is *the check moves to a
-library* (option B below), and nothing has been changed yet.
+**Built in part, on 2026-10-30.** The command exists and works:
+
+```sh
+./build/bintana check examples/hello          # two accessibility warnings, exit 0
+./build/bintana check --strict examples/hello # the same, exit 1
+./build/bintana check --json <project>        # one JSON line per finding, then `Done`
+```
+
+The decision below (*the check moves to a library*, option B) stands, and what
+is built is `lib/check` + `tools/check` + the `check` word in `main.c`, installed
+with the runtime. **The IDE has not been migrated to the library yet**: it still
+runs its own `ide/modules/Check.js` and company, so the two implementations can
+drift until stage 2 finishes. That is the remaining work, not a design change.
 
 ## What is wanted
 
@@ -80,6 +90,10 @@ Each one is shippable and leaves the IDE's behaviour as it was; stop after any.
    is the IDE losing a privilege. **Without it the command line cannot check a
    menu item's or a command's members**, and parity with the panel is not
    reachable.
+   **Built.** `bta_menu_class_value` gives the two classes a synthetic
+   constructor, the class-level verbs see it, and the `ClassIntrospection` test
+   holds it (123 assertions in that test, part of `tests/widgets`). The IDE's
+   `Names` still borrows a live item; that goes with stage 2.
 1. **Decouple the two classes.**
    - `Classes`: the project's *files and pairing* (scan, `formOf`,
      `formOfClass`) apart from the tree and the component list, taking a root
@@ -89,19 +103,39 @@ Each one is shippable and leaves the IDE's behaviour as it was; stop after any.
      the open tabs' text where it has them and the file's own where it has not.
      **This is the stage that can change a behaviour**, and it is guarded by
      the `completion` and `modules` phases of `tests/ide`.
+   **Standalone in the library, pending in the IDE.** `lib/check/ProjectFiles.js`
+   is the scan and pairing, and `lib/check/Owners.js` builds the export-owner
+   map from `Application.Symbols` over a list of `{ path, text }`. The IDE's
+   `Classes` and `Completion` are untouched, so the decoupling has not been
+   proven against the tabs yet.
 2. **Move the five files into `lib/check`**, with `ide` replaced by a small host
    contract (`project`, `files`, `formOf`, a place to put findings). A project
    names it in `uses`; the IDE does, and both of its source lists change:
    `ide/project.json` and `tests/ide/project.json` (the suite compares them).
+   **Half built.** `lib/check` exists with `Check`, `Names`, `Accessibility`,
+   `ProjectFile`, `LaunchConfig`, `Lex`, `ProjectFiles` and `Owners`; the host
+   contract is `{ project, classes: { files, formOf }, names, problems }`, and
+   `tools/check` supplies it. **The IDE still uses its own copies**, so this is
+   what remains: change `ide/project.json` and `tests/ide/project.json`, delete
+   the duplicates, and run the `completion`/`modules` phases.
 3. **The console project and the subcommand.** `tools/check` behind a `check`
    word in `main.c`, as `test` is, and installed with the runtime
    (`cmake --install`, `tests/install.sh`).
+   **Built.** `bintana check [--json] [--strict] <project>`; the tool is found
+   one hop from the binary (`<bin>/../share/bintana/tools/check` installed,
+   `<build>/../tools/check` in the tree), installed by `CMakeLists.txt`, exercised
+   by `tests/smoke`'s `testCheck` and by `tests/install`.
 4. **Documentation**, in the same change as each stage and not after: `--help`
    in `main.c`; `bintana-docs` (`llm/check.md` and the runtime page);
    `api.json` through `./tools/apijson.sh`; `docs/installing.md`; the IDE's
    `ide.pot` and `es.po` (the findings' sentences are already `Locale.Text`);
    and `bintana-llm`, whose guide is for writing a project with no IDE and
    should end with *then run `bintana check`*.
+   **Partly built.** `--help` lists the subcommand, `api.json` carries the
+   library, and `docs/installing.md` mentions the command. The pages in
+   `bintana-docs` and the closing line in `bintana-llm` live in those
+   repositories and are still pending; so do `ide.pot`/`es.po`, which only
+   matter once the IDE loads the library.
 
 ## Decisions already taken
 
@@ -115,17 +149,22 @@ Each one is shippable and leaves the IDE's behaviour as it was; stop after any.
 
 ## Open questions
 
-- **What is public.** A library's top-level names are published and held to
-  `api.json` and a page (`tests/api.sh` counts them: 49 across `lib/` on
-  2026-10-29). `Names` is used by the IDE for more than the check (the live
-  editor check, completion), so it cannot be private to the library. Decide the
-  smallest exported surface before stage 2, and whether the findings' sentences
-  go into the IDE's catalogue or into one of the library's own.
-- **Where the console project lives once installed**, so `main.c` finds it the
-  way it finds the IDE's directory (`@BTA_BIN_TO_IDE@` in `bintana-ide`).
-- **Whether `check` runs `Application.CheckSource` on every `.js`** (610 us a
-  file, measured by `Check.code`'s own comment) or only on those a project
-  loads: a project of four hundred modules is the case to measure.
+- **What is public — answered.** `lib/check` exports nine top-level names:
+  `Check`, `Names`, `Accessibility`, `ProjectFile`, `Kind`, `LaunchConfig`,
+  `Lex`, `ProjectFiles` and `Owners`. `tests/api.sh` holds them to `api.json`
+  and describes each beside its declaration; the IDE, once migrated, uses the
+  same nine. The findings' sentences stay in the code that raises them, as the
+  panel's do; only `Accessibility`'s were ever translated.
+- **Where the console project lives once installed — answered.** Under
+  `${BTA_DATADIR}/tools/check`, found by the same one-hop rule the library
+  search uses: `<bin>/../share/bintana/tools/check` installed,
+  `<build>/../tools/check` in the source tree, `/usr/share/bintana/...` as the
+  distribution fallback. No path is written down at configure time.
+- **Whether `check` runs `Application.CheckSource` on every `.js` — answered by
+  the measurement already in `Check.code`.** It does, on every file the walk
+  finds: 610 us a file, 39 ms for this repository's 63 `.js` and 1.07 MB of
+  `ide/`. A project of four hundred small modules costs less than one large
+  form, and the check runs only when asked.
 
 ## What would change this
 

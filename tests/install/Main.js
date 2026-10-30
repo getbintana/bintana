@@ -107,6 +107,7 @@ function Main() {
     }
 
     contents(prefix);
+    checkTool(prefix, work);
     pluginDev(prefix, work);
     launcher(prefix);
     entry(prefix);
@@ -176,6 +177,66 @@ function contents(prefix) {
         check("every source in the installed project.json is there", gone.length === 0,
               gone.join(", "));
     }
+}
+
+/* ---------------------------------------------------------------- the check
+ *
+ * `bintana check` is a console project the runtime finds one hop from its own
+ * binary, over a library it finds the same way -- two hops that only an install
+ * can break, because in the source tree both sit under the checkout. So the
+ * *installed* binary is what runs it: a project with an error must end 1 and
+ * say what is wrong, the same answer must come out as JSON, and a clean one
+ * must end 0 and print nothing.
+ *
+ * **The exit status is the assertion**, not only the text: it is what a CI
+ * reads, and a checker that cannot find its own sources must not exit 0. The
+ * clean project is what tells those two failures apart.
+ */
+function checkTool(prefix, work) {
+    const runtime = File.Join(prefix, "bin", "bintana");
+
+    for (const rel of ["share/bintana/tools/check/project.json",
+                       "share/bintana/tools/check/Main.js",
+                       "share/bintana/lib/check/Check.js",
+                       "share/bintana/lib/check/ProjectFiles.js"])
+        check(`installed ${rel}`, File.Exists(File.Join(prefix, rel)));
+
+    const bad = File.Join(work, "check-bad");
+    Directory.Make(bad);
+    File.SaveJson(File.Join(bad, "project.json"),
+                  { name: "check-bad", startup: "Main",
+                    sources: ["Main.js", "Missing.js"] });
+    File.Save(File.Join(bad, "Main.js"), "class Main extends Form {}\n");
+
+    const r = Exec.Wait([runtime, "check", bad],
+                        { Timeout: 60000, Stderr: "separate" });
+    eq("the installed check fails a broken project", r.ExitCode, 1);
+    check("...and says what is wrong", r.Output.includes("Missing.js"),
+          r.Output + r.Errors);
+
+    const json = Exec.Wait([runtime, "check", "--json", bad],
+                           { Timeout: 60000, Stderr: "separate" });
+    eq("...and the same exit status as JSON", json.ExitCode, 1);
+    const said = json.Output.split("\n").some((line) => {
+        try {
+            const row = JSON.parse(line);
+            return row.Event === "Finding" && row.Text.includes("Missing.js");
+        } catch (e) {
+            return false;
+        }
+    });
+    check("...and answers the same as JSON", said, json.Output);
+
+    const good = File.Join(work, "check-good");
+    Directory.Make(good);
+    File.SaveJson(File.Join(good, "project.json"),
+                  { name: "check-good", main: "Go", sources: ["Go.js"] });
+    File.Save(File.Join(good, "Go.js"), "function Go() {}\n");
+
+    const ok = Exec.Wait([runtime, "check", good],
+                         { Timeout: 60000, Stderr: "separate" });
+    eq("the installed check passes a clean project", ok.ExitCode, 0);
+    eq("...and prints nothing", ok.Output.trim(), "");
 }
 
 /* -------------------------------------------------------------- plugins

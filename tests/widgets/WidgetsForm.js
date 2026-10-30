@@ -21080,6 +21080,31 @@ class Form1 extends Form {
         eq("inherited from Object, as `in` was",
            Widget.Member("Button", "toString"), "Method");
 
+        /* **A menu item and a command answer with no window too.** They are not
+         * widgets and have no global constructor -- a `.form`'s loader makes
+         * their instances -- so a checker could not ask their class until the
+         * runtime built the synthetic one for them. The properties are the
+         * instance's own, and the two events are what each raises. */
+        eq("a menu item's class answers by name",
+           Widget.Member("MenuItem", "Name"), "ReadOnly");
+        eq("and a command's", Widget.Member("Action", "Text"), "ReadOnly");
+        eq("a writable command property",
+           Widget.Member("Action", "Enabled"), "Property");
+        check("the event a menu item raises is its class's",
+              Widget.EventNames("MenuItem").includes("Click"),
+              JSON.stringify(Widget.EventNames("MenuItem")));
+        check("and the command's",
+              Widget.EventNames("Action").includes("Execute"),
+              JSON.stringify(Widget.EventNames("Action")));
+        check("the properties are the ones it has",
+              Widget.PropertyNames("MenuItem").includes("Value") &&
+              Widget.PropertyNames("Action").includes("Enabled"),
+              JSON.stringify(Widget.PropertyNames("MenuItem")));
+        check("and Members walks both",
+              Widget.Members("MenuItem").some((m) => m.Name === "Click") &&
+              Widget.Members("Action").some((m) => m.Name === "Execute"),
+              JSON.stringify(Widget.Members("MenuItem").map((m) => m.Name)));
+
         /* **`Members` is the verb that answers where the three above refuse**, and
          * that is what it was added for. `Timer` is a class in rad.js and the old
          * verbs say *not a widget class* about it -- so an editor completing

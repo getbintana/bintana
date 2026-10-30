@@ -129,6 +129,7 @@ class TestForm extends Form {
         this.testConsoleExit();
         this.testLook();
         this.testTests();
+        this.testCheck();
     }
 
     /* --- .form loading -------------------------------------------------- */
@@ -385,6 +386,105 @@ class TestForm extends Form {
                   plain.out.includes("the program ran") && !plain.out.includes("tests were loaded"),
                   plain.out.slice(0, 300));
             eq("--json is refused outside test", run("--json", dir).code, 2);
+        } finally {
+            Directory.DeleteTree(dir);
+        }
+    }
+
+    /* --- `bintana check` ----------------------------------------------------
+     *
+     * The project pass with no window and no IDE: a project with an error, a
+     * warning-only project under `--strict`, and a clean one. What is asserted
+     * is the text a person reads, the JSON a tool reads, and the exit status a
+     * CI reads -- the three spellings of the same answer.
+     */
+    testCheck() {
+        const dir = File.Join(Environment.TempDirectory,
+                              `bta-smoke-check-${Environment.ProcessId}`);
+        Directory.Make(dir);
+        const write = (name, text) => File.Save(File.Join(dir, name), text);
+        const run = (...args) =>
+            Exec.Wait([Application.Executable, "check", ...args],
+                      { Timeout: 20000 });
+
+        try {
+            /* An error, a warning that is not one, and a file the manifest
+             * forgot: the three shapes the pass exists for. */
+            write("project.json", JSON.stringify({
+                name: "smoke-check", startup: "Main",
+                sources: ["Main.js", "Missing.js"], nonsense: true,
+            }));
+            write("Main.js",
+                "class Main extends Form {\n" +
+                "    Form_Open() { this.Txt1.Typoo = 1; }\n" +
+                "    Txt1_Clik() {}\n" +
+                "}\n");
+            write("Main.form", JSON.stringify({
+                format: "bintana-form/1", class: "Main",
+                children: [
+                    { type: "TextBox", name: "Txt1", properties: { X: 1, Y: 1 } },
+                    { type: "Page", name: "Txt1", properties: { X: 2, Y: 2 } },
+                ],
+            }));
+            write("Stray.js", "class Stray {}\n");
+
+            const bad = run(dir);
+            eq("a project with an error ends 1", bad.ExitCode, 1);
+            for (const [what, text] of [
+                ["a missing source", "sources names Missing.js"],
+                ["a duplicate control", "two controls are called Txt1"],
+                ["a property the class lacks", "TextBox has no Typoo"],
+                ["a handler for no event", "does not raise Clik"],
+                ["a key nothing reads", "nonsense"],
+                ["a file sources forgot", "Stray.js"],
+            ]) check(`check says ${what}`, bad.Output.includes(text), bad.Output);
+
+            const json = run("--json", dir);
+            const rows = json.Output.split("\n").filter((l) => l.startsWith("{"))
+                                 .map((l) => JSON.parse(l));
+            check("--json is one object per finding",
+                  rows.filter((r) => r.Event === "Finding").length >= 6,
+                  JSON.stringify(rows.slice(0, 3)));
+            check("each names kind, file, line and text",
+                  rows.some((r) => r.Event === "Finding" && r.Kind === "Error" &&
+                                   r.File === "project.json" && r.Line === 0 &&
+                                   r.Text.includes("Missing.js")),
+                  JSON.stringify(rows.slice(0, 3)));
+            const done = rows.find((r) => r.Event === "Done");
+            check("...and a Done with the counts",
+                  done && done.Errors >= 1 && done.Warnings >= 1,
+                  JSON.stringify(done));
+
+            /* Warnings alone are a green run unless the caller asked for the
+             * other answer. */
+            write("project.json", JSON.stringify({
+                name: "smoke-check", startup: "Main", sources: ["Main.js"],
+            }));
+            write("Main.js", "class Main extends Form { Form_Open() {} }\n");
+            write("Main.form", JSON.stringify({
+                format: "bintana-form/1", class: "Main",
+                children: [{ type: "TextBox", name: "Txt1",
+                             properties: { X: 1, Y: 1 } }],
+            }));
+            const warned = run(dir);
+            eq("a warning alone is not a failure", warned.ExitCode, 0);
+            check("...and is still said", warned.Output.includes("Txt1"),
+                  warned.Output);
+            eq("--strict makes it one", run("--strict", dir).ExitCode, 1);
+
+            /* A clean project says nothing at all. */
+            write("project.json", JSON.stringify({
+                name: "smoke-check", main: "Go", sources: ["Go.js"],
+            }));
+            write("Go.js", "function Go() {}\n");
+            File.Delete(File.Join(dir, "Main.form"));
+            File.Delete(File.Join(dir, "Main.js"));
+            File.Delete(File.Join(dir, "Stray.js"));
+            const clean = run(dir);
+            eq("a clean project ends 0", clean.ExitCode, 0);
+            eq("and prints nothing", clean.Output.trim(), "");
+
+            eq("no project is a usage error", run().ExitCode, 2);
         } finally {
             Directory.DeleteTree(dir);
         }

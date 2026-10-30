@@ -78,6 +78,7 @@ distribution are in [`docs/installing.md`](docs/installing.md), with the
 ./tests/run.sh widgets record                     # the tests whose name contains it
 ./tests/run.sh ide designer                       # one project, up to one phase
 ./tests/run.sh ide list                           # what a project can be asked for
+./build/bintana check <project>                   # the project pass, no window, exit 1 on error
 BINTANA=/other/bintana ./tests/run.sh             # suite against another build
 TIMEOUT=2400 ./tests/run.sh                       # a slower machine
 BINTANA_PROFILE=/tmp/caps ./tests/run.sh          # a Sysprof capture per project

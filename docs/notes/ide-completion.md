@@ -81,7 +81,7 @@ So there were two fixes, and **only one of them is in the IDE**:
   **And then the count, discovered, which removed the reason to declare
   anything.** The first version of this asked the runtime for a signature and got
   nothing for a library, and the obvious next move -- a `static Signatures` in
-  each of the six libraries -- was the wrong one, and the objection to it is the
+  each of the libraries -- was the wrong one, and the objection to it is the
   right one: **nobody should have to write the arity of fifty methods for an
   editor to catch `Ask()`.** `Function.length` is the engine's own answer and it
   is right for every declaration without a default, so `Widget.Members` grew a

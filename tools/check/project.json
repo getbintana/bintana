@@ -1,0 +1,8 @@
+{
+  "name": "check",
+  "main": "main",
+  "version": "1.0",
+  "description": "bintana check: the IDE's project check from a shell, over lib/check",
+  "uses": ["check"],
+  "sources": ["Main.js"]
+}

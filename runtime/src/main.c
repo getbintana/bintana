@@ -1,7 +1,9 @@
 /*
  * bintana -- the Bintana runtime.
  *
- *   bintana [run] <project-dir>
+ *   bintana [run] <project-dir> [args...]
+ *   bintana test  [--json] <project-dir> [filter]
+ *   bintana check [--json] [--strict] <project-dir>
  */
 #include "bta.h"
 
@@ -17,6 +19,7 @@ static void usage(void)
 {
     fputs("usage: bintana [run] <project-dir> [args...]\n"
           "       bintana test [--json] <project-dir> [filter]\n"
+          "       bintana check [--json] [--strict] <project-dir>\n"
           "\n"
           "Runs the Bintana project in <project-dir>: evaluates its .js\n"
           "sources, then instantiates and shows the startup form named in\n"
@@ -54,6 +57,115 @@ static void usage(void)
           "0 when every test passed and 1 when one did not.\n"
           "  --json    one JSON line per test, and one at the end.\n",
           stderr);
+}
+
+/*
+ * Where the installed `tools/check` project lives.
+ *
+ * It moves with the binary, like `lib/` and the IDE: `bin/` and `share/bintana/`
+ * are the same hop under a `--prefix` or a packager's DESTDIR. The source tree
+ * is the same hop one level up (`build/../tools/check`), which is what makes
+ * `./build/bintana check …` work with nothing installed. `/usr/share` is the
+ * distribution's fallback, as the library search has.
+ */
+static char *check_tool_dir(void)
+{
+    char *exe = bta_exe_path();
+    char *bin, *up;
+    GPtrArray *tried = g_ptr_array_new_with_free_func(g_free);
+
+    if (exe) {
+        bin = g_path_get_dirname(exe);
+        up  = g_path_get_dirname(bin);
+        g_ptr_array_add(tried, g_build_filename(up, "tools", "check", NULL));
+        g_ptr_array_add(tried, g_build_filename(up, "share", "bintana",
+                                                "tools", "check", NULL));
+        g_free(bin);
+        g_free(up);
+        g_free(exe);
+    }
+    g_ptr_array_add(tried, g_build_filename("/usr", "share", "bintana",
+                                            "tools", "check", NULL));
+
+    for (guint i = 0; i < tried->len; i++) {
+        const char *dir = tried->pdata[i];
+
+        if (g_file_test(dir, G_FILE_TEST_IS_DIR)) {
+            char *found = g_strdup(dir);
+
+            g_ptr_array_unref(tried);
+            return found;
+        }
+    }
+    g_ptr_array_unref(tried);
+    return NULL;
+}
+
+/*
+ * `bintana check [--json] [--strict] <project>`: run `tools/check`, a console
+ * project over `lib/check`. The target is made absolute here because the tool
+ * runs with its own directory as `Application.Directory`; `--strict` is the
+ * check's own (warnings fail) and not the runtime's control-property strictness.
+ */
+static int run_check(int argc, char **argv)
+{
+    const char *target = NULL;
+    bool        json = false, strict = false;
+
+    for (int i = 2; i < argc; i++) {
+        if (!strcmp(argv[i], "--json")) {
+            json = true;
+        } else if (!strcmp(argv[i], "--strict")) {
+            strict = true;
+        } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
+            usage();
+            return 0;
+        } else if (argv[i][0] == '-' || target) {
+            fprintf(stderr, "bintana check: unexpected '%s'\n", argv[i]);
+            usage();
+            return 2;
+        } else {
+            target = argv[i];
+        }
+    }
+
+    if (!target) {
+        usage();
+        return 2;
+    }
+    if (!g_file_test(target, G_FILE_TEST_IS_DIR)) {
+        fprintf(stderr, "bintana check: '%s' is not a directory\n", target);
+        return 2;
+    }
+
+    char *tool = check_tool_dir();
+    if (!tool) {
+        fprintf(stderr, "bintana check: cannot find tools/check beside the "
+                        "runtime -- is this an installed build?\n");
+        return 2;
+    }
+
+    char *root = g_canonicalize_filename(target, NULL);
+    GPtrArray *args = g_ptr_array_new_with_free_func(g_free);
+
+    g_ptr_array_add(args, root);
+    if (json)
+        g_ptr_array_add(args, g_strdup("--json"));
+    if (strict)
+        g_ptr_array_add(args, g_strdup("--strict"));
+    g_ptr_array_add(args, NULL);
+
+    BtaApp *app = bta_app_new(tool);
+    app->args = (char **)args->pdata;
+
+    char *fake_argv[] = { argv[0], NULL };
+    int   rc = bta_app_run(app, 1, fake_argv);
+
+    bta_app_free(app);
+    bta_profile_finish();
+    g_ptr_array_unref(args);   /* holds owned copies, unlike the run's */
+    g_free(tool);
+    return rc;
 }
 
 int main(int argc, char **argv)
@@ -95,6 +207,12 @@ int main(int argc, char **argv)
      */
     g_setenv("GTK_CSD", "0", FALSE);
 #endif
+
+    /* A word of its own, before the project/options parser: none of those
+     * options belongs to the check's run, and the target is not this process's
+     * project. */
+    if (argc > 1 && !strcmp(argv[1], "check"))
+        return run_check(argc, argv);
 
     const char *dir  = NULL;
     const char *profile = NULL;

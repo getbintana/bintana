@@ -3034,6 +3034,18 @@ static JSValue class_proto_for(JSContext *ctx, const char *type)
     if (cls)
         return JS_DupValue(ctx, cls->proto);
 
+    /* `MenuItem` and `Action` have no global constructor: a `.form`'s loader
+     * makes their instances. They still have a class to ask -- see
+     * `bta_menu_class_value` -- and that is what lets a check answer for a
+     * menu item or a command with no window. */
+    JSValue menu = bta_menu_class_value(ctx, type);
+    if (!JS_IsUndefined(menu)) {
+        JSValue proto = JS_GetPropertyStr(ctx, menu, "prototype");
+
+        JS_FreeValue(ctx, menu);
+        return proto;
+    }
+
     JSValue klass = bta_lookup_global(ctx, type);
     if (JS_IsException(klass))
         return klass;
@@ -5121,6 +5133,25 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
         JS_FreeValue(ctx, out);
         g_ptr_array_free(names, TRUE);
         return JS_EXCEPTION;
+    }
+
+    /* The two classes with no global constructor answer from the synthetic
+     * class `bta_menu_class_value` builds.  With `Sources` the source walk is
+     * the one that knows the class being written, and this does not apply. */
+    if (!sources) {
+        JSValue menu = bta_menu_class_value(ctx, type);
+
+        if (!JS_IsUndefined(menu)) {
+            take_members_of_resolved(ctx, menu, type, all, own_only,
+                                     out, names, &n);
+            JS_FreeValue(ctx, menu);
+            JS_FreeCString(ctx, type);
+            g_strfreev(forms);
+            for (guint i = 0; i < names->len; i++)
+                g_free(g_ptr_array_index(names, i));
+            g_ptr_array_free(names, TRUE);
+            return out;
+        }
     }
     if (sources) {
         index = decl_index_build(ctx, sources, g_strv_length(sources));

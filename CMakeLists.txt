@@ -473,6 +473,11 @@ install(DIRECTORY examples/ DESTINATION ${BTA_DATADIR}/examples
 install(DIRECTORY lib/ DESTINATION ${BTA_DATADIR}/lib
         PATTERN "*.pot" EXCLUDE)
 
+# `bintana check` is a console project and finds its sources the same way the
+# IDE does: one hop from the binary, under the data directory.
+install(DIRECTORY tools/check DESTINATION ${BTA_DATADIR}/tools
+        PATTERN "*.pot" EXCLUDE)
+
 # **One header, and that is the whole development surface a plugin needs.** Not
 # `bta.h` and not `quickjs.h`: a plugin links neither the runtime nor the
 # engine, so what it compiles against is the callback table and nothing else

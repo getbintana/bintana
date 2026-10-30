@@ -816,6 +816,46 @@ static const JSCFunctionListEntry menuitem_props[] = {
     JS_CFUNC_DEF("EventNames",    0, menuitem_event_names),
 };
 
+/* A class object with a prototype, built on demand: these two classes have no
+ * global constructor, so `Widget.Member` and company had nothing to ask without
+ * a window. The props are the instance's own table, the static `Events` is what
+ * the class raises, and `TextProperties` is empty because neither holds prose.
+ * Freed by the caller; nothing is cached, so a class-level query costs one
+ * object and no state that could go stale. */
+static JSValue menu_class_value(JSContext *ctx,
+                                const JSCFunctionListEntry *props, int n,
+                                const char *event)
+{
+    JSValue ctor  = JS_NewObject(ctx);
+    JSValue proto = JS_NewObject(ctx);
+    JSValue events, texts;
+
+    JS_SetPropertyFunctionList(ctx, proto, props, n);
+    JS_SetPropertyStr(ctx, proto, "constructor", JS_DupValue(ctx, ctor));
+
+    events = JS_NewArray(ctx);
+    JS_SetPropertyUint32(ctx, events, 0, JS_NewString(ctx, event));
+    JS_SetPropertyStr(ctx, ctor, "Events", events);
+
+    texts = JS_NewArray(ctx);
+    JS_SetPropertyStr(ctx, ctor, "TextProperties", texts);
+    JS_SetPropertyStr(ctx, ctor, "prototype", proto);
+    return ctor;
+}
+
+JSValue bta_menu_class_value(JSContext *ctx, const char *type)
+{
+    if (!type)
+        return JS_UNDEFINED;
+    if (!strcmp(type, "MenuItem"))
+        return menu_class_value(ctx, menuitem_props,
+                                (int)G_N_ELEMENTS(menuitem_props), "Click");
+    if (!strcmp(type, "Action"))
+        return menu_class_value(ctx, action_props,
+                                (int)G_N_ELEMENTS(action_props), "Execute");
+    return JS_UNDEFINED;
+}
+
 static JSValue menuitem_property_names(JSContext *ctx, JSValueConst this_val,
                                        int argc, JSValueConst *argv)
 {

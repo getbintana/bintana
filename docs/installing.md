@@ -57,9 +57,10 @@ editing anything under `examples/`, `ide/`, `lib/` or `tests/` needs no rebuild.
 LANGUAGE=es ./build/bintana ide examples/hello   # the IDE in Spanish
 ```
 
-`./build/bintana` finds the shipped libraries (`lib/charts`, `lib/markdown`,
-`lib/package`, `lib/qr`, `lib/report`) one hop from its own binary, so nothing
-has to be installed to run an example or the IDE from the source tree.
+`./build/bintana` finds the shipped libraries (`lib/charts`, `lib/check`,
+`lib/dialog`, `lib/markdown`, `lib/package`, `lib/qr`, `lib/report`,
+`lib/xlsx`) one hop from its own binary, so nothing has to be installed to run
+an example or the IDE from the source tree.
 
 ## Install
 
@@ -113,7 +114,8 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/bin/bintana-ide` | a one-line launcher for the IDE, under a name a menu entry can carry |
 | `<prefix>/share/bintana/ide/` | the IDE as the project directory it is |
 | `<prefix>/share/bintana/examples/` | the examples, to open and copy |
-| `<prefix>/share/bintana/lib/` | the three shipped libraries |
+| `<prefix>/share/bintana/lib/` | the shipped libraries, `check` among them |
+| `<prefix>/share/bintana/tools/check/` | the console project behind `bintana check` |
 | `<prefix>/include/bintana/bta_plugin.h` | the only header a native plugin compiles against |
 | `<prefix>/lib*/pkgconfig/bintana.pc` | what points a compiler at that header |
 | `<prefix>/share/applications/` + `share/icons/` | the menu entry and its icon |
@@ -132,8 +134,17 @@ somewhere writable before opening it in the IDE to edit.
 bintana-ide                              # the IDE, from the menu or a shell
 bintana-ide ~/my-project                 # ...opening a project
 bintana /usr/local/share/bintana/examples/hello
+bintana check ~/my-project                # what the IDE's Project -> Check finds
+bintana check --strict ~/my-project       # ...with warnings failing the run too
 bintana --version                        # the runtime's own release
 ```
+
+`bintana check` is the same project pass the IDE runs, from a shell: it reads
+the project and opens no window, so a CI job or a git hook can ask it. The exit
+status is 1 for an error, or for a warning under `--strict`, and 0 otherwise;
+`--json` gives one `{"Event":"Finding",…}` line per finding and a final
+`{"Event":"Done",…}`. It finds `share/bintana/tools/check` and its library one
+hop from the installed binary, so a staged or relocated prefix needs nothing.
 
 `bintana --version` is the runtime's release, which is also `BTA_VERSION` in a
 program and the `Version` of `bintana.pc`; an *application's* version is

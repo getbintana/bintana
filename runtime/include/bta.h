@@ -1348,6 +1348,16 @@ void bta_note_declared(JSContext *ctx, JSValueConst target, const char *key,
 
 /* --- menus -------------------------------------------------------------- */
 void bta_menu_init(JSContext *ctx);
+/*
+ * The class of a `MenuItem` or an `Action`, as the class-level verbs see it:
+ * a synthetic constructor with that prototype and with the static `Events`
+ * (and empty `TextProperties`) a project class carries. `JS_UNDEFINED` for
+ * any other name. Only those two classes have no global constructor -- a
+ * `.form`'s loader makes their instances -- so without this `Widget.Member`,
+ * `PropertyNames`, `Methods` and `EventNames` could not answer for them with
+ * no window, which is what `bintana check` needs.
+ */
+JSValue bta_menu_class_value(JSContext *ctx, const char *type);
 /* Builds the form's menu bar from a .form "menus" array, exposing each item on
  * the form by name and registering its accelerator. */
 int  bta_menus_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
