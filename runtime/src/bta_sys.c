@@ -426,6 +426,55 @@ static JSValue sys_file_is_extension(JSContext *ctx, JSValueConst this_val,
     return JS_NewBool(ctx, same);
 }
 
+/*
+ * A path with its `.` and `..` worked out **by the letters**, the way Node's
+ * `path.join` and Go's `filepath.Clean` do it: `a/./b` is `a/b`, `a/x/../b` is
+ * `a/b`, a doubled separator is one, and `..` at the root of an absolute path
+ * stays at the root. A relative path keeps the `..` it cannot climb out of
+ * (`../x` is still `../x`). Nothing is asked of the disk, so a `..` after a
+ * symbolic link goes back up the name and not the link's target -- which is
+ * the trade every one of those makes, and the reason this is `Join` and not
+ * `Absolute`.
+ */
+static char *path_clean(const char *path)
+{
+    const char *rest = g_path_skip_root(path);
+    GString    *out  = g_string_new(NULL);
+    GPtrArray  *keep = g_ptr_array_new();
+    char      **parts;
+
+    if (rest)                               /* "/" here, "C:\" on Windows */
+        g_string_append_len(out, path, rest - path);
+    else
+        rest = path;
+
+    parts = g_strsplit_set(rest, G_IS_DIR_SEPARATOR('\\') ? "/\\" : "/", -1);
+    for (char **p = parts; *p; p++) {
+        if (!**p || !strcmp(*p, "."))
+            continue;
+        if (!strcmp(*p, "..")) {
+            if (keep->len && strcmp(g_ptr_array_index(keep, keep->len - 1), ".."))
+                g_ptr_array_remove_index(keep, keep->len - 1);
+            else if (!out->len)             /* relative: nothing left to climb */
+                g_ptr_array_add(keep, *p);
+            continue;                       /* absolute: the root has no parent */
+        }
+        g_ptr_array_add(keep, *p);
+    }
+
+    for (guint i = 0; i < keep->len; i++) {
+        if (i)
+            g_string_append_c(out, G_DIR_SEPARATOR);
+        g_string_append(out, g_ptr_array_index(keep, i));
+    }
+    if (!out->len)
+        g_string_append_c(out, '.');
+
+    g_ptr_array_unref(keep);
+    g_strfreev(parts);
+    return g_string_free(out, FALSE);
+}
+
 static JSValue sys_file_join(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -442,9 +491,11 @@ static JSValue sys_file_join(JSContext *ctx, JSValueConst this_val,
     }
     g_ptr_array_add(parts, NULL);
 
-    char   *joined = g_build_filenamev((char **)parts->pdata);
+    char   *built  = g_build_filenamev((char **)parts->pdata);
+    char   *joined = *built ? path_clean(built) : g_strdup("");
     JSValue v      = JS_NewString(ctx, joined);
     g_free(joined);
+    g_free(built);
     g_ptr_array_unref(parts);
     return v;
 }
@@ -3266,7 +3317,7 @@ typedef struct {
     GCancellable *cancel;   /* cancelled at teardown, so the dialog answers */
 } DialogJob;
 
-enum { DLG_FOLDER, DLG_FILE, DLG_SAVE };
+enum { DLG_FOLDER, DLG_FILE, DLG_SAVE, DLG_FILES };
 
 #define DIALOG_MODE_KEY "bta-dialog-mode"
 
@@ -3293,6 +3344,52 @@ static void dialog_job_finish(DialogJob *job, char *path)
         bta_drain_jobs(JS_GetRuntime(job->ctx));
     }
     g_free(path);
+    dialog_job_free(job);
+}
+
+/*
+ * Several files, which GTK answers as a list: the callback is handed an array
+ * of paths, in the order the chooser gives them, and only when there is at
+ * least one -- cancelling answers nothing, as every dialog here does. A file
+ * with no local path (one a portal only lends as a URI) is left out rather
+ * than handed over as something `File` cannot open.
+ */
+static void on_dialog_many_done(GObject *src, GAsyncResult *res, gpointer user_data)
+{
+    DialogJob  *job   = user_data;
+    GError     *err   = NULL;
+    GListModel *files = gtk_file_dialog_open_multiple_finish(GTK_FILE_DIALOG(src),
+                                                             res, &err);
+    g_clear_error(&err);
+
+    if (!g_list_find(dialog_jobs, job)) {      /* torn down meanwhile */
+        g_clear_object(&files);
+        return;
+    }
+
+    JSContext *ctx   = job->ctx;
+    JSValue    paths = JS_NewArray(ctx);
+    uint32_t   n     = 0;
+
+    for (guint i = 0; files && i < g_list_model_get_n_items(files); i++) {
+        GFile *f    = g_list_model_get_item(files, i);
+        char  *path = g_file_get_path(f);
+
+        if (path)
+            JS_SetPropertyUint32(ctx, paths, n++, JS_NewString(ctx, path));
+        g_free(path);
+        g_object_unref(f);
+    }
+    g_clear_object(&files);
+
+    if (n && JS_IsFunction(ctx, job->cb)) {
+        JSValue r = JS_Call(ctx, job->cb, JS_UNDEFINED, 1, (JSValueConst *)&paths);
+        if (JS_IsException(r))
+            bta_dump_error(ctx);
+        JS_FreeValue(ctx, r);
+        bta_drain_jobs(JS_GetRuntime(ctx));
+    }
+    JS_FreeValue(ctx, paths);
     dialog_job_free(job);
 }
 
@@ -3538,6 +3635,9 @@ static JSValue sys_dialog(JSContext *ctx, JSValueConst this_val,
         break;
     case DLG_SAVE:
         gtk_file_dialog_save(dlg, parent, job->cancel, on_dialog_done, job);
+        break;
+    case DLG_FILES:
+        gtk_file_dialog_open_multiple(dlg, parent, job->cancel, on_dialog_many_done, job);
         break;
     default:
         gtk_file_dialog_open(dlg, parent, job->cancel, on_dialog_done, job);
@@ -4188,7 +4288,13 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, file, "SaveBytes",
                       JS_NewCFunction(ctx, sys_file_save_bytes, "SaveBytes", 2));
     /* Join(...parts) -> string
-     *   one path out of pieces, with the separator the platform uses
+     *   one path out of pieces, with the separator the platform uses, **and
+     *   normalised**: `.` and `..` are worked out by the letters, so
+     *   `Join(root, "../../etc/x")` answers `/etc/x` -- a name that is data
+     *   cannot hide where it leads. Whether it is still inside is
+     *   `Within(path, root)`. A relative path keeps the `..` it cannot climb
+     *   out of; nothing is asked of the disk, so `..` after a link goes back
+     *   up the name
      */
     JS_SetPropertyStr(ctx, file, "Join",   JS_NewCFunction(ctx, sys_file_join, "Join", 2));
     /* Absolute(path) -> string
@@ -4442,6 +4548,14 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, dialog, "OpenFile",
                       JS_NewCFunctionMagic(ctx, sys_dialog, "OpenFile", 2,
                                            JS_CFUNC_generic_magic, DLG_FILE));
+    /* OpenFiles(title, [options], cb)
+     *   the file chooser letting several be picked at once: the callback is
+     *   handed **an array of paths**, and is not called when the person
+     *   cancels. The same options as `OpenFile`
+     */
+    JS_SetPropertyStr(ctx, dialog, "OpenFiles",
+                      JS_NewCFunctionMagic(ctx, sys_dialog, "OpenFiles", 2,
+                                           JS_CFUNC_generic_magic, DLG_FILES));
     /* SaveFile(title, [options], cb)
      *   the same, for somewhere to write
      */

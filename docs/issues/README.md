@@ -12,7 +12,6 @@ in the same form.
 
 | Issue | The missing capability |
 |---|---|
-| [ISSUE-regex-position.md](ISSUE-regex-position.md) | A regular expression does not say where it matched |
 | [ISSUE-table-filter.md](ISSUE-table-filter.md) | A table's rows cannot be filtered by a column |
 | [ISSUE-grid-placement.md](ISSUE-grid-placement.md) | A `Grid` child has no row, no column and no `RowSpan` |
 | [ISSUE-postgres-driver.md](ISSUE-postgres-driver.md) | `Database` publishes `Sqlite` alone |
@@ -21,10 +20,8 @@ in the same form.
 | [ISSUE-symmetric-encryption.md](ISSUE-symmetric-encryption.md) | No symmetric encryption |
 | [ISSUE-pdf-reading.md](ISSUE-pdf-reading.md) | The runtime writes PDFs and cannot read one |
 | [ISSUE-image-object.md](ISSUE-image-object.md) | No image object to scale, crop or rotate |
-| [ISSUE-multiple-file-selection.md](ISSUE-multiple-file-selection.md) | `Dialog.OpenFile` picks one path |
 | [ISSUE-right-to-left.md](ISSUE-right-to-left.md) | `Fixed` does not mirror and icons ask for LTR |
 | [ISSUE-object-prototype.md](ISSUE-object-prototype.md) | `Object.prototype` is writable and there is no defence |
-| [ISSUE-file-join-normalisation.md](ISSUE-file-join-normalisation.md) | `File.Join` does not normalise |
 | [ISSUE-reference-hint-in-catch.md](ISSUE-reference-hint-in-catch.md) | The "did you mean" sentence is lost inside a `catch` |
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
@@ -34,7 +31,7 @@ in the same form.
 | [ISSUE-ide-formatter.md](ISSUE-ide-formatter.md) | No formatter and no multiple cursors |
 | [ISSUE-ide-align-centres.md](ISSUE-ide-align-centres.md) | No align-centres, no centre-in-form, and the grid is invisible |
 
-Twenty-one of them came out of the October audit
+Eighteen of them came out of the October audit
 ([`audit-2026-10.md`](../audit-2026-10.md)), which found the gaps in the
 runtime and in the IDE and had them written in this form. The audit keeps the
 argument; these files keep the gap.
@@ -50,7 +47,7 @@ gap is the other two, and they are two files now.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Forty-one have gone that way — thirty-eight filled, one refused, and two that
+Forty-four have gone that way — forty filled, one refused, and three that
 were never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -152,9 +149,23 @@ that was real: the reference now does, in
 [`llm/controls.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#scroller) and
 [`reference/widgets/Scroller.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/widgets/Scroller.md), with the
 measurements, and `tests/widgets`' `FillScroll` is what keeps it true.
+And never missing either: a regular expression that did not say where it
+matched. `Regex.Match` has answered a `Match` with `Index` and `Length` since
+the class was written, and the reference says so
+([`reference/globals/Regex.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/globals/Regex.md));
+the report was written from `api.json`, where a `Match` is not listed because
+it is not a global -- the answer is not a global either, and that is where the
+word was not found.
+
 **An issue answered by words that already existed is deleted like any other** —
 what it leaves behind is the documentation that would have prevented it, not a
 file describing a feature the runtime has.
+
+And a path built from a name that is data, which `File.Join` let leave the
+folder it was joined to while the answer still looked inside it: `Join`
+normalises now, `.` and `..` worked out by the letters, so `Within` asks about
+where the path really leads. And one dialog for several files:
+`Dialog.OpenFiles` hands the callback an array of paths.
 
 And a debugger whose values were flat lines and which could not stop on data:
 an object in the values panel opens onto its fields, a level at a time, asked

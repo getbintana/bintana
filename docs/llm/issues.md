@@ -179,7 +179,6 @@ needed and what it did instead.
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
-| A regular expression does not say where it matched | [ISSUE-regex-position](../issues/ISSUE-regex-position.md) |
 | A table's rows cannot be filtered by a column | [ISSUE-table-filter](../issues/ISSUE-table-filter.md) |
 | A `Grid` child has no row, no column and no `RowSpan` | [ISSUE-grid-placement](../issues/ISSUE-grid-placement.md) |
 | `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
@@ -188,10 +187,8 @@ needed and what it did instead.
 | No symmetric encryption | [ISSUE-symmetric-encryption](../issues/ISSUE-symmetric-encryption.md) |
 | The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
 | No image object to scale, crop or rotate | [ISSUE-image-object](../issues/ISSUE-image-object.md) |
-| `Dialog.OpenFile` picks one path | [ISSUE-multiple-file-selection](../issues/ISSUE-multiple-file-selection.md) |
 | `Fixed` does not mirror and icons ask for LTR | [ISSUE-right-to-left](../issues/ISSUE-right-to-left.md) |
 | `Object.prototype` is writable and there is no defence | [ISSUE-object-prototype](../issues/ISSUE-object-prototype.md) |
-| `File.Join` does not normalise | [ISSUE-file-join-normalisation](../issues/ISSUE-file-join-normalisation.md) |
 | The "did you mean" sentence is lost inside a `catch` | [ISSUE-reference-hint-in-catch](../issues/ISSUE-reference-hint-in-catch.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
 | The IDE has no schema browser, query console or data module | [ISSUE-ide-database-tools](../issues/ISSUE-ide-database-tools.md) |

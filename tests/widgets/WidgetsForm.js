@@ -17016,7 +17016,7 @@ class Form1 extends Form {
     testFileDialog() {
         check("SaveFile is there", typeof Dialog.SaveFile === "function");
 
-        for (const name of ["SelectFolder", "OpenFile", "SaveFile"]) {
+        for (const name of ["SelectFolder", "OpenFile", "OpenFiles", "SaveFile"]) {
             throws(`${name} needs a callback, being async`,
                    () => Dialog[name]("t"));
             /* Options and no callback is the same mistake wearing the shape
@@ -21896,6 +21896,16 @@ class Form1 extends Form {
         eq("a dotted directory does not fake an extension",
            File.Extension("/x.y/z"), "");
         eq("Join", File.Join("a", "b", "c.js"), "a/b/c.js");
+        /* Normalised by the letters: a name that is data cannot hide where it
+         * leads behind a `..` the answer still carried. */
+        eq("Join works the .. out", File.Join("/srv/root", "../../etc/x"), "/etc/x");
+        check("...so Within answers about where it really is",
+              !File.Within(File.Join("/srv/root", "../../etc/x"), "/srv/root"));
+        eq("and the . and the doubled separator", File.Join("a/./b//c"), "a/b/c");
+        eq("the root has no parent", File.Join("/a", "..", ".."), "/");
+        eq("a relative path keeps what it cannot climb out of",
+           File.Join("..", "elsewhere"), "../elsewhere");
+        eq("...and climbing all the way is the current directory", File.Join("a", ".."), ".");
 
         /* --- relative to a root, which is a component test and not a prefix
          * test: `proj2` starts with `proj` and is not inside it. */
