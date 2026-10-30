@@ -212,6 +212,18 @@ engine was built with a signed `char` on x86 and an unsigned one on ARM. No
 difference was found (the fork's tests are 0/118 both ways, and its byte
 handling reads `uint8_t`), which is why it is alignment and not a fix.
 
+**Timing the IDE's start-up has two traps of the shell's, both walked into.**
+`xdotool search --sync` polls every half second, so "the window appeared in
+508 ms" three times in a row was its interval, not the IDE: poll with a loop
+of plain `xdotool search` and `sleep 0.02` (about 480 ms, on an Xvfb of its
+own, for the IDE opening a copy of `examples/clients`). And a script that
+waits with `while pgrep -f <pattern>` or tidies with `pkill -f <pattern>`
+matches the shell running it, whose command line contains the pattern -- one
+waited an hour and a half for itself, another killed itself. Anchor the
+pattern at the start of the process's command line (`^./build/bintana
+tests/runner`). What the start-up costs is in
+[`interpreter-plan.md`](../plans/interpreter-plan.md), stage 0.
+
 ## What things cost, measured
 
 - **The appearance stylesheet is read back, which is why its rebuild can only be

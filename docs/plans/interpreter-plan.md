@@ -69,9 +69,24 @@ stage 1 in. "Compiling" is the parser, the scope resolver and the atom table;
 **Property access is half a percent of a real workload**, so stage 2 does not go
 ahead: days of work where a mistake answers a wrong value, to buy back at most
 that. What a Bintana program waits for is GTK -- the designer's time is CSS
-selector matching and GObject's type checks -- and, at start-up, **compiling**:
-half of what the IDE spends in its own binary while it opens is the parser,
-which is what [`bundle-plan.md`](bundle-plan.md)'s bytecode would remove.
+selector matching and GObject's type checks (most of the CSS half was the
+runtime reloading its sheet for a value a control already had, fixed:
+`profiling.md`) -- and, at start-up, **compiling**, which is half of what the
+IDE spends in its own binary while it opens.
+
+**Half of a small share, and a bytecode cache is not worth it** (measured
+2026-10-30, the IDE opening a copy of `examples/clients` on Xvfb,
+`RelWithDebInfo`, call graphs). The window is up in about 480 ms on about
+1100 million cycles, and `bta_compile` is **10 %** of them -- some 25-30 ms.
+The rest, on the main thread: drawing the first frame (13.5 %, GL in software
+on Xvfb), the dynamic linker relocating the libraries (10.5 %), building the
+forms (7.7 %), the handlers that run at open (8 %). A cache of compiled
+bytecode on disk would win at most the 25-30 ms, less the reading, at the
+price of invalidation, a directory of files and a format tied to the engine's
+version. [`bundle-plan.md`](bundle-plan.md) serialises bytecode for another
+reason (handing over an application without its sources), and speed is not
+one it can claim. **Reconsider when** a project's own compile is a visible
+share of its start-up -- measure `bta_compile`'s inclusive share as above.
 
 Two things that read wrong and are not: `tests/widgets` under `perf` is mostly
 two children -- a debugged one spinning on `Date.now` while it waits to be
