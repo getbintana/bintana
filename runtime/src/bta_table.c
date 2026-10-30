@@ -295,6 +295,15 @@ typedef struct {
      * mode, since an on-demand row is only an index and the index survives a
      * `Count = 0; Count = 50` that made it another row. See `cell_refind`. */
     guint          epoch;
+
+    /* **The rows a `Filter` handler hid** (a flat table that holds its rows):
+     * the rows themselves, as a set, and the filter model between the store and
+     * the selection that asks it. JavaScript is asked when rows arrive -- the
+     * store says where -- and on `Refilter()`; the model only looks a row up.
+     * A row is a key here and never read, so one removed and freed is a key
+     * nothing can match until the set is rebuilt. */
+    GtkFilterListModel *filtered;
+    GHashTable         *hidden;
 } TableState;
 
 static void table_state_free(gpointer p)
@@ -302,6 +311,8 @@ static void table_state_free(gpointer p)
     TableState *st = p;
     g_clear_pointer(&st->keys, g_hash_table_unref);
     g_clear_object(&st->virt);
+    g_clear_object(&st->filtered);           /* holds the store: first */
+    g_clear_pointer(&st->hidden, g_hash_table_unref);
     g_clear_object(&st->rows);
     g_clear_object(&st->cell);
     g_free(st);
@@ -383,6 +394,133 @@ static GtkTreeListModel *table_tree_model(BtaWidget *w)
     if (!table_state(w)->tree || !GTK_IS_TREE_LIST_MODEL(list))
         return NULL;
     return GTK_TREE_LIST_MODEL(list);
+}
+
+static int table_index_in(GListStore *store, BtaTableRow *node);
+
+/* ------------------------------------------------------------- the filter
+ *
+ * `Filter(row)` hides the rows its handler answers `false` for, and **a hidden
+ * row is still a row**: `Count` counts it, `Index`, `Selection`, `Select` and
+ * every event number by it, as `RowList.Filter` promises -- what a filter
+ * changes is what is on screen, not what the table holds. So the selection's
+ * positions (of what is shown) and the program's indices (of what is held) part
+ * company while anything is hidden, and these two cross between them, at the
+ * edge with JavaScript and nowhere else. With nothing hidden both are the
+ * identity, which is every table that never filters.
+ */
+
+/* Whether the view is showing the filter model, and it is hiding something. */
+static bool table_filtering(BtaWidget *w)
+{
+    TableState *st = table_state(w);
+
+    return st->hidden && g_hash_table_size(st->hidden) > 0 && !st->tree &&
+           st->filtered && table_sel_list(table_model(w)) == G_LIST_MODEL(st->filtered);
+}
+
+/* A held row's index -> where it is shown, or -1 when it is hidden. */
+static int table_row_to_view(BtaWidget *w, int index)
+{
+    TableState *st = table_state(w);
+    int         shown = 0;
+
+    if (index < 0 || !table_filtering(w))
+        return index;
+    for (int i = 0; i <= index; i++) {
+        gpointer row  = g_list_model_get_item(G_LIST_MODEL(st->rows), (guint)i);
+        bool     seen = row && !g_hash_table_contains(st->hidden, row);
+
+        g_clear_object(&row);
+        if (i == index)
+            return seen ? shown : -1;
+        if (seen)
+            shown++;
+    }
+    return -1;
+}
+
+/* Where a row is shown -> the index of the row it is, or -1. */
+static int table_view_to_row(BtaWidget *w, guint at)
+{
+    TableState *st = table_state(w);
+
+    if (!table_filtering(w))
+        return (int)at;
+
+    gpointer row   = g_list_model_get_item(G_LIST_MODEL(table_model(w)), at);
+    int      index = row ? table_index_in(st->rows, row) : -1;
+
+    g_clear_object(&row);
+    return index;
+}
+
+static gboolean table_filter_match(gpointer item, gpointer user_data)
+{
+    TableState *st = user_data;
+
+    return !st->hidden || !g_hash_table_contains(st->hidden, item);
+}
+
+/*
+ * Asks `Filter` about the held rows `from` .. `from + n`, by their index, and
+ * writes the answer into the set the filter model reads. With no handler the
+ * rows are shown. **A lookup and nothing else**, the rule `RowList.Filter` and
+ * `Data` keep: it runs while the store is telling the view about rows -- and if
+ * the handler remade the table all the same, the rest are given up rather than
+ * asked of rows that are no longer these.
+ */
+static void table_ask_filter(BtaWidget *w, guint from, guint n)
+{
+    TableState *st   = table_state(w);
+    bool        asks = !st->tree && bta_has_handler(w, "Filter");
+    guint       epoch = st->epoch;
+
+    if (!asks && !st->hidden)
+        return;
+    if (!st->hidden)
+        st->hidden = g_hash_table_new(NULL, NULL);
+
+    for (guint i = from; i < from + n; i++) {
+        gpointer row = g_list_model_get_item(G_LIST_MODEL(st->rows), i);
+        bool     show = true;
+
+        if (!row)
+            break;
+        if (asks) {
+            JSContext *ctx = w->ctx;
+            JSValue    arg = JS_NewInt32(ctx, (int)i);
+            JSValue    r   = bta_emit_answer(w, "Filter", 1, &arg, NULL);
+
+            /* Nothing answered is not "hide it". */
+            show = JS_IsUndefined(r) || JS_ToBool(ctx, r) != 0;
+            JS_FreeValue(ctx, r);
+            JS_FreeValue(ctx, arg);
+        }
+        if (show)
+            g_hash_table_remove(st->hidden, row);
+        else
+            g_hash_table_add(st->hidden, row);
+        g_object_unref(row);
+
+        if (st->epoch != epoch)
+            break;
+    }
+}
+
+/* The store gained rows: they are asked before the filter model -- connected
+ * after this -- looks them up. A store emptied forgets every answer. */
+static void on_rows_changed(GListModel *rows, guint pos, guint removed,
+                            guint added, gpointer user_data)
+{
+    BtaWidget  *w  = user_data;
+    TableState *st = table_state(w);
+
+    (void)removed;
+    if (st->hidden && g_list_model_get_n_items(rows) == 0)
+        g_hash_table_remove_all(st->hidden);
+    if (added)
+        table_ask_filter(w, pos, added);
 }
 
 /*
@@ -564,7 +702,7 @@ static int table_position_of(BtaWidget *w, BtaTableRow *row)
     if (!row->cells)
         return row->index < g_list_model_get_n_items(G_LIST_MODEL(table_model(w)))
                ? (int)row->index : -1;
-    return table_index_in(st->rows, row);
+    return table_row_to_view(w, table_index_in(st->rows, row));   /* -1: hidden */
 }
 
 /*
@@ -2403,7 +2541,7 @@ static void cell_select_row(BtaWidget *w, BtaTableRow *row)
     }
 
     GListStore *store = table_store_of(w, row);
-    int         at    = table_index_in(store, row);
+    int         at    = table_row_to_view(w, table_index_in(store, row));
 
     if (at >= 0)
         table_select_at(w, (guint)at);
@@ -4667,8 +4805,22 @@ static void build_table(BtaWidget *w)
      * (transfer full) and the state keeps the store too: without it the model
      * had one reference and two owners, and freeing the state was the second
      * unref -- `g_object_unref: assertion 'G_IS_OBJECT (object)' failed`. */
+    /*
+     * **Between the store and the selection, the filter** -- always, since a
+     * handler can arrive at any moment and with nothing hidden it passes every
+     * row through unasked. **`on_rows_changed` is connected before the model
+     * exists**, and that order is the mechanism: handlers run in the order they
+     * were connected, so new rows are asked about before the filter model looks
+     * them up.
+     */
+    g_signal_connect(st->rows, "items-changed", G_CALLBACK(on_rows_changed), w);
+    bta_widget_watch(w, st->rows);
+    st->filtered = gtk_filter_list_model_new(
+        g_object_ref(G_LIST_MODEL(st->rows)),
+        GTK_FILTER(gtk_custom_filter_new(table_filter_match, st, NULL)));
+
     GtkSingleSelection *sel =
-        gtk_single_selection_new(g_object_ref(G_LIST_MODEL(st->rows)));
+        gtk_single_selection_new(g_object_ref(G_LIST_MODEL(st->filtered)));
     gtk_single_selection_set_autoselect(sel, FALSE);
     gtk_single_selection_set_can_unselect(sel, TRUE);
 
@@ -5757,6 +5909,17 @@ static GListModel *table_live_model(BtaWidget *w)
     return st->virt ? G_LIST_MODEL(st->virt) : G_LIST_MODEL(st->rows);
 }
 
+/* How many indices there are, which is what `Index`, `Select`, `Activate` and
+ * `Reveal` are checked against: the rows a flat table holds -- shown or hidden
+ * by a filter -- and, in a tree, the rows the view shows, since a tree's index
+ * is a position in it. */
+static guint table_index_count(BtaWidget *w)
+{
+    return table_state(w)->tree
+        ? g_list_model_get_n_items(G_LIST_MODEL(table_model(w)))
+        : g_list_model_get_n_items(table_live_model(w));
+}
+
 static JSValue table_get_count(JSContext *ctx, JSValueConst this_val)
 {
     BtaWidget *w = bta_this(ctx, this_val);
@@ -6000,7 +6163,7 @@ static JSValue table_get_index(JSContext *ctx, JSValueConst this_val)
      * is the honest answer in both modes. */
     for (guint i = 0; i < n; i++)
         if (gtk_selection_model_is_selected(model, i))
-            return JS_NewInt32(ctx, (int)i);
+            return JS_NewInt32(ctx, table_view_to_row(w, i));
     return JS_NewInt32(ctx, -1);
 }
 
@@ -6016,12 +6179,15 @@ static JSValue table_set_index(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     GtkSelectionModel *model = table_model(w);
-    guint              n     = g_list_model_get_n_items(G_LIST_MODEL(model));
+    guint              n     = table_index_count(w);
+    /* A row a filter hid cannot be selected: nothing is, as for one that
+     * is not there. */
+    int                at    = i < 0 || (guint)i >= n ? -1 : table_row_to_view(w, i);
 
-    if (i < 0 || (guint)i >= n)
+    if (at < 0)
         table_clear_selection(w);
     else
-        gtk_selection_model_select_item(model, (guint)i, TRUE);
+        gtk_selection_model_select_item(model, (guint)at, TRUE);
     return JS_UNDEFINED;
 }
 
@@ -6039,7 +6205,7 @@ static JSValue table_get_selection(JSContext *ctx, JSValueConst this_val)
 
     for (guint i = 0; i < n; i++)
         if (gtk_selection_model_is_selected(model, i))
-            JS_SetPropertyUint32(ctx, out, k++, JS_NewInt32(ctx, (int)i));
+            JS_SetPropertyUint32(ctx, out, k++, JS_NewInt32(ctx, table_view_to_row(w, i)));
     return out;
 }
 
@@ -6055,6 +6221,10 @@ static void table_use_model(BtaWidget *w, GListModel *model)
     GtkSelectionModel *sel;
 
     st->epoch++;
+
+    /* A flat table of held rows is shown through its filter. */
+    if (model == G_LIST_MODEL(st->rows) && !st->tree && st->filtered)
+        model = G_LIST_MODEL(st->filtered);
 
     if (st->multi) {
         sel = GTK_SELECTION_MODEL(gtk_multi_selection_new(g_object_ref(model)));
@@ -6642,10 +6812,13 @@ static JSValue table_select_one(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;        /* it threw on the way; that stands */
 
     GtkSelectionModel *sel = table_model(w);
-    guint              n   = g_list_model_get_n_items(G_LIST_MODEL(sel));
+    guint              n   = table_index_count(w);
 
     if (i < 0 || (guint)i >= n)
         return JS_NewBool(ctx, false);      /* no such row: not an error */
+    /* Hidden by a filter: there is no row on screen to select. */
+    if ((i = table_row_to_view(w, i)) < 0)
+        return JS_NewBool(ctx, false);
 
     if (magic == TB_SELECT)
         /* FALSE: leave the rest alone, which is what `Select` means where
@@ -6722,6 +6895,10 @@ static JSValue table_activate(JSContext *ctx, JSValueConst this_val,
     if (argc > 0 && !JS_IsUndefined(argv[0])) {
         if (!bta_to_int(ctx, argv[0], "Activate", &index))
             return JS_EXCEPTION;
+        /* A row's index, which is where it is shown only while nothing is
+         * hidden; -1 for one a filter hid, which there is nothing to choose of. */
+        index = index < 0 || (guint)index >= table_index_count(w)
+              ? -1 : table_row_to_view(w, index);
     } else {
         for (guint i = 0; i < n; i++) {
             if (gtk_selection_model_is_selected(sel, i)) {
@@ -6758,14 +6935,49 @@ static JSValue table_reveal_row(JSContext *ctx, JSValueConst this_val,
     if (!bta_to_int(ctx, argv[0], "Reveal", &index))
         return JS_EXCEPTION;
 
-    GtkSelectionModel *sel = table_model(w);
-    guint              n   = g_list_model_get_n_items(G_LIST_MODEL(sel));
+    guint              n   = table_index_count(w);
 
     if (index < 0 || (guint)index >= n)
+        return JS_NewBool(ctx, false);
+    /* Hidden by a filter: not on screen, so nowhere to scroll to. */
+    if ((index = table_row_to_view(w, index)) < 0)
         return JS_NewBool(ctx, false);
 
     table_scroll_to(w, (guint)index);
     return JS_NewBool(ctx, true);
+}
+
+/*
+ * "The answer to `Filter` may have changed": every held row is asked again,
+ * and the filter model told the set it reads is a different one. Refused, with
+ * the reason, where there is nothing to filter: a tree's rows are found by
+ * opening the way to them, and a table answering `Data` holds no rows -- the
+ * program that answers decides which there are, which is the same line the
+ * sort draws.
+ */
+static JSValue table_refilter(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    TableState *st = table_state(w);
+
+    if (st->tree)
+        return JS_ThrowTypeError(ctx, "Refilter: a tree is not filtered -- "
+                                 "its rows are found by opening the way to them");
+    if (st->virt)
+        return JS_ThrowTypeError(ctx, "Refilter: a table answering Data holds no "
+                                 "rows to filter -- the Count it is given is the "
+                                 "rows there are");
+
+    if (st->hidden)
+        g_hash_table_remove_all(st->hidden);
+    table_ask_filter(w, 0, g_list_model_get_n_items(G_LIST_MODEL(st->rows)));
+    gtk_filter_changed(gtk_filter_list_model_get_filter(st->filtered),
+                       GTK_FILTER_CHANGE_DIFFERENT);
+    return JS_UNDEFINED;
 }
 
 static const JSCFunctionListEntry table_props[] = {
@@ -6907,6 +7119,13 @@ static const JSCFunctionListEntry table_props[] = {
      *   and answers whether there was one
      */
     JS_CFUNC_DEF("Reveal",   1, table_reveal_row),
+    /* Refilter()
+     *   says the answer to `Filter` may have changed, and asks it again of
+     *   every row. The whole of the API on this side: what the handler
+     *   answers from -- a search field, a tick -- is the program's, and nothing
+     *   here can see it change. A tree and a table answering `Data` refuse it
+     */
+    JS_CFUNC_DEF("Refilter", 0, table_refilter),
     /* Add(values, [options])
      *   one row, as an array of strings. A row shorter than there are columns
      *   reads `""` for the rest. Clears an on-demand `Count`. **`options` is
@@ -7118,6 +7337,15 @@ void bta_table_register(void)
          *   `Link` column an absent `Uri` means the text is the address and
          *   `""` means this cell is not a link
          */
+        /* Filter(row)
+         *   asked of each row as it arrives and on `Refilter()`. **Returning
+         *   `false` hides the row**; no handler shows every one. **A hidden
+         *   row is still a row**: `Count` counts it, and `Index`, `Selection`,
+         *   `Select`, `Cell` and every event number by it, so an index means
+         *   the same row whatever is typed in a search. A lookup and nothing
+         *   else: it runs while the table is told about rows. A flat table
+         *   that holds its rows -- not a tree, not one answering `Data`
+         */
         /* Sort(column, ascending)
          *   a sortable header was clicked. **The handler decides** — `SortBy`
          *   is what actually reorders
@@ -7181,7 +7409,7 @@ void bta_table_register(void)
          */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
-                            "Select,Activate,Data,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,ColumnMove,Scroll"),
+                            "Select,Activate,Data,Filter,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,ColumnMove,Scroll"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

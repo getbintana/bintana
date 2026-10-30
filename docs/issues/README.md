@@ -12,7 +12,6 @@ in the same form.
 
 | Issue | The missing capability |
 |---|---|
-| [ISSUE-table-filter.md](ISSUE-table-filter.md) | A table's rows cannot be filtered by a column |
 | [ISSUE-grid-placement.md](ISSUE-grid-placement.md) | A `Grid` child has no row, no column and no `RowSpan` |
 | [ISSUE-postgres-driver.md](ISSUE-postgres-driver.md) | `Database` publishes `Sqlite` alone |
 | [ISSUE-masked-input.md](ISSUE-masked-input.md) | No masked input |
@@ -31,7 +30,7 @@ in the same form.
 | [ISSUE-ide-formatter.md](ISSUE-ide-formatter.md) | No formatter and no multiple cursors |
 | [ISSUE-ide-align-centres.md](ISSUE-ide-align-centres.md) | No align-centres, no centre-in-form, and the grid is invisible |
 
-Eighteen of them came out of the October audit
+Seventeen of them came out of the October audit
 ([`audit-2026-10.md`](../audit-2026-10.md)), which found the gaps in the
 runtime and in the IDE and had them written in this form. The audit keeps the
 argument; these files keep the gap.
@@ -47,7 +46,7 @@ gap is the other two, and they are two files now.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Forty-four have gone that way — forty filled, one refused, and three that
+Forty-five have gone that way — forty-one filled, one refused, and three that
 were never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -166,6 +165,10 @@ folder it was joined to while the answer still looked inside it: `Join`
 normalises now, `.` and `..` worked out by the letters, so `Within` asks about
 where the path really leads. And one dialog for several files:
 `Dialog.OpenFiles` hands the callback an array of paths.
+And a table of four thousand rows that could only be narrowed by rebuilding it
+on every keystroke: `TableView.Filter(row)` hides the rows it answers `false`
+for and `Refilter()` asks again -- and a hidden row is still a row, so every
+index the program reads means the same row whatever is typed in the search.
 
 And a debugger whose values were flat lines and which could not stop on data:
 an object in the values panel opens onto its fields, a level at a time, asked

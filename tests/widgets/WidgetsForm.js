@@ -579,7 +579,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -18582,6 +18582,82 @@ class Form1 extends Form {
      * data -- which is the line Gambas draws between `Sorted` and its `Sort`
      * event, and the only one that can hold for an on-demand table too.
      */
+    /*
+     * `Filter(row)` hides rows, and **a hidden row is still a row**: what the
+     * program reads and writes numbers by every row the table holds, shown or
+     * not, so an index means the same row whatever is typed in a search box
+     * -- `RowList.Filter`'s promise. The selection is GTK's and numbers what is
+     * shown, so this is the crossing between the two, at every edge: `Index`
+     * both ways, `Selection`, `Select`, `Reveal`, `Activate` through GTK's own
+     * signal, rows added while a filter is on, and a sort, which hands every
+     * row back to the store.
+     */
+    testTableFilter() {
+        const t = new TableView();
+        this.Fixed1.Add(t);
+        t.Columns = [{ Text: "Client" }, { Text: "N" }];
+        t.MultiSelect = true;
+
+        let want = "";
+        const asked = [];
+        t.On("Filter", (row) => { asked.push(row); return want === "" || t.Cell(row, 0).startsWith(want); });
+
+        for (const c of ["Ana", "Bea", "Ana", "Carla", "Ana"]) t.Add([c, String(t.Count)]);
+        eq("a row is asked about as it arrives, by its index", asked.join(","), "0,1,2,3,4");
+        t.SelectAll();
+        eq("with nothing hidden every row shows", JSON.stringify(t.Selection), "[0,1,2,3,4]");
+
+        want = "Ana";
+        t.Refilter();
+        eq("Refilter asks every row again", asked.slice(5).join(","), "0,1,2,3,4");
+        eq("a hidden row is still counted", t.Count, 5);
+        t.SelectAll();
+        eq("and what is selected is numbered by the rows held", JSON.stringify(t.Selection), "[0,2,4]");
+
+        t.Index = 4;
+        eq("Index goes to the row it names, past the hidden ones", t.Index, 4);
+        eq("...the one that is there", t.Cell(t.Index, 1), "4");
+        t.Index = 1;
+        eq("a hidden row cannot be selected: nothing is", t.Index, -1);
+        eq("Select answers false for one", t.Select(3), false);
+        eq("and Reveal", t.Reveal(3), false);
+        eq("a shown one is", t.Reveal(2), true);
+
+        t.Add(["Bea", "5"]);
+        t.Add(["Ana", "6"]);
+        t.SelectAll();
+        eq("rows added while filtering are asked, and kept to the answer",
+           JSON.stringify(t.Selection), "[0,2,4,6]");
+
+        /* A round trip through GTK: `Activate(index)` emits the view's own
+         * `activate` with a position, and the handler reads the row back. */
+        let activated = -2;
+        t.On("Activate", () => { activated = t.Index; });
+        t.Activate(6);
+        eq("Activate names the row by its index, and GTK's signal reports it", activated, 6);
+
+        /* A sort hands every row back to the store: each is asked again, and
+         * the ones shown are the ones the answer says, at their new indices. */
+        t.SortBy(1, false);
+        t.SelectAll();
+        const shown = t.Selection.map((i) => t.Cell(i, 0) + t.Cell(i, 1));
+        eq("after a sort, the shown rows are still the ones the filter keeps",
+           shown.join(","), "Ana6,Ana4,Ana2,Ana0");
+
+        want = "";
+        t.Refilter();
+        t.SelectAll();
+        eq("emptied, every row is back", t.Selection.length, 7);
+
+        t.Clear();
+        t.Count = 3;
+        throws("a table answering Data has no rows to filter", () => t.Refilter());
+        t.Clear();
+        t.Add(["root"], { Key: "r" });
+        throws("and a tree is not filtered", () => t.Refilter());
+        t.Remove();
+    }
+
     testTableSort() {
         const t = new TableView();
         this.Fixed1.Add(t);

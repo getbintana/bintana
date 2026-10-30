@@ -30,6 +30,25 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   copied across the emit. It is `table_report_edit` now, which every editor
   kind goes through, and `EditCell`/`EndEdit` drive it from the suite
   (`TableEditors`); see *A table cell's editors*.
+- **A filter puts two numberings in one table, and they are crossed at the edge
+  with JavaScript and nowhere else.** `Filter(row)` hides rows through a
+  `GtkFilterListModel` between the store and the selection, so the selection's
+  positions are of what is *shown* while the program's indices -- `Index`,
+  `Selection`, `Select`, `Cell`, every event -- are of what is *held*, the
+  promise `RowList.Filter` already made. Two functions cross
+  (`table_row_to_view`, `table_view_to_row`), identity while nothing is hidden;
+  `table_position_of` answers a position **of the view**, which is what its
+  comment always said, and the events were already safe -- they name a row
+  through the row object (`table_address`), never through a position.
+  **JavaScript is not asked from the filter's match function**: GTK calls that
+  whenever it likes, and `Filter` is a handler. The answers live in a set of
+  hidden rows that the match function only looks up; the store's
+  `items-changed` asks about the rows that arrived -- **connected before the
+  filter model exists**, since handlers run in the order they were connected,
+  so new rows are answered before the model looks them up -- and `Refilter()`
+  asks every row. `testTableFilter` holds both numberings, a sort and GTK's own
+  `activate`, and goes red with the crossing turned off. A tree and a table
+  answering `Data` refuse `Refilter()`, the line the sort draws.
 - **A table sorts the text it shows, so the order has to know about numbers
   without knowing the format.** `SortBy` compared cells with `g_utf8_collate`,
   and every column of numbers came out `10, 100, 9`. A per-column type was the

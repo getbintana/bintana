@@ -9884,6 +9884,15 @@
           "Native": true
         },
         {
+          "Name": "Refilter",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "says the answer to `Filter` may have changed, and asks it again of every row. The whole of the API on this side: what the handler answers from -- a search field, a tick -- is the program's, and nothing here can see it change. A tree and a table answering `Data` refuse it",
+          "Native": true
+        },
+        {
           "Name": "RemoveNode",
           "Kind": "Method",
           "Params": 1,
@@ -10088,6 +10097,11 @@
           "Name": "Data",
           "Signature": "(row, column)",
           "Doc": "the table needs a cell. **The return value is the answer**: a string, or `{ Text, Icon, Uri, Style, Editable }` for a cell with a picture, an address or a theme class of its own, or one that does not edit in a column that does (`Editable: false`). In a `Link` column an absent `Uri` means the text is the address and `\"\"` means this cell is not a link"
+        },
+        {
+          "Name": "Filter",
+          "Signature": "(row)",
+          "Doc": "asked of each row as it arrives and on `Refilter()`. **Returning `false` hides the row**; no handler shows every one. **A hidden row is still a row**: `Count` counts it, and `Index`, `Selection`, `Select`, `Cell` and every event number by it, so an index means the same row whatever is typed in a search. A lookup and nothing else: it runs while the table is told about rows. A flat table that holds its rows -- not a tree, not one answering `Data`"
         },
         {
           "Name": "Sort",
