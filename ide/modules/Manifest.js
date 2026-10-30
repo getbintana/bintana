@@ -1,7 +1,7 @@
 /*
  * `project.json`, and everything that writes to it.
  *
- * One funnel -- `update` -- reads the file as a [`ProjectFile`](ProjectFile.js),
+ * One funnel -- `update` -- reads the file as a [`ProjectFile`](../../lib/check/ProjectFile.js),
  * hands it to a mutator and writes it back.  So what the file may say is the
  * record's business, not every caller's, and a mutator cannot write a manifest the
  * runtime would refuse to open.

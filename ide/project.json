@@ -28,8 +28,6 @@
     "forms/ImageForm.js",
     "forms/ColumnForm.js",
     "forms/RecordForm.js",
-    "modules/LaunchConfig.js",
-    "modules/ProjectFile.js",
     "modules/Launch.js",
     "forms/LaunchForm.js",
     "forms/ProjectForm.js",
@@ -48,14 +46,10 @@
     "modules/Changes.js",
     "modules/Problems.js",
     "modules/Tests.js",
-    "modules/Names.js",
     "modules/Snippets.js",
     "modules/Folding.js",
-    "modules/Accessibility.js",
-    "modules/Lex.js",
     "modules/Refactor.js",
     "modules/Live.js",
-    "modules/Check.js",
     "modules/Outline.js",
     "modules/Strings.js",
     "modules/Translations.js",
@@ -84,6 +78,7 @@
     "forms/MainForm.js"
   ],
   "uses": [
+    "check",
     "markdown",
     "package"
   ]

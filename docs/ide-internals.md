@@ -225,15 +225,18 @@ Btn_Clik()         Btn is a Button, and a Button does not raise Clik
 Gone_Click()       no control is named Gone, and Click is an event
 ```
 
-Both go through **`Completion`**'s lookups — `controls()`, `typeOf()`,
-`sample()` — which is already the class that answers *what is this control and
-what does it really have*, once per form and cached. A second copy of that would
-be a second answer to drift from the first.
+Both start from **`Completion`'s `controls()`** — the table `Names.tableOf`
+flattens a form's `children`, `menus` and `actions` into — and the tests
+themselves are the runtime's class-level answers: `Widget.Member` and
+`Widget.EventNames`, with no control built. A second copy of that would be a
+second answer to drift from the first.
 
-The member test is **the `in` operator on a real control of that type**, and not
-a list from `PropertyNames()`: `Click` and `SetFocus` are methods, they live on
-the prototype, and a name list would report every method call in the project as a
-mistake.
+The member test is **`Widget.Member` against the class**, and not a list from
+`PropertyNames()`: `Click` and `SetFocus` are methods, they live on the
+prototype, and a name list would report every method call in the project as a
+mistake. The class-level verb answers for a `MenuItem` and an `Action` too, so
+there is no live sample to borrow — the one class this process still cannot ask
+is a project component, below.
 
 What it deliberately does *not* report:
 
@@ -246,10 +249,6 @@ What it deliberately does *not* report:
   spells as a string or assigns as `this.Name =` is a control built in code, which
   binds by `Name` like a declared one, so it is left alone. Warning about every
   underscore is how a check gets switched off.
-- **A menu item's members.** `Completion.controls()` flattens a form's
-  `children`, and a menu is not among them — so `this.MnuSave.Enabled` is not
-  checked rather than wrongly flagged. Teaching that lookup about menus would fix
-  it here and in the completion popup at once, which is where it belongs.
 - **A file with no `.form` beside it.** A module has no control to check a name
   against.
 
@@ -300,11 +299,12 @@ is checked by the other's handler.
 
 ### It shares its two hardest checks rather than copying them
 
-The sixth row above is `Names`, which is `Live`'s member and handler
-checks moved somewhere both can reach. *Does this control have this member* has
-to have one answer; a second copy is a second answer to drift from the first,
-which is the argument this project already made about `Git`'s commands, about
-`SOURCE_LINK` and about `Navigator.symbols`.
+The sixth row above is `lib/check`'s `Names`, which is `Live`'s member and
+handler checks moved somewhere both can reach — the pause, and the pass over
+the whole project. *Does this control have this member* has to have one answer;
+a second copy is a second answer to drift from the first, which is the argument
+this project already made about `Git`'s commands, about `SOURCE_LINK` and about
+`Navigator.symbols`.
 
 What each caller keeps is its own half. `Live` owns the *moment* — the pause,
 and the rule that what the caret is inside is never reported. `Check` passes

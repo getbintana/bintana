@@ -309,6 +309,13 @@ save will edit `examples/hello` for real.
   the one AGENTS.md already names: icons resolve against Adwaita under xvfb, so a
   run that is about an icon has to be a real one (`tests/ide` answers two
   assertions more on a real theme, which is that difference and not a bug).
+- **The suite pins `LANGUAGE=C`, and a shipped catalogue is why.** The
+  assertions are English, and a library may now carry its own `po/` — `lib/check`
+  does, for the accessibility findings. Without the pin, a developer whose
+  desktop is Spanish saw the finding translated while the test still expected
+  the English sentence, and only that developer's run was red. A test about
+  translation sets the language itself, in the child it starts or in the
+  project it writes.
 - **When Xvfb is missing, ask for it; another virtual display is a false red
   suite.** `run.sh` exports `HEADLESS=1` and the runner's only way to honour it
   is `xvfb-run`, so a machine without `xorg-x11-server-Xvfb` stops with *no

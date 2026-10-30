@@ -1,0 +1,35 @@
+# Spanish (Argentina) for lib/check.
+# The accessibility findings the IDE and `bintana check` report.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: check\n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: Accessibility.js:121
+msgid "(an unnamed {0})"
+msgstr "(un {0} sin nombre)"
+
+#: Accessibility.js:133
+msgid " (the Label {0} just before it is probably its caption: set {0}.For to \"{1}\")"
+msgstr " (el Label {0} que está justo antes es probablemente su rótulo: poné {0}.For en \"{1}\")"
+
+#: Accessibility.js:134
+msgid "its name"
+msgstr "su nombre"
+
+#: Accessibility.js:136
+msgid "{0} is a {1} a screen reader cannot name: give it an AccessibleName, or point a Label's For at it{2}"
+msgstr "{0} es un {1} que un lector de pantalla no puede nombrar: dale un AccessibleName, o apuntá con el For de un Label hacia él{2}"
+
+#: Accessibility.js:146
+msgid "{0} is a {1} with no words, no command with words and no Tooltip of {2} characters or fewer: a screen reader says only \"button\". Give it an AccessibleName"
+msgstr "{0} es un {1} sin texto, sin comando con texto y sin Tooltip de {2} caracteres o menos: un lector de pantalla dice solo \"botón\". Dale un AccessibleName"
+
+#: Accessibility.js:150
+msgid "{0} is a {1} with no AccessibleName: give it one, or AccessibleHidden if it is only decoration"
+msgstr "{0} es un {1} sin AccessibleName: dale uno, o AccessibleHidden si es solo decoración"

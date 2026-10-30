@@ -1,6 +1,6 @@
 # `bintana check`: the IDE's project check, from a shell
 
-**Built in part, on 2026-10-30.** The command exists and works:
+**Built, and the IDE runs the same code.** The command works:
 
 ```sh
 ./build/bintana check examples/hello          # two accessibility warnings, exit 0
@@ -8,21 +8,22 @@
 ./build/bintana check --json <project>        # one JSON line per finding, then `Done`
 ```
 
-The decision below (*the check moves to a library*, option B) stands, and what
-is built is `lib/check` + `tools/check` + the `check` word in `main.c`, installed
-with the runtime. **The IDE has not been migrated to the library yet**: it still
-runs its own `ide/modules/Check.js` and company, so the two implementations can
-drift until stage 2 finishes. That is the remaining work, not a design change.
+`lib/check` is the one implementation. The IDE loads it with `uses: ["check"]`
+and its own `Check`/`Names`/`Accessibility`/`ProjectFile`/`LaunchConfig`/`Lex`
+modules are gone; `tools/check` is the console project behind the subcommand.
+A project that does not name it never loads it, and a normal run of anything
+else is unchanged.
 
 ## What is wanted
 
-The IDE's *Project -> Check* (`ide/modules/Check.js`) finds what the runtime
+The IDE's *Project -> Check* (`lib/check/Check.js`) finds what the runtime
 accepts in silence: two controls of one name, a property the class lacks, a
 source that does not compile, a `.js` that `sources` does not list, a handler
 whose control was renamed, a name two modules export, a control a screen reader
 cannot name. It reads files and opens no window, so it is exactly what a CI job,
-a git hook or an agent writing a project with no IDE would run -- and today the
-only way to see its answer is to open the IDE and read the Problems panel.
+a git hook or an agent writing a project with no IDE would run — and until the
+command existed the only way to see its answer was to open the IDE and read the
+Problems panel.
 
 ```sh
 bintana check <project>            # text, one line per finding
@@ -93,7 +94,7 @@ Each one is shippable and leaves the IDE's behaviour as it was; stop after any.
    **Built.** `bta_menu_class_value` gives the two classes a synthetic
    constructor, the class-level verbs see it, and the `ClassIntrospection` test
    holds it (123 assertions in that test, part of `tests/widgets`). The IDE's
-   `Names` still borrows a live item; that goes with stage 2.
+   `Names` and `Check` ask the class now; nothing borrows a live item.
 1. **Decouple the two classes.**
    - `Classes`: the project's *files and pairing* (scan, `formOf`,
      `formOfClass`) apart from the tree and the component list, taking a root
@@ -103,21 +104,25 @@ Each one is shippable and leaves the IDE's behaviour as it was; stop after any.
      the open tabs' text where it has them and the file's own where it has not.
      **This is the stage that can change a behaviour**, and it is guarded by
      the `completion` and `modules` phases of `tests/ide`.
-   **Standalone in the library, pending in the IDE.** `lib/check/ProjectFiles.js`
-   is the scan and pairing, and `lib/check/Owners.js` builds the export-owner
-   map from `Application.Symbols` over a list of `{ path, text }`. The IDE's
-   `Classes` and `Completion` are untouched, so the decoupling has not been
-   proven against the tabs yet.
+   **The decoupled pieces are in the library; the IDE keeps its richer
+   `Classes`/`Completion`.** `lib/check/ProjectFiles.js` is the scan and pairing
+   the command line needs, and `lib/check/Owners.js` builds the export-owner map
+   from `Application.Symbols` over a list of `{ path, text }`. The IDE still walks
+   its own tree and its open tabs and hands the check a host: `Check` reads
+   `classes.files`/`classes.formOf`, and `Names` calls `owners()` and
+   `componentEvents(type)`. That answer is live where the IDE's is, and a file on
+   disk where the command line's is -- without a second project walk.
 2. **Move the five files into `lib/check`**, with `ide` replaced by a small host
    contract (`project`, `files`, `formOf`, a place to put findings). A project
    names it in `uses`; the IDE does, and both of its source lists change:
    `ide/project.json` and `tests/ide/project.json` (the suite compares them).
-   **Half built.** `lib/check` exists with `Check`, `Names`, `Accessibility`,
-   `ProjectFile`, `LaunchConfig`, `Lex`, `ProjectFiles` and `Owners`; the host
-   contract is `{ project, classes: { files, formOf }, names, problems }`, and
-   `tools/check` supplies it. **The IDE still uses its own copies**, so this is
-   what remains: change `ide/project.json` and `tests/ide/project.json`, delete
-   the duplicates, and run the `completion`/`modules` phases.
+   **Built.** `lib/check` holds `Check`, `Names`, `Accessibility`, `ProjectFile`,
+   `LaunchConfig`, `Lex`, `ProjectFiles` and `Owners`. `ide/project.json` and
+   `tests/ide/project.json` name `uses: ["check"]` and no longer list the six
+   modules; `MainForm` builds `Names` with the two host callbacks, and the IDE's
+   `Completion` asks `Widget.PropertyNames`/`EventNames` for a `MenuItem` or an
+   `Action` instead of borrowing a live sample from its own menu bar. The full
+   IDE suite (3560 assertions) is green.
 3. **The console project and the subcommand.** `tools/check` behind a `check`
    word in `main.c`, as `test` is, and installed with the runtime
    (`cmake --install`, `tests/install.sh`).
@@ -131,11 +136,12 @@ Each one is shippable and leaves the IDE's behaviour as it was; stop after any.
    `ide.pot` and `es.po` (the findings' sentences are already `Locale.Text`);
    and `bintana-llm`, whose guide is for writing a project with no IDE and
    should end with *then run `bintana check`*.
-   **Partly built.** `--help` lists the subcommand, `api.json` carries the
-   library, and `docs/installing.md` mentions the command. The pages in
-   `bintana-docs` and the closing line in `bintana-llm` live in those
-   repositories and are still pending; so do `ide.pot`/`es.po`, which only
-   matter once the IDE loads the library.
+   **Built in this repository.** `--help` lists the subcommand, `api.json`
+   carries the library, `docs/installing.md` and `docs/testing.md` say how to
+   run it, `ide.pot`/`es.po` were regenerated, and `lib/check/po/es.po` carries
+   the accessibility findings the library now owns. The pages in `bintana-docs`
+   (`llm/check.md`) and the closing line in `bintana-llm` live in those
+   repositories and are still pending.
 
 ## Decisions already taken
 

@@ -3663,6 +3663,13 @@ save will edit `examples/hello` for real.
   the one AGENTS.md already names: icons resolve against Adwaita under xvfb, so a
   run that is about an icon has to be a real one (`tests/ide` answers two
   assertions more on a real theme, which is that difference and not a bug).
+- **The suite pins `LANGUAGE=C`, and a shipped catalogue is why.** The
+  assertions are English, and a library may now carry its own `po/` — `lib/check`
+  does, for the accessibility findings. Without the pin, a developer whose
+  desktop is Spanish saw the finding translated while the test still expected
+  the English sentence, and only that developer's run was red. A test about
+  translation sets the language itself, in the child it starts or in the
+  project it writes.
 - **When Xvfb is missing, ask for it; another virtual display is a false red
   suite.** `run.sh` exports `HEADLESS=1` and the runner's only way to honour it
   is `xvfb-run`, so a machine without `xorg-x11-server-Xvfb` stops with *no
@@ -7458,7 +7465,7 @@ package is installed, so `p_help` stands `HelpForm.root` in for `""` and opens a
 window of its own, and is red with the tree not built.
 
 **The accessibility check is a pure function over a `.form`'s JSON, and every
-row is one severity.** `Accessibility.findings(root)` (`ide/modules/Accessibility.js`)
+row is one severity.** `Accessibility.findings(root)` (`lib/check/Accessibility.js`)
 is called from `Check.form`, so it runs in the pass that already reads every
 `.form` and reports under the `project` source: three rules -- a field with
 neither `AccessibleName` nor a `Label.For` naming it (the caption just above it,
@@ -9193,7 +9200,11 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   one silently threw the first away -- and it looked exactly like a catalogue
   that had not been found (the library's own msgids untranslated, the project's
   fine). The order is load order: the last file to mention a msgid answers for
-  it, which is why the project's is last.
+  it, which is why the project's is last. **`lib/check` is the first shipped
+  library with a `po/`** — its accessibility findings are prose the library
+  raises, so they travel with it; the IDE's own catalogue no longer carries
+  them, and a project on a Spanish desktop gets them translated whether it
+  opened the IDE or ran `bintana check`.
 - **The extractor read comments, and a call's two prose arguments as a
   plural.** `Strings` matches calls with a pattern, so the example in
   `AskForm.js`'s own comment -- `AskForm.prompt("New form", "Name:", …)` --
@@ -12188,6 +12199,12 @@ same conclusion first, and both now export `HEADLESS=${HEADLESS-1}`: with `-`
 rather than `:-`, so that an explicitly empty one survives and the way back
 works.
 
+**The suite runs with `LANGUAGE=C`**, because its assertions are English and a
+shipped library may carry a catalogue — `lib/check` does, for the accessibility
+findings. A test that is about translation sets the language itself, in the
+child it starts or in the project it writes; the suite must not inherit the
+machine's answer.
+
 The second argument goes through to the project as its own second argument — the
 first is always the runner's pid, which the projects use to name their scratch
 directories. What a project makes of it is its business: `tests/ide` reads it as a
@@ -12273,7 +12290,9 @@ never has one), it falls back to
 `xvfb-run` (with the cairo renderer, since a virtual display is the least likely
 place to have a GL context), which is what makes the suite runnable over ssh and
 in CI: `.github/workflows/ci.yml` installs the dependencies plus `xvfb` and runs
-`./tests/run.sh` unchanged.
+`./tests/run.sh` unchanged. A step before it runs `./build/bintana check --json
+ide` with no display at all — the checker is a console project, so that step is
+also the answer to how an application's CI uses it.
 
 ## The seven projects
 
@@ -13221,15 +13240,18 @@ Btn_Clik()         Btn is a Button, and a Button does not raise Clik
 Gone_Click()       no control is named Gone, and Click is an event
 ```
 
-Both go through **`Completion`**'s lookups — `controls()`, `typeOf()`,
-`sample()` — which is already the class that answers *what is this control and
-what does it really have*, once per form and cached. A second copy of that would
-be a second answer to drift from the first.
+Both start from **`Completion`'s `controls()`** — the table `Names.tableOf`
+flattens a form's `children`, `menus` and `actions` into — and the tests
+themselves are the runtime's class-level answers: `Widget.Member` and
+`Widget.EventNames`, with no control built. A second copy of that would be a
+second answer to drift from the first.
 
-The member test is **the `in` operator on a real control of that type**, and not
-a list from `PropertyNames()`: `Click` and `SetFocus` are methods, they live on
-the prototype, and a name list would report every method call in the project as a
-mistake.
+The member test is **`Widget.Member` against the class**, and not a list from
+`PropertyNames()`: `Click` and `SetFocus` are methods, they live on the
+prototype, and a name list would report every method call in the project as a
+mistake. The class-level verb answers for a `MenuItem` and an `Action` too, so
+there is no live sample to borrow — the one class this process still cannot ask
+is a project component, below.
 
 What it deliberately does *not* report:
 
@@ -13242,10 +13264,6 @@ What it deliberately does *not* report:
   spells as a string or assigns as `this.Name =` is a control built in code, which
   binds by `Name` like a declared one, so it is left alone. Warning about every
   underscore is how a check gets switched off.
-- **A menu item's members.** `Completion.controls()` flattens a form's
-  `children`, and a menu is not among them — so `this.MnuSave.Enabled` is not
-  checked rather than wrongly flagged. Teaching that lookup about menus would fix
-  it here and in the completion popup at once, which is where it belongs.
 - **A file with no `.form` beside it.** A module has no control to check a name
   against.
 
@@ -13293,11 +13311,12 @@ is checked by the other's handler.
 
 ### It shares its two hardest checks rather than copying them
 
-The sixth row above is `Names`, which is `Live`'s member and handler
-checks moved somewhere both can reach. *Does this control have this member* has
-to have one answer; a second copy is a second answer to drift from the first,
-which is the argument this project already made about `Git`'s commands, about
-`SOURCE_LINK` and about `Navigator.symbols`.
+The sixth row above is `lib/check`'s `Names`, which is `Live`'s member and
+handler checks moved somewhere both can reach — the pause, and the pass over
+the whole project. *Does this control have this member* has to have one answer;
+a second copy is a second answer to drift from the first, which is the argument
+this project already made about `Git`'s commands, about `SOURCE_LINK` and about
+`Navigator.symbols`.
 
 What each caller keeps is its own half. `Live` owns the *moment* — the pause,
 and the rule that what the caret is inside is never reported. `Check` passes

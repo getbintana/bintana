@@ -4290,9 +4290,10 @@ function* p_completion(ide) {
      * unremarked. One walk now, in `Names`, over all three blocks that bind
      * a name on the form.
      *
-     * And what a `MenuItem` has is asked of a real one, not listed here: neither
-     * it nor an `Action` is a widget, so `Widget.New` cannot make one -- the
-     * sample is borrowed from this window's own menu bar, which has both.
+     * And what a `MenuItem` has is asked of its class, which the runtime builds
+     * for the question: neither it nor an `Action` is a widget, but
+     * `Widget.PropertyNames`/`EventNames` answer for both with no control and no
+     * borrowed sample from this window's menu bar.
      */
     File.Save(File.Join(TMP, "Barra.form"), JSON.stringify({
         format: "bintana-form/1", class: "Barra",

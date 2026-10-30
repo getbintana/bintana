@@ -285,8 +285,14 @@ export class MainForm extends Form {
     /* And the one thing that puts rows in it on its own: the names a file uses,
      * checked against the form beside it while it is being written. */
     /* The two checks that read a name against the `.form` beside it, shared by
-     * the two things that ask: the pause, and the project pass. */
-    names     = new Names(this);
+     * the two things that ask: the pause, and the project pass. They come from
+     * `lib/check`, and the host is what that library may ask beyond a widget
+     * class: the events a project component declares, and who owns an exported
+     * name -- the latter read from the completion's own cache, not from disk. */
+    names     = new Names({
+        componentEvents: (type) => this.classes.componentEvents(type),
+        owners: () => this.completion.declaredClasses().owners,
+    });
     live      = new Live(this);
     /* Where a name is used, and moving it everywhere it means the same thing:
      * F12's other half, and the one rename that is not the designer's. */

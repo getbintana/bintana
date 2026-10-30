@@ -26,6 +26,12 @@ same conclusion first, and both now export `HEADLESS=${HEADLESS-1}`: with `-`
 rather than `:-`, so that an explicitly empty one survives and the way back
 works.
 
+**The suite runs with `LANGUAGE=C`**, because its assertions are English and a
+shipped library may carry a catalogue — `lib/check` does, for the accessibility
+findings. A test that is about translation sets the language itself, in the
+child it starts or in the project it writes; the suite must not inherit the
+machine's answer.
+
 The second argument goes through to the project as its own second argument — the
 first is always the runner's pid, which the projects use to name their scratch
 directories. What a project makes of it is its business: `tests/ide` reads it as a
@@ -111,7 +117,9 @@ never has one), it falls back to
 `xvfb-run` (with the cairo renderer, since a virtual display is the least likely
 place to have a GL context), which is what makes the suite runnable over ssh and
 in CI: `.github/workflows/ci.yml` installs the dependencies plus `xvfb` and runs
-`./tests/run.sh` unchanged.
+`./tests/run.sh` unchanged. A step before it runs `./build/bintana check --json
+ide` with no display at all — the checker is a console project, so that step is
+also the answer to how an application's CI uses it.
 
 ## The seven projects
 

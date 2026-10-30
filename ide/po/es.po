@@ -37,6 +37,7 @@ msgstr "Copyright © 2026 Matias De lellis — Licencia MIT"
 #: forms/AboutForm.form: BtnClose.Text forms/GitForm.form:
 #: forms/ImageForm.form: forms/LogForm.form: forms/PoForm.form:
 #: forms/RefsForm.form: forms/SearchForm.form: forms/PoForm.js:393
+#: modules/Debugger.js:731
 msgid "Close"
 msgstr "Cerrar"
 
@@ -55,7 +56,7 @@ msgstr "Agregar"
 
 #: forms/ActionForm.form: BtnDelete.Text forms/ColumnForm.form: BtnColDel.Text
 #: forms/ConfirmForm.form: BtnYes.Text forms/MenuForm.form:
-#: forms/RecordForm.form: BtnRecDel.Text forms/MainForm.js:3128
+#: forms/RecordForm.form: BtnRecDel.Text forms/MainForm.js:3138
 #: modules/FormFiles.js:726
 msgid "Delete"
 msgstr "Eliminar"
@@ -539,7 +540,7 @@ msgstr "Eliminar del proyecto..."
 msgid "Autosave..."
 msgstr "Autoguardado..."
 
-#: forms/MainForm.form: menu MnuQuit forms/MainForm.js:1021
+#: forms/MainForm.form: menu MnuQuit forms/MainForm.js:1028
 msgid "Quit"
 msgstr "Salir"
 
@@ -1040,7 +1041,7 @@ msgstr "Depurar (Ctrl+F9)"
 msgid "Stop (Shift+F9)"
 msgstr "Detener (Mayús+F9)"
 
-#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:1377
+#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:1386
 msgid "No project"
 msgstr "Sin proyecto"
 
@@ -1118,7 +1119,7 @@ msgstr ""
 "Commitear lo que está en el próximo commit con el botón de abajo. Enter "
 "escribe una línea"
 
-#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:2554
+#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:2564
 msgid "Reload"
 msgstr "Recargar"
 
@@ -1208,7 +1209,7 @@ msgstr ""
 msgid "Problems"
 msgstr "Problemas"
 
-#: forms/MainForm.form: ConsoleBox.Tabs modules/Tests.js:188
+#: forms/MainForm.form: ConsoleBox.Tabs modules/Tests.js:201
 msgid "Tests"
 msgstr "Tests"
 
@@ -1450,7 +1451,7 @@ msgstr ""
 msgid "Base folder:"
 msgstr "Carpeta base:"
 
-#: forms/NewProjectForm.form: BtnCreate.Text forms/MainForm.js:2991
+#: forms/NewProjectForm.form: BtnCreate.Text forms/MainForm.js:3001
 msgid "Create"
 msgstr "Crear"
 
@@ -1990,158 +1991,158 @@ msgid_plural "{0} files in this commit"
 msgstr[0] "{0} archivo en este commit"
 msgstr[1] "{0} archivos en este commit"
 
-#: forms/MainForm.js:466
+#: forms/MainForm.js:472
 msgid "Bintana IDE -- {0}"
 msgstr "IDE de Bintana — {0}"
 
-#: forms/MainForm.js:571
+#: forms/MainForm.js:577
 msgid "(select a control)"
 msgstr "(elegí un control)"
 
-#: forms/MainForm.js:586 forms/MainForm.js:593
+#: forms/MainForm.js:592 forms/MainForm.js:599
 msgid "(none yet)"
 msgstr "(todavía ninguno)"
 
-#: forms/MainForm.js:721
+#: forms/MainForm.js:727
 msgid "Leave the project"
 msgstr "Dejar el proyecto"
 
-#: forms/MainForm.js:722
+#: forms/MainForm.js:728
 msgid "Discard and continue"
 msgstr "Descartar y seguir"
 
-#: forms/MainForm.js:723
+#: forms/MainForm.js:729
 msgid "Save all and continue"
 msgstr "Guardar todo y seguir"
 
-#: forms/MainForm.js:1025
+#: forms/MainForm.js:1032
 msgid "Quit without saving"
 msgstr "Salir sin guardar"
 
-#: forms/MainForm.js:1027
+#: forms/MainForm.js:1034
 msgid "Save all and quit"
 msgstr "Guardar todo y salir"
 
-#: forms/MainForm.js:1138
+#: forms/MainForm.js:1145
 msgid "Terminal"
 msgstr "Terminal"
 
-#: forms/MainForm.js:1177
+#: forms/MainForm.js:1184
 msgid "the shell ended"
 msgstr "el shell terminó"
 
-#: forms/MainForm.js:1382
+#: forms/MainForm.js:1391
 msgid "{0}   double click to edit"
 msgstr "{0}   doble clic para editar"
 
-#: forms/MainForm.js:1384
+#: forms/MainForm.js:1393
 msgid "{0}   double click to edit its fields"
 msgstr "{0}   doble clic para editar sus campos"
 
-#: forms/MainForm.js:1393
+#: forms/MainForm.js:1402
 msgid "   read-only: not UTF-8"
 msgstr "   solo lectura: no es UTF-8"
 
-#: forms/MainForm.js:1403
+#: forms/MainForm.js:1412
 msgid "   form {0}x{1}"
 msgstr "   formulario {0}x{1}"
 
-#: forms/MainForm.js:1406
+#: forms/MainForm.js:1415
 msgid "   Ln {0}, Col {1}"
 msgstr "   Lín {0}, Col {1}"
 
-#: forms/MainForm.js:1877
+#: forms/MainForm.js:1887
 msgid "Nothing wrong with the project"
 msgstr "No hay nada mal en el proyecto"
 
-#: forms/MainForm.js:2530
+#: forms/MainForm.js:2540
 msgid "{0} is no longer on disk."
 msgstr "{0} ya no está en el disco."
 
-#: forms/MainForm.js:2532
+#: forms/MainForm.js:2542
 msgid "{0} changed on disk, and there are unsaved changes here."
 msgstr "{0} cambió en el disco, y acá hay cambios sin guardar."
 
-#: forms/MainForm.js:2534
+#: forms/MainForm.js:2544
 msgid "{0} changed on disk."
 msgstr "{0} cambió en el disco."
 
-#: forms/MainForm.js:2555
+#: forms/MainForm.js:2565
 msgid "{0} changed on disk. Take the newer file and lose what is unsaved here?"
 msgstr ""
 "{0} cambió en el disco. ¿Tomar el archivo nuevo y perder lo que no está "
 "guardado acá?"
 
-#: forms/MainForm.js:2556
+#: forms/MainForm.js:2566
 msgid "Reload without saving"
 msgstr "Recargar sin guardar"
 
-#: forms/MainForm.js:2882 forms/MainForm.js:2904 modules/Navigator.js:72
+#: forms/MainForm.js:2892 forms/MainForm.js:2914 modules/Navigator.js:72
 msgid "Put the cursor on a name first."
 msgstr "Poné el cursor sobre un nombre primero."
 
-#: forms/MainForm.js:2909 forms/RefsForm.js:105
+#: forms/MainForm.js:2919 forms/RefsForm.js:105
 msgid "Rename symbol"
 msgstr "Renombrar símbolo"
 
-#: forms/MainForm.js:2909 forms/RefsForm.js:105
+#: forms/MainForm.js:2919 forms/RefsForm.js:105
 msgid "New name:"
 msgstr "Nombre nuevo:"
 
-#: forms/MainForm.js:2989
+#: forms/MainForm.js:2999
 msgid "Start a repository"
 msgstr "Empezar un repositorio"
 
-#: forms/MainForm.js:2990
+#: forms/MainForm.js:3000
 msgid "Create a git repository in {0}?"
 msgstr "¿Crear un repositorio git en {0}?"
 
-#: forms/MainForm.js:3046
+#: forms/MainForm.js:3056
 msgid "(no branches yet)"
 msgstr "(todavía no hay ramas)"
 
-#: forms/MainForm.js:3053
+#: forms/MainForm.js:3063
 msgid "(no other branch)"
 msgstr "(no hay otra rama)"
 
-#: forms/MainForm.js:3087
+#: forms/MainForm.js:3097
 msgid "Switch branch"
 msgstr "Cambiar de rama"
 
-#: forms/MainForm.js:3091
+#: forms/MainForm.js:3101
 msgid "Switch"
 msgstr "Cambiar"
 
-#: forms/MainForm.js:3106
+#: forms/MainForm.js:3116
 msgid "New branch"
 msgstr "Rama nueva"
 
-#: forms/MainForm.js:3106
+#: forms/MainForm.js:3116
 msgid "Called"
 msgstr "Se llama"
 
-#: forms/MainForm.js:3126
+#: forms/MainForm.js:3136
 msgid "Delete a branch"
 msgstr "Borrar una rama"
 
-#: forms/MainForm.js:3127
+#: forms/MainForm.js:3137
 msgid ""
 "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr "¿Borrar {0}? Lo que esté commiteado sólo ahí se rechaza, no se pierde."
 
-#: forms/MainForm.js:3219
+#: forms/MainForm.js:3229
 msgid "Clone a repository"
 msgstr "Clonar un repositorio"
 
-#: forms/MainForm.js:3219
+#: forms/MainForm.js:3229
 msgid "From"
 msgstr "Desde"
 
-#: forms/MainForm.js:3227
+#: forms/MainForm.js:3237
 msgid "Clone into"
 msgstr "Dónde clonarlo"
 
-#: forms/MainForm.js:1022 modules/TabSet.js:790
+#: forms/MainForm.js:1029 modules/TabSet.js:790
 msgid "{1} has unsaved changes."
 msgid_plural ""
 "{0} files have unsaved changes:\n"
@@ -2151,13 +2152,13 @@ msgstr[1] ""
 "{0} archivos tienen cambios sin guardar:\n"
 "{1}"
 
-#: forms/MainForm.js:1387 forms/QuickForm.js:265
+#: forms/MainForm.js:1396 forms/QuickForm.js:265
 msgid "{0} file"
 msgid_plural "{0} files"
 msgstr[0] "{0} archivo"
 msgstr[1] "{0} archivos"
 
-#: forms/MainForm.js:3088
+#: forms/MainForm.js:3098
 msgid ""
 "There is {0} change here. Switching keeps it, unless the two branches "
 "disagree about the same file."
@@ -2171,12 +2172,12 @@ msgstr[1] ""
 "Hay {0} cambios acá. Cambiar de rama los conserva, salvo que las dos ramas "
 "no coincidan en el mismo archivo."
 
-#: forms/MainForm.js:873 forms/MainForm.js:1616 modules/Exporter.js:38
+#: forms/MainForm.js:879 forms/MainForm.js:1626 modules/Exporter.js:38
 #: modules/Installer.js:27
 msgid "Open a project first."
 msgstr "Abrí un proyecto primero."
 
-#: forms/MainForm.js:1841
+#: forms/MainForm.js:1851
 msgid ""
 "There is no template yet. Run Project > Update translations first: it "
 "gathers every string the project shows and writes the .pot a translation "
@@ -2186,7 +2187,7 @@ msgstr ""
 "traducciones: junta cada cadena que el proyecto muestra y escribe el .pot "
 "del que arranca una traducción."
 
-#: forms/MainForm.js:450
+#: forms/MainForm.js:456
 msgid ""
 "{0} has no project.json.\n"
 "It can still be edited, but it will not be able to run."
@@ -2194,7 +2195,7 @@ msgstr ""
 "{0} no tiene project.json.\n"
 "Se puede editar igual, pero no va a poder ejecutarse."
 
-#: forms/MainForm.js:1455
+#: forms/MainForm.js:1464
 msgid ""
 "{0}\n"
 "is not there any more."
@@ -2202,23 +2203,23 @@ msgstr ""
 "{0}\n"
 "ya no está."
 
-#: forms/MainForm.js:3366
+#: forms/MainForm.js:3368
 msgid "Open a form to preview it."
 msgstr "Abrí un formulario para verlo en vista previa."
 
-#: forms/MainForm.js:3380
+#: forms/MainForm.js:3391
 msgid "Open a form's design to edit its menus."
 msgstr "Abrí el diseño de un formulario para editar sus menús."
 
-#: forms/MainForm.js:3399
+#: forms/MainForm.js:3410
 msgid "Open a form's design to edit its commands."
 msgstr "Abrí el diseño de un formulario para editar sus comandos."
 
-#: forms/MainForm.js:3432
+#: forms/MainForm.js:3443
 msgid "Open a form's design to edit its tab order."
 msgstr "Abrí el diseño de un formulario para editar su orden de tabulación."
 
-#: forms/MainForm.js:442
+#: forms/MainForm.js:448
 msgid ""
 "No such directory:\n"
 "{0}"
@@ -2226,15 +2227,15 @@ msgstr ""
 "No existe el directorio:\n"
 "{0}"
 
-#: forms/MainForm.js:729
+#: forms/MainForm.js:735
 msgid "{0} already exists and is not a folder."
 msgstr "{0} ya existe y no es una carpeta."
 
-#: forms/MainForm.js:739
+#: forms/MainForm.js:745
 msgid "{0} is already a project."
 msgstr "{0} ya es un proyecto."
 
-#: forms/MainForm.js:1759
+#: forms/MainForm.js:1769
 msgid ""
 "Cannot open {0}:\n"
 "{1}"
@@ -2242,7 +2243,7 @@ msgstr ""
 "No se pudo abrir {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:1779 forms/MetainfoForm.js:58
+#: forms/MainForm.js:1789 forms/MetainfoForm.js:58
 msgid ""
 "Cannot read {0}:\n"
 "{1}"
@@ -2250,7 +2251,7 @@ msgstr ""
 "No se pudo leer {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:1790
+#: forms/MainForm.js:1800
 msgid ""
 "Cannot edit {0}:\n"
 "{1}"
@@ -2258,8 +2259,8 @@ msgstr ""
 "No se pudo editar {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:3244 modules/FormFiles.js:429 modules/FormFiles.js:610
-#: modules/Tests.js:72
+#: forms/MainForm.js:3254 modules/FormFiles.js:429 modules/FormFiles.js:610
+#: modules/Tests.js:83
 msgid "{0} already exists."
 msgstr "{0} ya existe."
 
@@ -2592,39 +2593,6 @@ msgstr ""
 "Solo un contenedor dibujado por coordenadas tiene un orden de tabulación "
 "para editar."
 
-#: modules/Accessibility.js:121
-msgid "(an unnamed {0})"
-msgstr "(un {0} sin nombre)"
-
-#: modules/Accessibility.js:133
-msgid ""
-" (the Label {0} just before it is probably its caption: set {0}.For to "
-"\"{1}\")"
-msgstr " (el Label {0} que está justo antes es probablemente su rótulo: poné {0}.For en \"{1}\")"
-
-#: modules/Accessibility.js:134
-msgid "its name"
-msgstr "su nombre"
-
-#: modules/Accessibility.js:136
-msgid ""
-"{0} is a {1} a screen reader cannot name: give it an AccessibleName, or "
-"point a Label's For at it{2}"
-msgstr "{0} es un {1} que un lector de pantalla no puede nombrar: dale un AccessibleName, o apuntá con el For de un Label hacia él{2}"
-
-#: modules/Accessibility.js:146
-msgid ""
-"{0} is a {1} with no words, no command with words and no Tooltip of {2} "
-"characters or fewer: a screen reader says only \"button\". Give it an "
-"AccessibleName"
-msgstr "{0} es un {1} sin texto, sin comando con texto y sin Tooltip de {2} caracteres o menos: un lector de pantalla dice solo \"botón\". Dale un AccessibleName"
-
-#: modules/Accessibility.js:150
-msgid ""
-"{0} is a {1} with no AccessibleName: give it one, or AccessibleHidden if it "
-"is only decoration"
-msgstr "{0} es un {1} sin AccessibleName: dale uno, o AccessibleHidden si es solo decoración"
-
 #: modules/Changes.js:75
 msgid "Show the changes view"
 msgstr "Mostrar la vista de cambios"
@@ -2657,63 +2625,63 @@ msgstr "Poner la clase en {0}, como las demás de acá"
 msgid "Rename control"
 msgstr "Renombrar el control"
 
-#: modules/Debugger.js:105
+#: modules/Debugger.js:158
 msgid "Stop here while debugging"
 msgstr "Parar acá mientras se depura"
 
-#: modules/Debugger.js:107
+#: modules/Debugger.js:160
 msgid "only when"
 msgstr "solo cuando"
 
-#: modules/Debugger.js:108
+#: modules/Debugger.js:161
 msgid "message"
 msgstr "mensaje"
 
-#: modules/Debugger.js:281
+#: modules/Debugger.js:334
 msgid "Put the caret on a breakpoint first."
 msgstr "Poné el cursor sobre un punto de corte primero."
 
-#: modules/Debugger.js:453
+#: modules/Debugger.js:515
 msgid "{0}:{1} cannot stop; the breakpoint moved to line {2}."
 msgstr "{0}:{1} no puede parar; el punto de corte se movió a la línea {2}."
 
-#: modules/Debugger.js:529
+#: modules/Debugger.js:536
 msgid "{0}:{1} cannot stop: nothing runs there or after it."
 msgstr "{0}:{1} no puede parar: ahí o después no corre nada."
 
-#: modules/Debugger.js:515
+#: modules/Debugger.js:544
 msgid "{0} changed: {1} -> {2}"
 msgstr "{0} cambió: {1} -> {2}"
 
-#: modules/Debugger.js:623
+#: modules/Debugger.js:664
 msgid "Stops when {0} changes."
 msgstr "Se detiene cuando {0} cambie."
 
-#: modules/Debugger.js:628
+#: modules/Debugger.js:669
 msgid "{0} cannot be watched: {1}"
 msgstr "No se puede vigilar {0}: {1}"
 
-#: modules/Debugger.js:641
+#: modules/Debugger.js:731
 msgid "Open"
 msgstr "Abrir"
 
-#: modules/Debugger.js:696
+#: modules/Debugger.js:789
 msgid "… {0} more"
 msgstr "… {0} más"
 
-#: modules/Debugger.js:590
+#: modules/Debugger.js:816
 msgid "Change a value"
 msgstr "Cambiar un valor"
 
-#: modules/Debugger.js:591
+#: modules/Debugger.js:817
 msgid "{0} is"
 msgstr "{0} es"
 
-#: modules/Debugger.js:605
+#: modules/Debugger.js:831
 msgid "Stopped here"
 msgstr "Detenido acá"
 
-#: modules/Debugger.js:708
+#: modules/Debugger.js:938
 msgid "Run to cursor needs a program being debugged."
 msgstr "Ejecutar hasta el cursor necesita un programa en depuración."
 
@@ -2926,7 +2894,7 @@ msgid "Save the changes before tidying the project."
 msgstr "Guardá los cambios antes de ordenar el proyecto."
 
 #: modules/FormFiles.js:157 modules/FormFiles.js:292 modules/FormFiles.js:416
-#: modules/Tests.js:65
+#: modules/Tests.js:76
 msgid "\"{0}\" is not usable as a class name."
 msgstr "\"{0}\" no sirve como nombre de clase."
 
@@ -3254,7 +3222,7 @@ msgstr "Perfil escrito en {0}"
 msgid "Open it in Sysprof to read it."
 msgstr "Abrilo en Sysprof para leerlo."
 
-#: modules/Runner.js:397 modules/Runner.js:401
+#: modules/Runner.js:444 modules/Runner.js:448
 msgid "the run ended badly"
 msgstr "la ejecución terminó mal"
 
@@ -3298,33 +3266,33 @@ msgstr ""
 "No se pudo guardar {0}:\n"
 "{1}"
 
-#: modules/Tests.js:54
+#: modules/Tests.js:65
 msgid "New test"
 msgstr "Test nuevo"
 
-#: modules/Tests.js:54
+#: modules/Tests.js:65
 msgid "What it tests (a class name):"
 msgstr "Qué prueba (un nombre de clase):"
 
-#: modules/Tests.js:155
+#: modules/Tests.js:168
 msgid "Test"
 msgstr "Test"
 
-#: modules/Tests.js:156
+#: modules/Tests.js:169
 msgid "Time"
 msgstr "Tiempo"
 
-#: modules/Tests.js:157
+#: modules/Tests.js:170
 msgid "Message"
 msgstr "Mensaje"
 
-#: modules/Tests.js:187
+#: modules/Tests.js:200
 msgid "{0} test failed"
 msgid_plural "{0} tests failed"
 msgstr[0] "{0} test falló"
 msgstr[1] "{0} tests fallaron"
 
-#: modules/Tests.js:51
+#: modules/Tests.js:62
 msgid "Open a project before creating a test."
 msgstr "Abrí un proyecto antes de crear un test."
 
@@ -3425,6 +3393,42 @@ msgstr "Eventos"
 #: modules/Workspace.js:440
 msgid "Outline"
 msgstr "Contenido"
+
+#~ msgid "(an unnamed {0})"
+#~ msgstr "(un {0} sin nombre)"
+
+#~ msgid ""
+#~ " (the Label {0} just before it is probably its caption: set {0}.For to "
+#~ "\"{1}\")"
+#~ msgstr ""
+#~ " (el Label {0} que está justo antes es probablemente su rótulo: poné "
+#~ "{0}.For en \"{1}\")"
+
+#~ msgid "its name"
+#~ msgstr "su nombre"
+
+#~ msgid ""
+#~ "{0} is a {1} a screen reader cannot name: give it an AccessibleName, or "
+#~ "point a Label's For at it{2}"
+#~ msgstr ""
+#~ "{0} es un {1} que un lector de pantalla no puede nombrar: dale un "
+#~ "AccessibleName, o apuntá con el For de un Label hacia él{2}"
+
+#~ msgid ""
+#~ "{0} is a {1} with no words, no command with words and no Tooltip of {2} "
+#~ "characters or fewer: a screen reader says only \"button\". Give it an "
+#~ "AccessibleName"
+#~ msgstr ""
+#~ "{0} es un {1} sin texto, sin comando con texto y sin Tooltip de {2} "
+#~ "caracteres o menos: un lector de pantalla dice solo \"botón\". Dale un "
+#~ "AccessibleName"
+
+#~ msgid ""
+#~ "{0} is a {1} with no AccessibleName: give it one, or AccessibleHidden if "
+#~ "it is only decoration"
+#~ msgstr ""
+#~ "{0} es un {1} sin AccessibleName: dale uno, o AccessibleHidden si es solo "
+#~ "decoración"
 
 #~ msgid "Debug, or continue when stopped (Ctrl+F9)"
 #~ msgstr "Depurar, o continuar si está detenido (Ctrl+F9)"

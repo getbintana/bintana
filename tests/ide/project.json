@@ -27,8 +27,6 @@
     "../../ide/forms/ImageForm.js",
     "../../ide/forms/ColumnForm.js",
     "../../ide/forms/RecordForm.js",
-    "../../ide/modules/LaunchConfig.js",
-    "../../ide/modules/ProjectFile.js",
     "../../ide/modules/Launch.js",
     "../../ide/forms/LaunchForm.js",
     "../../ide/forms/ProjectForm.js",
@@ -47,14 +45,10 @@
     "../../ide/modules/Changes.js",
     "../../ide/modules/Problems.js",
     "../../ide/modules/Tests.js",
-    "../../ide/modules/Names.js",
     "../../ide/modules/Snippets.js",
     "../../ide/modules/Folding.js",
-    "../../ide/modules/Accessibility.js",
-    "../../ide/modules/Lex.js",
     "../../ide/modules/Refactor.js",
     "../../ide/modules/Live.js",
-    "../../ide/modules/Check.js",
     "../../ide/modules/Outline.js",
     "../../ide/modules/Strings.js",
     "../../ide/modules/Translations.js",
@@ -84,6 +78,7 @@
     "Driver.js"
   ],
   "uses": [
+    "check",
     "markdown",
     "package"
   ]

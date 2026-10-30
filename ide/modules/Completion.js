@@ -1131,11 +1131,11 @@ export class Completion {
 
         if (this.widgets.has(type)) return this.membersOfType(type);
 
-        /* A menu item or a command answers from the sample this window lends;
-         * the two of them are not widgets, so their class cannot be asked. */
-        const sample = this.ide.names.sampleFor(type);
-        if (sample)
-            return sample.PropertyNames().map((p) => ({ Text: p, Detail: type }));
+        /* A menu item or a command answers by name too: the runtime builds
+         * their class for the question, so no control of this window is
+         * borrowed to ask it. */
+        if (this.ide.names.runtimeType(type))
+            return Widget.PropertyNames(type).map((p) => ({ Text: p, Detail: type }));
 
         return this.membersOfClass(type);
     }
@@ -1262,9 +1262,8 @@ export class Completion {
 
         if (this.widgets.has(type)) return this.membersOfType(type);
 
-        const sample = this.ide.names.sampleFor(type);
-        if (sample)
-            return sample.PropertyNames().map((p) => ({ Text: p, Detail: type }));
+        if (this.ide.names.runtimeType(type))
+            return Widget.PropertyNames(type).map((p) => ({ Text: p, Detail: type }));
 
         const props = this.ide.classes.componentProperties(type);
         if (!props) return [];
@@ -1280,12 +1279,10 @@ export class Completion {
         if (!type) return [];
 
         let events;
-        if (this.widgets.has(type)) {
+        if (this.ide.names.runtimeType(type)) {
             events = Widget.EventNames(type);
         } else {
-            const sample = this.ide.names.sampleFor(type);
-            events = sample ? sample.EventNames()
-                            : this.ide.classes.componentEvents(type);
+            events = this.ide.classes.componentEvents(type);
         }
         if (!events) return [];
 

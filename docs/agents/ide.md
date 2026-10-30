@@ -1054,7 +1054,7 @@ package is installed, so `p_help` stands `HelpForm.root` in for `""` and opens a
 window of its own, and is red with the tree not built.
 
 **The accessibility check is a pure function over a `.form`'s JSON, and every
-row is one severity.** `Accessibility.findings(root)` (`ide/modules/Accessibility.js`)
+row is one severity.** `Accessibility.findings(root)` (`lib/check/Accessibility.js`)
 is called from `Check.form`, so it runs in the pass that already reads every
 `.form` and reports under the `project` source: three rules -- a field with
 neither `AccessibleName` nor a `Label.For` naming it (the caption just above it,

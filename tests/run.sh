@@ -33,6 +33,14 @@ cd "$(dirname "$0")/.."
 # here and the way back to a real screen would not work.
 export HEADLESS=${HEADLESS-1}
 
+# **The suite's assertions are English, and a library may ship a catalogue.**
+# `lib/check` now does, and a developer whose desktop is Spanish saw its
+# accessibility sentences translated while the test still expected the English
+# ones. A test that is about translation sets `LANGUAGE` itself, in the child it
+# starts or in the project it writes; the suite as a whole must not inherit the
+# machine's answer.
+export LANGUAGE=C
+
 BINTANA=${BINTANA:-./build/bintana}
 if [[ ! -x $BINTANA ]]; then
     echo "no runtime at $BINTANA -- build first: cmake --build build" >&2
