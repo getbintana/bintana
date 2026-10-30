@@ -183,10 +183,12 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `Object.defineProperty` is "a get/set pair declared in a class" -- so the
   way to change a prototype is a class of accessors mixed into it, which is
   what the prelude does at load time.
-- **A regular expression does not say where it matched.** `Regex.Match` answers
-  what it matched and not where, so a walk that has to continue from a match
-  finds the position by hand -- and `Regex` has no `Index` and no `Length`.
-  Filed: [ISSUE-regex-position.md](../issues/ISSUE-regex-position.md).
+- **A regular expression says where it matched; `api.json` does not say so.**
+  `Regex.Match` answers a `Match` with `Index` and `Length` -- a walk that
+  continues from a match starts at `m.Index + m.Length` -- but a `Match` is not
+  a global, so it is not in the manifest, and an audit that read the manifest
+  filed it as missing. Read `runtime/js/rad.js` (or the reference page) before
+  believing a JavaScript class has no member.
 
 - **A form is asked whether it is closing, and the answer is a return value.**
   `on_close_request` in `bta_controls.c` hands back what `Form_Close` returned, so
