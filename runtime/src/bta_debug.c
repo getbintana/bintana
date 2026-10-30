@@ -254,12 +254,15 @@ static void say_armed(JSContext *ctx, BtaBreak *bp)
  * three times, both pipes closed at the first stop. Detached, nothing is armed
  * and nothing is said.
  */
+static void unwatch_all(JSContext *ctx);
+
 static void detach(JSContext *ctx)
 {
     dbg.attached = false;
     dbg.mode     = RUN;
     if (dbg.breaks)
         g_ptr_array_set_size(dbg.breaks, 0);
+    unwatch_all(ctx);
     if (dbg.stop_on_throw) {
         dbg.stop_on_throw = false;
         JS_DebugStopOnThrow(JS_GetRuntime(ctx), false);
@@ -776,6 +779,255 @@ static void say_expand(JSContext *ctx, int frame, const char *text)
     emit_object(ctx, out);
 }
 
+/* ---------------------------------------------------- stopping on a change */
+
+/*
+ * A data breakpoint: stop where a field of one object is changed.
+ *
+ * **The field is turned into an accessor pair** -- the way a debugger with no
+ * hardware watchpoints emulates one in JavaScript -- whose setter stops the
+ * program *inside the assignment*: the frame running code at the top of the
+ * stack is the function that wrote it, which is the line the person was
+ * looking for. Nothing per opcode, nothing in the interpreter: a program with a
+ * field watched pays only at that field.
+ *
+ * It is about **one object**, not about an expression: `client.balance` is
+ * evaluated once, when it is armed, and what is watched is the object that
+ * `client` was then. That is what a watchpoint is everywhere, and the other
+ * meaning -- re-evaluate the text at every line -- would stop on a different
+ * client the moment `client` named another one.
+ *
+ * The pair share a cell (`[value]`) that holds the field's value; the getter
+ * reads it, the setter writes it. The C side holds the object and the cell
+ * until the watch is taken off, the IDE goes or the program ends, and every one
+ * of those puts the data property back with its value and its flags -- an
+ * object a debugger once looked at must not be left different.
+ */
+typedef struct {
+    int     id;
+    char   *text;       /* `owner.name`, for the stop and the log */
+    JSValue owner;      /* held: the object watched */
+    JSAtom  name;
+    int     flags;      /* the data property's own, to put back */
+    JSValue cell;       /* held: [value], shared by the getter and the setter */
+} BtaWatch;
+
+static GPtrArray *watches;   /* BtaWatch*, only while there are any */
+
+static void wait_for_orders(JSContext *ctx, int depth_now);
+
+static JSValue watch_get(JSContext *ctx, JSValueConst this_val, int argc,
+                         JSValueConst *argv, int magic, JSValue *data)
+{
+    (void)this_val; (void)argc; (void)argv; (void)magic;
+    return JS_GetPropertyUint32(ctx, data[0], 0);
+}
+
+/* data: [cell, id, owner, name as a string] */
+static JSValue watch_set(JSContext *ctx, JSValueConst this_val, int argc,
+                         JSValueConst *argv, int magic, JSValue *data)
+{
+    JSValue value = argc > 0 ? argv[0] : JS_UNDEFINED;
+    JSValue old;
+    bool    changed;
+    int32_t id = 0;
+
+    (void)magic;
+
+    /* Written through an object that inherits from the watched one: a data
+     * property would have become that object's own, so it does. */
+    if (!JS_IsSameValue(ctx, this_val, data[2])) {
+        JSAtom atom = JS_ValueToAtom(ctx, data[3]);
+        int    ok   = JS_DefinePropertyValue(ctx, this_val, atom, JS_DupValue(ctx, value),
+                                             JS_PROP_C_W_E);
+
+        JS_FreeAtom(ctx, atom);
+        return ok < 0 ? JS_EXCEPTION : JS_UNDEFINED;
+    }
+
+    old     = JS_GetPropertyUint32(ctx, data[0], 0);
+    changed = !JS_IsSameValue(ctx, old, value);
+    JS_SetPropertyUint32(ctx, data[0], 0, JS_DupValue(ctx, value));
+
+    /* The debugger's own writes -- `set`, an immediate -- are not the program
+     * changing it, and a detached debugger stops nothing. */
+    if (changed && !dbg.evaluating && dbg.attached) {
+        JSValue event = JS_NewObject(ctx);
+        char   *was   = render(ctx, old);
+        char   *now   = render(ctx, value);
+        const char *text = NULL;
+
+        JS_ToInt32(ctx, &id, data[1]);
+        for (guint i = 0; watches && i < watches->len; i++) {
+            BtaWatch *w = g_ptr_array_index(watches, i);
+            if (w->id == id)
+                text = w->text;
+        }
+
+        JS_SetPropertyStr(ctx, event, "event", JS_NewString(ctx, "stopped"));
+        JS_SetPropertyStr(ctx, event, "reason", JS_NewString(ctx, "watch"));
+        JS_SetPropertyStr(ctx, event, "id", JS_NewInt32(ctx, id));
+        JS_SetPropertyStr(ctx, event, "text", JS_NewString(ctx, text ? text : ""));
+        JS_SetPropertyStr(ctx, event, "old", JS_NewString(ctx, was));
+        JS_SetPropertyStr(ctx, event, "new", JS_NewString(ctx, now));
+        /* No pc: each frame's own, and frame 0 is the one that assigned --
+         * this setter is native, and native frames at the top are skipped. */
+        JS_SetPropertyStr(ctx, event, "frames", frames_of(ctx, NULL));
+        g_free(was);
+        g_free(now);
+
+        dbg.mode = RUN;
+        emit_object(ctx, event);
+        wait_for_orders(ctx, JS_DebugDepth(JS_GetRuntime(ctx)));
+    }
+    JS_FreeValue(ctx, old);
+    return JS_UNDEFINED;
+}
+
+/* Put the data property back, with whatever it holds now, and let go. */
+static void unwatch_one(JSContext *ctx, BtaWatch *w)
+{
+    JSValue value = JS_GetPropertyUint32(ctx, w->cell, 0);
+
+    if (JS_DefinePropertyValue(ctx, w->owner, w->name, value, w->flags) < 0)
+        JS_FreeValue(ctx, JS_GetException(ctx));
+    JS_FreeValue(ctx, w->owner);
+    JS_FreeValue(ctx, w->cell);
+    JS_FreeAtom(ctx, w->name);
+    g_free(w->text);
+    g_free(w);
+}
+
+static void unwatch_all(JSContext *ctx)
+{
+    if (!watches)
+        return;
+    for (guint i = 0; i < watches->len; i++)
+        unwatch_one(ctx, g_ptr_array_index(watches, i));
+    g_ptr_array_free(watches, TRUE);
+    watches = NULL;
+}
+
+static void say_watch(JSContext *ctx, int id, const char *text, const char *why)
+{
+    JSValue out = JS_NewObject(ctx);
+
+    JS_SetPropertyStr(ctx, out, "reply", JS_NewString(ctx, "watch"));
+    JS_SetPropertyStr(ctx, out, "id", JS_NewInt32(ctx, id));
+    JS_SetPropertyStr(ctx, out, "text", JS_NewString(ctx, text));
+    JS_SetPropertyStr(ctx, out, "armed", JS_NewBool(ctx, why == NULL));
+    if (why)
+        JS_SetPropertyStr(ctx, out, "why", JS_NewString(ctx, why));
+    emit_object(ctx, out);
+}
+
+/*
+ * Arm one: `owner` is evaluated where the frame stands, and `name` must be an
+ * own data property of what it came to that can be redefined. Each refusal is
+ * a sentence, since the IDE shows it to somebody who asked for something.
+ */
+static void watch_field(JSContext *ctx, int id, int frame, const char *owner,
+                        const char *name)
+{
+    char                *text  = g_strdup_printf("%s.%s", owner, name);
+    char                *error = NULL;
+    JSValue              obj   = evaluate_value(ctx, frame, owner, &error);
+    JSPropertyDescriptor desc;
+    JSAtom               atom;
+    int                  has;
+
+    if (JS_IsException(obj)) {
+        say_watch(ctx, id, text, error);
+        g_free(error);
+        g_free(text);
+        return;
+    }
+    if (!JS_IsObject(obj)) {
+        say_watch(ctx, id, text, "only a field of an object can be watched");
+        JS_FreeValue(ctx, obj);
+        g_free(text);
+        return;
+    }
+
+    atom = JS_NewAtom(ctx, name);
+    has  = JS_GetOwnProperty(ctx, &desc, obj, atom);
+    if (has < 0)
+        JS_FreeValue(ctx, JS_GetException(ctx));
+
+    /* Asked first: a field already watched is a getter by now. */
+    const char *why = NULL;
+    for (guint i = 0; watches && i < watches->len; i++) {
+        BtaWatch *w = g_ptr_array_index(watches, i);
+        if (w->name == atom && JS_IsSameValue(ctx, w->owner, obj))
+            why = "it is already watched";
+    }
+    if (!why)
+        why = has <= 0 ? "it is not a field of that object's own"
+            : (desc.flags & JS_PROP_GETSET) ? "it is a getter, not a value"
+            : !(desc.flags & JS_PROP_CONFIGURABLE) ? "it cannot be redefined"
+            : NULL;
+
+    if (why) {
+        say_watch(ctx, id, text, why);
+    } else {
+        BtaWatch *w    = g_new0(BtaWatch, 1);
+        JSValue   cell = JS_NewArray(ctx);
+        JSValue   data[4];
+        JSValue   getter, setter;
+
+        JS_SetPropertyUint32(ctx, cell, 0, JS_DupValue(ctx, desc.value));
+        data[0] = cell;
+        data[1] = JS_NewInt32(ctx, id);
+        data[2] = obj;
+        data[3] = JS_NewString(ctx, name);
+        getter = JS_NewCFunctionData(ctx, watch_get, 0, 0, 1, data);
+        setter = JS_NewCFunctionData(ctx, watch_set, 1, 0, 4, data);
+        JS_FreeValue(ctx, data[3]);
+
+        JS_DefineProperty(ctx, obj, atom, JS_UNDEFINED, getter, setter,
+                          JS_PROP_HAS_GET | JS_PROP_HAS_SET |
+                          JS_PROP_HAS_CONFIGURABLE | JS_PROP_CONFIGURABLE |
+                          JS_PROP_HAS_ENUMERABLE |
+                          (desc.flags & JS_PROP_ENUMERABLE));
+        JS_FreeValue(ctx, getter);
+        JS_FreeValue(ctx, setter);
+
+        w->id    = id;
+        w->text  = g_strdup(text);
+        w->owner = JS_DupValue(ctx, obj);
+        w->name  = JS_DupAtom(ctx, atom);
+        w->flags = desc.flags & (JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE |
+                                 JS_PROP_ENUMERABLE);
+        w->cell  = cell;                      /* the array's own reference */
+        if (!watches)
+            watches = g_ptr_array_new();
+        g_ptr_array_add(watches, w);
+        say_watch(ctx, id, text, NULL);
+    }
+
+    if (has > 0) {
+        JS_FreeValue(ctx, desc.value);
+        JS_FreeValue(ctx, desc.getter);
+        JS_FreeValue(ctx, desc.setter);
+    }
+    JS_FreeAtom(ctx, atom);
+    JS_FreeValue(ctx, obj);
+    g_free(text);
+}
+
+static void unwatch_id(JSContext *ctx, int id)
+{
+    for (guint i = 0; watches && i < watches->len; i++) {
+        BtaWatch *w = g_ptr_array_index(watches, i);
+
+        if (w->id == id) {
+            g_ptr_array_remove_index(watches, i);
+            unwatch_one(ctx, w);
+            return;
+        }
+    }
+}
+
 /* ------------------------------------------------------- reading commands */
 
 static void set_break(JSContext *ctx, JSValue cmd, bool one_shot)
@@ -1033,6 +1285,34 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
            and the stop happens where the program actually is. Asking twice, or
            asking one that is already stopped, changes nothing. */
         dbg.mode = PAUSE;
+    } else if (!strcmp(verb, "watch")) {
+        /* A data breakpoint: `owner` evaluated in the frame, `name` one of its
+         * own fields. Answered with `armed`, or with why it could not be. */
+        JSValue     iv = JS_GetPropertyStr(ctx, cmd, "id");
+        JSValue     fv = JS_GetPropertyStr(ctx, cmd, "frame");
+        JSValue     ov = JS_GetPropertyStr(ctx, cmd, "owner");
+        JSValue     nv = JS_GetPropertyStr(ctx, cmd, "name");
+        const char *owner = JS_ToCString(ctx, ov);
+        const char *name  = JS_ToCString(ctx, nv);
+        int         id = 0, frame = 0;
+
+        JS_ToInt32(ctx, &id, iv);
+        JS_ToInt32(ctx, &frame, fv);
+        if (owner && name)
+            watch_field(ctx, id, frame, owner, name);
+        JS_FreeCString(ctx, owner);
+        JS_FreeCString(ctx, name);
+        JS_FreeValue(ctx, nv);
+        JS_FreeValue(ctx, ov);
+        JS_FreeValue(ctx, fv);
+        JS_FreeValue(ctx, iv);
+    } else if (!strcmp(verb, "unwatch")) {
+        JSValue iv = JS_GetPropertyStr(ctx, cmd, "id");
+        int     id = 0;
+
+        JS_ToInt32(ctx, &id, iv);
+        unwatch_id(ctx, id);
+        JS_FreeValue(ctx, iv);
     }
     /*
      * Anything else is ignored, deliberately: a newer IDE may speak a verb this
@@ -1375,10 +1655,12 @@ void bta_debug_stopping(JSContext *ctx, int code)
     if (!dbg.on)
         return;
 
+    /* Every watched field back to a data property before the context goes: the
+     * cells are held from C, and JS_FreeRuntime aborts on anything left. */
+    unwatch_all(ctx);
     json = g_strdup_printf("{\"event\":\"exited\",\"code\":%d}", code);
     emit(json);
     g_free(json);
-    (void)ctx;
 }
 
 void bta_debug_want(void) { dbg.on = true; }

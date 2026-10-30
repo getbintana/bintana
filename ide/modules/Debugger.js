@@ -104,6 +104,11 @@ export class Debugger {
         this.children = new Map();
         /* The rows as drawn, so an activated index finds what it was. */
         this.rows = [];
+        /* The fields the program stops on when they change, by the path the
+         * tree reached them by -> the id the runtime knows the watch by. What
+         * is watched is an object of this run, so a run ending forgets them. */
+        this.fieldWatches = new Map();
+        this.nextWatch    = 1;
     }
 
     get running()  { return this.job !== null; }
@@ -397,6 +402,7 @@ export class Debugger {
     finished(code) {
         this.job     = null;
         this.stopped = null;
+        this.fieldWatches.clear();
         this.ide.running = false;
         this.clearHere();
         this.ide.log(code === 0 ? "\n[finished ok]\n"
@@ -450,6 +456,7 @@ export class Debugger {
         else if (kind === "locals")  this.showLocals(msg);
         else if (kind === "eval")    this.answered(msg);
         else if (kind === "expand")  this.expanded(msg);
+        else if (kind === "watch")   this.watchAnswered(msg);
     }
 
     /*
@@ -502,6 +509,10 @@ export class Debugger {
     }
 
     halt(msg) {
+        /* Stopped by a field changing: what it was and what it is now are the
+         * reason, and the line is the one that wrote it. */
+        if (msg.reason === "watch")
+            this.ide.log(`${Locale.Text("{0} changed: {1} -> {2}", msg.text, msg.old, msg.new)}\n`);
         this.stopped = msg.frames || [];
         this.frame   = 0;
         this.fill();
@@ -577,6 +588,44 @@ export class Debugger {
             this.opened.add(path);
             if (this.halted) this.send({ do: "expand", frame: this.frame, text: path });
         }
+        this.fillValues();
+    }
+
+    /*
+     * A field the program should stop on when it changes -- or no longer.
+     *
+     * Only a field: a local belongs to its frame, and the frame is the only
+     * thing that can change it. What is armed is the object the path reaches
+     * *now* (`watch_field` in the runtime), which is what a watchpoint is; the
+     * mark stays on the path, which is where it was asked for.
+     */
+    toggleFieldWatch(node) {
+        const was = this.fieldWatches.get(node.path);
+
+        if (was !== undefined) {
+            this.fieldWatches.delete(node.path);
+            this.send({ do: "unwatch", id: was });
+        } else {
+            if (!this.halted) return false;
+            const id = this.nextWatch++;
+            this.fieldWatches.set(node.path, id);
+            this.send({ do: "watch", id, frame: this.frame,
+                        owner: node.owner, name: node.field });
+        }
+        this.fillValues();
+        return true;
+    }
+
+    /* The runtime's answer to a field watch: armed, or why it could not be --
+     * a getter, a field the object only inherits, one already watched. */
+    watchAnswered(msg) {
+        if (msg.armed) {
+            this.ide.log(`${Locale.Text("Stops when {0} changes.", msg.text)}\n`);
+            return;
+        }
+        for (const [path, id] of this.fieldWatches)
+            if (id === msg.id) this.fieldWatches.delete(path);
+        this.ide.log(`${Locale.Text("{0} cannot be watched: {1}", msg.text, msg.why)}\n`);
         this.fillValues();
     }
 
@@ -661,8 +710,10 @@ export class Debugger {
              * that matter here -- harmless in markup text, where `&quot;` draws
              * as `"`.
              */
-            label.Text   = node.argument ? `<b>${Text.Escape(node.name)}</b>`
-                                         : Text.Escape(node.name);
+            /* A field the program stops on when it changes wears a dot. */
+            const mark   = this.fieldWatches.has(node.path) ? "\u25c9 " : "";
+            label.Text   = mark + (node.argument ? `<b>${Text.Escape(node.name)}</b>`
+                                                 : Text.Escape(node.name));
             /* Narrower as it goes in, so the values stay in one column. */
             label.Width  = Math.max(NAME_WIDTH - INDENT * depth, INDENT * 2);
             label.HAlign = "Start";
@@ -689,6 +740,7 @@ export class Debugger {
         for (const item of inside.items || [])
             this.addValue({ kind: "child", name: item.Name, value: item.Value,
                             path: childPath(node.path, item.Name),
+                            owner: node.path, field: item.Name,
                             failed: !!item.Failed, openable: !!item.Children },
                           depth + 1);
         if (inside.more > 0)
@@ -698,8 +750,9 @@ export class Debugger {
     }
 
     /*
-     * A row activated: a watch comes off the list, a value is changed, and a
-     * field opens or closes.
+     * A row activated: a watch comes off the list, a value is changed, a field
+     * that has fields opens or closes, and one that has none is watched for a
+     * change -- or no longer.
      *
      * The three are told apart by what the row is, which is what makes one
      * gesture do the right thing on a list that holds all of them.
@@ -714,6 +767,7 @@ export class Debugger {
         }
         if (node.kind === "child") {
             if (node.openable) this.toggleOpen(node.path);
+            else this.toggleFieldWatch(node);
             return;
         }
         if (node.kind !== "local" || !this.halted) return;

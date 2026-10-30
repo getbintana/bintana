@@ -619,6 +619,8 @@ const TESTS = [
     "ModulesDebugger",
     /* Async: the values tree, opened field by field. */
     "DebuggerTree",
+    /* Async: a data breakpoint, two runs of a child in a row. */
+    "DebuggerWatch",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -28303,6 +28305,105 @@ class Form1 extends Form {
 
                 eq("a watch that holds an object says it opens", watched && watched.children, true);
             });
+    }
+
+    /*
+     * A data breakpoint: the program stops where a field is changed, in the
+     * function that changed it, and says what it was and what it is. Writing
+     * the same value is not a change; a field the object does not have, or one
+     * already watched, is refused with a reason; and once taken off the field
+     * is a plain one again -- the write after it does not stop, and JSON sees
+     * the object as it was. A watch left armed at the end does not abort the
+     * runtime on its way out (the cells are held from C).
+     */
+    testDebuggerWatch() {
+        const proj = File.Join(SCRATCH, "dbg-watch");
+
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "dbgwatch", main: "Main", sources: ["Main.js"] });
+        File.Save(File.Join(proj, "Main.js"),
+                  'function Main() {\n' +
+                  '    const client = { name: "Ana", balance: 10 };\n' +
+                  '    client.balance = 10;\n' +
+                  '    debit(client, 3);\n' +
+                  '    client.balance = client.balance + 1;\n' +
+                  '    print(`answer ${client.balance} ${JSON.stringify(client)}`);\n' +
+                  '    Application.Quit(0);\n' +
+                  '}\n' +
+                  'function debit(c, n) {\n' +
+                  '    c.balance = c.balance - n;\n' +
+                  '}\n');
+
+        const run = (unwatch, done) => {
+            const out     = [];
+            const stops   = [];
+            const answers = {};
+
+            waiting++;
+            const job = Exec([Application.Executable, "--debug", proj],
+                {
+                    Timeout: 20000,
+                    Control: (line) => {
+                        const msg  = JSON.parse(line);
+                        const kind = msg.event || msg.reply;
+
+                        if (kind === "ready") {
+                            job.Write(JSON.stringify({ do: "break", file: "Main.js", line: 3, id: 1 }));
+                            job.Write(JSON.stringify({ do: "continue" }));
+                        } else if (kind === "stopped") {
+                            stops.push(msg);
+                            if (msg.reason === "breakpoint") {
+                                job.Write(JSON.stringify({ do: "watch", id: 5, frame: 0,
+                                                           owner: "client", name: "balance" }));
+                                job.Write(JSON.stringify({ do: "watch", id: 6, frame: 0,
+                                                           owner: "client", name: "nosuch" }));
+                                job.Write(JSON.stringify({ do: "watch", id: 7, frame: 0,
+                                                           owner: "client", name: "balance" }));
+                            } else if (unwatch) {
+                                job.Write(JSON.stringify({ do: "unwatch", id: 5 }));
+                            }
+                            job.Write(JSON.stringify({ do: "continue" }));
+                        } else if (kind === "watch") {
+                            answers[msg.id] = msg;
+                        }
+                    },
+                },
+                (line) => out.push(line),
+                (code) => {
+                    waiting--;
+                    done(code, out.join(""), stops, answers);
+                });
+        };
+
+        run(true, (code, out, stops, answers) => {
+            eq("a program with a field watched finishes", code, 0);
+            eq("...and the program is unchanged by it", out,
+               'answer 8 {"name":"Ana","balance":8}');
+            eq("a field of the object is armed", answers[5] && answers[5].armed, true);
+            eq("...named as it was asked", answers[5] && answers[5].text, "client.balance");
+            eq("one the object does not have is refused", answers[6] && answers[6].armed, false);
+            eq("...saying why", answers[6] && answers[6].why, "it is not a field of that object's own");
+            eq("and one already watched", answers[7] && answers[7].why, "it is already watched");
+
+            eq("it stopped twice: the breakpoint, then the change",
+               stops.map((s) => s.reason).join(","), "breakpoint,watch");
+            const changed = stops[1] || { frames: [] };
+            eq("writing the same value was not a change", changed.old, "10");
+            eq("...and the change says what it is now", changed.new, "7");
+            eq("in the function that wrote it", changed.frames[0] && changed.frames[0].Name, "debit");
+            eq("on the line that wrote it", changed.frames[0] && changed.frames[0].Line, 10);
+            eq("with its caller under it", changed.frames[1] && changed.frames[1].Name, "Main");
+
+            run(false, (code2, out2, stops2) => {
+                eq("a watch left armed to the end does not stop the runtime leaving", code2, 0);
+                eq("...and the write after it stops too",
+                   stops2.map((s) => s.reason).join(","), "breakpoint,watch,watch");
+                eq("...which it is not once taken off: the first run stopped twice",
+                   stops.length, 2);
+                eq("...the program unchanged either way", out2, 'answer 8 {"name":"Ana","balance":8}');
+            });
+        });
     }
 
     /*

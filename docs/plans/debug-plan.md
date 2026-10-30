@@ -233,6 +233,12 @@ From the IDE, on stdin:
 {"do":"set","frame":0,"name":"n","text":"4"}           ← built (the value is an
                                                         expression, not a literal)
 {"do":"stopOnThrow","value":true}                      ← built
+{"do":"watch","id":5,"frame":0,"owner":"client","name":"balance"}  ← built
+   → {"reply":"watch","id":5,"text":"client.balance","armed":true}
+      (or "armed":false, and a "why")
+   ⇢ {"event":"stopped","reason":"watch","id":5,"text":…,"old":"10",
+      "new":"7","frames":[…]}                          ← where it was written
+{"do":"unwatch","id":5}                                ← built
 
 {"do":"runto","file":"Form1.js","line":88}             ← built (one-shot: it takes
                                                         itself out when reached)
@@ -251,6 +257,23 @@ questions and nothing can survive a resume -- the rule the DAP section below
 sets for `variables`. The IDE keeps what is open by those expressions and asks
 again at each stop. A field is read with the hook held off, since a getter is
 JavaScript, and one that throws answers its message with `Failed`.
+
+**A data breakpoint is a field of one object, turned into an accessor pair.**
+`watch` evaluates `owner` where the frame stands and redefines `name` -- an own,
+configurable data property of what that came to -- as a native getter and
+setter sharing a cell with the value; the setter, when the value really changes
+(`SameValue`), stops the program **inside the assignment**, so frame 0 is the
+function that wrote it and the line is the one being looked for. It is how a
+debugger with no hardware watchpoints emulates one in JavaScript, and it costs
+nothing per opcode: a program pays only at that field. It is about the object
+`client` was when it was armed, not about the text -- re-evaluating the text at
+every line would stop on another client the moment the name moved. A getter,
+an inherited field, one that cannot be redefined and one already watched are
+refused with a sentence. `unwatch`, the IDE going away and the program ending
+all put the data property back with its value and its flags; the cells are
+held from C, and without the last of those `JS_FreeRuntime` aborts, which
+`testDebuggerWatch` asserts by ending a run with one still armed. The
+debugger's own writes (`set`, an immediate) do not stop it.
 
 **An expression that throws answers its message** and leaves no exception
 behind. A debugger asking a question must never leave one for the program to

@@ -30,12 +30,11 @@ in the same form.
 | [ISSUE-editable-combo.md](ISSUE-editable-combo.md) | No editable / autocompleting combo |
 | [ISSUE-ide-database-tools.md](ISSUE-ide-database-tools.md) | No schema browser, query console or data module |
 | [ISSUE-ide-report-designer.md](ISSUE-ide-report-designer.md) | Reports are code or raw text, never a designed thing |
-| [ISSUE-ide-debugger-values.md](ISSUE-ide-debugger-values.md) | The debugger's values are flat lines, and it cannot break on data |
 | [ISSUE-ide-rename-locals.md](ISSUE-ide-rename-locals.md) | Rename stops at top-level declarations |
 | [ISSUE-ide-formatter.md](ISSUE-ide-formatter.md) | No formatter and no multiple cursors |
 | [ISSUE-ide-align-centres.md](ISSUE-ide-align-centres.md) | No align-centres, no centre-in-form, and the grid is invisible |
 
-Twenty-two of them came out of the October audit
+Twenty-one of them came out of the October audit
 ([`audit-2026-10.md`](../audit-2026-10.md)), which found the gaps in the
 runtime and in the IDE and had them written in this form. The audit keeps the
 argument; these files keep the gap.
@@ -51,7 +50,7 @@ gap is the other two, and they are two files now.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Forty have gone that way — thirty-seven filled, one refused, and two that
+Forty-one have gone that way — thirty-eight filled, one refused, and two that
 were never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
@@ -156,6 +155,14 @@ measurements, and `tests/widgets`' `FillScroll` is what keeps it true.
 **An issue answered by words that already existed is deleted like any other** —
 what it leaves behind is the documentation that would have prevented it, not a
 file describing a feature the runtime has.
+
+And a debugger whose values were flat lines and which could not stop on data:
+an object in the values panel opens onto its fields, a level at a time, asked
+of the runtime by the expression that reaches each one (`expand`), and a field
+with nothing in it, activated, is watched -- the program stops inside the
+assignment that changes it, in the function that wrote it, with what it was
+and what it is (`watch`). Both are in
+[`debug-plan.md`](../plans/debug-plan.md).
 
 Refused: a list of check boxes. A tick the *list* keeps is state in the view,
 which is the wrong place for it — the argument is with the other things that are
