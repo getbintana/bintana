@@ -162,14 +162,21 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   `docs/plans/interpreter-plan.md`, stage 1. Before it, the hook was a branch
   in both spellings of `SWITCH`, measured at **+12.5 % / +16.4 %** before the
   GCC fix and **0 % / about 10 %** after (arithmetic / property reads).
-- **`JS_DebugPosition` decodes pc2line once per entry** (the fourth commit):
-  the frame keeps `debug_pc_lo`/`debug_pc_hi`, the pcs of the entry
-  `debug_line` was read from, and `bta_line_range` -- `find_line_num`'s decoder
-  answering the range too -- runs only when the pc leaves it. Per opcode it had
-  decoded from the start of the function, which with the IDE attached and
-  nothing armed made a loop 30 times slower; the numbers are in
-  `docs/plans/debug-plan.md`, *What the debugger costs while it is attached*.
-  Dropping it fails no test either: the debugger's tests pass on both, slower.
+- **The handler is called once per line, not per opcode** (the fourth to sixth
+  commits). The frame keeps `debug_pc_lo`/`debug_pc_hi`, the pcs of the line
+  `debug_line` was read from -- the whole run of pc2line entries on it, since
+  QuickJS writes one per expression for the column -- and `case_debug_step`
+  compares the pc with them and calls the handler only outside;
+  `bta_line_range`, `find_line_num`'s decoder answering the range too, runs
+  only then. Per opcode the handler had decoded from the start of the
+  function, which with the IDE attached and nothing armed made a loop 30 times
+  slower; the numbers are in `docs/plans/debug-plan.md`, *What the debugger
+  costs while it is attached*. **What it rests on**: inside the range,
+  `JS_DebugPosition` would only have answered "the same line", which
+  `on_step` returns on before it does anything else -- so a new early return
+  in `on_step` that comes *before* the position (a stop that wants every
+  opcode) would need the trampoline to call it again. Dropping any of the
+  three fails no test: the debugger's tests pass on all, slower.
 - **`JSStackFrame.this_obj`** exists because `this` is a *parameter* of the call
   and had no slot on the frame: a debugger could read every local of a method
   and not the one name its body uses most. Borrowed like `cur_func` -- the

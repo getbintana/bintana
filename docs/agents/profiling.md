@@ -189,9 +189,9 @@ program). Four things measured with it, after the eleventh and twelfth patches:
 - **What a program pays under the IDE is the hook, not the dispatch.**
   Attached with nothing armed, a loop ran 13 to 30 times slower than without
   `--debug`: `find_line_num` per opcode (it decodes pc2line from the start of
-  the function) and a `poll` per line. Both are gone (`debug-plan.md`, *What
-  the debugger costs while it is attached*); 4 to 8 times is what is left, the
-  C call per opcode. Measure it by feeding the child a `continue` on stdin and
+  the function) and a `poll` per line. Both are gone, and the trampoline now calls C only
+  where the pc leaves its line (`debug-plan.md`, *What the debugger costs while
+  it is attached*); two to five times is what is left. Measure it by feeding the child a `continue` on stdin and
   sending descriptor 3 to `/dev/null`:
   `(sleep 0.3; echo '{"do":"continue"}'; sleep 60) | build-rwd/bintana --debug <project> 3>/dev/null`.
 
