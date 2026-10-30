@@ -130,6 +130,7 @@ static JSValue compile_text(JSContext *ctx, const char *src, size_t len,
         return JS_Throw(ctx, script_exc);
     }
 
+    bta_debug_compile_retry(ctx);     /* the script parse broke partway */
     JSValue module = JS_Eval(ctx, src, len, name,
                              JS_EVAL_TYPE_MODULE | JS_EVAL_FLAG_COMPILE_ONLY);
     if (!JS_IsException(module)) {
@@ -165,7 +166,9 @@ static void note_uses(JSContext *ctx, JSValueConst compiled, const char *path);
 JSValue bta_compile(JSContext *ctx, const char *src, size_t len,
                     const char *name, bool *is_module)
 {
+    bta_debug_compile_begin(ctx);
     JSValue r = compile_text(ctx, src, len, name, is_module);
+    bta_debug_compile_end(ctx, name);
     if (!JS_IsException(r))
         note_uses(ctx, r, name);
     return r;

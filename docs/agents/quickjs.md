@@ -162,13 +162,15 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   `docs/plans/interpreter-plan.md`, stage 1. Before it, the hook was a branch
   in both spellings of `SWITCH`, measured at **+12.5 % / +16.4 %** before the
   GCC fix and **0 % / about 10 %** after (arithmetic / property reads).
-- **The handler is called once per line, not per opcode** (the fourth to sixth
-  commits). The frame keeps `debug_pc_lo`/`debug_pc_hi`, the pcs of the line
+- **The handler is called once per line, not per opcode** (the fourth to
+  seventh commits). The frame keeps `debug_pc_lo`/`debug_pc_hi`, the pcs of the line
   `debug_line` was read from -- the whole run of pc2line entries on it, since
   QuickJS writes one per expression for the column -- and `case_debug_step`
   compares the pc with them and calls the handler only outside;
-  `bta_line_range`, `find_line_num`'s decoder answering the range too, runs
-  only then. Per opcode the handler had decoded from the start of the
+  `bta_line_range` answers the line and its range then, by a binary search of
+  a table of runs kept on the `JSFunctionBytecode` (`bta_lines`, decoded from
+  pc2line the first time a debugger asks, freed with the function, NULL with
+  no debugger). Per opcode the handler had decoded from the start of the
   function, which with the IDE attached and nothing armed made a loop 30 times
   slower; the numbers are in `docs/plans/debug-plan.md`, *What the debugger
   costs while it is attached*. **What it rests on**: inside the range,

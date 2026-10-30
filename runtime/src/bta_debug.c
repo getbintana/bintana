@@ -111,6 +111,7 @@ static bool path_is(const char *path, const char *file);
 static void emit_object(JSContext *ctx, JSValue object);
 typedef struct BtaBreakStruct BtaBreak;
 static void say_armed(JSContext *ctx, BtaBreak *bp);
+static void say_refused(JSContext *ctx, BtaBreak *bp);
 
 /* --------------------------------------------------------- what can be hit */
 
@@ -165,6 +166,7 @@ void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled)
         }
         at = resolve_line(bp->file, bp->asked);
         if (at <= 0) {
+            say_refused(ctx, bp);
             g_ptr_array_remove_index(dbg.breaks, k);   /* nowhere to stop */
             continue;
         }
@@ -173,6 +175,101 @@ void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled)
             say_armed(ctx, bp);
         k++;
     }
+}
+
+/* ----------------------------------------------------- the functions' spans */
+
+/*
+ * Where each function of a file begins and ends, as the parser reports it
+ * (fork patch 9's `JS_SYMBOL_SCOPE`): what keeps a breakpoint inside the
+ * function it was asked for. The bytecode cannot say it -- the closing brace of
+ * a function has no opcode, and the next line that has one is often the next
+ * function's own `function b() {` -- so a breakpoint on a closing brace used to
+ * arm in the function below.
+ *
+ * Collected around each compile (`bta_compile` calls the two halves below) and
+ * kept per file. **A stack**, because a module compiles the files it imports
+ * inside its own compile; and only for the main context, because a `Task`
+ * compiles on its own thread and this state is not shared with it.
+ */
+typedef struct { int first, last; } BtaSpan;
+
+static GPtrArray  *spans_stack;     /* GArray of BtaSpan, one per compile in flight */
+static GHashTable *spans;           /* a file -> GArray of BtaSpan */
+
+static void span_seen(void *opaque, JSSymbolKind kind, const char *name,
+                      const char *parent, const char *supertype,
+                      const char *params, int line, int end_line, const char *doc)
+{
+    (void)opaque; (void)name; (void)parent; (void)supertype; (void)params; (void)doc;
+
+    if (kind != JS_SYMBOL_SCOPE || end_line < line || !spans_stack || !spans_stack->len)
+        return;
+    BtaSpan s = { line, end_line };
+    g_array_append_val(g_ptr_array_index(spans_stack, spans_stack->len - 1), s);
+}
+
+void bta_debug_compile_begin(JSContext *ctx)
+{
+    if (!dbg.on || ctx != dbg.ctx)
+        return;
+    if (!spans_stack)
+        spans_stack = g_ptr_array_new();
+    g_ptr_array_add(spans_stack, g_array_new(FALSE, FALSE, sizeof(BtaSpan)));
+    JS_SetSymbolHandler(JS_GetRuntime(ctx), span_seen, NULL);
+}
+
+/* A script compile that failed and is about to be tried as a module: what it
+ * reported is a parse that broke partway, and spans that end where it broke. */
+void bta_debug_compile_retry(JSContext *ctx)
+{
+    if (!dbg.on || ctx != dbg.ctx || !spans_stack || !spans_stack->len)
+        return;
+    g_array_set_size(g_ptr_array_index(spans_stack, spans_stack->len - 1), 0);
+}
+
+void bta_debug_compile_end(JSContext *ctx, const char *path)
+{
+    GArray *got;
+
+    if (!dbg.on || ctx != dbg.ctx || !spans_stack || !spans_stack->len)
+        return;
+
+    got = g_ptr_array_steal_index(spans_stack, spans_stack->len - 1);
+    if (!spans_stack->len)
+        JS_SetSymbolHandler(JS_GetRuntime(ctx), NULL, NULL);
+    if (!spans)
+        spans = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
+                                      (GDestroyNotify)g_array_unref);
+    g_hash_table_insert(spans, g_strdup(path), got);
+}
+
+/* The innermost function around a line of a file, or NULL. */
+static const BtaSpan *span_around(const char *file, int line)
+{
+    GHashTableIter it;
+    gpointer       key, value;
+    const BtaSpan *best = NULL;
+
+    if (!spans)
+        return NULL;
+    g_hash_table_iter_init(&it, spans);
+    while (g_hash_table_iter_next(&it, &key, &value)) {
+        GArray *set = value;
+
+        if (!path_is(key, file))
+            continue;
+        for (guint i = 0; i < set->len; i++) {
+            const BtaSpan *s = &g_array_index(set, BtaSpan, i);
+
+            if (s->first <= line && line <= s->last &&
+                (!best || s->first > best->first ||
+                 (s->first == best->first && s->last < best->last)))
+                best = s;
+        }
+        break;
+    }
+    return best;
 }
 
 /*
@@ -221,11 +318,31 @@ static int resolve_line(const char *file, int line)
         if (!path_is(path, file))
             continue;
 
+        /*
+         * **Not out of the function it was asked in.** A line past the last
+         * one of its function that can stop -- the closing brace, most of all
+         * -- goes back to that last one, and is said to have moved like any
+         * other -- and the line a function is declared on is one of its own, its
+         * first, which is all a one-statement function has. A file with no
+         * line that can stop at or after the one asked, outside any function,
+         * is a breakpoint with nowhere to go, and is said to be (`refused`).
+         */
+        const BtaSpan *around = span_around(file, line);
+        int            before = 0;
+
         for (guint i = 0; i < set->len; i++) {
             int at = g_array_index(set, int, i);
-            if (at >= line)
-                return at;
+
+            if (at >= line) {
+                if (!around || at <= around->last)
+                    return at;
+                break;
+            }
+            if (around && at >= around->first)
+                before = at;
         }
+        if (around)
+            return before;      /* 0: nothing in that function can stop */
         return 0;               /* past the last line that can stop */
     }
     return -1;                  /* not compiled yet */
@@ -240,6 +357,23 @@ static void say_armed(JSContext *ctx, BtaBreak *bp)
     JS_SetPropertyStr(ctx, said, "file", JS_NewString(ctx, bp->file));
     JS_SetPropertyStr(ctx, said, "line", JS_NewInt32(ctx, bp->line));
     JS_SetPropertyStr(ctx, said, "pending", JS_NewBool(ctx, bp->line != bp->asked));
+    emit_object(ctx, said);
+}
+
+/*
+ * A breakpoint with nowhere to stop: past the last line of its file that can,
+ * or in a function with no line that can at or before it. Said, because the
+ * IDE drew a mark for it -- and a mark beside a line that will never stop is
+ * the lie `armed` exists to prevent. It used to be dropped without a word.
+ */
+static void say_refused(JSContext *ctx, BtaBreak *bp)
+{
+    JSValue said = JS_NewObject(ctx);
+
+    JS_SetPropertyStr(ctx, said, "event", JS_NewString(ctx, "refused"));
+    JS_SetPropertyStr(ctx, said, "id", JS_NewInt32(ctx, bp->id));
+    JS_SetPropertyStr(ctx, said, "file", JS_NewString(ctx, bp->file));
+    JS_SetPropertyStr(ctx, said, "line", JS_NewInt32(ctx, bp->asked));
     emit_object(ctx, said);
 }
 
@@ -1079,7 +1213,8 @@ static void set_break(JSContext *ctx, JSValue cmd, bool one_shot)
     bp->asked = bp->line;
     int at = resolve_line(bp->file, bp->line);
 
-    if (at == 0) {                      /* past anything that can stop */
+    if (at == 0) {                      /* nowhere to stop */
+        say_refused(ctx, bp);
         free_break(bp);
         return;
     }

@@ -1170,6 +1170,12 @@ void bta_debug_start(JSContext *ctx);
 void bta_debug_stopping(JSContext *ctx, int code);
 /* A project file just compiled: what lines it can stop on. */
 void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled);
+/* Around every compile (`bta_compile`): the parser's function spans are
+ * collected for `path`, so a breakpoint stays in the function it was asked
+ * in. `retry` when a failed script compile is tried again as a module. */
+void bta_debug_compile_begin(JSContext *ctx);
+void bta_debug_compile_retry(JSContext *ctx);
+void bta_debug_compile_end(JSContext *ctx, const char *path);
 void bta_sys_cleanup(void);   /* cancels children still running */
 /*
  * How much of the program is still owed an answer: children running, timers

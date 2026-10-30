@@ -208,6 +208,8 @@ From the child, on descriptor 3:
 {"event":"log","file":"Form1.js","line":42,"text":"total=3","failed":false}
 {"event":"resumed"}
 {"event":"exited","code":0}
+{"event":"armed","id":7,"file":"Form1.js","line":43,"pending":true}   ← moved
+{"event":"refused","id":7,"file":"Form1.js","line":90}  ← nowhere to stop
 ```
 
 From the IDE, on stdin:
@@ -336,11 +338,21 @@ running it:
   the IDE is told where it went — which is what every editor does with a click
   on a blank line, and it is why a file is compiled and run in two steps under
   `--debug`.
-- **Moving a breakpoint is per *file*, and should be per *function*.** The set
-  of lines is the whole file's, so a breakpoint past the last statement of a
-  method moves into the next one. Visible rather than silent -- the mark moves
-  and the log says so -- and the fix wants the line ranges per function, which
-  is the same table a pc-level breakpoint would need.
+- **Moving a breakpoint is per *function*, and was per *file*.** The set of
+  lines was the whole file's, so a breakpoint on a method's closing brace
+  moved into the next one -- often onto its `function b() {`, which is a line
+  of `b`. The bytecode cannot say where a function ends (the closing brace has
+  no opcode), the parser can: fork patch 9 reports every function as a
+  `JS_SYMBOL_SCOPE` with its first and last line, and `bta_compile` collects
+  them under `--debug` (`bta_debug_compile_begin`/`_end`, a stack because a
+  module compiles its imports inside its own compile, `_retry` because a failed
+  script parse leaves spans cut short). A line past the last of its function
+  that can stop goes *back* to that last one -- for a one-statement function,
+  the line it is declared on, which is its own first line; an empty one stops
+  there when it is called. A blank line *between* functions still moves
+  forward. And a breakpoint with nowhere to go is said (`refused`) instead of
+  dropped, so the IDE takes the mark off -- it used to stay beside a line that
+  would never stop. `testDebuggerBraces` holds all four.
 - **"Have we left this line?" is a question about a frame, not about the
   program.** A single "last line seen" stopped a breakpoint inside a function
   called three times from firing more than once, and then made a line that
@@ -403,11 +415,15 @@ The first two are the fourth to sixth commits of patch 4, the last two
 | attached, before | 428 | 940 / 1673 / 1320 |
 | one entry kept per frame, the channel every 5 ms | 101 | 474 / 634 / 621 |
 | the trampoline compares the range | 78 | 372 / 502 / 478 |
-| the range is the whole line | **69** | **110 / 219 / 152** |
+| the range is the whole line | 69 | 110 / 219 / 152 |
+| the function's line table decoded once | **47-50** | **109 / 202 / 151** |
 
-**What is left** is one handler call per new line, which decodes the
-function's table from its start (`bta_line_range`), and `on_step`'s own work
-for a line: the clock, and `break_on_line`. Two to five times the plain run.
+**What is left** is one handler call per new line -- a binary search of the
+function's table, kept on it since the seventh commit -- and `on_step`'s own
+work for a line: the clock, and `break_on_line`. The one-line loops do not
+change line, so the table did nothing for them; what they pay is a call per
+function call, where a new frame has no line yet. Two to four times the plain
+run.
 
 ## What it costs outside the code
 

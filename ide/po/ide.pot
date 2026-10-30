@@ -37,7 +37,7 @@ msgstr ""
 #: forms/RefsForm.form: BtnClose.Text
 #: forms/SearchForm.form: BtnClose.Text
 #: forms/PoForm.js:393
-#: modules/Debugger.js:690
+#: modules/Debugger.js:712
 msgid "Close"
 msgstr ""
 
@@ -2632,43 +2632,47 @@ msgstr ""
 msgid "Put the caret on a breakpoint first."
 msgstr ""
 
-#: modules/Debugger.js:507
+#: modules/Debugger.js:508
 msgid "{0}:{1} cannot stop; the breakpoint moved to line {2}."
 msgstr ""
 
-#: modules/Debugger.js:515
+#: modules/Debugger.js:529
+msgid "{0}:{1} cannot stop: nothing runs there or after it."
+msgstr ""
+
+#: modules/Debugger.js:537
 msgid "{0} changed: {1} -> {2}"
 msgstr ""
 
-#: modules/Debugger.js:623
+#: modules/Debugger.js:645
 msgid "Stops when {0} changes."
 msgstr ""
 
-#: modules/Debugger.js:628
+#: modules/Debugger.js:650
 msgid "{0} cannot be watched: {1}"
 msgstr ""
 
-#: modules/Debugger.js:690
+#: modules/Debugger.js:712
 msgid "Open"
 msgstr ""
 
-#: modules/Debugger.js:748
+#: modules/Debugger.js:770
 msgid "… {0} more"
 msgstr ""
 
-#: modules/Debugger.js:775
+#: modules/Debugger.js:797
 msgid "Change a value"
 msgstr ""
 
-#: modules/Debugger.js:776
+#: modules/Debugger.js:798
 msgid "{0} is"
 msgstr ""
 
-#: modules/Debugger.js:790
+#: modules/Debugger.js:812
 msgid "Stopped here"
 msgstr ""
 
-#: modules/Debugger.js:894
+#: modules/Debugger.js:916
 msgid "Run to cursor needs a program being debugged."
 msgstr ""
 

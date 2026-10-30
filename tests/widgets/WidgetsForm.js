@@ -621,6 +621,8 @@ const TESTS = [
     "DebuggerTree",
     /* Async: a data breakpoint, two runs of a child in a row. */
     "DebuggerWatch",
+    /* Async: breakpoints on braces stay in their function. */
+    "DebuggerBraces",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -28404,6 +28406,83 @@ class Form1 extends Form {
                 eq("...the program unchanged either way", out2, 'answer 8 {"name":"Ana","balance":8}');
             });
         });
+    }
+
+    /*
+     * A breakpoint stays in the function it was asked in. The closing brace of
+     * a function has no opcode, and the next line that has one is often the
+     * next function's own declaration -- so a breakpoint on `}` used to arm,
+     * and stop, in the function below. It goes back to the last line of its
+     * own function now -- the line it is declared on, for a function with no
+     * other, which is where an empty one stops when it is called; one past the
+     * last line of the file is refused out loud instead of dropped without a
+     * word; and a blank line *between* functions still moves forward, which
+     * is what a click there means.
+     */
+    testDebuggerBraces() {
+        const proj = File.Join(SCRATCH, "dbg-braces");
+
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "dbgbraces", main: "Main", sources: ["Main.js"] });
+        File.Save(File.Join(proj, "Main.js"),
+                  'function a() {\n' +           // 1
+                  '    let x = 1;\n' +           // 2
+                  '    x++;\n' +                 // 3
+                  '}\n' +                        // 4  -> 3
+                  '\n' +                         // 5  -> 6
+                  'function b() {\n' +           // 6
+                  '    return 2;\n' +            // 7
+                  '}\n' +                        // 8  -> 6, its only line
+                  'function nothing() {\n' +     // 9
+                  '}\n' +                        // 10 -> 9
+                  'function Main() {\n' +        // 11
+                  '    a();\n' +                 // 12
+                  '    nothing();\n' +           // 13
+                  '    print("answer " + b());\n' +
+                  '}\n' +
+                  '\n');                         // 16 -> refused
+
+        const out     = [];
+        const armed   = {};
+        const refused = [];
+        const stops   = [];
+
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+
+                    if (kind === "ready") {
+                        for (const at of [4, 5, 8, 10, 16])
+                            job.Write(JSON.stringify({ do: "break", file: "Main.js", line: at, id: at }));
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    } else if (kind === "armed") {
+                        armed[msg.id] = msg.line;
+                    } else if (kind === "refused") {
+                        refused.push(msg.line);
+                    } else if (kind === "stopped") {
+                        stops.push(`${msg.frames[0].Name}:${msg.frames[0].Line}`);
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                waiting--;
+                eq("a program with breakpoints on braces finishes", code, 0);
+                check("...and prints its answer", out.join("").includes("answer 2"), JSON.stringify(out));
+                eq("a closing brace goes back to its function's last line", armed[4], 3);
+                eq("...the line it is declared on, where it has no other", armed[8], 6);
+                eq("...an empty one too", armed[10], 9);
+                eq("a blank line between functions moves forward", armed[5], 6);
+                eq("a line past the file is refused, out loud", refused.join(","), "16");
+                eq("and the stops are in the functions that were asked for",
+                   stops.join(","), "a:3,nothing:9,b:6");
+            });
     }
 
     /*

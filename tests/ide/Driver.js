@@ -15938,6 +15938,21 @@ function* p_debug(ide) {
     dbg.fill();
     ide.refresh();
 
+    /*
+     * --- a breakpoint the runtime refuses -------------------------------------
+     *
+     * Past the last line of a file that can stop, the runtime answers
+     * `refused` (testDebuggerBraces asserts it does); the mark comes off
+     * rather than staying beside a line that will never stop.
+     */
+    ide.Editor.GotoLine(at.line + 1);
+    ide.MnuBreakpoint_Click();
+    eq("a second breakpoint is marked", ide.debugger_.all().length, 2);
+    ide.debugger_.heard(JSON.stringify({ event: "refused", id: 99, file: js, line: at.line + 1 }));
+    eq("a refused one comes off", ide.debugger_.all().length, 1);
+    check("...and the one left is the other",
+          ide.debugger_.all()[0].line === at.line, JSON.stringify(ide.debugger_.all()));
+
     /* --- back to what the phase after this one expects ----------------------- */
     /* The caret went back to the top when the tab reopened, and F9 acts where
      * the caret is -- without this it would *add* a second one on line 1. */

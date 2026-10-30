@@ -451,6 +451,7 @@ export class Debugger {
         const kind = msg.event || msg.reply;
         if (kind === "ready")   this.ready();
         else if (kind === "armed")   this.armed(msg);
+        else if (kind === "refused") this.refused(msg);
         else if (kind === "stopped") this.halt(msg);
         else if (kind === "log")     this.recorded(msg);
         else if (kind === "locals")  this.showLocals(msg);
@@ -506,6 +507,27 @@ export class Debugger {
         /* The newline is the log's business and not the translator's. */
         this.ide.log(`${Locale.Text("{0}:{1} cannot stop; the breakpoint moved to line {2}.",
                                     name, from, msg.line)}\n`);
+    }
+
+    /*
+     * A breakpoint the runtime has nowhere to stop for: past the last line of
+     * its file that can stop, outside any function. The mark comes off, with
+     * its condition and its message: a dot beside a line that will never stop
+     * is a lie the programmer then acts on.
+     */
+    refused(msg) {
+        const name  = this.projectName(msg.file);
+        const lines = this.marks.get(name);
+
+        if (lines) this.marks.set(name, lines.filter((l) => l !== msg.line));
+        this.whens.delete(breakKey(name, msg.line));
+        this.logs.delete(breakKey(name, msg.line));
+
+        const state = this.ide.openTabs.get(name);
+        if (state && state.editor) state.editor.Unmark(msg.line, BREAK_MARK);
+
+        this.ide.log(`${Locale.Text("{0}:{1} cannot stop: nothing runs there or after it.",
+                                    name, msg.line)}\n`);
     }
 
     halt(msg) {
