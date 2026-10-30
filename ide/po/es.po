@@ -2672,6 +2672,14 @@ msgstr "Poné el cursor sobre un punto de corte primero."
 msgid "{0}:{1} cannot stop; the breakpoint moved to line {2}."
 msgstr "{0}:{1} no puede parar; el punto de corte se movió a la línea {2}."
 
+#: modules/Debugger.js:641
+msgid "Open"
+msgstr "Abrir"
+
+#: modules/Debugger.js:696
+msgid "… {0} more"
+msgstr "… {0} más"
+
 #: modules/Debugger.js:590
 msgid "Change a value"
 msgstr "Cambiar un valor"

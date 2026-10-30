@@ -344,9 +344,8 @@ static void emit(const char *json)
  * **An object is shown by what is in it**, one level deep, because
  * `[object Object]` is what a debugger shows when it has given up: the whole
  * question at a breakpoint is usually *what is in this thing*. One level and a
- * handful of fields, since the panel has a line and not a tree -- and what is
- * past that is what the immediate box is for: `this.Ok.Text` names the field
- * rather than hunting for it.
+ * handful of fields, since a row is one line -- and what is past that is the
+ * tree: `openable` says a value has fields, and `say_expand` answers them.
  */
 static char *render(JSContext *ctx, JSValueConst value)
 {
@@ -455,6 +454,38 @@ static char *render(JSContext *ctx, JSValueConst value)
     return out;
 }
 
+/*
+ * Whether a value has anything in it to open: what puts a triangle beside a
+ * row. The fields are the ones `render` shows -- own, enumerable, named by a
+ * string -- so a row that opens onto nothing cannot happen. An array is asked
+ * its length rather than its names, which for a big one would be every index.
+ */
+static bool openable(JSContext *ctx, JSValueConst value)
+{
+    JSPropertyEnum *keys = NULL;
+    uint32_t        n = 0;
+
+    if (!JS_IsObject(value) || JS_IsFunction(ctx, value))
+        return false;
+
+    if (JS_IsArray(value)) {
+        JSValue lv = JS_GetPropertyStr(ctx, value, "length");
+
+        if (JS_ToUint32(ctx, &n, lv))
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        JS_FreeValue(ctx, lv);
+        return n > 0;
+    }
+
+    if (JS_GetOwnPropertyNames(ctx, &keys, &n, value, JS_GPN_STRING_MASK |
+                               JS_GPN_ENUM_ONLY) < 0) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return false;
+    }
+    JS_FreePropertyEnum(ctx, keys, n);
+    return n > 0;
+}
+
 /* JSON, built the way the rest of this runtime builds it: through QuickJS. */
 static char *to_json(JSContext *ctx, JSValue value)
 {
@@ -476,7 +507,8 @@ static void emit_object(JSContext *ctx, JSValue object)
 }
 
 /*
- * An expression, evaluated where the program is standing, rendered.
+ * An expression, evaluated where the program is standing: its value, or
+ * JS_EXCEPTION with nothing left pending and the message in `*error`.
  *
  * Two things it must not do, and both were real. It must not let the hook fire
  * inside itself -- the debugger would stop in its own expression, with the
@@ -484,6 +516,30 @@ static void emit_object(JSContext *ctx, JSValue object)
  * question asked by a debugger is not something the program should then find
  * itself handling. What a throwing expression answers is the message, which is
  * what a person typing in an immediate box wants to see anyway.
+ */
+static JSValue evaluate_value(JSContext *ctx, int frame, const char *expr,
+                              char **error)
+{
+    JSValue out;
+    bool    was = dbg.evaluating;
+
+    dbg.evaluating = true;
+    out = JS_DebugEval(ctx, frame, expr);
+    dbg.evaluating = was;
+
+    if (JS_IsException(out)) {
+        JSValue      err = JS_GetException(ctx);
+        const char  *msg = JS_ToCString(ctx, err);
+
+        *error = g_strdup(msg ? msg : "error");
+        JS_FreeCString(ctx, msg);
+        JS_FreeValue(ctx, err);
+    }
+    return out;
+}
+
+/*
+ * The same, rendered: what a watch, a logpoint and the immediate box show.
  *
  * `message` is a logpoint's half: a string that comes back **is** the line to
  * write, unquoted, because `"i=" + i` is a sentence somebody wrote to read.
@@ -495,20 +551,10 @@ static char *evaluate(JSContext *ctx, int frame, const char *expr, bool *failed,
                       bool message)
 {
     JSValue out;
-    char   *text;
-    bool    was = dbg.evaluating;
+    char   *text = NULL;
 
-    dbg.evaluating = true;
-    out = JS_DebugEval(ctx, frame, expr);
-    dbg.evaluating = was;
-
+    out = evaluate_value(ctx, frame, expr, &text);
     if (JS_IsException(out)) {
-        JSValue      err = JS_GetException(ctx);
-        const char  *msg = JS_ToCString(ctx, err);
-
-        text = g_strdup(msg ? msg : "error");
-        JS_FreeCString(ctx, msg);
-        JS_FreeValue(ctx, err);
         if (failed)
             *failed = true;
         return text;
@@ -609,6 +655,8 @@ static void say_locals(JSContext *ctx, int frame)
         JS_SetPropertyStr(ctx, item, "Value", JS_NewString(ctx, text));
         JS_SetPropertyStr(ctx, item, "Argument",
                           JS_GetPropertyStr(ctx, row, "Argument"));
+        JS_SetPropertyStr(ctx, item, "Children",
+                          JS_NewBool(ctx, openable(ctx, value)));
         JS_SetPropertyUint32(ctx, items, i, item);
 
         g_free(text);
@@ -620,6 +668,111 @@ static void say_locals(JSContext *ctx, int frame)
     JS_SetPropertyStr(ctx, out, "reply", JS_NewString(ctx, "locals"));
     JS_SetPropertyStr(ctx, out, "frame", JS_NewInt32(ctx, frame));
     JS_SetPropertyStr(ctx, out, "items", items);
+    emit_object(ctx, out);
+}
+
+/* How many fields of one value are sent when it is opened; the rest are
+ * counted in `more`. An array of a million is opened onto its first ones. */
+#define EXPAND_FIELDS 200
+
+/* One field of an opened value, read with the hook held off: a getter is
+ * JavaScript, and the debugger must not stop inside its own question. */
+static JSValue expand_item(JSContext *ctx, JSValueConst owner, JSAtom atom,
+                           uint32_t index, bool by_index)
+{
+    JSValue item  = JS_NewObject(ctx);
+    bool    was   = dbg.evaluating;
+    JSValue value;
+    char   *text;
+
+    dbg.evaluating = true;
+    value = by_index ? JS_GetPropertyUint32(ctx, owner, index)
+                     : JS_GetProperty(ctx, owner, atom);
+    dbg.evaluating = was;
+
+    if (by_index) {
+        char name[16];
+
+        g_snprintf(name, sizeof name, "%u", index);
+        JS_SetPropertyStr(ctx, item, "Name", JS_NewString(ctx, name));
+    } else {
+        JS_SetPropertyStr(ctx, item, "Name", JS_AtomToString(ctx, atom));
+    }
+
+    /* A getter that throws answers its message, the way a watch does. */
+    if (JS_IsException(value)) {
+        JSValue     err = JS_GetException(ctx);
+        const char *msg = JS_ToCString(ctx, err);
+
+        JS_SetPropertyStr(ctx, item, "Value", JS_NewString(ctx, msg ? msg : "error"));
+        JS_SetPropertyStr(ctx, item, "Failed", JS_TRUE);
+        JS_SetPropertyStr(ctx, item, "Children", JS_FALSE);
+        JS_FreeCString(ctx, msg);
+        JS_FreeValue(ctx, err);
+        return item;
+    }
+
+    text = render(ctx, value);
+    JS_SetPropertyStr(ctx, item, "Value", JS_NewString(ctx, text));
+    JS_SetPropertyStr(ctx, item, "Children", JS_NewBool(ctx, openable(ctx, value)));
+    g_free(text);
+    JS_FreeValue(ctx, value);
+    return item;
+}
+
+/*
+ * What is inside a value: the panel's tree, one level at a time.
+ *
+ * **Addressed by the expression, not by a handle.** The IDE asks for
+ * `client.address` and the runtime evaluates it where the frame stands, exactly
+ * as a watch is evaluated -- so nothing is held here between two questions, and
+ * nothing can outlive a resume and answer for a program that has moved on, which
+ * is what `debug-plan.md` asks of whatever does this. The cost is that an
+ * expression with a side effect runs again; a path of names has none.
+ */
+static void say_expand(JSContext *ctx, int frame, const char *text)
+{
+    JSValue  out   = JS_NewObject(ctx);
+    JSValue  items = JS_NewArray(ctx);
+    char    *error = NULL;
+    JSValue  value = evaluate_value(ctx, frame, text, &error);
+    uint32_t n = 0, i, shown = 0;
+
+    JS_SetPropertyStr(ctx, out, "reply", JS_NewString(ctx, "expand"));
+    JS_SetPropertyStr(ctx, out, "frame", JS_NewInt32(ctx, frame));
+    JS_SetPropertyStr(ctx, out, "text", JS_NewString(ctx, text));
+
+    if (JS_IsException(value)) {
+        JS_SetPropertyStr(ctx, out, "failed", JS_TRUE);
+        JS_SetPropertyStr(ctx, out, "value", JS_NewString(ctx, error));
+        g_free(error);
+    } else if (JS_IsArray(value)) {
+        JSValue lv = JS_GetPropertyStr(ctx, value, "length");
+
+        if (JS_ToUint32(ctx, &n, lv))
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        JS_FreeValue(ctx, lv);
+        for (i = 0; i < n && i < EXPAND_FIELDS; i++)
+            JS_SetPropertyUint32(ctx, items, shown++,
+                                 expand_item(ctx, value, JS_ATOM_NULL, i, true));
+    } else if (JS_IsObject(value) && !JS_IsFunction(ctx, value)) {
+        JSPropertyEnum *keys = NULL;
+
+        if (JS_GetOwnPropertyNames(ctx, &keys, &n, value, JS_GPN_STRING_MASK |
+                                   JS_GPN_ENUM_ONLY) < 0) {
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            keys = NULL;
+            n    = 0;
+        }
+        for (i = 0; i < n && i < EXPAND_FIELDS; i++)
+            JS_SetPropertyUint32(ctx, items, shown++,
+                                 expand_item(ctx, value, keys[i].atom, 0, false));
+        JS_FreePropertyEnum(ctx, keys, n);
+    }
+
+    JS_SetPropertyStr(ctx, out, "items", items);
+    JS_SetPropertyStr(ctx, out, "more", JS_NewInt32(ctx, (int32_t)(n - shown)));
+    JS_FreeValue(ctx, value);
     emit_object(ctx, out);
 }
 
@@ -803,17 +956,38 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
 
         JS_ToInt32(ctx, &frame, fv);
         if (text) {
-            char   *answer = evaluate(ctx, frame, text, &failed, false);
+            char   *answer = NULL;
+            JSValue value  = evaluate_value(ctx, frame, text, &answer);
             JSValue out    = JS_NewObject(ctx);
+
+            failed = JS_IsException(value);
+            if (!failed)
+                answer = render(ctx, value);
 
             JS_SetPropertyStr(ctx, out, "reply", JS_NewString(ctx, "eval"));
             JS_SetPropertyStr(ctx, out, "frame", JS_NewInt32(ctx, frame));
             JS_SetPropertyStr(ctx, out, "text", JS_NewString(ctx, text));
             JS_SetPropertyStr(ctx, out, "value", JS_NewString(ctx, answer));
             JS_SetPropertyStr(ctx, out, "failed", JS_NewBool(ctx, failed));
+            /* A watch that holds an object opens like a local does. */
+            JS_SetPropertyStr(ctx, out, "children",
+                              JS_NewBool(ctx, !failed && openable(ctx, value)));
             emit_object(ctx, out);
             g_free(answer);
+            JS_FreeValue(ctx, value);
         }
+        JS_FreeCString(ctx, text);
+        JS_FreeValue(ctx, tv);
+        JS_FreeValue(ctx, fv);
+    } else if (!strcmp(verb, "expand")) {
+        JSValue     fv   = JS_GetPropertyStr(ctx, cmd, "frame");
+        JSValue     tv   = JS_GetPropertyStr(ctx, cmd, "text");
+        const char *text = JS_ToCString(ctx, tv);
+        int         frame = 0;
+
+        JS_ToInt32(ctx, &frame, fv);
+        if (text)
+            say_expand(ctx, frame, text);
         JS_FreeCString(ctx, text);
         JS_FreeValue(ctx, tv);
         JS_FreeValue(ctx, fv);

@@ -31,6 +31,42 @@ const HERE_MARK = "Info";
 /* What a breakpoint's settings are keyed by, here and in the runtime's `id`. */
 function breakKey(file, line) { return `${file}:${line}`; }
 
+/* The values tree: how far a level goes in, which is also the triangle's width,
+ * and how wide a name is at the top. */
+const INDENT     = 18;
+const NAME_WIDTH = 120;
+
+/* The triangle, by the names the desktop is likeliest to have. */
+const ICON_SHUT = ["pan-end-symbolic", "go-next-symbolic"];
+const ICON_OPEN = ["pan-down-symbolic", "go-down-symbolic"];
+
+/*
+ * The expression that reaches a field, from the one that reached its owner:
+ * `client` and `address` make `client.address`, an index makes `tags[2]`, and
+ * a name that is not an identifier is quoted -- `row["first name"]`. It is what
+ * the runtime is asked to `expand`, and a path of names has no side effect.
+ */
+function childPath(owner, name) {
+    if (name.length > 0 && isDigits(name)) return `${owner}[${name}]`;
+    if (isIdentifier(name)) return `${owner}.${name}`;
+    return `${owner}[${JSON.stringify(name)}]`;
+}
+
+function isDigits(s) {
+    for (const c of s) if (c < "0" || c > "9") return false;
+    return true;
+}
+
+function isIdentifier(s) {
+    if (s.length === 0) return false;
+    for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        const word = (c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || c === "_" || c === "$";
+        if (!word && (i === 0 || c < "0" || c > "9")) return false;
+    }
+    return true;
+}
+
 export class Debugger {
 
     /** @param {MainForm} ide */
@@ -58,6 +94,16 @@ export class Debugger {
         /* The last answer per watch, so the list can be drawn before the
          * replies come back and not flicker through empty. */
         this.answers = new Map();
+        /* The values opened in the tree, by the expression that reaches them
+         * (`client.address`). Kept between stops, so a value opened once stays
+         * open while the program is stepped -- and asked again at each stop,
+         * since what was inside it is the program's and has moved on. */
+        this.opened   = new Set();
+        /* What each opened expression answered at this stop: its `expand`
+         * reply, or null where it does not mean anything here. */
+        this.children = new Map();
+        /* The rows as drawn, so an activated index finds what it was. */
+        this.rows = [];
     }
 
     get running()  { return this.job !== null; }
@@ -403,6 +449,7 @@ export class Debugger {
         else if (kind === "log")     this.recorded(msg);
         else if (kind === "locals")  this.showLocals(msg);
         else if (kind === "eval")    this.answered(msg);
+        else if (kind === "expand")  this.expanded(msg);
     }
 
     /*
@@ -475,6 +522,7 @@ export class Debugger {
         if (!this.stopped) {
             this.locals = [];
             this.answers.clear();
+            this.children.clear();
             this.fillValues();
             return;
         }
@@ -504,39 +552,100 @@ export class Debugger {
 
     showLocals(msg) {
         this.locals = msg.items || [];
+        /* What was inside the opened values belongs to the stop before, so
+         * every one of them is asked again here, where the frame stands now. */
+        this.children.clear();
+        for (const path of this.opened)
+            this.send({ do: "expand", frame: this.frame, text: path });
+        this.fillValues();
+    }
+
+    /* An opened value's fields arriving. Matched by the expression, like a
+     * watch's answer, and dropped when it was asked of another frame. */
+    expanded(msg) {
+        if (msg.frame !== this.frame || !this.opened.has(msg.text)) return;
+        this.children.set(msg.text, msg.failed ? null : msg);
+        this.fillValues();
+    }
+
+    /* A triangle clicked: the value opens or closes. */
+    toggleOpen(path) {
+        if (this.opened.has(path)) {
+            this.opened.delete(path);
+            this.children.delete(path);
+        } else {
+            this.opened.add(path);
+            if (this.halted) this.send({ do: "expand", frame: this.frame, text: path });
+        }
         this.fillValues();
     }
 
     /*
-     * The values pane: the watches, then the frame's own.
+     * The values pane: the watches, then the frame's own, and under each opened
+     * one what is inside it.
      *
      * One list and not two, because they answer the same question -- *what is
      * true here* -- and a panel 170 pixels tall cannot afford a second heading.
      * A watch is marked by carrying the expression as its name, which is what
      * it is, and by being removable.
+     *
+     * **A tree drawn as indented rows of the same list**, and not a `TreeView`:
+     * a row here is a name and a value and a gesture, which is what the list
+     * already was, and an opened value is one more question to the runtime
+     * (`expand`) rather than a model to keep in step with it.
      */
     fillValues() {
         const list = this.ide.LocalList;
 
         list.Clear();
+        this.rows = [];
 
         for (const text of this.watches) {
             const seen = this.answers.get(text);
-            this.addValue(text, seen ? seen.value : "…", false,
-                          seen && seen.failed);
+            /* In parentheses, so `a + b`'s fields are asked of the sum. */
+            this.addValue({ kind: "watch", name: text, path: `(${text})`,
+                            value: seen ? seen.value : "…",
+                            failed: seen && seen.failed,
+                            openable: !!(seen && seen.children) }, 0);
         }
         for (const item of this.locals || [])
-            this.addValue(item.Name, item.Value, item.Argument, false);
+            this.addValue({ kind: "local", name: item.Name, path: item.Name,
+                            value: item.Value, argument: item.Argument,
+                            openable: !!item.Children }, 0);
     }
 
-    addValue(name, value, argument, failed) {
+    addValue(node, depth) {
         const list = this.ide.LocalList;
+        const open = node.openable && this.opened.has(node.path);
         {
             const row = new Panel();
             row.Arrangement = "Horizontal";
-            row.Spacing     = 6;
+            row.Spacing     = 2;
             row.Margin      = 2;
             list.Add(row);
+            this.rows.push(node);
+
+            if (depth > 0) {
+                const indent = new Panel();
+                indent.Width = INDENT * depth;
+                row.Add(indent);
+            }
+
+            /* The triangle, or the room it would take, so names line up. */
+            if (node.openable) {
+                const toggle = new Button();
+                toggle.Icon  = (open ? ICON_OPEN : ICON_SHUT).find((n) => Application.HasIcon(n)) || "";
+                if (!toggle.Icon) toggle.Text = open ? "▾" : "▸";
+                toggle.Style = "flat";
+                toggle.Width = INDENT;
+                toggle.Tooltip = open ? Locale.Text("Close") : Locale.Text("Open");
+                toggle.On("Click", () => this.toggleOpen(node.path));
+                row.Add(toggle);
+            } else {
+                const room = new Panel();
+                room.Width = INDENT;
+                row.Add(room);
+            }
 
             const label = new Label();
             label.Markup = true;
@@ -552,44 +661,66 @@ export class Debugger {
              * that matter here -- harmless in markup text, where `&quot;` draws
              * as `"`.
              */
-            label.Text   = argument ? `<b>${Text.Escape(name)}</b>`
-                                    : Text.Escape(name);
-            label.Width  = 120;
+            label.Text   = node.argument ? `<b>${Text.Escape(node.name)}</b>`
+                                         : Text.Escape(node.name);
+            /* Narrower as it goes in, so the values stay in one column. */
+            label.Width  = Math.max(NAME_WIDTH - INDENT * depth, INDENT * 2);
             label.HAlign = "Start";
-            label.Tooltip = name;
+            label.Tooltip = node.name;
             row.Add(label);
 
             const shown = new Label();
-            shown.Text      = value;
+            shown.Text      = node.value;
             shown.Ellipsize = true;
             shown.HExpand   = true;
             shown.HAlign    = "Start";
             /* An expression that threw is dimmed rather than hidden: the
              * message is the answer, and a watch that cannot be answered in
              * this frame is a fact about the frame. */
-            if (failed) shown.Style = "dim-label";
+            if (node.failed || node.kind === "more") shown.Style = "dim-label";
             row.Add(shown);
         }
+
+        if (!open) return;
+
+        const inside = this.children.get(node.path);
+        if (!inside) return;           /* not answered yet, or not here */
+
+        for (const item of inside.items || [])
+            this.addValue({ kind: "child", name: item.Name, value: item.Value,
+                            path: childPath(node.path, item.Name),
+                            failed: !!item.Failed, openable: !!item.Children },
+                          depth + 1);
+        if (inside.more > 0)
+            this.addValue({ kind: "more", name: "",
+                            value: Locale.Text("… {0} more", inside.more) },
+                          depth + 1);
     }
 
     /*
-     * A row activated: a watch comes off the list, a value is changed.
+     * A row activated: a watch comes off the list, a value is changed, and a
+     * field opens or closes.
      *
-     * The two are told apart by where the row is, which is what makes one
-     * gesture do the right thing on both halves of a list that holds both.
+     * The three are told apart by what the row is, which is what makes one
+     * gesture do the right thing on a list that holds all of them.
      */
     activated(index) {
-        if (index < this.watches.length) {
-            this.unwatch(this.watches[index]);
+        const node = this.rows[index];
+        if (!node) return;
+
+        if (node.kind === "watch") {
+            this.unwatch(node.name);
             return;
         }
-
-        const item = (this.locals || [])[index - this.watches.length];
-        if (!item || !this.halted) return;
+        if (node.kind === "child") {
+            if (node.openable) this.toggleOpen(node.path);
+            return;
+        }
+        if (node.kind !== "local" || !this.halted) return;
 
         AskForm.prompt(Locale.Text("Change a value"),
-                       Locale.Text("{0} is", item.Name), item.Value,
-                       (text) => this.poke(item.Name, text));
+                       Locale.Text("{0} is", node.name), node.value,
+                       (text) => this.poke(node.name, text));
     }
 
     /* Selecting a frame of the stack goes to its line and asks for its values. */
@@ -662,7 +793,8 @@ export class Debugger {
      * whatever order the pipe delivered.
      */
     answered(msg) {
-        this.answers.set(msg.text, { value: msg.value, failed: !!msg.failed });
+        this.answers.set(msg.text, { value: msg.value, failed: !!msg.failed,
+                                     children: !!msg.children });
 
         if (this.watches.includes(msg.text)) {
             this.fillValues();

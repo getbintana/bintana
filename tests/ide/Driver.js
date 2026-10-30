@@ -15846,6 +15846,66 @@ function* p_debug(ide) {
     check("and with nothing running it refuses", ide.debugger_.runToCursor() === false);
     check("which the command's state agrees with", !ide.ActRunTo.Enabled);
 
+    /*
+     * --- the values tree ----------------------------------------------------
+     *
+     * The panel as the IDE draws it from what the runtime says: the lines below
+     * are the runtime's own replies, copied from a child stopped on a line --
+     * `tests/widgets` (`testDebuggerTree`) asserts that the runtime says them.
+     * With no child, an order is queued rather than written, which is what
+     * lets this read what would have been asked.
+     */
+    const dbg   = ide.debugger_;
+    const asked = () => (dbg.waiting || []).map((t) => JSON.parse(t))
+                                           .filter((c) => c.do === "expand")
+                                           .map((c) => c.text);
+    const LOCALS = '{"reply":"locals","frame":0,"items":[' +
+        '{"Name":"client","Value":"{ name: \\"Ana\\", address: {…} }","Argument":false,"Children":true},' +
+        '{"Name":"n","Value":"7","Argument":false,"Children":false}]}';
+
+    dbg.heard('{"event":"stopped","reason":"breakpoint","frames":[{"Name":"Main","File":"","Line":0,"Column":0}]}');
+    dbg.heard(LOCALS);
+    eq("a stop draws a row per value", ide.LocalList.Count, 2);
+    eq("an object is a row that opens", dbg.rows[0].openable, true);
+    eq("and a number one that does not", dbg.rows[1].openable, false);
+
+    dbg.toggleOpen("client");
+    eq("opening asks the runtime by the expression", asked().join(","), "client");
+    eq("...and draws nothing until it answers", ide.LocalList.Count, 2);
+
+    dbg.heard('{"reply":"expand","frame":0,"text":"client","items":[' +
+              '{"Name":"name","Value":"\\"Ana\\"","Children":false},' +
+              '{"Name":"first name","Value":"\\"A.\\"","Children":false},' +
+              '{"Name":"address","Value":"{ city: \\"Rosario\\" }","Children":true}],"more":3}');
+    eq("the answer is drawn under its owner", ide.LocalList.Count, 6);
+    eq("...a level in", dbg.rows.slice(1, 4).map((r) => r.kind).join(","), "child,child,child");
+    eq("a field is reached by a path of names", dbg.rows[3].path, "client.address");
+    eq("...quoted where the name is not an identifier", dbg.rows[2].path, 'client["first name"]');
+    eq("and what was not sent is counted", dbg.rows[4].kind, "more");
+    eq("...before the frame's next value", dbg.rows[5].name, "n");
+
+    dbg.activated(3);
+    check("activating a field that opens opens it", dbg.opened.has("client.address"));
+
+    dbg.waiting = [];
+    dbg.heard(LOCALS);
+    eq("the next stop asks again for every opened value",
+       asked().sort().join(","), "client,client.address");
+    eq("...since what was inside them was the last stop's", ide.LocalList.Count, 2);
+
+    dbg.toggleOpen("client");
+    dbg.heard('{"reply":"expand","frame":0,"text":"client","items":[],"more":0}');
+    check("a value closed stays closed", !dbg.opened.has("client"));
+    eq("...and an answer for it arriving late draws nothing", ide.LocalList.Count, 2);
+
+    /* What the phase after this one expects: no stop, nothing open, nothing
+     * queued for a child that has not started. */
+    dbg.stopped = null;
+    dbg.opened.clear();
+    dbg.waiting = null;
+    dbg.fill();
+    ide.refresh();
+
     /* --- back to what the phase after this one expects ----------------------- */
     /* The caret went back to the top when the tab reopened, and F9 acts where
      * the caret is -- without this it would *add* a second one on line 1. */

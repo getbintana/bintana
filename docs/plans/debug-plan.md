@@ -218,13 +218,18 @@ From the IDE, on stdin:
 {"do":"continue"}  {"do":"pause"}                     ← built
 {"do":"step","kind":"over"|"into"|"out"}              ← built
 {"do":"locals","frame":0}                             ← built
-   → {"reply":"locals","frame":0,"items":[{"Name":"n","Value":"3","Argument":true}, …]}
+   → {"reply":"locals","frame":0,"items":[{"Name":"n","Value":"3","Argument":true,
+      "Children":false}, …]}
+{"do":"expand","frame":0,"text":"client.address"}     ← built (the values tree)
+   → {"reply":"expand","frame":0,"text":…,"items":[{"Name":"city",
+      "Value":"\"Rosario\"","Children":false}, …],"more":0}
 
 {"do":"break", … ,"when":"n > 3"}                      ← built
 {"do":"break", … ,"log":"\"n=\" + n"}                  ← built (a logpoint: records
                                                         and carries on)
 {"do":"eval","frame":0,"text":"this.Ok.Text"}         ← built
-   → {"reply":"eval","frame":0,"text":…,"value":"\"ok\"","failed":false}
+   → {"reply":"eval","frame":0,"text":…,"value":"\"ok\"","failed":false,
+      "children":false}
 {"do":"set","frame":0,"name":"n","text":"4"}           ← built (the value is an
                                                         expression, not a literal)
 {"do":"stopOnThrow","value":true}                      ← built
@@ -236,8 +241,16 @@ From the IDE, on stdin:
 **A value comes back as text the child rendered**, and an object is rendered by
 what is *in* it — one level, a handful of fields — because `[object Object]` is
 what a debugger shows when it has given up, and the question at a breakpoint is
-usually *what is in this thing*. Past one level is what the immediate box is
-for: `cliente.notas` names the field rather than hunting for it.
+usually *what is in this thing*. **Past one level is the tree**: a value that
+has fields says so (`Children`), and `expand` answers them, each rendered the
+same way and each saying whether it opens in turn -- up to 200, with the rest
+counted in `more`. It is addressed by the **expression** that reaches the
+value (`client.address`, `tags[2]`, `row["first name"]`) and evaluated where
+the frame stands, exactly like a watch, so the child holds nothing between two
+questions and nothing can survive a resume -- the rule the DAP section below
+sets for `variables`. The IDE keeps what is open by those expressions and asks
+again at each stop. A field is read with the hook held off, since a getter is
+JavaScript, and one that throws answers its message with `Failed`.
 
 **An expression that throws answers its message** and leaves no exception
 behind. A debugger asking a question must never leave one for the program to
@@ -254,7 +267,7 @@ Two rules that keep it honest. **The frames are the child's own numbering**, so
 `frame` means the same thing in every message about one stop. And **a value is
 sent as text the child rendered**, never as JSON of the object: a live object is
 not serialisable in general, and a debugger that could not show one would be
-useless exactly where it matters. Expanding is a second `locals` against a path.
+useless exactly where it matters. Expanding is `expand` against a path.
 
 ## Staging
 
@@ -347,17 +360,31 @@ the start of the function every time; and per new line `on_step` asked the
 channel with a `poll`, walked the whole stack for its depth and made a string of
 the file name, for a line that could not stop. Now:
 
-- the frame keeps the pcs of the pc2line entry it was last found in
-  (`debug_pc_lo`/`debug_pc_hi`, beside `debug_line`), and the table is decoded
-  only when the pc leaves it -- the fourth commit of patch 4;
+- the frame keeps the pcs of the line it was last found on
+  (`debug_pc_lo`/`debug_pc_hi`, beside `debug_line`) -- the whole run of
+  pc2line entries on that line, since QuickJS writes one per expression for
+  the column -- and the table is decoded only when the pc leaves it;
+- **the trampoline makes that comparison itself** and calls the handler only
+  outside the range, so inside a line no C call is made at all;
 - the channel is asked at most every 5 ms (`POLL_EVERY_US`), not at every line;
 - the depth and the file are worked out only when the line can stop: a step
   is in progress, the channel is due, or something is armed on that line
   number in some file (`break_on_line`).
 
-**428 -> 101 ms** for the three-line loop, and **940 -> 474 ms** for one written
-on a single line, against 13 and 62 ms with no debugger. What is left is the C
-call per opcode, which is what a per-opcode hook is.
+The first two are the fourth to sixth commits of patch 4, the last two
+`bta_debug.c`. Each step, the same two loops (`RelWithDebInfo`, one pinned core):
+
+| | three-line loop | one-line loop (arithmetic / call / properties) |
+|---|---|---|
+| no debugger | 13 ms | 60 / 96 / 95 ms |
+| attached, before | 428 | 940 / 1673 / 1320 |
+| one entry kept per frame, the channel every 5 ms | 101 | 474 / 634 / 621 |
+| the trampoline compares the range | 78 | 372 / 502 / 478 |
+| the range is the whole line | **69** | **110 / 219 / 152** |
+
+**What is left** is one handler call per new line, which decodes the
+function's table from its start (`bta_line_range`), and `on_step`'s own work
+for a line: the clock, and `break_on_line`. Two to five times the plain run.
 
 ## What it costs outside the code
 

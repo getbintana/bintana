@@ -617,6 +617,8 @@ const TESTS = [
     "DebuggerOrders",
     /* Async: the debugger in a module, plain and brought in by an import. */
     "ModulesDebugger",
+    /* Async: the values tree, opened field by field. */
+    "DebuggerTree",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -28199,6 +28201,108 @@ class Form1 extends Form {
 
         check("Write answers whether there was a child to write to",
               typeof job.Write === "function");
+    }
+
+    /*
+     * The values tree: what is inside a value, one level at a time, asked by
+     * the expression that reaches it (`expand`). Against a real child stopped
+     * on a line, since what a field holds is the engine's answer and not ours:
+     * a nested object opens again, an array opens onto its first 200 with the
+     * rest counted, a name that is not an identifier comes back as it is, a
+     * getter that throws answers its message, and an expression that means
+     * nothing here says so rather than answering empty. A watch that holds an
+     * object says it opens, the way a local does.
+     */
+    testDebuggerTree() {
+        const proj = File.Join(SCRATCH, "dbg-tree");
+
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "dbgtree", main: "Main", sources: ["Main.js"] });
+        File.Save(File.Join(proj, "Main.js"),
+                  'function Main() {\n' +
+                  '    const client = { name: "Ana", "first name": "A.",\n' +
+                  '                     address: { city: "Rosario", zip: 2000 },\n' +
+                  '                     get boom() { throw new Error("no balance"); } };\n' +
+                  '    const big = [];\n' +
+                  '    for (let i = 0; i < 250; i++) big.push(i);\n' +
+                  '    const n = 7;\n' +
+                  '    print(`answer ${client.name}${big.length}${n}`);\n' +
+                  '    Application.Quit(0);\n' +
+                  '}\n');
+
+        const out     = [];
+        const opened  = {};
+        let   locals  = null;
+        let   watched = null;
+
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+
+                    if (kind === "ready") {
+                        job.Write(JSON.stringify({ do: "break", file: "Main.js", line: 8, id: 1 }));
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    } else if (kind === "stopped") {
+                        job.Write(JSON.stringify({ do: "locals", frame: 0 }));
+                    } else if (kind === "locals") {
+                        locals = msg.items;
+                        for (const text of ["client", "client.address", "big", "nosuch"])
+                            job.Write(JSON.stringify({ do: "expand", frame: 0, text }));
+                        job.Write(JSON.stringify({ do: "eval", frame: 0, text: "client" }));
+                    } else if (kind === "expand") {
+                        opened[msg.text] = msg;
+                    } else if (kind === "eval") {
+                        watched = msg;
+                        job.Write(JSON.stringify({ do: "continue" }));
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                waiting--;
+                eq("a program whose values were opened finishes", code, 0);
+                check("...and prints its answer", out.join("").includes("answer Ana2507"),
+                      JSON.stringify(out));
+
+                const local = (name) => (locals || []).find((i) => i.Name === name) || {};
+                eq("an object says it opens", local("client").Children, true);
+                eq("and a number says it does not", local("n").Children, false);
+
+                const client = opened.client || {};
+                const field  = (name) => (client.items || []).find((i) => i.Name === name) || {};
+                eq("an object opens onto its own fields",
+                   (client.items || []).map((i) => i.Name).join(","),
+                   "name,first name,address,boom");
+                eq("each rendered the way a watch is", field("name").Value, '"Ana"');
+                eq("a name that is not an identifier comes back as it is",
+                   field("first name").Value, '"A."');
+                eq("a field that is an object opens again", field("address").Children, true);
+                eq("a getter that throws answers its message",
+                   field("boom").Value, "Error: no balance");
+                eq("...marked as failed", field("boom").Failed, true);
+
+                const address = opened["client.address"] || {};
+                eq("the field opens by its path",
+                   (address.items || []).map((i) => `${i.Name}=${i.Value}`).join(","),
+                   'city="Rosario",zip=2000');
+
+                const big = opened.big || {};
+                eq("an array opens onto its first 200", (big.items || []).length, 200);
+                eq("...named by index", big.items && big.items[199].Name, "199");
+                eq("...and counts the rest", big.more, 50);
+
+                const nosuch = opened.nosuch || {};
+                eq("an expression that means nothing here fails", nosuch.failed, true);
+                check("...with the engine's message",
+                      /nosuch is not defined/.test(nosuch.value || ""), nosuch.value);
+
+                eq("a watch that holds an object says it opens", watched && watched.children, true);
+            });
     }
 
     /*
