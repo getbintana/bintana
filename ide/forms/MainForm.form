@@ -562,6 +562,10 @@
           "action": "ActStop"
         },
         {
+          "name": "MnuProfile",
+          "text": "Run with profiling"
+        },
+        {
           "name": "MnuRunTests",
           "text": "Run tests",
           "shortcut": "<Control><Shift>t"
@@ -2201,7 +2205,7 @@
                                       "properties": {
                                         "Expand": true,
                                         "HExpand": true,
-                                        "Tooltip": "The watches and then the chosen frame's own values. Arguments are in bold; double click one to change it",
+                                        "Tooltip": "The watches and then the chosen frame's own values. Arguments are in bold; double click one to change it, and a field to stop when it changes",
                                         "VExpand": true
                                       }
                                     }

@@ -679,6 +679,10 @@ msgstr "Pantalla completa"
 msgid "_Project"
 msgstr "_Proyecto"
 
+#: forms/MainForm.form: menu MnuProfile
+msgid "Run with profiling"
+msgstr "Ejecutar con perfilado"
+
 #: forms/MainForm.form: menu MnuRunTests
 msgid "Run tests"
 msgstr "Ejecutar tests"
@@ -1245,10 +1249,11 @@ msgstr "Valores"
 #: forms/MainForm.form: LocalList.Tooltip
 msgid ""
 "The watches and then the chosen frame's own values. Arguments are in bold; "
-"double click one to change it"
+"double click one to change it, and a field to stop when it changes"
 msgstr ""
 "Las vigías y después los valores propios del cuadro elegido. Los argumentos "
-"van en negrita; doble clic en uno para cambiarlo"
+"van en negrita; doble clic en uno para cambiarlo, y en un campo para parar "
+"cuando cambie"
 
 #: forms/MainForm.form: TxtImmediate.Placeholder
 msgid "An expression, in the chosen frame"
@@ -2672,6 +2677,18 @@ msgstr "Poné el cursor sobre un punto de corte primero."
 msgid "{0}:{1} cannot stop; the breakpoint moved to line {2}."
 msgstr "{0}:{1} no puede parar; el punto de corte se movió a la línea {2}."
 
+#: modules/Debugger.js:515
+msgid "{0} changed: {1} -> {2}"
+msgstr "{0} cambió: {1} -> {2}"
+
+#: modules/Debugger.js:623
+msgid "Stops when {0} changes."
+msgstr "Se detiene cuando {0} cambie."
+
+#: modules/Debugger.js:628
+msgid "{0} cannot be watched: {1}"
+msgstr "No se puede vigilar {0}: {1}"
+
 #: modules/Debugger.js:641
 msgid "Open"
 msgstr "Abrir"
@@ -3224,6 +3241,14 @@ msgstr[1] ""
 #: modules/Recovery.js:152
 msgid "{0} is not a number of seconds."
 msgstr "{0} no es un número de segundos."
+
+#: modules/Runner.js:245
+msgid "Profile written to {0}"
+msgstr "Perfil escrito en {0}"
+
+#: modules/Runner.js:248
+msgid "Open it in Sysprof to read it."
+msgstr "Abrilo en Sysprof para leerlo."
 
 #: modules/Runner.js:397 modules/Runner.js:401
 msgid "the run ended badly"

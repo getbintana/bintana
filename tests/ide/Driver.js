@@ -15898,10 +15898,42 @@ function* p_debug(ide) {
     check("a value closed stays closed", !dbg.opened.has("client"));
     eq("...and an answer for it arriving late draws nothing", ide.LocalList.Count, 2);
 
+    /* A field with nothing in it, activated, is watched for a change: the
+     * runtime is asked by the owner's path and the field's name, and a
+     * refusal takes the mark off again. `testDebuggerWatch` in tests/widgets
+     * is the runtime's half. */
+    dbg.toggleOpen("client");
+    dbg.heard('{"reply":"expand","frame":0,"text":"client","items":[' +
+              '{"Name":"name","Value":"\\"Ana\\"","Children":false}],"more":0}');
+    const fieldRow = dbg.rows.findIndex((r) => r.path === "client.name");
+    dbg.waiting = [];
+    dbg.activated(fieldRow);
+    const armedCmd = (dbg.waiting || []).map((t) => JSON.parse(t)).find((c) => c.do === "watch");
+    eq("activating a field watches it, by owner and name",
+       armedCmd && `${armedCmd.owner}|${armedCmd.name}|${armedCmd.frame}`, "client|name|0");
+    check("...and marks it", dbg.fieldWatches.has("client.name"));
+    check("...on its row", ide.LocalList.Count === 3 && dbg.rows[fieldRow].path === "client.name");
+
+    dbg.heard(JSON.stringify({ reply: "watch", id: armedCmd ? armedCmd.id : 0, text: "client.name",
+                               armed: false, why: "it is a getter, not a value" }));
+    check("a refusal takes the mark off", !dbg.fieldWatches.has("client.name"));
+
+    dbg.activated(fieldRow);
+    dbg.waiting = [];
+    dbg.activated(fieldRow);
+    const offCmd = (dbg.waiting || []).map((t) => JSON.parse(t)).find((c) => c.do === "unwatch");
+    check("activating it again takes the watch off", offCmd !== undefined && !dbg.fieldWatches.has("client.name"));
+
+    dbg.heard('{"event":"stopped","reason":"watch","id":1,"text":"client.name","old":"\\"Ana\\"",' +
+              '"new":"\\"Bea\\"","frames":[{"Name":"rename","File":"","Line":0,"Column":0}]}');
+    eq("a stop on a change is a stop like any other", dbg.stopped && dbg.stopped[0].Name, "rename");
+    dbg.toggleOpen("client");
+
     /* What the phase after this one expects: no stop, nothing open, nothing
      * queued for a child that has not started. */
     dbg.stopped = null;
     dbg.opened.clear();
+    dbg.fieldWatches.clear();
     dbg.waiting = null;
     dbg.fill();
     ide.refresh();
@@ -16185,8 +16217,49 @@ function* p_running(ide) {
                   JSON.stringify(out));
             eq("Run re-enables when the child exits", ide.BtnRun.Enabled, true);
             eq("Stop disables when the child exits", ide.BtnStop.Enabled, false);
-            report();
+            profiled();
         });
+    };
+
+    /*
+     * And once more with a profile: the same plan with `--profile` added, so
+     * the same output reaches the log, and the capture is written and named.
+     * Sysprof is not opened -- it is a window -- and a build without
+     * sysprof-capture refuses the flag, which is then what the log must say.
+     */
+    const profiled = () => {
+        let again = "";
+        ide.runner.openCaptures = false;
+        ide.log = (text) => {
+            again += text;
+            log(text);
+            if (!text.includes("[finished")) return;
+
+            Timer.After(0, () => {
+                if (again.includes("sysprof-capture")) {
+                    print("  (the profiled half is skipped: this build has no sysprof-capture)");
+                    check("the refusal reaches the log", again.includes("--profile"), again);
+                } else {
+                    const capture = ide.runner.lastCapture;
+                    check("a profiled run is the same run", again.includes("hello from tabs"), again);
+                    check("...started with --profile", again.includes("--profile"), again);
+                    check("its capture is written", capture !== null && File.Exists(capture),
+                          `${capture}`);
+                    check("...outside the project", capture !== null &&
+                          !File.Within(capture, ide.project), `${capture}`);
+                    check("...and named in the log", capture !== null && again.includes(capture),
+                          again);
+                    check("...as a Sysprof capture", capture !== null &&
+                          File.Load(capture).includes("Startup"), `${capture}`);
+                    if (capture) File.Delete(capture);
+                }
+                eq("Run with profiling re-enables when the child exits",
+                   ide.MnuProfile.Enabled, true);
+                report();
+            });
+        };
+        ide.MnuProfile_Click();
+        eq("Run with profiling disables while running", ide.MnuProfile.Enabled, false);
     };
 
     ide.ActRun.Execute();

@@ -1215,6 +1215,7 @@ export class MainForm extends Form {
         this.ActSaveAll.Enabled = this.hasDirtyTabs();
         this.ActReload.Enabled = open;
         this.ActRun.Enabled    = open && !this.running;
+        this.MnuProfile.Enabled = open && !this.running;
         this.ActCheck.Enabled  = open;
         /* A command: the toolbar's Stop, the Run menu's and the debug bar's
          * follow this one assignment. */
@@ -1484,6 +1485,7 @@ export class MainForm extends Form {
 
     MnuNewTest_Click()  { this.tests.newTest(); }
     MnuRunTests_Click() { this.tests.run(); }
+    MnuProfile_Click()  { this.runner.start(true); }
 
     /* Both delegate to `Runner`, and these two are here because `tests/ide`
      * drives them by name -- as good a reason as a handler's. */

@@ -19,6 +19,10 @@ and GTK's frame marks besides. A **capture file**
 (`sysprof_capture_writer_add_mark(writer, time, cpu, pid, duration, group,
 name, message)` -- `duration` in a different place and unsigned) is
 `--profile <file>`: no Sysprof installed, opened in the application later.
+The IDE's *Project → Run with profiling* is that road (`Runner.start(true)`):
+the capture goes to `Environment.TempDirectory`, the log names it, and it opens
+in `sysprof` when there is one -- `tests/ide`'s `p_running` runs it with the
+opening turned off (`openCaptures`), since Sysprof is a window.
 `SYSPROF_TRACE_FD`, which is what `sysprof-cli --use-trace-fd` sets, takes the
 writer road too, the way an app calling `sysprof_capture_writer_new_from_env`
 is expected to.

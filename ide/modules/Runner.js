@@ -35,6 +35,12 @@ export class Runner {
         /* Lines waiting for the end of the turn: see `log`. */
         this.pending  = [];
         this.flushJob = null;
+        /* The Sysprof capture this run is writing, while it is a profiled one;
+         * the last one written; and whether a capture opens in Sysprof when the
+         * run ends -- the suite turns that off, since it would open a window. */
+        this.capture      = null;
+        this.lastCapture  = null;
+        this.openCaptures = true;
     }
 
     /*
@@ -63,7 +69,14 @@ export class Runner {
         this.ide.log(batch);
     }
 
-    start() {
+    /*
+     * Run, or run with a profile: the same plan with `--profile <file>` added,
+     * so the run writes a Sysprof capture of the runtime's own marks -- each
+     * event dispatched, each form built, each `Profile.Begin`/`End` the program
+     * makes. Nothing else changes: a profiled run is a run, and a second road
+     * to start a project would be a second answer to how it is started.
+     */
+    start(profile = false) {
         const ide = this.ide;
         if (!ide.project) return;
 
@@ -78,8 +91,16 @@ export class Runner {
          * the program on screen now. */
         ide.problems.clear("run");
         const plan = ide.launch.plan();
+        /* In the temporary directory and not the project: a capture is a
+         * measurement of one run, not a file of the program. */
+        this.capture = profile
+            ? File.Join(Environment.TempDirectory,
+                        `${File.Name(ide.project)}-${Date.now()}.syscap`)
+            : null;
+        const options = this.capture ? [...this.options(), "--profile", this.capture]
+                                     : this.options();
 
-        ide.log(`> bintana ${[...this.options(), ide.project,
+        ide.log(`> bintana ${[...options, ide.project,
                              ...plan.arguments].join(" ")}\n`);
         ide.running = true;
         ide.refresh();
@@ -96,7 +117,7 @@ export class Runner {
          * environment. A project that declares none plans an empty run, which
          * is exactly what this line was before there were any.
          */
-        this.job = Exec([Application.Executable, ...this.options(), ide.project,
+        this.job = Exec([Application.Executable, ...options, ide.project,
                          ...plan.arguments],
                         plan.options,
                         (line) => this.log(`${line}\n`),
@@ -202,7 +223,33 @@ export class Runner {
         ide.running = false;
         ide.refresh();
 
+        if (this.capture) this.captured(this.capture);
+        this.capture = null;
+
         if (code !== 0) this.findErrorLine();
+    }
+
+    /*
+     * A profiled run is over: say where the capture is and open it.
+     *
+     * No capture is not an error to report here: a build without
+     * sysprof-capture refuses `--profile` with a sentence of its own, and that
+     * sentence is already in the log. Sysprof is what reads the file -- the
+     * format is its own -- so with none installed, the path is the answer.
+     */
+    captured(path) {
+        const ide = this.ide;
+
+        if (!File.Exists(path)) return;
+        this.lastCapture = path;
+        ide.log(`${Locale.Text("Profile written to {0}", path)}\n`);
+
+        if (!Application.HasCommand("sysprof")) {
+            ide.log(`${Locale.Text("Open it in Sysprof to read it.")}\n`);
+            return;
+        }
+        if (this.openCaptures)
+            Exec(["sysprof", path], {}, () => {}, () => {});
     }
 
     /*
