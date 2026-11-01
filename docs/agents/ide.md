@@ -1188,3 +1188,11 @@ is the sentence at the pointer. The project pass's `.form` rows have `line` 0
 and no column, so they keep their place in the Problems list and draw nothing in
 an editor. `Diagnostics("Warning")` is what `tests/ide` asserts, which is the
 range GTK really holds and not the call having been made.
+
+**The save-time syntax error is the same pair in `Error`.**
+`TabSet.checkSyntax` clears both `Marks("Error")` and `Diagnostics("Error")` and
+adds both from `Application.CheckSource`; the span is the word at the column
+the parser named, or one character when it stopped on punctuation or at the end
+of the line -- the `)` it expected. `Live` writes `Warning`, so a line carrying
+a syntax error and a name complaint keeps both, which is the same rule the
+gutter has carried since the mark existed.

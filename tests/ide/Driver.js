@@ -14677,6 +14677,17 @@ function* p_search(ide) {
     check("with what it said", marks[0].Text.length > 0, JSON.stringify(marks[0]));
     eq("and the gutter is showing", ide.Editor.ShowMarks, true);
 
+    /* The gutter says which line; the underline says which word, and the
+     * sentence is the tooltip -- `P4`'s diagnostics, on the one finding that
+     * did not have them yet. */
+    const under = ide.Editor.Diagnostics("Error");
+    eq("and the word itself is underlined", under.length, 1);
+    eq("...on the line the compiler stopped at", under[0].Line, marks[0].Line);
+    check("...over a range", under[0].Length >= 1, JSON.stringify(under[0]));
+    check("...with the same sentence", under[0].Text === marks[0].Text);
+    check("...at the column the parser named", under[0].Column > 0,
+          JSON.stringify(under[0]));
+
     /* The mark is for the file one is looking at; the panel is for the file one
      * is not.  Same fact, two places, and the panel is the one that survives
      * closing the tab. */
@@ -14694,6 +14705,7 @@ function* p_search(ide) {
     ide.Editor.Text = NEEDLE;
     ide.save();
     eq("fixing it and saving takes the mark off", ide.Editor.Marks("Error").length, 0);
+    eq("...and the underline with it", ide.Editor.Diagnostics("Error").length, 0);
     eq("...and takes the row out of the panel with it",
        ide.problems.all.filter((x) => x.file === "Needle.js").length, 0);
 

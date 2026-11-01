@@ -1082,8 +1082,11 @@ export class TabSet {
         if (!editor || !File.IsExtension(name, "js")) return true;
 
         /* Only ours: a bookmark or a mark somebody else put there is not this
-         * function's to clear. */
+         * function's to clear. The underline follows the mark: the gutter says
+         * which line, the `Diagnostic` says which word and carries the same
+         * sentence to the pointer, exactly as `Live` does for a name. */
         editor.ClearMarks("Error");
+        editor.ClearDiagnostics("Error");
 
         const bad = Application.CheckSource(editor.Text);
 
@@ -1096,9 +1099,31 @@ export class TabSet {
 
         if (!bad) return true;
 
-        if (bad.Line > 0) editor.Mark(bad.Line, "Error", bad.Message);
+        if (bad.Line > 0) {
+            const column = bad.Column > 0 ? bad.Column : 1;
+            const span   = this.errorSpan(editor.Text, bad.Line, column);
+
+            editor.Mark(bad.Line, "Error", bad.Message);
+            editor.Diagnostic(bad.Line, column, span, "Error", bad.Message);
+        }
         this.ide.log(`${name}:${bad.Line}: ${bad.Message}\n`);
         return false;
+    }
+
+    /*
+     * How much to underline: `CheckSource` gives the point where the parser
+     * stopped, not how big the wrong thing is. The word at that point, or one
+     * character when it stopped on punctuation or at the end of the line --
+     * which is the `)` it expected and did not find.
+     */
+    errorSpan(text, line, column) {
+        const source = text.split("\n")[line - 1] || "";
+        const start  = Math.max(0, column - 1);
+
+        if (start >= source.length) return 1;
+
+        const word = source.slice(start).match(/^[A-Za-z0-9_$]+/);
+        return word ? word[0].length : 1;
     }
 
     /* --- what happens to a file while it is open --------------------------
