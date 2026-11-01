@@ -379,6 +379,9 @@ export class MainForm extends Form {
 
         this.dressTabActions();
         this.dressViews();
+        /* The Problems table's one action: a row with a repair offers it on a
+         * secondary click. Built here, when the table is in the form's tree. */
+        this.problems.installMenu();
         /* The project panel, folded again if that is how it was left.  The
          * same moment as the window's size, so the window is mapped with the
          * strip already there; the width it comes back to is the one written
@@ -1497,6 +1500,7 @@ export class MainForm extends Form {
      * read it must not open a file per row, which is the same mistake `Cursor`
      * would have been above. */
     ProblemView_Activate() { this.problems.activated(); }
+    ProblemView_Select()   { this.problems.selectionChanged(); }
     TestView_Activate()    { this.tests.activated(); }
 
     MnuNewTest_Click()  { this.tests.newTest(); }

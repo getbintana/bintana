@@ -12949,6 +12949,54 @@ function* p_problems(ide) {
     panel.clear("p4");
     eq("and the panel is left as it was found", panel.all.length, before);
 
+    /* --- a row with a repair ------------------------------------------------
+     *
+     * The data was already there since the accessibility work: `Check`'s rows
+     * carry `fix`, and `bintana check --fix` applies it. The panel dropped it.
+     * This is the consumer -- a context menu with one item, enabled only when
+     * the selected row has a repair, and the same `Check.applyFix` the shell
+     * runs, so there is no second idea of what the repair is.
+     */
+    const fixDir  = File.Join(TMP, "fixtest");
+    const fixPath = File.Join(fixDir, "Fix.form");
+    if (File.IsDir(fixDir)) Directory.DeleteTree(fixDir);
+    Directory.Make(fixDir);
+    File.SaveJson(fixPath, {
+        format: "bintana-form/1", class: "Fix",
+        children: [
+            { type: "Label", name: "Lbl",
+              properties: { X: 0, Y: 0, Width: 80, Text: "Name" } },
+            { type: "TextBox", name: "Txt",
+              properties: { X: 0, Y: 24, Width: 120 } },
+        ],
+    });
+
+    panel.report("pfix", [{
+        kind: "Warning", file: "fixtest/Fix.form", line: 0,
+        text: "a caption names nothing",
+        fix: { label: "Lbl", field: "Txt" },
+    }]);
+    const fixAt = panel.rows.findIndex((x) => x.text === "a caption names nothing");
+    ide.ProblemView.Select(fixAt);
+    check("a row with a repair enables Fix", ide.MnuProblemFix.Enabled);
+
+    const wasStart = ide.checkJob.start;
+    let restarts = 0;
+    ide.checkJob.start = () => { restarts++; };
+
+    ide.MnuProblemFix.Click();
+    const repaired = File.LoadJson(fixPath);
+    eq("the item writes Label.For", repaired.children[0].properties.For, "Txt");
+    eq("...and asks for the check again", restarts, 1);
+
+    ide.MnuProblemFix.Click();
+    eq("...while a row already fixed does not run it again", restarts, 1);
+
+    ide.checkJob.start = wasStart;
+    panel.clear("pfix");
+    Directory.DeleteTree(fixDir);
+    eq("...and the panel is left as it was found", panel.all.length, before);
+
     /* --- the menu item that only brings the page up -------------------------- */
 
     /*

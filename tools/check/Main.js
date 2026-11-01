@@ -21,34 +21,6 @@ function usage() {
     print("usage: bintana check [--json] [--strict] [--components <file>] [--fix] <project-dir>");
 }
 
-/* The node with that name, at any depth. */
-function nodeNamed(nodes, name) {
-    for (const node of nodes || []) {
-        if (node.name === name) return node;
-        const deeper = nodeNamed(node.children, name);
-        if (deeper) return deeper;
-    }
-    return null;
-}
-
-/*
- * The one repair a machine can make without inventing prose: a caption that
- * sits immediately above a field, and no `For` on either side. Answers whether
- * the file changed.
- */
-function applyLabelFor(root, finding) {
-    const form  = File.LoadJson(File.Join(root, finding.file));
-    const label = nodeNamed(form.children, finding.fix.label);
-    if (!label) return false;
-
-    label.properties = label.properties || {};
-    if (label.properties.For) return false;
-    label.properties.For = finding.fix.field;
-
-    File.SaveJson(File.Join(root, finding.file), form);
-    return true;
-}
-
 function main() {
     let json = false, strict = false, fix = false, target = null, components = null;
     let bad = null;
@@ -127,19 +99,20 @@ function main() {
         names,
         problems: { report() {}, clear() {} },
     };
-    let found = new Check(host).run();
-    let fixed = 0;
+    const check = new Check(host);
+    let   found = check.run();
+    let   fixed = 0;
 
     if (fix) {
         for (const f of found) {
             if (!f.fix || !f.file) continue;
             try {
-                if (applyLabelFor(root, f)) fixed++;
+                if (check.applyFix(f)) fixed++;
             } catch (e) {
                 print(`bintana check: could not fix ${f.file}: ${e.message}`);
             }
         }
-        if (fixed) found = new Check(host).run();
+        if (fixed) found = check.run();
     }
 
     if (fix) {

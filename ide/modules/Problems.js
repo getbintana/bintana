@@ -68,6 +68,10 @@ export class Problems {
          * widget: `Notebook.Tabs` replaces every label with a plain one, which
          * would take the Terminal's with it. */
         this.tab = null;
+
+        /* The context menu is built once, from `MainForm.Form_Open`, when the
+         * table is certainly in the form's tree. */
+        this.menuInstalled = false;
     }
 
     /*
@@ -187,6 +191,9 @@ export class Problems {
         this.drawn = signature;
         this.build(all);
         this.say(all.length);
+        /* A rebuild replaces the rows the selection pointed into, so the item
+         * is told what the table now holds rather than what it held. */
+        this.selectionChanged();
     }
 
     build(all) {
@@ -275,5 +282,72 @@ export class Problems {
         if (!p || !p.file) return false;
 
         return this.ide.runner.open(p.file, p.line || 1);
+    }
+
+    /* --- the one repair ---------------------------------------------------- */
+
+    /*
+     * A row whose finding carries a `fix` offers it on a secondary click.
+     *
+     * **A context menu and not a fourth column**: the table's three columns
+     * are the finding, and a button in every row is a button that does nothing
+     * in most of them. The item is built once, on the IDE's own form, and
+     * disabled until the selected row has a repair; the handler is written
+     * here the way `MenuBar` writes the preview's, because a menu item is not
+     * a widget and has no form of its own.
+     */
+    installMenu() {
+        const table = this.ide.ProblemView;
+        if (!table || this.menuInstalled) return;
+        this.menuInstalled = true;
+
+        table.Menu = [{ text: Locale.Text("Fix"), name: "MnuProblemFix",
+                        enabled: false }];
+
+        this.ide.MnuProblemFix_Click = () => this.fixSelected();
+    }
+
+    /* The item follows the selection: a row with no repair cannot be chosen,
+     * which is how the menu says what it is about before it is opened. */
+    selectionChanged() {
+        const item = this.ide.MnuProblemFix;
+        if (item) item.Enabled = this.canFix();
+    }
+
+    canFix() {
+        const p = this.rows[this.ide.ProblemView.Index];
+        return !!(p && p.fix && p.file);
+    }
+
+    /*
+     * The repair, from the row the reader is on.
+     *
+     * `Check.applyFix` is the same method `bintana check --fix` calls; nothing
+     * about the repair is re-decided here. A form open with unsaved edits is
+     * refused rather than overwritten: the pass reads the disk, so a fix now
+     * would repair the old bytes and the tab would write them back.
+     */
+    fixSelected() {
+        const p = this.rows[this.ide.ProblemView.Index];
+        if (!p || !p.fix || !p.file) return false;
+
+        const tab = this.ide.openTabs.get(p.file);
+        if (tab && tab.dirty) {
+            this.ide.log(Locale.Text(
+                "Fix: {0} has unsaved changes; save it first.\n", p.file));
+            return false;
+        }
+
+        let changed = false;
+        try { changed = this.ide.check.applyFix(p); }
+        catch (e) {
+            this.ide.log(Locale.Text("Fix: {0}: {1}\n", p.file, e.message));
+        }
+        if (!changed) return false;
+
+        /* The tab, if the form is open, and the pass that said it was wrong. */
+        if (tab) this.ide.tabs.reloadFromDisk(p.file);
+        this.ide.checkJob.start();
+        return true;
     }
 }

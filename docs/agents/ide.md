@@ -1143,6 +1143,21 @@ invented problem. The loader now refuses the same shapes with a sentence, so
 the application does not start on a file the panel is already complaining
 about.
 
+**The one repair is the same bytes in the shell and in the panel.**
+`Check.applyFix(finding)` is the method `bintana check --fix` calls, and the
+Problems panel's secondary-click *Fix* calls the same one -- two ideas of what
+`Label.For` should be would drift on the first change. The row carries the
+`fix` the check wrote; `MnuProblemFix` is a context menu built on the form by
+`Problems.installMenu()` (a menu item is not a widget, so its handler is
+written with `this.ide.MnuProblemFix_Click`, as `MenuBar` does for a preview),
+and `Enabled` follows the selected row. A form open with unsaved edits is
+refused: the pass reads the disk, so fixing now would repair the old bytes and
+the tab would write them back. A successful repair reloads an open tab through
+`TabSet.reloadFromDisk` and starts `CheckJob` again; the panel is left showing
+the old row until the child answers, which is the same wait every check has.
+`tests/ide`'s `p_problems` drives it through `MnuProblemFix.Click()` against a
+scratch `.form`, so the handler, the menu item and the rewrite are one road.
+
 **A name a `.form` binds can come from four places, and one is a property.**
 `Names.tableOf` walks `children`, root `menus`, `actions` and each control's own
 `properties.Menu` -- a popup menu is a property of the button that shows it, so
