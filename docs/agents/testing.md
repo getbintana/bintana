@@ -154,6 +154,8 @@ JavaScript frame per level, and under the sanitizer a 513-deep file hit
 QuickJS's stack check before the guard, so the finding was *Maximum call stack
 size exceeded* and the test that looked for the sentence was red only there. A mutation is chosen by `case % MUTATORS.length` and the node
 by a deterministic generator, so a failure prints the case that reproduces it.
+The other half -- `Serialize` and the designer's `BuildChildren` -- is
+[`plans/form-fuzz-plan.md`](../plans/form-fuzz-plan.md), pending for 1.0.
 **And the same bet can hide in a test that waits, because what it waits *for*
 is not the only clock in it.** `testExecControlLate` starts a child whose
 grandchild writes to descriptor 3 a third of a second later, and asserts the
