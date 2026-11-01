@@ -106,10 +106,10 @@ const hasOwn      = objectProto.hasOwnProperty;
  *
  * **One sentence on both sides now.** It used to send a worker to the main
  * thread, because `bta_locale_init` was not called there and `Locale.Compare`
- * was missing along with the catalogue half that genuinely must not cross a
- * thread; `bta_locale_init_facts` gives a worker the half that needs no
- * catalogue (ISSUE-worker-locale-order), so pointing at `Locale.Compare` is
- * right wherever this is read.
+ * was missing along with the catalogue.  `bta_locale_init_for` gives a worker
+ * the whole `Locale`, its own catalogue pinned to the language at `Start`, so
+ * pointing at `Locale.Compare` -- or at `Locale.Text` -- is right wherever
+ * this is read.
  * ---------------------------------------------------------------------- */
 
 defineProperty(String.prototype, "localeCompare", {

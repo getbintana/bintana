@@ -113,15 +113,16 @@ class TaskWork extends Task {
                 timer:     typeof Timer,
                 settings:  typeof Settings,
                 exec:      typeof Exec,
-                /* **Locale is here, with the facts and not the catalogue**:
-                 * `Compare` and `Matches` come from the process locale, which
-                 * a thread inherits, while `Text`/`Plural` read a hash table
-                 * the main thread fills and reloads.  Ordering a long list in
-                 * a worker is the work it was started for. */
-                locale:    typeof Locale,
-                localeCmp: Locale.Compare("Ana", "Bruno"),
-                localeFold: Locale.Matches("Córdoba", "cordoba"),
-                localeText: typeof Locale.Text,
+                /* **Locale is here whole, built on this thread**: the facts
+                 * come from the process locale and the catalogue from the
+                 * `.po` files, with the language the application had at
+                 * `Start`.  Neither reads the main thread's table. */
+                locale:      typeof Locale,
+                localeCmp:   Locale.Compare("Ana", "Bruno"),
+                localeFold:  Locale.Matches("Córdoba", "cordoba"),
+                localeText:  typeof Locale.Text,
+                localeRead:  typeof Locale.Read,
+                localeWrite: typeof Locale.Write,
                 /* Refused on this side too -- rad.js is evaluated entire here,
                  * so the curation crosses with it -- and pointing at
                  * `Locale.Compare`, which is now the right answer on both
@@ -130,6 +131,45 @@ class TaskWork extends Task {
                     try { "a".localeCompare("b"); return "NOT REFUSED"; }
                     catch (e) { return e.message; }
                 })(),
+            };
+        }
+
+        /*
+         * The catalogue, on this thread.  `Run` starts after the main thread
+         * has already changed `Locale.Current` again, so what this answers is
+         * the language captured at `Start` -- the same bargain a form already
+         * has with the words it was built with.  `Read`/`Write` are the
+         * editor's pair and are pure file I/O; a worker gets them too.
+         */
+        if (msg.mode === "locale") {
+            const path    = File.Join(Application.Directory, "po", "zz.po");
+            const entries = Locale.Read(path);
+            const out     = File.Join(msg.dir, "task-locale.po");
+
+            Locale.Write(out, entries);
+            const back = Locale.Read(out).length;
+            File.Delete(out);
+
+            const text    = Locale.Text("Name:");
+            const plural  = Locale.Plural("{0} file", "{0} files", 2);
+            const context = Locale.Context("verb", "Open");
+            const started = Locale.Current;
+
+            /* The setter is this worker's alone: it reloads this thread's
+             * catalogue and must not move the main thread's. */
+            Locale.Current = "";
+            const bare = Locale.Text("Name:");
+
+            return {
+                text:      text,
+                plural:    plural,
+                context:   context,
+                current:   started,
+                bare:      bare,
+                bareNow:   Locale.Current,
+                available: Locale.Available.includes("zz"),
+                read:      entries.length,
+                writeBack: back,
             };
         }
 

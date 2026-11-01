@@ -185,6 +185,7 @@ struct BtaTaskJob {
     char      *app_name;
     char      *app_version;
     char      *app_dir;
+    char      *language;    /* the catalogue in use at Start, for this worker */
     GPtrArray *app_libs;    /* what `uses` resolved to, for the file's imports */
     char      *app_config;
     char      *app_exe;         /* "" where the platform will not say */
@@ -268,6 +269,7 @@ static void task_job_unref(gpointer data)
     g_free(job->app_name);
     g_free(job->app_version);
     g_free(job->app_dir);
+    g_free(job->language);
     if (job->app_libs)
         g_ptr_array_unref(job->app_libs);
     g_free(job->app_config);
@@ -1152,14 +1154,18 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      * bta_decimal.c's `Decimal` -- same nine places, same `Round`, same
      * thirds -- and not a lookalike that rounds differently.
      *
-     * Not here: bta_locale_init (the catalogue is a process-global hash table
-     * the main thread filled, and prose is assembled where it is shown --
-     * bta_locale_init_facts is the half of it a worker does get), the
-     * bta_painter_init / bta_metrics_init pair (cairo and pango, which is
-     * drawing), bta_http_init and bta_media_init (callbacks on the loop --
-     * the elements API included: a signal handler is the main loop's, and
-     * the thread that emitted it waits for it), and
-     * every GTK one.  Each is named in docs/plans/task-plan.md with the reason.
+     * Not here: the bta_painter_init / bta_metrics_init pair (cairo and pango,
+     * which is drawing), bta_http_init and bta_media_init (callbacks on the
+     * loop -- the elements API included: a signal handler is the main loop's,
+     * and the thread that emitted it waits for it), and every GTK one.  Each
+     * is named in docs/plans/task-plan.md with the reason.
+     *
+     * `Locale` is here whole, and not as the facts half it used to get: the
+     * catalogue is thread-local now (bta_locale.c), and the worker builds its
+     * own from the same `po/` directories with the language the application
+     * had at `Start`.  Nothing of it is shared with the main thread, so
+     * `Locale.Text` in here needs no lock and a language change on the main
+     * thread cannot move the words under a running task.
      */
     bta_bytes_init(ctx, global);
     bta_decimal_init(ctx, global);
@@ -1188,10 +1194,12 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     /* A header read and a dictionary: a report sizing a logo on a thread, which
      * is the caller a widget could not have served anyway. */
     bta_probe_init(ctx, global);
-    /* The locale facts and not the catalogue: a worker sorts ten thousand
-     * names with the desktop's collation, which is the work it was started
-     * for, and no `L` crosses a thread. */
-    bta_locale_init_facts(ctx, global);
+    /* The whole catalogue, built on this thread from the language the
+     * application had at `Start`.  A worker that sorts ten thousand names and
+     * one that writes a translated report both get what they asked for, and
+     * neither reads the main thread's table. */
+    bta_locale_init_for(ctx, global, job->app_dir, job->app_libs,
+                        job->language);
 
     /* The `.record` hooks, on the same terms as the main thread's: a worker
      * that constructs a Record whose shape lives in a file reads the project's
@@ -1441,6 +1449,14 @@ unwind:
     bta_modules_forget(ctx);
 
 done:
+    /*
+     * The worker's catalogue is C memory of this thread and not of the runtime:
+     * free it after the context, so a finalizer that somehow reaches `Locale`
+     * still finds it, and before the thread ends.  Every path through this
+     * function lands here, including the one where the runtime never started.
+     */
+    bta_locale_cleanup();
+
     /* Said before the idle source, so teardown's bounded wait ends as soon as
      * the runtime is gone rather than when the loop gets around to it. */
     g_mutex_lock(&task_lock);
@@ -1737,6 +1753,7 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
     job->file_text  = text;
     job->file_path  = path;
     job->msg_json   = msg_json;
+    job->language   = g_strdup(bta_locale_language());
     job->timeout_ms = timeout;
     if (app) {
         char *exe = bta_exe_path();

@@ -21942,6 +21942,21 @@ class Form1 extends Form {
             eq("a brace that is not a hole is text",
                Locale.Text("{a} y {0}", 1), "{a} y 1");
 
+            /*
+             * **A reload during formatting must not free the template under
+             * the call.** `bta_locale_format` converts the arguments before it
+             * walks the template, and a `toString` is JavaScript that can
+             * assign `Locale.Current`; the copy at the top of that function is
+             * what makes this call finish with the catalogue it started with.
+             * The reload still takes effect for the next call.
+             */
+            eq("a reload during formatting keeps the template it started with",
+               Locale.Text("{0} files, {1} unsaved",
+                           { toString() { Locale.Current = ""; return 3; } }, 1),
+               "1 sin guardar de 3");
+            eq("...and the reload took effect afterwards", Locale.Current, "");
+            Locale.Current = "zz";
+
             eq("a context picks its own entry",
                Locale.Context("verb", "Open"), "Abrir");
             eq("and the same word with no context picks the other",
@@ -27154,16 +27169,14 @@ class Form1 extends Form {
                 eq("a worker has no Timer", r.timer, "undefined");
                 eq("...no Settings", r.settings, "undefined");
                 eq("...no Exec", r.exec, "undefined");
-                /* The curation crosses with rad.js, and says the true thing on
-                 * this side: there is no `Locale` here to be sent to. */
-                /* The locale facts cross and the catalogue does not: a worker
-                 * can order ten thousand names, which is what it was started
-                 * for, and cannot translate one. */
-                eq("...and Locale, with the facts and not the catalogue",
-                   r.locale, "object");
+                /* The facts and the catalogue: the second is this worker's
+                 * own, built from the language captured at Start. */
+                eq("...and Locale", r.locale, "object");
                 eq("...which orders names", r.localeCmp, -1);
                 check("...and folds accents", r.localeFold === true);
-                eq("...and carries no catalogue verbs", r.localeText, "undefined");
+                eq("...with the catalogue too", r.localeText, "function");
+                eq("...and its editor pair", r.localeRead, "function");
+                eq("...which writes as well", r.localeWrite, "function");
                 check("localeCompare is refused in a worker too",
                       r.lc.includes("code units"), r.lc);
                 check("...naming Locale.Compare on this side too",
@@ -27171,6 +27184,38 @@ class Form1 extends Form {
                 next();
             };
             t.Start({ mode: "prelude" });
+        });
+
+        /*
+         * **The catalogue is the worker's own, pinned at Start.**
+         *
+         * The main thread changes `Locale.Current` immediately after `Start`;
+         * the task that is already running still translates with `zz`, and a
+         * task started now would not.  That is the difference between a
+         * snapshot and a shared table behind a lock: a lock would answer with
+         * whatever language the main thread had at the moment of the lookup.
+         */
+        steps.push(() => {
+            Directory.Make(SCRATCH);
+            Locale.Current = "zz";
+            const t = new TaskWork();
+
+            t.Error = (m) => { Locale.Current = ""; fail(`locale errored: ${m}`); };
+            t.Done  = (r) => {
+                eq("a worker translates", r.text, "NOMBRE:");
+                eq("...with the catalogue's own plural rule", r.plural, "2 archivoj");
+                eq("...and its context entry", r.context, "Abrir");
+                eq("...in the language it started with", r.current, "zz");
+                eq("...and its own Current can change", r.bare, "Name:");
+                eq("...without touching the main thread's", r.bareNow, "");
+                eq("...and lists the project's catalogues", r.available, true);
+                check("...and reads one as data", r.read > 10, String(r.read));
+                eq("...and writes it back unchanged", r.writeBack, r.read);
+                eq("the main thread kept its own catalogue", Locale.Current, "");
+                next();
+            };
+            t.Start({ mode: "locale", dir: SCRATCH });
+            Locale.Current = "";
         });
 
         /* Entropy, a keyed digest and a compressor have no callbacks and no list,

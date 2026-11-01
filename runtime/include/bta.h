@@ -1485,10 +1485,15 @@ void bta_grid_reflow(GtkWidget *slot);
 void bta_locale_init(JSContext *ctx, JSValue global, const char *project_dir,
                     GPtrArray *libs);
 
-/* The worker's half: `Number`, `Date`, `Currency`, `Parse`, `DecimalPoint`,
- * `Compare` and `Matches`, and not the catalogue -- see the note over it in
- * bta_locale.c. No project directory and no `L`: it reads none of it. */
-void bta_locale_init_facts(JSContext *ctx, JSValue global);
+/* The same, with the language named instead of auto-detected.  `NULL` asks for
+ * the desktop's language, as `bta_locale_init` does; `""` means no catalogue;
+ * a name loads that `po`.  Every thread has its own catalogue, so a `Task`
+ * calls this on its worker with the language the application had at `Start`. */
+void bta_locale_init_for(JSContext *ctx, JSValue global, const char *project_dir,
+                         GPtrArray *libs, const char *language);
+
+/* The catalogue in use on this thread, `""` when none.  Borrowed. */
+const char *bta_locale_language(void);
 
 /* Decimal: exact base-10 arithmetic with the ordinary operators, which needs
  * the JS_SetArithHandler patch in vendor/quickjs. */
@@ -1616,7 +1621,9 @@ void bta_locale_cleanup(void);
  * entry for it.  `ctxt` disambiguates a word that is not translated the same
  * way twice (gettext's msgctxt); NULL for none.
  *
- * The caller does not own the result: it lives in the catalogue.
+ * The caller does not own the result: it lives in **this thread's** catalogue
+ * until that thread reloads it.  Copy it before running any JavaScript that
+ * could assign `Locale.Current`.
  */
 const char *bta_locale_lookup(const char *ctxt, const char *msgid);
 /* `{0}`, `{1}`... replaced by argv[0..].  Positional and not `%s`, because a

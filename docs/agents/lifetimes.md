@@ -328,3 +328,14 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   NULL, so the branch it described could not happen. The same cleanup leaked
   its own reference on the server's auth domain, which `http_server_free`
   always released.
+- **A borrowed string from the catalogue can die inside the call that formats
+  it.** `bta_locale_lookup` returns a pointer into this thread's `L.entries`,
+  and `bta_locale_format` calls `JS_ToCString` on the arguments before it walks
+  the template -- so a `toString` that assigns `Locale.Current` reloads the
+  catalogue and frees the entry the template points into. The copy at the top
+  of `bta_locale_format` is what keeps one call on one catalogue; the
+  reentrancy assertion in `testLocale` is a heap-use-after-free under
+  `tests/asan.sh` without it. A lock around the lookup is not the fix: the
+  pointer outlives the lock, and one held across `JS_ToCString` deadlocks the
+  reload. This is the same-thread half of the catalogue problem; the
+  cross-thread half is the `GPrivate` in `bta_locale.c`.

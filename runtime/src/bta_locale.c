@@ -41,7 +41,20 @@ typedef struct {
     GPtrArray *forms;   /* char*, one per plural form; [0] is the singular */
 } Entry;
 
-static struct {
+/*
+ * **One catalogue per thread, and not one per process.**
+ *
+ * The main thread fills its catalogue from `po/` and can reload it with
+ * `Locale.Current`; a `Task` worker gets its own copy, built from the same
+ * directories and pinned to the language the application had at `Start`.  The
+ * two never touch each other's table, which is what makes `Locale.Text` safe
+ * in a worker without a lock: there is no shared mutable state to order.
+ *
+ * It also gives a task the semantics a form already has -- the words it was
+ * built with do not change underneath it -- where a shared catalogue behind a
+ * per-call lock would let a task see two languages in one answer.
+ */
+typedef struct {
     /*
      * The catalogue directories, in **load order**: every library's `po/` first
      * and the project's last, so a project that translates a string a library
@@ -58,7 +71,7 @@ static struct {
     GHashTable *entries;    /* key -> Entry*, NULL when there is no catalogue */
     int         nplurals;
     char       *plural;     /* the expression out of Plural-Forms */
-} L;
+} LocaleState;
 
 static void entry_free(gpointer p)
 {
@@ -66,6 +79,36 @@ static void entry_free(gpointer p)
     g_ptr_array_free(e->forms, TRUE);
     g_free(e);
 }
+
+static void locale_state_free(gpointer data)
+{
+    LocaleState *s = data;
+
+    if (!s)
+        return;
+    if (s->entries)
+        g_hash_table_destroy(s->entries);
+    if (s->dirs)
+        g_ptr_array_free(s->dirs, TRUE);
+    g_free(s->language);
+    g_free(s->plural);
+    g_free(s);
+}
+
+static GPrivate locale_key = G_PRIVATE_INIT(locale_state_free);
+
+static LocaleState *locale_state(void)
+{
+    LocaleState *s = g_private_get(&locale_key);
+
+    if (!s) {
+        s = g_new0(LocaleState, 1);
+        g_private_set(&locale_key, s);
+    }
+    return s;
+}
+
+#define L (*locale_state())
 
 /* ------------------------------------------------------------ plural forms
  *
@@ -780,6 +823,20 @@ char *bta_locale_format(JSContext *ctx, const char *text,
         return g_strdup(text);
 
     /*
+     * **The template is ours before any argument is converted.** `text` points
+     * into the catalogue, and `JS_ToCString` below can call a `toString` that
+     * assigns `Locale.Current`; the reload frees the entry `text` points into,
+     * so formatting from it afterwards would read freed memory.  This is a
+     * same-thread use-after-free, not a Task race -- a lock around the lookup
+     * would not reach it, and holding one across `JS_ToCString` would deadlock
+     * the reload.  A copy is what makes the call see one catalogue from the
+     * first hole to the last.
+     */
+    char *tpl = g_strdup(text);
+    if (!tpl)
+        return NULL;
+
+    /*
      * The arguments as strings, once: a template may name the same one twice.
      * **A value that cannot become text is a refusal** and not an empty
      * substitution -- `as[i] = g_strdup(s ? s : "")` swallowed the failure with
@@ -792,6 +849,7 @@ char *bta_locale_format(JSContext *ctx, const char *text,
 
         if (!s) {
             g_strfreev(as);            /* zeroed, so it stops at the first NULL */
+            g_free(tpl);
             return NULL;               /* it threw on the way; that stands */
         }
         as[i] = g_strdup(s);
@@ -799,7 +857,7 @@ char *bta_locale_format(JSContext *ctx, const char *text,
     }
 
     GString *out = g_string_new(NULL);
-    for (const char *p = text; *p; ) {
+    for (const char *p = tpl; *p; ) {
         if (*p != '{' || !g_ascii_isdigit(p[1])) {
             g_string_append_c(out, *p++);
             continue;
@@ -828,6 +886,7 @@ char *bta_locale_format(JSContext *ctx, const char *text,
     for (int i = 0; i < argc; i++)
         g_free(as[i]);
     g_free(as);
+    g_free(tpl);
     return g_string_free(out, FALSE);
 }
 
@@ -2508,39 +2567,71 @@ static const JSCFunctionListEntry locale_props[] = {
 };
 
 /*
- * Which catalogue to start with: the first of the desktop's languages that the
- * project has a file for.
+ * Builds **this thread's** catalogue.
  *
- * g_get_language_names() hands back the whole ordered list a locale implies --
- * es_AR.UTF-8, es_AR, es, C -- so a project shipping only es.po serves an
- * Argentine desktop without anybody listing the variants.
+ * `language` is what the caller wants:
+ *
+ *   - `NULL`  auto-detect from the desktop, which is what a program's main
+ *             thread does at boot;
+ *   - `""`    no catalogue -- the `msgid` itself, which is what a worker gets
+ *             when the application had no language at `Start`;
+ *   - a name  that `.po`, or no catalogue at all when the project has none.
+ *
+ * A `Task` calls this on its own thread with the language the application had
+ * at `Start`, so the worker and the main thread never share a table.  That is
+ * also why `Locale.Current` inside a task reloads only that task's copy: the
+ * process-global state that would have needed a lock is gone.
  */
-void bta_locale_init(JSContext *ctx, JSValue global, const char *project_dir,
-                    GPtrArray *libs)
+void bta_locale_init_for(JSContext *ctx, JSValue global, const char *project_dir,
+                         GPtrArray *libs, const char *language)
 {
-    L.dirs     = g_ptr_array_new_with_free_func(g_free);
-    L.language = g_strdup("");
+    LocaleState *s      = locale_state();
+    /* Owned before the state is cleared: `language` may be this thread's own
+     * `bta_locale_language()`, which the clear below frees. */
+    char        *wanted = language ? g_strdup(language) : NULL;
+
+    /* Initialising a thread twice is allowed: drop what this thread had. */
+    catalogue_clear();
+    g_clear_pointer(&s->language, g_free);
+    if (s->dirs) {
+        g_ptr_array_free(s->dirs, TRUE);
+        s->dirs = NULL;
+    }
+
+    s->dirs     = g_ptr_array_new_with_free_func(g_free);
+    s->language = g_strdup("");
 
     /* Libraries first and the project last: that is load order, and the last
      * file to mention a msgid answers for it. */
     for (guint i = 0; libs && i < libs->len; i++)
-        g_ptr_array_add(L.dirs, g_build_filename(g_ptr_array_index(libs, i),
-                                                 "po", NULL));
-    g_ptr_array_add(L.dirs, g_build_filename(project_dir, "po", NULL));
+        g_ptr_array_add(s->dirs, g_build_filename(g_ptr_array_index(libs, i),
+                                                  "po", NULL));
+    g_ptr_array_add(s->dirs, g_build_filename(project_dir, "po", NULL));
 
-    bool any = false;
-    for (guint i = 0; i < L.dirs->len && !any; i++)
-        any = g_file_test(g_ptr_array_index(L.dirs, i), G_FILE_TEST_IS_DIR);
+    if (wanted) {
+        /* A worker's snapshot.  An empty name means "the application had no
+         * catalogue", and must not fall back to the desktop's language --
+         * that would translate with something the application never chose. */
+        if (*wanted)
+            catalogue_use(wanted);
+    } else {
+        bool any = false;
 
-    if (any) {
-        const char * const *names = g_get_language_names();
-        for (int i = 0; names && names[i]; i++) {
-            if (g_str_equal(names[i], "C"))
-                break;                          /* C means "no translation" */
-            if (catalogue_use(names[i]))
-                break;
+        for (guint i = 0; i < s->dirs->len && !any; i++)
+            any = g_file_test(g_ptr_array_index(s->dirs, i),
+                              G_FILE_TEST_IS_DIR);
+        if (any) {
+            const char * const *names = g_get_language_names();
+
+            for (int i = 0; names && names[i]; i++) {
+                if (g_str_equal(names[i], "C"))
+                    break;                  /* C means "no translation" */
+                if (catalogue_use(names[i]))
+                    break;
+            }
         }
     }
+    g_free(wanted);
 
     JSValue locale = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, locale, locale_props,
@@ -2549,49 +2640,37 @@ void bta_locale_init(JSContext *ctx, JSValue global, const char *project_dir,
 }
 
 /*
- * The half of `Locale` a worker gets: **the facts of the process locale and
- * not the catalogue.**
- *
- * `Number`, `Date`, `Currency`, `Parse`, `DecimalPoint` and `Compare`/`Matches`
- * come from `localeconv` and the C library's collation -- properties of the
- * process, like the locale itself, and a background thread inherits both
- * (`.NET`'s `CultureInfo`, Java's `Collator` and Qt's `QCollator` are all
- * usable off the main thread for the same reason). `Text`, `Plural`,
- * `Context`, `Current` and `Available` read `L`, the process-global hash table
- * the main thread fills and can reload while a worker runs -- a race, and prose
- * belongs where it is shown -- so they are not here.
- *
- * **The object is built from the same declaration and the prose members are
- * taken off it**, so `Locale`'s surface has one definition: a second table
- * would be a second list of members to keep in step, and the documentation is
- * written from the first. `Read`/`Write` go with the catalogue: they are its
- * editor's pair.
+ * The main thread's boot: auto-detect from the desktop.  `g_get_language_names`
+ * hands back the whole ordered list a locale implies -- es_AR.UTF-8, es_AR,
+ * es, C -- so a project shipping only es.po serves an Argentine desktop
+ * without anybody listing the variants; C ends the walk because it means "no
+ * translation".
  */
-static const char *const LOCALE_CATALOGUE[] = {
-    "Text", "Plural", "Context", "Read", "Write", "Current", "Available", NULL,
-};
-
-void bta_locale_init_facts(JSContext *ctx, JSValue global)
+void bta_locale_init(JSContext *ctx, JSValue global, const char *project_dir,
+                     GPtrArray *libs)
 {
-    JSValue locale = JS_NewObject(ctx);
-
-    JS_SetPropertyFunctionList(ctx, locale, locale_props,
-                               G_N_ELEMENTS(locale_props));
-    for (const char *const *name = LOCALE_CATALOGUE; *name; name++) {
-        JSAtom atom = JS_NewAtom(ctx, *name);
-
-        JS_DeleteProperty(ctx, locale, atom, 0);
-        JS_FreeAtom(ctx, atom);
-    }
-    JS_SetPropertyStr(ctx, global, "Locale", locale);
+    bta_locale_init_for(ctx, global, project_dir, libs, NULL);
 }
 
+/*
+ * The catalogue in use **on this thread**, `""` when none.  Borrowed, and only
+ * read on the thread that owns the catalogue; `task_start` copies it before a
+ * worker exists.
+ */
+const char *bta_locale_language(void)
+{
+    LocaleState *s = g_private_get(&locale_key);
+
+    return s && s->language ? s->language : "";
+}
+
+/*
+ * Frees this thread's catalogue.  `g_private_replace` runs the destructor on
+ * the old value, which is the same one `G_PRIVATE_INIT` installs, so the main
+ * thread at teardown and a worker on its way out take the same road.
+ */
 void bta_locale_cleanup(void)
 {
-    catalogue_clear();
-    if (L.dirs) {
-        g_ptr_array_free(L.dirs, TRUE);
-        L.dirs = NULL;
-    }
-    g_clear_pointer(&L.language, g_free);
+    if (g_private_get(&locale_key))
+        g_private_replace(&locale_key, NULL);
 }

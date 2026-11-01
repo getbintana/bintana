@@ -1,6 +1,6 @@
 # Task: a class that runs in a thread of its own
 
-**Status: phases 1, 2 and 3 built.** What is left is named at the end with its trigger. The surface is
+**Status: phases 1, 2, 3 and 4 built.** What is left is named at the end with its trigger. The surface is
 [`docs/reference/globals/Task.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/globals/Task.md), which was
 written first and is the specification this follows. What is *not* built is
 named at the end, with the trigger that builds it — because the one limitation
@@ -102,7 +102,7 @@ calls that enter and leave. `bta_decimal.c`, `bta_bytes.c`, `bta_day.c`,
 at boot. A database connection is a class instance, which does not cross, so
 each side opens its own and sqlite is serialized by default.
 
-### What a worker sees in phase 1
+### What a worker sees
 
 Built the way the main context is — `bta_new_context`, the `init` functions,
 `rad.js`, then `bta_close_hatches` — minus what the rule takes:
@@ -112,31 +112,42 @@ Built the way the main context is — `bta_new_context`, the `init` functions,
 - **Gone, because it hangs a callback off the loop:** `Exec`, `File.Watch`,
   `Timer` (rad.js builds it on the captured `setTimeout`, so it is deleted
   *after* rad.js runs, not before), the asynchronous half of `Http`.
-- **Gone, because it is process state the main thread owns:** `Settings`,
-  and the **catalogue half of `Locale`** (`Text`, `Plural`, `Context`,
-  `Current`, `Available`, `Read`, `Write`) — see below. The facts half
-  (`Compare`, `Matches`, `Number`, `Date`, `Currency`, `Parse`,
-  `DecimalPoint`) is there, because none of it reads `L`.
+- **Gone, because it is process state the main thread owns:** `Settings`.
 - **There:** the language and `rad.js` entire, `print`, `Logger`, `Decimal`,
   `Bytes`, `Day`/`Time`, `Hash`, `Dictionary`, `Regex`, `Stopwatch`, `Record`,
-  `Field`, `Table`, `Sqlite`, an `Application` that answers facts, and
-  `File`/`Directory` for reading.
+  `Field`, `Table`, `Sqlite`, an `Application` that answers facts,
+  `File`/`Directory` for reading, and **`Locale` whole** — its catalogue is
+  this worker's own, pinned to the language at `Start` (see below).
 
-### The catalogue, which is the one place a lock is coming
+### The catalogue, which is per thread and not behind a lock
 
-`bta_locale.c` holds the catalogue in a `static struct` with a `GHashTable`.
-It is filled once by `bta_locale_init` during boot and read afterwards, so a
-worker could read it with no lock at all — provided nothing reloads it while
-the program runs. Phase 1 left `Locale` out of the worker rather than lean on
-that, and that was **the whole global for a half's reason**: `Compare` and
-`Matches` are `g_utf8_collate` and a fold, `Number`/`Date`/`Currency`/`Parse`/
-`DecimalPoint` are `localeconv`, and none of them touches `L`. A worker got
-none of them and could not put two names in order — the work it was started
-for. `bta_locale_init_facts` installs that half (ISSUE-worker-locale-order,
-deleted as answered) and the catalogue half stays out, because a worker
-computes and the prose is assembled where it is shown. **The day a language
-can be changed without restarting, that hash table is the runtime's first real
-mutex**, and it is named here so it is not discovered then.
+`bta_locale.c` holds the catalogue in a `GHashTable` inside a `GPrivate`, so
+**every thread has its own**. The main thread fills its own from `po/` and can
+reload it with `Locale.Current`; a `Task` worker builds its own from the same
+directories, pinned to the language the application had at `Start`
+(`bta_locale_init_for`). The two never read or free each other's table, which is
+what makes `Locale.Text` in a worker safe without a lock.
+
+A lock was the other answer, and it is not enough by itself. `bta_locale_lookup`
+returns a **borrowed** pointer into the table, and `bta_locale_format` converts
+its arguments with `JS_ToCString` before it walks the template; a `toString`
+there can assign `Locale.Current`, and the reload frees the entry the template
+points into. That is a same-thread use-after-free, not a cross-thread race: a
+lock around the lookup does not reach it, and one held across the conversion
+would deadlock the reload. **`bta_locale_format` copies the template before it
+runs any JavaScript**, which is what makes one call see one catalogue from the
+first hole to the last.
+
+A per-worker snapshot also gives a task the semantics a form already has: the
+words it started with do not change underneath it. A shared table behind a
+per-call lock would let a report translate page one in `es` and page two in
+`en`. If the cost of parsing the `.po` per task ever matters, the storage can
+become a refcounted immutable catalogue without changing the `Locale` surface;
+it is not a reason to start with a lock.
+
+`Locale.Read` and `Locale.Write` are the catalogue editor's pair and touch no
+catalogue at all — list mode never reaches `po_header` — so a worker gets them
+with the rest.
 
 ## Writing, and the lock that is not its condition
 
@@ -320,7 +331,10 @@ nearly free and it goes in then.**
 3. **`Lock.Hold(name, fn)`** — **built**: static, recursive, answering
    nothing, releasing whether the function returned, threw or was interrupted.
    `runtime/src/bta_lock.c`, 150 lines including why.
-4. **The catalogue's mutex**, if and when a language can change at runtime.
+4. **The catalogue per worker** — **built**: `Locale` is thread-local, the
+   worker builds its own with the language at `Start` (`bta_locale_init_for`),
+   and `bta_locale_format` copies the template before it runs JavaScript. A
+   lock is not needed; the argument is above.
 5. **`GCancellable`**, if and when `File` and `Directory` move to GIO. Not
    before: one verb in six would take it, and it is not the one that hangs.
 

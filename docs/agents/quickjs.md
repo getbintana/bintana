@@ -785,20 +785,26 @@ still counts a `typeof`, since its getter throws for one as for any read.
 
 ## The language: what the curation took and what it left
 
-- **A worker gets `Locale`'s facts and not its catalogue, and the split is the
-  process boundary.** `Number`, `Date`, `Currency`, `Parse`, `DecimalPoint`,
-  `Compare` and `Matches` read `localeconv` and the C library's collation --
-  properties of the process that every thread inherits, which is why .NET's
-  `CultureInfo`, Java's `Collator` and Qt's `QCollator` all work off the main
-  thread. `Text`, `Plural`, `Context`, `Current` and `Available` read `L`, the
-  process-global hash table the main thread fills and can reload mid-run, so
-  they are a race and not merely prose out of place; `Read`/`Write` go with
-  them, being the catalogue editor's pair. `bta_locale_init_facts` builds the
-  object from **the same `locale_props` table** and deletes the prose names, so
-  there is one definition of the surface and the extractor and the docs see one
-  list -- a second table would be a second list to keep in step. The assertion
-  is `testTask`'s: a worker orders `Ana` before `Bruno`, folds `Córdoba`, and
-  has no `Locale.Text`.
+- **A worker gets the whole `Locale`, in a catalogue of its own.** The
+  `GHashTable` lives in a `GPrivate`, so every thread has one; the main thread
+  can reload its own with `Locale.Current` while a worker reads its own, and
+  neither frees the other's. `bta_locale_init_for` builds the worker's from the
+  same `po/` directories with the language the application had at `Start`, so
+  a task translates with the words it started with. `Read`/`Write` are the
+  catalogue editor's pair and touch no catalogue at all, so they come too. The
+  object is still built from **the same `locale_props` table**, so the surface
+  has one definition and the extractor and the docs see one list. The assertion
+  is `testTask`'s: a worker orders `Ana` before `Bruno`, folds `Córdoba`,
+  translates `Name:` as `NOMBRE:`, and keeps `zz` after the main thread has
+  changed `Locale.Current` back to `""`.
+- **The template is copied before the arguments are converted, and that is not
+  about threads.** `bta_locale_lookup` returns a pointer into the catalogue;
+  `bta_locale_format` then calls `JS_ToCString` on the arguments, and a
+  `toString` can assign `Locale.Current` and free the entry the template points
+  into. A lock around the lookup does not help -- the pointer outlives it -- and
+  holding one across the conversion deadlocks the reload. Copying the template
+  at the top of `bta_locale_format` makes one call see one catalogue. This is
+  the same-thread half that a per-worker table does not fix by itself.
 - **A wrong answer that looks like the right tool is worse than a missing one,
   and `localeCompare` was the case that proves it.** With no ICU it compared
   code units, so `"Álvarez".localeCompare("Zapata")` was `1` -- and measured,
@@ -816,9 +822,9 @@ still counts a `typeof`, since its getter throws for one as for any read.
   hatches), so the `gone[]` list is one catalogue and not two. The worker used
   to get a **different sentence**, because `Locale` was not installed there at
   all and sending it to `Locale.Compare` would have been the second wrong
-  answer in a row; `bta_locale_init_facts` gives a worker the half of `Locale`
-  that needs no catalogue (`ISSUE-worker-locale-order`, deleted as answered),
-  so it is one sentence on both sides now.
+  answer in a row; `bta_locale_init_for` gives a worker its own catalogue and
+  the whole `Locale` (`ISSUE-worker-locale-order`, deleted as answered), so it
+  is one sentence on both sides now.
 - **The bare `sort()` is the half of that which cannot be refused**, and after
   the refusal above it is the one that stays silent. It gives the same wrong
   order and never consults the locale -- a comparator-less `sort` compares UTF-16

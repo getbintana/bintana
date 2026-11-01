@@ -104,9 +104,10 @@ already in place is a position and not a move, and a text the element already
 holds is not written, which was also growing the tree's orphan list and making
 every save slower than the one before,
 and a worker that could not put two names in order: `Locale` is installed in a
-`Task` now with the half that needs no catalogue -- `Compare`, `Matches`,
-`Number`, `Date`, `Currency`, `Parse`, `DecimalPoint` -- because the split is
-the process boundary and not the global,
+`Task` now whole, with a catalogue of its own pinned to the language at
+`Start` -- `Compare`, `Matches`, `Number`, `Date`, `Currency`, `Parse`,
+`DecimalPoint` *and* `Text`, `Plural`, `Context`, `Current`, `Available`,
+`Read`/`Write` -- because the catalogue is per thread and not a global,
 and two element verbs that could not refuse a surplus argument:
 `parent.Remove(child)` took the **parent** out -- on a document's root the file
 was emptied -- and `Add(name, text)` dropped the value. Both say no now, and
