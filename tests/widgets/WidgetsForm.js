@@ -729,7 +729,14 @@ function chosenTests() {
         return [];
     }
 
-    const wanted = TESTS.filter((n) => n.toLowerCase().includes(only.toLowerCase()));
+    /* `=Name` asks for exactly that test. A bare name is a substring -- `Page`
+     * runs PageAt, CurrentPending and the rest -- which is the right question
+     * while developing and the wrong one for `tests/alone.sh`, whose claim is
+     * that each test stands with only what `NEEDS` says it needs. */
+    const exact  = only.startsWith("=");
+    const needle = exact ? only.slice(1) : only.toLowerCase();
+    const wanted = TESTS.filter((n) => exact ? n === needle
+                                             : n.toLowerCase().includes(needle));
     if (!wanted.length) {
         failures.push(`no test matches "${only}" -- try one of: ${TESTS.join(", ")}`);
         return [];
@@ -4814,7 +4821,10 @@ class Form1 extends Form {
      * there is no GTK4 sink to build a pipeline with.
      */
     testVideoDroppedInHandler() {
-        if (!Widget.Available("Video")) return;
+        if (!Widget.Available("Video")) {
+            print("  (skipping the dropped-Video child: this build has no Video)");
+            return;
+        }
 
         const dir = File.Join(SCRATCH, "viddrop");
         Directory.Make(dir);
@@ -16484,7 +16494,10 @@ class Form1 extends Form {
      * ordinary run asserts only that the child ends cleanly.
      */
     testTerminalSpawnLifetime() {
-        if (!Widget.Available("Terminal")) return;
+        if (!Widget.Available("Terminal")) {
+            print("  (skipping the terminal-spawn child: this build has no VTE)");
+            return;
+        }
 
         const dir = File.Join(SCRATCH, "termspawn");
         Directory.Make(dir);

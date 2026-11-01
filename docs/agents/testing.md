@@ -127,6 +127,17 @@ half that is real -- *the scroll does arrive*. The documents that stated the
 same thing as a certainty (`reference/widgets/Editor.md`, `plans/git-plan.md`)
 say *may* now. **A negative about timing is not a property of the code; it is a
 bet on the scheduler.**
+
+**A test that cannot run says so, in a line or in an assertion.** The optional
+dependencies fork the suite (`no-vte`, `no-gstreamer`, `no-libxml` …), and the
+house style is to assert the refusal branch so the total stays the same in
+every build. Where there is no verb to refuse — a widget the build does not
+have — the guard prints `(skipping …)` naming what is missing;
+`testVideoDroppedInHandler` and `testTerminalSpawnLifetime` used to return in
+silence, which is the same failure the uncounted `until` above fixes: a
+smaller total with nothing red to say why. A bare `return` is right only after
+an assertion that already failed (`if (!got) return;`), because then the run is
+red and the missing lines cannot be mistaken for a clean pass.
 **And the same bet can hide in a test that waits, because what it waits *for*
 is not the only clock in it.** `testExecControlLate` starts a child whose
 grandchild writes to descriptor 3 a third of a second later, and asserts the
@@ -239,7 +250,11 @@ Three things that will waste your time:
 - **`tests/widgets` selects where `tests/ide` runs a prefix**, and the difference is
   the shape of the tests, not a missing feature: the widget tests each build what
   they need and delete it, so any one of them can run alone (`run.sh widgets record`
-  is 71 assertions in 0.2 s). Its couplings are declared in `NEEDS`, and they run one way:
+  is 71 assertions in 0.2 s). **`tests/alone.sh` is that claim measured**: each
+  name in its own process, with only what `NEEDS` declares, so a test that has
+  been leaning on the one before it is red there and green in the suite. It
+  uses `run.sh widgets =Name`, the exact filter, because a bare name is a
+  substring and `Page` would run four tests. Its couplings are declared in `NEEDS`, and they run one way:
   the async tail (`Exec`) checks what `Terminal` and `TimerShorthand` set up, so
   asking for the tail brings those two; asking for one of them alone does not bring
   the tail. A test whose deferred half lives in the tail and does not
