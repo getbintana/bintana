@@ -33,7 +33,8 @@
               "name": "LblInput",
               "properties": {
                 "Text": "Text to encode",
-                "Alignment": "Start"
+                "Alignment": "Start",
+                "For": "Input"
               }
             },
             {
@@ -58,7 +59,8 @@
                   "name": "LblEcc",
                   "properties": {
                     "Text": "Error correction",
-                    "Alignment": "Start"
+                    "Alignment": "Start",
+                    "For": "Ecc"
                   }
                 },
                 {
@@ -73,7 +75,8 @@
                   "name": "LblQuiet",
                   "properties": {
                     "Text": "Quiet zone",
-                    "Alignment": "Start"
+                    "Alignment": "Start",
+                    "For": "Quiet"
                   }
                 },
                 {

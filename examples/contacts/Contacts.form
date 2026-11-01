@@ -19,7 +19,8 @@
         "Tooltip": "Anywhere in the name, without accents and in any case: ver finds Echeverría",
         "Width": 636,
         "X": 12,
-        "Y": 12
+        "Y": 12,
+        "AccessibleName": "Search"
       }
     },
     {

@@ -138,7 +138,8 @@
                   "type": "Label",
                   "name": "LblText",
                   "properties": {
-                    "Text": "Text"
+                    "Text": "Text",
+                    "For": "TxtText"
                   }
                 },
                 {
@@ -152,7 +153,8 @@
                   "type": "Label",
                   "name": "LblName",
                   "properties": {
-                    "Text": "Name (its handler is Name_Click)"
+                    "Text": "Name (its handler is Name_Click)",
+                    "For": "TxtName"
                   }
                 },
                 {
@@ -166,7 +168,8 @@
                   "type": "Label",
                   "name": "LblShortcut",
                   "properties": {
-                    "Text": "Shortcut, e.g. <Control>s"
+                    "Text": "Shortcut, e.g. <Control>s",
+                    "For": "TxtShortcut"
                   }
                 },
                 {

@@ -16,7 +16,8 @@
         "X": 12,
         "Y": 18,
         "Width": 88,
-        "Height": 22
+        "Height": 22,
+        "For": "TxtName"
       }
     },
     {
@@ -129,7 +130,8 @@
         "X": 12,
         "Y": 142,
         "Width": 88,
-        "Height": 22
+        "Height": 22,
+        "For": "TxtFont"
       }
     },
     {
@@ -152,7 +154,8 @@
         "X": 12,
         "Y": 182,
         "Width": 88,
-        "Height": 22
+        "Height": 22,
+        "For": "SpnScale"
       }
     },
     {
@@ -179,7 +182,8 @@
         "X": 12,
         "Y": 222,
         "Width": 88,
-        "Height": 22
+        "Height": 22,
+        "For": "SpnOpacity"
       }
     },
     {
@@ -206,7 +210,8 @@
         "X": 12,
         "Y": 262,
         "Width": 88,
-        "Height": 22
+        "Height": 22,
+        "For": "TxtBorder"
       }
     },
     {
@@ -229,7 +234,8 @@
         "X": 12,
         "Y": 302,
         "Width": 88,
-        "Height": 22
+        "Height": 22,
+        "For": "TxtRadius"
       }
     },
     {
@@ -252,7 +258,8 @@
         "X": 12,
         "Y": 342,
         "Width": 88,
-        "Height": 22
+        "Height": 22,
+        "For": "TxtPadding"
       }
     },
     {
@@ -275,7 +282,8 @@
         "X": 12,
         "Y": 382,
         "Width": 88,
-        "Height": 22
+        "Height": 22,
+        "For": "TxtShadow"
       }
     },
     {

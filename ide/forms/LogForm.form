@@ -101,7 +101,8 @@
                         "ReadOnly": true,
                         "VAlign": "Fill",
                         "VExpand": true,
-                        "Wrap": false
+                        "Wrap": false,
+                        "AccessibleName": "Before"
                       }
                     },
                     {
@@ -116,7 +117,8 @@
                         "ReadOnly": true,
                         "VAlign": "Fill",
                         "VExpand": true,
-                        "Wrap": false
+                        "Wrap": false,
+                        "AccessibleName": "After"
                       }
                     }
                   ]
@@ -133,7 +135,8 @@
                     "ReadOnly": true,
                     "VAlign": "Fill",
                     "VExpand": true,
-                    "Wrap": false
+                    "Wrap": false,
+                    "AccessibleName": "Unified"
                   }
                 }
               ]

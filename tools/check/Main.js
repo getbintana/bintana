@@ -10,6 +10,7 @@
  *   bintana check --json <project>     one JSON line per finding, and one Done
  *   bintana check --strict <project>   warnings fail the run too
  *   bintana check --components <file>  the IDE's component events, as JSON
+ *   bintana check --fix <project>      apply the unambiguous Label.For repairs
  *
  * The exit code is what a CI reads: 1 for an error, or for a warning under
  * `--strict`; 0 otherwise, and 2 when the command itself could not start.
@@ -17,11 +18,39 @@
 "use strict";
 
 function usage() {
-    print("usage: bintana check [--json] [--strict] [--components <file>] <project-dir>");
+    print("usage: bintana check [--json] [--strict] [--components <file>] [--fix] <project-dir>");
+}
+
+/* The node with that name, at any depth. */
+function nodeNamed(nodes, name) {
+    for (const node of nodes || []) {
+        if (node.name === name) return node;
+        const deeper = nodeNamed(node.children, name);
+        if (deeper) return deeper;
+    }
+    return null;
+}
+
+/*
+ * The one repair a machine can make without inventing prose: a caption that
+ * sits immediately above a field, and no `For` on either side. Answers whether
+ * the file changed.
+ */
+function applyLabelFor(root, finding) {
+    const form  = File.LoadJson(File.Join(root, finding.file));
+    const label = nodeNamed(form.children, finding.fix.label);
+    if (!label) return false;
+
+    label.properties = label.properties || {};
+    if (label.properties.For) return false;
+    label.properties.For = finding.fix.field;
+
+    File.SaveJson(File.Join(root, finding.file), form);
+    return true;
 }
 
 function main() {
-    let json = false, strict = false, target = null, components = null;
+    let json = false, strict = false, fix = false, target = null, components = null;
     let bad = null;
     const args = Application.Arguments;
 
@@ -30,6 +59,7 @@ function main() {
 
         if (arg === "--json")       json = true;
         else if (arg === "--strict") strict = true;
+        else if (arg === "--fix")    fix = true;
         else if (arg === "--components") {
             const path = args[++i];
             if (!path) bad = "--components needs a file";
@@ -97,7 +127,27 @@ function main() {
         names,
         problems: { report() {}, clear() {} },
     };
-    const found = new Check(host).run();
+    let found = new Check(host).run();
+    let fixed = 0;
+
+    if (fix) {
+        for (const f of found) {
+            if (!f.fix || !f.file) continue;
+            try {
+                if (applyLabelFor(root, f)) fixed++;
+            } catch (e) {
+                print(`bintana check: could not fix ${f.file}: ${e.message}`);
+            }
+        }
+        if (fixed) found = new Check(host).run();
+    }
+
+    if (fix) {
+        if (json)
+            print(JSON.stringify({ Event: "Fixed", Count: fixed }));
+        else
+            print(`fixed ${fixed} accessibility row${fixed === 1 ? "" : "s"}`);
+    }
 
     /* Worst first, then by place, and the same order in both spellings. The
      * panel's order, so a shell and the IDE read the list the same way. */
@@ -115,13 +165,15 @@ function main() {
         else infos++;
 
         if (json) {
-            print(JSON.stringify({
+            const row = {
                 Event: "Finding",
                 Kind:  f.kind,
                 File:  f.file,
                 Line:  f.line || 0,
                 Text:  f.text,
-            }));
+            };
+            if (f.fix) row.Fix = f.fix;
+            print(JSON.stringify(row));
         } else {
             print(`${f.file}:${f.line || 0}: ${String(f.kind).toLowerCase()}: ${f.text}`);
         }

@@ -51,7 +51,8 @@
               "properties": {
                 "HAlign": "Fill",
                 "Height": 34,
-                "Text": "Ana Ñanculeo"
+                "Text": "Ana Ñanculeo",
+                "AccessibleName": "Name"
               }
             },
             {

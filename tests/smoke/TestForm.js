@@ -463,14 +463,25 @@ class TestForm extends Form {
             write("Main.js", "class Main extends Form { Form_Open() {} }\n");
             write("Main.form", JSON.stringify({
                 format: "bintana-form/1", class: "Main",
-                children: [{ type: "TextBox", name: "Txt1",
-                             properties: { X: 1, Y: 1 } }],
+                children: [
+                    { type: "Label",  name: "Lbl1",
+                      properties: { Text: "Name", X: 1, Y: 1 } },
+                    { type: "TextBox", name: "Txt1",
+                      properties: { X: 1, Y: 25 } },
+                ],
             }));
             const warned = run(dir);
             eq("a warning alone is not a failure", warned.ExitCode, 0);
             check("...and is still said", warned.Output.includes("Txt1"),
                   warned.Output);
             eq("--strict makes it one", run("--strict", dir).ExitCode, 1);
+
+            /* The one repair a machine can make: the caption above the field. */
+            const fixed = run("--fix", dir);
+            eq("a fixable warning is fixed", fixed.ExitCode, 0);
+            check("...and says how many", fixed.Output.includes("fixed 1"),
+                  fixed.Output);
+            eq("...leaving a clean pass", run(dir).ExitCode, 0);
 
             /* A clean project says nothing at all. */
             write("project.json", JSON.stringify({

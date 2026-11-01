@@ -107,7 +107,8 @@
         "Text": "Heading:",
         "Width": 90,
         "X": 12,
-        "Y": 238
+        "Y": 238,
+        "For": "TxtColText"
       }
     },
     {
@@ -130,7 +131,8 @@
         "Text": "Width:",
         "Width": 90,
         "X": 12,
-        "Y": 280
+        "Y": 280,
+        "For": "SpnColWidth"
       }
     },
     {
@@ -154,7 +156,8 @@
         "Text": "Alignment:",
         "Width": 80,
         "X": 258,
-        "Y": 280
+        "Y": 280,
+        "For": "CmbColAlign"
       }
     },
     {
@@ -175,7 +178,8 @@
         "Text": "Cell:",
         "Width": 90,
         "X": 12,
-        "Y": 322
+        "Y": 322,
+        "For": "CmbColCell"
       }
     },
     {
@@ -207,7 +211,8 @@
             "Text": "Min:",
             "Width": 40,
             "X": 0,
-            "Y": 6
+            "Y": 6,
+            "For": "TxtColMin"
           }
         },
         {
@@ -228,7 +233,8 @@
             "Text": "Max:",
             "Width": 40,
             "X": 126,
-            "Y": 6
+            "Y": 6,
+            "For": "TxtColMax"
           }
         },
         {
@@ -249,7 +255,8 @@
             "Text": "Step:",
             "Width": 44,
             "X": 252,
-            "Y": 6
+            "Y": 6,
+            "For": "TxtColStep"
           }
         },
         {
@@ -270,7 +277,8 @@
             "Text": "Decimals:",
             "Width": 80,
             "X": 372,
-            "Y": 6
+            "Y": 6,
+            "For": "TxtColDec"
           }
         },
         {
@@ -304,7 +312,8 @@
             "Text": "Active text:",
             "Width": 96,
             "X": 0,
-            "Y": 6
+            "Y": 6,
+            "For": "TxtColOn"
           }
         },
         {
@@ -325,7 +334,8 @@
             "Text": "Inactive text:",
             "Width": 110,
             "X": 262,
-            "Y": 6
+            "Y": 6,
+            "For": "TxtColOff"
           }
         },
         {
@@ -359,7 +369,8 @@
             "Text": "Items, one per line:",
             "Width": 170,
             "X": 0,
-            "Y": 6
+            "Y": 6,
+            "For": "TxtColItems"
           }
         },
         {

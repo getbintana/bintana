@@ -32,22 +32,46 @@
         {
           "type": "Panel",
           "name": "RulerA",
-          "properties": { "Background": "#3584e4", "Height": 3, "Width": 268, "X": 8, "Y": 6 }
+          "properties": {
+            "Background": "#3584e4",
+            "Height": 3,
+            "Width": 268,
+            "X": 8,
+            "Y": 6
+          }
         },
         {
           "type": "Button",
           "name": "BtnFixedItem",
-          "properties": { "Height": 30, "Text": "Item", "Width": 84, "X": 8, "Y": 16 }
+          "properties": {
+            "Height": 30,
+            "Text": "Item",
+            "Width": 84,
+            "X": 8,
+            "Y": 16
+          }
         },
         {
           "type": "Button",
           "name": "BtnFixedSub",
-          "properties": { "Height": 30, "Text": "Submenu", "Width": 88, "X": 98, "Y": 16 }
+          "properties": {
+            "Height": 30,
+            "Text": "Submenu",
+            "Width": 88,
+            "X": 98,
+            "Y": 16
+          }
         },
         {
           "type": "Button",
           "name": "BtnFixedRule",
-          "properties": { "Height": 30, "Text": "Rule", "Width": 84, "X": 192, "Y": 16 }
+          "properties": {
+            "Height": 30,
+            "Text": "Rule",
+            "Width": 84,
+            "X": 192,
+            "Y": 16
+          }
         }
       ]
     },
@@ -64,22 +88,46 @@
         {
           "type": "Panel",
           "name": "RulerB",
-          "properties": { "Background": "#3584e4", "Height": 3, "Width": 380, "X": 8, "Y": 6 }
+          "properties": {
+            "Background": "#3584e4",
+            "Height": 3,
+            "Width": 380,
+            "X": 8,
+            "Y": 6
+          }
         },
         {
           "type": "Button",
           "name": "BtnSlackItem",
-          "properties": { "Height": 30, "Text": "Item", "Width": 84, "X": 8, "Y": 16 }
+          "properties": {
+            "Height": 30,
+            "Text": "Item",
+            "Width": 84,
+            "X": 8,
+            "Y": 16
+          }
         },
         {
           "type": "Button",
           "name": "BtnSlackSub",
-          "properties": { "Height": 30, "Text": "Submenu", "Width": 88, "X": 98, "Y": 16 }
+          "properties": {
+            "Height": 30,
+            "Text": "Submenu",
+            "Width": 88,
+            "X": 98,
+            "Y": 16
+          }
         },
         {
           "type": "Button",
           "name": "BtnSlackRule",
-          "properties": { "Height": 30, "Text": "Rule", "Width": 84, "X": 192, "Y": 16 }
+          "properties": {
+            "Height": 30,
+            "Text": "Rule",
+            "Width": 84,
+            "X": 192,
+            "Y": 16
+          }
         }
       ]
     },
@@ -106,17 +154,29 @@
             {
               "type": "Button",
               "name": "BtnBoxItem",
-              "properties": { "Height": 30, "Text": "Item", "Width": 84 }
+              "properties": {
+                "Height": 30,
+                "Text": "Item",
+                "Width": 84
+              }
             },
             {
               "type": "Button",
               "name": "BtnBoxSub",
-              "properties": { "Height": 30, "Text": "Submenu", "Width": 88 }
+              "properties": {
+                "Height": 30,
+                "Text": "Submenu",
+                "Width": 88
+              }
             },
             {
               "type": "Button",
               "name": "BtnBoxRule",
-              "properties": { "Height": 30, "Text": "Rule", "Width": 84 }
+              "properties": {
+                "Height": 30,
+                "Text": "Rule",
+                "Width": 84
+              }
             }
           ]
         }
@@ -145,17 +205,26 @@
             {
               "type": "Button",
               "name": "BtnEvenItem",
-              "properties": { "Height": 30, "Text": "Item" }
+              "properties": {
+                "Height": 30,
+                "Text": "Item"
+              }
             },
             {
               "type": "Button",
               "name": "BtnEvenSub",
-              "properties": { "Height": 30, "Text": "Submenu" }
+              "properties": {
+                "Height": 30,
+                "Text": "Submenu"
+              }
             },
             {
               "type": "Button",
               "name": "BtnEvenRule",
-              "properties": { "Height": 30, "Text": "Rule" }
+              "properties": {
+                "Height": 30,
+                "Text": "Rule"
+              }
             }
           ]
         }
@@ -173,17 +242,28 @@
         {
           "type": "Label",
           "name": "LblLang",
-          "properties": { "Alignment": "Left", "HExpand": true }
+          "properties": {
+            "Alignment": "Left",
+            "HExpand": true
+          }
         },
         {
           "type": "Button",
           "name": "BtnAnchors",
-          "properties": { "Height": 32, "Text": "Anchors...", "Width": 110 }
+          "properties": {
+            "Height": 32,
+            "Text": "Anchors...",
+            "Width": 110
+          }
         },
         {
           "type": "Button",
           "name": "BtnMeasure",
-          "properties": { "Height": 32, "Text": "Measure", "Width": 110 }
+          "properties": {
+            "Height": 32,
+            "Text": "Measure",
+            "Width": 110
+          }
         }
       ]
     },
@@ -194,7 +274,8 @@
         "Expand": true,
         "Margin": 12,
         "ReadOnly": true,
-        "Wrap": false
+        "Wrap": false,
+        "AccessibleName": "Report"
       }
     }
   ]

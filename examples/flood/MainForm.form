@@ -38,7 +38,8 @@
               "Small (10×10)",
               "Medium (14×14)",
               "Large (18×18)"
-            ]
+            ],
+            "AccessibleName": "Size"
           }
         },
         {

@@ -11,52 +11,114 @@
     {
       "type": "Label",
       "name": "LblTitle",
-      "properties": { "Height": 20, "Text": "Title", "Width": 408, "X": 12, "Y": 12 }
+      "properties": {
+        "Height": 20,
+        "Text": "Title",
+        "Width": 408,
+        "X": 12,
+        "Y": 12,
+        "For": "TxtTitle"
+      }
     },
     {
       "type": "TextBox",
       "name": "TxtTitle",
-      "properties": { "HAlign": "Fill", "Height": 34, "Width": 408, "X": 12, "Y": 36 }
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 408,
+        "X": 12,
+        "Y": 36
+      }
     },
     {
       "type": "Label",
       "name": "LblNotes",
-      "properties": { "Height": 20, "Text": "Notes", "Width": 408, "X": 12, "Y": 78 }
+      "properties": {
+        "Height": 20,
+        "Text": "Notes",
+        "Width": 408,
+        "X": 12,
+        "Y": 78,
+        "For": "EdNotes"
+      }
     },
     {
       "type": "TextEditor",
       "name": "EdNotes",
-      "properties": { "HAlign": "Fill", "Height": 110, "Width": 408, "X": 12, "Y": 102 }
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 110,
+        "Width": 408,
+        "X": 12,
+        "Y": 102
+      }
     },
     {
       "type": "Label",
       "name": "LblPri",
-      "properties": { "Height": 20, "Text": "Priority", "Width": 190, "X": 12, "Y": 220 }
+      "properties": {
+        "Height": 20,
+        "Text": "Priority",
+        "Width": 190,
+        "X": 12,
+        "Y": 220,
+        "For": "CmbPriority"
+      }
     },
     {
       "type": "ComboBox",
       "name": "CmbPriority",
-      "properties": { "Height": 34, "Width": 190, "X": 12, "Y": 244 }
+      "properties": {
+        "Height": 34,
+        "Width": 190,
+        "X": 12,
+        "Y": 244
+      }
     },
     {
       "type": "Label",
       "name": "LblCol",
-      "properties": { "Height": 20, "Text": "Column", "Width": 190, "X": 214, "Y": 220 }
+      "properties": {
+        "Height": 20,
+        "Text": "Column",
+        "Width": 190,
+        "X": 214,
+        "Y": 220,
+        "For": "CmbColumn"
+      }
     },
     {
       "type": "ComboBox",
       "name": "CmbColumn",
-      "properties": { "Height": 34, "Width": 190, "X": 214, "Y": 244 }
+      "properties": {
+        "Height": 34,
+        "Width": 190,
+        "X": 214,
+        "Y": 244
+      }
     },
     {
       "type": "Label",
       "name": "LblDue",
-      "properties": { "Height": 20, "Text": "Due date", "Width": 190, "X": 12, "Y": 286 }
+      "properties": {
+        "Height": 20,
+        "Text": "Due date",
+        "Width": 190,
+        "X": 12,
+        "Y": 286,
+        "For": "PckDue"
+      }
     },
     {
       "type": "DatePicker",
       "name": "PckDue",
-      "properties": { "Height": 34, "Width": 150, "X": 12, "Y": 310 }
+      "properties": {
+        "Height": 34,
+        "Width": 150,
+        "X": 12,
+        "Y": 310
+      }
     },
     {
       "type": "Button",

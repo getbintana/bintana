@@ -913,7 +913,8 @@
                   "name": "ImgWelcome",
                   "properties": {
                     "Icon": "applications-engineering-symbolic",
-                    "Size": 96
+                    "Size": 96,
+                    "AccessibleHidden": true
                   }
                 },
                 {
@@ -1422,7 +1423,8 @@
                                 "HExpand": true,
                                 "Height": 30,
                                 "Style": "heading flat",
-                                "Tooltip": "What this tree shows"
+                                "Tooltip": "What this tree shows",
+                                "AccessibleName": "Tree view"
                               }
                             },
                             {
@@ -1533,7 +1535,8 @@
                                         "HAlign": "Fill",
                                         "HExpand": true,
                                         "Placeholder": "Filter files",
-                                        "Tooltip": "Show only the files whose name contains this"
+                                        "Tooltip": "Show only the files whose name contains this",
+                                        "AccessibleName": "Filter files"
                                       }
                                     },
                                     {
@@ -1651,7 +1654,8 @@
                                         "HAlign": "Start",
                                         "Margin": 4,
                                         "Style": "caption-heading",
-                                        "Text": "Commit message"
+                                        "Text": "Commit message",
+                                        "For": "TxtCommit"
                                       }
                                     },
                                     {
@@ -1737,7 +1741,8 @@
                               "name": "ImgReload",
                               "properties": {
                                 "Icon": "dialog-warning",
-                                "Size": 16
+                                "Size": 16,
+                                "AccessibleHidden": true
                               }
                             },
                             {
@@ -1842,7 +1847,8 @@
                                     "HAlign": "Fill",
                                     "HExpand": true,
                                     "Icon": "edit-find-symbolic",
-                                    "Tooltip": "Text to find"
+                                    "Tooltip": "Text to find",
+                                    "AccessibleName": "Find text"
                                   }
                                 },
                                 {
@@ -1924,7 +1930,8 @@
                                     "HAlign": "Fill",
                                     "HExpand": true,
                                     "Icon": "edit-find-replace-symbolic",
-                                    "Tooltip": "Replace the matches with this"
+                                    "Tooltip": "Replace the matches with this",
+                                    "AccessibleName": "Replace with"
                                   }
                                 },
                                 {
@@ -1974,7 +1981,8 @@
                                   "properties": {
                                     "Icon": "document-edit-symbolic",
                                     "Size": 64,
-                                    "Style": "dim-label"
+                                    "Style": "dim-label",
+                                    "AccessibleHidden": true
                                   }
                                 },
                                 {
@@ -2030,7 +2038,8 @@
                             "ReadOnly": true,
                             "VAlign": "Fill",
                             "VExpand": true,
-                            "Wrap": false
+                            "Wrap": false,
+                            "AccessibleName": "Log"
                           }
                         },
                         {
@@ -2228,7 +2237,8 @@
                                   "properties": {
                                     "HExpand": true,
                                     "Placeholder": "An expression, in the chosen frame",
-                                    "Tooltip": "Evaluated where the program is stopped. Enter answers; Watch keeps it and re-asks at every stop"
+                                    "Tooltip": "Evaluated where the program is stopped. Enter answers; Watch keeps it and re-asks at every stop",
+                                    "AccessibleName": "Expression"
                                   }
                                 },
                                 {

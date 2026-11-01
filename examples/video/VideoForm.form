@@ -26,7 +26,8 @@
         "Text": "Clip:",
         "Width": 190,
         "X": 428,
-        "Y": 12
+        "Y": 12,
+        "For": "CmbClips"
       }
     },
     {
@@ -102,7 +103,8 @@
         "Text": "Volume",
         "Width": 190,
         "X": 428,
-        "Y": 234
+        "Y": 234,
+        "For": "SldVol"
       }
     },
     {

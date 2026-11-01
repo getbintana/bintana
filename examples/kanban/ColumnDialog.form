@@ -11,12 +11,25 @@
     {
       "type": "Label",
       "name": "LblPrompt",
-      "properties": { "HAlign": "Fill", "Height": 20, "Width": 348, "X": 12, "Y": 12 }
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 20,
+        "Width": 348,
+        "X": 12,
+        "Y": 12,
+        "For": "TxtName"
+      }
     },
     {
       "type": "TextBox",
       "name": "TxtName",
-      "properties": { "HAlign": "Fill", "Height": 34, "Width": 348, "X": 12, "Y": 40 }
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 348,
+        "X": 12,
+        "Y": 40
+      }
     },
     {
       "type": "Label",

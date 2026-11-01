@@ -98,7 +98,8 @@
             "Height": 32,
             "Icon": "zoom-out-symbolic",
             "Style": "flat",
-            "Width": 34
+            "Width": 34,
+            "AccessibleName": "Zoom out"
           }
         },
         {
@@ -108,7 +109,8 @@
             "Height": 32,
             "Icon": "zoom-in-symbolic",
             "Style": "flat",
-            "Width": 34
+            "Width": 34,
+            "AccessibleName": "Zoom in"
           }
         },
         {
@@ -116,7 +118,8 @@
           "name": "CmbFit",
           "properties": {
             "Tooltip": "How it fills the frame when it is not zoomed",
-            "Width": 130
+            "Width": 130,
+            "AccessibleName": "Fit"
           }
         },
         {
@@ -165,7 +168,9 @@
             {
               "type": "Picture",
               "name": "Shown",
-              "properties": {}
+              "properties": {
+                "AccessibleName": "Preview"
+              }
             }
           ]
         }

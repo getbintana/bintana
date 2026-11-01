@@ -103,7 +103,8 @@
         "Width": 384,
         "Wrap": true,
         "X": 384,
-        "Y": 88
+        "Y": 88,
+        "AccessibleName": "Summary"
       }
     },
     {

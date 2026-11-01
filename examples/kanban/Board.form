@@ -38,7 +38,8 @@
             "Height": 34,
             "Icon": "edit-clear-symbolic",
             "Placeholder": "Search title or notes",
-            "Tooltip": "Anywhere in the title or the notes, accents folded"
+            "Tooltip": "Anywhere in the title or the notes, accents folded",
+            "AccessibleName": "Search"
           }
         },
         {
@@ -56,7 +57,8 @@
             ],
             "Text": "All priorities",
             "Tooltip": "Show only one priority",
-            "Width": 150
+            "Width": 150,
+            "AccessibleName": "Priority"
           }
         },
         {

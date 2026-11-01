@@ -15,7 +15,8 @@
         "Text": "Name:",
         "Width": 110,
         "X": 12,
-        "Y": 18
+        "Y": 18,
+        "For": "TxtPrName"
       }
     },
     {
@@ -37,7 +38,8 @@
         "Text": "Version:",
         "Width": 110,
         "X": 12,
-        "Y": 64
+        "Y": 64,
+        "For": "TxtPrVersion"
       }
     },
     {
@@ -60,7 +62,8 @@
         "Text": "Application id:",
         "Width": 110,
         "X": 12,
-        "Y": 110
+        "Y": 110,
+        "For": "TxtPrId"
       }
     },
     {
@@ -84,7 +87,8 @@
         "Text": "Starts at:",
         "Width": 110,
         "X": 12,
-        "Y": 156
+        "Y": 156,
+        "For": "CmbPrKind"
       }
     },
     {
@@ -112,7 +116,8 @@
         "Height": 34,
         "Width": 276,
         "X": 264,
-        "Y": 150
+        "Y": 150,
+        "AccessibleName": "Startup form"
       }
     },
     {
@@ -124,7 +129,8 @@
         "Visible": false,
         "Width": 276,
         "X": 264,
-        "Y": 150
+        "Y": 150,
+        "AccessibleName": "Main function"
       }
     },
     {
@@ -135,7 +141,8 @@
         "Text": "Description:",
         "Width": 110,
         "X": 12,
-        "Y": 202
+        "Y": 202,
+        "For": "TxtPrDesc"
       }
     },
     {

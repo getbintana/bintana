@@ -15,7 +15,8 @@
         "Y": 18,
         "Width": 110,
         "Height": 24,
-        "Text": "Name:"
+        "Text": "Name:",
+        "For": "TxtAppName"
       }
     },
     {
@@ -37,7 +38,8 @@
         "Y": 64,
         "Width": 110,
         "Height": 24,
-        "Text": "Comment:"
+        "Text": "Comment:",
+        "For": "TxtAppComment"
       }
     },
     {
@@ -60,7 +62,8 @@
         "Y": 110,
         "Width": 110,
         "Height": 24,
-        "Text": "Icon:"
+        "Text": "Icon:",
+        "For": "TxtAppIcon"
       }
     },
     {

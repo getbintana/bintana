@@ -14,7 +14,8 @@
       "properties": {
         "Size": 20,
         "VAlign": "Center",
-        "Visible": false
+        "Visible": false,
+        "AccessibleHidden": true
       },
       "design": {
         "Icon": "audio-speakers-symbolic"
@@ -67,7 +68,8 @@
         "Icon": "checkbox-checked-symbolic",
         "Size": 16,
         "VAlign": "Center",
-        "Visible": false
+        "Visible": false,
+        "AccessibleHidden": true
       }
     }
   ]

@@ -47,7 +47,8 @@
             "Height": 30,
             "Icon": "zoom-out-symbolic",
             "Style": "flat",
-            "Width": 34
+            "Width": 34,
+            "AccessibleName": "Zoom out"
           }
         },
         {
@@ -57,7 +58,8 @@
             "Height": 30,
             "Icon": "zoom-in-symbolic",
             "Style": "flat",
-            "Width": 34
+            "Width": 34,
+            "AccessibleName": "Zoom in"
           }
         },
         {
@@ -93,7 +95,9 @@
         {
           "type": "Picture",
           "name": "Shown",
-          "properties": {}
+          "properties": {
+            "AccessibleName": "Preview"
+          }
         }
       ]
     }

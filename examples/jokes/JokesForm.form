@@ -10,17 +10,38 @@
     {
       "type": "ComboBox",
       "name": "CmbCategory",
-      "properties": { "Height": 34, "Width": 180, "X": 12, "Y": 12 }
+      "properties": {
+        "Height": 34,
+        "Width": 180,
+        "X": 12,
+        "Y": 12,
+        "AccessibleName": "Category"
+      }
     },
     {
       "type": "CheckButton",
       "name": "ChkSafe",
-      "properties": { "Active": true, "Height": 34, "Text": "Safe mode", "Width": 130, "X": 200, "Y": 12 }
+      "properties": {
+        "Active": true,
+        "Height": 34,
+        "Text": "Safe mode",
+        "Width": 130,
+        "X": 200,
+        "Y": 12
+      }
     },
     {
       "type": "Button",
       "name": "BtnJoke",
-      "properties": { "Default": true, "HAlign": "End", "Height": 34, "Text": "Again", "Width": 88, "X": 380, "Y": 12 }
+      "properties": {
+        "Default": true,
+        "HAlign": "End",
+        "Height": 34,
+        "Text": "Again",
+        "Width": 88,
+        "X": 380,
+        "Y": 12
+      }
     },
     {
       "type": "Label",

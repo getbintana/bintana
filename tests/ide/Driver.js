@@ -14050,6 +14050,24 @@ function* p_access(ide) {
     check("but a caption that has one is not offered",
           !said([text("Label", "LblA", { For: "TxtB" }), text("TextBox", "TxtA")])[0].includes("just before it"));
 
+    /* The same walk, with the repair beside the sentence: what `--fix` applies
+     * and what an editor would offer as one action. */
+    const fixable = Accessibility.entries({ children: [
+        text("Label", "LblA", { Text: "Nombre" }), text("TextBox", "TxtA"),
+    ] })[0];
+    eq("the caption above is offered as the fix",
+       JSON.stringify(fixable.fix), JSON.stringify({ label: "LblA", field: "TxtA" }));
+    eq("a field with no caption above has no automatic fix",
+       Accessibility.entries({ children: [text("TextBox", "TxtA")] })[0].fix, null);
+    eq("a label whose text arrives at runtime is not a caption",
+       Accessibility.entries({ children: [
+           text("Label", "LblA"), text("TextBox", "TxtA"),
+       ] })[0].fix, null);
+    eq("a status label with a hole in it is not one either",
+       Accessibility.entries({ children: [
+           text("Label", "LblA", { Text: "Moves left: {0}" }), text("TextBox", "TxtA"),
+       ] })[0].fix, null);
+
     for (const type of ["SpinBox", "DecimalBox", "ComboBox", "DatePicker", "Slider", "Switch",
                         "TextEditor", "SourceEditor"])
         eq(`a ${type} is a field`, said([text(type, "X")]).length, 1);

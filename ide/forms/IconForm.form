@@ -16,7 +16,8 @@
         "Width": 528,
         "Height": 34,
         "Icon": "edit-find-symbolic",
-        "HAlign": "Fill"
+        "HAlign": "Fill",
+        "AccessibleName": "Filter icons"
       }
     },
     {

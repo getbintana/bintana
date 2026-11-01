@@ -67,7 +67,8 @@
         "Text": "Name:",
         "Width": 110,
         "X": 222,
-        "Y": 34
+        "Y": 34,
+        "For": "TxtLcName"
       }
     },
     {
@@ -89,7 +90,8 @@
         "Text": "Arguments, one per line:",
         "Width": 260,
         "X": 222,
-        "Y": 96
+        "Y": 96,
+        "For": "TxtLcArgs"
       }
     },
     {
@@ -112,7 +114,8 @@
         "Text": "Directory, empty for the project’s own:",
         "Width": 300,
         "X": 222,
-        "Y": 224
+        "Y": 224,
+        "For": "TxtLcDir"
       }
     },
     {
@@ -134,7 +137,8 @@
         "Text": "Environment, NAME=value one per line:",
         "Width": 300,
         "X": 222,
-        "Y": 286
+        "Y": 286,
+        "For": "TxtLcEnv"
       }
     },
     {

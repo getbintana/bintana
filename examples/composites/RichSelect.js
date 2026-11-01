@@ -97,6 +97,9 @@ class RichSelect extends Component {
 
         this.Face.Icon = item ? item.Icon : "";
         this.Face.Text = item ? item.Title : "";
+        /* The face says what is chosen; a screen reader gets the same words,
+         * and the form's static name is the empty answer. */
+        this.Face.AccessibleName = item ? item.Title : Locale.Text("Choose");
 
         this.rows.forEach((row, i) => { row.Chosen = i === this.chosen; });
     }

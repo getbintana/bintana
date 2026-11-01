@@ -32,7 +32,8 @@
         "Placeholder": "Add a tag and press Enter",
         "Width": 360,
         "X": 0,
-        "Y": 72
+        "Y": 72,
+        "AccessibleName": "Add a tag"
       }
     }
   ]

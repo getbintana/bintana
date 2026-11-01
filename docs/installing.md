@@ -136,6 +136,7 @@ bintana-ide ~/my-project                 # ...opening a project
 bintana /usr/local/share/bintana/examples/hello
 bintana check ~/my-project                # what the IDE's Project -> Check finds
 bintana check --strict ~/my-project       # ...with warnings failing the run too
+bintana check --fix ~/my-project          # apply the unambiguous Label.For fixes
 bintana --version                        # the runtime's own release
 ```
 
@@ -143,8 +144,10 @@ bintana --version                        # the runtime's own release
 the project and opens no window, so a CI job or a git hook can ask it. The exit
 status is 1 for an error, or for a warning under `--strict`, and 0 otherwise;
 `--json` gives one `{"Event":"Finding",…}` line per finding and a final
-`{"Event":"Done",…}`. It finds `share/bintana/tools/check` and its library one
-hop from the installed binary, so a staged or relocated prefix needs nothing.
+`{"Event":"Done",…}`. `--fix` applies the one repair that needs no prose -- a
+caption immediately above a field, with no `For` -- and then reports what is
+left. It finds `share/bintana/tools/check` and its library one hop from the
+installed binary, so a staged or relocated prefix needs nothing.
 
 `bintana --version` is the runtime's release, which is also `BTA_VERSION` in a
 program and the `Version` of `bintana.pc`; an *application's* version is

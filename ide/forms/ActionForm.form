@@ -123,7 +123,8 @@
                   "type": "Label",
                   "name": "LblName",
                   "properties": {
-                    "Text": "Name (its handler is Name_Execute)"
+                    "Text": "Name (its handler is Name_Execute)",
+                    "For": "TxtName"
                   }
                 },
                 {
@@ -137,7 +138,8 @@
                   "type": "Label",
                   "name": "LblText",
                   "properties": {
-                    "Text": "Text"
+                    "Text": "Text",
+                    "For": "TxtText"
                   }
                 },
                 {
@@ -151,7 +153,8 @@
                   "type": "Label",
                   "name": "LblIcon",
                   "properties": {
-                    "Text": "Icon"
+                    "Text": "Icon",
+                    "For": "TxtIcon"
                   }
                 },
                 {
@@ -166,7 +169,8 @@
                   "type": "Label",
                   "name": "LblShortcut",
                   "properties": {
-                    "Text": "Shortcut, e.g. <Control>s"
+                    "Text": "Shortcut, e.g. <Control>s",
+                    "For": "TxtShortcut"
                   }
                 },
                 {

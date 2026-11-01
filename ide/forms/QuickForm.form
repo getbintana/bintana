@@ -19,7 +19,8 @@
         "Tooltip": "Type part of a file's name, or > to run a command",
         "Width": 488,
         "X": 12,
-        "Y": 12
+        "Y": 12,
+        "AccessibleName": "Go to file"
       }
     },
     {

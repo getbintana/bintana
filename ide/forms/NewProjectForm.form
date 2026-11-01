@@ -32,7 +32,8 @@
               "name": "LblName",
               "properties": {
                 "HAlign": "End",
-                "Text": "Name:"
+                "Text": "Name:",
+                "For": "TxtName"
               }
             },
             {
@@ -48,7 +49,8 @@
               "name": "LblId",
               "properties": {
                 "HAlign": "End",
-                "Text": "Application id:"
+                "Text": "Application id:",
+                "For": "TxtId"
               }
             },
             {
@@ -66,7 +68,8 @@
               "name": "LblKind",
               "properties": {
                 "HAlign": "End",
-                "Text": "Starts at:"
+                "Text": "Starts at:",
+                "For": "CmbKind"
               }
             },
             {
@@ -87,7 +90,8 @@
               "name": "LblDesc",
               "properties": {
                 "HAlign": "End",
-                "Text": "Description:"
+                "Text": "Description:",
+                "For": "TxtDesc"
               }
             },
             {
@@ -103,7 +107,8 @@
               "name": "LblBase",
               "properties": {
                 "HAlign": "End",
-                "Text": "Base folder:"
+                "Text": "Base folder:",
+                "For": "TxtBase"
               }
             },
             {

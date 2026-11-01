@@ -17,7 +17,8 @@
         "Width": 348,
         "Height": 22,
         "Text": "",
-        "HAlign": "Fill"
+        "HAlign": "Fill",
+        "For": "TxtValue"
       }
     },
     {

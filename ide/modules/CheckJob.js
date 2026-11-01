@@ -174,12 +174,14 @@ export class CheckJob {
         catch (e) { return; }
 
         if (said.Event === "Finding") {
-            this.findings.push({
+            const row = {
                 kind: said.Kind,
                 file: said.File,
                 line: said.Line || 0,
                 text: said.Text,
-            });
+            };
+            if (said.Fix) row.fix = said.Fix;
+            this.findings.push(row);
         } else if (said.Event === "Done") {
             this.doneLine = said;
         }

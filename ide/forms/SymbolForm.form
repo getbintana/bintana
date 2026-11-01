@@ -19,7 +19,8 @@
         "Tooltip": "Type part of a method's name, or a number to go to that line",
         "Width": 348,
         "X": 12,
-        "Y": 12
+        "Y": 12,
+        "AccessibleName": "Method or line"
       }
     },
     {

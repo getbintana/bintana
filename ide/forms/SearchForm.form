@@ -37,7 +37,8 @@
                 "HAlign": "Fill",
                 "HExpand": true,
                 "Icon": "edit-find-symbolic",
-                "Tooltip": "Text to find"
+                "Tooltip": "Text to find",
+                "AccessibleName": "Text to find"
               }
             },
             {
@@ -89,7 +90,8 @@
               "properties": {
                 "HAlign": "End",
                 "HExpand": true,
-                "Text": "Files:"
+                "Text": "Files:",
+                "For": "CboFiles"
               }
             },
             {
@@ -118,7 +120,8 @@
                 "HAlign": "Fill",
                 "HExpand": true,
                 "Icon": "edit-find-replace-symbolic",
-                "Tooltip": "The replacement. With Regular expression on, $1 and $$ are the pattern's groups"
+                "Tooltip": "The replacement. With Regular expression on, $1 and $$ are the pattern's groups",
+                "AccessibleName": "Replace with"
               }
             },
             {

@@ -26,7 +26,8 @@
             "Placeholder": "Filter by name",
             "Icon": "edit-find-symbolic",
             "HExpand": true,
-            "HAlign": "Fill"
+            "HAlign": "Fill",
+            "AccessibleName": "Filter by name"
           }
         },
         {
@@ -118,7 +119,8 @@
                   "name": "LblName",
                   "properties": {
                     "Text": "Name",
-                    "HAlign": "End"
+                    "HAlign": "End",
+                    "For": "TxtName"
                   }
                 },
                 {
@@ -135,7 +137,8 @@
                   "name": "LblCategory",
                   "properties": {
                     "Text": "Category",
-                    "HAlign": "End"
+                    "HAlign": "End",
+                    "For": "CmbCategory"
                   }
                 },
                 {
@@ -159,7 +162,8 @@
                   "name": "LblSince",
                   "properties": {
                     "Text": "Since",
-                    "HAlign": "End"
+                    "HAlign": "End",
+                    "For": "PckSince"
                   }
                 },
                 {
@@ -174,7 +178,8 @@
                   "name": "LblPostal",
                   "properties": {
                     "Text": "Postal code",
-                    "HAlign": "End"
+                    "HAlign": "End",
+                    "For": "TxtPostal"
                   }
                 },
                 {
@@ -189,7 +194,8 @@
                   "name": "LblBalance",
                   "properties": {
                     "Text": "Balance",
-                    "HAlign": "End"
+                    "HAlign": "End",
+                    "For": "TxtBalance"
                   }
                 },
                 {
@@ -279,7 +285,8 @@
                   "type": "DatePicker",
                   "name": "PckPlaced",
                   "properties": {
-                    "Enabled": false
+                    "Enabled": false,
+                    "AccessibleName": "Placed on"
                   }
                 },
                 {
@@ -289,7 +296,8 @@
                     "Enabled": false,
                     "Placeholder": "What was ordered",
                     "HExpand": true,
-                    "HAlign": "Fill"
+                    "HAlign": "Fill",
+                    "AccessibleName": "What was ordered"
                   }
                 },
                 {
@@ -300,7 +308,8 @@
                     "Alignment": "Right",
                     "Purpose": "Number",
                     "Placeholder": "0.00",
-                    "Width": 130
+                    "Width": 130,
+                    "AccessibleName": "Amount"
                   }
                 }
               ]

@@ -14,7 +14,8 @@
         "Height": 40,
         "Width": 360,
         "X": 0,
-        "Y": 0
+        "Y": 0,
+        "AccessibleName": "Choose"
       }
     }
   ]

@@ -53,7 +53,9 @@
       "properties": {
         "Focusable": false,
         "Height": 40,
-        "Shortcut": ["r"],
+        "Shortcut": [
+          "r"
+        ],
         "Style": "suggested-action",
         "Text": "Record",
         "Tooltip": "R",
@@ -69,7 +71,9 @@
         "Enabled": false,
         "Focusable": false,
         "Height": 40,
-        "Shortcut": ["s"],
+        "Shortcut": [
+          "s"
+        ],
         "Text": "Stop",
         "Tooltip": "S",
         "Width": 132,
@@ -83,7 +87,9 @@
       "properties": {
         "Focusable": false,
         "Height": 40,
-        "Shortcut": ["f"],
+        "Shortcut": [
+          "f"
+        ],
         "Text": "Folder…",
         "Tooltip": "F",
         "Width": 132,
@@ -102,7 +108,8 @@
         "Text": "",
         "Width": 416,
         "X": 12,
-        "Y": 152
+        "Y": 152,
+        "AccessibleName": "Play"
       }
     },
     {

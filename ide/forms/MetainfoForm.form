@@ -44,7 +44,8 @@
               "name": "LblId",
               "properties": {
                 "HAlign": "End",
-                "Text": "Application id:"
+                "Text": "Application id:",
+                "For": "TxtId"
               }
             },
             {
@@ -62,7 +63,8 @@
               "name": "LblName",
               "properties": {
                 "HAlign": "End",
-                "Text": "Name:"
+                "Text": "Name:",
+                "For": "TxtName"
               }
             },
             {
@@ -80,7 +82,8 @@
               "name": "LblSummary",
               "properties": {
                 "HAlign": "End",
-                "Text": "Summary:"
+                "Text": "Summary:",
+                "For": "TxtSummary"
               }
             },
             {
@@ -97,7 +100,8 @@
               "name": "LblDevId",
               "properties": {
                 "HAlign": "End",
-                "Text": "Developer id:"
+                "Text": "Developer id:",
+                "For": "TxtDevId"
               }
             },
             {
@@ -114,7 +118,8 @@
               "name": "LblDevName",
               "properties": {
                 "HAlign": "End",
-                "Text": "Developer:"
+                "Text": "Developer:",
+                "For": "TxtDevName"
               }
             },
             {
@@ -130,7 +135,8 @@
               "name": "LblMetaLic",
               "properties": {
                 "HAlign": "End",
-                "Text": "Metadata license:"
+                "Text": "Metadata license:",
+                "For": "TxtMetaLic"
               }
             },
             {
@@ -148,7 +154,8 @@
               "name": "LblProjLic",
               "properties": {
                 "HAlign": "End",
-                "Text": "Project license:"
+                "Text": "Project license:",
+                "For": "TxtProjLic"
               }
             },
             {
@@ -166,7 +173,8 @@
               "name": "LblHome",
               "properties": {
                 "HAlign": "End",
-                "Text": "Homepage:"
+                "Text": "Homepage:",
+                "For": "TxtHome"
               }
             },
             {
@@ -183,7 +191,8 @@
               "name": "LblBug",
               "properties": {
                 "HAlign": "End",
-                "Text": "Bug tracker:"
+                "Text": "Bug tracker:",
+                "For": "TxtBug"
               }
             },
             {
@@ -200,7 +209,8 @@
               "name": "LblCats",
               "properties": {
                 "HAlign": "End",
-                "Text": "Categories:"
+                "Text": "Categories:",
+                "For": "TxtCats"
               }
             },
             {
@@ -219,7 +229,8 @@
           "name": "LblDesc",
           "properties": {
             "HAlign": "Start",
-            "Text": "Description:"
+            "Text": "Description:",
+            "For": "TxtDesc"
           }
         },
         {

@@ -317,6 +317,8 @@ class RecorderForm extends Form {
 
         this.BtnPlay.Text    = File.Name(this._path);
         this.BtnPlay.Tooltip = this._path;
+        this.BtnPlay.AccessibleName =
+            Locale.Text("Play {0}", File.Name(this._path));
         this.LblInfo.Text    = `${clock(wavSeconds(this._path))} · ${size(info.Size)}`;
     }
 

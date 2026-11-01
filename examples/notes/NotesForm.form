@@ -113,7 +113,8 @@
           "name": "Ed",
           "properties": {
             "Enabled": false,
-            "MinWidth": 240
+            "MinWidth": 240,
+            "AccessibleName": "Note"
           }
         }
       ]

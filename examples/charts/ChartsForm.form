@@ -94,7 +94,7 @@
       "name": "Load",
       "properties": {
         "Type": "Line",
-        "Title": "Six hours of readings \u2014 wheel to zoom, drag to pan, double click to reset",
+        "Title": "Six hours of readings — wheel to zoom, drag to pan, double click to reset",
         "Legend": "Bottom",
         "Expand": true,
         "Zoomable": true
@@ -113,7 +113,8 @@
           "type": "ComboBox",
           "name": "CmbType",
           "properties": {
-            "Width": 110
+            "Width": 110,
+            "AccessibleName": "Chart type"
           }
         },
         {

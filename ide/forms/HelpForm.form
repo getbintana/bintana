@@ -77,7 +77,8 @@
                     "Height": 28,
                     "Icon": "edit-find-symbolic",
                     "Placeholder": "Find",
-                    "Width": 200
+                    "Width": 200,
+                    "AccessibleName": "Find"
                   }
                 }
               ]

@@ -1116,6 +1116,19 @@ same array. `forget` clears the panel but **keeps the cache**: a project being
 left has nothing to answer for on screen, and its answer is still true when it
 comes back.
 
+**The repair is data beside the sentence.** `Accessibility.entries(root)` is the
+same walk as `findings`, each row `{ text, fix }`; `fix` is `{ label, field }`
+when the caption immediately above a field **has static text** and is the answer
+-- the one repair that needs no new prose and no new translation. An empty label
+(a path or timestamp set at runtime), a status with a `{0}`, and a long help
+sentence are not captions and are not offered. `bintana check --fix` applies those
+`Label.For` repairs, rewrites the `.form` through `File.SaveJson`, and re-runs
+so what it prints is what is left. The IDE's own forms were brought to zero
+warnings this way; the rows the child sends carry the same `fix`, which is what
+a Problems quick-fix would apply. The rest -- a field with no caption, a
+picture, a button with no words -- needs a decision: `AccessibleName`, or
+`AccessibleHidden` when the control is decoration.
+
 **A name a `.form` binds can come from four places, and one is a property.**
 `Names.tableOf` walks `children`, root `menus`, `actions` and each control's own
 `properties.Menu` -- a popup menu is a property of the button that shows it, so

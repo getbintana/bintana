@@ -56,16 +56,15 @@ jobs:
       # The project pass, from a shell and with no display at all: exactly what
       # an application's CI runs. `tests/smoke` drives it too, but inside a
       # project that already has a display; this is the step that proves it
-      # needs none. `--json` keeps the accessibility warnings out of the log
-      # (100 today) and leaves the `Done` line, which says how many there were;
-      # a failure prints the findings.
+      # needs none. `--strict` makes a warning fail, so a caption that names no
+      # field, a handler for an event that does not exist or a property the
+      # class lacks is red here and not a line nobody reads.
       - name: The project check
         run: |
-          ./build/bintana check --json ide > /tmp/bintana-check.json || {
-            cat /tmp/bintana-check.json
-            exit 1
-          }
-          tail -1 /tmp/bintana-check.json
+          ./build/bintana check --strict ide
+          for project in examples/*/; do
+            ./build/bintana check --strict "$project"
+          done
 
       - name: Test
         run: ./tests/run.sh

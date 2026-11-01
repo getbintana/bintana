@@ -65,7 +65,8 @@
               "name": "BtnPoly",
               "properties": {
                 "Icon": "vector-polyline-symbolic",
-                "Tooltip": "Polyline — click each point; click the first to close it, Return or double click to end (5)"
+                "Tooltip": "Polyline — click each point; click the first to close it, Return or double click to end (5)",
+                "AccessibleName": "Polyline"
               }
             },
             {
@@ -150,7 +151,8 @@
               "type": "Label",
               "name": "LblOpacity",
               "properties": {
-                "Text": "Opacity"
+                "Text": "Opacity",
+                "For": "Alpha"
               }
             },
             {
@@ -170,7 +172,8 @@
               "type": "Label",
               "name": "LblBrush",
               "properties": {
-                "Text": "Width"
+                "Text": "Width",
+                "For": "Brush"
               }
             },
             {
@@ -211,7 +214,10 @@
                 "Text": "Redo",
                 "Tooltip": "Redo what Undo took (Ctrl+Y)",
                 "Width": 90,
-                "Shortcut": ["<Control>y", "<Control><Shift>z"]
+                "Shortcut": [
+                  "<Control>y",
+                  "<Control><Shift>z"
+                ]
               }
             },
             {

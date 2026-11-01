@@ -47,7 +47,8 @@
           "name": "BtnOther",
           "properties": {
             "Text": "",
-            "Visible": false
+            "Visible": false,
+            "AccessibleName": "Other"
           }
         },
         {

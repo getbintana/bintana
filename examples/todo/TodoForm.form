@@ -17,7 +17,8 @@
         "Placeholder": "What needs doing?",
         "Width": 396,
         "X": 12,
-        "Y": 12
+        "Y": 12,
+        "AccessibleName": "New task"
       }
     },
     {

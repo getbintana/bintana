@@ -14,7 +14,8 @@
         "Icon": "applications-development",
         "Width": 24,
         "X": 12,
-        "Y": 12
+        "Y": 12,
+        "AccessibleHidden": true
       }
     },
     {

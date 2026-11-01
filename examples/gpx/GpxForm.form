@@ -50,7 +50,8 @@
         "VAlign": "Start",
         "Width": 400,
         "X": 12,
-        "Y": 56
+        "Y": 56,
+        "AccessibleName": "Track name"
       }
     },
     {
@@ -78,7 +79,8 @@
         "VAlign": "Start",
         "Width": 40,
         "X": 800,
-        "Y": 56
+        "Y": 56,
+        "AccessibleName": "Zoom out"
       }
     },
     {

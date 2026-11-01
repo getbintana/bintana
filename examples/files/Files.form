@@ -65,7 +65,8 @@
         "Tooltip": "Anywhere in the name, accents folded. The rows are not rebuilt to filter",
         "Width": 300,
         "X": 13,
-        "Y": 56
+        "Y": 56,
+        "AccessibleName": "Filter by name"
       }
     },
     {
@@ -85,7 +86,8 @@
         "Text": "Everything",
         "Width": 150,
         "X": 321,
-        "Y": 56
+        "Y": 56,
+        "AccessibleName": "File kind"
       }
     },
     {

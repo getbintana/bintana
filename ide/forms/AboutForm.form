@@ -25,7 +25,8 @@
           "name": "ImgAbout",
           "properties": {
             "Icon": "applications-engineering-symbolic",
-            "Size": 96
+            "Size": 96,
+            "AccessibleHidden": true
           }
         },
         {

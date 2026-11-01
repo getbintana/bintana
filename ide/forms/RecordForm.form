@@ -16,7 +16,8 @@
         "Text": "Record:",
         "Width": 60,
         "X": 12,
-        "Y": 18
+        "Y": 18,
+        "For": "TxtRecClass"
       }
     },
     {
@@ -38,7 +39,8 @@
         "Text": "Naming:",
         "Width": 60,
         "X": 272,
-        "Y": 18
+        "Y": 18,
+        "For": "CmbRecNaming"
       }
     },
     {
@@ -144,7 +146,8 @@
         "Text": "Name:",
         "Width": 60,
         "X": 12,
-        "Y": 298
+        "Y": 298,
+        "For": "TxtRecName"
       }
     },
     {
@@ -166,7 +169,8 @@
         "Text": "Kind:",
         "Width": 60,
         "X": 292,
-        "Y": 298
+        "Y": 298,
+        "For": "CmbRecKind"
       }
     },
     {
@@ -209,7 +213,8 @@
         "Text": "As:",
         "Width": 32,
         "X": 340,
-        "Y": 340
+        "Y": 340,
+        "For": "TxtRecAs"
       }
     },
     {
@@ -230,7 +235,8 @@
         "Text": "Default:",
         "Width": 64,
         "X": 12,
-        "Y": 378
+        "Y": 378,
+        "For": "TxtRecDef"
       }
     },
     {
@@ -251,7 +257,8 @@
         "Text": "Min:",
         "Width": 40,
         "X": 292,
-        "Y": 378
+        "Y": 378,
+        "For": "TxtRecMin"
       }
     },
     {
@@ -272,7 +279,8 @@
         "Text": "Max:",
         "Width": 44,
         "X": 428,
-        "Y": 378
+        "Y": 378,
+        "For": "TxtRecMax"
       }
     },
     {
@@ -293,7 +301,8 @@
         "Text": "Decimals:",
         "Width": 84,
         "X": 292,
-        "Y": 422
+        "Y": 422,
+        "For": "CmbRecDec"
       }
     },
     {
@@ -314,7 +323,8 @@
         "Text": "Values:",
         "Width": 64,
         "X": 12,
-        "Y": 466
+        "Y": 466,
+        "For": "TxtRecValues"
       }
     },
     {
@@ -335,7 +345,8 @@
         "Text": "Holds:",
         "Width": 64,
         "X": 12,
-        "Y": 510
+        "Y": 510,
+        "For": "TxtRecOf"
       }
     },
     {

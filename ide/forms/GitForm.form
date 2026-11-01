@@ -119,7 +119,8 @@
                         "MinWidth": 120,
                         "ReadOnly": true,
                         "VAlign": "Fill",
-                        "VExpand": true
+                        "VExpand": true,
+                        "AccessibleName": "Before"
                       }
                     },
                     {
@@ -133,7 +134,8 @@
                         "MinWidth": 120,
                         "ReadOnly": true,
                         "VAlign": "Fill",
-                        "VExpand": true
+                        "VExpand": true,
+                        "AccessibleName": "After"
                       }
                     }
                   ]
@@ -149,7 +151,8 @@
                     "Language": "diff",
                     "ReadOnly": true,
                     "VAlign": "Fill",
-                    "VExpand": true
+                    "VExpand": true,
+                    "AccessibleName": "Unified"
                   }
                 }
               ]
@@ -167,7 +170,8 @@
         "Margin": 12,
         "Style": "caption-heading",
         "Text": "Commit message",
-        "Width": 105
+        "Width": 105,
+        "For": "Message"
       }
     },
     {
