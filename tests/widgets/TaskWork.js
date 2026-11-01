@@ -252,6 +252,17 @@ class TaskWork extends Task {
             }
         }
 
+        /* A task whose work is its effect has nothing to answer. */
+        if (msg.mode === "void")
+            return;
+
+        /* JavaScript lets a program throw what it likes; both of these have a
+         * sentence even though neither has a stack. */
+        if (msg.mode === "throw-string")
+            throw "task string " + msg.n;
+        if (msg.mode === "throw-object")
+            throw { code: msg.n };
+
         if (msg.mode === "boom")
             throw new Error("task boom " + msg.n);
         if (msg.mode === "spin") {

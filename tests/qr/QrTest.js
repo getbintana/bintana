@@ -79,12 +79,12 @@ class QrTest extends Form {
     testReedSolomon() {
         const hex = (a) => a.map((b) => b.toString(16).padStart(2, "0")).join(" ");
 
-        const annex = qrInterleave([0x10, 0x20, 0x0c, 0x56, 0x61, 0x80, 0xec, 0x11,
+        const annex = qrInternals.qrInterleave([0x10, 0x20, 0x0c, 0x56, 0x61, 0x80, 0xec, 0x11,
                                     0xec, 0x11, 0xec, 0x11, 0xec, 0x11, 0xec, 0x11], 1, "M");
         eq("annex I: the ten EC codewords of 01234567 at 1-M",
            hex(annex.slice(16)), "a5 24 d4 c1 ed 36 c7 87 2c 55");
 
-        const hello = qrInterleave([0x20, 0x5b, 0x0b, 0x78, 0xd1, 0x72, 0xdc, 0x4d,
+        const hello = qrInternals.qrInterleave([0x20, 0x5b, 0x0b, 0x78, 0xd1, 0x72, 0xdc, 0x4d,
                                     0x43, 0x40, 0xec, 0x11, 0xec], 1, "Q");
         eq("HELLO WORLD at 1-Q: its thirteen EC codewords",
            hello.slice(13).join(" "), "168 72 22 82 217 54 156 0 46 15 180 122 16");
@@ -141,17 +141,17 @@ class QrTest extends Form {
                         40: [2956, 2334, 1666, 1276] };
         for (const v in table)
             eq(`data codewords at version ${v}`,
-               ["L", "M", "Q", "H"].map((e) => qrDataCodewords(Number(v), e)).join(","),
+               ["L", "M", "Q", "H"].map((e) => qrInternals.qrDataCodewords(Number(v), e)).join(","),
                table[v].join(","));
 
         /* And every version's blocks divide what is there. */
         let bad = [];
         for (let v = 1; v <= 40; v++)
             for (const e of ["L", "M", "Q", "H"]) {
-                const raw = Math.floor(qrRawModules(v) / 8);
-                const n = QR_BLOCKS[e][v];
+                const raw = Math.floor(qrInternals.qrRawModules(v) / 8);
+                const n = qrInternals.QR_BLOCKS[e][v];
                 const shortLen = Math.floor(raw / n);
-                if (shortLen - QR_ECC_PER_BLOCK[e][v] < 1 || qrDataCodewords(v, e) < 1)
+                if (shortLen - qrInternals.QR_ECC_PER_BLOCK[e][v] < 1 || qrInternals.qrDataCodewords(v, e) < 1)
                     bad.push(`${v}-${e}`);
             }
         eq("every version and level has room for data in every block", bad.join(" "), "");
@@ -243,9 +243,9 @@ class QrTest extends Form {
         check("an alignment pattern at (22, 22)", c.Dark(22, 22) && !c.Dark(21, 22) && c.Dark(20, 22));
         check("and at (38, 6), between two finders",
               c.Dark(38, 6) && !c.Dark(37, 6) && c.Dark(36, 6));
-        eq("the alignment centres of version 32", qrAlignment(32).join(","), "6,34,60,86,112,138");
-        eq("and of version 36", qrAlignment(36).join(","), "6,24,50,76,102,128,154");
-        eq("version 1 has none", qrAlignment(1).length, 0);
+        eq("the alignment centres of version 32", qrInternals.qrAlignment(32).join(","), "6,34,60,86,112,138");
+        eq("and of version 36", qrInternals.qrAlignment(36).join(","), "6,24,50,76,102,128,154");
+        eq("version 1 has none", qrInternals.qrAlignment(1).length, 0);
 
         eq("outside the symbol is light", c.Dark(-1, 0) || c.Dark(0, c.Size), false);
     }

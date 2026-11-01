@@ -27218,6 +27218,29 @@ class Form1 extends Form {
             Locale.Current = "";
         });
 
+        /*
+         * **A library whose module is pure crosses by being a module.** `xlsx`
+         * is one file; `qr` keeps its view in a script beside `QrCode.js`, and
+         * the module loader skips a script in a worker.  Both write and encode
+         * with the classes the main thread uses, from their own file.
+         */
+        steps.push(() => {
+            Directory.Make(SCRATCH);
+            const path = File.Join(SCRATCH, "task-library.xlsx");
+            const t    = new LibraryTask();
+
+            t.Error = (m) => fail(`library errored: ${m}`);
+            t.Done  = (r) => {
+                eq("a worker writes an xlsx through a library", r.sheets, 1);
+                check("...and the file is there", r.size > 0, String(r.size));
+                eq("...and encodes a QR", r.qrSize, 21);
+                eq("...of the version that fits", r.qrVersion, 1);
+                File.Delete(path);
+                next();
+            };
+            t.Start({ path });
+        });
+
         /* Entropy, a keyed digest and a compressor have no callbacks and no list,
          * so a worker has them -- and compressing is what a worker is for. */
         steps.push(() => {
@@ -27367,6 +27390,44 @@ class Form1 extends Form {
                 next();
             };
             t.Start({ mode: "boom", n: 42 });
+        });
+
+        /* A task whose work is its effect answers nothing, and that is null. */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`void errored: ${m}`);
+            t.Done  = (r) => {
+                eq("a Run that returns nothing answers null", r, null);
+                next();
+            };
+            t.Start({ mode: "void" });
+        });
+
+        /* A thrown string is a sentence even without an Error around it. */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Done  = () => fail("a thrown string must not reach Done");
+            t.Error = (m, stack) => {
+                eq("a thrown string is its own message", m, "task string 7");
+                eq("...and has no stack", stack, "");
+                next();
+            };
+            t.Start({ mode: "throw-string", n: 7 });
+        });
+
+        /* A thrown object is its JSON, not `[object Object]`. */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Done  = () => fail("a thrown object must not reach Done");
+            t.Error = (m, stack) => {
+                eq("a thrown object is its JSON", m, '{"code":8}');
+                eq("...and has no stack", stack, "");
+                next();
+            };
+            t.Start({ mode: "throw-object", n: 8 });
         });
 
         /* The guard ends a run that will not end itself, and says it was the

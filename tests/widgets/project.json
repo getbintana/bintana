@@ -9,10 +9,12 @@
     "Gadgets/Stepper.js",
     "Translated.js",
     "TaskWork.js",
+    "LibraryTask.js",
     "WidgetsForm.js"
   ],
   "uses": [
     "dialog",
-    "xlsx"
+    "xlsx",
+    "qr"
   ]
 }

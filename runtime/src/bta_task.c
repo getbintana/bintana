@@ -1262,18 +1262,51 @@ static int task_interrupt(JSContext *ctx, void *opaque)
 static void task_exc_text(JSContext *ctx, char **msg, char **stack)
 {
     JSValue     exc = JS_GetException(ctx);
-    JSValue     m   = JS_GetPropertyStr(ctx, exc, "message");
-    JSValue     st  = JS_GetPropertyStr(ctx, exc, "stack");
     const char *s;
 
-    s = JS_ToCString(ctx, m);
-    *msg = g_strdup(s ? s : "error");
-    JS_FreeCString(ctx, s);
-    s = JS_ToCString(ctx, st);
-    *stack = g_strdup(s ? s : "");
-    JS_FreeCString(ctx, s);
-    JS_FreeValue(ctx, m);
-    JS_FreeValue(ctx, st);
+    /*
+     * **An `Error` has a message and a stack; anything else is what it is.**
+     * JavaScript lets a program `throw "boom"` or `throw { code: 7 }`, and
+     * reading `.message` off those answered the literal `"undefined"` -- a
+     * failure with no failure in it.  A thrown string is the sentence; an
+     * object is its JSON when it has one, and `String` when it does not
+     * (a cycle, a function, a converter that throws).  Only an `Error` carries
+     * a stack, so everything else answers `""`.
+     */
+    if (JS_IsError(exc)) {
+        JSValue m  = JS_GetPropertyStr(ctx, exc, "message");
+        JSValue st = JS_GetPropertyStr(ctx, exc, "stack");
+
+        s = JS_ToCString(ctx, m);
+        *msg = g_strdup(s && *s ? s : "error");
+        JS_FreeCString(ctx, s);
+        s = JS_ToCString(ctx, st);
+        *stack = g_strdup(s ? s : "");
+        JS_FreeCString(ctx, s);
+        JS_FreeValue(ctx, m);
+        JS_FreeValue(ctx, st);
+    } else {
+        JSValue json = JS_IsObject(exc) && !JS_IsFunction(ctx, exc)
+                     ? JS_JSONStringify(ctx, exc, JS_UNDEFINED, JS_UNDEFINED)
+                     : JS_UNDEFINED;
+
+        if (JS_IsException(json)) {
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            json = JS_UNDEFINED;
+        }
+        s = JS_ToCString(ctx, JS_IsUndefined(json) ? exc : json);
+        if (!s) {
+            /* A symbol, or something whose conversion threw: the failure to
+             * describe the failure still has to leave nothing pending. */
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            *msg = g_strdup("error");
+        } else {
+            *msg = g_strdup(*s ? s : "error");
+            JS_FreeCString(ctx, s);
+        }
+        JS_FreeValue(ctx, json);
+        *stack = g_strdup("");
+    }
     JS_FreeValue(ctx, exc);
 }
 
@@ -1432,6 +1465,15 @@ static gpointer task_thread(gpointer data)
     if (job->fail) {
         JS_FreeValue(ctx, ans);
         goto unwind;
+    }
+
+    /* **`Run` with no `return` is a task that answers nothing**, which is the
+     * ordinary JavaScript shape and not a message with an `undefined` in it.
+     * The message check still refuses `undefined` in an object or an array;
+     * this one becomes the `null` a `Done` handler already knows how to read. */
+    if (JS_IsUndefined(ans)) {
+        JS_FreeValue(ctx, ans);
+        ans = JS_NULL;
     }
     job->result_json = task_pack(ctx, ans);
     JS_FreeValue(ctx, ans);

@@ -118,6 +118,12 @@ Built the way the main context is — `bta_new_context`, the `init` functions,
   `Field`, `Table`, `Sqlite`, an `Application` that answers facts,
   `File`/`Directory` for reading, and **`Locale` whole** — its catalogue is
   this worker's own, pinned to the language at `Start` (see below).
+- **Libraries a pure module can import:** `xlsx` and `qr`'s encoder are
+  modules with no widget in them, so a task's `import { Xlsx } from "xlsx"` /
+  `import { QrCode } from "qr"` works. A script beside the module (`QrView.js`)
+  is skipped. A library of several modules still needs a `worker` manifest to
+  say which of them are safe; that is the next step, not a thing this shape
+  already solves.
 
 ### The catalogue, which is per thread and not behind a lock
 
