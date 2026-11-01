@@ -176,6 +176,11 @@ static int run_check(int argc, char **argv)
     g_ptr_array_add(args, NULL);
 
     BtaApp *app = bta_app_new(tool);
+    if (!app) {
+        g_ptr_array_unref(args);
+        g_free(tool);
+        return 2;
+    }
     app->args = (char **)args->pdata;
 
     char *fake_argv[] = { argv[0], NULL };
@@ -371,6 +376,11 @@ int main(int argc, char **argv)
     }
 
     BtaApp *app = bta_app_new(dir);
+    if (!app) {
+        bta_profile_finish();
+        g_ptr_array_unref(rest);
+        return 2;
+    }
     app->args = (char **)rest->pdata;
 
     if (form) {

@@ -3237,6 +3237,12 @@ BtaApp *bta_app_new(const char *project_dir)
     app->startup_form = JS_UNDEFINED;   /* not all-zero: g_new0 is not enough */
     app->dir = g_canonicalize_filename(project_dir, NULL);
     app->rt  = JS_NewRuntime();
+    if (!app->rt) {
+        fprintf(stderr, "bintana: out of memory: the runtime would not start\n");
+        g_free(app->dir);
+        g_free(app);
+        return NULL;
+    }
 
     /*
      * A widget tree is recursive data and the code that walks it -- the
@@ -3284,6 +3290,13 @@ BtaApp *bta_app_new(const char *project_dir)
 #endif
 
     app->ctx = bta_new_context(app->rt);
+    if (!app->ctx) {
+        fprintf(stderr, "bintana: out of memory: the context would not start\n");
+        JS_FreeRuntime(app->rt);
+        g_free(app->dir);
+        g_free(app);
+        return NULL;
+    }
     JS_SetRuntimeOpaque(app->rt, app);
     JS_SetContextOpaque(app->ctx, app);
 

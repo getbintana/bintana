@@ -2236,6 +2236,14 @@ and comes up with `GLOBAL`, `File.LoadJson` and `Settings` undefined. Keep only
 the Bintana block, and run the same check on `forms.js`: it names the file in
 one line and costs nothing.
 
+**`JS_NewContextRaw` now unlinks a context whose `class_proto` allocation
+fails** (`8e14a39`), and that is the function `bta_new_context` calls. Before
+the fix its `if (!ctx) return NULL` returned with the context still on the
+runtime's GC list, so the next `JS_FreeRuntime` walked freed memory -- the
+check was there and was not the whole answer. `bta_app_new` and `bta_task` now
+check `JS_NewRuntime` and `bta_new_context` and say out of memory instead of
+dereferencing the failure.
+
 **A stale `origin/bintana` in the submodule looks exactly like a diverged pin,
 and it is not one.** Working on the seventh patch, `vendor/quickjs` sat detached
 at a commit whose history had the same seven subjects as `origin/bintana` and

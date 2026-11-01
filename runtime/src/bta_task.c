@@ -1301,6 +1301,12 @@ static gpointer task_thread(gpointer data)
     JSValue     r, cls, inst, run, msg, ans;
 
     rt = JS_NewRuntime();
+    if (!rt) {
+        job->fail       = 1;
+        job->fail_msg   = g_strdup("Task: the worker runtime would not start");
+        job->fail_stack = g_strdup("");
+        goto done;
+    }
     /* The budget is bytes and buys levels -- the same numbers the main runtime
      * uses, since a worker walks the same shapes.  `JS_NewRuntime` records the
      * stack top of the thread that calls it, which is why this is here and not
