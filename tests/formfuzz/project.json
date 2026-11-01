@@ -1,0 +1,5 @@
+{
+  "name": "formfuzz",
+  "main": "main",
+  "description": "Deterministic mutation fuzzing for the .form loader, one child run per case."
+}

@@ -483,6 +483,53 @@ class TestForm extends Form {
                   fixed.Output);
             eq("...leaving a clean pass", run(dir).ExitCode, 0);
 
+            /* A `.form` a person edited can be any JSON at all. The pass reads
+             * files it did not write, so a shape it cannot walk is a row about
+             * that file and not a stack trace that stops the pass -- which is
+             * what a `null` root and a `children` left as an object used to
+             * do. The loader refuses the same shapes (`bta_form.c`), asserted
+             * in `tests/widgets`. */
+            for (const [what, form, said] of [
+                ["null",                     "null",                        "a .form is a JSON object"],
+                ["an array",                 "[]",                          "a .form is a JSON object"],
+                ["children not a list",      '{"children": 42}',            '"children" is not a list'],
+                ["properties not an object", '{"properties": []}',          '"properties" is not an object'],
+                ["menus not a list",         '{"menus": 42}',               '"menus" is not a list'],
+                ["actions not a list",       '{"actions": 42}',             '"actions" is not a list'],
+                ["a null child",             '{"children": [null]}',        "children[0] is not a control"],
+                ["a child with no type",     '{"children": [{"name": "B"}]}', 'children[0] has no "type"'],
+                ["a name that is not one",
+                 '{"children": [{"type": "Button", "name": "a b"}]}',
+                 'children[0] is called "a b", which is not a name'],
+                ["a menu name that is not one",
+                 '{"menus": [{"name": "a b", "text": "x"}]}',
+                 'menus[0] is called "a b", which is not an action name'],
+                ["menu children not a list",
+                 '{"menus": [{"name": "M", "children": 42}]}',
+                 'menus[0]: "children" is not a list'],
+                ["a null menu item", '{"menus": [null]}',
+                 "menus[0] is not a menu item"],
+                ["a command with an underscore",
+                 '{"actions": [{"name": "M_1", "text": "x"}]}',
+                 'actions[0] is called "M_1", which is not an action name'],
+                ["a command name that is not one",
+                 '{"actions": [{"name": "a b", "text": "x"}]}',
+                 'actions[0] is called "a b", which is not an action name'],
+            ]) {
+                write("Main.form", form);
+                const res = run(dir);
+                eq(`a form with ${what} is an error`, res.ExitCode, 1);
+                check(`...saying ${said}`, res.Output.includes(said), res.Output);
+            }
+
+            write("Main.form", '{"children":[' +
+                                '{"type":"Panel","children":['.repeat(128) +
+                                '{"type":"Panel"}' + ']}'.repeat(129));
+            const tooDeep = run(dir);
+            eq("a tree past the depth limit is an error", tooDeep.ExitCode, 1);
+            check("...naming the limit",
+                  tooDeep.Output.includes("nests deeper than 128"), tooDeep.Output);
+
             /* A clean project says nothing at all. */
             write("project.json", JSON.stringify({
                 name: "smoke-check", main: "Go", sources: ["Go.js"],

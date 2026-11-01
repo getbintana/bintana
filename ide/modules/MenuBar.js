@@ -245,7 +245,12 @@ export class MenuBar {
 
         for (let i = 0; i < list.length; i++) {
             const node = list[i];
-            const key  = `${path}_${i}`;
+            /* A hyphen and not an underscore: the runtime now refuses a menu
+             * name GLib cannot use as a detailed action, and `form.` forbids
+             * `_` while allowing `-` (see `action_name_ok` in `bta_menu.c`).
+             * The handler is still `<name>_Click`, and the underscore there is
+             * part of the property name, not of the action. */
+            const key  = `${path}-${i}`;
 
             if (node.separator) {
                 out.push({ separator: true });
@@ -260,7 +265,7 @@ export class MenuBar {
                 continue;
             }
 
-            const name = `${PREVIEW}${this.serial}_${key}`;
+            const name = `${PREVIEW}${this.serial}-${key}`;
             const item = { name,
                            text: node.text || MenuBar.actionText(node, actions) };
 

@@ -78,6 +78,7 @@ distribution are in [`docs/installing.md`](docs/installing.md), with the
 ./tests/run.sh widgets record                     # the tests whose name contains it
 ./tests/alone.sh                                  # every widget test on its own
 ./tests/alone.sh Table                            # ...the ones whose name contains it
+./tests/formfuzz.sh                               # mutation fuzzing of the .form loader
 ./tests/run.sh ide designer                       # one project, up to one phase
 ./tests/run.sh ide list                           # what a project can be asked for
 ./build/bintana check <project>                   # the project pass, no window, exit 1 on error

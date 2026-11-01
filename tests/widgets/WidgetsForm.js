@@ -533,6 +533,10 @@ const TESTS = [
     /* Blocking too, and for the same reason: the order is pinned from children
      * started in a locale of our choosing. */
     "LocaleOrder",
+    /* Blocking too: one child per malformed `.form`, and each has to finish
+     * before the next is written. Like the three above, it runs before
+     * anything has armed a deadline. */
+    "FormShape",
     /* Blocking too: two children, to see that Today follows the time zone. */
     "Day",
     /* Blocking as well -- `desktop-file-validate` and `gio launch` are children
@@ -12825,6 +12829,89 @@ class Form1 extends Form {
         } finally {
             File.Delete(path);
         }
+    }
+
+    /* --- the shape of a .form ---------------------------------------------
+     *
+     * A `.form` is a file a person edits, so every part of it is a claim until
+     * the loader checks it: a truncated save is `null`, a hand edit leaves
+     * `children` as an object, and a `null` in a list used to be skipped -- a
+     * window with fewer controls and nothing said. Each case is a child
+     * process because the loader runs at startup, which is the only place that
+     * proves the application itself refuses it. `tests/smoke` asks the same
+     * questions of `bintana check`.
+     */
+    testFormShape() {
+        const dir = File.Join(SCRATCH, "shape");
+
+        if (File.IsDir(dir))
+            Directory.DeleteTree(dir);
+        Directory.Make(dir);
+
+        File.SaveJson(File.Join(dir, "project.json"),
+                      { name: "shape", startup: "F", sources: ["F.js"] });
+        File.Save(File.Join(dir, "F.js"),
+                  "class F extends Form {\n" +
+                  "    Form_Open() { print('OPEN ' + this.Controls.length); Application.Quit(0); }\n" +
+                  "}\n");
+
+        const run = (form) => {
+            File.Save(File.Join(dir, "F.form"), form);
+            return Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        };
+
+        for (const [what, form, said] of [
+            ["null",                    "null",                        "a .form is a JSON object"],
+            ["an array",                "[]",                          "a .form is a JSON object"],
+            ["children not a list",     '{"children": 42}',            '"children" is not a list'],
+            ["properties not an object",'{"properties": []}',          '"properties" is not an object'],
+            ["menus not a list",        '{"menus": 42}',               '"menus" is not a list'],
+            ["actions not a list",      '{"actions": 42}',             '"actions" is not a list'],
+            ["a null child",            '{"children": [null]}',        "children[0] is not a control"],
+            ["a child with no type",    '{"children": [{"name": "B"}]}', 'a child is missing its "type"'],
+            ["a name that is not one",
+             '{"children": [{"type": "Button", "name": "a b"}]}',
+             "'a b' is not a usable control name"],
+            ["a menu name that is not one",
+             '{"menus": [{"name": "a b", "text": "x"}]}',
+             "'a b' is not a usable item name"],
+            ["menu children not a list",
+             '{"menus": [{"name": "M", "children": 42}]}',
+             '"children" is not a list'],
+            ["a null menu item", '{"menus": [null]}',
+             "menu: item 0 is not an object"],
+            ["a menu name with an underscore",
+             '{"menus": [{"name": "M_1", "text": "x"}]}',
+             "'M_1' is not a usable item name"],
+            ["a command name that is not one",
+             '{"actions": [{"name": "a b", "text": "x"}]}',
+             "'a b' is not a usable command name"],
+        ]) {
+            const r = run(form);
+            eq(`a form with ${what} is refused`, r.ExitCode, 1);
+            check(`...saying ${said}`, r.Output.includes(said), r.Output);
+        }
+
+        /* One level past `BTA_FORM_MAX_DEPTH` in `bta_form.c`. */
+        const deep = '{"children":[' +
+                     '{"type":"Panel","children":['.repeat(128) +
+                     '{"type":"Panel"}' + ']}'.repeat(129);
+        const tooDeep = run(deep);
+        eq("a tree past the depth limit is refused", tooDeep.ExitCode, 1);
+        check("...naming the limit",
+              tooDeep.Output.includes("nests deeper than 128"), tooDeep.Output);
+
+        const whole = run('{"children": [{"type": "Button", "name": "B"}]}');
+        eq("a well-formed form still loads", whole.ExitCode, 0);
+        check("...with its control", whole.Output.includes("OPEN 1"), whole.Output);
+
+        /* GLib's rule is not the identifier one: a hyphen is valid here and an
+         * underscore is not, which is the opposite of a control's name. */
+        const dashed = run('{"menus": [{"name": "M-1", "text": "x", ' +
+                           '"children": [{"name": "S1", "text": "s"}]}]}');
+        eq("a menu name with a hyphen loads", dashed.ExitCode, 0);
+
+        Directory.DeleteTree(dir);
     }
 
     /* --- Designing: a drawing answers to nobody by name ---------------------

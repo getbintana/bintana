@@ -210,9 +210,11 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   so clicking the picture would have opened a project; and `set_accels` ends in
   `gtk_application_set_accels_for_action`, which is the **application** -- a
   designed form with `<Control>s` in its menu takes Ctrl+S off the IDE. Rename
-  after the path and drop the shortcuts (`MenuBar.sanitise`). The same lookup
-  is what makes it work at all: a handler assigned from code is found like any
-  other, which is how a menu built at run time gets one.
+  after the path and drop the shortcuts (`MenuBar.sanitise`), with `-` between
+  the parts: a menu name is a GLib action name, where `_` is refused and `-`
+  allowed, as the next bullet explains. The same lookup is what makes it work
+  at all: a handler assigned from code is found like any other, which is how a
+  menu built at run time gets one.
 - **And that assignment is checked now.** `make_item` and `bta_actions_build`
   both looked away from `JS_SetPropertyStr`, exactly as the control loader did
   before `bta_form.c` was fixed: a menu item or a command named `Actions`,
@@ -222,6 +224,19 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   **nothing is wired until the name is ours** -- the `GSimpleAction` is built
   *after* the bind, because a refused bind frees the wrapper and an action
   already in the group would hold a handler pointing at freed memory.
+- **A name with a space in it aborts the process, and not at the assignment.**
+  `make_item` builds `form.<name>` as the detailed action, and GLib's
+  `g_menu_item_set_detailed_action` treats that string as an identifier:
+  `name: "a b"` ended the program with
+  `GLib-GIO-ERROR: Detailed action name 'form.a b' has invalid format` -- an
+  abort, not a refusal. Measured from a `.form` whose menu named `a b`, and the
+  same for a command. **The rule is GLib's, not the identifier one**:
+  `g_action_name_is_valid` refuses `form.M_1` (underscore) and accepts
+  `form.M-1` (hyphen), the opposite of a control's name, so `action_name_ok`
+  checks the full `form.<name>` before the path is built; a space would have
+  been caught by either rule and an underscore only by this one. The shared
+  `bta_is_identifier` is for controls (`bta_form.c`), the class index and
+  `bta_runtime.c`'s class path, which are all JavaScript identifiers.
 - **`Menu` needs the widget to be in a form's tree already.** It names handlers on
   `w->form`, and a widget that has not been added to anything has none -- the
   property setter says so where it is set. Build, `Add`, *then* assign `Menu`;

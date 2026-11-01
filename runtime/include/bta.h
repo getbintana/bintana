@@ -1356,6 +1356,16 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
  * to one that is not there rather than doing nothing when it is pressed. */
 bool bta_action_exists(BtaWidget *form, const char *name);
 
+/*
+ * Whether `s` is an ASCII identifier: `A-Z`, `a-z`, `_` or `$`, then those and
+ * digits. This is the spelling of a control or a class name, which is narrower
+ * than the JavaScript identifiers underneath. **A menu item or a command is
+ * not this**: it becomes `form.<name>` in a detailed action, and GLib's
+ * `g_action_name_is_valid` allows only alphanumerics, `-` and `.` -- so `_` is
+ * refused there and `.` is accepted. See `action_name_ok` in `bta_menu.c`.
+ */
+bool bta_is_identifier(const char *s);
+
 /* How GTK spells the group a form's commands live in: `form.ActDelete`. */
 #define BTA_ACTION_GROUP "form"
 

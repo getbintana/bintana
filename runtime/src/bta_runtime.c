@@ -1314,16 +1314,6 @@ static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
-static bool is_identifier(const char *s)
-{
-    if (!s || !*s || (!g_ascii_isalpha(*s) && *s != '_' && *s != '$'))
-        return false;
-    for (const char *p = s; *p; p++)
-        if (!g_ascii_isalnum(*p) && *p != '_' && *p != '$')
-            return false;
-    return true;
-}
-
 /* Every dot-separated segment an identifier, and at least one segment. */
 static bool is_class_path(const char *s)
 {
@@ -1334,7 +1324,7 @@ static bool is_class_path(const char *s)
     bool   ok    = true;
 
     for (int i = 0; parts[i]; i++)
-        if (!is_identifier(parts[i]))
+        if (!bta_is_identifier(parts[i]))
             ok = false;
 
     g_strfreev(parts);

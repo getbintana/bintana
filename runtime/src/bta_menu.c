@@ -103,6 +103,8 @@ typedef struct {
     JSValue        items;     /* array; duplicated, reported via gc_mark */
 } BtaMenuItem;
 
+static bool action_name_ok(const char *prefix, const char *name);
+
 /* ---------------------------------------------------- the form's commands */
 
 /*
@@ -1034,6 +1036,13 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
                                           "named so a control can point at it", i),
                    -1;
         }
+        if (!action_name_ok(MENU_GROUP, name)) {
+            JS_ThrowTypeError(ctx, "actions[%u]: '%s' is not a usable command name",
+                              i, name);
+            g_free(name);
+            JS_FreeValue(ctx, spec);
+            return -1;
+        }
 
         /*
          * **A command's handler is `<Name>_Execute`, and it used to be
@@ -1148,6 +1157,26 @@ int bta_actions_build(JSContext *ctx, JSValueConst form_obj, BtaWidget *w,
 /* The menu being built right now. Set by the three entry points around their
  * `build_items`, which never nests one of them inside another. */
 static const void *building_owner;
+
+/*
+ * Whether `prefix.name` is a detailed action name GLib will accept.
+ *
+ * **The rule is GLib's and not JavaScript's.** `g_action_name_is_valid` allows
+ * only alphanumerics, `-` and `.`, so a name with a space *or an underscore* is
+ * invalid -- and `form.M_1` is as fatal as `form.a b`:
+ * `g_action_name_is_valid("form.M_1")` is false, and GTK either aborts on the
+ * detailed action or warns *Don't know how to handle this item* and leaves the
+ * menu short. A dot or a hyphen is fine here and is not an identifier, which is
+ * why this is not `bta_is_identifier`.
+ */
+static bool action_name_ok(const char *prefix, const char *name)
+{
+    char *path = g_strdup_printf("%s.%s", prefix, name);
+    bool  ok   = g_action_name_is_valid(path);
+
+    g_free(path);
+    return ok;
+}
 
 static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *name,
                               JSValueConst spec, GSimpleActionGroup *group,
@@ -1300,6 +1329,20 @@ static bool append_item(JSContext *ctx, JSValueConst form, GMenu *section,
     bool  ok   = false;
 
     /*
+     * `form.<name>` is what this item's action is called, and GLib aborts the
+     * process on a detailed action name with a space in it
+     * (`g_menu_item_set_detailed_action: Detailed action name 'form.a b' has
+     * invalid format`) -- measured, not assumed. An underscore is no safer:
+     * `g_action_name_is_valid("form.M_1")` is false, and GTK answers *Don't
+     * know how to handle this item*. The rule is GLib's, which is why the
+     * check is `action_name_ok` and not the identifier one a control uses.
+     */
+    if (name && !action_name_ok(prefix, name)) {
+        JS_ThrowTypeError(ctx, "menu: '%s' is not a usable item name", name);
+        goto out;
+    }
+
+    /*
      * A menu label is prose declared in the .form, so it goes through the
      * catalogue like a control's Text -- which cannot be said with
      * BtaClass.texts, because a menu item is not a widget and has no class.
@@ -1319,6 +1362,12 @@ static bool append_item(JSContext *ctx, JSValueConst form, GMenu *section,
     }
 
     JSValue kids = JS_GetPropertyStr(ctx, spec, "children");
+    if (!JS_IsUndefined(kids) && !JS_IsNull(kids) && !JS_IsArray(kids)) {
+        JS_ThrowTypeError(ctx, "menu: %s: \"children\" is not a list",
+                          name ? name : "an item");
+        JS_FreeValue(ctx, kids);
+        goto out;
+    }
     if (JS_IsArray(kids)) {
         GMenu *sub = build_items(ctx, form, kids, group, prefix, column);
         if (sub) {
@@ -1482,8 +1531,13 @@ static GMenu *build_items(JSContext *ctx, JSValueConst form, JSValueConst arr,
     for (uint32_t i = 0; i < n && ok; i++) {
         JSValue spec = JS_GetPropertyUint32(ctx, arr, i);
         if (!JS_IsObject(spec)) {
+            /* A list of items is a list of objects. A `null` in it used to be
+             * skipped, which turned a corrupted menu into a shorter one and
+             * nothing said -- the same defect the controls' `children` had. */
+            JS_ThrowTypeError(ctx, "menu: item %u is not an object", i);
             JS_FreeValue(ctx, spec);
-            continue;
+            ok = false;
+            break;
         }
 
         if (spec_bool(ctx, spec, "separator")) {

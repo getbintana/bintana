@@ -9,7 +9,7 @@ Seven Bintana projects are run by the suite — `ide`, `markdown`, `qr`, `report
 non-zero status on failure. They are applications, not a harness — write
 assertions the way the suite already does. A project is any directory under
 `tests/` with a `project.json` that does not declare `main`, so adding one is
-adding a directory: nothing lists them. (The console projects — `api`, `bench`, `icons`,
+adding a directory: nothing lists them. (The console projects — `api`, `bench`, `formfuzz`, `icons`,
 `install`, `pack`, `runner`, `styles` — are tools and are driven by their own
 `.sh`.)
 
@@ -138,6 +138,22 @@ silence, which is the same failure the uncounted `until` above fixes: a
 smaller total with nothing red to say why. A bare `return` is right only after
 an assertion that already failed (`if (!got) return;`), because then the run is
 red and the missing lines cannot be mistaken for a clean pass.
+
+**Fuzzing the format is one child per case, and the case number is the seed.**
+`tests/formfuzz` mutates the seed `.form` (root, `children`, `properties`, a
+node's `type` and `name`, depth, truncation, …) and runs the runtime on each
+case, because the loader runs at startup and a crash there is the question.
+`tests/formfuzz.sh` drives it, under `build-asan` too. It found the pair this
+section now keeps: a `.form` whose root was `null` loaded as an empty window,
+and `bintana check` printed a stack trace for the same file instead of a row.
+The shapes both refuse are in `formats.md`; the rules live in
+`runtime/src/bta_form.c` and `lib/check/Check.js`, and the deep limit is the
+same 128 in both because a file one refuses and the other accepts is a file
+nobody can trust. **128 and not a rounder 512**: the check's walk is one
+JavaScript frame per level, and under the sanitizer a 513-deep file hit
+QuickJS's stack check before the guard, so the finding was *Maximum call stack
+size exceeded* and the test that looked for the sentence was red only there. A mutation is chosen by `case % MUTATORS.length` and the node
+by a deterministic generator, so a failure prints the case that reproduces it.
 **And the same bet can hide in a test that waits, because what it waits *for*
 is not the only clock in it.** `testExecControlLate` starts a child whose
 grandchild writes to descriptor 3 a third of a second later, and asserts the

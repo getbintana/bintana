@@ -16,7 +16,51 @@ static int apply_properties(JSContext *ctx, JSValueConst target,
                             const BtaClass *cls, bool deferred);
 
 static int build_children(JSContext *ctx, JSValueConst form_obj,
-                          BtaWidget *parent, JSValueConst children);
+                          BtaWidget *parent, JSValueConst children, int depth);
+
+/*
+ * How deeply a `.form` may nest. A form is a window, and one eleven levels
+ * deep is already the deepest this tree has; the limit is not about memory but
+ * about the walk being recursive in C and in the check, where a file of twenty
+ * thousand nested panels otherwise ends in a `RangeError` that says nothing
+ * about which file it came from.
+ *
+ * **128 and not 512**: the check's walk is one JavaScript frame per level, and
+ * under `tests/asan.sh` a 513-deep file reached QuickJS's stack check before
+ * the guard did -- the row was *Maximum call stack size exceeded* instead of
+ * the sentence. 128 leaves room under the sanitized stack and is still an
+ * order of magnitude past any real form. `lib/check/Check.js` carries the same
+ * number, because the two have to refuse the same file.
+ */
+#define BTA_FORM_MAX_DEPTH 128
+
+/* An object and not an array: JSON's array is an object to QuickJS, and a
+ * `properties` that is a list would be applied by index. */
+static bool is_json_object(JSValueConst v)
+{
+    return JS_IsObject(v) && !JS_IsArray(v);
+}
+
+/*
+ * The shape of one optional key, `0` when it is there and right.
+ *
+ * `array` says which of the two a key is; absent and `null` are both "not
+ * written", which is how the serialiser leaves a form with no menus.
+ */
+static int shape_of(JSContext *ctx, JSValueConst v, const char *where,
+                    const char *key, bool array)
+{
+    if (JS_IsUndefined(v) || JS_IsNull(v))
+        return 0;
+
+    bool ok = array ? JS_IsArray(v) : is_json_object(v);
+    if (!ok) {
+        JS_ThrowTypeError(ctx, "form: %s: \"%s\" is not %s", where, key,
+                          array ? "a list" : "an object");
+        return -1;
+    }
+    return 0;
+}
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -34,7 +78,7 @@ static char *spec_string(JSContext *ctx, JSValueConst spec, const char *key)
     return out;
 }
 
-static bool is_identifier(const char *s)
+bool bta_is_identifier(const char *s)
 {
     if (!s || !*s || (!g_ascii_isalpha(*s) && *s != '_' && *s != '$'))
         return false;
@@ -346,17 +390,22 @@ static int apply_properties(JSContext *ctx, JSValueConst target,
 /* ----------------------------------------------------------------- children */
 
 static int build_one(JSContext *ctx, JSValueConst form_obj,
-                     BtaWidget *parent, JSValueConst spec)
+                     BtaWidget *parent, JSValueConst spec, int depth)
 {
     char *type = spec_string(ctx, spec, "type");
     char *name = spec_string(ctx, spec, "name");
     int   rc   = -1;
 
+    if (depth > BTA_FORM_MAX_DEPTH) {
+        JS_ThrowRangeError(ctx, "form: the tree nests deeper than %d",
+                           BTA_FORM_MAX_DEPTH);
+        goto out;
+    }
     if (!type) {
         JS_ThrowTypeError(ctx, "form: a child is missing its \"type\"");
         goto out;
     }
-    if (name && !is_identifier(name)) {
+    if (name && !bta_is_identifier(name)) {
         JS_ThrowTypeError(ctx, "form: '%s' is not a usable control name", name);
         goto out;
     }
@@ -420,6 +469,12 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
     BtaClass *cls = bta_class_find(type);
     JSValue   props = JS_GetPropertyStr(ctx, spec, "properties");
 
+    if (shape_of(ctx, props, name ? name : type, "properties", false) < 0) {
+        JS_FreeValue(ctx, props);
+        JS_FreeValue(ctx, obj);
+        goto out;
+    }
+
     int prc = apply_properties(ctx, obj, props, name ? name : type, cls, false);
     if (prc < 0) {
         JS_FreeValue(ctx, props);
@@ -429,13 +484,15 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
 
     JSValue kids = JS_GetPropertyStr(ctx, spec, "children");
     int crc = 0;
-    if (JS_IsArray(kids)) {
+    if (shape_of(ctx, kids, name ? name : type, "children", true) < 0) {
+        crc = -1;
+    } else if (!JS_IsUndefined(kids) && !JS_IsNull(kids)) {
         if (!w->slot) {
             JS_ThrowTypeError(ctx, "form: %s is not a container but has children",
                               type);
             crc = -1;
         } else {
-            crc = build_children(ctx, form_obj, w, kids);
+            crc = build_children(ctx, form_obj, w, kids, depth + 1);
         }
     }
     JS_FreeValue(ctx, kids);
@@ -516,7 +573,7 @@ out:
 }
 
 static int build_children(JSContext *ctx, JSValueConst form_obj,
-                          BtaWidget *parent, JSValueConst children)
+                          BtaWidget *parent, JSValueConst children, int depth)
 {
     JSValue  lenv = JS_GetPropertyStr(ctx, children, "length");
     uint32_t n    = 0;
@@ -525,7 +582,18 @@ static int build_children(JSContext *ctx, JSValueConst form_obj,
 
     for (uint32_t i = 0; i < n; i++) {
         JSValue spec = JS_GetPropertyUint32(ctx, children, i);
-        int     rc   = JS_IsObject(spec) ? build_one(ctx, form_obj, parent, spec) : 0;
+        int     rc;
+
+        /* A list of children is a list of nodes. A `null` or a string in it
+         * used to be skipped, which turned a corrupted file into a window with
+         * fewer controls and nothing said. */
+        if (!JS_IsObject(spec) || JS_IsArray(spec)) {
+            JS_ThrowTypeError(ctx, "form: children[%u] is not a control", i);
+            JS_FreeValue(ctx, spec);
+            return -1;
+        }
+
+        rc = build_one(ctx, form_obj, parent, spec, depth);
         JS_FreeValue(ctx, spec);
         if (rc < 0)
             return -1;
@@ -622,7 +690,7 @@ static void index_class_files(GHashTable *out, const char *dir,
 
         if (g_file_test(path, G_FILE_TEST_IS_DIR)) {
             char *deeper = NULL;
-            if (prefix && is_identifier(name))
+            if (prefix && bta_is_identifier(name))
                 deeper = *prefix ? g_strdup_printf("%s.%s", prefix, name)
                                  : g_strdup(name);
 
@@ -642,7 +710,7 @@ static void index_class_files(GHashTable *out, const char *dir,
         /* Also under the name its folders spell out, which is what a project
          * using namespaces asks for.  A path is unique, so this key cannot
          * collide the way a bare name can. */
-        if (prefix && *prefix && is_identifier(base))
+        if (prefix && *prefix && bta_is_identifier(base))
             index_add(out, g_strdup_printf("%s.%s", prefix, base), path, depth);
 
         g_free(base);
@@ -861,6 +929,19 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
         return -1;
     }
 
+    /*
+     * The file is an object or it is not a `.form`. Everything below reads keys
+     * off it, and a `null` or a list used to answer "no properties, no
+     * children" and load an empty window -- a truncated save, a file of the
+     * wrong kind, and nothing said.
+     */
+    if (!is_json_object(root)) {
+        JS_ThrowTypeError(ctx, "%s: a .form is a JSON object", path);
+        JS_FreeValue(ctx, root);
+        g_free(path);
+        return -1;
+    }
+
     int rc = -1;
     /* Exact, because a component with a `.form` of its own nests one of these
      * inside another and only the outermost may rebuild. */
@@ -889,6 +970,11 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
     JSValue props = JS_GetPropertyStr(ctx, root, "properties");
     /* The form's own properties, before its children: a form has no class row
      * with a deferred property, and its children are the window's controls. */
+    if (shape_of(ctx, props, class_name, "properties", false) < 0) {
+        JS_FreeValue(ctx, props);
+        rc = -1;
+        goto out;
+    }
     rc = apply_properties(ctx, form_obj, props, class_name, NULL, false);
     JS_FreeValue(ctx, props);
     if (rc < 0)
@@ -897,6 +983,11 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
     /* Commands first: a menu item and a control may both name one, and a name
      * that is not there is refused where it is written. */
     JSValue actions = JS_GetPropertyStr(ctx, root, "actions");
+    if (shape_of(ctx, actions, class_name, "actions", true) < 0) {
+        JS_FreeValue(ctx, actions);
+        rc = -1;
+        goto out;
+    }
     rc = bta_actions_build(ctx, form_obj, w, actions);
     JS_FreeValue(ctx, actions);
     if (rc < 0)
@@ -905,14 +996,24 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
     /* Menus before children: the bar takes its place at the top of the window
      * and the slot keeps whatever room is left. */
     JSValue menus = JS_GetPropertyStr(ctx, root, "menus");
+    if (shape_of(ctx, menus, class_name, "menus", true) < 0) {
+        JS_FreeValue(ctx, menus);
+        rc = -1;
+        goto out;
+    }
     rc = bta_menus_build(ctx, form_obj, w, menus);
     JS_FreeValue(ctx, menus);
     if (rc < 0)
         goto out;
 
     JSValue kids = JS_GetPropertyStr(ctx, root, "children");
-    if (JS_IsArray(kids))
-        rc = build_children(ctx, form_obj, w, kids);
+    if (shape_of(ctx, kids, class_name, "children", true) < 0) {
+        JS_FreeValue(ctx, kids);
+        rc = -1;
+        goto out;
+    }
+    if (!JS_IsUndefined(kids) && !JS_IsNull(kids))
+        rc = build_children(ctx, form_obj, w, kids, 1);
     JS_FreeValue(ctx, kids);
 
     /* Every control is built: a caption's `For` that named a sibling declared

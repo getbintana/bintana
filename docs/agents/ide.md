@@ -1129,6 +1129,20 @@ a Problems quick-fix would apply. The rest -- a field with no caption, a
 picture, a button with no words -- needs a decision: `AccessibleName`, or
 `AccessibleHidden` when the control is decoration.
 
+**A malformed `.form` is a row about that file, not the end of the pass.**
+`Check.formShape` reads the shape the loader reads (`bta_form.c`): an object at
+the root, an object for `properties`, lists for `children`, `menus` and
+`actions`, a `type` and an ASCII name on each control, and at most 128 levels.
+It reports every defect as an `Error` at `line: 0` and stops walking that file;
+the rest of the project is still checked. The fuzz pass found both halves of
+this: a `null` `.form` loaded as an empty window, and the same file made
+`bintana check` print a stack trace -- `children` and `menus` were walked by
+`for...of` and `node.name` was read off `null`. `code()` runs the same shape
+check before `tableOf`, or every `.js` beside a broken form reported a second,
+invented problem. The loader now refuses the same shapes with a sentence, so
+the application does not start on a file the panel is already complaining
+about.
+
 **A name a `.form` binds can come from four places, and one is a property.**
 `Names.tableOf` walks `children`, root `menus`, `actions` and each control's own
 `properties.Menu` -- a popup menu is a property of the button that shows it, so

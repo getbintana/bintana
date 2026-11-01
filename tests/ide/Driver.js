@@ -9748,7 +9748,7 @@ function* p_menus(ide) {
     /* Clicking a previewed item writes its handler, which is what a double click
      * does on a control of the canvas and on a row of the editor's tree -- and
      * it is written under the item's *real* name, not the preview's. */
-    const leaf = bar.owned.find((n) => n.endsWith("_0_0"));
+    const leaf = bar.owned.find((n) => n.endsWith("-0-0"));
     check("a leaf has a handler installed", typeof ide[`${leaf}_Click`] === "function");
 
     ide[`${leaf}_Click`]();
