@@ -74,6 +74,15 @@ copy_deps() {
 
 copy_deps "$dest/bin/bintana.exe"
 
+# Vulkan, which `libgtk-4-1.dll` imports at load time -- GTK's Vulkan renderer
+# is built in -- and Windows does not carry: the loader is the GPU driver's,
+# the SDK's, or MSYS2's `vulkan-loader`, and a machine with none of the three
+# never reaches `main` ("vulkan-1.dll was not found").  The closure above does
+# not bring it: on a build machine that has one in `C:\Windows\System32` (the
+# runners do) `ldd` resolves it there, and the copy keeps only what lives under
+# the MSYS2 prefix.  So it is copied by name, and a tree without it is not built.
+cp "$ucrt/bin/vulkan-1.dll" "$dest/bin/"
+
 # GLib's spawn helpers, which no link names: on Windows a child with its output
 # piped -- every `Exec` that reads what it printed, the IDE's Run among them --
 # is started *through* `gspawn-win64-helper.exe` (from a process with no
@@ -112,6 +121,10 @@ for dir in "$ucrt"/lib/gdk-pixbuf-2.0/*/loaders; do
 
     mkdir -p "$out"
     cp -f "$dir"/*.dll "$dest/bin/" 2>/dev/null || true
+
+    # And their own closure: a loader is opened by name, later, so `ldd` on the
+    # exe never saw it -- the SVG one is where `librsvg-2-2.dll` comes from.
+    copy_deps "$dir"/*.dll
 
     # Only the loaders, and only by their bare names: the query tool loads each
     # one to ask what it can read, and every other DLL in `bin` is not a loader.

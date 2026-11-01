@@ -167,6 +167,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-vulkan-loader
             mingw-w64-ucrt-x86_64-gtksourceview5
             mingw-w64-ucrt-x86_64-sqlite3
             mingw-w64-ucrt-x86_64-libsoup3
@@ -326,6 +327,14 @@ jobs:
                   [ -z "$path" ] || test -e "$into/$path" \
                       || { echo "$name: installed without $path" >&2; exit 1; }
               done < "with/$name"
+              # GTK imports vulkan-1.dll at load time and the SVG loader
+              # imports librsvg-2-2.dll: neither is Windows' own, and the
+              # runner's System32 has a Vulkan loader, so a setup missing one
+              # still runs here and fails on a machine whose driver ships none.
+              for dll in vulkan-1.dll librsvg-2-2.dll; do
+                  test -f "$into/bin/$dll" \
+                      || { echo "$name: installed without $dll" >&2; exit 1; }
+              done
               PATH="$clean" "$into/bin/bintana.exe" --version
               PATH="$clean" "$into/bin/bintana.exe" "$smoke"
               # No console, so nothing it prints is seen: the exit code is the
