@@ -22384,8 +22384,8 @@ class Form1 extends Form {
         eq("Delete removes it", File.Exists(path), false);
 
         throws("loading a missing file throws", () => File.Load(File.Join(SCRATCH, "nope")));
-        /* And as an ordinary Error: an `InternalError` is uncatchable in the
-         * QuickJS after v0.17.0, and the runtime's refusals used to be one. */
+        /* And as an ordinary Error: an `InternalError` is uncatchable since
+         * QuickJS v0.18.0, and the runtime's refusals used to be one. */
         let missing = null;
         try { File.Load(File.Join(SCRATCH, "nope")); } catch (e) { missing = e.name; }
         eq("a refusal is an Error a program catches", missing, "Error");

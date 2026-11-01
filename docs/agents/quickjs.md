@@ -6,26 +6,25 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.17.0** plus the eighteen patches below, one commit each (the eighth
-carries a fix as a second commit, `1493dc7`, until it is squashed into it). The fork's
+upstream **v0.18.0** plus the eighteen patches below, one commit each (the eighth
+carries a fix as a second commit until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
 
-**And one upstream fix taken before its release: the GCC 14+ fix, `6de8b67`
-in the fork, a port of bellard/quickjs `10c81b1`, which made the interpreter two to three times faster here.** `JS_MKVAL`
+**The GCC 14+ fix, a port of bellard/quickjs `10c81b1` (`2f0aa72` upstream),
+is in v0.18.0, and the cherry-pick that carried it before the release
+(`6de8b67`) is gone: the rebase dropped it, as designed.** `JS_MKVAL`
 wrote only the 32-bit half of a `JSValue`'s union, and since GCC 14 (GCC PR
 114134) every `js_int32`/`js_bool` inlined into `JS_CallInternal` became a
 read-modify-write through the stack. On GCC 16: a 3e7-turn integer
 loop went **1650 -> 580 ms** and 2e7 property reads **1092 -> 570 ms**, Release
-against Release. It is a port under the eleventh and not a patch,
-listed in `BINTANA.md`, and the rebase onto the release that contains it simply
-drops it. **The release builds were `-O0` too**: an unset
+against Release. **The release builds were `-O0` too**: an unset
 `CMAKE_BUILD_TYPE` is `Debug` here, and the `package` and `windows` jobs set
 none, so the tarball and the zip ran four times slower than the same source
 optimised -- `RelWithDebInfo` in both now, as `docs/installing.md` says.
 
 **The runtime never throws an `InternalError`, because upstream made that
-class uncatchable from JavaScript** (`db0fe52`, after v0.17.0) -- it means the
+class uncatchable from JavaScript** (`db0fe52`, in v0.18.0) -- it means the
 engine is in a state nobody should carry on from. The runtime used to throw one
 122 times, for ordinary failures a program is documented to catch (`File.Load`'s
 *cannot read*, Http, Zip, Sqlite, Media), so on that engine every `try {
@@ -35,12 +34,23 @@ argument that wanted a `TypeError`. `tests/api` fails on a
 `JS_ThrowInternalError` anywhere under `runtime/src`, naming the line, and
 `tests/widgets`' `File` asserts a failed `File.Load` is caught as an `Error`
 (red on the old spelling). A new throw is `JS_ThrowPlainError`, or a
-`TypeError`/`RangeError` when that is what the refusal is. The rebase past
-v0.17.0 still has two things to read: the same range changes
-`JSInterruptHandler` to take a `JSContext*` (`876442b`, `task_interrupt` in
-`bta_task.c`) and compiles an untagged template literal to `OP_add` (`c359cac`),
-which is the path patch 1 hooks -- `testDecimal`'s template assertions are the
-ones to read.
+`TypeError`/`RangeError` when that is what the refusal is. The rebase onto
+v0.18.0 took the two changes it brought: `JSInterruptHandler` now
+takes a `JSContext*` (`876442b`, `task_interrupt` in `bta_task.c`), and an
+untagged template literal compiles to `OP_add` (`c359cac`), which is the path
+patch 1 hooks -- `testDecimal`'s template assertions are the ones to read.
+
+**v0.18.0 reverted the computed-property evaluation-order block, and patch 10's
+hunk sits exactly on it.** `0db3949` implements the spec change (ToPropertyKey
+after the right-hand side) by removing `e995085`'s block from
+`js_parse_assign_expr2`; patch 10's diff carries the old block as context, so a
+resolution that takes "both sides" puts it back. Nothing fails to build. The
+engine's bytecode verifier then refuses the prelude -- `qjs -C
+runtime/js/rad.js` answers `InternalError: stack underflow (op=17, pc=0)`,
+`op=17` being `dup` at pc 0 -- and Bintana prints it twice (rad.js and forms.js)
+and comes up with `GLOBAL`, `File.LoadJson` and `Settings` undefined. Keep only
+the Bintana block, and run the same check on `forms.js`: it names the file in
+one line and costs nothing.
 
 **A stale `origin/bintana` in the submodule looks exactly like a diverged pin,
 and it is not one.** Working on the seventh patch, `vendor/quickjs` sat detached
@@ -74,7 +84,7 @@ An upgrade happens in two repositories:
 
 ```sh
 # in a checkout of the fork
-git fetch upstream --tags && git rebase v0.18.0 bintana   # resolve, build
+git fetch upstream --tags && git rebase v0.19.0 bintana   # resolve, build
 git push --force-with-lease origin bintana
 
 # in this tree

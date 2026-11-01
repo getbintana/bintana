@@ -1237,9 +1237,10 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
 
 /* ------------------------------------------------------------ the thread */
 
-static int task_interrupt(JSRuntime *rt, void *opaque)
+static int task_interrupt(JSContext *ctx, void *opaque)
 {
     volatile gint *stop = opaque;
+    (void)ctx;
 
     /* 1 is a request and not an abort: a worker that watches `Stopping` gets
      * to finish its sentence.  2 (timed out) and 3 (forced) are the ones that

@@ -35,7 +35,7 @@ runtime/js/rad.js the JS half, baked into the binary
 
 `vendor/quickjs` is a submodule of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`
--- quickjs-ng **v0.17.0** plus **eighteen local patches** as one commit each,
+-- quickjs-ng **v0.18.0** plus **eighteen local patches** as one commit each,
 among them the
 arithmetic hook that gives `Decimal` its operators, `js_atod` so `JSON.parse`
 does not read the locale's decimal comma, the refusal message that names the
