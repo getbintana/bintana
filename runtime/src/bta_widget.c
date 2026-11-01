@@ -3408,6 +3408,61 @@ static JSValue w_property_names_by_type(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/*
+ * DeferredProperties(type): the properties a `.form` applies **after the
+ * class's children are built**.
+ *
+ * The one answer both loaders share -- `bta_form.c` for the file a form is
+ * built from, and `forms.js`'s `AddNode` for a node a designer builds -- so a
+ * class does not have to state its order twice, and a setter does not have to
+ * keep a pending value. `ListBox.Index` and `ComboBox.Index` are the callers:
+ * a selection needs rows, and `Items` is applied before the children.
+ *
+ * A name that is no class of this runtime answers `[]` rather than throwing:
+ * a project component is built by the JavaScript loader and has no class row
+ * here, and it defers nothing.
+ */
+static JSValue w_deferred_properties_by_type(JSContext *ctx, JSValueConst this_val,
+                                             int argc, JSValueConst *argv)
+{
+    if (argc < 1 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx,
+            "DeferredProperties(type) expects a class name");
+
+    const char *type = JS_ToCString(ctx, argv[0]);
+    if (!type)
+        return JS_EXCEPTION;
+
+    BtaClass *cls = bta_class_find(type);
+    JS_FreeCString(ctx, type);
+
+    JSValue out = JS_NewArray(ctx);
+    if (JS_IsException(out) || !cls || !cls->deferred || !*cls->deferred)
+        return out;
+
+    uint32_t    n = 0;
+    const char *p = cls->deferred;
+
+    while (*p) {
+        const char *comma = strchr(p, ',');
+        size_t      len   = comma ? (size_t)(comma - p) : strlen(p);
+
+        while (len && g_ascii_isspace(*p)) {
+            p++;
+            len--;
+        }
+        while (len && g_ascii_isspace(p[len - 1]))
+            len--;
+
+        if (len)
+            JS_SetPropertyUint32(ctx, out, n++, JS_NewStringLen(ctx, p, len));
+        if (!comma)
+            break;
+        p = comma + 1;
+    }
+    return out;
+}
+
 static JSValue w_methods_by_type(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv)
 {
@@ -9804,6 +9859,22 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
             JS_SetPropertyStr(ctx, ctor, "PropertyNames",
                               JS_NewCFunction(ctx, w_property_names_by_type,
                                               "PropertyNames", 1));
+            /* DeferredProperties(type) -> string[]
+             *   the properties a `.form` applies **after the class's children
+             *   are built**, in the order it declares them. A property can
+             *   need the data the children bring: `ListBox.Index` selects a
+             *   row, and there are no rows until `Items` has been applied --
+             *   while the serialiser writes `Index` first because it sorts.
+             *   This is the answer both loaders read (`bta_form.c` for a form
+             *   file, `forms.js`'s `AddNode` for a node a designer builds), so
+             *   the class states the order once. `[]` for a class with no
+             *   deferred property, and for a name this runtime has no class
+             *   row for -- a project component, which the JavaScript loader
+             *   builds
+             */
+            JS_SetPropertyStr(ctx, ctor, "DeferredProperties",
+                              JS_NewCFunction(ctx, w_deferred_properties_by_type,
+                                              "DeferredProperties", 1));
             /* Methods(type)
              *   its methods, **most derived first**, and not its
              *   `constructor`

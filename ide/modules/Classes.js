@@ -854,6 +854,25 @@ export class Classes {
     }
 
     /*
+     * Every component's events, as one plain map, for a process that is not
+     * this one.
+     *
+     * The project check runs in a child so the window stays live (`CheckJob`),
+     * and the child cannot read `Classes` -- it is a console project with
+     * `lib/check` and nothing of the IDE. This is the one answer it needs, in
+     * the shape `Task.Start` and a JSON file can carry: `["Change", …]` per
+     * component type, libraries included.
+     */
+    componentEventsMap() {
+        const out = {};
+
+        for (const c of this.components)
+            out[c.name] = ownThenInherited(c.events,
+                                           Widget.EventNames("Component"));
+        return out;
+    }
+
+    /*
      * Which of a component's properties hold prose -- **null when its class
      * declares none**, which is the one place the rule above bends and does so
      * on purpose.

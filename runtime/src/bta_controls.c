@@ -8596,13 +8596,13 @@ void bta_core_register(void)
          *   a double click on a row, or Enter on it: the gesture for *use
          *   this one*
          */
-        BTA_CLASS_TEXT("ListBox",   "Control",   build_listbox,  listbox_props,   false, "Items",
-                       "Select,Activate"),
+        BTA_CLASS_DEFERRED("ListBox", "Control", build_listbox, listbox_props, false,
+                           NULL, "Items", "Select,Activate", "Index"),
         /* Select()
          *   the selection moved. Ask `Index` or `Text` for what it is now
          */
-        BTA_CLASS_TEXT("ComboBox",  "Control",   build_combobox, combobox_props,  false,
-                       "Items,Text", "Select"),
+        BTA_CLASS_DEFERRED("ComboBox", "Control", build_combobox, combobox_props, false,
+                           NULL, "Items,Text", "Select", "Index"),
         /* Change()
          *   the value changed — stepped, typed, or **assigned from code**:
          *   the round trip goes out to GTK and back

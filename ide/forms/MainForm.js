@@ -300,6 +300,10 @@ export class MainForm extends Form {
     /* ...and the pass itself: what is wrong with the project, asked of the whole
      * of it rather than of the file on screen. */
     check     = new Check(this);
+    /* ...and its child process, which is what keeps the window live while a
+     * large project is checked. The in-process `check` is what the project
+     * check's tests and the `bintana check` command run. */
+    checkJob  = new CheckJob(this);
     /* What is in the file on screen, beside it: the side panel's other half, for
      * the tabs where there is no selection to speak about. */
     outline   = new Outline(this);
@@ -483,17 +487,6 @@ export class MainForm extends Form {
         this.log(`Project: ${dir}\n`);
         this.reportProject();
 
-        /*
-         * And what is wrong with it, once, here.
-         *
-         * Opening a project is the moment one is willing to be told -- before
-         * any of it is on screen, and not while typing in it. `Check` takes
-         * the project's own listing, which `listFiles` above has just rebuilt,
-         * and reads files rather than opening them.
-         */
-        this.check.forget();
-        this.check.run();
-
         /* What was open the last time this project was, reopened before anything
          * is offered: the recovered text below lands in these same tabs. */
         const back = this.session.restoreTabs(dir);
@@ -512,6 +505,20 @@ export class MainForm extends Form {
          * project was open is offered once, with the tree and the tabs already
          * in place for the answer to land in. */
         this.recovery.offer(dir);
+
+        /*
+         * And what is wrong with it, once the window has something on screen.
+         *
+         * `schedule` waits until the window is visible and then starts
+         * `bintana check --json` as a child (`CheckJob`). A child and not a
+         * `Task`: a worker runs `rad.js` and not `forms.js`, so it has no
+         * `Widget`, and the check asks `Widget` for every member and event.
+         * The window keeps taking clicks while the child reads the project;
+         * `CheckJob` drops an answer about a project that changed while it
+         * ran.
+         */
+        this.checkJob.forget();
+        this.checkJob.schedule();
     }
 
     /* --------------------------------------------------------- recent list
@@ -989,10 +996,11 @@ export class MainForm extends Form {
      */
     leaving() {
         this.stopShell();
-        /* A preview and a test run are children of this process, and nobody is
-         * left to stop them once the IDE is gone. */
+        /* A preview, a test run and the project check are children of this
+         * process, and nobody is left to stop them once the IDE is gone. */
         this.runner.stopPreview();
         this.tests.stop();
+        this.checkJob.stop();
         this.session.save();
         /* Nothing unsaved is an answer too. The snapshot used to go only in
          * `quit()` or on a tick that found nothing dirty, so saving and closing
@@ -1882,9 +1890,13 @@ export class MainForm extends Form {
      * the one command a check needs once anybody has fixed something.
      */
     ActCheck_Execute() {
-        const found = this.check.run();
+        /* The one run a person asked for: start it now, and let the child
+         * report when it has something to say. An unsaved tab can have changed
+         * a live name the check reads, which is why this is a fresh run and
+         * not the cached answer. */
+        this.checkJob.start();
         this.showConsole(this.problems.page);
-        if (!found.length) this.log(`${Locale.Text("Nothing wrong with the project")}\n`);
+        this.log(`${Locale.Text("Checking the project...")}\n`);
     }
 
     /*

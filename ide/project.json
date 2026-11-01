@@ -35,6 +35,7 @@
     "forms/AppForm.js",
     "forms/MetainfoForm.js",
     "modules/Classes.js",
+    "modules/CheckJob.js",
     "modules/Binding.js",
     "modules/ProjectTree.js",
     "modules/FormFiles.js",

@@ -388,6 +388,14 @@ icon when the theme has one by that name (`gtkapplication.c`).
   applied first. Apply it where the thing is made -- `table_build_columns` sets
   the sorter on every column it builds -- and keep the setter's loop for the
   other order. Both orders happen, so neither may be the one that breaks.
+  **A property that cannot be applied until the children exist is declared,
+  not remembered by its setter**: the class row's `deferred` list names it
+  (`ListBox.Index` and `ComboBox.Index` are the callers), and both loaders --
+  `bta_form.c` and `forms.js`'s `AddNode` -- apply it after `build_children`.
+  It is the same answer `Widget.DeferredProperties(type)` publishes. The first
+  version of the list fix was a pending index in each setter, which would have
+  been the fourth copy of the `Current`/`For` bargain; the class row is the
+  place a class says what it is.
 - **An event emitted while a `.form` is being applied reaches the host's handler
   before the host's other controls exist.** Measured: a `Report` with
   `"Paper": "Letter"` in the form emitted `Prepared` from the setter, the form's

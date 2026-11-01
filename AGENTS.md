@@ -219,8 +219,10 @@ skips `On` silently.
 
 **The `.form` format knows no control.** The loader assigns each property as
 an ordinary JS assignment through the real setter (properties first,
-`Arrangement` first and `Action` last, then children). The serialiser in
-`rad.js` is its exact inverse: it saves every accessor with **both** a getter
+`Arrangement` first and `Action` last, then children; a class may also **defer**
+a property until after its children -- `ListBox.Index` and `ComboBox.Index` see
+the rows `Items` brought -- and that order is declared in the class row).
+The serialiser in `rad.js` is its exact inverse: it saves every accessor with **both** a getter
 and a setter whose value differs from a fresh control's. So **a property added
 in C is designable, serialisable and editable with no other change**, and a
 read-only accessor is excluded by construction. A property's legal values are

@@ -19,7 +19,7 @@ static void usage(void)
 {
     fputs("usage: bintana [run] <project-dir> [args...]\n"
           "       bintana test [--json] <project-dir> [filter]\n"
-          "       bintana check [--json] [--strict] <project-dir>\n"
+          "       bintana check [--json] [--strict] [--components <file>] <project-dir>\n"
           "\n"
           "Runs the Bintana project in <project-dir>: evaluates its .js\n"
           "sources, then instantiates and shows the startup form named in\n"
@@ -102,14 +102,18 @@ static char *check_tool_dir(void)
 }
 
 /*
- * `bintana check [--json] [--strict] <project>`: run `tools/check`, a console
- * project over `lib/check`. The target is made absolute here because the tool
- * runs with its own directory as `Application.Directory`; `--strict` is the
- * check's own (warnings fail) and not the runtime's control-property strictness.
+ * `bintana check [--json] [--strict] [--components <file>] <project>`: run
+ * `tools/check`, a console project over `lib/check`. The target is made
+ * absolute here because the tool runs with its own directory as
+ * `Application.Directory`; `--strict` is the check's own (warnings fail) and not
+ * the runtime's control-property strictness. `--components` is the IDE's map of
+ * a project component's events, passed to the child because the child cannot
+ * ask the IDE's `Classes`.
  */
 static int run_check(int argc, char **argv)
 {
     const char *target = NULL;
+    const char *components = NULL;
     bool        json = false, strict = false;
 
     for (int i = 2; i < argc; i++) {
@@ -117,6 +121,13 @@ static int run_check(int argc, char **argv)
             json = true;
         } else if (!strcmp(argv[i], "--strict")) {
             strict = true;
+        } else if (!strcmp(argv[i], "--components")) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "bintana check: --components needs a file\n");
+                usage();
+                return 2;
+            }
+            components = argv[++i];
         } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
             usage();
             return 0;
@@ -153,6 +164,10 @@ static int run_check(int argc, char **argv)
         g_ptr_array_add(args, g_strdup("--json"));
     if (strict)
         g_ptr_array_add(args, g_strdup("--strict"));
+    if (components) {
+        g_ptr_array_add(args, g_strdup("--components"));
+        g_ptr_array_add(args, g_canonicalize_filename(components, NULL));
+    }
     g_ptr_array_add(args, NULL);
 
     BtaApp *app = bta_app_new(tool);

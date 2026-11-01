@@ -391,7 +391,7 @@ class ClientsForm extends Form {
          * `read()`. */
         this.TxtBalance.Text  = c ? `${c.Balance}` : "";
         this.TxtPostal.Text   = c ? c.PostalCode : "";
-        this.ChkActive.Value  = c ? c.Active : true;
+        this.ChkActive.Active = c ? c.Active : true;
 
         this.TxtName.Enabled     = c !== null;
         this.CmbCategory.Enabled = c !== null;
@@ -428,7 +428,7 @@ class ClientsForm extends Form {
                 Since:      this.PckSince.Value,
                 Balance:    this.TxtBalance.Text || "0",
                 PostalCode: this.TxtPostal.Text,
-                Active:     this.ChkActive.Value,
+                Active:     this.ChkActive.Active,
             });
             this.say("");
         } catch (e) {
@@ -444,7 +444,7 @@ class ClientsForm extends Form {
     TxtPostal_LostFocus()   { this.read(); }
     PckSince_Change()       { this.read(); }
     CmbCategory_Select()    { this.read(); }
-    ChkActive_Change()      { this.read(); }
+    ChkActive_Click()       { this.read(); }
 
     /* --- saving ------------------------------------------------------------ */
 

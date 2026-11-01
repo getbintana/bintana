@@ -56,9 +56,9 @@ jobs:
       # The project pass, from a shell and with no display at all: exactly what
       # an application's CI runs. `tests/smoke` drives it too, but inside a
       # project that already has a display; this is the step that proves it
-      # needs none. `--json` keeps 135 accessibility warnings out of the log and
-      # leaves the `Done` line, which says how many there were; a failure prints
-      # the findings.
+      # needs none. `--json` keeps the accessibility warnings out of the log
+      # (100 today) and leaves the `Done` line, which says how many there were;
+      # a failure prints the findings.
       - name: The project check
         run: |
           ./build/bintana check --json ide > /tmp/bintana-check.json || {
@@ -683,6 +683,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-pkgconf
             mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-vulkan-loader
             mingw-w64-ucrt-x86_64-gtksourceview5
             mingw-w64-ucrt-x86_64-sqlite3
             mingw-w64-ucrt-x86_64-libsoup3
@@ -715,6 +716,11 @@ jobs:
           name="bintana-${version}-windows-$(uname -m)"
 
           tools/windows-portable.sh build "stage/$name"
+          # Both are imported at load time and are not Windows' own: this
+          # runner has a Vulkan loader in System32, which is where `ldd`
+          # finds it and why the closure alone would drop it.
+          test -f "stage/$name/bin/vulkan-1.dll"
+          test -f "stage/$name/bin/librsvg-2-2.dll"
           (cd "stage/$name" && cmake -E tar cf "$GITHUB_WORKSPACE/$name.zip" \
                                               --format=zip -- .)
           echo "$name.zip" > zip-name.txt

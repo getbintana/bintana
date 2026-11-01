@@ -226,7 +226,8 @@ Gone_Click()       no control is named Gone, and Click is an event
 ```
 
 Both start from **`Completion`'s `controls()`** — the table `Names.tableOf`
-flattens a form's `children`, `menus` and `actions` into — and the tests
+flattens a form's `children`, `menus`, `actions` and each control's own `Menu`
+into — and the tests
 themselves are the runtime's class-level answers: `Widget.Member` and
 `Widget.EventNames`, with no control built. A second copy of that would be a
 second answer to drift from the first.

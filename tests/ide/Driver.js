@@ -13640,10 +13640,13 @@ function* p_check(ide) {
     /* What the fixture already has to answer for: the phases planted files by
      * hand, and a manifest with a `sources` is a whitelist. Measured rather
      * than assumed, because everything below is a delta from it. */
-    pass.run();
+    const first  = pass.run();
     const before = rows().length;
+    const reused = pass.run();
     check("the pass says something about the project as it stands", before > 0,
           JSON.stringify(rows().slice(0, 3)));
+    check("...and a second run with nothing changed reuses the answer",
+          first === reused, "the pass ran twice for one project");
 
     /* --- a .form the runtime would take without a word ---------------------- */
 
@@ -13668,6 +13671,11 @@ function* p_check(ide) {
             { type: "Label",  name: "Twice", properties: { Text: "dos" } },
             { type: "Panel",  name: "Close", properties: {} },
             { type: "Button", name: "Btn",   properties: { Txt: "nope" } },
+            /* A menu a control shows from its own press: a property of the
+             * control and not a block of the file, and the fourth place a
+             * `.form` binds a name on the form. */
+            { type: "Button", name: "MenuBtn",
+              properties: { Menu: [{ name: "MnuOnControl", text: "In" }] } },
         ],
     }, null, 2));
 
@@ -13675,12 +13683,22 @@ function* p_check(ide) {
               "class Bad extends Form {\n" +
               "    Btn_Clik() { }\n" +                    /* Button raises Click */
               "    MnuOk_Chose() { }\n" +                 /* an item raises Click */
+              "    MnuOnControl_Click() { }\n" +           /* an item of a control's Menu */
+              "    Elsewhere_Click() { }\n" +              /* built in Other.js */
               "    Gone_Click() { }\n" +                  /* no control is Gone */
               "    Built_Click() { }\n" +                 /* made in code, below */
               "    save_draft() { }\n" +                  /* a helper, not a handler */
               "    Form_Load() { this.Built = new Button(); this.Built.Name = \"Built\"; }\n" +
-              "    Form_Open() { this.Btn.Txt = \"x\"; this.MnuOk.Enabld = 1; }\n" +
+              "    Form_Open() { this.Btn.Txt = \"x\"; this.MnuOk.Enabld = 1; " +
+              "this.MnuOnControl.Nope = 1; const generated = \"this.Twice.Txt\"; }\n" +
               "}\n");
+
+    /* A control built in another file, named where it is built: the handler
+     * above is `Elsewhere_Click`, and only a pass over the whole project can
+     * see that it has a control. */
+    File.Save(File.Join(TMP, "Other.js"),
+              "const holder = {};\n" +
+              "holder.Name = \"Elsewhere\";\n");
 
     ide.listFiles();
     pass.run();
@@ -13745,6 +13763,27 @@ function* p_check(ide) {
           JSON.stringify(said));
 
     /*
+     * The fourth place a `.form` binds a name: a control's own `Menu`. It is a
+     * property, not a block of the file, so the three walks above cannot see
+     * it -- and every popup menu in every project was reported as a handler
+     * with no control.
+     */
+    check("a menu a control shows binds its items on the form",
+          !has("named MnuOnControl"), JSON.stringify(said));
+    check("...and its items are asked about as menu items",
+          has("MenuItem has no Nope"), JSON.stringify(said));
+
+    /*
+     * And a control built in another file: the handler is here and the name is
+     * assigned there, which is one answer only if the pass reads the project.
+     */
+    check("a control built in another file is not a handler with no control",
+          !has("named Elsewhere"), JSON.stringify(said));
+    check("...and code inside a string is text, not a member assignment",
+          !said.some((r) => r.text.includes("Twice has no Txt")),
+          JSON.stringify(said));
+
+    /*
      * **A module is checked too, which is the fix this fixture is here for.**
      * `Bad.js` is the easy half: it has a `.form` beside it, so the member and
      * handler checks had something to read. A `.js` with no `.form` -- which is
@@ -13776,6 +13815,48 @@ function* p_check(ide) {
     check("a module that compiles has no syntax complaint",
           !rows().some((r) => r.file === "Broken.js" && r.kind === "Error"),
           JSON.stringify(rows().filter((r) => r.file === "Broken.js")));
+
+    /*
+     * **A `sources` list is what the project loads, and an `import` is a load.**
+     * A project with a whitelist and a module reached by `import` used to be
+     * told the module was never loaded -- a true sentence about the manifest and
+     * a false one about the program.
+     *
+     * A project of its own, because this is a pure question about a manifest
+     * and a pair of files, and the fixture above is the IDE's own project.
+     */
+    /* Outside `TMP`: the IDE's own project is the folder above, and a fixture
+     * inside it would be a file the pass then has to have an opinion about. */
+    const imports = `/tmp/bta-test-imports${TAG}`;
+    if (File.IsDir(imports)) Directory.DeleteTree(imports);
+    Directory.Make(imports);
+    File.Save(File.Join(imports, "project.json"), JSON.stringify({
+        name: "imports", startup: "A", version: "1.0", sources: ["A.js"],
+    }, null, 2));
+    File.Save(File.Join(imports, "A.js"),
+              "import { B } from \"./B.js\";\n" +
+              "import \"./C.js\";\n" +
+              "class A { value() { return B; } }\n");
+    File.Save(File.Join(imports, "B.js"), "export const B = 1;\n");
+    File.Save(File.Join(imports, "C.js"), "const C = 1;\n");
+
+    const importFiles = new ProjectFiles(imports).scan();
+    const importCheck = new Check({
+        project: imports,
+        classes: { files: importFiles, formOf: () => null },
+        names: new Names({ owners: () => new Map(), componentEvents: null }),
+        problems: { report() {}, clear() {} },
+    }).run();
+    check("a module an import reaches is not a file nothing loads",
+          !importCheck.some((r) => r.file === "B.js" &&
+                                    r.text.includes("never loaded")),
+          JSON.stringify(importCheck.filter((r) => r.file === "B.js")));
+    check("...including the form that binds no name",
+          !importCheck.some((r) => r.file === "C.js" &&
+                                    r.text.includes("never loaded")),
+          JSON.stringify(importCheck.filter((r) => r.file === "C.js")));
+
+    Directory.DeleteTree(imports);
 
     /* --- a name this language took ------------------------------------------ */
 
@@ -13906,6 +13987,7 @@ function* p_check(ide) {
     File.Delete(File.Join(TMP, "Bad.form"));
     File.Delete(File.Join(TMP, "Bad.js"));
     File.Delete(File.Join(TMP, "Broken.js"));
+    File.Delete(File.Join(TMP, "Other.js"));
     File.Delete(File.Join(TMP, "Taken.js"));
     File.Delete(File.Join(TMP, "Safe.js"));
     ide.listFiles();

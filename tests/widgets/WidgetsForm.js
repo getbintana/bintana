@@ -232,6 +232,11 @@ class RoundTrip extends Form {}
 /* A form with no .form at all: what a menu-less form has to answer. */
 class RoundTrip2 extends Form {}
 
+/* The C loader's turn at the property order: `testIndexPending` writes this
+ * class's `.form` with `Index` before `Items`, the way the serialiser sorts
+ * them, and asserts the selection arrived. */
+class IndexForm extends Form {}
+
 /* A window of its own for the anchor test, because WidgetsForm is arranged
  * Vertical and what is under test is a fixed surface being resized. */
 class AnchorForm extends Form {}
@@ -583,7 +588,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Designing", "CurrentPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
@@ -12707,6 +12712,70 @@ class Form1 extends Form {
                forgot.Current, 0);
 
             panel.Delete();
+        }
+    }
+
+    /* --- Index named before the rows exist ---------------------------------
+     *
+     * The same shape as `CurrentPending`, for data instead of pages:
+     * `ListBox.Index` and `ComboBox.Index` select a row, and `Items` is what
+     * makes the row. The serialiser writes `Index` first because it sorts, so
+     * the loader applies it after the children -- the class says so through
+     * `DeferredProperties`, and both the C loader and `AddNode` read the same
+     * answer.
+     */
+    testIndexPending() {
+        for (const type of ["ListBox", "ComboBox"]) {
+            const panel = new Panel();
+            this.Fixed1.Add(panel);
+
+            panel.BuildChildren({ children: [{
+                type, name: "Idx" + type,
+                properties: { Index: 2, Items: ["A", "B", "C"] },
+            }] });
+            const built = panel.Children[0];
+            eq(`${type}: a declared Index waits for Items`, built.Index, 2);
+            eq(`${type}: ...and the row it names is selected`, built.Text, "C");
+
+            panel.Delete();
+        }
+
+        /* The serialiser's order: what the designer saves, and what the C
+         * loader reads back from disk. */
+        const list = new ListBox();
+        list.Items = ["A", "B", "C"];
+        list.Index = 2;
+        const node = list.Serialize();
+        eq("the serialiser writes Index", node.properties.Index, 2);
+
+        const panel = new Panel();
+        this.Fixed1.Add(panel);
+        panel.BuildChildren({ children: [{ type: "ListBox", name: "RT",
+                                           properties: node.properties }] });
+        eq("...and a node built from it selects the same row",
+           panel.Children[0].Index, 2);
+        panel.Delete();
+
+        const path = File.Join(Application.Directory, "IndexForm.form");
+        File.Save(path, JSON.stringify({
+            format: "bintana-form/1", class: "IndexForm",
+            properties: { Width: 320, Height: 240 },
+            children: [
+                { type: "ListBox", name: "Lst",
+                  properties: { Index: 2, Items: ["A", "B", "C"] } },
+                { type: "ComboBox", name: "Cmb",
+                  properties: { Index: 2, Items: ["A", "B", "C"] } },
+            ],
+        }, null, 2));
+
+        try {
+            const form = new IndexForm();
+            eq("ListBox: the C loader applies a declared Index", form.Lst.Index, 2);
+            eq("...and Text says which row", form.Lst.Text, "C");
+            eq("ComboBox: the C loader applies a declared Index", form.Cmb.Index, 2);
+            eq("...and Text says which row", form.Cmb.Text, "C");
+        } finally {
+            File.Delete(path);
         }
     }
 

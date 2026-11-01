@@ -157,8 +157,9 @@ one verb, and which the IDE still asks. Its history is in git.
    `Names.tableOf` *and* a walk of its own. Three, and the generated `.d.ts` of
    stage 0 was a fourth reader of the same table.
 
-   One walk now, `Names.tableOf`, over all three blocks; the other two read
-   it. **And it took a runtime addition**: a `MenuItem` and an `Action` are not
+   One walk now, `Names.tableOf`, over the four places a `.form` binds a name
+   -- `children`, `menus`, `actions` and a control's own `Menu`; the other two
+   read it. **And it took a runtime addition**: a `MenuItem` and an `Action` are not
    widgets, so `Widget.New` cannot make one to ask -- the only thing that builds
    one is a `.form` loader reading a `menus` block. Both answer `PropertyNames()`
    and `EventNames()` now, out of their own C tables rather than a second list,

@@ -1074,3 +1074,64 @@ way to quiet a row that is also true**: GTK's hidden state, which a screen reade
 needs in order to skip a logo. Not done: a box for the word in `ProjectForm`,
 whose `.form` is positioned by hand. A row's `line` is `0` as every `.form`
 row's is; the control is named in the text.
+
+**The pass runs as a child process, started after the window is visible.**
+`CheckJob` (`ide/modules/CheckJob.js`) waits for `Form.Visible` and then a frame
+(`100 ms`), because a `Timer.After(0)` -- or half a second -- ran before GTK had
+drawn the first frame; the pass then held the main loop for its whole length and
+the window was mapped with nothing in it for ten seconds. `Visible` is `false`
+inside `Form_Open` and `true` once `Show` has presented the window; measured on
+Xvfb, the window with content is there at ~1.5 s. Then it starts
+`bintana check --json <project>` through `Exec`, parses the one-line JSON the
+tool prints, and reports under the `project` source when `Done` arrives. **The
+window keeps painting and taking clicks while the child reads the project.**
+Measured on Xvfb: the child was in `ps` at 2 s, a `Ctrl+P` at 2 s opened the
+quick-open window, and the child was gone by 9 s.
+
+**A `Task` is not this child.** A task's worker deliberately runs `rad.js` and
+not `forms.js`, so it has no `Widget`; `lib/check` asks `Widget.Types`,
+`Widget.Member` and `Widget.EventNames` for every control, and `Member` reads
+the prototype the worker does not have. The runtime already has the pass as a
+command, and the IDE already runs commands as children (`Run`, `Git`, the
+project's tests), so the child is the same code from a shell.
+
+**The component map is what the child cannot ask.** A form's control can be a
+component of the project, whose events live in the IDE's `Classes`; a console
+child has no IDE. `Classes.componentEventsMap()` is written to a temporary file
+and passed as `--components`, and `tools/check` hands it to `Names` as
+`componentEvents`, so the child checks the same pairs the in-process pass did.
+The file is removed when the child ends or is stopped.
+
+**A child reads the disk while the person types.** `CheckJob` takes the same
+content fingerprint `Check.run` uses -- `Hash.Sha256` over every `.js`, `.form`
+and `project.json`, in process -- before it starts and again when the child
+ends. If it moved, the answer is about two versions and is dropped, not shown.
+That is the case the old in-process pass could not have: it held the loop, so
+nobody could type during it.
+
+`Check.run` keeps the same fingerprint and per-project cache for the in-process
+pass that `tests/ide` and `bintana check` run; `Check.remember` is how a current
+child answer enters it, and the check phase asserts a second run returns the
+same array. `forget` clears the panel but **keeps the cache**: a project being
+left has nothing to answer for on screen, and its answer is still true when it
+comes back.
+
+**A name a `.form` binds can come from four places, and one is a property.**
+`Names.tableOf` walks `children`, root `menus`, `actions` and each control's own
+`properties.Menu` -- a popup menu is a property of the button that shows it, so
+the three file blocks could not see it. Missing that fourth place reported every
+popup item in the tree as a handler with no control: 24 of the IDE's 35 false
+"no control is named" rows. The other 11 came from a control built in a *different
+file* (`Workspace.js` builds `WidgetTree`, `MainForm.js` handles its events), so
+`Check.run` now reads every `.js` once and hands `Names.setBuiltNames` the whole
+project's `.Name = "..."` and `this.X = ...` names. `Names.members`/`handlers`
+run over `Lex.blank` like `curated` already did -- code inside a generated string
+is text, not a member assignment. And a `sources` list is not the only load: a
+relative `import` is one too, resolved with `Application.Symbols` and compared as
+a project-relative path, so `examples/sheets/SheetParts.js` is no longer "never
+loaded". **Measured on this repository:** `bintana check ide` went from 135
+warnings (100 accessibility, 35 false) to 100, and the command-line tool from
+12.6 s to 3.7 s -- the CLI had been rebuilding `Owners.of` for every file it
+walked, which was O(files²). The pass still reads every source before it reports,
+so `Run` holds the texts only for the length of the pass and `code()` uses them
+instead of reading the disk twice.

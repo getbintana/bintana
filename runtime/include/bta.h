@@ -499,6 +499,23 @@ typedef struct BtaClass {
     const char *texts;
 
     /*
+     * The properties a `.form` applies **after the class's children are
+     * built**, comma separated; NULL when every property makes sense before.
+     *
+     * A property can depend on data the children bring: `ListBox.Index` and
+     * `ComboBox.Index` select a row, and there are no rows until `Items` has
+     * been applied -- while the serialiser writes `Index` first because it
+     * sorts. Settling that in the loader is the same choice `Action` (last)
+     * and `Arrangement` (first) already are, and a class that says *after the
+     * children* needs no pending value in its own setter.
+     *
+     * Read by both loaders: `bta_form.c` for the file a form is built from,
+     * and `forms.js`'s `AddNode` for a node a designer or a program builds.
+     * `Widget.DeferredProperties(type)` is the one answer they share.
+     */
+    const char *deferred;
+
+    /*
      * The events this class raises, comma separated; NULL when it raises none of
      * its own.  **The first is the default** -- the one a double click in the
      * designer writes, which is the one you almost always want.
@@ -648,10 +665,12 @@ void bta_table_register(void);      /* bta_tree.c     */
  * `BTA_CLASS_OPTIONAL` is how the exception says otherwise.
  */
 #define BTA_CLASS_AT(cname, parent_, build_, props_, nprops_, is_form_,   \
-                     options_, texts_, available_, probe_, events_)       \
+                     options_, texts_, available_, probe_, events_,      \
+                     deferred_)                                           \
     { .name = cname, .parent = parent_, .build = build_,                  \
       .props = props_, .nprops = nprops_, .is_form = is_form_,            \
-      .options = options_, .texts = texts_, .events = events_,            \
+      .options = options_, .texts = texts_, .deferred = deferred_,        \
+      .events = events_,                                                  \
       .available = available_, .probe = probe_,                           \
       .proto = JS_UNDEFINED, .ctor = JS_UNDEFINED }
 
@@ -659,12 +678,13 @@ void bta_table_register(void);      /* bta_tree.c     */
 #define BTA_CLASS_FULL(cname, parent_, build_, props_, nprops_, is_form_, \
                        options_, texts_, events_)                         \
     BTA_CLASS_AT(cname, parent_, build_, props_, nprops_, is_form_,       \
-                 options_, texts_, true, NULL, events_)
+                 options_, texts_, true, NULL, events_, NULL)
 
 /*
- * Every variant takes `events` last, so a class states what it raises where it
- * states everything else about itself.  NULL for the containers that raise
- * nothing of their own -- which is most of them, and saying so is the point.
+ * Every variant takes `events` where a class states what it raises, beside
+ * everything else about itself.  NULL for the containers that raise nothing of
+ * their own -- which is most of them, and saying so is the point.
+ * `BTA_CLASS_DEFERRED` is the one that adds the property phase after it.
  */
 #define BTA_CLASS(cname, parent, build, props, is_form, events) \
     BTA_CLASS_FULL(cname, parent, build, props, (int)G_N_ELEMENTS(props), \
@@ -683,6 +703,16 @@ void bta_table_register(void);      /* bta_tree.c     */
     BTA_CLASS_FULL(cname, parent, build, props, (int)G_N_ELEMENTS(props), \
                    is_form, options, texts, events)
 /*
+ * ...and for one whose `.form` node applies a property **after its children**
+ * (see BtaClass.deferred): `ListBox` and `ComboBox` are the callers, and
+ * `deferred` is the comma-separated list.  `options` and `texts` are both
+ * passed because either kind of class can have one.
+ */
+#define BTA_CLASS_DEFERRED(cname, parent, build, props, is_form, options,    \
+                           texts, events, deferred)                          \
+    BTA_CLASS_AT(cname, parent, build, props, (int)G_N_ELEMENTS(props),      \
+                 is_form, options, texts, true, NULL, events, deferred)
+/*
  * ...and for a class whose engine is optional at build time, which says so
  * itself: `Terminal` is the one, and `#ifdef BTA_HAVE_VTE true #else false` is
  * the whole of the declaration.  `available` comes before `events` because
@@ -690,7 +720,7 @@ void bta_table_register(void);      /* bta_tree.c     */
  */
 #define BTA_CLASS_OPTIONAL(cname, parent, build, props, is_form, available, events) \
     BTA_CLASS_AT(cname, parent, build, props, (int)G_N_ELEMENTS(props), \
-                 is_form, NULL, NULL, available, NULL, events)
+                 is_form, NULL, NULL, available, NULL, events, NULL)
 
 /*
  * ...and for the class whose answer is **asked of the machine**, not declared
@@ -701,7 +731,7 @@ void bta_table_register(void);      /* bta_tree.c     */
 #define BTA_CLASS_ENUM_PROBE(cname, parent, build, props, is_form, options,  \
                              probe, events)                                  \
     BTA_CLASS_AT(cname, parent, build, props, (int)G_N_ELEMENTS(props),      \
-                 is_form, options, NULL, true, probe, events)
+                 is_form, options, NULL, true, probe, events, NULL)
 
 /* The answer for a class, whichever way it declares it. */
 bool bta_class_runnable(const BtaClass *cls);

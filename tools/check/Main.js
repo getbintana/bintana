@@ -9,6 +9,7 @@
  *   bintana check <project>            text, one line per finding
  *   bintana check --json <project>     one JSON line per finding, and one Done
  *   bintana check --strict <project>   warnings fail the run too
+ *   bintana check --components <file>  the IDE's component events, as JSON
  *
  * The exit code is what a CI reads: 1 for an error, or for a warning under
  * `--strict`; 0 otherwise, and 2 when the command itself could not start.
@@ -16,18 +17,28 @@
 "use strict";
 
 function usage() {
-    print("usage: bintana check [--json] [--strict] <project-dir>");
+    print("usage: bintana check [--json] [--strict] [--components <file>] <project-dir>");
 }
 
 function main() {
-    let json = false, strict = false, target = null;
+    let json = false, strict = false, target = null, components = null;
     let bad = null;
+    const args = Application.Arguments;
 
-    for (const arg of Application.Arguments) {
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+
         if (arg === "--json")       json = true;
         else if (arg === "--strict") strict = true;
-        else if (arg === "-h" || arg === "--help") { usage(); Application.Quit(0); return; }
-        else if (arg.startsWith("-")) bad = arg;
+        else if (arg === "--components") {
+            const path = args[++i];
+            if (!path) bad = "--components needs a file";
+            else       components = path;
+        } else if (arg === "-h" || arg === "--help") {
+            usage();
+            Application.Quit(0);
+            return;
+        } else if (arg.startsWith("-")) bad = arg;
         else if (target) bad = arg;
         else target = arg;
     }
@@ -50,11 +61,34 @@ function main() {
     files.scan();
 
     const sources = files.sources();
+    /* Read once: `Names.ambiguous` asks who owns a name for every file it
+     * walks, and `Owners.of` reads and parses every source. Rebuilding it per
+     * file was O(files²) -- 12.6 s against this repository's own `ide/`, 3.2 s
+     * with the map made once. */
+    const owners  = Owners.of(sources);
+
+    /*
+     * The IDE runs this check as a child, and a component of the project is a
+     * class this process cannot build. The events it declares come from the
+     * IDE's `Classes.componentEventsMap()` in a file beside the command; a
+     * shell without one says nothing about a component's events, which is the
+     * refusal it has always made.
+     */
+    let componentEvents = null;
+    if (components) {
+        try {
+            const map = File.LoadJson(File.Absolute(components));
+            componentEvents = (type) => map[type] || null;
+        } catch (e) {
+            print(`bintana check: cannot read --components: ${e.message}`);
+            Application.Quit(2);
+            return;
+        }
+    }
+
     const names   = new Names({
-        owners: () => Owners.of(sources),
-        /* A component of the project is not a class this process can build;
-         * saying nothing about it is the same refusal the IDE makes. */
-        componentEvents: null,
+        owners: () => owners,
+        componentEvents,
     });
 
     const host = {

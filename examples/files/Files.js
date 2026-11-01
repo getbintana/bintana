@@ -324,8 +324,4 @@ class Files extends Form {
                             { Folder: this.folder },
                             (path) => this.open(path));
     }
-
-    Panel1_MouseDown() {
-        
-    }
 }

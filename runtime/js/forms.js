@@ -808,11 +808,52 @@ function translateDeclared(value) {
  */
 const DRAWN_NOT_BUILT = ["Menu", "HeaderMenu", "Action"];
 
-function applyNode(widget, node, designing) {
+/*
+ * The properties this class waits for its children to apply, cached by type:
+ * the class table does not change while the process lives, and `AddNode`
+ * builds one node at a time for a whole designer tree.
+ *
+ * The answer comes from `Widget.DeferredProperties`, the same one the C loader
+ * reads, so a class states its order once. A property is applied in the pass
+ * that matches its answer: the ordinary one before the children, the deferred
+ * one after them. `ListBox.Index` is the first caller -- a selection needs the
+ * rows `Items` brings, and the serialiser writes `Index` first because it sorts.
+ */
+const DEFERRED = new Map();
+function deferredProperties(widget) {
+    const type = Widget.TypeName(widget.constructor);
+    let names  = DEFERRED.get(type);
+    if (names) return names;
+
+    /* A component of the project has no class row of its own; if it extends a
+     * control that defers something, the answer is the base's. */
+    for (let p = widget.constructor; p; p = prototypeOf(p)) {
+        let base;
+        try { base = Widget.TypeName(p); } catch (e) { break; }
+
+        const found = DEFERRED.get(base);
+        const list  = found || new Set(Widget.DeferredProperties(base));
+
+        if (!found) DEFERRED.set(base, list);
+        if (list.size) {
+            DEFERRED.set(type, list);
+            return list;
+        }
+    }
+
+    names = new Set();
+    DEFERRED.set(type, names);
+    return names;
+}
+
+function applyNode(widget, node, designing, deferred = false) {
     const properties = node.properties || {};
     const texts      = widget.TextProperties();
+    const later      = deferredProperties(widget);
 
     for (const key in properties) {
+        if (later.has(key) !== deferred) continue;
+
         const declared = properties[key];
 
         if (designing && DRAWN_NOT_BUILT.includes(key)) {
@@ -838,7 +879,7 @@ function applyNode(widget, node, designing) {
      * never takes this branch -- the C loader has no idea `design` is a key --
      * so a design value cannot reach a running application even by accident.
      */
-    if (designing) {
+    if (designing && !deferred) {
         for (const key in node.design || {}) widget.SetDesign(key, node.design[key]);
     }
 }
@@ -878,6 +919,10 @@ Container.prototype.AddNode = function (node, designing = false) {
     for (const child of node.children || []) {
         widget.AddNode(child, designing);
     }
+
+    /* The properties the class said wait for the children: `Index` after the
+     * rows `Items` brought. */
+    applyNode(widget, node, designing, true);
     return widget;
 };
 

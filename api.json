@@ -12246,6 +12246,15 @@
           "Native": false
         },
         {
+          "Name": "DeferredProperties",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "(type)",
+          "Returns": "string[]",
+          "Doc": "the properties a `.form` applies **after the class's children are built**, in the order it declares them. A property can need the data the children bring: `ListBox.Index` selects a row, and there are no rows until `Items` has been applied -- while the serialiser writes `Index` first because it sorts. This is the answer both loaders read (`bta_form.c` for a form file, `forms.js`'s `AddNode` for a node a designer builds), so the class states the order once. `[]` for a class with no deferred property, and for a name this runtime has no class row for -- a project component, which the JavaScript loader builds",
+          "Native": true
+        },
+        {
           "Name": "Delete",
           "Kind": "Method",
           "Params": 0,

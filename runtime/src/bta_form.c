@@ -12,7 +12,8 @@
 #include <string.h>
 
 static int apply_properties(JSContext *ctx, JSValueConst target,
-                            JSValueConst props, const char *where);
+                            JSValueConst props, const char *where,
+                            const BtaClass *cls, bool deferred);
 
 static int build_children(JSContext *ctx, JSValueConst form_obj,
                           BtaWidget *parent, JSValueConst children);
@@ -201,8 +202,39 @@ void bta_note_declared(JSContext *ctx, JSValueConst target, const char *key,
     JS_FreeAtom(ctx, atom);
 }
 
+/* Whether this class's `.form` node applies `prop` after its children are
+ * built. The list is comma separated, the shape `texts` and `events` use. */
+static bool class_defers(const BtaClass *cls, const char *prop)
+{
+    if (!cls || !cls->deferred || !*cls->deferred || !prop)
+        return false;
+
+    const char *p = cls->deferred;
+    size_t      n = strlen(prop);
+
+    while (*p) {
+        const char *comma = strchr(p, ',');
+        size_t      len   = comma ? (size_t)(comma - p) : strlen(p);
+
+        while (len && g_ascii_isspace(*p)) {
+            p++;
+            len--;
+        }
+        while (len && g_ascii_isspace(p[len - 1]))
+            len--;
+
+        if (len == n && !strncmp(p, prop, n))
+            return true;
+        if (!comma)
+            break;
+        p = comma + 1;
+    }
+    return false;
+}
+
 static int apply_properties(JSContext *ctx, JSValueConst target,
-                            JSValueConst props, const char *where)
+                            JSValueConst props, const char *where,
+                            const BtaClass *cls, bool deferred)
 {
     if (!JS_IsObject(props))
         return 0;
@@ -230,15 +262,27 @@ static int apply_properties(JSContext *ctx, JSValueConst target,
      * children. Both are properties whose meaning depends on what has been set
      * already, and the loader is where that is settled rather than in every
      * file.
+     *
+     * **And a class may say a property waits for its children**, which is the
+     * other half of the same rule: `ListBox.Index` selects a row, and the rows
+     * arrive with `Items` -- while the serialiser writes `Index` first because
+     * it sorts. `deferred` says which phase this call is; the loader makes two
+     * of them, one before `build_children` and one after.
      */
     int rc = 0;
-    for (uint32_t pass = 0; pass < 2 && rc == 0; pass++)
+    uint32_t passes = deferred ? 1 : 2;
+
+    for (uint32_t pass = 0; pass < passes && rc == 0; pass++)
     for (uint32_t i = 0; i < len; i++) {
-        const char *nm    = JS_AtomToCString(ctx, tab[i].atom);
-        bool        is_it = nm && !strcmp(nm, "Action");
+        const char *nm          = JS_AtomToCString(ctx, tab[i].atom);
+        bool        is_action   = nm && !strcmp(nm, "Action");
+        bool        is_deferred = class_defers(cls, nm);
 
         JS_FreeCString(ctx, nm);
-        if (is_it != (pass == 1))
+
+        if (is_deferred != deferred)
+            continue;
+        if (!deferred && is_action != (pass == 1))
             continue;
 
         JSValue v = JS_GetProperty(ctx, props, tab[i].atom);
@@ -371,10 +415,14 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
         goto out;
     }
 
-    JSValue props = JS_GetPropertyStr(ctx, spec, "properties");
-    int prc = apply_properties(ctx, obj, props, name ? name : type);
-    JS_FreeValue(ctx, props);
+    /* The class row says which properties wait for the children. A class of
+     * the project is not in this table and defers nothing. */
+    BtaClass *cls = bta_class_find(type);
+    JSValue   props = JS_GetPropertyStr(ctx, spec, "properties");
+
+    int prc = apply_properties(ctx, obj, props, name ? name : type, cls, false);
     if (prc < 0) {
+        JS_FreeValue(ctx, props);
         JS_FreeValue(ctx, obj);
         goto out;
     }
@@ -392,6 +440,16 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
     }
     JS_FreeValue(ctx, kids);
     if (crc < 0) {
+        JS_FreeValue(ctx, props);
+        JS_FreeValue(ctx, obj);
+        goto out;
+    }
+
+    /* The phase the class declared: `ListBox.Index` after `Items`, whatever
+     * order the file wrote them in. */
+    prc = apply_properties(ctx, obj, props, name ? name : type, cls, true);
+    JS_FreeValue(ctx, props);
+    if (prc < 0) {
         JS_FreeValue(ctx, obj);
         goto out;
     }
@@ -829,7 +887,9 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
     held = true;
 
     JSValue props = JS_GetPropertyStr(ctx, root, "properties");
-    rc = apply_properties(ctx, form_obj, props, class_name);
+    /* The form's own properties, before its children: a form has no class row
+     * with a deferred property, and its children are the window's controls. */
+    rc = apply_properties(ctx, form_obj, props, class_name, NULL, false);
     JS_FreeValue(ctx, props);
     if (rc < 0)
         goto out;
