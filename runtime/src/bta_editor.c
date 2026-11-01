@@ -33,6 +33,9 @@ static GtkSourceBuffer *buffer_of(BtaWidget *w)
  * fed from JS has the same constraint, so it is attached from the same place. */
 static void on_editor_realized(GtkWidget *view, gpointer user_data);
 static void editor_attach_provider(BtaWidget *w);
+static gboolean on_diagnostic_tooltip(GtkWidget *view, int x, int y,
+                                      gboolean keyboard, GtkTooltip *tip,
+                                      gpointer user_data);
 
 /*
  * What a `SourceEditor` is to its parent: a box holding the scroller and, when
@@ -69,6 +72,12 @@ static void build_source_editor(BtaWidget *w)
     gtk_source_view_set_show_line_marks(sv, FALSE);
     gtk_text_view_set_monospace(GTK_TEXT_VIEW(sv), TRUE);
     gtk_text_view_set_left_margin(GTK_TEXT_VIEW(sv), 6);
+
+    /* A diagnostic is an underline and a sentence; the sentence is read where
+     * the pointer rests, which is the text view's own tooltip. */
+    gtk_widget_set_has_tooltip(view, TRUE);
+    g_signal_connect(view, "query-tooltip",
+                     G_CALLBACK(on_diagnostic_tooltip), NULL);
 
     /* The scroller, the buffer's two events and the watch that keeps them from
      * outliving the widget: the same for both editors, so it is written once. */
@@ -1520,6 +1529,314 @@ static JSValue ed_marks(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/* ------------------------------------------------------------- Diagnostics */
+
+/*
+ * A range underlined in the text, with the sentence that says why.
+ *
+ * A gutter `Mark` says *this line*; a diagnostic says *this word*: the token a
+ * compiler, a linter or the IDE's own name check is talking about -- and it
+ * carries its reason in a tooltip, so the answer is where the pointer already
+ * is. The sentence is data, not prose in the C, because it comes from whoever
+ * found the problem (`Live` passes the check's own message).
+ *
+ * One `GtkTextTag` per diagnostic, because a tooltip belongs to the range and
+ * not to the class of problem; the tag is removed with the diagnostic, so a
+ * pass that runs every 400 ms does not grow the tag table.
+ */
+typedef struct {
+    GtkTextTag *tag;
+    int         line;
+    int         column;
+    int         length;
+    char       *kind;
+    char       *text;
+} BtaDiagnostic;
+
+#define DIAGNOSTICS_KEY "bta-diagnostics"
+#define DIAGNOSTIC_KEY  "bta-diagnostic"
+
+static void diag_free(gpointer data)
+{
+    BtaDiagnostic *d = data;
+
+    if (d->tag)
+        g_object_unref(d->tag);
+    g_free(d->kind);
+    g_free(d->text);
+    g_free(d);
+}
+
+static void diagnostics_free(gpointer data)
+{
+    g_ptr_array_unref(data);
+}
+
+static GPtrArray *diagnostics_of(GtkTextBuffer *buf, bool create)
+{
+    GPtrArray *found = g_object_get_data(G_OBJECT(buf), DIAGNOSTICS_KEY);
+
+    if (!found && create) {
+        found = g_ptr_array_new_with_free_func(diag_free);
+        g_object_set_data_full(G_OBJECT(buf), DIAGNOSTICS_KEY, found,
+                               diagnostics_free);
+    }
+    return found;
+}
+
+/* The tag table owns one reference and this owns another; taking the tag out
+ * of the table is what lets the next pass start from a table of its own size. */
+static void diag_remove(GtkTextBuffer *buf, BtaDiagnostic *d)
+{
+    GtkTextIter a, b;
+
+    gtk_text_buffer_get_bounds(buf, &a, &b);
+    gtk_text_buffer_remove_tag(buf, d->tag, &a, &b);
+    gtk_text_tag_table_remove(gtk_text_buffer_get_tag_table(buf), d->tag);
+}
+
+static const char *DIAGNOSTIC_KINDS[] = { "Error", "Warning", "Info" };
+
+static const char *diagnostic_kind(const char *name)
+{
+    for (size_t i = 0; i < G_N_ELEMENTS(DIAGNOSTIC_KINDS); i++)
+        if (!strcmp(name, DIAGNOSTIC_KINDS[i]))
+            return DIAGNOSTIC_KINDS[i];
+    return NULL;
+}
+
+/*
+ * The optional kind argument `Diagnostics` and `ClearDiagnostics` share:
+ * `NULL` for every kind, a static string for one, `-1` for a refusal.
+ */
+static int diagnostic_filter(JSContext *ctx, int argc, JSValueConst *argv,
+                             int at, const char **out)
+{
+    *out = NULL;
+    if (argc <= at || JS_IsUndefined(argv[at]) || JS_IsNull(argv[at]))
+        return 0;
+
+    const char *name = JS_ToCString(ctx, argv[at]);
+    if (!name)
+        return -1;
+
+    const char *kind = diagnostic_kind(name);
+    JS_FreeCString(ctx, name);
+    if (!kind) {
+        JS_ThrowTypeError(ctx, "not a diagnostic kind -- Error, Warning or Info");
+        return -1;
+    }
+    *out = kind;
+    return 0;
+}
+
+static JSValue ed_diagnostic(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    /* QuickJS pads a call to the declared arity, so a missing fifth argument
+     * arrives as `undefined` with `argc` already 5: both tests, or a sentence
+     * would be the word "undefined". */
+    if (argc < 5 || JS_IsUndefined(argv[4]) || JS_IsNull(argv[4]))
+        return JS_ThrowTypeError(ctx,
+            "Diagnostic(line, column, length, kind, text) needs all five");
+
+    int32_t line, column, length;
+    if (!bta_to_int(ctx, argv[0], "Diagnostic line", &line) ||
+        !bta_to_int(ctx, argv[1], "Diagnostic column", &column) ||
+        !bta_to_int(ctx, argv[2], "Diagnostic length", &length))
+        return JS_EXCEPTION;
+
+    if (line < 1)
+        return JS_ThrowRangeError(ctx, "Diagnostic: line is 1-based, got %d", line);
+    if (column < 1)
+        return JS_ThrowRangeError(ctx, "Diagnostic: column is 1-based, got %d", column);
+    if (length < 1)
+        return JS_ThrowRangeError(ctx, "Diagnostic: length is at least 1, got %d", length);
+
+    const char *name = JS_ToCString(ctx, argv[3]);
+    if (!name)
+        return JS_EXCEPTION;
+
+    const char *kind = diagnostic_kind(name);
+    if (!kind) {
+        JSValue e = JS_ThrowTypeError(ctx,
+            "Diagnostic: \"%s\" is not a kind -- Error, Warning or Info", name);
+        JS_FreeCString(ctx, name);
+        return e;
+    }
+
+    const char *text = argc > 4 ? JS_ToCString(ctx, argv[4]) : NULL;
+    if (!text) {
+        JS_FreeCString(ctx, name);
+        return JS_ThrowTypeError(ctx, "Diagnostic: text is required");
+    }
+
+    GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
+    GtkTextIter    a, b;
+
+    bta_text_iter_at_line(buf, &a, line);
+    if (column > 1)
+        gtk_text_iter_forward_chars(&a, column - 1);
+    b = a;
+    gtk_text_iter_forward_chars(&b, length);
+
+    if (gtk_text_iter_equal(&a, &b)) {
+        JS_FreeCString(ctx, text);
+        JS_FreeCString(ctx, name);
+        return JS_UNDEFINED;
+    }
+
+    GtkTextTag *tag = gtk_text_buffer_create_tag(
+        buf, NULL,
+        "underline", !strcmp(kind, "Error") ? PANGO_UNDERLINE_ERROR
+                                             : PANGO_UNDERLINE_SINGLE,
+        NULL);
+    if (!tag) {
+        JSValue e = JS_ThrowPlainError(ctx, "Diagnostic: the text has no tag table");
+        JS_FreeCString(ctx, text);
+        JS_FreeCString(ctx, name);
+        return e;
+    }
+
+    /* `underline-rgba` is GTK 3.16's, so it is there from 4.10 to now: the
+     * respective red, amber and blue of the three kinds, and the theme's own
+     * colour for none of them. */
+    const char *colour = !strcmp(kind, "Error")   ? "#e01b24"
+                       : !strcmp(kind, "Warning") ? "#e5a50a"
+                                                  : "#3584e4";
+    GdkRGBA rgba;
+
+    if (gdk_rgba_parse(&rgba, colour))
+        g_object_set(tag, "underline-rgba", &rgba, NULL);
+
+    /* The table's reference, and ours: `diag_remove` takes the table's away
+     * before the diagnostic is freed. */
+    g_object_ref(tag);
+
+    BtaDiagnostic *d = g_new0(BtaDiagnostic, 1);
+    d->tag    = tag;
+    d->line   = line;
+    d->column = column;
+    d->length = length;
+    d->kind   = g_strdup(kind);
+    d->text   = g_strdup(text);
+
+    g_object_set_data(G_OBJECT(tag), DIAGNOSTIC_KEY, d);
+    g_ptr_array_add(diagnostics_of(buf, true), d);
+    gtk_text_buffer_apply_tag(buf, tag, &a, &b);
+
+    JS_FreeCString(ctx, text);
+    JS_FreeCString(ctx, name);
+    return JS_UNDEFINED;
+}
+
+static JSValue ed_clear_diagnostics(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *kind = NULL;
+    if (diagnostic_filter(ctx, argc, argv, 0, &kind) < 0)
+        return JS_EXCEPTION;
+
+    GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
+    GPtrArray     *all = diagnostics_of(buf, false);
+    int            n   = 0;
+
+    if (!all)
+        return JS_NewInt32(ctx, 0);
+
+    for (int i = (int)all->len - 1; i >= 0; i--) {
+        BtaDiagnostic *d = all->pdata[i];
+
+        if (kind && strcmp(kind, d->kind))
+            continue;
+
+        diag_remove(buf, d);
+        g_ptr_array_remove_index(all, (guint)i);
+        n++;
+    }
+    return JS_NewInt32(ctx, n);
+}
+
+/*
+ * Diagnostics([kind]) -- `[{ Line, Column, Length, Kind, Text }]`, in the order
+ * they were added. The reader that makes an underline assertable instead of a
+ * flag that reads back while nothing was drawn.
+ */
+static JSValue ed_diagnostics(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *kind = NULL;
+    if (diagnostic_filter(ctx, argc, argv, 0, &kind) < 0)
+        return JS_EXCEPTION;
+
+    GPtrArray *all = diagnostics_of(GTK_TEXT_BUFFER(buffer_of(w)), false);
+
+    JSValue  out = JS_NewArray(ctx);
+    uint32_t n   = 0;
+
+    for (guint i = 0; all && i < all->len; i++) {
+        BtaDiagnostic *d = all->pdata[i];
+
+        if (kind && strcmp(kind, d->kind))
+            continue;
+
+        JSValue row = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, row, "Line",   JS_NewInt32(ctx, d->line));
+        JS_SetPropertyStr(ctx, row, "Column", JS_NewInt32(ctx, d->column));
+        JS_SetPropertyStr(ctx, row, "Length", JS_NewInt32(ctx, d->length));
+        JS_SetPropertyStr(ctx, row, "Kind",   JS_NewString(ctx, d->kind));
+        JS_SetPropertyStr(ctx, row, "Text",   JS_NewString(ctx, d->text));
+        JS_SetPropertyUint32(ctx, out, n++, row);
+    }
+    return out;
+}
+
+/* The pointer resting on an underlined range, if it is on one. */
+static gboolean on_diagnostic_tooltip(GtkWidget *view, int x, int y,
+                                      gboolean keyboard, GtkTooltip *tip,
+                                      gpointer user_data)
+{
+    (void)keyboard;
+    (void)user_data;
+
+    int         bx = 0, by = 0, trailing = 0;
+    GtkTextIter it;
+
+    gtk_text_view_window_to_buffer_coords(GTK_TEXT_VIEW(view),
+                                          GTK_TEXT_WINDOW_TEXT,
+                                          x, y, &bx, &by);
+    if (!gtk_text_view_get_iter_at_position(GTK_TEXT_VIEW(view), &it,
+                                            &trailing, bx, by))
+        return FALSE;
+
+    GSList  *tags  = gtk_text_iter_get_tags(&it);
+    gboolean shown = FALSE;
+
+    for (GSList *l = tags; l; l = l->next) {
+        BtaDiagnostic *d = g_object_get_data(G_OBJECT(l->data), DIAGNOSTIC_KEY);
+
+        if (d && d->text && *d->text) {
+            gtk_tooltip_set_text(tip, d->text);
+            shown = TRUE;
+            break;
+        }
+    }
+    g_slist_free(tags);
+    return shown;
+}
+
 /* ----------------------------------------------------------------- Folding */
 
 /*
@@ -2594,6 +2911,24 @@ static const JSCFunctionListEntry source_props[] = {
      *   read as by the first thing that used it
      */
     JS_CFUNC_DEF("Marks",      1, ed_marks),
+    /* Diagnostic(line, column, length, kind, text)
+     *   underlines `length` characters from `column` on `line` — both 1-based,
+     *   as `Select` and `GotoLine` count — with `kind` `Error` `Warning` or
+     *   `Info`, and shows `text` in a tooltip where the pointer rests on it.
+     *   The range moves with the text; **clear and add them again after an
+     *   edit**, as `Live` does on its pause. Several may share a line
+     */
+    JS_CFUNC_DEF("Diagnostic", 5, ed_diagnostic),
+    /* ClearDiagnostics([kind])
+     *   takes them all off, or only one kind. How many went
+     */
+    JS_CFUNC_DEF("ClearDiagnostics", 1, ed_clear_diagnostics),
+    /* Diagnostics([kind])
+     *   **a record per diagnostic**, in the order added: `{ Line, Column,
+     *   Length, Kind, Text }`. The reader that makes an underline assertable,
+     *   as `Marks` does for the gutter
+     */
+    JS_CFUNC_DEF("Diagnostics", 1, ed_diagnostics),
     /* FoldRanges
      *   the blocks that can be folded, as `[{ Start, End, [Tail] }]` lines,
      *   1-based: what a fold of one would hide is `Start + 1` to `End`, **whole**.

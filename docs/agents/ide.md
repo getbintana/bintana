@@ -1148,3 +1148,14 @@ warnings (100 accessibility, 35 false) to 100, and the command-line tool from
 walked, which was O(files²). The pass still reads every source before it reports,
 so `Run` holds the texts only for the length of the pass and `code()` uses them
 instead of reading the disk twice.
+
+**A finding carries the word, not only the line.** `Names` yields `column` and
+`length` beside `line`; the indices a `Regex` gives are UTF-16, and
+`charsBetween` converts them to the characters `Column`, `Select` and
+`Diagnostic` count, so an emoji before the token does not move the underline.
+`Live.mark` adds a `Diagnostic` with the same sentence the gutter mark carries:
+the gutter says *which line*, the underline says *which word*, and the tooltip
+is the sentence at the pointer. The project pass's `.form` rows have `line` 0
+and no column, so they keep their place in the Problems list and draw nothing in
+an editor. `Diagnostics("Warning")` is what `tests/ide` asserts, which is the
+range GTK really holds and not the call having been made.

@@ -8082,6 +8082,15 @@
       "Parent": "Editor",
       "Members": [
         {
+          "Name": "ClearDiagnostics",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "([kind])",
+          "Returns": "",
+          "Doc": "takes them all off, or only one kind. How many went",
+          "Native": true
+        },
+        {
           "Name": "ClearMarks",
           "Kind": "Method",
           "Params": 1,
@@ -8106,6 +8115,24 @@
           "Signature": "",
           "Returns": "",
           "Doc": "the heading of the popup your own provider fills. **Translated**",
+          "Native": true
+        },
+        {
+          "Name": "Diagnostic",
+          "Kind": "Method",
+          "Params": 5,
+          "Signature": "(line, column, length, kind, text)",
+          "Returns": "",
+          "Doc": "underlines `length` characters from `column` on `line` — both 1-based, as `Select` and `GotoLine` count — with `kind` `Error` `Warning` or `Info`, and shows `text` in a tooltip where the pointer rests on it. The range moves with the text; **clear and add them again after an edit**, as `Live` does on its pause. Several may share a line",
+          "Native": true
+        },
+        {
+          "Name": "Diagnostics",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "([kind])",
+          "Returns": "",
+          "Doc": "**a record per diagnostic**, in the order added: `{ Line, Column, Length, Kind, Text }`. The reader that makes an underline assertable, as `Marks` does for the gutter",
           "Native": true
         },
         {

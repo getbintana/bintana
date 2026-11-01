@@ -959,6 +959,18 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   turns the same build into the message in GtkSourceView's own tooltip.
   **That is the whole check, because the effect needs a pointer**: the suite can
   only say the text is on the mark, which it already did, and did.
+- **A `Diagnostic` is one anonymous `GtkTextTag` per range, and its sentence is
+  the view's own tooltip.** The tag carries `underline` -- `PANGO_UNDERLINE_ERROR`
+  for `Error`, a single line for the other two -- and `underline-rgba`, which is
+  3.16's property and therefore present at the 4.10 floor. The tooltip needs
+  `has-tooltip` on the *view*, the same trap as the mark lane above; the tag has
+  no tooltip of its own. The tag is **removed from the table** when the
+  diagnostic goes, not merely unapplied: `Live` clears and re-adds every 400 ms,
+  and a table that only grew would carry every underline the session ever drew.
+  GTK adjusts tag ranges with edits, but a diagnostic is about a token that was
+  read from a particular text, so the caller clears and re-adds after an edit
+  instead of trusting where the range ended up; `Diagnostics([kind])` is the
+  reader that makes the range assertable, as `Marks` does for the gutter.
 
 ## Calendar, radios and pickers
 

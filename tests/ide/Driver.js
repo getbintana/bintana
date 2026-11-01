@@ -13098,6 +13098,9 @@ function* p_names(ide) {
           mine()[0].text);
     eq("...and the gutter says so beside it",
        editor.Marks("Warning").map((m) => m.Line).join(","), "3");
+    eq("...and the word itself is underlined", editor.Diagnostics("Warning").length, 1);
+    eq("...on its line", editor.Diagnostics("Warning")[0].Line, 3);
+    eq("...at its column", editor.Diagnostics("Warning")[0].Column, 9);
 
     /*
      * And the answer to the objection that keeps a syntax check off the
@@ -13108,12 +13111,14 @@ function* p_names(ide) {
     ide.live.pass();
     eq("what the caret is inside is not reported", mine().length, 0);
     eq("...and nothing is marked either", editor.Marks("Warning").length, 0);
+    eq("...nor underlined", editor.Diagnostics("Warning").length, 0);
 
     /* A member every widget really has, from anywhere. */
     editor.Text = editor.Text.replace(".Txt", ".Name");
     editor.GotoLine(5);
     ide.live.pass();
     eq("a member it does have is not reported", mine().length, 0);
+    eq("...and nothing is underlined", editor.Diagnostics("Warning").length, 0);
 
     /* --- an event the control does not raise --------------------------------- */
 
@@ -13131,6 +13136,9 @@ function* p_names(ide) {
     eq("...on its line", mine()[0].line, 3);
     check("...saying it will never be called",
           mine()[0].text.includes("Clik"), mine()[0].text);
+    eq("...under the handler's name", editor.Diagnostics("Warning").length, 1);
+    eq("...on its line", editor.Diagnostics("Warning")[0].Line, 3);
+    eq("...at its column", editor.Diagnostics("Warning")[0].Column, 5);
 
     /*
      * A method with an underscore whose first half is not a control is left
@@ -13151,6 +13159,7 @@ function* p_names(ide) {
     ide.live.pass();
     eq("the file put back has nothing wrong with it", mine().length, 0);
     eq("...and no marks left over", editor.Marks("Warning").length, 0);
+    eq("...nor underlines", editor.Diagnostics("Warning").length, 0);
 
     /* The editor is dirty now and every phase after this one expects it clean:
      * the text is what it was, so saving writes the same bytes. */

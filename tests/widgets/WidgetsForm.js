@@ -588,7 +588,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
@@ -1576,6 +1576,44 @@ class WidgetsForm extends Form {
         eq("...as GTK does", this.Ed.Line, 2);
 
         this.Ed.Clear();
+    }
+
+    /* --- an underline under the word, not only the line -------------------
+     *
+     * `Mark` is the gutter's; `Diagnostic` is the text's, with the sentence in
+     * a tooltip. Asserted through `Diagnostics()`, which is the record the
+     * tag really carries, and not through the call having been made.
+     */
+    testDiagnostics() {
+        const ed = new SourceEditor();
+        this.Fixed1.Add(ed);
+        ed.Text = "alpha beta\ngamma delta";
+
+        ed.Diagnostic(1, 7, 4, "Error", "beta is wrong");
+        ed.Diagnostic(2, 7, 5, "Warning", "delta is long");
+
+        const all = ed.Diagnostics();
+        eq("two diagnostics", all.length, 2);
+        eq("...the first on its line", all[0].Line, 1);
+        eq("...at its column", all[0].Column, 7);
+        eq("...with its length", all[0].Length, 4);
+        eq("...its kind", all[0].Kind, "Error");
+        eq("...and its sentence", all[0].Text, "beta is wrong");
+
+        eq("one kind can be read alone", ed.Diagnostics("Warning").length, 1);
+        eq("clearing one kind answers how many", ed.ClearDiagnostics("Error"), 1);
+        eq("...and leaves the other", ed.Diagnostics().length, 1);
+        eq("clearing the rest", ed.ClearDiagnostics(), 1);
+        eq("...leaves none", ed.Diagnostics().length, 0);
+
+        throws("a kind that is not one is refused",
+               () => ed.Diagnostic(1, 1, 1, "Nope", "x"));
+        throws("a line is 1-based", () => ed.Diagnostic(0, 1, 1, "Error", "x"));
+        throws("a column is 1-based", () => ed.Diagnostic(1, 0, 1, "Error", "x"));
+        throws("a length is at least one", () => ed.Diagnostic(1, 1, 0, "Error", "x"));
+        throws("the sentence is required", () => ed.Diagnostic(1, 1, 1, "Error"));
+
+        ed.Delete();
     }
 
     /* --- marks in the gutter ----------------------------------------------

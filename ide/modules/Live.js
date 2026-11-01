@@ -156,10 +156,19 @@ export class Live {
      * `Warning` and not `Error`: the file compiles and will run, and what it
      * does is the wrong thing rather than nothing. The save's syntax error keeps
      * `Error` to itself, so a line carrying both says both.
+     *
+     * The gutter says which line; the `Diagnostic` says which word, and carries
+     * the same sentence in its tooltip. `Names` gives both the index a match
+     * came from (line) and the column and length the editor counts in.
      */
     mark(editor, found) {
         editor.ClearMarks("Warning");
-        for (const p of found)
+        editor.ClearDiagnostics("Warning");
+
+        for (const p of found) {
             if (p.line > 0) editor.Mark(p.line, "Warning", p.text);
+            if (p.line > 0 && p.column > 0 && p.length > 0)
+                editor.Diagnostic(p.line, p.column, p.length, "Warning", p.text);
+        }
     }
 }
