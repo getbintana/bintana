@@ -107,6 +107,7 @@
 #include "bta.h"
 #include "bta_prelude.h"
 
+#include <math.h>
 #include <string.h>
 
 /* The tag a decimal travels under, both ways.  An object with a string
@@ -383,15 +384,38 @@ static JSValue task_max(JSContext *ctx, JSValueConst this_val,
                         int argc, JSValueConst *argv)
 {
     if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
-        int32_t n = 0;
+        double n;
 
-        if (!JS_IsNumber(argv[0]) || JS_ToInt32(ctx, &n, argv[0]) < 0)
+        /*
+         * **Whole, finite and in range, or refused.**  `JS_ToInt32` made a
+         * number of anything that was one: `NaN`, `Infinity` and `-0.5` became
+         * 0 -- which here is *no limit* -- and `4294967297` wrapped to a limit
+         * of 1.  A fraction is refused rather than truncated for the same
+         * reason: `0.5` truncated is the ceiling taken away.
+         */
+        if (!JS_IsNumber(argv[0]))
             return JS_ThrowTypeError(ctx, "Task.Max is a whole number of tasks, "
                                           "0 for no limit");
+        if (!bta_to_number(ctx, argv[0], "Task.Max", &n))
+            return JS_EXCEPTION;
         if (n < 0)
             return JS_ThrowRangeError(ctx, "Task.Max cannot be negative; 0 "
                                            "means no limit");
-        task_limit = n;
+        if (n != floor(n) || n > (double)INT32_MAX) {
+            /* Said the way the program wrote it: `Infinity`, `10000000000`. */
+            const char *had = JS_ToCString(ctx, argv[0]);
+            JSValue     e   = n != floor(n)
+                ? JS_ThrowRangeError(ctx, "Task.Max: %s is not a whole number "
+                                          "of tasks; 0 means no limit",
+                                     had ? had : "?")
+                : JS_ThrowRangeError(ctx, "Task.Max: %s is more tasks than a "
+                                          "limit holds; 0 means no limit",
+                                     had ? had : "?");
+
+            JS_FreeCString(ctx, had);
+            return e;
+        }
+        task_limit = (int)n;
     }
     return JS_NewInt32(ctx, task_limit);
 }
@@ -401,8 +425,9 @@ static const JSCFunctionListEntry task_statics[] = {
      *   the most tasks alive at once, `0` (the default) for no limit. A `Start`
      *   over it is refused rather than queued; the program waits for an answer
      *   or raises it. With no argument it answers the ceiling; with one it sets
-     *   it and answers the new value. One thread and one runtime per task is
-     *   what makes a ceiling worth having
+     *   it and answers the new value — **a whole number**: a fraction, `NaN`,
+     *   `Infinity` or a count past 2³¹ is refused and the ceiling stays. One
+     *   thread and one runtime per task is what makes a ceiling worth having
      */
     JS_CFUNC_DEF("Max", 1, task_max),
 };

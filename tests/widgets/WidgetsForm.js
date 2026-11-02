@@ -27250,6 +27250,15 @@ class Form1 extends Form {
         Task.Max(1);
         throws("a task over Task.Max is refused", () => new TaskWork().Start({}));
         first.Stop({ KillAfter: 0 });
+
+        /* **A number that is not a count is refused, and the ceiling stays.**
+         * `JS_ToInt32` read NaN, Infinity and -0.5 as 0 -- no limit at all --
+         * and wrapped 4294967297 to a limit of one. */
+        Task.Max(3);
+        for (const v of [NaN, Infinity, -0.5, 0.5, 2.5, 4294967297, 1e10]) {
+            throws(`Task.Max(${v}) is refused`, () => Task.Max(v));
+            eq("...and the ceiling is as it was", Task.Max(), 3);
+        }
         Task.Max(wasMax);
 
         /* A token is a value: idempotent, and refused where a task expects it. */
