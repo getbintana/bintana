@@ -286,6 +286,13 @@ class TaskWork extends Task {
         if (msg.mode === "bytes")
             return { n: msg.data.Length, back: msg.data, b64: msg.data.ToBase64() };
 
+        /* An effect anyone can see: a task started on a raised token must not
+         * get this far. */
+        if (msg.mode === "touch") {
+            File.Save(msg.path, "ran");
+            return { ran: true };
+        }
+
         /* A task whose work is its effect has nothing to answer. */
         if (msg.mode === "void")
             return;

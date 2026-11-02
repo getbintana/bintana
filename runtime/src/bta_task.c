@@ -355,7 +355,8 @@ static const JSCFunctionListEntry task_props[] = {
      *   a fresh thread, builds the class, and calls `Run(msg)`. **Once** — a
      *   second `Start` is refused; work that repeats is a new `Task`. A
      *   `Cancellable` last stops it when raised, and stops every task given
-     *   the same one
+     *   the same one; raised already, `Run` is not called and the task ends
+     *   `Cancelled`
      */
     JS_CFUNC_DEF("Start",  3, task_start),
     /* Stop([options])
@@ -1653,8 +1654,20 @@ static gpointer task_thread(gpointer data)
         goto unwind;
     }
 
-    int64_t prof = bta_profile_begin();
-    ans = JS_Call(ctx, run, inst, 1, (JSValueConst *)&msg);
+    /*
+     * **Ended before it began, `Run` is not called.**  A token raised before
+     * `Start`, a `Stop()` or a `Timeout` while the file loaded: the ending is
+     * already decided, and the run that used to follow did its whole work
+     * -- a `Run` that wrote a file wrote it, 20 times in 20 -- and was then
+     * reported cancelled.  `task_ending` reads the same signals and gives the
+     * ending its usual words.
+     */
+    bool    ended = g_atomic_int_get(&job->stop) != 0 ||
+                    g_cancellable_is_cancelled(job->cancel) ||
+                    (job->shared && g_cancellable_is_cancelled(job->shared));
+    int64_t prof  = ended ? 0 : bta_profile_begin();
+
+    ans = ended ? JS_UNDEFINED : JS_Call(ctx, run, inst, 1, (JSValueConst *)&msg);
     JS_FreeValue(ctx, msg);
     JS_FreeValue(ctx, run);
     JS_FreeValue(ctx, inst);

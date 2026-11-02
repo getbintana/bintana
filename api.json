@@ -14311,7 +14311,7 @@
           "Params": 3,
           "Signature": "(argv, [options], [cancellable])",
           "Returns": "{ ExitCode, Output }",
-          "Doc": "runs it and **waits**, answering what it printed: `{ ExitCode, Output }`. It blocks the main loop, so it is for programs that answer in milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for one that might sit there; `Input` is the text or `Bytes` the child reads, which is what makes `Exec.Wait([\"sort\"], { Input: text })` a filter. **With no `Timeout` it gives up after 30 s** — a frozen window is no place for a default that never ends — and `Timeout: 0` is the explicit *wait forever*. A `Cancellable` last ends the child when raised; in a task, `this.Cancellable` is how `Stop` reaches it",
+          "Doc": "runs it and **waits**, answering what it printed: `{ ExitCode, Output }`. It blocks the main loop, so it is for programs that answer in milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for one that might sit there; `Input` is the text or `Bytes` the child reads, which is what makes `Exec.Wait([\"sort\"], { Input: text })` a filter. **With no `Timeout` it gives up after 30 s** — a frozen window is no place for a default that never ends — and `Timeout: 0` is the explicit *wait forever*. A `Cancellable` last ends the child when raised, and raised already starts none; in a task, `this.Cancellable` is how `Stop` reaches it",
           "Native": true
         }
       ]
@@ -16354,7 +16354,7 @@
           "Params": 3,
           "Signature": "(data, [options], [cancellable])",
           "Returns": "",
-          "Doc": "serialises the message, loads the class's file in a fresh runtime on a fresh thread, builds the class, and calls `Run(msg)`. **Once** — a second `Start` is refused; work that repeats is a new `Task`. A `Cancellable` last stops it when raised, and stops every task given the same one",
+          "Doc": "serialises the message, loads the class's file in a fresh runtime on a fresh thread, builds the class, and calls `Run(msg)`. **Once** — a second `Start` is refused; work that repeats is a new `Task`. A `Cancellable` last stops it when raised, and stops every task given the same one; raised already, `Run` is not called and the task ends `Cancelled`",
           "Native": true
         },
         {

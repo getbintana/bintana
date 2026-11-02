@@ -89,6 +89,14 @@
   raises it at once -- refused the very calls a `Run` makes to wind down after
   `Stopping`. `File.Hash` and the compressors take none, and still wait for
   the flag or `KillAfter` between opcodes.
+- **A token raised before the work starts must stop it from starting.**
+  `Task.Start` on a raised token loaded the file and called `Run`, which did
+  its whole work -- a `Run` that wrote a file wrote it, 20 times in 20 -- and
+  the ending said `cancelled` afterwards; `task_thread` now asks the job's
+  signals before the call. `Exec.Wait` spawned the child and let
+  `communicate` cancel it, and the kill raced the child: `touch` made its file
+  25 to 35 times in 1000. It asks before the spawn, after every option is
+  read, since a getter can raise the token.
 - **A token cancelled from the main thread can wake the worker before the
   job's flag is up.** `g_cancellable_cancel` sets `Cancelled` first and emits
   the signal afterwards; a `Run` polling `this.Cancellable.Cancelled` can

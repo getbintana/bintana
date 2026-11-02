@@ -2696,6 +2696,23 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;       /* it threw on the way; that stands */
     }
 
+    /*
+     * **A token raised already starts nothing.** The cancel used to reach the
+     * child only after the spawn, through `communicate`, and the kill that
+     * followed raced the child's first instructions: `touch` with the token
+     * raised still made its file 3 times in 200.  Asked here, after every
+     * option has been read -- a getter among them can raise it -- and before
+     * anything exists to be undone.
+     */
+    if (opt_cancel && g_cancellable_is_cancelled(opt_cancel)) {
+        g_object_unref(launcher);
+        g_ptr_array_unref(args);
+        g_clear_pointer(&input, g_bytes_unref);
+        g_main_context_pop_thread_default(priv);
+        g_main_context_unref(priv);
+        return JS_ThrowPlainError(ctx, "Exec.Wait failed: the operation was cancelled");
+    }
+
     GError      *err  = NULL;
     GSubprocess *proc = g_subprocess_launcher_spawnv(
         launcher, (const gchar * const *)args->pdata, &err);
@@ -4629,7 +4646,8 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   filter. **With no `Timeout` it gives up after 30 s** — a frozen window
      *   is no place for a default that never ends — and `Timeout: 0` is the
      *   explicit *wait forever*. A `Cancellable` last ends the child when
-     *   raised; in a task, `this.Cancellable` is how `Stop` reaches it
+     *   raised, and raised already starts none; in a task,
+     *   `this.Cancellable` is how `Stop` reaches it
      */
     JS_SetPropertyStr(ctx, exec, "Wait",
                       JS_NewCFunction(ctx, sys_exec_wait, "Wait", 3));

@@ -27285,6 +27285,21 @@ class Form1 extends Form {
                   String(Date.now() - from));
         }
 
+        /* **A raised token starts nothing.** The cancel used to reach the child
+         * through `communicate`, after the spawn, and the kill raced it:
+         * `touch` made its file about 3 times in 200.  A thousand tries, so
+         * the old race shows every run (it showed one run in two at 200); with
+         * nothing spawned they cost nothing. */
+        Directory.Make(File.Join(SCRATCH, "token-touch"));
+        let touched = 0;
+        for (let i = 0; i < 1000; i++) {
+            const f = File.Join(SCRATCH, "token-touch", `t${i}`);
+            try { Exec.Wait(["touch", f], token); } catch (e) { /* cancelled */ }
+            if (File.Exists(f)) touched++;
+        }
+        eq("Exec.Wait on a raised token never starts the child", touched, 0);
+        Directory.DeleteTree(File.Join(SCRATCH, "token-touch"));
+
         /* Every file verb that can block takes one, and a raised one stops
          * it before it has done anything -- the tree is still all there. */
         Directory.Make(File.Join(SCRATCH, "token-tree", "sub"));
@@ -27501,6 +27516,27 @@ class Form1 extends Form {
                 next();
             };
             t.Start({ mode: "cancellable" }, { Timeout: 5000 }, stop);
+        });
+
+        /* **A task started on a raised token does not run.** `Run` used to be
+         * called anyway -- it did its whole work, every time -- and the ending
+         * said cancelled afterwards. */
+        steps.push(() => {
+            const raised = new Cancellable();
+            const path   = File.Join(SCRATCH, "raised-start");
+            const t      = new TaskWork();
+
+            raised.Cancel();
+            Directory.Make(SCRATCH);
+            if (File.Exists(path)) File.Delete(path);
+            t.Done  = () => fail("a task on a raised token must not reach Done");
+            t.Error = (m) => {
+                check("a task started on a raised token ends cancelled",
+                      String(m).includes("cancelled"), String(m));
+                eq("...and its Run never ran", File.Exists(path), false);
+                next();
+            };
+            t.Start({ mode: "touch", path }, raised);
         });
 
         /* The shared token is one way: it stops every task holding it, but
