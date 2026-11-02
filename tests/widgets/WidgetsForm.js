@@ -17643,9 +17643,9 @@ class Form1 extends Form {
               `${bare.LblVersion.Text} / ${Application.Version}`);
         /* **Hidden until given, every one of them** -- the assertion that
          * catches an about box with an empty line in the middle of it. */
-        eq("no summary, link or copyright that was not given",
+        eq("no summary, link, copyright or binary that was not asked for",
            bare.LblSummary.Visible || bare.LnkWebsite.Visible
-           || bare.LblCopyright.Visible, false);
+           || bare.LblCopyright.Visible || bare.LblExecutable.Visible, false);
         eq("and a picture only when the project ships its icon",
            bare.ImgIcon.Visible,
            !!Application.Id && Application.HasIcon(Application.Id));
@@ -17661,7 +17661,8 @@ class Form1 extends Form {
         const full = AboutBox.Show({
             Summary: "What it is.", Copyright: "Copyright © 2026 Somebody",
             Website: "https://example.org/", Icon: "dialog-information-symbolic",
-            Name: "Other", Version: "Release 7", Title: "Who" });
+            Name: "Other", Version: "Release 7", Title: "Who",
+            Executable: true });
         eq("a summary given is shown", [full.LblSummary.Visible,
                                         full.LblSummary.Text].join("|"),
            "true|What it is.");
@@ -17677,6 +17678,10 @@ class Form1 extends Form {
         eq("and the caller's words replace the project's",
            [full.LblName.Text, full.LblVersion.Text, full.Text].join("|"),
            "Other|Release 7|Who");
+        eq("and the binary it runs on, when asked, whole in the tooltip",
+           [full.LblExecutable.Visible, full.LblExecutable.Text,
+            full.LblExecutable.Tooltip].join("|"),
+           ["true", Application.Executable, Application.Executable].join("|"));
         eq("with one label of its own declared for the catalogue",
            AboutBox.TextProperties.join(","), "BtnClose");
         full.BtnClose_Click();
@@ -21657,6 +21662,45 @@ class Form1 extends Form {
               Widget.Members("Dialog").length > 0 &&
               Widget.Members("Dialog").length < 40,
               Widget.Members("Dialog").length);
+
+        /* **`Sources` means another program, so the running one is not asked.**
+         * A name the sources do not declare resolves against what was on the
+         * global object before this program's first file -- the runtime's --
+         * and never against this program's classes or its libraries'. Without
+         * it an editor (the IDE is a Bintana program) answered a project's
+         * `AskForm.` with its own form. `WidgetsForm` is this project's class
+         * and `Confirm` its library's: both answer without `Sources` and
+         * neither with it. */
+        const none = { Sources: [] };
+        const refusal = (f) => { try { f(); return ""; } catch (e) { return e.message; } };
+        check("the running program's own class answers without Sources",
+              Widget.Members("WidgetsForm").length > 0 &&
+              Widget.Members("Confirm").length > 0);
+        eq("and not beside Sources, which describe another program",
+           refusal(() => Widget.Members("WidgetsForm", none)),
+           "Members: 'WidgetsForm' is not a class, and no source among Sources declares it");
+        eq("nor does a library this program uses",
+           refusal(() => Widget.Members("Confirm", none)),
+           "Members: 'Confirm' is not a class, and no source among Sources declares it");
+        check("while the runtime's classes, globals and types all still answer",
+              Widget.Members("Timer", none).length > 0 &&
+              Widget.Members("Button", none).length > 0 &&
+              Widget.Members("File", none).length > 0 &&
+              Widget.Members("XmlNode", none).length > 0 &&
+              Widget.Members("MenuItem", none).length > 0,
+              JSON.stringify(["Timer", "Button", "File", "XmlNode", "MenuItem"]
+                  .map((n) => refusal(() => Widget.Members(n, none)) || "ok")));
+        /* The base of a class read from the sources is resolved the same way:
+         * a source extending this program's own class has no base to inherit
+         * from in the program it belongs to. */
+        check("a base among the running program's classes is not walked into",
+              !Widget.Members("Sub", { Sources: ["class Sub extends WidgetsForm { Own() {} }\n"] })
+                  .some((m) => m.Name === "Form_Open"));
+        /* The event verbs take `Sources` too, and the same rule. */
+        eq("an event verb beside Sources does not reach this program either",
+           refusal(() => Widget.EventNames("WidgetsForm", none)) !== "", true);
+        check("and still answers for a control",
+              Widget.EventNames("Button", none).includes("Click"));
 
         /* **The refusals, named.** A source is text: `JS_ToCString` converts
          * anything, so a number would have become the source `"5"` and answered

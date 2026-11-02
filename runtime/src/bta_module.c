@@ -193,6 +193,7 @@ typedef struct {
     GPtrArray  *uses;       /* Uses: each file's free names, until checked */
     GHashTable *loading;    /* library name -> 1 while load_library runs */
     GHashTable *declared;   /* name -> GPtrArray of the modules declaring it */
+    GHashTable *runtime;    /* the global object's names before the program: the runtime's */
 } ModState;
 
 /* The free names one file uses, each at the first line it is used on. */
@@ -242,6 +243,8 @@ static void state_free(ModState *st)
     g_ptr_array_unref(st->uses);
     g_hash_table_unref(st->loading);
     g_hash_table_unref(st->declared);
+    if (st->runtime)
+        g_hash_table_unref(st->runtime);
     g_free(st->project);
     if (st->libs)
         g_ptr_array_unref(st->libs);
@@ -304,6 +307,71 @@ bool bta_module_exported(JSContext *ctx, const char *name)
     yes = t && g_hash_table_contains(t, name);
     g_mutex_unlock(&owners_lock);
     return yes;
+}
+
+/*
+ * Whether `name` was on the global object before the program's first file:
+ * the runtime's own, and not something the running program declared.
+ *
+ * **Why a photograph and not a rule.**  What a program adds to the global
+ * object is more than its exports: a library's top-level `function` and `var`
+ * land there too, and so does whatever a library's native plugin installs. A
+ * lexical `class` is not there at all, and a module export is. No property of
+ * a name says which side put it there; *when* it arrived does, and
+ * `bta_modules_scope` runs exactly at the border -- after the prelude and the
+ * hatches, before the first library or project file.
+ *
+ * It exists for an editor: the IDE is a Bintana program, and asking the
+ * runtime about a class of the project *it is editing* resolved the name in
+ * the IDE's own scope -- `Markdown.` offered 124 members and `AskForm.` 119 to
+ * a project that has neither. A context with no photograph (none taken yet)
+ * answers yes, which is the old behaviour and not a refusal.
+ */
+bool bta_module_runtime_owns(JSContext *ctx, const char *name)
+{
+    ModState *st = state_of(ctx, false);
+    bool      yes;
+
+    g_mutex_lock(&owners_lock);
+    yes = !st || !st->runtime || g_hash_table_contains(st->runtime, name);
+    g_mutex_unlock(&owners_lock);
+    return yes;
+}
+
+/* The photograph `bta_module_runtime_owns` reads: every own string key of the
+ * global object, taken once per context. */
+static void take_runtime_names(JSContext *ctx, ModState *st)
+{
+    JSValue         global = JS_GetGlobalObject(ctx);
+    JSPropertyEnum *props  = NULL;
+    uint32_t        count  = 0;
+    GHashTable     *names  = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                                   g_free, NULL);
+
+    if (JS_GetOwnPropertyNames(ctx, &props, &count, global,
+                               JS_GPN_STRING_MASK) == 0) {
+        for (uint32_t i = 0; i < count; i++) {
+            const char *s = JS_AtomToCString(ctx, props[i].atom);
+            if (s) {
+                g_hash_table_add(names, g_strdup(s));
+                JS_FreeCString(ctx, s);
+            }
+        }
+        JS_FreePropertyEnum(ctx, props, count);
+    } else {
+        /* Consumed: a photograph that failed is no photograph, and the
+         * answer above stays the permissive one. */
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        g_hash_table_unref(names);
+        names = NULL;
+    }
+    JS_FreeValue(ctx, global);
+
+    g_mutex_lock(&owners_lock);
+    if (st->runtime)
+        g_hash_table_unref(st->runtime);
+    st->runtime = names;
+    g_mutex_unlock(&owners_lock);
 }
 
 bool bta_module_done(JSContext *ctx, const char *path)
@@ -1155,6 +1223,10 @@ void bta_modules_scope(JSContext *ctx, const char *project, GPtrArray *libs)
     st->libs = g_ptr_array_new_with_free_func(g_free);
     for (guint i = 0; libs && i < libs->len; i++)
         g_ptr_array_add(st->libs, g_strdup(libs->pdata[i]));
+
+    /* The border between the runtime and the program, so this is where the
+     * runtime's names are photographed (`bta_module_runtime_owns`). */
+    take_runtime_names(ctx, st);
 
     JS_SetModuleLoaderFunc(JS_GetRuntime(ctx), module_normalize, module_load,
                            NULL);

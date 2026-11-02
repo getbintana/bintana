@@ -78,6 +78,17 @@
           }
         },
         {
+          "type": "Label",
+          "name": "LblExecutable",
+          "properties": {
+            "Alignment": "Center",
+            "Ellipsize": true,
+            "HAlign": "Fill",
+            "Style": "dim-label",
+            "Visible": false
+          }
+        },
+        {
           "type": "Panel",
           "name": "PnlButtons",
           "properties": {

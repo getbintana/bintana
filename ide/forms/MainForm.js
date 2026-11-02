@@ -3466,6 +3466,27 @@ export class MainForm extends Form {
      * The version, and the binary it is running on.  Kept while it is open for
      * the same reason the menu editor is: so a test can drive the dialog the
      * menu opened, rather than the method under it.
+     *
+     * **The application's about box, not one of the IDE's own**: `AboutBox`
+     * in `lib/dialog` is what every program shows, and this was `AboutForm`
+     * until the library existed.  The binary is the one thing the IDE asks for
+     * that a program usually does not (`BINTANA=/other/bintana` is a habit
+     * here, and `bintana ide` is whatever the PATH found).  The prose is passed
+     * as literals so the extractor finds it here, and the name is "Bintana"
+     * rather than `Application.Name`'s "Bintana IDE", which is the project's.
      */
-    MnuAbout_Click() { this.about = AboutForm.show(); }
+    MnuAbout_Click() {
+        this.about = AboutBox.Show({
+            Title: Locale.Text("About Bintana"),
+            Name: "Bintana",
+            Version: Application.Version
+                ? Locale.Text("Version {0}, on Bintana {1}",
+                              Application.Version, BTA_VERSION)
+                : Locale.Text("On Bintana {0}", BTA_VERSION),
+            Icon: "applications-engineering-symbolic",
+            Summary: Locale.Text("A RAD environment in the spirit of Visual Basic and Gambas: QuickJS embedded in a GTK4 runtime. The IDE is written in Bintana and runs on it with no privileges of its own."),
+            Copyright: Locale.Text("Copyright © 2026 Matias De lellis — MIT License"),
+            Executable: true,
+        });
+    }
 }

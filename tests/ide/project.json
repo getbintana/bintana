@@ -7,7 +7,6 @@
     "../../ide/forms/BreakpointForm.js",
     "../../ide/forms/PreviewForm.js",
     "../../ide/forms/ConfirmForm.js",
-    "../../ide/forms/AboutForm.js",
     "../../ide/forms/NewProjectForm.js",
     "../../ide/forms/MenuForm.js",
     "../../ide/forms/ActionForm.js",
@@ -80,6 +79,7 @@
   ],
   "uses": [
     "check",
+    "dialog",
     "markdown",
     "package"
   ]

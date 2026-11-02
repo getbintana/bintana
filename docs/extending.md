@@ -1,10 +1,11 @@
 # Extending the runtime
 
 Before writing C, check whether the thing is a Bintana form. `AskForm`,
-`ConfirmForm`, `NewProjectForm` and `AboutForm` are dialogs and not runtime
+`ConfirmForm`, `NewProjectForm` and the about box are dialogs and not runtime
 primitives, and that was the right call for all four -- the about box even though
 GTK has one of its own, because an icon, three labels and a button were there
-already.
+already. It began as the IDE's `AboutForm` and is `lib/dialog`'s `AboutBox` now,
+which every program shows.
 
 And check whether it is a **component**: the fields a form keeps needing that a
 toolkit does not ship -- a combo you can type in, a select whose rows carry a

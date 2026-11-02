@@ -86,8 +86,16 @@ share one scope, and a library every new project names in `uses` takes its
 class names away from all of them.** `About` is exactly what a project calls
 its own -- `examples/hello` has one, a component -- so a class in a default
 library is named for what it is *and* for being unlikely in a program, which is
-why it is `AboutBox`. The IDE keeps its own `AboutForm`, for the reason it keeps
-`AskForm` and `ConfirmForm` above: naming `dialog` in the IDE's `uses` would put the
-library's classes in the IDE's own process, and whether completion then offers
-`Confirm.` to a project that does not use it -- `tests/ide`'s completion phase
-asserts it must not -- is a question for that piece of work, and was not tried here.
+why it is `AboutBox`.
+
+**The IDE shows it too, and getting there found a bug older than the library.**
+Naming `dialog` in the IDE's `uses` turned one assertion red: a project that does
+not use the library was offered `Confirm.`'s members, out of the copy loaded in the
+IDE's own process. It was not new -- `Markdown.` (124 members) and the IDE's own
+`AskForm.` (119) had been offered the same way all along, and the test asked only
+about the one library the IDE did not load. The fix is the runtime's, since it is
+the runtime that resolved the name: `Widget.Members` with `Sources` answers an
+undeclared name from the runtime alone (`docs/notes/ide-completion.md` has how).
+**So a library the IDE uses is no longer a hazard to its completion**, which is
+what kept `AskForm` and `ConfirmForm` out of `lib/dialog` as much as their call
+sites did; those two remain their own piece of work.

@@ -1365,14 +1365,20 @@ export class Completion {
              * declare is a name the popover has no business answering. The
              * first version re-threw when sources were present and one test
              * caught an uncaught error where a class from a library this project
-             * does not use was asked about. */
+             * does not use was asked about.
+             *
+             * **And `Sources` always, even empty, with no second try without
+             * it.** `Sources` is what tells the runtime the class belongs to
+             * *another* program, so a name the project does not declare is
+             * answered from the runtime alone. Asked without it, the name
+             * resolved in this process -- the IDE's -- and a project with no
+             * `markdown` and no `AskForm` was offered the IDE's `Markdown.`
+             * (124 members) and its `AskForm.` (119). */
             let got = null;
             try {
                 got = Widget.Members(name, { Sources: list, Forms: found.forms });
             } catch (e) {
-                if (!list.length) {
-                    try { got = Widget.Members(name); } catch (e2) { got = null; }
-                }
+                got = null;
             }
 
             for (const m of got || []) {

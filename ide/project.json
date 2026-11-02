@@ -8,7 +8,6 @@
     "forms/BreakpointForm.js",
     "forms/PreviewForm.js",
     "forms/ConfirmForm.js",
-    "forms/AboutForm.js",
     "forms/NewProjectForm.js",
     "forms/MenuForm.js",
     "forms/ActionForm.js",
@@ -80,6 +79,7 @@
   ],
   "uses": [
     "check",
+    "dialog",
     "markdown",
     "package"
   ]

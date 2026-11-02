@@ -808,6 +808,11 @@ void    bta_modules_explain(JSContext *ctx, const char *path);
 /* Whether a module put `name` on the global object -- a program's name, not
  * the runtime's, which is what `Application.Globals` needs to tell apart. */
 bool    bta_module_exported(JSContext *ctx, const char *name);
+/* Whether `name` was on the global object before the program's first file --
+ * the runtime's own, and not the running program's. Yes when no photograph
+ * was taken. What `Widget.Members` with `Sources` resolves an undeclared name
+ * against, so an editor is not answered out of its own scope. */
+bool    bta_module_runtime_owns(JSContext *ctx, const char *name);
 /* Who exports what, for a context that is going away. */
 void    bta_modules_forget(JSContext *ctx);
 /* Where this context's imports resolve: `./x.js` inside `project` or one of

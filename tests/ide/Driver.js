@@ -463,11 +463,16 @@ function* p_welcome(ide) {
     check("...and which version the IDE itself is, which is the other question",
           about.LblVersion.Text.includes(Application.Version),
           `${about.LblVersion.Text} / ${Application.Version}`);
-    eq("and which binary it is running on", about.LblRuntime.Text, Application.Executable);
+    eq("and which binary it is running on", about.LblExecutable.Text, Application.Executable);
     eq("with the whole path in reach, however narrow the dialog",
-       about.LblRuntime.Tooltip, Application.Executable);
-    check("while the prose stays in the .form, where the catalogue reads it",
-          about.LblName.Text !== "" && about.LblSummary.Text !== "",
+       about.LblExecutable.Tooltip, Application.Executable);
+    /* **The application's dialog, not one of the IDE's own**: `AboutBox` from
+     * `lib/dialog`, which the IDE names in `uses` like any program. */
+    check("it is the library's about box, which every program shows",
+          about instanceof AboutBox, about.constructor && about.constructor.name);
+    check("with the IDE's own words in it, passed where the extractor reads them",
+          about.LblName.Text === "Bintana" && about.LblSummary.Visible &&
+          about.LblSummary.Text !== "" && about.LblCopyright.Visible,
           `${about.LblName.Text} / ${about.LblSummary.Text}`);
 
     /*
@@ -3980,6 +3985,23 @@ function* p_completion(ide) {
     check("a library class this project does not use is not offered",
           answer("A", "Confirm.").length === 0,
           JSON.stringify(answer("A", "Confirm.")));
+    /* **Nor out of the IDE's own scope**, which is the half the line above
+     * could not see while the IDE did not use `dialog` itself. The IDE is a
+     * Bintana program: it uses `markdown` and declares `AskForm`, and asking
+     * the runtime about a name this project does not declare resolved it in
+     * the IDE's process -- `Markdown.` was 124 members here and `AskForm.` 119,
+     * in a project that has neither. `Timer.` and `Button.` are the runtime's
+     * and are asked beside them, so the empty answers cannot be the verb
+     * answering nothing for anybody. */
+    check("nor a library the IDE itself uses",
+          answer("", "Markdown.").length === 0 && answer("", "Confirm.").length === 0,
+          JSON.stringify([answer("", "Markdown.").length, answer("", "Confirm.").length]));
+    check("nor a form of the IDE's own",
+          answer("", "AskForm.").length === 0 && answer("", "MainForm.").length === 0,
+          JSON.stringify([answer("", "AskForm.").length, answer("", "MainForm.").length]));
+    check("while the runtime's classes still answer",
+          answer("", "Timer.").length > 0 && answer("", "Button.").length > 0,
+          JSON.stringify([answer("", "Timer.").length, answer("", "Button.").length]));
 
     /* **And the members of one it does.** `Dial` is a class in the `gadgets`
      * library this project declares, and the IDE never runs that library -- a

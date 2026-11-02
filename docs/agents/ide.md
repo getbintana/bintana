@@ -155,6 +155,15 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
 
 ## IDE traps
 
+- **A class verb asked about the edited project's name answers out of the
+  IDE's own process unless it is handed `Sources`.** `Widget.Members(name)` and
+  the event verbs resolve a bare name the way a program resolves its own -- and
+  the program is the IDE, so a project with neither was offered the IDE's
+  `Markdown.` (124 members) and `AskForm.` (119). Pass `{ Sources: [...] }`,
+  **`[]` when the project declares nothing by that name**: with `Sources` an
+  undeclared name is the runtime's or nobody's (`bta_module_runtime_owns`). It
+  hid because the test asked about `Confirm`, the one library the IDE did not
+  load; it showed the day the IDE named `dialog` to use `AboutBox`.
 - **A library's component is loaded by `uses`, never by `sources`.**
   `Designer.newControl` registered every placed component's `.js` in the
   manifest, and a library's is absolute and outside the project: the palette

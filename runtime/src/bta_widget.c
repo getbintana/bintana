@@ -3028,7 +3028,13 @@ static JSValue w_event_names(JSContext *ctx, JSValueConst this_val,
  * refused the way `Widget.New` refuses it -- walked and not assumed, so
  * `Widget.PropertyNames("Util")` on an ordinary class says so.
  */
-static JSValue class_proto_for(JSContext *ctx, const char *type)
+static JSValue lookup_beside_sources(JSContext *ctx, const char *name,
+                                     char **sources);
+
+/* `sources`: the caller is describing another program (`{ Sources }`), so a
+ * name outside the class table resolves against the runtime only -- see
+ * `lookup_beside_sources`.  NULL is the running program's own lookup. */
+static JSValue class_proto_in(JSContext *ctx, const char *type, char **sources)
 {
     BtaClass *cls = bta_class_find(type);
     if (cls)
@@ -3046,7 +3052,7 @@ static JSValue class_proto_for(JSContext *ctx, const char *type)
         return proto;
     }
 
-    JSValue klass = bta_lookup_global(ctx, type);
+    JSValue klass = lookup_beside_sources(ctx, type, sources);
     if (JS_IsException(klass))
         return klass;
 
@@ -3080,17 +3086,24 @@ static JSValue class_proto_for(JSContext *ctx, const char *type)
     return proto;
 }
 
-/* The type a class-level question was asked about, resolved. */
-static JSValue class_proto_arg(JSContext *ctx, int argc, JSValueConst *argv,
-                               const char *who)
+/* The type a class-level question was asked about, resolved -- against the
+ * runtime only when the caller handed `Sources` (`class_proto_in`). */
+static JSValue class_proto_arg_in(JSContext *ctx, int argc, JSValueConst *argv,
+                                  const char *who, char **sources)
 {
     const char *type = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
     if (!type)
         return JS_ThrowTypeError(ctx, "%s(type) expects a type name", who);
 
-    JSValue proto = class_proto_for(ctx, type);
+    JSValue proto = class_proto_in(ctx, type, sources);
     JS_FreeCString(ctx, type);
     return proto;
+}
+
+static JSValue class_proto_arg(JSContext *ctx, int argc, JSValueConst *argv,
+                               const char *who)
+{
+    return class_proto_arg_in(ctx, argc, argv, who, NULL);
 }
 
 /*
@@ -5111,6 +5124,51 @@ static void take_form_children(JSContext *ctx, char **forms,
 }
 
 /*
+ * A name a caller's `Sources` do not declare, resolved against **the runtime
+ * only** -- never against the program this process is running.
+ *
+ * `bta_lookup_global` is the right lookup for the running program: a bare
+ * name is evaluated, the lexical scope first. For an editor it is the wrong
+ * one, because the running program is the editor: the IDE asked about
+ * `AskForm.` and `Markdown.` in a project that has neither and was answered
+ * with the IDE's own form and the IDE's own library, 119 and 124 members.
+ * Here a bare name is a property of the global object that was there before
+ * the program's first file (`bta_module_runtime_owns`), and a qualified one
+ * walks down from such a property. A name that is not throws the same
+ * `TypeError` a name that resolves to nothing does, which every caller
+ * already consumes.
+ */
+static JSValue lookup_beside_sources(JSContext *ctx, const char *name,
+                                     char **sources)
+{
+    if (!sources)
+        return bta_lookup_global(ctx, name);
+
+    const char *dot  = strchr(name, '.');
+    char       *head = dot ? g_strndup(name, (gsize)(dot - name)) : g_strdup(name);
+    bool        ours = bta_module_runtime_owns(ctx, head);
+    JSValue     v    = JS_UNDEFINED;
+
+    if (ours && !dot) {
+        JSValue global = JS_GetGlobalObject(ctx);
+        v = JS_GetPropertyStr(ctx, global, head);
+        JS_FreeValue(ctx, global);
+    } else if (ours) {
+        v = bta_lookup_global(ctx, name);   /* a qualified name walks the object */
+    }
+    g_free(head);
+
+    if (JS_IsException(v))
+        return v;
+    if (JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return JS_ThrowTypeError(ctx, "'%s' is not one of the runtime's names",
+                                 name);
+    }
+    return v;
+}
+
+/*
  * `Widget.Members(type, [options])`, with one option and one reason for it.
  *
  * **`{ Sources: [text, ...] }` is what a caller hands over when the class is a
@@ -5140,6 +5198,10 @@ static void take_form_children(JSContext *ctx, char **forms,
  * `Method` exactly as `take_members_of_resolved` would for the same class once
  * it is loaded -- the property the tests hold, since two readers that disagree
  * are two answers.
+ *
+ * **And a name the sources do not declare is the runtime's or nobody's.**
+ * `Sources` says the class belongs to *another* program, so the fallback must
+ * not answer out of the one running: see `lookup_beside_sources`.
  */
 static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv)
@@ -5236,7 +5298,7 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
                     continue;
                 }
                 /* The end of the sources is not the end of the answer. */
-                JSValue up = bta_lookup_global(ctx, d->base);
+                JSValue up = lookup_beside_sources(ctx, d->base, sources);
                 if (!JS_IsException(up)) {
                     take_members_of_resolved(ctx, up, d->base, all, false,
                                              out, names, &n);
@@ -5253,10 +5315,10 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
 
     /* The class table answers for whatever the sources did not: a widget, a
      * class of rad.js, a global that is a bag of functions. The resolution
-     * without the guard -- `class_proto_for` refuses a class that is not a
+     * without the guard -- `class_proto_in` refuses a class that is not a
      * widget, and this question does not care. */
     if (!sources || !g_hash_table_contains(index, type)) {
-        JSValue klass = bta_lookup_global(ctx, type);
+        JSValue klass = lookup_beside_sources(ctx, type, sources);
         if (!JS_IsException(klass)) {
             take_members_of_resolved(ctx, klass, type, all, own_only,
                                      out, names, &n);
@@ -5365,7 +5427,7 @@ static JSValue w_event_names_by_type(JSContext *ctx, JSValueConst this_val,
                 JS_NewString(ctx,
                     ((DeclEvent *) g_ptr_array_index(d->events, i))->name));
     } else {
-        JSValue proto = class_proto_arg(ctx, argc, argv, "EventNames");
+        JSValue proto = class_proto_arg_in(ctx, argc, argv, "EventNames", sources);
         if (JS_IsException(proto))
             out = proto;
         else {
@@ -5500,7 +5562,7 @@ static JSValue w_event_signature_by_type(JSContext *ctx, JSValueConst this_val,
             DeclEvent *e = decl_event_named(d->events, name);
             out = (e && e->params) ? JS_NewString(ctx, e->params) : JS_NULL;
         } else {
-            JSValue proto = class_proto_arg(ctx, argc, argv, "EventSignature");
+            JSValue proto = class_proto_arg_in(ctx, argc, argv, "EventSignature", sources);
             if (JS_IsException(proto))
                 out = proto;
             else {
@@ -5551,7 +5613,7 @@ static JSValue w_event_doc_by_type(JSContext *ctx, JSValueConst this_val,
             DeclEvent *e = decl_event_named(d->events, name);
             out = (e && e->doc) ? JS_NewString(ctx, e->doc) : JS_NULL;
         } else {
-            JSValue proto = class_proto_arg(ctx, argc, argv, "EventDoc");
+            JSValue proto = class_proto_arg_in(ctx, argc, argv, "EventDoc", sources);
             if (JS_IsException(proto))
                 out = proto;
             else {
@@ -9940,7 +10002,13 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
              *   a hundred names. **A class the sources declare wins over a
              *   class of the same name in the runtime**, because in a program
              *   that uses that library the library's is the class being
-             *   written. A form's children are members too, and reading one
+             *   written. **With `Sources` — even `[]` — a name they do not
+             *   declare is the runtime's or nobody's**: it resolves against
+             *   what was on the global object before this program's first
+             *   file, never against the program running the question, so an
+             *   editor written in Bintana is not answered out of its own
+             *   classes and libraries. The event verbs follow the same rule.
+             *   A form's children are members too, and reading one
              *   needs no display: `JS_ParseJSON` and a walk of `children`,
              *   paired to the class by the form's own `class` key and not by
              *   the file's name. **They are offered for a class that is

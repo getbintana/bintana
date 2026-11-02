@@ -36,5 +36,6 @@ The one rule stays where it was: **the IDE is written in Bintana and has no
 privileged API.** When it needs something the runtime lacks, what gets added is
 a runtime feature every application then has. The corollary runs the other way
 too: before writing C, check whether the thing is expressible as a Bintana
-form. `AskForm`, `ConfirmForm`, `NewProjectForm` and `AboutForm` are dialogs,
-not runtime primitives — the last one although GTK ships a `GtkAboutDialog`.
+form. `AskForm`, `ConfirmForm` and `NewProjectForm` are dialogs, not runtime
+primitives, and so is `lib/dialog`'s `AboutBox` the IDE shows — although GTK
+ships a `GtkAboutDialog`.

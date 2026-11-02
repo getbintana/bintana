@@ -56,6 +56,21 @@ So there were two fixes, and **only one of them is in the IDE**:
   have become the source `"5"` and answered "this class declares nothing" as though
   the caller had said so.
 
+  **And the runtime's fallback was the IDE's scope, which nobody saw for months.**
+  A name the sources do not declare went to the ordinary lookup -- the one a program
+  uses on itself, the lexical scope first -- and the program asking is the IDE. So a
+  project with neither was offered the IDE's `Markdown.` (124 members, a library the
+  IDE uses) and its `AskForm.` (119, a form of the IDE's own). The test asked about
+  `Confirm.` only, and `Confirm` was the one library the IDE did not load; it went red
+  the day the IDE named `dialog` in `uses` to show `AboutBox`. **With `Sources`, even
+  `[]`, a name they do not declare is the runtime's or nobody's**: what was on the
+  global object when `bta_modules_scope` ran -- after the prelude, before the first
+  library or project file -- photographed per context (`bta_module_runtime_owns`).
+  A photograph and not a rule, because no property of a name says who put it there:
+  a library's top-level `function` lands on the global object too, a lexical `class`
+  does not, and a module export does. The event verbs take the same road. The IDE
+  passes `Sources` always, and the second try without them is gone.
+
   **And a form's children, which is the last name that was missing everywhere.**
   `Confirm.BtnAccept` exists -- the library's own code does
   `dlg.BtnAccept.Text = ...` -- and was in no list: the loader assigns each node by
