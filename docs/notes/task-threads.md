@@ -87,8 +87,11 @@
   (`List`, `Files`, `Folders`, `Copy`, `DeleteTree`). Handed, not implied:
   when every blocking call of a worker took the job's signal, `Stop` -- which
   raises it at once -- refused the very calls a `Run` makes to wind down after
-  `Stopping`. `File.Hash` and the compressors take none, and still wait for
-  the flag or `KillAfter` between opcodes.
+  `Stopping`. `File.Hash`, `Gzip`'s four verbs and `ZipArchive.ExtractAll`
+  take one too and ask it between two blocks or two entries; a call handed
+  none still waits for the flag or `KillAfter` between opcodes.
+  `ZipWriter.AddFile` takes none: stopped part-way it would leave an entry
+  half-written in an archive that is still being made.
 - **A token raised before the work starts must stop it from starting.**
   `Task.Start` on a raised token loaded the file and called `Run`, which did
   its whole work -- a `Run` that wrote a file wrote it, 20 times in 20 -- and

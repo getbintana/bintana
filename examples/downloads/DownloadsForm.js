@@ -23,11 +23,11 @@
  *
  * ## HTTP/1.1, on purpose
  *
- * `Form_Open` sets `SOUP_FORCE_HTTP1` before the first request. Over HTTP/2,
- * which almost every https server speaks, libsoup sees a cancel only when the
- * stream next has traffic: the ✕, the timeout and Cancel all would all report
- * the right ending, but when the server answered and not when they were
- * pressed. See `Http.md`, *Cancelling over HTTP/2*, in bintana-docs.
+ * `Fetcher` asks for it with `{ Http1: true }`. Over HTTP/2, which almost
+ * every https server speaks, libsoup sees a cancel only when the stream next
+ * has traffic: the ✕, the timeout and Cancel all would all report the right
+ * ending, but when the server answered and not when they were pressed. See
+ * `Http.md`, *Cancelling over HTTP/2*, in bintana-docs.
  *
  * ## Telling the endings apart
  *
@@ -80,12 +80,6 @@ class DownloadsForm extends Form {
     running = 0;
 
     Form_Open() {
-        /* Every button here cancels, and over HTTP/2 -- what an https server
-         * offers -- libsoup notices a cancel only when the server next sends
-         * something. HTTP/1.1 notices at once. libsoup reads this once, at the
-         * first connection, for the whole process and its tasks. */
-        Environment.Set("SOUP_FORCE_HTTP1", "1");
-
         this.dir = File.Join(Environment.HomeDirectory, "Downloads", "bintana-downloads");
         this.TxtUrl.Text = "https://httpbin.org/delay/8";
         this.LblStatus.Text = Locale.Text("Files are saved in {0}", this.dir);

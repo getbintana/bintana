@@ -1356,14 +1356,23 @@ static bool dir_walk(const char *root, GPatternSpec *spec, bool recursive,
     bool cancelled = g_cancellable_is_cancelled(cancel) ||
                      (err && g_error_matches(err, G_IO_ERROR,
                                              G_IO_ERROR_CANCELLED));
-    g_clear_error(&err);
     g_file_enumerator_close(walk, cancel, NULL);
     g_object_unref(walk);
 
     if (cancelled) {
+        g_clear_error(&err);
         g_ptr_array_unref(entries);
         return false;
     }
+    /* The folder asked about broke off part-way: what was read is not the
+     * folder, so it is refused with the reason, as `List` refuses it.  One
+     * met on the way down keeps what it gave -- a corner, not the answer. */
+    if (err && error) {
+        g_propagate_error(error, err);
+        g_ptr_array_unref(entries);
+        return false;
+    }
+    g_clear_error(&err);
 
     g_ptr_array_sort_values(entries, dir_info_cmp);
 
@@ -4366,7 +4375,8 @@ static JSValue sys_hash_verify(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "File.Hash") : NULL;
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+    const char   *path = argc > 0 ? bta_file_path(ctx, argv[0], "File.Hash") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "File.Hash(path, [algorithm]) needs a path");
 
@@ -4390,13 +4400,22 @@ static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
     GChecksum *sum = g_checksum_new(HASHES[kind].type);
     guchar     buf[65536];
     size_t     got;
+    bool       stopped = false;
 
-    while ((got = fread(buf, 1, sizeof buf, f)) > 0)
+    /* Asked between two blocks, so a stop reaches a video's hash within one
+     * 64 KB read -- the work a task is given this for. */
+    while (!(stopped = cancel && g_cancellable_is_cancelled(cancel)) &&
+           (got = fread(buf, 1, sizeof buf, f)) > 0)
         g_checksum_update(sum, buf, got);
 
-    bool failed = ferror(f) != 0;
+    bool failed = !stopped && ferror(f) != 0;
     fclose(f);
 
+    if (stopped) {
+        g_checksum_free(sum);
+        JS_FreeCString(ctx, path);
+        return JS_ThrowPlainError(ctx, "File.Hash: cancelled");
+    }
     if (failed) {
         JSValue e = JS_ThrowPlainError(ctx, "File.Hash: cannot read '%s': %s",
                                        path, bta_errno_text(errno));
@@ -4513,13 +4532,14 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   also moves; refuses to clobber
      */
     JS_SetPropertyStr(ctx, file, "Rename", JS_NewCFunction(ctx, sys_file_rename, "Rename", 2));
-    /* Hash(path, [algorithm]) -> string
+    /* Hash(path, [algorithm], [cancellable]) -> string
      *   the checksum as hex, `"Sha256"` unless told — see
      *   [`Hash`](docs/reference/globals/Hash.md). **Read in blocks**, so a
-     *   video costs 64 KB of memory and not the video
+     *   video costs 64 KB of memory and not the video. A `Cancellable` last
+     *   stops it between two blocks
      */
     JS_SetPropertyStr(ctx, file, "Hash",
-                      JS_NewCFunction(ctx, sys_file_hash, "Hash", 2));
+                      JS_NewCFunction(ctx, sys_file_hash, "Hash", 3));
     /* LoadBytes(path, [cancellable]) -> Bytes
      *   the whole file as [`Bytes`](docs/llm/library.md#bytes), untouched —
      *   what `Load` cannot do, since it answers text. A `Cancellable` last

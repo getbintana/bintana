@@ -126,6 +126,7 @@ typedef struct {
     JSValue      headers;    /* defaults object, duplicated -- reported via gc_mark */
     int          timeout_ms; /* our guard; 0 waits forever */
     bool         follow;     /* true by default */
+    bool         http1;      /* ask for HTTP/1.1; false by default */
     char        *language;   /* Accept-Language; NULL sends none */
     char        *user_agent; /* User-Agent; NULL sends none (and some servers
                               * refuse the nameless, with a 402 and no body) */
@@ -495,6 +496,7 @@ static bool http_bool_opt(JSContext *ctx, JSValueConst opts, const char *key,
  * it was only in the async list. */
 static const char *const HTTP_OPT_KEYS[] = {
     "Query", "Headers", "Timeout", "FollowRedirects", "ContentType", "Body", "Auth",
+    "Http1",
 };
 
 /* True when the object names any of them: then it is options, not a body. */
@@ -1663,6 +1665,25 @@ static JSValue http_client_set_follow(JSContext *ctx, JSValueConst this_val, JSV
     return JS_UNDEFINED;
 }
 
+static JSValue http_client_get_http1(JSContext *ctx, JSValueConst this_val)
+{
+    HttpClientData *c = http_client_data(this_val);
+
+    if (!c)
+        return JS_ThrowTypeError(ctx, "Http1: not an Http client");
+    return JS_NewBool(ctx, c->http1);
+}
+
+static JSValue http_client_set_http1(JSContext *ctx, JSValueConst this_val, JSValueConst v)
+{
+    HttpClientData *c = http_client_data(this_val);
+
+    if (!c)
+        return JS_ThrowTypeError(ctx, "Http1: not an Http client");
+    c->http1 = JS_ToBool(ctx, v) > 0;
+    return JS_UNDEFINED;
+}
+
 static JSValue http_client_get_language(JSContext *ctx, JSValueConst this_val)
 {
     HttpClientData *c = http_client_data(this_val);
@@ -2303,6 +2324,16 @@ static bool http_build(JSContext *ctx, HttpClientData *c, const char *method,
 
     if (!http_bool_opt(ctx, opts, "FollowRedirects", c ? c->follow : true, &present))
         soup_message_add_flags(msg, SOUP_MESSAGE_NO_REDIRECT);
+    /*
+     * **HTTP/1.1 when asked, for this request.**  Over HTTP/2 libsoup sees a
+     * cancel only when the stream next has traffic (docs/agents/network.md),
+     * so `Stop`, a `Timeout` and a `Cancellable` end a flight late -- or, on a
+     * server that never answers, never.  Not forced: HTTP/2 is what most
+     * servers offer and what the rest of a program wants.  This is the
+     * per-request answer `SOUP_FORCE_HTTP1` gave only for the whole process.
+     */
+    if (http_bool_opt(ctx, opts, "Http1", c ? c->http1 : false, NULL))
+        soup_message_set_force_http1(msg, TRUE);
     if (fresh)
         soup_message_add_flags(msg, SOUP_MESSAGE_NEW_CONNECTION);
 
@@ -2744,7 +2775,7 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     /* Over HTTP/2 libsoup sees `canc` only when this stream next has traffic,
      * so the cancel and the guard below end the wait late (or, against a
      * silent server, never).  Not forced away here: an application that needs
-     * prompt cancelling sets SOUP_FORCE_HTTP1 -- docs/agents/network.md. */
+     * prompt cancelling asks `Http1` -- docs/agents/network.md. */
     w.msg = msg;
     soup_session_send_and_read_async(sess, msg, G_PRIORITY_DEFAULT, canc,
                                      on_http_wait_done, &w);
@@ -3000,6 +3031,14 @@ static const JSCFunctionListEntry http_client_props[] = {
      *   follow a `3xx`. Default `true`
      */
     JS_CGETSET_DEF("FollowRedirects", http_client_get_follow,  http_client_set_follow),
+    /* Http1
+     *   ask for HTTP/1.1 rather than HTTP/2. Default `false`. Over HTTP/2
+     *   libsoup notices a cancel only when the server next sends something,
+     *   so a `Stop`, a `Timeout` or a `Cancellable` ends a request late; a
+     *   program whose requests must stop when told sets this. `{ Http1 }` on
+     *   one call does the same for that call
+     */
+    JS_CGETSET_DEF("Http1",           http_client_get_http1,   http_client_set_http1),
     /* Language
      *   the `Accept-Language` it asks with
      */
@@ -3268,6 +3307,7 @@ static JSValue js_http_client(JSContext *ctx, JSValueConst this_val,
         bool present = false;
 
         c->follow = http_bool_opt(ctx, opts, "FollowRedirects", true, &present);
+        c->http1  = http_bool_opt(ctx, opts, "Http1", false, &present);
 
         if (!http_text_opt(ctx, opts, "Language", &c->language)) {
             JS_FreeValue(ctx, obj);
@@ -3524,7 +3564,7 @@ static const JSCFunctionListEntry http_props[] = {
     /* Client([opts]) -> HttpClient
      *   a client with its own session: `BaseUrl`, `Headers`, `Timeout` (ms,
      *   `0` waits forever for the callback verbs), `FollowRedirects` (default
-     *   `true`), `Language`,
+     *   `true`), `Http1` (default `false`), `Language`,
      *   `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`,
      *   `MaxPerHost`. The options are an object — a bare URL is refused
      */

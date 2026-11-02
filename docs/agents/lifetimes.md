@@ -338,8 +338,10 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   worker to it implicitly (`bta_task_cancellable`), and `Stop` cancels at
   once, so a `Run` that saw `Stopping` and wound down by reading a file or
   running a command had each of those calls refused -- the cooperative stage
-  could do no I/O. A call handed nothing, and `File.Hash` or the compressors,
-  are reached only between opcodes or by the two-second teardown bound.
+  could do no I/O. A call handed nothing is reached only between opcodes or
+  by the two-second teardown bound. The streaming verbs -- `File.Hash`,
+  `Gzip`'s four, `ZipArchive.ExtractAll` -- ask the token between two 64 KB
+  blocks or two entries, which is what lets a stop end a hash of `/dev/zero`.
   **The operation holds a reference, so the job's cancel outlives the job's
   `Stop` request** -- and the thread that sees the cancellation is the worker,
   not the caller. A shared `Cancellable` (`Start`'s last argument) is

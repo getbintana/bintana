@@ -151,6 +151,7 @@ typedef struct {
     const guint8 *mem;
     size_t        memlen, mempos;
     FILE         *file;
+    GCancellable *cancel;           /* the caller's, or NULL; asked per chunk */
 } GzSource;
 
 typedef struct {
@@ -207,6 +208,11 @@ static char *gz_run(GConverter *conv, bool inflate, GzSource *src, GzSink *sink)
     int      stalled = 0;
 
     for (;;) {
+        /* Between two chunks: a stop reaches a big file within 64 KB. The
+         * file verbs then remove their temporary, as for any refusal. */
+        if (src->cancel && g_cancellable_is_cancelled(src->cancel))
+            return g_strdup("cancelled");
+
         if (off == have && !eof) {
             have = gz_read(src, in, sizeof in, &failed);
             off  = 0;
@@ -334,10 +340,11 @@ static JSValue gz_finish_memory(JSContext *ctx, GConverter *conv, char *why,
 static JSValue gzip_compress(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
-    const char *who = "Gzip.Compress";
-    size_t      len;
-    const char *text;
-    int         level;
+    const char   *who    = "Gzip.Compress";
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+    size_t        len;
+    const char   *text;
+    int           level;
 
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Gzip.Compress(data, [{ Level }]) needs the data");
@@ -349,7 +356,7 @@ static JSValue gzip_compress(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     GConverter *conv = G_CONVERTER(g_zlib_compressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP, level));
-    GzSource    src  = { .mem = data, .memlen = len };
+    GzSource    src  = { .mem = data, .memlen = len, .cancel = cancel };
     GzSink      sink = { .mem = g_byte_array_new(), .max = UINT64_MAX };
     char       *why  = gz_run(conv, false, &src, &sink);
 
@@ -361,9 +368,10 @@ static JSValue gzip_compress(JSContext *ctx, JSValueConst this_val,
 static JSValue gzip_decompress(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
-    const char *who = "Gzip.Decompress";
-    size_t      len;
-    uint64_t    max;
+    const char   *who    = "Gzip.Decompress";
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+    size_t        len;
+    uint64_t      max;
 
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Gzip.Decompress(bytes, [{ MaxSize }]) needs the bytes");
@@ -375,7 +383,7 @@ static JSValue gzip_decompress(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     GConverter *conv = G_CONVERTER(g_zlib_decompressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP));
-    GzSource    src  = { .mem = data, .memlen = len };
+    GzSource    src  = { .mem = data, .memlen = len, .cancel = cancel };
     GzSink      sink = { .mem = g_byte_array_new(), .max = max };
     char       *why  = gz_run(conv, true, &src, &sink);
 
@@ -387,6 +395,7 @@ static JSValue gzip_decompress(JSContext *ctx, JSValueConst this_val,
 static JSValue gz_file(JSContext *ctx, int argc, JSValueConst *argv,
                        const char *who, bool inflate)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
     int      level = 6;
     uint64_t max = UINT64_MAX;
 
@@ -432,7 +441,7 @@ static JSValue gz_file(JSContext *ctx, int argc, JSValueConst *argv,
         GConverter *conv = inflate
             ? G_CONVERTER(g_zlib_decompressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP))
             : G_CONVERTER(g_zlib_compressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP, level));
-        GzSource src  = { .file = in };
+        GzSource src  = { .file = in, .cancel = cancel };
         GzSink   sink = { .file = out, .max = max };
 
         why = gz_run(conv, inflate, &src, &sink);
@@ -490,35 +499,38 @@ static JSValue gzip_decompress_file(JSContext *ctx, JSValueConst this_val,
 }
 
 static const JSCFunctionListEntry gzip_props[] = {
-    /* Compress(data, [{ Level }]) -> Bytes
+    /* Compress(data, [{ Level }], [cancellable]) -> Bytes
      *   `data` (text as its UTF-8, or a
      *   [`Bytes`](docs/llm/library.md#bytes)) as one gzip member. `Level` is 1
      *   (fast) to 9 (small), 6 unless told. A second option, or a value that is
      *   neither text nor `Bytes`, is refused. About 50 MB a second: a big one
-     *   belongs in a [`Task`](docs/llm/library.md#task)
+     *   belongs in a [`Task`](docs/llm/library.md#task), and a `Cancellable`
+     *   last stops it between two 64 KB chunks
      */
-    JS_CFUNC_DEF("Compress", 2, gzip_compress),
-    /* Decompress(bytes, [{ MaxSize }]) -> Bytes
+    JS_CFUNC_DEF("Compress", 3, gzip_compress),
+    /* Decompress(bytes, [{ MaxSize }], [cancellable]) -> Bytes
      *   what `bytes` holds, **all of it**: members glued together are read to
      *   the end, a stream that stops inside one **throws** (naming how far it
      *   got) rather than answering what it had, and so does anything that is
      *   not gzip. The answer may not pass `MaxSize` bytes (256 MiB unless
      *   told), because a few kilobytes can inflate to gigabytes. Text comes
-     *   out as `ToText()` of the answer
+     *   out as `ToText()` of the answer. A `Cancellable` last stops it
      */
-    JS_CFUNC_DEF("Decompress", 2, gzip_decompress),
-    /* CompressFile(source, destination, [{ Level }]) -> number
+    JS_CFUNC_DEF("Decompress", 3, gzip_decompress),
+    /* CompressFile(source, destination, [{ Level }], [cancellable]) -> number
      *   gzips a file into another **without loading it**, 64 KB at a time, and
      *   answers the bytes written. The destination appears only when it is
      *   whole: a failure leaves no half-written file, and an existing one is
-     *   untouched
+     *   untouched. A `Cancellable` last stops it between two chunks, with the
+     *   same promise: the destination is as it was
      */
-    JS_CFUNC_DEF("CompressFile", 3, gzip_compress_file),
-    /* DecompressFile(source, destination, [{ MaxSize }]) -> number
+    JS_CFUNC_DEF("CompressFile", 4, gzip_compress_file),
+    /* DecompressFile(source, destination, [{ MaxSize }], [cancellable]) -> number
      *   the reverse, streamed, with the same ceiling and the same promise about
-     *   the destination. Answers the bytes written
+     *   the destination. Answers the bytes written. A `Cancellable` last stops
+     *   it
      */
-    JS_CFUNC_DEF("DecompressFile", 3, gzip_decompress_file),
+    JS_CFUNC_DEF("DecompressFile", 4, gzip_decompress_file),
 };
 
 void bta_gzip_init(JSContext *ctx, JSValue global)

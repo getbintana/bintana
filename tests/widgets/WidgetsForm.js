@@ -25339,6 +25339,18 @@ class Form1 extends Form {
         eq("BaseUrl reads back", api.BaseUrl, "http://127.0.0.1:8471");
         eq("Timeout reads back", api.Timeout, 5000);
         eq("FollowRedirects starts true", api.FollowRedirects, true);
+        /* `Http1` asks for HTTP/1.1, where a cancel is seen at once; HTTP/2,
+         * the default, sees one only when the stream next has traffic. This
+         * server speaks 1.1 either way, so what is asserted is the option's
+         * road, not the protocol -- the timing is measured in network.md. */
+        eq("Http1 starts false", api.Http1, false);
+        eq("...is a Client option", Http.Client({ Http1: true }).Http1, true);
+        api.Http1 = true;
+        eq("...and a property", api.Http1, true);
+        eq("a client asking for HTTP/1.1 still answers", api.GetWait("/").Status, 200);
+        api.Http1 = false;
+        eq("so does one call asking for it",
+           Http.GetWait("http://127.0.0.1:8471/", { Http1: true }).Status, 200);
         api.Headers = { "X-Probe": "si" };
         eq("Headers read back", api.Headers["X-Probe"], "si");
         eq("a relative URL rides the BaseUrl", api.GetWait("/").Status, 200);
@@ -25804,7 +25816,7 @@ class Form1 extends Form {
                 for (const [key, value] of [["Query", { z: "1" }], ["Headers", {}],
                                             ["Timeout", 5000], ["FollowRedirects", true],
                                             ["ContentType", "text/plain"], ["Body", ""],
-                                            ["Auth", null]]) {
+                                            ["Auth", null], ["Http1", true]]) {
                     const got = wait.PostWait("/echo", { [key]: value }).Body.ToText();
 
                     check(`a ${key} makes the object options, not a body`,
@@ -27367,6 +27379,39 @@ class Form1 extends Form {
         eq("...and the tree is left as it was", File.Load(leaf), "kept");
         eq("...with nothing copied", File.Exists(File.Join(tree, "b.txt")), false);
 
+        /* The streaming verbs take one too: a hash, the compressors and an
+         * archive's extraction, and a raised one does nothing at all. */
+        File.Save(leaf, "kept");
+        const packed = Gzip.Compress("kept");
+        const gzOut  = File.Join(SCRATCH, "token.gz");
+        const zipAt  = File.Join(SCRATCH, "token.zip");
+        const zipTo  = File.Join(SCRATCH, "token-unzipped");
+        {
+            const w = Zip.Create(zipAt);
+            w.Add("a.txt", "one");
+            w.Finish();
+        }
+        const archive = Zip.Open(zipAt);
+        for (const [name, fn] of [
+            ["File.Hash",           () => File.Hash(leaf, "Sha256", token)],
+            ["File.Hash (no algorithm)", () => File.Hash(leaf, token)],
+            ["Gzip.Compress",       () => Gzip.Compress("data", token)],
+            ["Gzip.Decompress",     () => Gzip.Decompress(packed, token)],
+            ["Gzip.CompressFile",   () => Gzip.CompressFile(leaf, gzOut, token)],
+            ["Gzip.DecompressFile", () => Gzip.DecompressFile(leaf, gzOut, { MaxSize: 10 }, token)],
+            ["ZipArchive.ExtractAll", () => archive.ExtractAll(zipTo, token)],
+        ]) {
+            let said = "";
+            try { fn(); said = "ran to the end"; } catch (e) { said = e.message; }
+            check(`${name} stops on a raised Cancellable`, said.includes("cancel"), said);
+        }
+        archive.Close();
+        eq("...the compressor wrote no file", File.Exists(gzOut), false);
+        eq("...and the archive extracted nothing", File.Exists(File.Join(zipTo, "a.txt")), false);
+        eq("an unraised one hashes as ever", File.Hash(leaf, new Cancellable()), File.Hash(leaf));
+        File.Delete(zipAt);
+        if (File.Exists(zipTo)) Directory.DeleteTree(zipTo);
+
         const unraised = new Cancellable();
         eq("a Cancellable not raised changes nothing", File.Load(leaf, unraised), "kept");
         eq("...for a walk either", Directory.Files(tree, { Recursive: true }, unraised).length, 1);
@@ -27716,6 +27761,35 @@ class Form1 extends Form {
             };
             t.Start({ mode: "wind-down", dir: File.Join(SCRATCH, "wind-down") });
         });
+
+        /* **A stop reaches a streaming verb part-way**, between two 64 KB
+         * blocks: `/dev/zero` never ends, so nothing but the token can end the
+         * hash or the compression -- which used to run on past `KillAfter`,
+         * since no interrupt reaches C. The compressor's temporary goes with
+         * it. */
+        for (const verb of ["hash", "gzip"]) {
+            steps.push(() => {
+                const out  = File.Join(SCRATCH, "endless.gz");
+                const t    = new TaskWork();
+                let   from = 0;
+
+                Directory.Make(SCRATCH);
+                t.Progress = () => { from = Date.now(); t.Stop({ KillAfter: 10000 }); };
+                t.Done  = () => fail(`an endless ${verb} must not reach Done`);
+                t.Error = (m) => {
+                    check(`Stop ends an endless ${verb === "hash" ? "File.Hash" : "Gzip.CompressFile"}`,
+                          String(m).includes("cancelled"), String(m));
+                    check("...at once, not at KillAfter", Date.now() - from < 3000,
+                          String(Date.now() - from));
+                    if (verb === "gzip")
+                        check("...leaving no file and no temporary",
+                              !Directory.List(SCRATCH).some((n) => n.startsWith("endless.gz")),
+                              JSON.stringify(Directory.List(SCRATCH)));
+                    next();
+                };
+                t.Start({ mode: "endless", verb, out });
+            });
+        }
 
         /* Cancellable is what reaches a native wait: the flag alone cannot. */
         steps.push(() => {

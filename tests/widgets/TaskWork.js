@@ -286,6 +286,17 @@ class TaskWork extends Task {
         if (msg.mode === "bytes")
             return { n: msg.data.Length, back: msg.data, b64: msg.data.ToBase64() };
 
+        /* A stream that never ends, so only the token can end the verb: the
+         * proof that it is asked part-way, not only before the first block. */
+        if (msg.mode === "endless") {
+            this.Report({ ready: true });
+            if (msg.verb === "hash")
+                File.Hash("/dev/zero", "Sha256", this.Cancellable);
+            else
+                Gzip.CompressFile("/dev/zero", msg.out, this.Cancellable);
+            return { ended: true };
+        }
+
         /* An effect anyone can see: a task started on a raised token must not
          * get this far. */
         if (msg.mode === "touch") {

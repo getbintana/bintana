@@ -236,11 +236,15 @@ each rule below; read it before changing a level.
   or `{ Timeout }`. So every way of cancelling a flight (`Stop`, `Timeout`,
   a `Cancellable` argument, a task's `Stop`/`Timeout`/shared token) reports the right
   ending late, and a server that never answers is never left. **It is not ours
-  to fix and we do not force HTTP/1.1**: the application opts in with
-  `SOUP_FORCE_HTTP1`, which libsoup reads once (`soup-connection-manager.c`, a
-  `static`) at the first connection, so `Environment.Set` before the first
-  request is enough and covers worker threads. `bintana-docs` documents it in
-  `Http.md#cancelling-over-http2`; `examples/downloads` sets it. Searched on
+  to fix and we do not force HTTP/1.1**: the application opts in per request
+  or per client with `Http1` (`soup_message_set_force_http1`), measured the
+  same way -- a task stopped at 1.5 s ends at 1502 ms with it and 6889 ms
+  without. The process-wide road is `SOUP_FORCE_HTTP1`, which libsoup reads
+  once (`soup-connection-manager.c`, a `static`) at the first connection, so
+  `Environment.Set` before the first request covers worker threads too.
+  `bintana-docs` documents both in `Http.md#cancelling-over-http2`;
+  `examples/downloads` uses `Http1`. The suite cannot assert the timing: its
+  servers are local and speak HTTP/1.1. Searched on
   2026-11-02: no libsoup issue or MR covers it; the nearest is #367 (*HTTP/2:
   Socket I/O timeout not reported to app*), the same `check_status` not being
   called. When an upstream report exists, link it here and in `Http.md`.

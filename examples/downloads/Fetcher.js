@@ -17,7 +17,9 @@
 class Fetcher extends Task {
 
     Run(msg) {
-        const r = Http.GetWait(msg.url, this.Cancellable);
+        /* HTTP/1.1, so a stop is seen at once rather than when the server
+         * next sends something -- which over HTTP/2 can be never. */
+        const r = Http.GetWait(msg.url, { Http1: true }, this.Cancellable);
 
         /* A 404 is an answer, not a failure, as far as `Http` is concerned;
          * as far as a download is concerned it is nothing to save. */

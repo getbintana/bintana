@@ -14525,10 +14525,10 @@
         {
           "Name": "Hash",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(path, [algorithm])",
+          "Params": 3,
+          "Signature": "(path, [algorithm], [cancellable])",
           "Returns": "string",
-          "Doc": "the checksum as hex, `\"Sha256\"` unless told — see [`Hash`](docs/reference/globals/Hash.md). **Read in blocks**, so a video costs 64 KB of memory and not the video",
+          "Doc": "the checksum as hex, `\"Sha256\"` unless told — see [`Hash`](docs/reference/globals/Hash.md). **Read in blocks**, so a video costs 64 KB of memory and not the video. A `Cancellable` last stops it between two blocks",
           "Native": true
         },
         {
@@ -14710,37 +14710,37 @@
         {
           "Name": "Compress",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(data, [{ Level }])",
+          "Params": 3,
+          "Signature": "(data, [{ Level }], [cancellable])",
           "Returns": "Bytes",
-          "Doc": "`data` (text as its UTF-8, or a [`Bytes`](docs/llm/library.md#bytes)) as one gzip member. `Level` is 1 (fast) to 9 (small), 6 unless told. A second option, or a value that is neither text nor `Bytes`, is refused. About 50 MB a second: a big one belongs in a [`Task`](docs/llm/library.md#task)",
+          "Doc": "`data` (text as its UTF-8, or a [`Bytes`](docs/llm/library.md#bytes)) as one gzip member. `Level` is 1 (fast) to 9 (small), 6 unless told. A second option, or a value that is neither text nor `Bytes`, is refused. About 50 MB a second: a big one belongs in a [`Task`](docs/llm/library.md#task), and a `Cancellable` last stops it between two 64 KB chunks",
           "Native": true
         },
         {
           "Name": "CompressFile",
           "Kind": "Method",
-          "Params": 3,
-          "Signature": "(source, destination, [{ Level }])",
+          "Params": 4,
+          "Signature": "(source, destination, [{ Level }], [cancellable])",
           "Returns": "number",
-          "Doc": "gzips a file into another **without loading it**, 64 KB at a time, and answers the bytes written. The destination appears only when it is whole: a failure leaves no half-written file, and an existing one is untouched",
+          "Doc": "gzips a file into another **without loading it**, 64 KB at a time, and answers the bytes written. The destination appears only when it is whole: a failure leaves no half-written file, and an existing one is untouched. A `Cancellable` last stops it between two chunks, with the same promise: the destination is as it was",
           "Native": true
         },
         {
           "Name": "Decompress",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(bytes, [{ MaxSize }])",
+          "Params": 3,
+          "Signature": "(bytes, [{ MaxSize }], [cancellable])",
           "Returns": "Bytes",
-          "Doc": "what `bytes` holds, **all of it**: members glued together are read to the end, a stream that stops inside one **throws** (naming how far it got) rather than answering what it had, and so does anything that is not gzip. The answer may not pass `MaxSize` bytes (256 MiB unless told), because a few kilobytes can inflate to gigabytes. Text comes out as `ToText()` of the answer",
+          "Doc": "what `bytes` holds, **all of it**: members glued together are read to the end, a stream that stops inside one **throws** (naming how far it got) rather than answering what it had, and so does anything that is not gzip. The answer may not pass `MaxSize` bytes (256 MiB unless told), because a few kilobytes can inflate to gigabytes. Text comes out as `ToText()` of the answer. A `Cancellable` last stops it",
           "Native": true
         },
         {
           "Name": "DecompressFile",
           "Kind": "Method",
-          "Params": 3,
-          "Signature": "(source, destination, [{ MaxSize }])",
+          "Params": 4,
+          "Signature": "(source, destination, [{ MaxSize }], [cancellable])",
           "Returns": "number",
-          "Doc": "the reverse, streamed, with the same ceiling and the same promise about the destination. Answers the bytes written",
+          "Doc": "the reverse, streamed, with the same ceiling and the same promise about the destination. Answers the bytes written. A `Cancellable` last stops it",
           "Native": true
         }
       ]
@@ -14813,7 +14813,7 @@
           "Params": 1,
           "Signature": "([opts])",
           "Returns": "HttpClient",
-          "Doc": "a client with its own session: `BaseUrl`, `Headers`, `Timeout` (ms, `0` waits forever for the callback verbs), `FollowRedirects` (default `true`), `Language`, `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`, `MaxPerHost`. The options are an object — a bare URL is refused",
+          "Doc": "a client with its own session: `BaseUrl`, `Headers`, `Timeout` (ms, `0` waits forever for the callback verbs), `FollowRedirects` (default `true`), `Http1` (default `false`), `Language`, `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`, `MaxPerHost`. The options are an object — a bare URL is refused",
           "Native": true
         },
         {
@@ -17404,6 +17404,15 @@
           "Native": true
         },
         {
+          "Name": "Http1",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "ask for HTTP/1.1 rather than HTTP/2. Default `false`. Over HTTP/2 libsoup notices a cancel only when the server next sends something, so a `Stop`, a `Timeout` or a `Cancellable` ends a request late; a program whose requests must stop when told sets this. `{ Http1 }` on one call does the same for that call",
+          "Native": true
+        },
+        {
           "Name": "IdleTimeout",
           "Kind": "Property",
           "Params": -1,
@@ -18084,9 +18093,9 @@
           "Name": "ExtractAll",
           "Kind": "Method",
           "Params": 1,
-          "Signature": "(folder, [{ MaxSize }])",
+          "Signature": "(folder, [{ MaxSize }], [cancellable])",
           "Returns": "number",
-          "Doc": "every entry under `folder`, made as needed, answering how many files it wrote. **Nothing is written until every name, every method and the total size have passed**: an entry named `../x`, an absolute path, a drive letter, a backslash or an empty part refuses the whole archive. Existing files are replaced; only files and folders are made, never a link",
+          "Doc": "every entry under `folder`, made as needed, answering how many files it wrote. **Nothing is written until every name, every method and the total size have passed**: an entry named `../x`, an absolute path, a drive letter, a backslash or an empty part refuses the whole archive. Existing files are replaced; only files and folders are made, never a link. A `Cancellable` last stops it between two entries, leaving the ones written",
           "Native": true
         },
         {

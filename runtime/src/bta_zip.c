@@ -731,6 +731,8 @@ static JSValue zip_extract(JSContext *ctx, JSValueConst this_val, int argc, JSVa
 
 static JSValue zip_extract_all(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     BtaZip *z = zip_this(ctx, this_val);
 
     if (!z)
@@ -771,6 +773,14 @@ static JSValue zip_extract_all(JSContext *ctx, JSValueConst this_val, int argc, 
 
     for (guint i = 0; i < z->n && !why; i++) {
         const ZipEntry *x = &z->ent[i];
+
+        /* Between two entries: the files already written stay, as a stopped
+         * `Directory.Copy` leaves what it copied, and each one is whole. */
+        if (cancel && g_cancellable_is_cancelled(cancel)) {
+            why = g_strdup("cancelled");
+            break;
+        }
+
         char *path = g_build_filename(dir, x->name, NULL);
 
         if (x->dir) {
@@ -840,14 +850,16 @@ static const JSCFunctionListEntry zip_proto_props[] = {
      *   folder `path` is in must exist. Same refusals as `Read`
      */
     JS_CFUNC_DEF("Extract", 3, zip_extract),
-    /* ExtractAll(folder, [{ MaxSize }]) -> number
+    /* ExtractAll(folder, [{ MaxSize }], [cancellable]) -> number
      *   every entry under `folder`, made as needed, answering how many files it
      *   wrote. **Nothing is written until every name, every method and the total
      *   size have passed**: an entry named `../x`, an absolute path, a drive
      *   letter, a backslash or an empty part refuses the whole archive. Existing
-     *   files are replaced; only files and folders are made, never a link
+     *   files are replaced; only files and folders are made, never a link. A
+     *   `Cancellable` last stops it between two entries, leaving the ones
+     *   written
      */
-    JS_CFUNC_DEF("ExtractAll", 2, zip_extract_all),
+    JS_CFUNC_DEF("ExtractAll", 3, zip_extract_all),
     /* Close()
      *   lets go of the archive. Closing twice is not an error; any other call
      *   after it throws
