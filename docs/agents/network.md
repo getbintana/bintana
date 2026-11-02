@@ -224,6 +224,26 @@ each rule below; read it before changing a level.
   went red with *Network is not defined*; the asynchronous `Http` is not there
   because its source belongs to the main loop. Anything `rad.js` hangs on a C
   global is guarded with `typeof … !== "undefined"`.
+- **Over HTTP/2 a cancel is seen only when the stream next has traffic.**
+  libsoup's `soup_client_message_io_http2_run_until_read_async` (3.6.6, and
+  still in 3.8.1) puts the `GCancellable` in a `GTask` and never connects to
+  it; `soup_http2_message_data_check_status` asks `is_cancelled` only when a
+  frame arrives for that stream. HTTP/1.1 polls with sources made on the
+  cancellable and answers at once. Measured against
+  `https://httpbin.org/delay/6`, cancelled at 1.5 s: HTTP/2 answers at 7.1 s,
+  HTTP/1.1 at 1.5 s -- in a 20-line C program on libsoup alone, in `Http.GetWait`
+  on the main thread and in a task, and in the callback `Http.Get` with `Stop()`
+  or `{ Timeout }`. So every way of cancelling a flight (`Stop`, `Timeout`,
+  `{ Cancellable }`, a task's `Stop`/`Timeout`/shared token) reports the right
+  ending late, and a server that never answers is never left. **It is not ours
+  to fix and we do not force HTTP/1.1**: the application opts in with
+  `SOUP_FORCE_HTTP1`, which libsoup reads once (`soup-connection-manager.c`, a
+  `static`) at the first connection, so `Environment.Set` before the first
+  request is enough and covers worker threads. `bintana-docs` documents it in
+  `Http.md#cancelling-over-http2`; `examples/downloads` sets it. Searched on
+  2026-11-02: no libsoup issue or MR covers it; the nearest is #367 (*HTTP/2:
+  Socket I/O timeout not reported to app*), the same `check_status` not being
+  called. When an upstream report exists, link it here and in `Http.md`.
 - **A timeout in a `tests/widgets` test is measured against the whole suite's
   blocking calls.** Tests run in order but their waits overlap, and later tests
   hold the main loop for seconds in `*Wait`; a connection that completed and a

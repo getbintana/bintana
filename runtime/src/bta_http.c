@@ -2769,6 +2769,10 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         jar_borrowed = true;
     }
 
+    /* Over HTTP/2 libsoup sees `canc` only when this stream next has traffic,
+     * so the cancel and the guard below end the wait late (or, against a
+     * silent server, never).  Not forced away here: an application that needs
+     * prompt cancelling sets SOUP_FORCE_HTTP1 -- docs/agents/network.md. */
     w.msg = msg;
     soup_session_send_and_read_async(sess, msg, G_PRIORITY_DEFAULT, canc,
                                      on_http_wait_done, &w);
