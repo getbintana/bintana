@@ -81,9 +81,20 @@
   now, so the deliberate leak is said in the same vocabulary as everything else
   that holds one. Freeing memory a live thread still writes to is
   worse than leaking it on the last line before exit. `GCancellable` is the
-  only thing that reaches a thread blocked in native code, and it was measured
-  and deferred: one of the six verbs a worker can block in takes one, and it
-  is not the one that hangs. See docs/plans/task-plan.md.
+  only thing that reaches a thread blocked in native code, and it now reaches
+  the job's blocking verbs: `Exec.Wait`, `Http.*Wait`, the GIO file verbs and
+  the directory walk (`List`, `Files`, `Folders`, `Copy`, `DeleteTree`).
+  `File.Hash` and the compressors still take none, and still wait for the flag
+  or `KillAfter` between opcodes. See docs/plans/task-plan.md.
+
+- **A token cancelled from the main thread can wake the worker before the
+  job's flag is up.** `g_cancellable_cancel` sets `Cancelled` first and emits
+  the signal afterwards; a `Run` polling `this.Cancellable.Cancelled` can
+  return in between, and `task_ending` then read `stop == 0` and reported
+  `Done` for a run the caller had stopped. `task_ending` consults
+  `g_cancellable_is_cancelled(job->cancel)` as well -- the signal is the job's
+  own, so its state is the same answer and is already visible. The test is
+  *a cancelled token must not reach Done*.
 - **`Lock.Hold` releases in C, and that is what makes it correct rather than
   tidy.** A forced `Stop()` ends a worker at an arbitrary opcode, so an
   `Enter`/`Leave` pair written in JavaScript would leave the lock held for the

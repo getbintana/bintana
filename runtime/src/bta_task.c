@@ -1509,6 +1509,17 @@ static void task_ending(BtaTaskJob *job, JSContext *ctx, bool threw)
 {
     gint stop = g_atomic_int_get(&job->stop);
 
+    /*
+     * A shared token can be raised a hair before this side's signal handler
+     * runs: `Cancel()` sets the flag first and emits afterwards, and a worker
+     * waiting on `this.Cancellable.Cancelled` can return in between.  The
+     * signal is the job's own, so its state is the same answer and is already
+     * visible -- without this, the run that stopped on the caller's token was
+     * reported as `Done`.
+     */
+    if (stop == 0 && job->cancel && g_cancellable_is_cancelled(job->cancel))
+        stop = 1;
+
     if (stop == 2) {
         job->fail       = 3;
         job->fail_msg   = g_strdup_printf("Task: timed out after %ld ms",

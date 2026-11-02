@@ -1003,14 +1003,15 @@ static JSValue sys_file_trash(JSContext *ctx, JSValueConst this_val,
  * primitive it repeats. Symbolic links and permissions are the toolkit's
  * business (`G_FILE_COPY_NONE`), which is the same bargain `File.Copy` makes.
  */
-static bool copy_tree(GFile *src, GFile *dst, GError **error)
+static bool copy_tree(GFile *src, GFile *dst, GCancellable *cancel,
+                      GError **error)
 {
-    GFileType kind = g_file_query_file_type(src, G_FILE_QUERY_INFO_NONE, NULL);
+    GFileType kind = g_file_query_file_type(src, G_FILE_QUERY_INFO_NONE, cancel);
 
     if (kind != G_FILE_TYPE_DIRECTORY)
-        return g_file_copy(src, dst, G_FILE_COPY_NONE, NULL, NULL, NULL, error);
+        return g_file_copy(src, dst, G_FILE_COPY_NONE, cancel, NULL, NULL, error);
 
-    if (!g_file_make_directory_with_parents(dst, NULL, error)) {
+    if (!g_file_make_directory_with_parents(dst, cancel, error)) {
         /* Already there is not a failure: a caller copying into a tree it is
          * building will meet its own folders on the way down. */
         if (!g_error_matches(*error, G_IO_ERROR, G_IO_ERROR_EXISTS))
@@ -1019,13 +1020,14 @@ static bool copy_tree(GFile *src, GFile *dst, GError **error)
     }
 
     GFileEnumerator *walk = g_file_enumerate_children(
-        src, G_FILE_ATTRIBUTE_STANDARD_NAME, G_FILE_QUERY_INFO_NONE, NULL, error);
+        src, G_FILE_ATTRIBUTE_STANDARD_NAME, G_FILE_QUERY_INFO_NONE,
+        cancel, error);
     if (!walk)
         return false;
 
     bool ok = true;
     for (;;) {
-        GFileInfo *info = g_file_enumerator_next_file(walk, NULL, error);
+        GFileInfo *info = g_file_enumerator_next_file(walk, cancel, error);
         if (!info) {
             ok = (*error == NULL);      /* no more, or the walk itself failed */
             break;
@@ -1034,7 +1036,7 @@ static bool copy_tree(GFile *src, GFile *dst, GError **error)
         GFile *from = g_file_get_child(src, g_file_info_get_name(info));
         GFile *to   = g_file_get_child(dst, g_file_info_get_name(info));
 
-        ok = copy_tree(from, to, error);
+        ok = copy_tree(from, to, cancel, error);
 
         g_object_unref(from);
         g_object_unref(to);
@@ -1069,7 +1071,7 @@ static JSValue sys_dir_copy(JSContext *ctx, JSValueConst this_val,
         GFile  *dst   = g_file_new_for_path(to);
         GError *error = NULL;
 
-        if (!copy_tree(src, dst, &error))
+        if (!copy_tree(src, dst, bta_task_cancellable(ctx), &error))
             e = JS_ThrowPlainError(ctx, "cannot copy %s to %s: %s", from, to,
                                    bta_gerror_text(error));
         g_clear_error(&error);
@@ -1091,27 +1093,28 @@ static JSValue sys_dir_copy(JSContext *ctx, JSValueConst this_val,
  * spells that out: a recursive delete behind an innocent name is how a wrong
  * path becomes a lost afternoon, and the two are one word apart on purpose.
  */
-static bool delete_tree(GFile *dir, GError **error)
+static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error)
 {
     GFileEnumerator *walk = g_file_enumerate_children(
-        dir, G_FILE_ATTRIBUTE_STANDARD_NAME, G_FILE_QUERY_INFO_NONE, NULL, error);
+        dir, G_FILE_ATTRIBUTE_STANDARD_NAME, G_FILE_QUERY_INFO_NONE,
+        cancel, error);
 
     /* Not a folder: it is a file, and deleting it is the whole of the job. */
     if (!walk) {
         g_clear_error(error);
-        return g_file_delete(dir, NULL, error);
+        return g_file_delete(dir, cancel, error);
     }
 
     bool ok = true;
     for (;;) {
-        GFileInfo *info = g_file_enumerator_next_file(walk, NULL, error);
+        GFileInfo *info = g_file_enumerator_next_file(walk, cancel, error);
         if (!info) {
             ok = (*error == NULL);
             break;
         }
 
         GFile *child = g_file_get_child(dir, g_file_info_get_name(info));
-        ok = delete_tree(child, error);
+        ok = delete_tree(child, cancel, error);
 
         g_object_unref(child);
         g_object_unref(info);
@@ -1120,7 +1123,7 @@ static bool delete_tree(GFile *dir, GError **error)
     }
 
     g_object_unref(walk);
-    return ok && g_file_delete(dir, NULL, error);
+    return ok && g_file_delete(dir, cancel, error);
 }
 
 static JSValue sys_dir_delete(JSContext *ctx, JSValueConst this_val,
@@ -1154,7 +1157,7 @@ static JSValue sys_dir_delete_tree(JSContext *ctx, JSValueConst this_val,
         GFile  *dir   = g_file_new_for_path(path);
         GError *error = NULL;
 
-        if (!delete_tree(dir, &error))
+        if (!delete_tree(dir, bta_task_cancellable(ctx), &error))
             e = JS_ThrowPlainError(ctx, "cannot delete %s: %s", path,
                                    bta_gerror_text(error));
         g_clear_error(&error);
@@ -1177,9 +1180,15 @@ static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
     const char *pattern = argc > 1 && JS_IsString(argv[1])
                               ? bta_file_path(ctx, argv[1], "Directory.List") : NULL;
 
-    GError *err = NULL;
-    GDir   *dir = g_dir_open(path, 0, &err);
-    if (!dir) {
+    GCancellable    *cancel = bta_task_cancellable(ctx);
+    GFile           *dir    = g_file_new_for_path(path);
+    GError          *err    = NULL;
+    GFileEnumerator *walk   = g_file_enumerate_children(
+        dir, G_FILE_ATTRIBUTE_STANDARD_NAME, G_FILE_QUERY_INFO_NONE,
+        cancel, &err);
+
+    g_object_unref(dir);
+    if (!walk) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot list %s: %s", path,
                                        bta_gerror_text(err));
         g_clear_error(&err);
@@ -1190,16 +1199,38 @@ static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
 
     GPatternSpec *spec  = pattern ? g_pattern_spec_new(pattern) : NULL;
     GPtrArray    *names = g_ptr_array_new_with_free_func(g_free);
-    const char   *name;
+    bool          failed = false;
 
-    while ((name = g_dir_read_name(dir))) {
-        if (spec && !g_pattern_spec_match_string(spec, name))
-            continue;
-        g_ptr_array_add(names, g_strdup(name));
+    for (;;) {
+        GFileInfo *info = g_file_enumerator_next_file(walk, cancel, &err);
+
+        if (!info) {
+            if (err)
+                failed = true;      /* cancelled or an unreadable entry */
+            break;
+        }
+
+        const char *name = g_file_info_get_name(info);
+
+        if (name && (!spec || g_pattern_spec_match_string(spec, name)))
+            g_ptr_array_add(names, g_strdup(name));
+        g_object_unref(info);
     }
-    g_dir_close(dir);
+    g_clear_error(&err);
+    g_file_enumerator_close(walk, cancel, NULL);
+    g_object_unref(walk);
     if (spec)
         g_pattern_spec_free(spec);
+
+    if (failed) {
+        JSValue e = JS_ThrowPlainError(ctx, "cannot list %s: %s", path,
+                                       g_cancellable_is_cancelled(cancel)
+                                           ? "cancelled" : "unreadable");
+        g_ptr_array_unref(names);
+        JS_FreeCString(ctx, path);
+        JS_FreeCString(ctx, pattern);
+        return e;
+    }
 
     g_ptr_array_sort_values(names, (GCompareFunc)g_strcmp0);
 
@@ -1254,37 +1285,73 @@ static JSValue sys_dir_make(JSContext *ctx, JSValueConst this_val,
  * to a *file* is an ordinary file -- icon themes are largely built out of those,
  * and not counting them would answer a question nobody asked.
  */
-static void dir_walk(const char *root, GPatternSpec *spec, bool recursive,
-                     bool want_dirs, GPtrArray *out)
+static int dir_info_cmp(const void *a, const void *b)
 {
-    GDir *dir = g_dir_open(root, 0, NULL);
-    if (!dir)
-        return;   /* unreadable: skipped, not fatal -- one corner of /usr must
-                   * not end a walk that was about somewhere else */
+    GFileInfo *ia = (GFileInfo *)a;
+    GFileInfo *ib = (GFileInfo *)b;
 
-    GPtrArray  *names = g_ptr_array_new_with_free_func(g_free);
-    const char *name;
+    return g_strcmp0(g_file_info_get_name(ia), g_file_info_get_name(ib));
+}
 
-    while ((name = g_dir_read_name(dir)))
-        g_ptr_array_add(names, g_strdup(name));
-    g_dir_close(dir);
+static bool dir_walk(const char *root, GPatternSpec *spec, bool recursive,
+                     bool want_dirs, GPtrArray *out, GCancellable *cancel)
+{
+    GFile *dir = g_file_new_for_path(root);
+    GFileEnumerator *walk = g_file_enumerate_children(
+        dir,
+        G_FILE_ATTRIBUTE_STANDARD_NAME "," G_FILE_ATTRIBUTE_STANDARD_TYPE ","
+        G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK,
+        G_FILE_QUERY_INFO_NONE, cancel, NULL);
 
-    g_ptr_array_sort_values(names, (GCompareFunc)g_strcmp0);
+    g_object_unref(dir);
+    if (!walk)
+        return !g_cancellable_is_cancelled(cancel);   /* unreadable: skipped */
 
-    for (guint i = 0; i < names->len; i++) {
-        char *full   = g_build_filename(root, names->pdata[i], NULL);
-        bool  is_dir = g_file_test(full, G_FILE_TEST_IS_DIR);
+    GError   *err     = NULL;
+    GPtrArray *entries = g_ptr_array_new_with_free_func(g_object_unref);
+
+    for (;;) {
+        GFileInfo *info = g_file_enumerator_next_file(walk, cancel, &err);
+
+        if (!info)
+            break;
+        g_ptr_array_add(entries, info);
+    }
+    bool cancelled = g_cancellable_is_cancelled(cancel) ||
+                     (err && g_error_matches(err, G_IO_ERROR,
+                                             G_IO_ERROR_CANCELLED));
+    g_clear_error(&err);
+    g_file_enumerator_close(walk, cancel, NULL);
+    g_object_unref(walk);
+
+    if (cancelled) {
+        g_ptr_array_unref(entries);
+        return false;
+    }
+
+    g_ptr_array_sort_values(entries, dir_info_cmp);
+
+    bool ok = true;
+
+    for (guint i = 0; i < entries->len && ok; i++) {
+        GFileInfo *info = g_ptr_array_index(entries, i);
+        const char *name = g_file_info_get_name(info);
+        bool  is_dir  = g_file_info_get_file_type(info) == G_FILE_TYPE_DIRECTORY;
+        bool  is_link = g_file_info_get_is_symlink(info);
+
+        char *full = g_build_filename(root, name, NULL);
 
         if (is_dir == want_dirs &&
-            (!spec || g_pattern_spec_match_string(spec, names->pdata[i])))
+            (!spec || g_pattern_spec_match_string(spec, name)))
             g_ptr_array_add(out, g_strdup(full));
 
-        if (recursive && is_dir && !g_file_test(full, G_FILE_TEST_IS_SYMLINK))
-            dir_walk(full, spec, recursive, want_dirs, out);
+        if (recursive && is_dir && !is_link)
+            ok = dir_walk(full, spec, recursive, want_dirs, out, cancel);
 
         g_free(full);
     }
-    g_ptr_array_unref(names);
+    g_ptr_array_unref(entries);
+    return ok;
 }
 
 static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
@@ -1323,8 +1390,20 @@ static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
 
     GPatternSpec *spec  = pattern ? g_pattern_spec_new(pattern) : NULL;
     GPtrArray    *found = g_ptr_array_new_with_free_func(g_free);
+    bool          ok    = dir_walk(path, spec, recursive, magic != 0, found,
+                                    bta_task_cancellable(ctx));
 
-    dir_walk(path, spec, recursive, magic != 0, found);
+    if (!ok) {
+        g_ptr_array_unref(found);
+        if (spec)
+            g_pattern_spec_free(spec);
+        JSValue e = JS_ThrowPlainError(ctx, "%s: cancelled",
+                                       magic ? "Directory.Folders"
+                                             : "Directory.Files");
+        JS_FreeCString(ctx, path);
+        JS_FreeCString(ctx, pattern);
+        return e;
+    }
 
     JSValue arr = JS_NewArray(ctx);
     for (guint i = 0; i < found->len; i++)

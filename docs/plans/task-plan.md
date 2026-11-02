@@ -1,12 +1,11 @@
 # Task: a class that runs in a thread of its own
 
-**Status: phases 1 to 6 built**, with the directory walk's cancellable still
-named at the end. The surface is
+**Status: built, all six phases.** The surface is
 [`docs/reference/globals/Task.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/globals/Task.md), which was
-written first and is the specification this follows. What is *not* built is
-named at the end, with the trigger that builds it — because the one limitation
-this ships with is a deferral and not a doctrine, and the difference has to be
-readable from the error message.
+written first and is the specification this follows. Two things were named
+while writing it and are deliberately not rows of this plan: markdown's parser,
+which waits for a use case, and a debugger in a worker, which is a design of its
+own. Neither is a limitation this plan ships with.
 
 ## What it is
 
@@ -320,17 +319,20 @@ The calls that take it now:
 | `File.Load` / `LoadBytes` | `g_file_load_contents` | yes |
 | `File.Info` | `g_file_query_info` | yes |
 | `File.Copy` / `File.Trash` | `g_file_copy` / `g_file_trash` | yes |
+| `Directory.List` / `Files` / `Folders` | `g_file_enumerate_children`, checked between entries | yes |
+| `Directory.Copy` / `DeleteTree` | the same walk, with `g_file_copy` / `g_file_delete` | yes |
 
 `File.Load` moved from `g_file_get_contents` to `g_file_load_contents` for
-this; the main thread gets the same `GFile` read with a NULL cancellable. What
-is left is the **directory walk**, which is still `g_dir_open`/`readdir` and
-cannot be cancelled, plus `File.Hash` and the compressors. The trigger is the
-same as before: the day `Directory` moves to `g_file_enumerate_children` for
-its own reason, the cancellable comes with it.
+this; the main thread gets the same `GFile` read with a NULL cancellable. The
+**directory walk** moved from `g_dir_open`/`readdir` to
+`g_file_enumerate_children` for the same reason, so `List`, `Files`, `Folders`,
+`Copy` and `DeleteTree` stop where they are, including part-way down a
+recursive walk. `File.Hash` and the compressors still take no signal and wait
+for the flag or `KillAfter` between opcodes.
 
 Teardown still has the bounded two-second wait and casts an unresponsive worker
-adrift, because a thread blocked in a call with no cancellable is reached by
-nothing else.
+adrift: `File.Hash` and the compressors have no signal to take, so the bound is
+still the only backstop for them.
 
 ## Phases
 
@@ -354,9 +356,9 @@ nothing else.
    rather than queued. The count is a thread and a runtime each, which is what
    makes a ceiling worth having.
 6. **`GCancellable`** — **built where it pays**: a job owns one, `Stop`,
-   `Timeout` and `KillAfter` cancel it, and `Exec.Wait`, `Http.*Wait` and the
-   GIO file verbs take it. The directory walk still cannot; that is one trigger
-   left, not a reason to defer the rest.
+   `Timeout` and `KillAfter` cancel it, and `Exec.Wait`, `Http.*Wait`, the GIO
+   file verbs and the directory walk take it. `File.Hash` and the compressors
+   do not, and are not on this plan's path.
 
 The order matters, and it is the one thing this plan got wrong the first time:
 **phase 2 was written as if phase 3 were its condition.** It was not. A
@@ -364,12 +366,11 @@ refusal justified by a missing feature is only honest while the feature is
 what is missing — and here it was a measurement, not a feature. Stating the
 trigger is what made that findable.
 
-### Deferred, and what reopens each
+### Beyond this plan
 
-The rest is not a roadmap; each waits for a program that asks for it:
+Two things were named while writing it and are not rows left to build:
 
-| | the program that reopens it |
+| | why it is not here |
 |---|---|
-| `markdown`'s parser as a worker module | a task that parses a `.md` — an index of notes, a table of contents, a document exported off the main thread. The viewer and the IDE help run on the page, so they do not. |
-| a cancellable directory walk | the day `Directory` moves to GIO for its own reason; today it is `readdir`, which takes none. |
-| a debugger in a worker | a second debug session, because the protocol is one control descriptor and `dbg` is process state; that is a design, not a flag. |
+| `markdown`'s parser as a worker module | It waits for a task that parses a `.md` — an index of notes, a table of contents, a document exported off the main thread. The viewer and the IDE help run on the page, so they do not. |
+| a debugger in a worker | A second debug session, because the protocol is one control descriptor and `dbg` is process state. That is a design of its own, not a flag on this one. |

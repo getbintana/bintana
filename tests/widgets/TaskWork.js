@@ -297,6 +297,26 @@ class TaskWork extends Task {
             return { status: r.Status, body: r.Body.ToText() };
         }
 
+        /* The three directory verbs take the job's signal through GIO. */
+        if (msg.mode === "dir") {
+            const said = {};
+
+            this.Cancellable.Cancel();
+            for (const name of ["Files", "Folders", "List"]) {
+                try {
+                    if (name === "List")
+                        Directory.List(msg.dir);
+                    else
+                        Directory[name](msg.dir, { Recursive: true });
+                    said[name] = "";
+                } catch (e) {
+                    said[name] = e.message;
+                }
+            }
+            this.Report({ said: said });
+            return { done: true };
+        }
+
         /* A token made inside the task is accepted by a blocking call. */
         if (msg.mode === "own-token") {
             const c = new Cancellable();

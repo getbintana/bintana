@@ -27352,6 +27352,24 @@ class Form1 extends Form {
         });
 
         steps.push(() => {
+            Directory.Make(SCRATCH);
+            const t = new TaskWork();
+            let said = "";
+
+            t.Progress = (p) => { said = p.said; };
+            t.Done  = () => fail("a cancelled directory walk must not reach Done");
+            t.Error = (m) => {
+                for (const name of ["Files", "Folders", "List"])
+                    check(`a cancelled Directory.${name} stops`,
+                          String(said[name]).includes("cancel"), said[name]);
+                check("...and the task ends cancelled",
+                      String(m).includes("cancelled"), String(m));
+                next();
+            };
+            t.Start({ mode: "dir", dir: SCRATCH });
+        });
+
+        steps.push(() => {
             const t = new TaskWork();
 
             t.Error = (m) => fail(`own token errored: ${m}`);
