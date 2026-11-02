@@ -8123,7 +8123,7 @@
           "Params": 5,
           "Signature": "(line, column, length, kind, text)",
           "Returns": "",
-          "Doc": "underlines `length` characters from `column` on `line` — both 1-based, as `Select` and `GotoLine` count — with `kind` `Error` `Warning` or `Info`, and shows `text` in a tooltip where the pointer rests on it. The range moves with the text; **clear and add them again after an edit**, as `Live` does on its pause. Several may share a line",
+          "Doc": "underlines `length` characters from `column` on `line` — both 1-based, as `Select` and `GotoLine` count — with `kind` `Error` `Warning` or `Info`, and shows `text` in a tooltip where the pointer rests on it. **It stays on its line**: a length past the end stops there, a column at or past the end underlines the last character (where a parser points for *unexpected end*), and an empty line the last character above it. The range moves with the text; **clear and add them again after an edit**, as `Live` does on its pause. Several may share a line",
           "Native": true
         },
         {
@@ -8132,7 +8132,7 @@
           "Params": 1,
           "Signature": "([kind])",
           "Returns": "",
-          "Doc": "**a record per diagnostic**, in the order added: `{ Line, Column, Length, Kind, Text }`. The reader that makes an underline assertable, as `Marks` does for the gutter",
+          "Doc": "**a record per diagnostic**, in the order added: `{ Line, Column, Length, Kind, Text }` — the range **underlined**, after it was kept to its line, which is not always the one asked for. The reader that makes an underline assertable, as `Marks` does for the gutter",
           "Native": true
         },
         {

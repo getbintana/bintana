@@ -985,7 +985,19 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   GTK adjusts tag ranges with edits, but a diagnostic is about a token that was
   read from a particular text, so the caller clears and re-adds after an edit
   instead of trusting where the range ended up; `Diagnostics([kind])` is the
-  reader that makes the range assertable, as `Marks` does for the gutter.
+  reader that makes the range assertable, as `Marks` does for the gutter -- and
+  it reads the tag's toggles, not what was asked, because the two differed.
+- **`gtk_text_iter_forward_chars` crosses line breaks**, counting each as a
+  character. `Diagnostic` used it for both ends, so a length past the end of
+  the line underlined the lines below (`1:9+21` for a 1-character token), a
+  column past the end started on another line, and the column a parser gives
+  for *unexpected end of input* -- one past the last character,
+  `CheckSource` says `2:10` on a 9-character line -- was an empty range,
+  dropped: the IDE's commonest syntax error had a gutter mark and no
+  underline. `diagnostic_range` keeps it to the named line, with the last
+  character for a column at or past the end and the nearest character above
+  for an empty line; `Diagnostics()` read back the asked range all along, so
+  no test saw any of it.
 
 ## Calendar, radios and pickers
 

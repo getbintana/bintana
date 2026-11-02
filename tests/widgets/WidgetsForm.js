@@ -1629,6 +1629,46 @@ class WidgetsForm extends Form {
         throws("a length is at least one", () => ed.Diagnostic(1, 1, 0, "Error", "x"));
         throws("the sentence is required", () => ed.Diagnostic(1, 1, 1, "Error"));
 
+        /*
+         * **It stays on the line it names.** GTK walks a range across line
+         * breaks, so a length past the end ran on through the lines below and
+         * a column past the end started on another line; and the column a
+         * parser gives for *unexpected end of input* -- one past the last
+         * character -- made an empty range that was dropped, so the commonest
+         * syntax error had no underline at all.  `Diagnostics()` reads the
+         * buffer's own tag, so these are what is drawn.
+         */
+        ed.Text = "let a = 1\nlet b = 2\nlet c = 3";
+        const drawn = () => ed.Diagnostics().map((d) => `${d.Line}:${d.Column}+${d.Length}`).join(" ");
+
+        ed.Diagnostic(1, 9, 30, "Error", "too long");
+        eq("a length past the end stops at the end of its line", drawn(), "1:9+1");
+        ed.ClearDiagnostics();
+
+        ed.Diagnostic(1, 20, 3, "Warning", "too far");
+        eq("a column past the end underlines the line's last character", drawn(), "1:9+1");
+        ed.ClearDiagnostics();
+
+        const eoi = Application.CheckSource("let a = 1\ncall(1, 2");
+        eq("(a parser points one past the end for an unexpected end)",
+           `${eoi.Line}:${eoi.Column}`, "2:10");
+        ed.Text = "let a = 1\ncall(1, 2";
+        ed.Diagnostic(eoi.Line, eoi.Column, 1, "Error", eoi.Message);
+        eq("...and that is underlined, on the last character", drawn(), "2:9+1");
+        ed.ClearDiagnostics();
+
+        const eol = Application.CheckSource("let a = 1\ncall(1, 2\n");
+        eq("(with a final line break it points at the empty line after)",
+           `${eol.Line}:${eol.Column}`, "3:1");
+        ed.Text = "let a = 1\ncall(1, 2\n\n";
+        ed.Diagnostic(eol.Line, eol.Column, 1, "Error", eol.Message);
+        eq("...an empty line underlines the last character above it", drawn(), "2:9+1");
+        ed.ClearDiagnostics();
+
+        ed.Text = "\n\nx";
+        ed.Diagnostic(2, 1, 1, "Info", "nothing above");
+        eq("an empty line with nothing above it underlines nothing", drawn(), "");
+
         ed.Delete();
     }
 

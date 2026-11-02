@@ -1630,6 +1630,73 @@ static int diagnostic_filter(JSContext *ctx, int argc, JSValueConst *argv,
     return 0;
 }
 
+/* The iter at the end of `it`'s line, before its line break. */
+static GtkTextIter diag_line_end(GtkTextIter it)
+{
+    if (!gtk_text_iter_ends_line(&it))
+        gtk_text_iter_forward_to_line_end(&it);
+    return it;
+}
+
+/*
+ * What a diagnostic underlines: **on the line it names, always**.
+ *
+ * `gtk_text_iter_forward_chars` walks the whole buffer and counts a line
+ * break as a character, so a length longer than the rest of the line ran on
+ * through the lines below it, and a column past the end started on another
+ * line altogether -- the wave and the tooltip on code that had nothing to do
+ * with the sentence.  Clipped here instead:
+ *
+ *   - a length past the end of the line stops at the end of the line;
+ *   - a column at or past the end underlines the line's last character, which
+ *     is where a parser points for *unexpected end of input* -- one past the
+ *     last character it read.  That position used to draw nothing at all:
+ *     an empty range, dropped, so the commonest syntax error had a mark in the
+ *     gutter and no word underlined;
+ *   - an empty line underlines the last character of the nearest line above
+ *     that has one, the same answer for the same error when the file ends
+ *     with a line break (`CheckSource` then says line N+1, column 1).
+ *
+ * False when there is nothing to underline: an empty line with only empty
+ * lines above it.
+ */
+static bool diagnostic_range(GtkTextBuffer *buf, int32_t line, int32_t column,
+                             int32_t length, GtkTextIter *a, GtkTextIter *b)
+{
+    GtkTextIter start, end;
+
+    bta_text_iter_at_line(buf, &start, line);
+    end = diag_line_end(start);
+
+    while (gtk_text_iter_get_line_offset(&end) == 0 &&
+           gtk_text_iter_get_line(&start) > 0) {
+        gtk_text_iter_backward_line(&start);
+        end    = diag_line_end(start);
+        column = G_MAXINT32;            /* the last character of that one */
+    }
+
+    int len = gtk_text_iter_get_line_offset(&end);
+
+    if (len == 0)
+        return false;
+
+    if (column - 1 >= len) {
+        *b = end;
+        *a = end;
+        gtk_text_iter_backward_char(a);
+        return true;
+    }
+
+    *a = start;
+    gtk_text_iter_forward_chars(a, column - 1);
+    *b = *a;
+    if (length >= len - (column - 1))
+        *b = end;
+    else
+        gtk_text_iter_forward_chars(b, length);
+    return true;
+}
+
 static JSValue ed_diagnostic(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -1678,13 +1745,7 @@ static JSValue ed_diagnostic(JSContext *ctx, JSValueConst this_val,
     GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
     GtkTextIter    a, b;
 
-    bta_text_iter_at_line(buf, &a, line);
-    if (column > 1)
-        gtk_text_iter_forward_chars(&a, column - 1);
-    b = a;
-    gtk_text_iter_forward_chars(&b, length);
-
-    if (gtk_text_iter_equal(&a, &b)) {
+    if (!diagnostic_range(buf, line, column, length, &a, &b)) {
         JS_FreeCString(ctx, text);
         JS_FreeCString(ctx, name);
         return JS_UNDEFINED;
@@ -1717,11 +1778,13 @@ static JSValue ed_diagnostic(JSContext *ctx, JSValueConst this_val,
      * before the diagnostic is freed. */
     g_object_ref(tag);
 
+    /* What was underlined, not what was asked -- the answer `Diagnostics()`
+     * falls back on once the text under the tag is gone (`diag_extent`). */
     BtaDiagnostic *d = g_new0(BtaDiagnostic, 1);
     d->tag    = tag;
-    d->line   = line;
-    d->column = column;
-    d->length = length;
+    d->line   = gtk_text_iter_get_line(&a) + 1;
+    d->column = gtk_text_iter_get_line_offset(&a) + 1;
+    d->length = gtk_text_iter_get_offset(&b) - gtk_text_iter_get_offset(&a);
     d->kind   = g_strdup(kind);
     d->text   = g_strdup(text);
 
@@ -1767,9 +1830,38 @@ static JSValue ed_clear_diagnostics(JSContext *ctx, JSValueConst this_val,
 
 /*
  * Diagnostics([kind]) -- `[{ Line, Column, Length, Kind, Text }]`, in the order
- * they were added. The reader that makes an underline assertable instead of a
- * flag that reads back while nothing was drawn.
+ * they were added, as the buffer holds them now (see `diag_extent`). The reader that
+ * makes an underline assertable instead of a flag that reads back while
+ * nothing was drawn.
  */
+/*
+ * Where the tag really is: the buffer's own record of the range, read by its
+ * toggles, so a reader asserts what is drawn -- and follows the text when it
+ * was edited since.  What was stored when it was added answers for a tag
+ * whose text has been deleted out from under it.
+ */
+static void diag_extent(GtkTextBuffer *buf, const BtaDiagnostic *d,
+                        int *line, int *column, int *length)
+{
+    GtkTextIter a, b;
+
+    *line   = d->line;
+    *column = d->column;
+    *length = d->length;
+
+    gtk_text_buffer_get_start_iter(buf, &a);
+    if (!gtk_text_iter_starts_tag(&a, d->tag) &&
+        !gtk_text_iter_forward_to_tag_toggle(&a, d->tag))
+        return;
+
+    b = a;
+    gtk_text_iter_forward_to_tag_toggle(&b, d->tag);
+
+    *line   = gtk_text_iter_get_line(&a) + 1;
+    *column = gtk_text_iter_get_line_offset(&a) + 1;
+    *length = gtk_text_iter_get_offset(&b) - gtk_text_iter_get_offset(&a);
+}
+
 static JSValue ed_diagnostics(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
@@ -1781,7 +1873,8 @@ static JSValue ed_diagnostics(JSContext *ctx, JSValueConst this_val,
     if (diagnostic_filter(ctx, argc, argv, 0, &kind) < 0)
         return JS_EXCEPTION;
 
-    GPtrArray *all = diagnostics_of(GTK_TEXT_BUFFER(buffer_of(w)), false);
+    GtkTextBuffer *buf = GTK_TEXT_BUFFER(buffer_of(w));
+    GPtrArray     *all = diagnostics_of(buf, false);
 
     JSValue  out = JS_NewArray(ctx);
     uint32_t n   = 0;
@@ -1792,10 +1885,14 @@ static JSValue ed_diagnostics(JSContext *ctx, JSValueConst this_val,
         if (kind && strcmp(kind, d->kind))
             continue;
 
+        int line, column, length;
+
+        diag_extent(buf, d, &line, &column, &length);
+
         JSValue row = JS_NewObject(ctx);
-        JS_SetPropertyStr(ctx, row, "Line",   JS_NewInt32(ctx, d->line));
-        JS_SetPropertyStr(ctx, row, "Column", JS_NewInt32(ctx, d->column));
-        JS_SetPropertyStr(ctx, row, "Length", JS_NewInt32(ctx, d->length));
+        JS_SetPropertyStr(ctx, row, "Line",   JS_NewInt32(ctx, line));
+        JS_SetPropertyStr(ctx, row, "Column", JS_NewInt32(ctx, column));
+        JS_SetPropertyStr(ctx, row, "Length", JS_NewInt32(ctx, length));
         JS_SetPropertyStr(ctx, row, "Kind",   JS_NewString(ctx, d->kind));
         JS_SetPropertyStr(ctx, row, "Text",   JS_NewString(ctx, d->text));
         JS_SetPropertyUint32(ctx, out, n++, row);
@@ -2915,8 +3012,12 @@ static const JSCFunctionListEntry source_props[] = {
      *   underlines `length` characters from `column` on `line` — both 1-based,
      *   as `Select` and `GotoLine` count — with `kind` `Error` `Warning` or
      *   `Info`, and shows `text` in a tooltip where the pointer rests on it.
-     *   The range moves with the text; **clear and add them again after an
-     *   edit**, as `Live` does on its pause. Several may share a line
+     *   **It stays on its line**: a length past the end stops there, a
+     *   column at or past the end underlines the last character (where a
+     *   parser points for *unexpected end*), and an empty line the last
+     *   character above it. The range moves with the text; **clear and add
+     *   them again after an edit**, as `Live` does on its pause. Several may
+     *   share a line
      */
     JS_CFUNC_DEF("Diagnostic", 5, ed_diagnostic),
     /* ClearDiagnostics([kind])
@@ -2925,8 +3026,9 @@ static const JSCFunctionListEntry source_props[] = {
     JS_CFUNC_DEF("ClearDiagnostics", 1, ed_clear_diagnostics),
     /* Diagnostics([kind])
      *   **a record per diagnostic**, in the order added: `{ Line, Column,
-     *   Length, Kind, Text }`. The reader that makes an underline assertable,
-     *   as `Marks` does for the gutter
+     *   Length, Kind, Text }` — the range **underlined**, after it was kept
+     *   to its line, which is not always the one asked for. The reader that
+     *   makes an underline assertable, as `Marks` does for the gutter
      */
     JS_CFUNC_DEF("Diagnostics", 1, ed_diagnostics),
     /* FoldRanges
