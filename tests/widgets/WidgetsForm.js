@@ -27351,6 +27351,44 @@ class Form1 extends Form {
                     { Cancellable: stop, Timeout: 5000 });
         });
 
+        /* The shared token is one way: it stops every task holding it, but
+         * one task's Timeout or Stop ends that task alone and leaves the token
+         * as it was.  Three tasks on one token -- `a` times out, `c` is stopped,
+         * and `b` must last until the token itself is raised. */
+        steps.push(() => {
+            const all = new Cancellable();
+            const a   = new TaskWork();
+            const b   = new TaskWork();
+            const c   = new TaskWork();
+            let   raised = false;
+
+            for (const t of [a, b, c])
+                t.Done = () => fail("a task on an unraised token must not reach Done");
+            a.Error = (m) => {
+                check("one task's Timeout ends it",
+                      String(m).includes("timed out"), String(m));
+                eq("...and leaves the shared token unraised", all.Cancelled, false);
+                c.Stop({ KillAfter: 0 });
+            };
+            c.Error = (m) => {
+                check("one task's Stop ends it",
+                      String(m).includes("cancelled"), String(m));
+                eq("...and leaves the shared token unraised", all.Cancelled, false);
+                raised = true;
+                all.Cancel();
+            };
+            b.Error = (m) => {
+                check("a sibling outlives the others' Timeout and Stop", raised,
+                      String(m));
+                check("...and stops when the token is raised",
+                      String(m).includes("cancelled"), String(m));
+                next();
+            };
+            b.Start({ mode: "cancellable" }, { Cancellable: all, Timeout: 20000 });
+            c.Start({ mode: "cancellable" }, { Cancellable: all, Timeout: 20000 });
+            a.Start({ mode: "cancellable" }, { Cancellable: all, Timeout: 300 });
+        });
+
         steps.push(() => {
             Directory.Make(SCRATCH);
             const t = new TaskWork();

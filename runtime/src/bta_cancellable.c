@@ -2,6 +2,8 @@
  * Cancellable -- a cancellation signal a program can share.
  *
  * The runtime's own `Task.Start` creates one per job and `Stop()` raises it.
+ * A shared one is forwarded into that, one way: raising it stops every task
+ * linked to it, while one task's `Stop` or `Timeout` raises only its own.
  * A program that wants to stop several tasks at once, or a blocking call on
  * its own terms, makes one and hands it over:
  *

@@ -337,10 +337,14 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   compressors, is still only reached between opcodes or by the two-second
   teardown bound. **The operation holds a reference, so the job's cancel
   outlives the job's `Stop` request** -- and the thread that sees the
-  cancellation is the worker, not the caller. A shared `Cancellable` links to
-  the same object, so the worker's `this.Cancellable` and the main thread's
-  token see one state; `task_ending` reads it too, because `Cancel()` sets the
-  flag before it emits the signal (see `docs/notes/task-threads.md`).
+  cancellation is the worker, not the caller. A shared `Cancellable` is forwarded
+  into the job's own, one way: raising it stops every linked task, but a
+  task's `Stop`, `Timeout` or `KillAfter` raises only its own (the first
+  version held the shared one as the job's, so one task's timeout ended its
+  siblings and left the caller's token cancelled). The worker's
+  `this.Cancellable` wraps the shared object itself, so both sides see one
+  state; `task_ending` reads both, because `Cancel()` sets the flag before it
+  emits the signal (see `docs/notes/task-threads.md`).
 - **A borrowed string from the catalogue can die inside the call that formats
   it.** `bta_locale_lookup` returns a pointer into this thread's `L.entries`,
   and `bta_locale_format` calls `JS_ToCString` on the arguments before it walks
