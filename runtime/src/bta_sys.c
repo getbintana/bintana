@@ -2532,6 +2532,32 @@ static void exec_wait_guard_free(GSource *src)
  * async boundary, nothing for bta_sys_cleanup() to free.  Which is the whole of
  * why it is short.
  */
+/* `{ Cancellable }` on Wait: borrowed, or NULL when absent. */
+static bool exec_wait_cancellable(JSContext *ctx, JSValueConst opts,
+                                  GCancellable **out)
+{
+    *out = NULL;
+    if (!JS_IsObject(opts))
+        return true;
+
+    JSValue v = JS_GetPropertyStr(ctx, opts, "Cancellable");
+
+    if (JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return true;
+    }
+
+    GCancellable *cancel = bta_cancellable_get(ctx, v);
+
+    JS_FreeValue(ctx, v);
+    if (!cancel) {
+        JS_ThrowTypeError(ctx, "Exec.Wait: Cancellable is not a Cancellable");
+        return false;
+    }
+    *out = cancel;
+    return true;
+}
+
 static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -2551,6 +2577,10 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
             "Exec.Wait(argv, [options]): the second argument is the options "
             "object -- Wait takes no callbacks, it answers with a record");
     }
+
+    GCancellable *opt_cancel = NULL;
+    if (!exec_wait_cancellable(ctx, opts, &opt_cancel))
+        return JS_EXCEPTION;
 
     GBytes *input = NULL;
     if (!exec_wait_input(ctx, opts, &input))
@@ -2634,10 +2664,15 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
      * than waiting for a `Wait` that is already blocked on the child.
      */
     GBytes *stdin_bytes = input ? input : g_bytes_new_static("", 0);
+    GCancellable *task_cancel = bta_task_cancellable(ctx);
+    GCancellable *canc        = g_cancellable_new();
+    /* A local signal linked to the task's and the caller's: the operation's
+     * own guard must not cancel either for the next call. */
+    gulong task_link = bta_cancellable_link(task_cancel, canc);
+    gulong opt_link  = bta_cancellable_link(opt_cancel, canc);
 
     input = NULL;   /* the operation holds its own reference to it */
-    g_subprocess_communicate_async(proc, stdin_bytes,
-                                   bta_task_cancellable(ctx),
+    g_subprocess_communicate_async(proc, stdin_bytes, canc,
                                    on_exec_wait_done, &w);
     g_bytes_unref(stdin_bytes);
 
@@ -2672,6 +2707,12 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
      * ours to end, or a stopped task leaves `sleep 10` behind. */
     if (w.err && g_error_matches(w.err, G_IO_ERROR, G_IO_ERROR_CANCELLED))
         exec_signal_group(proc, pid, true);
+
+    if (task_link)
+        g_cancellable_disconnect(task_cancel, task_link);
+    if (opt_link)
+        g_cancellable_disconnect(opt_cancel, opt_link);
+    g_object_unref(canc);
 
     g_main_context_pop_thread_default(priv);
     g_main_context_unref(priv);

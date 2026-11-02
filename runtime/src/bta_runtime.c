@@ -2498,6 +2498,7 @@ static bool install_globals(BtaApp *app)
     bta_widgets_init(ctx, global);
     bta_menu_init(ctx);
     bta_sys_init(ctx, global);
+    bta_cancellable_init(ctx, global);
     bta_task_init(ctx, global);
     bta_lock_init(ctx, global);
     bta_random_init(ctx, global);

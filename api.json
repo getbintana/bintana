@@ -13522,6 +13522,29 @@
       ]
     },
     {
+      "Name": "Cancellable",
+      "Members": [
+        {
+          "Name": "Cancel",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "raises the signal; idempotent. Every task and blocking call holding it sees `Cancelled` and returns as soon as it can",
+          "Native": true
+        },
+        {
+          "Name": "Cancelled",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "boolean",
+          "Doc": "whether the signal has been raised; read-only",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Clipboard",
       "Members": [
         {

@@ -1269,6 +1269,16 @@ void bta_profile_init(JSContext *ctx, JSValue global);
  * See runtime/src/bta_task.c, which is the whole of it.
  */
 void bta_task_init(JSContext *ctx, JSValue global);
+/* Cancellable: a refcounted GIO signal a program can share between tasks. */
+void bta_cancellable_init(JSContext *ctx, JSValue global);
+/* A JS wrapper around `cancel` (NULL makes a fresh signal). */
+JSValue bta_cancellable_new(JSContext *ctx, GCancellable *cancel);
+/* The GIO signal behind a JS value, or NULL when it is not a Cancellable.
+ * Borrowed. */
+GCancellable *bta_cancellable_get(JSContext *ctx, JSValueConst v);
+/* Chain two GIO signals: `to` is cancelled when `from` is.  Answer the handler
+ * id for `g_cancellable_disconnect`, or 0. */
+gulong bta_cancellable_link(GCancellable *from, GCancellable *to);
 /* True when this context runs inside a worker thread. Widgets (and anything
  * else that touches GTK) ask this before constructing, because GTK off the
  * main thread is a crash and not an error. */

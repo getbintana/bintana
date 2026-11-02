@@ -27156,6 +27156,15 @@ class Form1 extends Form {
         first.Stop({ KillAfter: 0 });
         Task.Max(wasMax);
 
+        /* A token is a value: idempotent, and refused where a task expects it. */
+        const token = new Cancellable();
+        eq("a new Cancellable is not cancelled", token.Cancelled, false);
+        token.Cancel();
+        token.Cancel();
+        eq("...and Cancel is idempotent", token.Cancelled, true);
+        throws("Task.Start refuses something that is not a Cancellable",
+               () => new TaskWork().Start({}, { Cancellable: {} }));
+
         /*
          * The asynchronous half, as a list of steps rather than a pyramid.
          *
@@ -27321,6 +27330,37 @@ class Form1 extends Form {
                 next();
             };
             t.Start({ mode: "process" });
+        });
+
+        steps.push(() => {
+            const stop = new Cancellable();
+            const t    = new TaskWork();
+
+            t.Progress = (p) => {
+                check("the task sees the Start token", p.ready === true);
+                stop.Cancel();
+            };
+            t.Done  = () => fail("a cancelled token must not reach Done");
+            t.Error = (m) => {
+                check("a shared Cancellable stops the task",
+                      String(m).includes("cancelled"), String(m));
+                eq("...and the main thread reads it cancelled", stop.Cancelled, true);
+                next();
+            };
+            t.Start({ mode: "cancellable" },
+                    { Cancellable: stop, Timeout: 5000 });
+        });
+
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`own token errored: ${m}`);
+            t.Done  = (r) => {
+                check("a task passes its own Cancellable to Exec.Wait",
+                      String(r.said).includes("cancel"), r.said);
+                next();
+            };
+            t.Start({ mode: "own-token" });
         });
 
         steps.push(() => {

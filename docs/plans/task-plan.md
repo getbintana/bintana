@@ -307,6 +307,10 @@ a thread — nobody has one, and everybody who offered withdrew it (`Thread.Abor
 blocked call returns `G_IO_ERROR_CANCELLED` instead of not returning.
 
 Each `BtaTaskJob` owns one, and `Stop`, `Timeout` and `KillAfter` cancel it.
+A program can also start a task with its own [`Cancellable`](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/globals/Cancellable.md):
+the job holds that signal instead of a fresh one, `this.Cancellable` inside
+`Run` wraps the same object, and `Cancel()` asks the task to stop exactly as
+`Stop()` does -- cooperative, without a `KillAfter` of its own.
 The calls that take it now:
 
 | Verb | What it calls | |

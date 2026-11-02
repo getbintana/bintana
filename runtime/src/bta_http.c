@@ -2667,6 +2667,32 @@ static gboolean on_http_wait_late(gpointer data)
     return G_SOURCE_REMOVE;
 }
 
+/* `{ Cancellable }` on a Wait, borrowed; absent is fine. */
+static bool http_wait_cancellable(JSContext *ctx, JSValueConst opts,
+                                  const char *who, GCancellable **out)
+{
+    *out = NULL;
+    if (!JS_IsObject(opts))
+        return true;
+
+    JSValue v = JS_GetPropertyStr(ctx, opts, "Cancellable");
+
+    if (JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return true;
+    }
+
+    GCancellable *cancel = bta_cancellable_get(ctx, v);
+
+    JS_FreeValue(ctx, v);
+    if (!cancel) {
+        JS_ThrowTypeError(ctx, "%s: Cancellable is not a Cancellable", who);
+        return false;
+    }
+    *out = cancel;
+    return true;
+}
+
 /* Blocking sibling: the same message, sent with nobody to call back. */
 static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
                          const char *method, const char *url,
@@ -2711,6 +2737,13 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         return JS_ThrowRangeError(ctx, "%s: Timeout %d is negative", who, timeout);
     }
 
+    GCancellable *opt_cancel = NULL;
+    if (!http_wait_cancellable(ctx, opts, who, &opt_cancel)) {
+        g_object_unref(msg);
+        http_tls_unref(tls);
+        return JS_EXCEPTION;
+    }
+
     /* A context of this call's own: iterating the default one would run the
      * application's handlers inside the wait (DoEvents). Pushed before the
      * send -- the task takes the thread-default when it is made. */
@@ -2722,10 +2755,8 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     GCancellable *canc        = g_cancellable_new();
     /* A local one, linked to the task's: the operation's own Timeout must not
      * cancel the job for the next call, while Stop must reach this flight. */
-    gulong        linked      = task_cancel
-        ? g_cancellable_connect(task_cancel, G_CALLBACK(g_cancellable_cancel),
-                                canc, NULL)
-        : 0;
+    gulong        linked      = bta_cancellable_link(task_cancel, canc);
+    gulong        opt_link    = bta_cancellable_link(opt_cancel, canc);
     HttpWaitState w = { false, NULL, NULL, NULL };
     bool jar_borrowed = false;
 
@@ -2768,6 +2799,8 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     g_main_context_unref(priv);
     if (linked)
         g_cancellable_disconnect(task_cancel, linked);
+    if (opt_link)
+        g_cancellable_disconnect(opt_cancel, opt_link);
     g_object_unref(canc);
     if (jar_borrowed && c->jar)
         soup_session_remove_feature(sess, SOUP_SESSION_FEATURE(c->jar));

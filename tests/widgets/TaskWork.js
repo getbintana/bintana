@@ -297,6 +297,26 @@ class TaskWork extends Task {
             return { status: r.Status, body: r.Body.ToText() };
         }
 
+        /* A token made inside the task is accepted by a blocking call. */
+        if (msg.mode === "own-token") {
+            const c = new Cancellable();
+            let   said = "";
+
+            c.Cancel();
+            try { Exec.Wait(["/bin/sh", "-c", "sleep 10"], { Cancellable: c }); }
+            catch (e) { said = e.message; }
+            return { said: said };
+        }
+
+        /* The Start token, visible inside `Run` as the same signal. */
+        if (msg.mode === "cancellable") {
+            const c = this.Cancellable;
+
+            this.Report({ ready: c instanceof Cancellable });
+            while (!c.Cancelled) { /* the test raises the token */ }
+            return { saw: true };
+        }
+
         /* A child that would outlive the task unless Stop cancels it. */
         if (msg.mode === "block") {
             Exec.Wait(["/bin/sh", "-c", "sleep 10"]);

@@ -179,6 +179,7 @@ struct BtaTaskJob {
     bool       ended;           /* the thread is on its way out, under task_lock */
     GThread   *thread;
     GCancellable *cancel;       /* `Stop`, `Timeout` and `KillAfter` cancel it */
+    gulong     cancel_link;     /* what wakes `stop` when a shared token does */
     guint      timeout_src;
     guint      force_src;       /* the second stage of a Stop */
     long       timeout_ms;
@@ -270,6 +271,8 @@ static void task_job_unref(gpointer data)
     g_free(job->file_text);
     g_free(job->file_path);
     g_free(job->msg_json);
+    if (job->cancel_link)
+        g_cancellable_disconnect(job->cancel, job->cancel_link);
     g_clear_object(&job->cancel);
     g_free(job->app_name);
     g_free(job->app_version);
@@ -326,6 +329,18 @@ GCancellable *bta_task_cancellable(JSContext *ctx)
     BtaTaskEnv *env = task_env(ctx);
 
     return env && env->job ? env->job->cancel : NULL;
+}
+
+/* A shared `Cancellable` was raised: the task is asked to stop, exactly as
+ * `Stop()` asks it.  It does not force the run -- only `Stop` has a
+ * `KillAfter` -- and it leaves a timeout or a forced stop as it found it. */
+static void task_cancelled(GCancellable *cancel, gpointer data)
+{
+    BtaTaskJob *job = data;
+
+    (void)cancel;
+    if (g_atomic_int_get(&job->stop) == 0)
+        g_atomic_int_set(&job->stop, 1);
 }
 
 static JSValue task_start(JSContext *ctx, JSValueConst this_val,
@@ -423,9 +438,25 @@ static JSValue task_construct(JSContext *ctx, JSValueConst new_target,
         return obj;
 
     /* Inside a worker this is the real thing, built by the thread below to run
-     * `Run` on: no handlers, no state, and `Start` refuses there. */
-    if (bta_task_is_worker(ctx))
+     * `Run` on: no handlers, no state, and `Start` refuses there.  The job's
+     * signal is exposed as `this.Cancellable`, wrapping the same
+     * `GCancellable` the main thread's object does. */
+    if (bta_task_is_worker(ctx)) {
+        BtaTaskEnv *env = task_env(ctx);
+
+        if (env && env->job) {
+            JSValue signal = bta_cancellable_new(ctx, env->job->cancel);
+
+            if (JS_IsException(signal) ||
+                JS_DefinePropertyValueStr(ctx, obj, "Cancellable", signal,
+                                          JS_PROP_CONFIGURABLE |
+                                          JS_PROP_ENUMERABLE) < 0) {
+                JS_FreeValue(ctx, obj);
+                return JS_EXCEPTION;
+            }
+        }
         return obj;
+    }
 
     /* Plain values, the way an Exec handle carries its state: what the proxy
      * is doing is read off it, and `__started` is what keeps a Task to one
@@ -1339,6 +1370,7 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     /* Pure computation over a string, and libxml2 is thread-safe per document:
      * parsing a big file off the main thread is what this is for. */
     bta_xml_init(ctx, global);
+    bta_cancellable_init(ctx, global);
     task_install(ctx, global);
     /* The table behind it is process-global, so this is the same `Lock` the
      * main thread holds -- which is the whole point of naming them. */
@@ -1881,6 +1913,34 @@ static bool task_opt_timeout(JSContext *ctx, JSValueConst opts, long *out)
     return true;
 }
 
+/* `{ Cancellable }` on Start: borrowed, ref'd into `*out`.  Absent is fine;
+ * anything else must be a `Cancellable`. */
+static bool task_opt_cancellable(JSContext *ctx, JSValueConst opts,
+                                 GCancellable **out)
+{
+    JSValue v;
+
+    *out = NULL;
+    if (JS_IsUndefined(opts) || JS_IsNull(opts))
+        return true;
+
+    v = JS_GetPropertyStr(ctx, opts, "Cancellable");
+    if (JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return true;
+    }
+
+    GCancellable *cancel = bta_cancellable_get(ctx, v);
+
+    JS_FreeValue(ctx, v);
+    if (!cancel) {
+        JS_ThrowTypeError(ctx, "Task.Start: Cancellable is not a Cancellable");
+        return false;
+    }
+    *out = g_object_ref(cancel);
+    return true;
+}
+
 static JSValue task_start(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv)
 {
@@ -1895,6 +1955,7 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
     BtaApp     *app;
     BtaTaskJob *job;
     char       *msg_json;
+    GCancellable *given = NULL;
 
     if (bta_task_is_worker(ctx))
         return JS_ThrowTypeError(ctx, "Task: a task cannot start another task");
@@ -1958,13 +2019,23 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
         g_free(text);
         return JS_EXCEPTION;
     }
+    if (argc > 1 && !task_opt_cancellable(ctx, argv[1], &given)) {
+        g_free(class_name);
+        g_free(path);
+        g_free(text);
+        g_free(msg_json);
+        return JS_EXCEPTION;
+    }
 
     job = g_new0(BtaTaskJob, 1);
     job->refs       = 1;        /* the live one; sources take their own */
     job->ctx        = ctx;
     job->self       = JS_DupValue(ctx, this_val);
     job->reports    = g_queue_new();
-    job->cancel     = g_cancellable_new();
+    job->cancel     = given ? given : g_cancellable_new();
+    job->cancel_link = g_cancellable_connect(job->cancel,
+                                             G_CALLBACK(task_cancelled),
+                                             job, NULL);
     job->class_name = class_name;
     job->file_text  = text;
     job->file_path  = path;
