@@ -80,7 +80,13 @@ function main() {
     if (components) {
         try {
             const map = File.LoadJson(File.Absolute(components));
-            componentEvents = (type) => map[type] || null;
+            /* `Dictionary.Has`, never `map[type]`: a parsed object answers
+             * for what every object inherits, and a node typed `constructor`
+             * got a function back -- `events.includes` threw, and the file's
+             * check became one false error with its real findings gone.  A
+             * value that is not a list is a malformed entry: nothing is said. */
+            componentEvents = (type) =>
+                Dictionary.Has(map, type) && Array.isArray(map[type]) ? map[type] : null;
         } catch (e) {
             print(`bintana check: cannot read --components: ${e.message}`);
             Application.Quit(2);

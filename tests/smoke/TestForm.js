@@ -530,6 +530,43 @@ class TestForm extends Form {
             check("...naming the limit",
                   tooDeep.Output.includes("nests deeper than 128"), tooDeep.Output);
 
+            /*
+             * **`--components` answers for the components it names, and for
+             * nothing an object inherits.** The map is a parsed JSON object,
+             * and `map[type]` gave a node typed `constructor` a function: the
+             * check threw on it, reported one false error for the file and
+             * lost its real finding -- the `Clik` below.
+             */
+            write("project.json", JSON.stringify({
+                name: "smoke-check", startup: "Main", sources: ["Main.js"],
+            }));
+            write("Main.js",
+                "class Main extends Form {\n" +
+                "    Thing_Click() {}\n" +
+                "    Other_Clik() {}\n" +
+                "}\n");
+            write("Main.form", JSON.stringify({
+                format: "bintana-form/1", class: "Main",
+                children: [
+                    { type: "constructor", name: "Thing", properties: {} },
+                    { type: "Stepper",     name: "Other", properties: {} },
+                ],
+            }));
+            const comps = File.Join(dir, "components.json");
+            for (const [what, map] of [
+                ["a component's events", { Stepper: ["Change", "Click"] }],
+                ["an entry that is not a list beside it",
+                 { Stepper: ["Change", "Click"], constructor: "Click" }],
+            ]) {
+                File.Save(comps, JSON.stringify(map));
+                const res = run("--components", comps, dir);
+                eq(`with ${what}, a type named like Object's own is no error`,
+                   res.ExitCode, 0);
+                check("...and the file's real finding is still said",
+                      res.Output.includes("Stepper does not raise Clik"), res.Output);
+            }
+            File.Delete(comps);
+
             /* A clean project says nothing at all. */
             write("project.json", JSON.stringify({
                 name: "smoke-check", main: "Go", sources: ["Go.js"],
