@@ -1074,6 +1074,8 @@ void bta_plugins_cleanup(BtaApp *app);
 
 /* --- Http ------------------------------------------------------------- */
 void  bta_http_init(JSContext *ctx, JSValue global);
+/* A worker's `Http`: the blocking verbs only, on a session of this thread. */
+void  bta_http_init_worker(JSContext *ctx, JSValue global);
 void  bta_http_cleanup(void);   /* cancels requests still in flight */
 guint bta_http_pending(void);   /* requests owed an answer */
 
@@ -1145,6 +1147,10 @@ void bta_a11y_walk(GtkWidget *wd, int depth, void (*fn)(GtkWidget *, gpointer),
 
 /* --- File / Dir / Exec -------------------------------------------------- */
 void bta_sys_init(JSContext *ctx, JSValue global);
+/* The same `Environment` without `Set` and without the `CurrentDirectory`
+ * setter; the directory it answers is the one at the call.  A worker calls this
+ * after `bta_sys_init`. */
+void bta_sys_env_readonly(JSContext *ctx, JSValue global);
 /* Where this binary is -- `/proc/self/exe` or `GetModuleFileName`, one answer
  * for the two callers that need it (`Application.Executable` and the library
  * search). Newly allocated, or NULL where the platform will not say. */

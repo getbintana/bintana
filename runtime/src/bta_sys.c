@@ -2795,16 +2795,26 @@ static JSValue sys_clear_timer(JSContext *ctx, JSValueConst this_val,
  * because it belongs to the application and not to the system, and quitting,
  * which is `Application.Quit` for the same reason.
  */
+/* `g_getenv` and `g_setenv` are not safe against each other; a worker reads
+ * while the main thread can still write, so the two share this lock. */
+static GMutex env_lock;
+
 static JSValue env_get(JSContext *ctx, JSValueConst this_val,
                        int argc, JSValueConst *argv)
 {
     const char *name = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    JSValue     out;
+
     if (!name)
         return JS_ThrowTypeError(ctx, "Environment.Get(name) expects a name");
 
+    g_mutex_lock(&env_lock);
     const char *value = g_getenv(name);
+    out = value ? JS_NewString(ctx, value) : JS_NULL;
+    g_mutex_unlock(&env_lock);
+
     JS_FreeCString(ctx, name);
-    return value ? JS_NewString(ctx, value) : JS_NULL;
+    return out;
 }
 
 /*
@@ -2819,20 +2829,31 @@ static JSValue env_set(JSContext *ctx, JSValueConst this_val,
                        int argc, JSValueConst *argv)
 {
     const char *name = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *value = NULL;
+    bool        remove;
+
     if (!name)
         return JS_ThrowTypeError(ctx, "Environment.Set(name, value) expects a name");
 
-    if (argc < 2 || JS_IsNull(argv[1]) || JS_IsUndefined(argv[1])) {
-        g_unsetenv(name);
-    } else {
-        const char *value = JS_ToCString(ctx, argv[1]);
+    /* Converted before the lock: `JS_ToCString` may run a `toString`. */
+    remove = argc < 2 || JS_IsNull(argv[1]) || JS_IsUndefined(argv[1]);
+    if (!remove) {
+        value = JS_ToCString(ctx, argv[1]);
         if (!value) {
             JS_FreeCString(ctx, name);
             return JS_EXCEPTION;
         }
-        g_setenv(name, value, TRUE);
-        JS_FreeCString(ctx, value);
     }
+
+    g_mutex_lock(&env_lock);
+    if (remove)
+        g_unsetenv(name);
+    else
+        g_setenv(name, value, TRUE);
+    g_mutex_unlock(&env_lock);
+
+    if (value)
+        JS_FreeCString(ctx, value);
     JS_FreeCString(ctx, name);
     return JS_UNDEFINED;
 }
@@ -2841,9 +2862,10 @@ static JSValue env_set(JSContext *ctx, JSValueConst this_val,
  * where it ran, and a fresh copy each time because `Set` moves underneath it. */
 static JSValue env_variables(JSContext *ctx, JSValueConst this_val)
 {
-    char  **all = g_get_environ();
     JSValue out = JS_NewObject(ctx);
 
+    g_mutex_lock(&env_lock);
+    char **all = g_get_environ();
     for (int i = 0; all && all[i]; i++) {
         char *eq = strchr(all[i], '=');
         if (!eq)
@@ -2852,6 +2874,7 @@ static JSValue env_variables(JSContext *ctx, JSValueConst this_val)
         JS_SetPropertyStr(ctx, out, all[i], JS_NewString(ctx, eq + 1));
     }
     g_strfreev(all);
+    g_mutex_unlock(&env_lock);
     return out;
 }
 
@@ -2901,10 +2924,13 @@ static JSValue env_has_display(JSContext *ctx, JSValueConst this_val)
      * question must not go looking for Xvfb. */
     return JS_TRUE;
 #else
+    g_mutex_lock(&env_lock);
     const char *x11     = g_getenv("DISPLAY");
     const char *wayland = g_getenv("WAYLAND_DISPLAY");
+    bool        has     = (x11 && *x11) || (wayland && *wayland);
 
-    return JS_NewBool(ctx, (x11 && *x11) || (wayland && *wayland));
+    g_mutex_unlock(&env_lock);
+    return JS_NewBool(ctx, has);
 #endif
 }
 
@@ -4203,6 +4229,39 @@ static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
 }
 
 /* ------------------------------------------------------------------ init */
+
+/*
+ * The same `Environment`, with the two doors that change the process taken
+ * off: `Set` and the `CurrentDirectory` setter.  A worker reads what it was
+ * started with -- and `CurrentDirectory` is the one fact that is snapshotted
+ * rather than live, because a `chdir` on the main thread is process state the
+ * worker must not follow halfway through a relative path.
+ */
+void bta_sys_env_readonly(JSContext *ctx, JSValue global)
+{
+    JSValue env = JS_GetPropertyStr(ctx, global, "Environment");
+    JSAtom  atom;
+
+    if (!JS_IsObject(env)) {
+        JS_FreeValue(ctx, env);
+        return;
+    }
+
+    atom = JS_NewAtom(ctx, "Set");
+    JS_DeleteProperty(ctx, env, atom, 0);
+    JS_FreeAtom(ctx, atom);
+
+    atom = JS_NewAtom(ctx, "CurrentDirectory");
+    JS_DeleteProperty(ctx, env, atom, 0);
+    JS_FreeAtom(ctx, atom);
+
+    char *cwd = g_get_current_dir();
+    JS_DefinePropertyValueStr(ctx, env, "CurrentDirectory",
+                              JS_NewString(ctx, cwd),
+                              JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    g_free(cwd);
+    JS_FreeValue(ctx, env);
+}
 
 void bta_sys_init(JSContext *ctx, JSValue global)
 {

@@ -25,6 +25,25 @@
 static SoupSession *http_default_session = NULL;
 static SoupSession *http_default_sync_session = NULL;
 
+/* A worker's blocking calls get a session of their own: the process-global
+ * one is shared with the main thread, and a `SoupSession` is not thread-safe.
+ * Lazy, and freed with the thread that made it. */
+static GPrivate http_worker_sync_key = G_PRIVATE_INIT(g_object_unref);
+
+static SoupSession *http_sync_session(JSContext *ctx)
+{
+    if (!bta_task_is_worker(ctx))
+        return http_default_sync_session;
+
+    SoupSession *sess = g_private_get(&http_worker_sync_key);
+
+    if (!sess) {
+        sess = soup_session_new();
+        g_private_set(&http_worker_sync_key, sess);
+    }
+    return sess;
+}
+
 /*
  * What a client was told to trust besides the system's store.
  *
@@ -3366,7 +3385,7 @@ static JSValue js_http_requestwait(JSContext *ctx, JSValueConst this_val,
 
     if (!method)
         return JS_EXCEPTION;
-    JSValue r = http_wait_call(ctx, NULL, http_default_sync_session, method, true,
+    JSValue r = http_wait_call(ctx, NULL, http_sync_session(ctx), method, true,
                                argc - 1, argv + 1, "Http.RequestWait");
 
     g_free(method);
@@ -3376,14 +3395,14 @@ static JSValue js_http_requestwait(JSContext *ctx, JSValueConst this_val,
 static JSValue js_http_getwait(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
-    return http_wait_call(ctx, NULL, http_default_sync_session, "GET", false,
+    return http_wait_call(ctx, NULL, http_sync_session(ctx), "GET", false,
                           argc, argv, "Http.GetWait");
 }
 
 static JSValue js_http_postwait(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv)
 {
-    return http_wait_call(ctx, NULL, http_default_sync_session, "POST", true,
+    return http_wait_call(ctx, NULL, http_sync_session(ctx), "POST", true,
                           argc, argv, "Http.PostWait");
 }
 
@@ -3421,7 +3440,7 @@ static JSValue js_http_head(JSContext *ctx, JSValueConst this_val,
 static JSValue js_http_verbwait(JSContext *ctx, int argc, JSValueConst *argv,
                                 const char *method, bool takes_body, const char *who)
 {
-    return http_wait_call(ctx, NULL, http_default_sync_session, method, takes_body,
+    return http_wait_call(ctx, NULL, http_sync_session(ctx), method, takes_body,
                           argc, argv, who);
 }
 
@@ -3447,6 +3466,34 @@ static JSValue js_http_headwait(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv)
 {
     return js_http_verbwait(ctx, argc, argv, "HEAD", false, "Http.HeadWait");
+}
+
+/*
+ * What a worker gets: the blocking spelling, and only it.  Each call runs on
+ * the thread's own `SoupSession` (`http_sync_session`), because the global one
+ * belongs to the main thread.  The callback verbs attach sources to the loop,
+ * which is the rule a worker cannot break; `Http.Client` would hand out that
+ * same unsafe surface, so it is not here either.
+ */
+static const JSCFunctionListEntry http_worker_props[] = {
+    JS_CFUNC_DEF("RequestWait", 4, js_http_requestwait),
+    JS_CFUNC_DEF("GetWait",     2, js_http_getwait),
+    JS_CFUNC_DEF("PostWait",    3, js_http_postwait),
+    JS_CFUNC_DEF("PutWait",     3, js_http_putwait),
+    JS_CFUNC_DEF("PatchWait",   3, js_http_patchwait),
+    JS_CFUNC_DEF("DeleteWait",  2, js_http_deletewait),
+    JS_CFUNC_DEF("HeadWait",    2, js_http_headwait),
+};
+
+void bta_http_init_worker(JSContext *ctx, JSValue global)
+{
+    http_multipart_init(ctx, global);
+
+    JSValue http = JS_NewObject(ctx);
+
+    JS_SetPropertyFunctionList(ctx, http, http_worker_props,
+                               G_N_ELEMENTS(http_worker_props));
+    JS_SetPropertyStr(ctx, global, "Http", http);
 }
 
 static JSValue js_http_server(JSContext *ctx, JSValueConst this_val,
@@ -5065,6 +5112,11 @@ void bta_http_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, global, "Multipart",
                       JS_NewCFunction2(ctx, http_missing_construct, "Multipart", 0,
                                        JS_CFUNC_constructor, 0));
+}
+
+void bta_http_init_worker(JSContext *ctx, JSValue global)
+{
+    bta_http_init(ctx, global);   /* every name refuses with the package */
 }
 
 guint bta_http_pending(void)

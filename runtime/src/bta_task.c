@@ -113,6 +113,7 @@
  * `$decimal` *is* a decimal -- own it explicitly and nothing collides with it
  * by accident. */
 #define TASK_DEC_TAG "$decimal"
+#define TASK_BYTES_TAG "$bytes"
 
 /* ------------------------------------------------------------------ mode */
 
@@ -124,6 +125,8 @@
 static GMutex task_lock;
 static GList *task_rts;
 static GList *task_jobs;
+/* The live-task ceiling, `Task.Max`; 0 is no limit.  Main thread only. */
+static gint task_limit;
 
 /* Signalled by a worker on its way out, waited on by teardown.  `g_thread_join`
  * has no bounded form, and a join that cannot end is how a program stops
@@ -349,6 +352,34 @@ static const JSCFunctionListEntry task_props[] = {
     JS_CGETSET_DEF("Stopping", task_get_stopping, NULL),
 };
 
+static JSValue task_max(JSContext *ctx, JSValueConst this_val,
+                        int argc, JSValueConst *argv)
+{
+    if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+        int32_t n = 0;
+
+        if (!JS_IsNumber(argv[0]) || JS_ToInt32(ctx, &n, argv[0]) < 0)
+            return JS_ThrowTypeError(ctx, "Task.Max is a whole number of tasks, "
+                                          "0 for no limit");
+        if (n < 0)
+            return JS_ThrowRangeError(ctx, "Task.Max cannot be negative; 0 "
+                                           "means no limit");
+        task_limit = n;
+    }
+    return JS_NewInt32(ctx, task_limit);
+}
+
+static const JSCFunctionListEntry task_statics[] = {
+    /* Max([limit]) -> number
+     *   the most tasks alive at once, `0` (the default) for no limit. A `Start`
+     *   over it is refused rather than queued; the program waits for an answer
+     *   or raises it. With no argument it answers the ceiling; with one it sets
+     *   it and answers the new value. One thread and one runtime per task is
+     *   what makes a ceiling worth having
+     */
+    JS_CFUNC_DEF("Max", 1, task_max),
+};
+
 static JSValue task_construct(JSContext *ctx, JSValueConst new_target,
                               int argc, JSValueConst *argv)
 {
@@ -420,6 +451,9 @@ static void task_install(JSContext *ctx, JSValue global)
     ctor = JS_NewCFunction2(ctx, task_construct, "Task", 0,
                             JS_CFUNC_constructor, 0);
     JS_SetConstructor(ctx, ctor, proto);
+    if (!bta_task_is_worker(ctx))
+        JS_SetPropertyFunctionList(ctx, ctor, task_statics,
+                                   G_N_ELEMENTS(task_statics));
     JS_SetPropertyStr(ctx, global, "Task", ctor);
 }
 
@@ -651,8 +685,9 @@ typedef struct {
  * sentence; this only answers. */
 static bool task_check(JSContext *ctx, TaskWalk *w, JSValueConst v)
 {
-    bool  ok = true;
-    void *ptr;
+    bool   ok = true;
+    void  *ptr;
+    size_t blen = 0;
 
     if (w->depth > 200)
         return false;
@@ -670,6 +705,11 @@ static bool task_check(JSContext *ctx, TaskWalk *w, JSValueConst v)
 
     /* A decimal is terminal: it crosses as its own digits. */
     if (task_is_dec(ctx, w->dec_proto, v))
+        return true;
+
+    /* Bytes travel as base64 under the tag below; the pointer is only the
+     * yes/no here, and the shadow walk reads them for real. */
+    if (bta_bytes_get(v, &blen))
         return true;
 
     ptr = JS_VALUE_GET_PTR(v);
@@ -757,6 +797,7 @@ static JSValue task_shadow(JSContext *ctx, JSValueConst dec_proto,
 {
     JSPropertyEnum *tab = NULL;
     uint32_t        len = 0;
+    size_t          blen = 0;
     JSValue         out;
 
     if (JS_IsArray(v)) {
@@ -780,6 +821,22 @@ static JSValue task_shadow(JSContext *ctx, JSValueConst dec_proto,
         }
         return out;
     }
+
+    const uint8_t *data = bta_bytes_get(v, &blen);
+
+    if (data) {
+        char   *b64 = g_base64_encode(data, blen);
+        JSValue tag = JS_NewObject(ctx);
+
+        if (JS_IsException(tag)) {
+            g_free(b64);
+            return tag;
+        }
+        JS_SetPropertyStr(ctx, tag, TASK_BYTES_TAG, JS_NewString(ctx, b64));
+        g_free(b64);
+        return tag;
+    }
+
     if (!JS_IsObject(v))
         return JS_DupValue(ctx, v);
 
@@ -838,10 +895,11 @@ static char *task_pack(JSContext *ctx, JSValueConst v)
     w.dec_proto = dec_proto;
     if (!task_check(ctx, &w, v)) {
         JS_ThrowTypeError(ctx, "Task: messages carry plain data -- objects, "
-                               "arrays, strings, numbers, booleans, null and "
-                               "decimals.  Functions, class instances, cycles, "
-                               "`undefined` and `Bytes` do not cross; a Record "
-                               "crosses as what Serialize writes");
+                               "arrays, strings, numbers, booleans, null, "
+                               "decimals and Bytes.  Functions, class "
+                               "instances, cycles and `undefined` do not "
+                               "cross; a Record crosses as what Serialize "
+                               "writes");
         goto done;
     }
 
@@ -886,8 +944,30 @@ static JSValue task_revive(JSContext *ctx, JSValueConst dec_ctor, JSValue v)
         return v;
 
     if (!JS_IsArray(v)) {
-        JSValue tagged = JS_GetPropertyStr(ctx, v, TASK_DEC_TAG);
+        JSValue tagged = JS_GetPropertyStr(ctx, v, TASK_BYTES_TAG);
 
+        if (JS_IsString(tagged)) {
+            const char *b64 = JS_ToCString(ctx, tagged);
+            gsize       n   = 0;
+            guchar     *data;
+            JSValue     bytes;
+
+            if (!b64) {
+                JS_FreeValue(ctx, tagged);
+                JS_FreeValue(ctx, v);
+                return JS_EXCEPTION;
+            }
+            data = g_base64_decode(b64, &n);
+            bytes = bta_bytes_new(ctx, data, n);
+            g_free(data);
+            JS_FreeCString(ctx, b64);
+            JS_FreeValue(ctx, tagged);
+            JS_FreeValue(ctx, v);
+            return bytes;
+        }
+        JS_FreeValue(ctx, tagged);
+
+        tagged = JS_GetPropertyStr(ctx, v, TASK_DEC_TAG);
         if (JS_IsString(tagged)) {
             JSValue dec = JS_CallConstructor(ctx, dec_ctor, 1,
                                              (JSValueConst *)&tagged);
@@ -1053,6 +1133,64 @@ static void task_delete(JSContext *ctx, JSValue global, const char *name)
     }
 }
 
+/*
+ * `Settings` is rad.js's, built on `File` and `Application.ConfigDirectory`.
+ * A worker may read it -- `Get`, `Has`, `Keys` -- but `Set` would rewrite the
+ * whole file from this runtime's own cache, and the main thread's changes
+ * between the two reads would be lost.  The value goes back in `Report`/
+ * `Done`, and the main thread saves it.
+ */
+static JSValue task_settings_write(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv)
+{
+    return JS_ThrowTypeError(ctx, "Settings: a task cannot write settings -- "
+                                  "report the value and let the main thread "
+                                  "save it");
+}
+
+static void task_settings_readonly(JSContext *ctx, JSValue global)
+{
+    static const char *const writers[] = { "Set", "Delete", "Clear" };
+    JSValue settings = JS_GetPropertyStr(ctx, global, "Settings");
+
+    if (JS_IsObject(settings)) {
+        for (size_t i = 0; i < G_N_ELEMENTS(writers); i++) {
+            JSAtom atom = JS_NewAtom(ctx, writers[i]);
+
+            JS_SetProperty(ctx, settings, atom,
+                           JS_NewCFunction(ctx, task_settings_write,
+                                           writers[i], 2));
+            JS_FreeAtom(ctx, atom);
+        }
+    }
+    JS_FreeValue(ctx, settings);
+}
+
+/* `Exec` in a worker is `Exec.Wait` and nothing else: the callback spelling
+ * attaches its sources to the main loop, which is the one thing a worker keeps
+ * its hands off.  The call itself says so rather than being undefined. */
+static JSValue task_exec_async(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    return JS_ThrowTypeError(ctx, "Exec: a task takes no callbacks -- use "
+                                  "Exec.Wait, which runs and answers");
+}
+
+static void task_exec_wait_only(JSContext *ctx, JSValue global)
+{
+    JSValue exec = JS_GetPropertyStr(ctx, global, "Exec");
+    JSValue wait = JS_IsObject(exec) ? JS_GetPropertyStr(ctx, exec, "Wait")
+                                     : JS_UNDEFINED;
+    JSValue only = JS_NewCFunction(ctx, task_exec_async, "Exec", 0);
+
+    if (!JS_IsUndefined(wait))
+        JS_SetPropertyStr(ctx, only, "Wait", wait);
+    else
+        JS_FreeValue(ctx, wait);
+    JS_SetPropertyStr(ctx, global, "Exec", only);
+    JS_FreeValue(ctx, exec);
+}
+
 /* Replace `<object>.<verb>` with a refusal, keeping the verb's name so the
  * error says what was called rather than what replaced it. */
 static void task_refuse(JSContext *ctx, JSValue global, const char *dotted,
@@ -1173,6 +1311,13 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     bta_database_init(ctx, global);
     bta_sqlite_init(ctx, global);
     bta_sys_init(ctx, global);
+    /* Read-only process state: the same `Environment` without `Set` or the
+     * `CurrentDirectory` setter, and `Exec` reduced to the blocking `Wait`
+     * that has no source on the main loop. */
+    bta_sys_env_readonly(ctx, global);
+    task_exec_wait_only(ctx, global);
+    /* The blocking HTTP verbs, each on this thread's own session. */
+    bta_http_init_worker(ctx, global);
     /* A worker computing on a thread is what a capture wants attributed most:
      * `Profile.Begin` here marks the same collector the main thread does (per
      * thread, so it is safe) and the same capture file (under its own lock). */
@@ -1222,18 +1367,18 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     }
     JS_FreeValue(ctx, r);
 
-    /* Gone because they hang a callback off the main loop, or draw, or are
-     * process state the main thread owns.  Taken away rather than inherited:
-     * a name that answered here would be a cross-thread answer wearing a safe
-     * name. */
-    task_delete(ctx, global, "Exec");
+    /* `Settings` is rad.js's; read it here, but the setter would rewrite the
+     * file from this runtime's cache and lose the main thread's changes. */
+    task_settings_readonly(ctx, global);
+
+    /* Gone because they hang a callback off the main loop, or draw.  Taken
+     * away rather than inherited: a name that answered here would be a
+     * cross-thread answer wearing a safe name. */
     task_delete(ctx, global, "Dialog");
     task_delete(ctx, global, "Clipboard");
     task_delete(ctx, global, "Screen");
     task_delete(ctx, global, "Message");
-    task_delete(ctx, global, "Environment");
     task_delete(ctx, global, "Timer");      /* rad.js built it on setTimeout */
-    task_delete(ctx, global, "Settings");   /* writes, and the main thread's */
 
     for (size_t i = 0; i < G_N_ELEMENTS(task_loopers); i++)
         task_refuse(ctx, global, task_loopers[i], task_no_loop, (int)i);
@@ -1746,6 +1891,16 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Task.Start needs the message to send");
     if (argc > 1 && !task_opt_timeout(ctx, argv[1], &timeout))
         return JS_EXCEPTION;
+
+    if (task_limit > 0) {
+        g_mutex_lock(&task_lock);
+        guint live = g_list_length(task_jobs);
+        g_mutex_unlock(&task_lock);
+        if (live >= (guint)task_limit)
+            return JS_ThrowRangeError(ctx, "Task: %u tasks are already running "
+                                           "-- Task.Max is %d; wait for an "
+                                           "answer or raise it", live, task_limit);
+    }
 
     ctor = JS_GetPropertyStr(ctx, this_val, "constructor");
     name = JS_GetPropertyStr(ctx, ctor, "name");

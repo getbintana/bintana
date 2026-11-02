@@ -217,9 +217,11 @@ each rule below; read it before changing a level.
 - **`Probe` must not follow redirects**: the redirect is the answer. Put
   `FollowRedirects: true` back in it and `testNetwork` goes red on the portal
   rows.
-- **A `Task` worker runs `rad.js` and has no `Network`** (nor `Http`): the
-  first `Network.Probe = …` stopped every worker at load, and the xlsx and task
-  tests went red with *Network is not defined*. Anything `rad.js` hangs on a C
+- **A `Task` worker runs `rad.js` and has no `Network`**, and only the blocking
+  `Http.*Wait` verbs -- each on a `SoupSession` of that thread. The first
+  `Network.Probe = …` stopped every worker at load, and the xlsx and task tests
+  went red with *Network is not defined*; the asynchronous `Http` is not there
+  because its source belongs to the main loop. Anything `rad.js` hangs on a C
   global is guarded with `typeof … !== "undefined"`.
 - **A timeout in a `tests/widgets` test is measured against the whole suite's
   blocking calls.** Tests run in order but their waits overlap, and later tests

@@ -16308,6 +16308,15 @@
       "Name": "Task",
       "Members": [
         {
+          "Name": "Max",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "([limit])",
+          "Returns": "number",
+          "Doc": "the most tasks alive at once, `0` (the default) for no limit. A `Start` over it is refused rather than queued; the program waits for an answer or raises it. With no argument it answers the ceiling; with one it sets it and answers the new value. One thread and one runtime per task is what makes a ceiling worth having",
+          "Native": true
+        },
+        {
           "Name": "Report",
           "Kind": "Method",
           "Params": 1,

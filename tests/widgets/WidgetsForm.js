@@ -5391,6 +5391,25 @@ class Form1 extends Form {
               r.ExitCode !== 0 && r.Output.includes("declares no \"worker\" files"),
               r.Output);
 
+        /* A viewer library says the same thing, by name, instead of failing
+         * with `Component is not defined` from inside the module. */
+        r = run("workerMarkdown", { sources: ["Worker.js", "Main.js"], uses: ["markdown"] }, {
+            "Worker.js":
+                'import { Markdown } from "markdown";\n' +
+                "export class Worker extends Task { Run() { return typeof Markdown; } }\n",
+            "Main.js":
+                "function Main() {\n" +
+                "    const t = new Worker();\n" +
+                "    t.Done = (v) => { print('WORKERLIB ' + v); Application.Quit(0); };\n" +
+                "    t.Error = (m) => { print('WORKERLIB FAILED ' + m); Application.Quit(1); };\n" +
+                "    t.Start({});\n" +
+                "}\n",
+        });
+        check("a viewer library a task cannot import says why",
+              r.ExitCode !== 0 &&
+              r.Output.includes("declares no \"worker\" files"),
+              r.Output);
+
         /* What is refused, and that each says what to do. */
         const refused = (what, files, wanted, project) => {
             const rr = run(what, { sources: ["Main.js"], ...(project || {}) }, files);
@@ -27125,6 +27144,18 @@ class Form1 extends Form {
         /* And Report is the worker's voice: on a proxy it is at the wrong end. */
         throws("Report is refused on the handle", () => new TaskWork().Report(1));
 
+        /* A ceiling refuses rather than queueing: the program waits for an
+         * answer or raises it. `Task.Max(0)` is no limit. */
+        const wasMax = Task.Max();
+        Task.Max(0);
+        const first = new TaskWork();
+        first.Done = first.Error = () => {};
+        first.Start({ mode: "spin" });
+        Task.Max(1);
+        throws("a task over Task.Max is refused", () => new TaskWork().Start({}));
+        first.Stop({ KillAfter: 0 });
+        Task.Max(wasMax);
+
         /*
          * The asynchronous half, as a list of steps rather than a pyramid.
          *
@@ -27213,8 +27244,8 @@ class Form1 extends Form {
                       r.xmlSchema);
                 /* And not what would fire on the main loop, or is ours. */
                 eq("a worker has no Timer", r.timer, "undefined");
-                eq("...no Settings", r.settings, "undefined");
-                eq("...no Exec", r.exec, "undefined");
+                eq("...but Settings, read-only", r.settings, "object");
+                eq("...and Exec, blocking only", r.exec, "function");
                 /* The facts and the catalogue: the second is this worker's
                  * own, built from the language captured at Start. */
                 eq("...and Locale", r.locale, "object");
@@ -27262,6 +27293,84 @@ class Form1 extends Form {
             };
             t.Start({ mode: "locale", dir: SCRATCH });
             Locale.Current = "";
+        });
+
+        /* Process state is readable and not writable, and a child is the
+         * blocking spelling only. */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`process errored: ${m}`);
+            t.Done  = (r) => {
+                check("a worker reads Environment.HomeDirectory", r.home.length > 0);
+                check("...and Environment.Get", r.path === true);
+                eq("...but has no Environment.Set", r.hasSet, "undefined");
+                eq("...and reads CurrentDirectory", r.cwd, "string");
+                check("...without a setter", typeof r.cwdSet === "string",
+                      String(r.cwdSet));
+                eq("a worker reads Settings", r.settings, 7);
+                check("...but cannot write them",
+                      String(r.settingsSet).includes("cannot write settings"),
+                      r.settingsSet);
+                check("...nor delete one",
+                      String(r.settingsDelete).includes("cannot write settings"),
+                      r.settingsDelete);
+                check("...nor clear them",
+                      String(r.settingsClear).includes("cannot write settings"),
+                      r.settingsClear);
+                next();
+            };
+            t.Start({ mode: "process" });
+        });
+
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`exec errored: ${m}`);
+            t.Done  = (r) => {
+                eq("a worker runs Exec.Wait", r.code, 0);
+                eq("...and reads its output", r.out, "hi");
+                check("...while the callback spelling refuses",
+                      String(r.async).includes("callbacks"), r.async);
+                next();
+            };
+            t.Start({ mode: "exec" });
+        });
+
+        steps.push(() => {
+            let srv = null;
+
+            try { srv = Http.Server({ Port: 0 }); }
+            catch (e) { next(); return; }   /* no libsoup */
+
+            srv.Request = (req) => req.Answer(200, "from a worker");
+            srv.Start();
+
+            const t = new TaskWork();
+
+            t.Error = (m) => { srv.Stop(); fail(`http errored: ${m}`); };
+            t.Done  = (r) => {
+                eq("a worker makes a blocking HTTP request", r.status, 200);
+                eq("...and reads the answer", r.body, "from a worker");
+                srv.Stop();
+                next();
+            };
+            t.Start({ mode: "http", url: srv.Url + "/" });
+        });
+
+        steps.push(() => {
+            const data = Random.Bytes(64);
+            const b64  = data.ToBase64();
+            const t    = new TaskWork();
+
+            t.Error = (m) => fail(`bytes errored: ${m}`);
+            t.Done  = (r) => {
+                eq("a worker receives Bytes", r.n, 64);
+                check("...and answers a Bytes", r.back instanceof Bytes);
+                eq("...byte for byte", r.back.ToBase64(), b64);
+                next();
+            };
+            t.Start({ mode: "bytes", data });
         });
 
         /*

@@ -109,15 +109,16 @@ Built the way the main context is — `bta_new_context`, the `init` functions,
 
 - **Gone, because GTK off the main thread is a crash:** every widget,
   `Dialog`, `Message`, `Clipboard`, `Screen`, menus, the printer, the desktop.
-- **Gone, because it hangs a callback off the loop:** `Exec`, `File.Watch`,
-  `Timer` (rad.js builds it on the captured `setTimeout`, so it is deleted
-  *after* rad.js runs, not before), the asynchronous half of `Http`.
-- **Gone, because it is process state the main thread owns:** `Settings`.
+- **Gone, because it hangs a callback off the loop:** `File.Watch`, `Timer`
+  (rad.js builds it on the captured `setTimeout`, so it is deleted *after*
+  rad.js runs, not before), and the callback spelling of `Exec` and `Http`.
 - **There:** the language and `rad.js` entire, `print`, `Logger`, `Decimal`,
   `Bytes`, `Day`/`Time`, `Hash`, `Dictionary`, `Regex`, `Stopwatch`, `Record`,
   `Field`, `Table`, `Sqlite`, an `Application` that answers facts,
-  `File`/`Directory` for reading, and **`Locale` whole** — its catalogue is
-  this worker's own, pinned to the language at `Start` (see below).
+  `File`/`Directory` for reading, **`Locale` whole** — its catalogue is this
+  worker's own, pinned to the language at `Start` (see below) — the blocking
+  `Exec.Wait` and `Http.*Wait`, `Environment` read-only, and `Settings` with
+  its setter refused.
 - **Libraries a pure module can import:** `xlsx` and `qr`'s encoder are
   modules with no widget in them, so a task's `import { Xlsx } from "xlsx"` /
   `import { QrCode } from "qr"` works. A script beside the module (`QrView.js`)
@@ -127,9 +128,10 @@ Built the way the main context is — `bta_new_context`, the `init` functions,
   falling back to `sources`. Without the key the old answer stands, which is
   what makes a one-module library cross with no manifest at all.
 - **`markdown` is not split, and deliberately so:** no consumer in the tree
-  parses Markdown off the main thread. Its only module is the control, so
-  importing it in a task refuses on `Component`; when a consumer appears, the
-  parser becomes a module and `project.json` gains a `worker` list. The split
+  parses Markdown off the main thread. Its `project.json` declares an **empty**
+  `worker` list, so importing it in a task refuses with "declares no worker
+  files" instead of failing inside the module on `Component`; when a consumer
+  appears, the parser becomes a module and that list gains its name. The split
   waits for that, rather than inventing an API nobody asked for.
 
 ### The catalogue, which is per thread and not behind a lock
@@ -348,7 +350,10 @@ nearly free and it goes in then.**
    worker builds its own with the language at `Start` (`bta_locale_init_for`),
    and `bta_locale_format` copies the template before it runs JavaScript. A
    lock is not needed; the argument is above.
-5. **`GCancellable`**, if and when `File` and `Directory` move to GIO. Not
+5. **`Task.Max`** — **built**: a live-task ceiling, `0` for no limit, refused
+   rather than queued. The count is a thread and a runtime each, which is what
+   makes a ceiling worth having.
+6. **`GCancellable`**, if and when `File` and `Directory` move to GIO. Not
    before: one verb in six would take it, and it is not the one that hangs.
 
 The order matters, and it is the one thing this plan got wrong the first time:
@@ -364,9 +369,4 @@ The rest is not a roadmap; each waits for a program that asks for it:
 | | the program that reopens it |
 |---|---|
 | `markdown`'s parser as a worker module | a task that parses a `.md` — an index of notes, a table of contents, a document exported off the main thread. The viewer and the IDE help run on the page, so they do not. |
-| `Environment`/`Settings` in a worker | a task that needs configuration or an environment value it cannot receive in `msg`. |
-| `Exec` synchronous in a worker | a task that must run an external tool; today the async `Exec` on the main thread is the only door. |
-| `Http` synchronous in a worker | a task that must fetch or upload on its own thread; async `Http` already serves the main one. |
-| `Bytes` in messages | a task that moves binary data rather than a path. |
-| a cap on live tasks | an application that starts more than it can afford; `examples/usage` already caps itself at the processor count. |
 | `GCancellable`, a debugger in a worker | named above, with the same rule: a measured need, not a symmetry. |

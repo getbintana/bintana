@@ -252,9 +252,61 @@ class TaskWork extends Task {
             }
         }
 
+        /* Process state a worker may read and must not write. */
+        if (msg.mode === "process") {
+            const cwd = Environment.CurrentDirectory;
+            let cwdSet = null;
+
+            try { Environment.CurrentDirectory = "/"; }
+            catch (e) { cwdSet = e.message; }
+
+            let settingsSet = null, settingsDelete = null, settingsClear = null;
+
+            try { Settings.Set("bta-task-test", 1); }
+            catch (e) { settingsSet = e.message; }
+            try { Settings.Delete("bta-task-test"); }
+            catch (e) { settingsDelete = e.message; }
+            try { Settings.Clear(); }
+            catch (e) { settingsClear = e.message; }
+
+            return {
+                home:       Environment.HomeDirectory,
+                path:       Environment.Get("PATH") !== null,
+                hasSet:     typeof Environment.Set,
+                cwd:        typeof cwd,
+                cwdSet:     cwdSet,
+                settings:   Settings.Get("bta-task-missing", 7),
+                settingsSet: settingsSet,
+                settingsDelete: settingsDelete,
+                settingsClear: settingsClear,
+            };
+        }
+
+        /* Bytes cross as base64 under a tag, and come back a Bytes. */
+        if (msg.mode === "bytes")
+            return { n: msg.data.Length, back: msg.data, b64: msg.data.ToBase64() };
+
         /* A task whose work is its effect has nothing to answer. */
         if (msg.mode === "void")
             return;
+
+        /* The blocking HTTP spelling, on this worker's own session. */
+        if (msg.mode === "http") {
+            const r = Http.GetWait(msg.url, { Timeout: 5000 });
+
+            return { status: r.Status, body: r.Body.ToText() };
+        }
+
+        /* The blocking child only: callbacks belong to the main loop. */
+        if (msg.mode === "exec") {
+            const r = Exec.Wait(["/bin/sh", "-c", "printf hi"]);
+            let   async = "";
+
+            try { Exec(["/bin/true"]); }
+            catch (e) { async = e.message; }
+
+            return { code: r.ExitCode, out: String(r.Output), async: async };
+        }
 
         /* JavaScript lets a program throw what it likes; both of these have a
          * sentence even though neither has a stack. */
