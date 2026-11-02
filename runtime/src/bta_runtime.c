@@ -3064,60 +3064,80 @@ static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
- * A library's own `.js`, in the order it wants them.
+ * A library's own `.js`: the order it loads them on the main thread, and the
+ * subset a `Task` worker may import.
  *
- * **A library may carry a `project.json`, and only its `sources` is read.** A
- * library with one class needs no order and most will not have the file; a
- * library whose own classes extend each other does -- `BarChart extends Chart`
- * sorts the wrong way round by path, which is the same reason a project has
- * `sources` at all. Reusing the name and the key is the whole of the mechanism:
- * anybody who has written a project already knows it, and there is no second
- * manifest format to learn or to keep working.
+ * **A library may carry a `project.json`, and two of its keys are read.**
+ * `sources` orders the library's own files; one class needs no order and most
+ * libraries will not have the file, but one whose classes extend each other
+ * does -- `BarChart extends Chart` sorts the wrong way round by path, which is
+ * the same reason a project has `sources` at all. `worker` names the files a
+ * worker may import, for a library whose `sources` include a module that
+ * extends `Component`; its absence keeps the old answer (the sources list,
+ * with scripts skipped), and an empty list says there is no safe subset.
+ * Reusing the names is the whole of the mechanism: anybody who has written a
+ * project already knows them, and there is no second manifest format to learn
+ * or to keep working.
  *
  * Nothing else in that file means anything here: a library is not a project and
  * `bintana <library>` is not a thing to do.
+ *
+ * One list at a time: NULL when the file is absent, cannot be read, is not
+ * JSON, or `key` is not an array -- the caller decides what to fall back to.
+ * An **empty array** is a real answer: the library declared no files for that
+ * purpose.
  */
-GPtrArray *bta_library_sources(JSContext *ctx, const char *dir)
+static GPtrArray *library_list(JSContext *ctx, const char *dir, const char *key)
 {
-    GPtrArray *out  = g_ptr_array_new_with_free_func(g_free);
+    GPtrArray *out  = NULL;
     char      *path = g_build_filename(dir, "project.json", NULL);
     char      *text = NULL;
 
     if (g_file_test(path, G_FILE_TEST_IS_REGULAR))
         text = bta_read_file(path, NULL);
     g_free(path);
+    if (!text)
+        return NULL;
 
-    if (text) {
-        JSValue cfg = JS_ParseJSON(ctx, text, strlen(text), "library");
+    JSValue cfg = JS_ParseJSON(ctx, text, strlen(text), "library");
 
-        if (!JS_IsException(cfg)) {
-            JSValue arr = JS_GetPropertyStr(ctx, cfg, "sources");
+    if (JS_IsException(cfg)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        fprintf(stderr, "bintana: %s/project.json is not JSON; loading its "
+                        "files by path\n", dir);
+    } else {
+        JSValue arr = JS_GetPropertyStr(ctx, cfg, key);
 
-            if (JS_IsArray(arr)) {
-                JSValue  lenv = JS_GetPropertyStr(ctx, arr, "length");
-                uint32_t n    = 0;
-                JS_ToUint32(ctx, &n, lenv);
-                JS_FreeValue(ctx, lenv);
+        if (JS_IsArray(arr)) {
+            JSValue  lenv = JS_GetPropertyStr(ctx, arr, "length");
+            uint32_t n    = 0;
 
-                for (uint32_t i = 0; i < n; i++) {
-                    JSValue     e = JS_GetPropertyUint32(ctx, arr, i);
-                    const char *f = JS_ToCString(ctx, e);
+            JS_ToUint32(ctx, &n, lenv);
+            JS_FreeValue(ctx, lenv);
+            out = g_ptr_array_new_with_free_func(g_free);
+            for (uint32_t i = 0; i < n; i++) {
+                JSValue     e = JS_GetPropertyUint32(ctx, arr, i);
+                const char *f = JS_ToCString(ctx, e);
 
-                    if (f && *f)
-                        g_ptr_array_add(out, g_build_filename(dir, f, NULL));
-                    JS_FreeCString(ctx, f);
-                    JS_FreeValue(ctx, e);
-                }
+                if (f && *f)
+                    g_ptr_array_add(out, g_build_filename(dir, f, NULL));
+                JS_FreeCString(ctx, f);
+                JS_FreeValue(ctx, e);
             }
-            JS_FreeValue(ctx, arr);
-        } else {
-            JS_FreeValue(ctx, JS_GetException(ctx));
-            fprintf(stderr, "bintana: %s/project.json is not JSON; loading its "
-                            "sources by path\n", dir);
         }
+        JS_FreeValue(ctx, arr);
         JS_FreeValue(ctx, cfg);
-        g_free(text);
     }
+    g_free(text);
+    return out;
+}
+
+GPtrArray *bta_library_sources(JSContext *ctx, const char *dir)
+{
+    GPtrArray *out = library_list(ctx, dir, "sources");
+
+    if (!out)
+        out = g_ptr_array_new_with_free_func(g_free);
 
     /* No list, an empty one, or a file that would not parse: every `.js` in it,
      * sorted by path -- the same fallback and the same limit a project has. */
@@ -3126,6 +3146,17 @@ GPtrArray *bta_library_sources(JSContext *ctx, const char *dir)
         g_ptr_array_sort_values(out, (GCompareFunc)g_strcmp0);
     }
     return out;
+}
+
+/*
+ * The files a library says a `Task` worker may import, or NULL when it has no
+ * `worker` key.  An empty list is a declaration that the library has no safe
+ * half, and is not the same as the key's absence: the worker loader falls back
+ * to `sources` only for the absence.
+ */
+GPtrArray *bta_library_worker_sources(JSContext *ctx, const char *dir)
+{
+    return library_list(ctx, dir, "worker");
 }
 
 /* Explicit "sources" order wins; otherwise every .js in the project, sorted,

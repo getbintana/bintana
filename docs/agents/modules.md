@@ -70,7 +70,11 @@ it settled:
   imported -- and the re-exports are live bindings. A library file not loaded
   yet (in a worker, or a library later in `uses`) is compiled there; a script
   file of the library is skipped, so `import { Chart } from "charts"` refuses
-  until `lib/charts` exports.
+  until `lib/charts` exports. **A worker uses the library's `worker` list when
+  it declares one**: only those files are evaluated (`sources` stays the main
+  thread's), a script named there is an error rather than a skip, and an empty
+  list refuses instead of falling back. Without the key, the worker falls back
+  to `sources`, which is how a one-module library like `xlsx` crosses.
 - **What an import brought in is handed out after the module that imported it
   ran**, from a pending list `load_file` fills, so it reaches later files by
   name like any module. A re-export (`export { withIva } from "./P.js"`) is the

@@ -121,9 +121,11 @@ Built the way the main context is — `bta_new_context`, the `init` functions,
 - **Libraries a pure module can import:** `xlsx` and `qr`'s encoder are
   modules with no widget in them, so a task's `import { Xlsx } from "xlsx"` /
   `import { QrCode } from "qr"` works. A script beside the module (`QrView.js`)
-  is skipped. A library of several modules still needs a `worker` manifest to
-  say which of them are safe; that is the next step, not a thing this shape
-  already solves.
+  is skipped. A library of several modules declares the safe subset in
+  `project.json`'s `worker` list: `load_library1` evaluates only those files in
+  a worker, refuses a script named there, and refuses an empty list instead of
+  falling back to `sources`. Without the key the old answer stands, which is
+  what makes a one-module library cross with no manifest at all.
 
 ### The catalogue, which is per thread and not behind a lock
 

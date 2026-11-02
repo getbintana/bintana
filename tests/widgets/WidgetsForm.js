@@ -5345,6 +5345,52 @@ class Form1 extends Form {
         check("a library is imported by its name, its files' exports as one",
               r.Output.includes("LIBRARY ab function"), r.Output);
 
+        /*
+         * **A worker imports the library's `worker` list, and not its
+         * `sources`.** The view extends `Component` and exists only for the
+         * main thread; the parser is the half a task may evaluate. Without the
+         * key the old answer stands -- every module file, and the view fails --
+         * and an empty list says there is no safe half rather than falling
+         * back to it.
+         */
+        const workerLib = (mode) => ({
+            "lib/two/project.json": JSON.stringify({
+                sources: ["Parser.js", "View.js"],
+                ...(mode === "list" ? { worker: ["Parser.js"] } : {}),
+                ...(mode === "empty" ? { worker: [] } : {}),
+            }),
+            "lib/two/Parser.js":
+                "export class Parser { static get Kind() { return 'pure'; } }\n",
+            "lib/two/View.js": "export class View extends Component {}\n",
+            "Worker.js":
+                'import { Parser } from "two";\n' +
+                "export class Worker extends Task { Run() { return Parser.Kind; } }\n",
+            "Main.js":
+                "function Main() {\n" +
+                "    const t = new Worker();\n" +
+                "    t.Done = (v) => { print('WORKERLIB ' + v); Application.Quit(0); };\n" +
+                "    t.Error = (m) => { print('WORKERLIB FAILED ' + m); Application.Quit(1); };\n" +
+                "    t.Start({});\n" +
+                "}\n",
+        });
+
+        r = run("workerLib", { sources: ["Worker.js", "Main.js"], uses: ["two"] },
+                workerLib("list"));
+        check("a worker imports only the library's declared worker files",
+              r.ExitCode === 0 && r.Output.includes("WORKERLIB pure"), r.Output);
+
+        r = run("workerLibOld", { sources: ["Worker.js", "Main.js"], uses: ["two"] },
+                workerLib("absent"));
+        check("...and without the list it still loads the view and fails",
+              r.ExitCode !== 0 && r.Output.includes("Component is not defined"),
+              r.Output);
+
+        r = run("workerLibNone", { sources: ["Worker.js", "Main.js"], uses: ["two"] },
+                workerLib("empty"));
+        check("...while an empty list says there is no worker half",
+              r.ExitCode !== 0 && r.Output.includes("declares no \"worker\" files"),
+              r.Output);
+
         /* What is refused, and that each says what to do. */
         const refused = (what, files, wanted, project) => {
             const rr = run(what, { sources: ["Main.js"], ...(project || {}) }, files);

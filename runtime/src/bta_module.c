@@ -1060,14 +1060,29 @@ static JSModuleDef *load_library(JSContext *ctx, ModState *st, const char *name,
 static JSModuleDef *load_library1(JSContext *ctx, ModState *st,
                                   const char *name, const char *dir)
 {
-    GPtrArray *files = bta_library_sources(ctx, dir);
-    GString   *text  = g_string_new(NULL);
+    /*
+     * **A worker library is the files its manifest declares, not all of
+     * them.**  `sources` is the main thread's order and may name a module that
+     * extends `Component`; `worker` is the subset a task may evaluate, and its
+     * absence keeps the old answer (the sources list, with scripts skipped).
+     * An empty `worker` list is a declaration that there is no safe subset and
+     * refuses with that sentence rather than falling back.
+     */
+    GPtrArray *worker_files = bta_task_is_worker(ctx)
+                            ? bta_library_worker_sources(ctx, dir) : NULL;
+    bool       declared     = worker_files != NULL;
+    GPtrArray *files        = declared ? worker_files
+                                      : bta_library_sources(ctx, dir);
+    GString   *text         = g_string_new(NULL);
 
     for (guint i = 0; i < files->len; i++) {
         char *path = g_canonicalize_filename(files->pdata[i], NULL);
 
         if (!g_hash_table_contains(st->done, path)) {
-            if (!load_file(ctx, st, path, true)) {
+            /* A script in a worker list is a mistake: the list says what may
+             * be imported, and a script cannot be.  In `sources` it is the
+             * ordinary case and is skipped. */
+            if (!load_file(ctx, st, path, !declared)) {
                 if (JS_HasException(ctx)) {
                     g_free(path);
                     g_ptr_array_unref(files);
@@ -1091,9 +1106,15 @@ static JSModuleDef *load_library1(JSContext *ctx, ModState *st,
 
     if (!text->len) {
         g_string_free(text, TRUE);
-        JS_ThrowReferenceError(ctx, "import from '%s': the library exports "
-                               "nothing -- its classes are reached by name, "
-                               "with no import", name);
+        if (declared)
+            JS_ThrowReferenceError(ctx, "import from '%s': its project.json "
+                                   "declares no \"worker\" files -- a Task can "
+                                   "only import what the library lists there",
+                                   name);
+        else
+            JS_ThrowReferenceError(ctx, "import from '%s': the library exports "
+                                   "nothing -- its classes are reached by name, "
+                                   "with no import", name);
         return NULL;
     }
 

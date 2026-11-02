@@ -821,6 +821,9 @@ bool    bta_module_done(JSContext *ctx, const char *path);
 void    bta_modules_checking(JSContext *ctx, bool on);
 /* A library's `.js` files in the order it loads them (bta_runtime.c). */
 GPtrArray *bta_library_sources(JSContext *ctx, const char *dir);
+/* The files its `project.json` names for a `Task` worker, or NULL when it
+ * declares none.  An empty array is "no safe worker files", not "no key". */
+GPtrArray *bta_library_worker_sources(JSContext *ctx, const char *dir);
 /* A JSDoc comment's description and its `@returns {T}` type, each NULL when
  * absent; the caller frees both. */
 void    bta_prelude_sources(const char **rad, const char **forms);
