@@ -126,6 +126,11 @@ Built the way the main context is — `bta_new_context`, the `init` functions,
   a worker, refuses a script named there, and refuses an empty list instead of
   falling back to `sources`. Without the key the old answer stands, which is
   what makes a one-module library cross with no manifest at all.
+- **`markdown` is not split, and deliberately so:** no consumer in the tree
+  parses Markdown off the main thread. Its only module is the control, so
+  importing it in a task refuses on `Component`; when a consumer appears, the
+  parser becomes a module and `project.json` gains a `worker` list. The split
+  waits for that, rather than inventing an API nobody asked for.
 
 ### The catalogue, which is per thread and not behind a lock
 
