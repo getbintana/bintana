@@ -81,11 +81,14 @@
   now, so the deliberate leak is said in the same vocabulary as everything else
   that holds one. Freeing memory a live thread still writes to is
   worse than leaking it on the last line before exit. `GCancellable` is the
-  only thing that reaches a thread blocked in native code, and it now reaches
-  the job's blocking verbs: `Exec.Wait`, `Http.*Wait`, the GIO file verbs and
-  the directory walk (`List`, `Files`, `Folders`, `Copy`, `DeleteTree`).
-  `File.Hash` and the compressors still take none, and still wait for the flag
-  or `KillAfter` between opcodes.
+  only thing that reaches a thread blocked in native code, and it reaches the
+  blocking verbs `Run` hands `this.Cancellable` to, as their last argument:
+  `Exec.Wait`, `Http.*Wait`, the GIO file verbs and the directory walk
+  (`List`, `Files`, `Folders`, `Copy`, `DeleteTree`). Handed, not implied:
+  when every blocking call of a worker took the job's signal, `Stop` -- which
+  raises it at once -- refused the very calls a `Run` makes to wind down after
+  `Stopping`. `File.Hash` and the compressors take none, and still wait for
+  the flag or `KillAfter` between opcodes.
 - **A token cancelled from the main thread can wake the worker before the
   job's flag is up.** `g_cancellable_cancel` sets `Cancelled` first and emits
   the signal afterwards; a `Run` polling `this.Cancellable.Cancelled` can

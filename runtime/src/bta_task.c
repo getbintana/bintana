@@ -180,7 +180,7 @@ struct BtaTaskJob {
     GThread   *thread;
     GCancellable *cancel;       /* the job's own: `Stop`, `Timeout` and `KillAfter` cancel it */
     gulong     cancel_link;     /* what wakes `stop` when `cancel` is raised */
-    GCancellable *shared;       /* `Start`'s `{ Cancellable }`, or NULL; only read */
+    GCancellable *shared;       /* `Start`'s Cancellable argument, or NULL; only read */
     gulong     shared_link;     /* forwards `shared` into `cancel`, one way */
     guint      timeout_src;
     guint      force_src;       /* the second stage of a Stop */
@@ -324,18 +324,6 @@ static BtaTaskEnv *task_env(JSContext *ctx)
     return JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
 }
 
-/*
- * The job's cancellable, for a native call that blocks: `Exec.Wait`,
- * `Http.*Wait`, a GIO file read.  Borrowed, NULL on the main thread; it is
- * cancelled by `Stop`, `Timeout` and `KillAfter`, and freed with the job.
- */
-GCancellable *bta_task_cancellable(JSContext *ctx)
-{
-    BtaTaskEnv *env = task_env(ctx);
-
-    return env && env->job ? env->job->cancel : NULL;
-}
-
 /* The job's signal was raised -- forwarded from a shared `Cancellable`, or by
  * `Stop`/`Timeout`/`KillAfter`, which set `stop` first: the task is asked to
  * stop, exactly as `Stop()` asks it.  It does not force the run -- only `Stop` has a
@@ -362,16 +350,19 @@ static gboolean task_deliver(gpointer data);
  * runtime is nothing at all.  It is also what tests/api.sh reads, so a member
  * here without a row in docs/llm/library.md fails the build. */
 static const JSCFunctionListEntry task_props[] = {
-    /* Start(data, [options])
+    /* Start(data, [options], [cancellable])
      *   serialises the message, loads the class's file in a fresh runtime on
      *   a fresh thread, builds the class, and calls `Run(msg)`. **Once** — a
-     *   second `Start` is refused; work that repeats is a new `Task`
+     *   second `Start` is refused; work that repeats is a new `Task`. A
+     *   `Cancellable` last stops it when raised, and stops every task given
+     *   the same one
      */
-    JS_CFUNC_DEF("Start",  2, task_start),
+    JS_CFUNC_DEF("Start",  3, task_start),
     /* Stop([options])
      *   **asks** it to end, and enforces `KillAfter` ms later (5000 by
-     *   default, 0 = at once). Two stages like `Exec`'s guard. Answers
-     *   whether there was a live job to ask
+     *   default, 0 = at once). Two stages like `Exec`'s guard. Raises
+     *   `this.Cancellable` at once, so a blocking call `Run` handed it
+     *   returns. Answers whether there was a live job to ask
      */
     JS_CFUNC_DEF("Stop",   1, task_stop),
     /* Report(value)
@@ -444,17 +435,17 @@ static JSValue task_construct(JSContext *ctx, JSValueConst new_target,
         return obj;
 
     /* Inside a worker this is the real thing, built by the thread below to run
-     * `Run` on: no handlers, no state, and `Start` refuses there.  A shared
-     * token is exposed as `this.Cancellable`, wrapping the same `GCancellable`
-     * the main thread's object does, so the task can raise it for its
-     * siblings; without one it is the job's own signal, which `Stop` raises. */
+     * `Run` on: no handlers, no state, and `Start` refuses there.
+     * `this.Cancellable` is the job's own signal -- what `Stop`, `Timeout`
+     * and `KillAfter` raise, and what a shared token forwards into -- so
+     * handing it to a blocking call is how that call hears all of them.  Not
+     * the shared token itself: raising that is the main thread's to do, and a
+     * call given it would not hear this task's own `Stop`. */
     if (bta_task_is_worker(ctx)) {
         BtaTaskEnv *env = task_env(ctx);
 
         if (env && env->job) {
-            JSValue signal = bta_cancellable_new(ctx, env->job->shared
-                                                    ? env->job->shared
-                                                    : env->job->cancel);
+            JSValue signal = bta_cancellable_new(ctx, env->job->cancel);
 
             if (JS_IsException(signal) ||
                 JS_DefinePropertyValueStr(ctx, obj, "Cancellable", signal,
@@ -1519,12 +1510,12 @@ static void task_ending(BtaTaskJob *job, JSContext *ctx, bool threw)
     gint stop = g_atomic_int_get(&job->stop);
 
     /*
-     * A shared token can be raised a hair before this side's signal handler
-     * runs: `Cancel()` sets the flag first and emits afterwards, and a worker
-     * waiting on `this.Cancellable.Cancelled` can return in between.  Both
-     * signals are read: the shared one is set first, the job's own as soon as
-     * the forward runs, and either is the same answer -- without this, the run that stopped on the caller's token was
-     * reported as `Done`.
+     * A raised signal can be read before its handlers have run: `Cancel()`
+     * sets the flag first and emits afterwards, and a `Run` waiting on
+     * `this.Cancellable.Cancelled` can return in between -- before `stop` is
+     * set.  Both signals are read: the shared one is set first, the job's own
+     * as soon as the forward runs, and either is the same answer -- without
+     * this, the run that stopped on the caller's token was reported as `Done`.
      */
     if (stop == 0 && ((job->cancel && g_cancellable_is_cancelled(job->cancel)) ||
                       (job->shared && g_cancellable_is_cancelled(job->shared))))
@@ -1934,34 +1925,6 @@ static bool task_opt_timeout(JSContext *ctx, JSValueConst opts, long *out)
     return true;
 }
 
-/* `{ Cancellable }` on Start: borrowed, ref'd into `*out`.  Absent is fine;
- * anything else must be a `Cancellable`. */
-static bool task_opt_cancellable(JSContext *ctx, JSValueConst opts,
-                                 GCancellable **out)
-{
-    JSValue v;
-
-    *out = NULL;
-    if (JS_IsUndefined(opts) || JS_IsNull(opts))
-        return true;
-
-    v = JS_GetPropertyStr(ctx, opts, "Cancellable");
-    if (JS_IsUndefined(v) || JS_IsNull(v)) {
-        JS_FreeValue(ctx, v);
-        return true;
-    }
-
-    GCancellable *cancel = bta_cancellable_get(ctx, v);
-
-    JS_FreeValue(ctx, v);
-    if (!cancel) {
-        JS_ThrowTypeError(ctx, "Task.Start: Cancellable is not a Cancellable");
-        return false;
-    }
-    *out = g_object_ref(cancel);
-    return true;
-}
-
 static JSValue task_start(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv)
 {
@@ -1989,6 +1952,10 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
                                       "one for the next job");
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Task.Start needs the message to send");
+    /* `Start(msg, [opts], [cancellable])`: the token is the last argument. */
+    given = bta_cancellable_arg(ctx, &argc, argv, 1);
+    if (argc > 1 && !bta_cancellable_not_option(ctx, argv[1], "Task.Start"))
+        return JS_EXCEPTION;
     if (argc > 1 && !task_opt_timeout(ctx, argv[1], &timeout))
         return JS_EXCEPTION;
 
@@ -2040,13 +2007,6 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
         g_free(text);
         return JS_EXCEPTION;
     }
-    if (argc > 1 && !task_opt_cancellable(ctx, argv[1], &given)) {
-        g_free(class_name);
-        g_free(path);
-        g_free(text);
-        g_free(msg_json);
-        return JS_EXCEPTION;
-    }
 
     job = g_new0(BtaTaskJob, 1);
     job->refs       = 1;        /* the live one; sources take their own */
@@ -2058,7 +2018,7 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
      * stops every task linked to it; stopping one task must not raise it, or
      * one task's timeout ends its siblings and reads as a Cancel nobody made. */
     job->cancel     = g_cancellable_new();
-    job->shared     = given;
+    job->shared     = given ? g_object_ref(given) : NULL;
     job->shared_link = bta_cancellable_link(given, job->cancel);
     job->cancel_link = g_cancellable_connect(job->cancel,
                                              G_CALLBACK(task_cancelled),
@@ -2161,9 +2121,9 @@ static JSValue task_stop(JSContext *ctx, JSValueConst this_val,
          */
         g_atomic_int_set(&job->stop, 1);
         /* A native call can not see the flag between two opcodes; the
-         * cancellable is what reaches `Exec.Wait`, `Http.*Wait` and a GIO
-         * read while they are blocked.  A `Run` that watches `Stopping` is
-         * unaffected -- it does not use this object. */
+         * job's signal is what reaches one that is blocked -- but only a call
+         * `Run` handed `this.Cancellable` to.  What `Run` calls without it,
+         * winding down after `Stopping`, is left to finish. */
         if (job->cancel)
             g_cancellable_cancel(job->cancel);
         if (after <= 0)

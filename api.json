@@ -14086,10 +14086,10 @@
         {
           "Name": "Copy",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(from, to)",
+          "Params": 3,
+          "Signature": "(from, to, [cancellable])",
           "Returns": "",
-          "Doc": "a whole tree",
+          "Doc": "a whole tree. A `Cancellable` last stops it part way, leaving what was copied",
           "Native": true
         },
         {
@@ -14104,26 +14104,26 @@
         {
           "Name": "DeleteTree",
           "Kind": "Method",
-          "Params": 1,
-          "Signature": "(path)",
+          "Params": 2,
+          "Signature": "(path, [cancellable])",
           "Returns": "",
-          "Doc": "it and everything under it — the one to be careful with, and the reason it has a name of its own rather than a flag",
+          "Doc": "it and everything under it — the one to be careful with, and the reason it has a name of its own rather than a flag. A `Cancellable` last stops it part way, leaving what was not yet deleted",
           "Native": true
         },
         {
           "Name": "Files",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(path, [options])",
+          "Params": 3,
+          "Signature": "(path, [options], [cancellable])",
           "Returns": "string[]",
-          "Doc": "the **full paths** of the files, sorted",
+          "Doc": "the **full paths** of the files, sorted. A `Cancellable` last stops the walk",
           "Native": true
         },
         {
           "Name": "Folders",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(path, [options])",
+          "Params": 3,
+          "Signature": "(path, [options], [cancellable])",
           "Returns": "string[]",
           "Doc": "the same for the directories",
           "Native": true
@@ -14131,10 +14131,10 @@
         {
           "Name": "List",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(path, [pattern])",
+          "Params": 3,
+          "Signature": "(path, [pattern], [cancellable])",
           "Returns": "string[]",
-          "Doc": "the **names**, sorted, with no `.` or `..` — what a tree of one folder shows",
+          "Doc": "the **names**, sorted, with no `.` or `..` — what a tree of one folder shows. A `Cancellable` last stops the listing",
           "Native": true
         },
         {
@@ -14308,10 +14308,10 @@
         {
           "Name": "Wait",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(argv, [options])",
+          "Params": 3,
+          "Signature": "(argv, [options], [cancellable])",
           "Returns": "{ ExitCode, Output }",
-          "Doc": "runs it and **waits**, answering what it printed: `{ ExitCode, Output }`. It blocks the main loop, so it is for programs that answer in milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for one that might sit there; `Input` is the text or `Bytes` the child reads, which is what makes `Exec.Wait([\"sort\"], { Input: text })` a filter. **With no `Timeout` it gives up after 30 s** — a frozen window is no place for a default that never ends — and `Timeout: 0` is the explicit *wait forever*",
+          "Doc": "runs it and **waits**, answering what it printed: `{ ExitCode, Output }`. It blocks the main loop, so it is for programs that answer in milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for one that might sit there; `Input` is the text or `Bytes` the child reads, which is what makes `Exec.Wait([\"sort\"], { Input: text })` a filter. **With no `Timeout` it gives up after 30 s** — a frozen window is no place for a default that never ends — and `Timeout: 0` is the explicit *wait forever*. A `Cancellable` last ends the child when raised; in a task, `this.Cancellable` is how `Stop` reaches it",
           "Native": true
         }
       ]
@@ -14480,10 +14480,10 @@
         {
           "Name": "Copy",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(from, to)",
+          "Params": 3,
+          "Signature": "(from, to, [cancellable])",
           "Returns": "",
-          "Doc": "**byte for byte**, so it works on images; refuses to clobber",
+          "Doc": "**byte for byte**, so it works on images; refuses to clobber. A `Cancellable` last stops a large copy part way",
           "Native": true
         },
         {
@@ -14534,10 +14534,10 @@
         {
           "Name": "Info",
           "Kind": "Method",
-          "Params": 1,
-          "Signature": "(path)",
+          "Params": 2,
+          "Signature": "(path, [cancellable])",
           "Returns": "{ Size, Modified, Type, Icon, IsDir }",
-          "Doc": "`{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a content type you can test (`\"image/png\"`), `.Icon` is the name the desktop draws for that kind of file, and `.Modified` is a real `Date`, to the millisecond",
+          "Doc": "`{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a content type you can test (`\"image/png\"`), `.Icon` is the name the desktop draws for that kind of file, and `.Modified` is a real `Date`, to the millisecond. A `Cancellable` last ends a query that is stuck, and throws rather than answering `null`",
           "Native": true
         },
         {
@@ -14570,19 +14570,19 @@
         {
           "Name": "Load",
           "Kind": "Method",
-          "Params": 1,
-          "Signature": "(path)",
+          "Params": 2,
+          "Signature": "(path, [cancellable])",
           "Returns": "string",
-          "Doc": "the whole file as a string. **Throws if it cannot be read**, and the message names the file: there is no `null` to test for and no silent empty string",
+          "Doc": "the whole file as a string. **Throws if it cannot be read**, and the message names the file: there is no `null` to test for and no silent empty string. A `Cancellable` last ends a read that is stuck",
           "Native": true
         },
         {
           "Name": "LoadBytes",
           "Kind": "Method",
-          "Params": 1,
-          "Signature": "(path)",
+          "Params": 2,
+          "Signature": "(path, [cancellable])",
           "Returns": "Bytes",
-          "Doc": "the whole file as [`Bytes`](docs/llm/library.md#bytes), untouched — what `Load` cannot do, since it answers text",
+          "Doc": "the whole file as [`Bytes`](docs/llm/library.md#bytes), untouched — what `Load` cannot do, since it answers text. A `Cancellable` last ends a read that is stuck",
           "Native": true
         },
         {
@@ -14678,10 +14678,10 @@
         {
           "Name": "Trash",
           "Kind": "Method",
-          "Params": 1,
-          "Signature": "(path)",
+          "Params": 2,
+          "Signature": "(path, [cancellable])",
           "Returns": "",
-          "Doc": "to the desktop's trash, whole for a folder. Throws where there is no trash",
+          "Doc": "to the desktop's trash, whole for a folder. Throws where there is no trash. A `Cancellable` last stops it",
           "Native": true
         },
         {
@@ -14828,8 +14828,8 @@
         {
           "Name": "DeleteWait",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(url, [opts])",
+          "Params": 3,
+          "Signature": "(url, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Delete`",
           "Native": true
@@ -14846,8 +14846,8 @@
         {
           "Name": "GetWait",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(url, [opts])",
+          "Params": 3,
+          "Signature": "(url, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Get`",
           "Native": true
@@ -14864,8 +14864,8 @@
         {
           "Name": "HeadWait",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(url, [opts])",
+          "Params": 3,
+          "Signature": "(url, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Head`",
           "Native": true
@@ -14882,8 +14882,8 @@
         {
           "Name": "PatchWait",
           "Kind": "Method",
-          "Params": 3,
-          "Signature": "(url, body, [opts])",
+          "Params": 4,
+          "Signature": "(url, body, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Patch`",
           "Native": true
@@ -14900,8 +14900,8 @@
         {
           "Name": "PostWait",
           "Kind": "Method",
-          "Params": 3,
-          "Signature": "(url, body, [opts])",
+          "Params": 4,
+          "Signature": "(url, body, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Post`",
           "Native": true
@@ -14918,8 +14918,8 @@
         {
           "Name": "PutWait",
           "Kind": "Method",
-          "Params": 3,
-          "Signature": "(url, body, [opts])",
+          "Params": 4,
+          "Signature": "(url, body, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Put`",
           "Native": true
@@ -14936,10 +14936,10 @@
         {
           "Name": "RequestWait",
           "Kind": "Method",
-          "Params": 4,
-          "Signature": "(method, url, [body], [opts])",
+          "Params": 5,
+          "Signature": "(method, url, [body], [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
-          "Doc": "the blocking spelling: answers with the record, **throws** on transport failure — and what it throws carries the same `Kind` and `Status` the callback would have been handed",
+          "Doc": "the blocking spelling: answers with the record, **throws** on transport failure — and what it throws carries the same `Kind` and `Status` the callback would have been handed. A `Cancellable` last ends the flight when raised -- in a task, `this.Cancellable` is how `Stop` reaches it",
           "Native": true
         },
         {
@@ -16351,10 +16351,10 @@
         {
           "Name": "Start",
           "Kind": "Method",
-          "Params": 2,
-          "Signature": "(data, [options])",
+          "Params": 3,
+          "Signature": "(data, [options], [cancellable])",
           "Returns": "",
-          "Doc": "serialises the message, loads the class's file in a fresh runtime on a fresh thread, builds the class, and calls `Run(msg)`. **Once** — a second `Start` is refused; work that repeats is a new `Task`",
+          "Doc": "serialises the message, loads the class's file in a fresh runtime on a fresh thread, builds the class, and calls `Run(msg)`. **Once** — a second `Start` is refused; work that repeats is a new `Task`. A `Cancellable` last stops it when raised, and stops every task given the same one",
           "Native": true
         },
         {
@@ -16363,7 +16363,7 @@
           "Params": 1,
           "Signature": "([options])",
           "Returns": "",
-          "Doc": "**asks** it to end, and enforces `KillAfter` ms later (5000 by default, 0 = at once). Two stages like `Exec`'s guard. Answers whether there was a live job to ask",
+          "Doc": "**asks** it to end, and enforces `KillAfter` ms later (5000 by default, 0 = at once). Two stages like `Exec`'s guard. Raises `this.Cancellable` at once, so a blocking call `Run` handed it returns. Answers whether there was a live job to ask",
           "Native": true
         },
         {
@@ -17344,7 +17344,7 @@
           "Name": "DeleteWait",
           "Kind": "Method",
           "Params": 1,
-          "Signature": "(url, [opts])",
+          "Signature": "(url, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Delete`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
@@ -17371,7 +17371,7 @@
           "Name": "GetWait",
           "Kind": "Method",
           "Params": 1,
-          "Signature": "(url, [opts])",
+          "Signature": "(url, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Get`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
@@ -17389,7 +17389,7 @@
           "Name": "HeadWait",
           "Kind": "Method",
           "Params": 1,
-          "Signature": "(url, [opts])",
+          "Signature": "(url, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Head`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
@@ -17461,7 +17461,7 @@
           "Name": "PatchWait",
           "Kind": "Method",
           "Params": 2,
-          "Signature": "(url, body, [opts])",
+          "Signature": "(url, body, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Patch`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
@@ -17479,7 +17479,7 @@
           "Name": "PostWait",
           "Kind": "Method",
           "Params": 2,
-          "Signature": "(url, body, [opts])",
+          "Signature": "(url, body, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Post`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
@@ -17506,7 +17506,7 @@
           "Name": "PutWait",
           "Kind": "Method",
           "Params": 2,
-          "Signature": "(url, body, [opts])",
+          "Signature": "(url, body, [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
           "Doc": "the blocking `Put`. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
           "Native": true
@@ -17524,9 +17524,9 @@
           "Name": "RequestWait",
           "Kind": "Method",
           "Params": 2,
-          "Signature": "(method, url, [body], [opts])",
+          "Signature": "(method, url, [body], [opts], [cancellable])",
           "Returns": "{ Status, Reason, Headers, Body, Url }",
-          "Doc": "the blocking spelling: answers with the record, **throws** on transport failure — and what it throws carries the same `Kind` and `Status` the callback would have been handed. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever",
+          "Doc": "the blocking spelling: answers with the record, **throws** on transport failure — and what it throws carries the same `Kind` and `Status` the callback would have been handed. **With no `Timeout` it gives up after 30 s**, and `{ Timeout: 0 }` waits forever. A `Cancellable` last ends the flight when raised -- in a task, `this.Cancellable` is how `Stop` reaches it",
           "Native": true
         },
         {

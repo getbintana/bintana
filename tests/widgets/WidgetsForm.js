@@ -21545,8 +21545,9 @@ class Form1 extends Form {
          * for a function written in JavaScript, the parser over its own source
          * (`Timer.After`, `File.LoadJson`) -- which nobody wrote twice. */
         const sigOf = (t, n) => (Widget.Members(t).find((m) => m.Name === n) || {}).Signature;
-        eq("a global's native verb says its parameters", sigOf("File", "Load"), "(path)");
-        eq("...and one with an optional", sigOf("Directory", "Files"), "(path, [options])");
+        eq("a global's native verb says its parameters", sigOf("File", "Load"), "(path, [cancellable])");
+        eq("...and one with an optional", sigOf("Directory", "Files"),
+           "(path, [options], [cancellable])");
         eq("a native class static says its own", sigOf("Widget", "New"), "(type)");
         eq("an inherited control method answers from the class that declares it",
            sigOf("Button", "Bounds"), "([container])");
@@ -25154,6 +25155,25 @@ class Form1 extends Form {
            refusal(() => Http.GetWait("http://127.0.0.1:9/", { Timeout: 200 })),
            "Http.GetWait: cannot reach 'http://127.0.0.1:9/': the connection was refused");
 
+        /* The token is the last argument, after the options or in their
+         * place; as an option it is refused rather than ignored.  (An option
+         * read through a getter was also a token nothing held: freed before
+         * the send, the cancel never reached it.) */
+        const raised = new Cancellable();
+        raised.Cancel();
+        for (const [how, fn] of [
+            ["after the options", () => Http.GetWait("http://127.0.0.1:9/", { Timeout: 200 }, raised)],
+            ["in their place",    () => Http.GetWait("http://127.0.0.1:9/", raised)],
+            ["after a body",      () => Http.PostWait("http://127.0.0.1:9/", "x", raised)],
+        ]) {
+            let kind = "";
+            try { fn(); } catch (e) { kind = e.Kind; }
+            eq(`Http.*Wait takes a raised Cancellable last, ${how}`, kind, "Cancelled");
+        }
+        eq("...and refuses one given as an option",
+           refusal(() => Http.GetWait("http://127.0.0.1:9/", { Cancellable: raised })),
+           "Http.GetWait: a Cancellable is the last argument, not an option");
+
         const fast = Exec(["python3", "-m", "http.server", "8471",
                            "--directory", "/tmp"]);
         const slow = Exec(["python3", "-c", [
@@ -27162,8 +27182,65 @@ class Form1 extends Form {
         token.Cancel();
         token.Cancel();
         eq("...and Cancel is idempotent", token.Cancelled, true);
-        throws("Task.Start refuses something that is not a Cancellable",
-               () => new TaskWork().Start({}, { Cancellable: {} }));
+        /*
+         * **A token is handed over as the last argument, never as an option.**
+         * An option is read through whatever getter the object has, and one
+         * that made a fresh token handed the runtime something nothing held:
+         * freed with its wrapper before it was used (a crash in `Exec.Wait`).
+         * And a blocking call is cancelled by nothing it was not handed --
+         * which is what lets a task wind down after `Stopping`.
+         */
+        throws("Task.Start refuses a Cancellable given as an option",
+               () => new TaskWork().Start({}, { Cancellable: token }));
+        throws("Exec.Wait refuses a Cancellable given as an option",
+               () => Exec.Wait(["true"], { Cancellable: token }));
+
+        const sh = ["/bin/sh", "-c", "sleep 5"];
+        for (const [how, fn] of [
+            ["in place of the options", () => Exec.Wait(sh, token)],
+            ["after the options",       () => Exec.Wait(sh, { Timeout: 9000 }, token)],
+        ]) {
+            let waited = "";
+            const from = Date.now();
+            try { fn(); waited = "ran to the end"; } catch (e) { waited = e.message; }
+            check(`Exec.Wait takes a raised Cancellable last, ${how}`,
+                  waited.includes("cancelled"), waited);
+            check("...without waiting for the child", Date.now() - from < 2500,
+                  String(Date.now() - from));
+        }
+
+        /* Every file verb that can block takes one, and a raised one stops
+         * it before it has done anything -- the tree is still all there. */
+        Directory.Make(File.Join(SCRATCH, "token-tree", "sub"));
+        File.Save(File.Join(SCRATCH, "token-tree", "sub", "a.txt"), "kept");
+        const tree = File.Join(SCRATCH, "token-tree");
+        const leaf = File.Join(tree, "sub", "a.txt");
+        for (const [name, fn] of [
+            ["File.Load",            () => File.Load(leaf, token)],
+            ["File.LoadBytes",       () => File.LoadBytes(leaf, token)],
+            ["File.Info",            () => File.Info(leaf, token)],
+            ["File.Copy",            () => File.Copy(leaf, File.Join(tree, "b.txt"), token)],
+            ["File.Trash",           () => File.Trash(leaf, token)],
+            ["Directory.List",       () => Directory.List(tree, token)],
+            ["Directory.List(glob)", () => Directory.List(tree, "*", token)],
+            ["Directory.Files",      () => Directory.Files(tree, { Recursive: true }, token)],
+            ["Directory.Folders",    () => Directory.Folders(tree, token)],
+            ["Directory.Copy",       () => Directory.Copy(tree, File.Join(SCRATCH, "token-copy"), token)],
+            ["Directory.DeleteTree", () => Directory.DeleteTree(tree, token)],
+        ]) {
+            let said = "";
+            try { fn(); said = "ran to the end"; } catch (e) { said = e.message; }
+            check(`${name} stops on a raised Cancellable`, said.includes("cancel"), said);
+        }
+        eq("...and the tree is left as it was", File.Load(leaf), "kept");
+        eq("...with nothing copied", File.Exists(File.Join(tree, "b.txt")), false);
+
+        const unraised = new Cancellable();
+        eq("a Cancellable not raised changes nothing", File.Load(leaf, unraised), "kept");
+        eq("...for a walk either", Directory.Files(tree, { Recursive: true }, unraised).length, 1);
+        Directory.DeleteTree(tree);
+        if (File.Exists(File.Join(SCRATCH, "token-copy")))
+            Directory.DeleteTree(File.Join(SCRATCH, "token-copy"));
 
         /*
          * The asynchronous half, as a list of steps rather than a pyramid.
@@ -27347,8 +27424,7 @@ class Form1 extends Form {
                 eq("...and the main thread reads it cancelled", stop.Cancelled, true);
                 next();
             };
-            t.Start({ mode: "cancellable" },
-                    { Cancellable: stop, Timeout: 5000 });
+            t.Start({ mode: "cancellable" }, { Timeout: 5000 }, stop);
         });
 
         /* The shared token is one way: it stops every task holding it, but
@@ -27384,9 +27460,9 @@ class Form1 extends Form {
                       String(m).includes("cancelled"), String(m));
                 next();
             };
-            b.Start({ mode: "cancellable" }, { Cancellable: all, Timeout: 20000 });
-            c.Start({ mode: "cancellable" }, { Cancellable: all, Timeout: 20000 });
-            a.Start({ mode: "cancellable" }, { Cancellable: all, Timeout: 300 });
+            b.Start({ mode: "cancellable" }, { Timeout: 20000 }, all);
+            c.Start({ mode: "cancellable" }, { Timeout: 20000 }, all);
+            a.Start({ mode: "cancellable" }, { Timeout: 300 }, all);
         });
 
         steps.push(() => {
@@ -27452,6 +27528,40 @@ class Form1 extends Form {
                 next();
             };
             t.Start({ mode: "http", url: srv.Url + "/" });
+        });
+
+        /*
+         * **Stop reaches what `Run` handed its token to, and nothing else.**
+         * Asked to stop, a `Run` winds down with blocking calls of its own --
+         * reading what it wrote, running a command to tidy up -- and those
+         * must work; the one it handed `this.Cancellable` refuses.  When
+         * `Stop` cancelled every blocking call of the task, all five threw.
+         */
+        steps.push(() => {
+            const t = new TaskWork();
+            let said = null;
+
+            t.Progress = (p) => {
+                if (p.ready)
+                    t.Stop({ KillAfter: 5000 });
+                if (p.said)
+                    said = p.said;
+            };
+            t.Done  = () => fail("a stopped task must not reach Done");
+            t.Error = (m) => {
+                const s = said || {};
+                eq("after Stop, File.Load with no token still reads", s.Load, "left as it was");
+                eq("...File.Info still answers", s.Info, 14);
+                eq("...Directory.List still lists", s.List, "note");
+                eq("...Exec.Wait still runs", s.Exec, "wound");
+                check("...and the call handed this.Cancellable refuses",
+                      String(s.Given).includes("cancel"), String(s.Given));
+                check("...and the task ends cancelled",
+                      String(m).includes("cancelled"), String(m));
+                Directory.DeleteTree(File.Join(SCRATCH, "wind-down"));
+                next();
+            };
+            t.Start({ mode: "wind-down", dir: File.Join(SCRATCH, "wind-down") });
         });
 
         /* Cancellable is what reaches a native wait: the flag alone cannot. */

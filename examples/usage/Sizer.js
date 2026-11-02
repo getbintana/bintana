@@ -56,9 +56,11 @@ class Sizer extends Task {
             const dir = stack.pop();
             let   subs, names;
 
+            /* Handed the task's signal: once Stop has asked, the rest of a
+             * root goes by as fast as refusals, rather than read to the end. */
             try {
-                subs = Directory.Folders(dir);
-                names = Directory.Files(dir);
+                subs = Directory.Folders(dir, this.Cancellable);
+                names = Directory.Files(dir, this.Cancellable);
             } catch (e) {
                 errors++;
                 continue;

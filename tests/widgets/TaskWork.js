@@ -297,7 +297,7 @@ class TaskWork extends Task {
             return { status: r.Status, body: r.Body.ToText() };
         }
 
-        /* The three directory verbs take the job's signal through GIO. */
+        /* The three directory verbs take the job's signal, handed over. */
         if (msg.mode === "dir") {
             const said = {};
 
@@ -305,9 +305,9 @@ class TaskWork extends Task {
             for (const name of ["Files", "Folders", "List"]) {
                 try {
                     if (name === "List")
-                        Directory.List(msg.dir);
+                        Directory.List(msg.dir, this.Cancellable);
                     else
-                        Directory[name](msg.dir, { Recursive: true });
+                        Directory[name](msg.dir, { Recursive: true }, this.Cancellable);
                     said[name] = "";
                 } catch (e) {
                     said[name] = e.message;
@@ -323,12 +323,12 @@ class TaskWork extends Task {
             let   said = "";
 
             c.Cancel();
-            try { Exec.Wait(["/bin/sh", "-c", "sleep 10"], { Cancellable: c }); }
+            try { Exec.Wait(["/bin/sh", "-c", "sleep 10"], c); }
             catch (e) { said = e.message; }
             return { said: said };
         }
 
-        /* The Start token, visible inside `Run` as the same signal. */
+        /* The task's own signal, which the Start token forwards into. */
         if (msg.mode === "cancellable") {
             const c = this.Cancellable;
 
@@ -339,7 +339,31 @@ class TaskWork extends Task {
 
         /* A child that would outlive the task unless Stop cancels it. */
         if (msg.mode === "block") {
-            Exec.Wait(["/bin/sh", "-c", "sleep 10"]);
+            Exec.Wait(["/bin/sh", "-c", "sleep 10"], this.Cancellable);
+            return { done: true };
+        }
+
+        /* Asked to stop, it winds down with the blocking calls it was not
+         * handed the token for -- and those must still work. */
+        if (msg.mode === "wind-down") {
+            Directory.Make(msg.dir);
+            File.Save(File.Join(msg.dir, "note"), "left as it was");
+            this.Report({ ready: true });
+            while (!this.Stopping) { /* the test stops it */ }
+
+            const said = {};
+            const tries = {
+                Load:  () => File.Load(File.Join(msg.dir, "note")),
+                Info:  () => File.Info(File.Join(msg.dir, "note")).Size,
+                List:  () => Directory.List(msg.dir).join(","),
+                Exec:  () => Exec.Wait(["/bin/sh", "-c", "printf wound"]).Output,
+                Given: () => File.Load(File.Join(msg.dir, "note"), this.Cancellable),
+            };
+            for (const name of ["Load", "Info", "List", "Exec", "Given"]) {
+                try { said[name] = tries[name](); }
+                catch (e) { said[name] = `threw: ${e.message}`; }
+            }
+            this.Report({ said });
             return { done: true };
         }
 

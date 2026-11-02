@@ -218,8 +218,8 @@ each rule below; read it before changing a level.
   `FollowRedirects: true` back in it and `testNetwork` goes red on the portal
   rows.
 - **A `Task` worker runs `rad.js` and has no `Network`**, and only the blocking
-  `Http.*Wait` verbs -- each on a `SoupSession` of that thread and linked to
-  the job's `GCancellable`, so `Stop` cancels the flight. The first
+  `Http.*Wait` verbs -- each on a `SoupSession` of that thread; handed
+  `this.Cancellable` last, `Stop` cancels the flight. The first
   `Network.Probe = …` stopped every worker at load, and the xlsx and task tests
   went red with *Network is not defined*; the asynchronous `Http` is not there
   because its source belongs to the main loop. Anything `rad.js` hangs on a C
@@ -234,7 +234,7 @@ each rule below; read it before changing a level.
   HTTP/1.1 at 1.5 s -- in a 20-line C program on libsoup alone, in `Http.GetWait`
   on the main thread and in a task, and in the callback `Http.Get` with `Stop()`
   or `{ Timeout }`. So every way of cancelling a flight (`Stop`, `Timeout`,
-  `{ Cancellable }`, a task's `Stop`/`Timeout`/shared token) reports the right
+  a `Cancellable` argument, a task's `Stop`/`Timeout`/shared token) reports the right
   ending late, and a server that never answers is never left. **It is not ours
   to fix and we do not force HTTP/1.1**: the application opts in with
   `SOUP_FORCE_HTTP1`, which libsoup reads once (`soup-connection-manager.c`, a

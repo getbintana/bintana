@@ -2,7 +2,7 @@
  * A download manager: several downloads at once, each in a `Task`, and the
  * two ways of stopping them.
  *
- *     t.Start(msg, { Cancellable: this.all, Timeout: ms });
+ *     t.Start(msg, { Timeout: ms }, this.all);
  *
  *     ✕ on a row       t.Stop()          ends that download alone
  *     its Timeout      the guard         ends that download alone
@@ -118,7 +118,7 @@ class DownloadsForm extends Form {
         this.running++;
         this.idle();
         t.Start({ url, path: File.Join(this.dir, nameOf(url, this.made)) },
-                { Cancellable: this.all, Timeout: ms > 0 ? ms : undefined });
+                { Timeout: ms > 0 ? ms : undefined }, this.all);
     }
 
     /* One row: the address, what became of it, and its own ✕. */

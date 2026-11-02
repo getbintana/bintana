@@ -4102,7 +4102,7 @@ function* p_completion(ide) {
           det("FocusNext", "Container.") === "()",
           JSON.stringify(det("FocusNext", "Container.")));
     check("and a global's verb says its parameters, declared beside the C",
-          det("Load", "        File.") === "(path)" &&
+          det("Load", "        File.") === "(path, [cancellable])" &&
           det("Add", "Container.") !== "()",
           JSON.stringify([det("Load", "        File."), det("Add", "Container.")]));
     check("a member of a class the runtime never ran keeps the honest floor",
@@ -4226,7 +4226,8 @@ function* p_completion(ide) {
      * C entry declares it now, and `api.sh` fails on a global's native verb
      * that has none. */
     eq("and says its parameter, which neither `()` nor `(...)` did",
-       ask("", "        File.").find((p) => p.Text === "Load").Detail, "(path)");
+       ask("", "        File.").find((p) => p.Text === "Load").Detail,
+       "(path, [cancellable])");
     /* **And what it is for**, under the list for the chosen row: the first
      * sentence of the description written beside the member in the C, in
      * plain text -- the backticks and the bold of the documentation's Markdown

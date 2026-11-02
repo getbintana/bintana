@@ -2667,36 +2667,11 @@ static gboolean on_http_wait_late(gpointer data)
     return G_SOURCE_REMOVE;
 }
 
-/* `{ Cancellable }` on a Wait, borrowed; absent is fine. */
-static bool http_wait_cancellable(JSContext *ctx, JSValueConst opts,
-                                  const char *who, GCancellable **out)
-{
-    *out = NULL;
-    if (!JS_IsObject(opts))
-        return true;
-
-    JSValue v = JS_GetPropertyStr(ctx, opts, "Cancellable");
-
-    if (JS_IsUndefined(v) || JS_IsNull(v)) {
-        JS_FreeValue(ctx, v);
-        return true;
-    }
-
-    GCancellable *cancel = bta_cancellable_get(ctx, v);
-
-    JS_FreeValue(ctx, v);
-    if (!cancel) {
-        JS_ThrowTypeError(ctx, "%s: Cancellable is not a Cancellable", who);
-        return false;
-    }
-    *out = cancel;
-    return true;
-}
-
 /* Blocking sibling: the same message, sent with nobody to call back. */
 static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
                          const char *method, const char *url,
-                         JSValueConst body, JSValueConst opts, const char *who)
+                         JSValueConst body, JSValueConst opts,
+                         GCancellable *opt_cancel, const char *who)
 {
     SoupMessage *msg;
     char        *full;
@@ -2737,8 +2712,7 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         return JS_ThrowRangeError(ctx, "%s: Timeout %d is negative", who, timeout);
     }
 
-    GCancellable *opt_cancel = NULL;
-    if (!http_wait_cancellable(ctx, opts, who, &opt_cancel)) {
+    if (!bta_cancellable_not_option(ctx, opts, who)) {
         g_object_unref(msg);
         http_tls_unref(tls);
         return JS_EXCEPTION;
@@ -2751,11 +2725,9 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
 
     g_main_context_push_thread_default(priv);
 
-    GCancellable *task_cancel = bta_task_cancellable(ctx);
     GCancellable *canc        = g_cancellable_new();
-    /* A local one, linked to the task's: the operation's own Timeout must not
-     * cancel the job for the next call, while Stop must reach this flight. */
-    gulong        linked      = bta_cancellable_link(task_cancel, canc);
+    /* A local one, linked to the caller's: the operation's own Timeout must
+     * not cancel that one for the next call. */
     gulong        opt_link    = bta_cancellable_link(opt_cancel, canc);
     HttpWaitState w = { false, NULL, NULL, NULL };
     bool jar_borrowed = false;
@@ -2801,8 +2773,6 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     }
     g_main_context_pop_thread_default(priv);
     g_main_context_unref(priv);
-    if (linked)
-        g_cancellable_disconnect(task_cancel, linked);
     if (opt_link)
         g_cancellable_disconnect(opt_cancel, opt_link);
     g_object_unref(canc);
@@ -2843,6 +2813,9 @@ static JSValue http_wait_call(JSContext *ctx, HttpClientData *c, SoupSession *se
                               const char *method, bool takes_body,
                               int argc, JSValueConst *argv, const char *who)
 {
+    /* `(url, [body], [opts], [cancellable])`: borrowed, argv holds it. */
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "%s(url, [body], [opts]): needs a URL", who);
     for (int i = 0; i < argc; i++) {
@@ -2889,7 +2862,7 @@ static JSValue http_wait_call(JSContext *ctx, HttpClientData *c, SoupSession *se
         return JS_ThrowTypeError(ctx, "%s: too many arguments", who);
     }
 
-    JSValue r = http_wait(ctx, c, sess, method, url, body, opts, who);
+    JSValue r = http_wait(ctx, c, sess, method, url, body, opts, cancel, who);
 
     g_free(url);
     return r;
@@ -3126,43 +3099,45 @@ static const JSCFunctionListEntry http_client_props[] = {
      *   name
      */
     JS_CFUNC_DEF("Stream",      6, http_client_stream),
-    /* RequestWait(method, url, [body], [opts]) -> { Status, Reason, Headers, Body, Url }
+    /* RequestWait(method, url, [body], [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking spelling: answers with the record, **throws** on
      *   transport failure — and what it throws carries the same `Kind` and
      *   `Status` the callback would have been handed. **With no `Timeout` it
-     *   gives up after 30 s**, and `{ Timeout: 0 }` waits forever
+     *   gives up after 30 s**, and `{ Timeout: 0 }` waits forever. A
+     *   `Cancellable` last ends the flight when raised -- in a task,
+     *   `this.Cancellable` is how `Stop` reaches it
      */
-    JS_CFUNC_DEF("RequestWait", 4, http_client_requestwait),
-    /* GetWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("RequestWait", 5, http_client_requestwait),
+    /* GetWait(url, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Get`. **With no `Timeout` it gives up after 30 s**, and
      *   `{ Timeout: 0 }` waits forever
      */
-    JS_CFUNC_DEF("GetWait",     2, http_client_getwait),
-    /* PostWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("GetWait",     3, http_client_getwait),
+    /* PostWait(url, body, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Post`. **With no `Timeout` it gives up after 30 s**, and
      *   `{ Timeout: 0 }` waits forever
      */
-    JS_CFUNC_DEF("PostWait",    3, http_client_postwait),
-    /* PutWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("PostWait",    4, http_client_postwait),
+    /* PutWait(url, body, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Put`. **With no `Timeout` it gives up after 30 s**, and
      *   `{ Timeout: 0 }` waits forever
      */
-    JS_CFUNC_DEF("PutWait",     3, http_client_putwait),
-    /* PatchWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("PutWait",     4, http_client_putwait),
+    /* PatchWait(url, body, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Patch`. **With no `Timeout` it gives up after 30 s**, and
      *   `{ Timeout: 0 }` waits forever
      */
-    JS_CFUNC_DEF("PatchWait",   3, http_client_patchwait),
-    /* DeleteWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("PatchWait",   4, http_client_patchwait),
+    /* DeleteWait(url, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Delete`. **With no `Timeout` it gives up after 30 s**,
      *   and `{ Timeout: 0 }` waits forever
      */
-    JS_CFUNC_DEF("DeleteWait",  2, http_client_deletewait),
-    /* HeadWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("DeleteWait",  3, http_client_deletewait),
+    /* HeadWait(url, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Head`. **With no `Timeout` it gives up after 30 s**, and
      *   `{ Timeout: 0 }` waits forever
      */
-    JS_CFUNC_DEF("HeadWait",    2, http_client_headwait),
+    JS_CFUNC_DEF("HeadWait",    3, http_client_headwait),
 };
 
 /* ------------------------------------------------------- Http global */
@@ -3522,13 +3497,13 @@ static JSValue js_http_headwait(JSContext *ctx, JSValueConst this_val,
  * same unsafe surface, so it is not here either.
  */
 static const JSCFunctionListEntry http_worker_props[] = {
-    JS_CFUNC_DEF("RequestWait", 4, js_http_requestwait),
-    JS_CFUNC_DEF("GetWait",     2, js_http_getwait),
-    JS_CFUNC_DEF("PostWait",    3, js_http_postwait),
-    JS_CFUNC_DEF("PutWait",     3, js_http_putwait),
-    JS_CFUNC_DEF("PatchWait",   3, js_http_patchwait),
-    JS_CFUNC_DEF("DeleteWait",  2, js_http_deletewait),
-    JS_CFUNC_DEF("HeadWait",    2, js_http_headwait),
+    JS_CFUNC_DEF("RequestWait", 5, js_http_requestwait),
+    JS_CFUNC_DEF("GetWait",     3, js_http_getwait),
+    JS_CFUNC_DEF("PostWait",    4, js_http_postwait),
+    JS_CFUNC_DEF("PutWait",     4, js_http_putwait),
+    JS_CFUNC_DEF("PatchWait",   4, js_http_patchwait),
+    JS_CFUNC_DEF("DeleteWait",  3, js_http_deletewait),
+    JS_CFUNC_DEF("HeadWait",    3, js_http_headwait),
 };
 
 void bta_http_init_worker(JSContext *ctx, JSValue global)
@@ -3598,36 +3573,38 @@ static const JSCFunctionListEntry http_props[] = {
      *   name
      */
     JS_CFUNC_DEF("Stream",      6, js_http_stream),
-    /* RequestWait(method, url, [body], [opts]) -> { Status, Reason, Headers, Body, Url }
+    /* RequestWait(method, url, [body], [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking spelling: answers with the record, **throws** on
      *   transport failure — and what it throws carries the same `Kind` and
-     *   `Status` the callback would have been handed
+     *   `Status` the callback would have been handed. A `Cancellable` last
+     *   ends the flight when raised -- in a task, `this.Cancellable` is how
+     *   `Stop` reaches it
      */
-    JS_CFUNC_DEF("RequestWait", 4, js_http_requestwait),
-    /* GetWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("RequestWait", 5, js_http_requestwait),
+    /* GetWait(url, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Get`
      */
-    JS_CFUNC_DEF("GetWait",     2, js_http_getwait),
-    /* PostWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("GetWait",     3, js_http_getwait),
+    /* PostWait(url, body, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Post`
      */
-    JS_CFUNC_DEF("PostWait",    3, js_http_postwait),
-    /* PutWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("PostWait",    4, js_http_postwait),
+    /* PutWait(url, body, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Put`
      */
-    JS_CFUNC_DEF("PutWait",     3, js_http_putwait),
-    /* PatchWait(url, body, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("PutWait",     4, js_http_putwait),
+    /* PatchWait(url, body, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Patch`
      */
-    JS_CFUNC_DEF("PatchWait",   3, js_http_patchwait),
-    /* DeleteWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("PatchWait",   4, js_http_patchwait),
+    /* DeleteWait(url, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Delete`
      */
-    JS_CFUNC_DEF("DeleteWait",  2, js_http_deletewait),
-    /* HeadWait(url, [opts]) -> { Status, Reason, Headers, Body, Url }
+    JS_CFUNC_DEF("DeleteWait",  3, js_http_deletewait),
+    /* HeadWait(url, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Head`
      */
-    JS_CFUNC_DEF("HeadWait",    2, js_http_headwait),
+    JS_CFUNC_DEF("HeadWait",    3, js_http_headwait),
 };
 
 /* ------------------------------------------------------- Server */

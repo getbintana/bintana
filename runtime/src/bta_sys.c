@@ -87,6 +87,8 @@ const char *bta_file_path(JSContext *ctx, JSValueConst v, const char *who)
 static JSValue sys_file_load(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Load(path) needs a path");
 
@@ -99,7 +101,7 @@ static JSValue sys_file_load(JSContext *ctx, JSValueConst this_val,
     GError *err  = NULL;
     GFile  *file = g_file_new_for_path(path);
 
-    if (!g_file_load_contents(file, bta_task_cancellable(ctx),
+    if (!g_file_load_contents(file, cancel,
                               &data, &len, NULL, &err)) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
                                        bta_gerror_text(err));
@@ -546,6 +548,8 @@ static JSValue sys_file_rename(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     if (argc < 2)
         return JS_ThrowTypeError(ctx, "File.Copy(from, to) needs both paths");
 
@@ -567,7 +571,7 @@ static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
         GError *error = NULL;
 
         if (!g_file_copy(src, dst, G_FILE_COPY_NONE,
-                         bta_task_cancellable(ctx), NULL, NULL, &error))
+                         cancel, NULL, NULL, &error))
             e = JS_ThrowPlainError(ctx, "cannot copy %s to %s: %s", from, to,
                                    bta_gerror_text(error));
         g_clear_error(&error);
@@ -606,6 +610,8 @@ static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_info(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "File.Info") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "File.Info(path) needs a path");
@@ -616,7 +622,7 @@ static JSValue sys_file_info(JSContext *ctx, JSValueConst this_val,
         G_FILE_ATTRIBUTE_STANDARD_SIZE "," G_FILE_ATTRIBUTE_STANDARD_TYPE ","
         G_FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE "," G_FILE_ATTRIBUTE_STANDARD_ICON ","
         G_FILE_ATTRIBUTE_TIME_MODIFIED "," G_FILE_ATTRIBUTE_TIME_MODIFIED_USEC,
-        G_FILE_QUERY_INFO_NONE, bta_task_cancellable(ctx), &err);
+        G_FILE_QUERY_INFO_NONE, cancel, &err);
 
     g_object_unref(file);
     JS_FreeCString(ctx, path);
@@ -972,6 +978,8 @@ static JSValue sys_file_delete(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_trash(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Trash(path) needs a path");
 
@@ -983,7 +991,7 @@ static JSValue sys_file_trash(JSContext *ctx, JSValueConst this_val,
     GError *error = NULL;
     JSValue e     = JS_UNDEFINED;
 
-    if (!g_file_trash(file, bta_task_cancellable(ctx), &error))
+    if (!g_file_trash(file, cancel, &error))
         e = JS_ThrowPlainError(ctx, "cannot trash %s: %s", path,
                                bta_gerror_text(error));
 
@@ -1052,6 +1060,8 @@ static bool copy_tree(GFile *src, GFile *dst, GCancellable *cancel,
 static JSValue sys_dir_copy(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     const char *from = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.Copy") : NULL;
     const char *to   = argc > 1 ? bta_file_path(ctx, argv[1], "Directory.Copy") : NULL;
 
@@ -1071,7 +1081,7 @@ static JSValue sys_dir_copy(JSContext *ctx, JSValueConst this_val,
         GFile  *dst   = g_file_new_for_path(to);
         GError *error = NULL;
 
-        if (!copy_tree(src, dst, bta_task_cancellable(ctx), &error))
+        if (!copy_tree(src, dst, cancel, &error))
             e = JS_ThrowPlainError(ctx, "cannot copy %s to %s: %s", from, to,
                                    bta_gerror_text(error));
         g_clear_error(&error);
@@ -1144,6 +1154,8 @@ static JSValue sys_dir_delete(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_dir_delete_tree(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.DeleteTree") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "Directory.DeleteTree(path) needs a path");
@@ -1157,7 +1169,7 @@ static JSValue sys_dir_delete_tree(JSContext *ctx, JSValueConst this_val,
         GFile  *dir   = g_file_new_for_path(path);
         GError *error = NULL;
 
-        if (!delete_tree(dir, bta_task_cancellable(ctx), &error))
+        if (!delete_tree(dir, cancel, &error))
             e = JS_ThrowPlainError(ctx, "cannot delete %s: %s", path,
                                    bta_gerror_text(error));
         g_clear_error(&error);
@@ -1172,6 +1184,8 @@ static JSValue sys_dir_delete_tree(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.List") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "Directory.List(path) needs a path");
@@ -1180,7 +1194,6 @@ static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
     const char *pattern = argc > 1 && JS_IsString(argv[1])
                               ? bta_file_path(ctx, argv[1], "Directory.List") : NULL;
 
-    GCancellable    *cancel = bta_task_cancellable(ctx);
     GFile           *dir    = g_file_new_for_path(path);
     GError          *err    = NULL;
     GFileEnumerator *walk   = g_file_enumerate_children(
@@ -1357,6 +1370,8 @@ static bool dir_walk(const char *root, GPatternSpec *spec, bool recursive,
 static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv, int magic)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     const char *path = argc > 0 ? bta_file_path(ctx, argv[0], magic ? "Directory.Folders" : "Directory.Files") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, magic ? "Directory.Folders(path) needs a path"
@@ -1391,7 +1406,7 @@ static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
     GPatternSpec *spec  = pattern ? g_pattern_spec_new(pattern) : NULL;
     GPtrArray    *found = g_ptr_array_new_with_free_func(g_free);
     bool          ok    = dir_walk(path, spec, recursive, magic != 0, found,
-                                    bta_task_cancellable(ctx));
+                                    cancel);
 
     if (!ok) {
         g_ptr_array_unref(found);
@@ -2581,7 +2596,8 @@ static void exec_wait_guard_free(GSource *src)
 }
 
 /*
- * Exec.Wait(argv, [options]) -- the child, run to the end, as a record.
+ * Exec.Wait(argv, [options], [cancellable]) -- the child, run to the end, as
+ * a record.
  *
  * The other spelling of the same call, for the case the asynchronous one makes
  * worse rather than better: a tool that runs a command it knows ends, looks at
@@ -2611,35 +2627,12 @@ static void exec_wait_guard_free(GSource *src)
  * async boundary, nothing for bta_sys_cleanup() to free.  Which is the whole of
  * why it is short.
  */
-/* `{ Cancellable }` on Wait: borrowed, or NULL when absent. */
-static bool exec_wait_cancellable(JSContext *ctx, JSValueConst opts,
-                                  GCancellable **out)
-{
-    *out = NULL;
-    if (!JS_IsObject(opts))
-        return true;
-
-    JSValue v = JS_GetPropertyStr(ctx, opts, "Cancellable");
-
-    if (JS_IsUndefined(v) || JS_IsNull(v)) {
-        JS_FreeValue(ctx, v);
-        return true;
-    }
-
-    GCancellable *cancel = bta_cancellable_get(ctx, v);
-
-    JS_FreeValue(ctx, v);
-    if (!cancel) {
-        JS_ThrowTypeError(ctx, "Exec.Wait: Cancellable is not a Cancellable");
-        return false;
-    }
-    *out = cancel;
-    return true;
-}
-
 static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
+    /* `Wait(argv, [options], [cancellable])`: borrowed, argv holds it. */
+    GCancellable *opt_cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     if (argc < 1 || !JS_IsArray(argv[0]))
         return JS_ThrowTypeError(ctx,
             "Exec.Wait(argv, [options]): argv must be an array");
@@ -2657,8 +2650,7 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
             "object -- Wait takes no callbacks, it answers with a record");
     }
 
-    GCancellable *opt_cancel = NULL;
-    if (!exec_wait_cancellable(ctx, opts, &opt_cancel))
+    if (!bta_cancellable_not_option(ctx, opts, "Exec.Wait"))
         return JS_EXCEPTION;
 
     GBytes *input = NULL;
@@ -2743,11 +2735,9 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
      * than waiting for a `Wait` that is already blocked on the child.
      */
     GBytes *stdin_bytes = input ? input : g_bytes_new_static("", 0);
-    GCancellable *task_cancel = bta_task_cancellable(ctx);
     GCancellable *canc        = g_cancellable_new();
-    /* A local signal linked to the task's and the caller's: the operation's
-     * own guard must not cancel either for the next call. */
-    gulong task_link = bta_cancellable_link(task_cancel, canc);
+    /* A local signal linked to the caller's: the operation's own guard must
+     * not cancel that one for the next call. */
     gulong opt_link  = bta_cancellable_link(opt_cancel, canc);
 
     input = NULL;   /* the operation holds its own reference to it */
@@ -2787,8 +2777,6 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
     if (w.err && g_error_matches(w.err, G_IO_ERROR, G_IO_ERROR_CANCELLED))
         exec_signal_group(proc, pid, true);
 
-    if (task_link)
-        g_cancellable_disconnect(task_cancel, task_link);
     if (opt_link)
         g_cancellable_disconnect(opt_cancel, opt_link);
     g_object_unref(canc);
@@ -3943,6 +3931,8 @@ static JSValue js_monotonic(JSContext *ctx, JSValueConst this_val,
 static JSValue sys_file_load_bytes(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
+    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.LoadBytes(path) needs a path");
 
@@ -3955,7 +3945,7 @@ static JSValue sys_file_load_bytes(JSContext *ctx, JSValueConst this_val,
     GError *err  = NULL;
     GFile  *file = g_file_new_for_path(path);
 
-    if (!g_file_load_contents(file, bta_task_cancellable(ctx),
+    if (!g_file_load_contents(file, cancel,
                               &data, &len, NULL, &err)) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
                                        bta_gerror_text(err));
@@ -4412,12 +4402,12 @@ void bta_sys_env_readonly(JSContext *ctx, JSValue global)
 void bta_sys_init(JSContext *ctx, JSValue global)
 {
     JSValue file = JS_NewObject(ctx);
-    /* Load(path) -> string
+    /* Load(path, [cancellable]) -> string
      *   the whole file as a string. **Throws if it cannot be read**, and the
      *   message names the file: there is no `null` to test for and no silent
-     *   empty string
+     *   empty string. A `Cancellable` last ends a read that is stuck
      */
-    JS_SetPropertyStr(ctx, file, "Load",   JS_NewCFunction(ctx, sys_file_load, "Load", 1));
+    JS_SetPropertyStr(ctx, file, "Load",   JS_NewCFunction(ctx, sys_file_load, "Load", 2));
     /* Save(path, text)
      *   writes it **atomically** — a temporary beside it, renamed over — so a
      *   failed write leaves the old file intact and a reader never sees half
@@ -4445,31 +4435,33 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      */
     JS_SetPropertyStr(ctx, file, "Open",
                       JS_NewCFunction(ctx, sys_file_open, "Open", 1));
-    /* Info(path) -> { Size, Modified, Type, Icon, IsDir }
+    /* Info(path, [cancellable]) -> { Size, Modified, Type, Icon, IsDir }
      *   `{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a
      *   content type you can test (`"image/png"`), `.Icon` is the name the
      *   desktop draws for that kind of file, and `.Modified` is a real
-     *   `Date`, to the millisecond
+     *   `Date`, to the millisecond. A `Cancellable` last ends a query that
+     *   is stuck, and throws rather than answering `null`
      */
     JS_SetPropertyStr(ctx, file, "Info",
-                      JS_NewCFunction(ctx, sys_file_info, "Info", 1));
+                      JS_NewCFunction(ctx, sys_file_info, "Info", 2));
     /* Watch(path, cb) -> { Stop }
      *   `cb(event, path)` — `"Changed"`, `"Created"`, `"Deleted"` — and
      *   answers something with a `Stop()`
      */
     JS_SetPropertyStr(ctx, file, "Watch",
                       JS_NewCFunction(ctx, sys_file_watch, "Watch", 2));
-    /* Copy(from, to)
-     *   **byte for byte**, so it works on images; refuses to clobber
+    /* Copy(from, to, [cancellable])
+     *   **byte for byte**, so it works on images; refuses to clobber. A
+     *   `Cancellable` last stops a large copy part way
      */
     JS_SetPropertyStr(ctx, file, "Copy",
-                      JS_NewCFunction(ctx, sys_file_copy, "Copy", 2));
-    /* Trash(path)
+                      JS_NewCFunction(ctx, sys_file_copy, "Copy", 3));
+    /* Trash(path, [cancellable])
      *   to the desktop's trash, whole for a folder. Throws where there is no
-     *   trash
+     *   trash. A `Cancellable` last stops it
      */
     JS_SetPropertyStr(ctx, file, "Trash",
-                      JS_NewCFunction(ctx, sys_file_trash, "Trash", 1));
+                      JS_NewCFunction(ctx, sys_file_trash, "Trash", 2));
     /* Rename(from, to)
      *   also moves; refuses to clobber
      */
@@ -4481,12 +4473,13 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      */
     JS_SetPropertyStr(ctx, file, "Hash",
                       JS_NewCFunction(ctx, sys_file_hash, "Hash", 2));
-    /* LoadBytes(path) -> Bytes
+    /* LoadBytes(path, [cancellable]) -> Bytes
      *   the whole file as [`Bytes`](docs/llm/library.md#bytes), untouched —
-     *   what `Load` cannot do, since it answers text
+     *   what `Load` cannot do, since it answers text. A `Cancellable` last
+     *   ends a read that is stuck
      */
     JS_SetPropertyStr(ctx, file, "LoadBytes",
-                      JS_NewCFunction(ctx, sys_file_load_bytes, "LoadBytes", 1));
+                      JS_NewCFunction(ctx, sys_file_load_bytes, "LoadBytes", 2));
     /* SaveBytes(path, bytes)
      *   those bytes, exactly; the pair of `LoadBytes`
      */
@@ -4582,49 +4575,52 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, global, "Screen", screen);
 
     JSValue dir = JS_NewObject(ctx);
-    /* List(path, [pattern]) -> string[]
+    /* List(path, [pattern], [cancellable]) -> string[]
      *   the **names**, sorted, with no `.` or `..` — what a tree of one
-     *   folder shows
+     *   folder shows. A `Cancellable` last stops the listing
      */
-    JS_SetPropertyStr(ctx, dir, "List", JS_NewCFunction(ctx, sys_dir_list, "List", 2));
-    /* Files(path, [options]) -> string[]
-     *   the **full paths** of the files, sorted
+    JS_SetPropertyStr(ctx, dir, "List", JS_NewCFunction(ctx, sys_dir_list, "List", 3));
+    /* Files(path, [options], [cancellable]) -> string[]
+     *   the **full paths** of the files, sorted. A `Cancellable` last stops
+     *   the walk
      */
     JS_SetPropertyStr(ctx, dir, "Files",
-                      JS_NewCFunctionMagic(ctx, sys_dir_walk, "Files", 2,
+                      JS_NewCFunctionMagic(ctx, sys_dir_walk, "Files", 3,
                                            JS_CFUNC_generic_magic, 0));
-    /* Folders(path, [options]) -> string[]
+    /* Folders(path, [options], [cancellable]) -> string[]
      *   the same for the directories
      */
     JS_SetPropertyStr(ctx, dir, "Folders",
-                      JS_NewCFunctionMagic(ctx, sys_dir_walk, "Folders", 2,
+                      JS_NewCFunctionMagic(ctx, sys_dir_walk, "Folders", 3,
                                            JS_CFUNC_generic_magic, 1));
     /* Make(path)
      *   creates it **and any missing parent**, so there is no loop to write
      */
     JS_SetPropertyStr(ctx, dir, "Make", JS_NewCFunction(ctx, sys_dir_make, "Make", 1));
-    /* Copy(from, to)
-     *   a whole tree
+    /* Copy(from, to, [cancellable])
+     *   a whole tree. A `Cancellable` last stops it part way, leaving what
+     *   was copied
      */
-    JS_SetPropertyStr(ctx, dir, "Copy", JS_NewCFunction(ctx, sys_dir_copy, "Copy", 2));
+    JS_SetPropertyStr(ctx, dir, "Copy", JS_NewCFunction(ctx, sys_dir_copy, "Copy", 3));
     /* Delete(path)
      *   an **empty** directory, as
      *   [`File.Delete`](docs/reference/globals/File.md) is
      */
     JS_SetPropertyStr(ctx, dir, "Delete",
                       JS_NewCFunction(ctx, sys_dir_delete, "Delete", 1));
-    /* DeleteTree(path)
+    /* DeleteTree(path, [cancellable])
      *   it and everything under it — the one to be careful with, and the
-     *   reason it has a name of its own rather than a flag
+     *   reason it has a name of its own rather than a flag. A `Cancellable`
+     *   last stops it part way, leaving what was not yet deleted
      */
     JS_SetPropertyStr(ctx, dir, "DeleteTree",
-                      JS_NewCFunction(ctx, sys_dir_delete_tree, "DeleteTree", 1));
+                      JS_NewCFunction(ctx, sys_dir_delete_tree, "DeleteTree", 2));
     JS_SetPropertyStr(ctx, global, "Directory", dir);
 
     /* Wait hangs off Exec the way After hangs off Timer: asynchronous is this
      * language's default, so the plain call keeps the plain name. */
     JSValue exec = JS_NewCFunction(ctx, sys_exec, "Exec", 4);
-    /* Wait(argv, [options]) -> { ExitCode, Output }
+    /* Wait(argv, [options], [cancellable]) -> { ExitCode, Output }
      *   runs it and **waits**, answering what it printed: `{ ExitCode, Output
      *   }`. It blocks the main loop, so it is for programs that answer in
      *   milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for
@@ -4632,10 +4628,11 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   reads, which is what makes `Exec.Wait(["sort"], { Input: text })` a
      *   filter. **With no `Timeout` it gives up after 30 s** — a frozen window
      *   is no place for a default that never ends — and `Timeout: 0` is the
-     *   explicit *wait forever*
+     *   explicit *wait forever*. A `Cancellable` last ends the child when
+     *   raised; in a task, `this.Cancellable` is how `Stop` reaches it
      */
     JS_SetPropertyStr(ctx, exec, "Wait",
-                      JS_NewCFunction(ctx, sys_exec_wait, "Wait", 2));
+                      JS_NewCFunction(ctx, sys_exec_wait, "Wait", 3));
     JS_SetPropertyStr(ctx, global, "Exec", exec);
 
     /* The clock a duration is measured on, held by rad.js for `Stopwatch` and

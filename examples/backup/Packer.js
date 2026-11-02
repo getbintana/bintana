@@ -26,7 +26,8 @@
 class Packer extends Task {
 
     Run(msg) {
-        const files = Directory.Files(msg.src, { Recursive: true });
+        /* Handed the task's signal, so a Stop reaches a walk of a big tree. */
+        const files = Directory.Files(msg.src, { Recursive: true }, this.Cancellable);
         let   bytesIn = 0, bytesOut = 0;
         const bad = [];
 

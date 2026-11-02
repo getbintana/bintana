@@ -8,7 +8,7 @@
  * its own terms, makes one and hands it over:
  *
  *     const stop = new Cancellable();
- *     t.Start(data, { Cancellable: stop });
+ *     t.Start(data, stop);
  *     stop.Cancel();
  *
  * The value is the same on both sides of a worker: the JS object on the main
@@ -143,6 +143,61 @@ GCancellable *bta_cancellable_get(JSContext *ctx, JSValueConst v)
 
     (void)ctx;
     return c ? c->cancel : NULL;
+}
+
+/*
+ * A trailing `Cancellable`: the one road by which a call is handed one.
+ *
+ * When the last of more than `fixed` arguments is a Cancellable, its signal is
+ * returned and `*argc` drops by one, so the rest of the function reads its
+ * arguments as if the token had not been there.  Borrowed: `argv` holds it for
+ * the length of the call.  NULL when there is none.
+ *
+ * An argument and not an option, for two reasons.  An option is read through
+ * whatever getter the object has, which may hand out a token nothing else
+ * holds -- freed with its wrapper the moment the runtime let go of the value.
+ * And nothing is cancelled that the caller did not hand over: inside a task,
+ * `Stop` reaches a blocking call because `Run` passed `this.Cancellable`, and
+ * a call `Run` makes to wind down after `Stopping` is left alone.
+ */
+GCancellable *bta_cancellable_arg(JSContext *ctx, int *argc, JSValueConst *argv,
+                                  int fixed)
+{
+    (void)ctx;
+    if (*argc <= fixed)
+        return NULL;
+
+    BtaCancellable *c = cancellable_of(argv[*argc - 1]);
+
+    if (!c)
+        return NULL;
+    (*argc)--;
+    return c->cancel;
+}
+
+/* `{ Cancellable }` in an options object is the spelling that used to work:
+ * refused with a sentence naming the argument, rather than quietly ignored --
+ * an ignored token is a cancel that never arrives. */
+bool bta_cancellable_not_option(JSContext *ctx, JSValueConst opts,
+                                const char *who)
+{
+    if (!JS_IsObject(opts))
+        return true;
+
+    JSValue v = JS_GetPropertyStr(ctx, opts, "Cancellable");
+
+    if (JS_IsException(v))
+        return false;
+
+    bool set = !JS_IsUndefined(v);
+
+    JS_FreeValue(ctx, v);
+    if (set) {
+        JS_ThrowTypeError(ctx, "%s: a Cancellable is the last argument, "
+                               "not an option", who);
+        return false;
+    }
+    return true;
 }
 
 static void cancellable_forward(GCancellable *from, gpointer data)

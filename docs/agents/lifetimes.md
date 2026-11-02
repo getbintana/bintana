@@ -330,21 +330,34 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   always released.
 - **A job's `GCancellable` is cancelled, not freed, by the stop.** `BtaTaskJob`
   owns it; `Stop`, `Timeout` and `KillAfter` cancel it from the main thread, and
-  `task_job_unref` drops the last reference. A native call that takes it
-  (`Exec.Wait`, `Http.*Wait`, `g_file_load_contents`, `g_file_query_info`,
-  `g_file_copy`, `g_file_trash`, `g_file_enumerate_children`) returns
-  `G_IO_ERROR_CANCELLED`; a call that does not, such as `File.Hash` or the
-  compressors, is still only reached between opcodes or by the two-second
-  teardown bound. **The operation holds a reference, so the job's cancel
-  outlives the job's `Stop` request** -- and the thread that sees the
-  cancellation is the worker, not the caller. A shared `Cancellable` is forwarded
-  into the job's own, one way: raising it stops every linked task, but a
-  task's `Stop`, `Timeout` or `KillAfter` raises only its own (the first
-  version held the shared one as the job's, so one task's timeout ended its
-  siblings and left the caller's token cancelled). The worker's
-  `this.Cancellable` wraps the shared object itself, so both sides see one
-  state; `task_ending` reads both, because `Cancel()` sets the flag before it
-  emits the signal (see `docs/notes/task-threads.md`).
+  `task_job_unref` drops the last reference. **It reaches only the calls `Run`
+  hands it to** -- `this.Cancellable`, passed last to `Exec.Wait`, `Http.*Wait`,
+  `File.Load`/`LoadBytes`/`Info`/`Copy`/`Trash` or
+  `Directory.List`/`Files`/`Folders`/`Copy`/`DeleteTree`, which then return
+  `G_IO_ERROR_CANCELLED`. The first version linked every blocking call of a
+  worker to it implicitly (`bta_task_cancellable`), and `Stop` cancels at
+  once, so a `Run` that saw `Stopping` and wound down by reading a file or
+  running a command had each of those calls refused -- the cooperative stage
+  could do no I/O. A call handed nothing, and `File.Hash` or the compressors,
+  are reached only between opcodes or by the two-second teardown bound.
+  **The operation holds a reference, so the job's cancel outlives the job's
+  `Stop` request** -- and the thread that sees the cancellation is the worker,
+  not the caller. A shared `Cancellable` (`Start`'s last argument) is
+  forwarded into the job's own, one way: raising it stops every linked task,
+  but a task's `Stop`, `Timeout` or `KillAfter` raises only its own (the
+  first version held the shared one as the job's, so one task's timeout ended
+  its siblings and left the caller's token cancelled). The worker's
+  `this.Cancellable` is the job's own, so a call handed it hears all three;
+  `task_ending` reads the shared one too, because `Cancel()` sets the flag
+  before it emits the signal (see `docs/notes/task-threads.md`).
+- **A token is an argument, never an option.** `{ Cancellable }` read with
+  `JS_GetPropertyStr` and then `JS_FreeValue`d left a borrowed `GCancellable*`
+  behind, and a getter that made a fresh token handed over the only reference:
+  the wrapper was finalised on the free, `Exec.Wait` linked a dead object and
+  crashed, `Http.GetWait` ignored the cancel. Even `Task.Start`, which took a
+  reference, took it after the free. `bta_cancellable_arg` reads the last
+  argument instead -- `argv` holds it for the call, so borrowing is safe --
+  and `bta_cancellable_not_option` refuses the old spelling by name.
 - **A borrowed string from the catalogue can die inside the call that formats
   it.** `bta_locale_lookup` returns a pointer into this thread's `L.entries`,
   and `bta_locale_format` calls `JS_ToCString` on the arguments before it walks
