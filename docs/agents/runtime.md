@@ -395,7 +395,11 @@ icon when the theme has one by that name (`gtkapplication.c`).
   It is the same answer `Widget.DeferredProperties(type)` publishes. The first
   version of the list fix was a pending index in each setter, which would have
   been the fourth copy of the `Current`/`For` bargain; the class row is the
-  place a class says what it is.
+  place a class says what it is. **A class of the project has no row, so both
+  loaders walk its prototypes** to the nearest row that defers something:
+  `forms.js` did and `bta_form.c` asked only `bta_class_find(type)`, so
+  `MyList extends ListBox` built by `AddNode` selected row 2 and the same node
+  read from a `.form` opened at -1 (a `ComboBox` subclass, at row 0).
 - **An event emitted while a `.form` is being applied reaches the host's handler
   before the host's other controls exist.** Measured: a `Report` with
   `"Paper": "Letter"` in the form emitted `Prepared` from the setter, the form's

@@ -237,6 +237,11 @@ class RoundTrip2 extends Form {}
  * them, and asserts the selection arrived. */
 class IndexForm extends Form {}
 
+/* ...and a project's own subclasses of the two, which have no class row of
+ * their own: they wait for `Items` because their base does. */
+class IdxList extends ListBox {}
+class IdxCombo extends ComboBox {}
+
 /* A window of its own for the anchor test, because WidgetsForm is arranged
  * Vertical and what is under test is a fixed surface being resized. */
 class AnchorForm extends Form {}
@@ -12842,7 +12847,7 @@ class Form1 extends Form {
      * answer.
      */
     testIndexPending() {
-        for (const type of ["ListBox", "ComboBox"]) {
+        for (const type of ["ListBox", "ComboBox", "IdxList", "IdxCombo"]) {
             const panel = new Panel();
             this.Fixed1.Add(panel);
 
@@ -12882,6 +12887,10 @@ class Form1 extends Form {
                   properties: { Index: 2, Items: ["A", "B", "C"] } },
                 { type: "ComboBox", name: "Cmb",
                   properties: { Index: 2, Items: ["A", "B", "C"] } },
+                { type: "IdxList", name: "SubLst",
+                  properties: { Index: 2, Items: ["A", "B", "C"] } },
+                { type: "IdxCombo", name: "SubCmb",
+                  properties: { Index: 2, Items: ["A", "B", "C"] } },
             ],
         }, null, 2));
 
@@ -12891,6 +12900,15 @@ class Form1 extends Form {
             eq("...and Text says which row", form.Lst.Text, "C");
             eq("ComboBox: the C loader applies a declared Index", form.Cmb.Index, 2);
             eq("...and Text says which row", form.Cmb.Text, "C");
+            /* A subclass of the project has no row, and the C loader used to
+             * defer nothing for it: Index -1 on the list, the first row on
+             * the combo -- while AddNode, above, selected the right one. */
+            eq("a project's ListBox subclass: the C loader defers Index too",
+               form.SubLst.Index, 2);
+            eq("...and Text says which row", form.SubLst.Text, "C");
+            eq("a project's ComboBox subclass: the C loader defers Index too",
+               form.SubCmb.Index, 2);
+            eq("...and Text says which row", form.SubCmb.Text, "C");
         } finally {
             File.Delete(path);
         }

@@ -276,6 +276,52 @@ static bool class_defers(const BtaClass *cls, const char *prop)
     return false;
 }
 
+/*
+ * The class whose deferred properties a node built as `type` follows: the
+ * nearest one, walking from the instance up its prototypes, whose row defers
+ * something.
+ *
+ * A class of the project has no row, and used to defer nothing -- so
+ * `MyList extends ListBox` had its `Index` applied before `Items` brought a
+ * row, and opened with nothing selected, while the same node built by
+ * `AddNode` selected it.  This is the walk `forms.js`'s `deferredProperties`
+ * makes, so a node defers the same whichever loader builds it.
+ */
+static const BtaClass *deferring_class(JSContext *ctx, JSValueConst obj,
+                                       const char *type)
+{
+    const BtaClass *own = bta_class_find(type);
+
+    if (own && own->deferred && *own->deferred)
+        return own;
+
+    int       n;
+    BtaClass *table = bta_class_table(&n);
+    JSValue   p     = JS_GetPrototype(ctx, obj);
+
+    while (JS_IsObject(p)) {
+        for (int i = 0; i < n; i++) {
+            if (JS_IsObject(table[i].proto) &&
+                JS_VALUE_GET_PTR(table[i].proto) == JS_VALUE_GET_PTR(p) &&
+                table[i].deferred && *table[i].deferred) {
+                JS_FreeValue(ctx, p);
+                return &table[i];
+            }
+        }
+
+        JSValue up = JS_GetPrototype(ctx, p);
+
+        JS_FreeValue(ctx, p);
+        p = up;
+    }
+    /* A proxy's trap can throw here; the answer is then the class's own row,
+     * and the throw is not left pending for the next call into JS. */
+    if (JS_IsException(p))
+        JS_FreeValue(ctx, JS_GetException(ctx));
+    JS_FreeValue(ctx, p);
+    return own;
+}
+
 static int apply_properties(JSContext *ctx, JSValueConst target,
                             JSValueConst props, const char *where,
                             const BtaClass *cls, bool deferred)
@@ -464,9 +510,10 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
         goto out;
     }
 
-    /* The class row says which properties wait for the children. A class of
-     * the project is not in this table and defers nothing. */
-    BtaClass *cls = bta_class_find(type);
+    /* The class row says which properties wait for the children -- the
+     * nearest row that says any, so a project's subclass of a control that
+     * defers something defers it too. */
+    const BtaClass *cls = deferring_class(ctx, obj, type);
     JSValue   props = JS_GetPropertyStr(ctx, spec, "properties");
 
     if (shape_of(ctx, props, name ? name : type, "properties", false) < 0) {

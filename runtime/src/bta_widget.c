@@ -3419,8 +3419,9 @@ static JSValue w_property_names_by_type(JSContext *ctx, JSValueConst this_val,
  * a selection needs rows, and `Items` is applied before the children.
  *
  * A name that is no class of this runtime answers `[]` rather than throwing:
- * a project component is built by the JavaScript loader and has no class row
- * here, and it defers nothing.
+ * a project's class has no row here.  Both loaders then ask the classes it
+ * extends, nearest first, so `MyList extends ListBox` defers what `ListBox`
+ * does (`deferring_class` in bta_form.c, `deferredProperties` in forms.js).
  */
 static JSValue w_deferred_properties_by_type(JSContext *ctx, JSValueConst this_val,
                                              int argc, JSValueConst *argv)
