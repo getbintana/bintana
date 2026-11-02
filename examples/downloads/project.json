@@ -1,0 +1,11 @@
+{
+  "name": "Downloads",
+  "id": "io.github.getbintana.Downloads",
+  "startup": "DownloadsForm",
+  "sources": [
+    "Fetcher.js",
+    "DownloadsForm.js"
+  ],
+  "version": "1.0",
+  "description": "Several downloads at once, each in a thread of its own: a ✕ stops one, a timeout ends one, and Cancel all stops every download sharing the token"
+}

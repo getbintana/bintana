@@ -1,0 +1,130 @@
+{
+  "format": "bintana-form/1",
+  "class": "DownloadsForm",
+  "properties": {
+    "Text": "Downloads",
+    "Width": 640,
+    "Height": 420
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblUrl",
+      "properties": {
+        "For": "TxtUrl",
+        "Height": 20,
+        "Text": "Address",
+        "Width": 300,
+        "X": 12,
+        "Y": 12
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtUrl",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 380,
+        "X": 12,
+        "Y": 34
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblTimeout",
+      "properties": {
+        "For": "SpnTimeout",
+        "HAlign": "End",
+        "Height": 20,
+        "Text": "Timeout, s (0: none)",
+        "Width": 140,
+        "X": 400,
+        "Y": 12
+      }
+    },
+    {
+      "type": "SpinBox",
+      "name": "SpnTimeout",
+      "properties": {
+        "HAlign": "End",
+        "Height": 34,
+        "Max": 3600,
+        "Min": 0,
+        "Value": 5,
+        "Width": 110,
+        "X": 400,
+        "Y": 34
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnAdd",
+      "properties": {
+        "HAlign": "End",
+        "Height": 34,
+        "Style": "suggested-action",
+        "Text": "Download",
+        "Width": 108,
+        "X": 520,
+        "Y": 34
+      }
+    },
+    {
+      "type": "RowList",
+      "name": "List",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 268,
+        "MinHeight": 120,
+        "MinWidth": 280,
+        "Style": "frame",
+        "VAlign": "Fill",
+        "Width": 616,
+        "X": 12,
+        "Y": 80
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 34,
+        "Style": "dim-label",
+        "VAlign": "End",
+        "Width": 360,
+        "X": 12,
+        "Y": 374
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnClear",
+      "properties": {
+        "HAlign": "End",
+        "Height": 34,
+        "Text": "Clear list",
+        "VAlign": "End",
+        "Width": 116,
+        "X": 384,
+        "Y": 374
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancelAll",
+      "properties": {
+        "HAlign": "End",
+        "Height": 34,
+        "Style": "destructive-action",
+        "Text": "Cancel all",
+        "VAlign": "End",
+        "Width": 116,
+        "X": 512,
+        "Y": 374
+      }
+    }
+  ]
+}
