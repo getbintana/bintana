@@ -27358,6 +27358,23 @@ class Form1 extends Form {
             t.Start({ mode: "http", url: srv.Url + "/" });
         });
 
+        /* Cancellable is what reaches a native wait: the flag alone cannot. */
+        steps.push(() => {
+            const t    = new TaskWork();
+            const from = Date.now();
+
+            t.Done  = () => fail("a stopped blocking task must not reach Done");
+            t.Error = (m) => {
+                check("a stopped task cancels Exec.Wait",
+                      String(m).includes("cancelled"), String(m));
+                check("...without waiting for the child",
+                      Date.now() - from < 2500, String(Date.now() - from));
+                next();
+            };
+            t.Start({ mode: "block" });
+            Timer.After(250, () => t.Stop({ KillAfter: 2000 }));
+        });
+
         steps.push(() => {
             const data = Random.Bytes(64);
             const b64  = data.ToBase64();

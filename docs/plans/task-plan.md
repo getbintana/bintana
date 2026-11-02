@@ -1,6 +1,7 @@
 # Task: a class that runs in a thread of its own
 
-**Status: phases 1, 2, 3 and 4 built.** What is left is named at the end with its trigger. The surface is
+**Status: phases 1 to 6 built**, with the directory walk's cancellable still
+named at the end. The surface is
 [`docs/reference/globals/Task.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/globals/Task.md), which was
 written first and is the specification this follows. What is *not* built is
 named at the end, with the trigger that builds it — because the one limitation
@@ -297,40 +298,35 @@ the hard stop always won the race and `Run` never got to look. They had to
 become separate states (`1` asked, `2` timed out, `3` forced) before the
 cooperative half could exist at all.
 
-### Where it stops reaching, and what `GCancellable` would buy
+### Where it reaches: the job's `GCancellable`, built
 
 The interrupt only fires between opcodes, so a worker inside a native call
-cannot be reached by any flag. GIO's answer to that is `GCancellable`: not a
-way to kill a thread — nobody has one, and everybody who offered withdrew it
-(`Thread.Abort`, `Thread.stop`, `pthread_cancel`) — but cooperation moved
-inside the library, so a blocked call returns `G_IO_ERROR_CANCELLED` instead
-of not returning.
+cannot be reached by a flag. GIO's answer is `GCancellable`: not a way to kill
+a thread — nobody has one, and everybody who offered withdrew it (`Thread.Abort`,
+`Thread.stop`, `pthread_cancel`) — but cooperation inside the library, so a
+blocked call returns `G_IO_ERROR_CANCELLED` instead of not returning.
 
-**Measured, and it does not pay yet.** Of the six verbs a worker can call that
-could block, exactly one takes a `GCancellable`:
+Each `BtaTaskJob` owns one, and `Stop`, `Timeout` and `KillAfter` cancel it.
+The calls that take it now:
 
-| Verb | What it calls | Takes one |
+| Verb | What it calls | |
 |---|---|---|
-| `File.Load` | `g_file_get_contents` | no — glib |
-| `Directory.List` | `g_dir_open` / `g_dir_read_name` | no — glib |
-| `Directory.Files` / `Folders` | `g_file_test` | no — glib |
-| `File.Hash` | `g_fopen` / `fread` | no — libc |
-| `File.Exists` | `g_file_test` | no |
-| `File.Info` | `g_file_query_info` | **yes** |
+| `Exec.Wait` | `g_subprocess_communicate_async`, then SIGKILL on cancel | yes |
+| `Http.*Wait` | `soup_session_send_and_read_async`, linked to the job | yes |
+| `File.Load` / `LoadBytes` | `g_file_load_contents` | yes |
+| `File.Info` | `g_file_query_info` | yes |
+| `File.Copy` / `File.Trash` | `g_file_copy` / `g_file_trash` | yes |
 
-And the one that takes it is the one that almost never blocks: what hangs on a
-dead sshfs is the directory walk, and the walk is glib. Making it pay means
-moving `Directory.*` to `g_file_enumerate_children` and `File.Load` to
-`g_file_load_contents` — functions the **main thread** runs too, and a `GFile`
-plus a `GFileInfo` per entry where there is a `readdir` today, which
-`examples/usage` would feel on a hundred thousand files.
+`File.Load` moved from `g_file_get_contents` to `g_file_load_contents` for
+this; the main thread gets the same `GFile` read with a NULL cancellable. What
+is left is the **directory walk**, which is still `g_dir_open`/`readdir` and
+cannot be cancelled, plus `File.Hash` and the compressors. The trigger is the
+same as before: the day `Directory` moves to `g_file_enumerate_children` for
+its own reason, the cancellable comes with it.
 
-So teardown solves the symptom instead: a bounded wait of two seconds per live
-task, and a thread still running when it passes is cast adrift rather than
-joined, with its job deliberately left unfreed. The program closes and says
-why. **The trigger for `GCancellable` is named rather than argued: the day
-`Directory` and `File` move to GIO for some other reason, the cancellable is
-nearly free and it goes in then.**
+Teardown still has the bounded two-second wait and casts an unresponsive worker
+adrift, because a thread blocked in a call with no cancellable is reached by
+nothing else.
 
 ## Phases
 
@@ -353,8 +349,10 @@ nearly free and it goes in then.**
 5. **`Task.Max`** — **built**: a live-task ceiling, `0` for no limit, refused
    rather than queued. The count is a thread and a runtime each, which is what
    makes a ceiling worth having.
-6. **`GCancellable`**, if and when `File` and `Directory` move to GIO. Not
-   before: one verb in six would take it, and it is not the one that hangs.
+6. **`GCancellable`** — **built where it pays**: a job owns one, `Stop`,
+   `Timeout` and `KillAfter` cancel it, and `Exec.Wait`, `Http.*Wait` and the
+   GIO file verbs take it. The directory walk still cannot; that is one trigger
+   left, not a reason to defer the rest.
 
 The order matters, and it is the one thing this plan got wrong the first time:
 **phase 2 was written as if phase 3 were its condition.** It was not. A
@@ -369,4 +367,5 @@ The rest is not a roadmap; each waits for a program that asks for it:
 | | the program that reopens it |
 |---|---|
 | `markdown`'s parser as a worker module | a task that parses a `.md` — an index of notes, a table of contents, a document exported off the main thread. The viewer and the IDE help run on the page, so they do not. |
-| `GCancellable`, a debugger in a worker | named above, with the same rule: a measured need, not a symmetry. |
+| a cancellable directory walk | the day `Directory` moves to GIO for its own reason; today it is `readdir`, which takes none. |
+| a debugger in a worker | a second debug session, because the protocol is one control descriptor and `dbg` is process state; that is a design, not a flag. |

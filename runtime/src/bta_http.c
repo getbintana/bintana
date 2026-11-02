@@ -2718,7 +2718,14 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
 
     g_main_context_push_thread_default(priv);
 
-    GCancellable *canc = g_cancellable_new();
+    GCancellable *task_cancel = bta_task_cancellable(ctx);
+    GCancellable *canc        = g_cancellable_new();
+    /* A local one, linked to the task's: the operation's own Timeout must not
+     * cancel the job for the next call, while Stop must reach this flight. */
+    gulong        linked      = task_cancel
+        ? g_cancellable_connect(task_cancel, G_CALLBACK(g_cancellable_cancel),
+                                canc, NULL)
+        : 0;
     HttpWaitState w = { false, NULL, NULL, NULL };
     bool jar_borrowed = false;
 
@@ -2759,6 +2766,8 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     }
     g_main_context_pop_thread_default(priv);
     g_main_context_unref(priv);
+    if (linked)
+        g_cancellable_disconnect(task_cancel, linked);
     g_object_unref(canc);
     if (jar_borrowed && c->jar)
         soup_session_remove_feature(sess, SOUP_SESSION_FEATURE(c->jar));

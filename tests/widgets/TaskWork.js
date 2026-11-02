@@ -297,6 +297,12 @@ class TaskWork extends Task {
             return { status: r.Status, body: r.Body.ToText() };
         }
 
+        /* A child that would outlive the task unless Stop cancels it. */
+        if (msg.mode === "block") {
+            Exec.Wait(["/bin/sh", "-c", "sleep 10"]);
+            return { done: true };
+        }
+
         /* The blocking child only: callbacks belong to the main loop. */
         if (msg.mode === "exec") {
             const r = Exec.Wait(["/bin/sh", "-c", "printf hi"]);

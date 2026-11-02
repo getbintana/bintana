@@ -178,6 +178,7 @@ struct BtaTaskJob {
     bool       dead;            /* teardown owns it; deliver touches no JS */
     bool       ended;           /* the thread is on its way out, under task_lock */
     GThread   *thread;
+    GCancellable *cancel;       /* `Stop`, `Timeout` and `KillAfter` cancel it */
     guint      timeout_src;
     guint      force_src;       /* the second stage of a Stop */
     long       timeout_ms;
@@ -269,6 +270,7 @@ static void task_job_unref(gpointer data)
     g_free(job->file_text);
     g_free(job->file_path);
     g_free(job->msg_json);
+    g_clear_object(&job->cancel);
     g_free(job->app_name);
     g_free(job->app_version);
     g_free(job->app_dir);
@@ -312,6 +314,18 @@ static BtaTaskEnv *task_env(JSContext *ctx)
     if (!bta_task_is_worker(ctx))
         return NULL;
     return JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
+}
+
+/*
+ * The job's cancellable, for a native call that blocks: `Exec.Wait`,
+ * `Http.*Wait`, a GIO file read.  Borrowed, NULL on the main thread; it is
+ * cancelled by `Stop`, `Timeout` and `KillAfter`, and freed with the job.
+ */
+GCancellable *bta_task_cancellable(JSContext *ctx)
+{
+    BtaTaskEnv *env = task_env(ctx);
+
+    return env && env->job ? env->job->cancel : NULL;
 }
 
 static JSValue task_start(JSContext *ctx, JSValueConst this_val,
@@ -1821,6 +1835,8 @@ static gboolean task_timeout(gpointer data)
     if (task_find_locked(job->self) && !job->dead) {
         job->timeout_src = 0;
         g_atomic_int_set(&job->stop, 2);
+        if (job->cancel)
+            g_cancellable_cancel(job->cancel);
     }
     g_mutex_unlock(&task_lock);
     return G_SOURCE_REMOVE;
@@ -1837,6 +1853,8 @@ static gboolean task_force(gpointer data)
     if (task_find_locked(job->self) && !job->dead) {
         job->force_src = 0;
         g_atomic_int_set(&job->stop, 3);
+        if (job->cancel)
+            g_cancellable_cancel(job->cancel);
     }
     g_mutex_unlock(&task_lock);
     return G_SOURCE_REMOVE;
@@ -1946,6 +1964,7 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
     job->ctx        = ctx;
     job->self       = JS_DupValue(ctx, this_val);
     job->reports    = g_queue_new();
+    job->cancel     = g_cancellable_new();
     job->class_name = class_name;
     job->file_text  = text;
     job->file_path  = path;
@@ -2043,6 +2062,12 @@ static JSValue task_stop(JSContext *ctx, JSValueConst this_val,
          * the run ends; what it stopped meaning is *ends this instant*.
          */
         g_atomic_int_set(&job->stop, 1);
+        /* A native call can not see the flag between two opcodes; the
+         * cancellable is what reaches `Exec.Wait`, `Http.*Wait` and a GIO
+         * read while they are blocked.  A `Run` that watches `Stopping` is
+         * unaffected -- it does not use this object. */
+        if (job->cancel)
+            g_cancellable_cancel(job->cancel);
         if (after <= 0)
             g_atomic_int_set(&job->stop, 3);
         else

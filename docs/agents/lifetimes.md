@@ -328,6 +328,15 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   NULL, so the branch it described could not happen. The same cleanup leaked
   its own reference on the server's auth domain, which `http_server_free`
   always released.
+- **A job's `GCancellable` is cancelled, not freed, by the stop.** `BtaTaskJob`
+  owns it; `Stop`, `Timeout` and `KillAfter` cancel it from the main thread, and
+  `task_job_unref` drops the last reference. A native call that takes it
+  (`Exec.Wait`, `Http.*Wait`, `g_file_load_contents`, `g_file_query_info`,
+  `g_file_copy`, `g_file_trash`) returns `G_IO_ERROR_CANCELLED`; a call that
+  does not, such as the directory walk, is still only reached between opcodes
+  or by the two-second teardown bound. **The operation holds a reference, so
+  the job's cancel outlives the job's `Stop` request** -- and the thread that
+  sees the cancellation is the worker, not the caller.
 - **A borrowed string from the catalogue can die inside the call that formats
   it.** `bta_locale_lookup` returns a pointer into this thread's `L.entries`,
   and `bta_locale_format` calls `JS_ToCString` on the arguments before it walks

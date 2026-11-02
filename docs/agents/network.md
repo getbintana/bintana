@@ -218,7 +218,8 @@ each rule below; read it before changing a level.
   `FollowRedirects: true` back in it and `testNetwork` goes red on the portal
   rows.
 - **A `Task` worker runs `rad.js` and has no `Network`**, and only the blocking
-  `Http.*Wait` verbs -- each on a `SoupSession` of that thread. The first
+  `Http.*Wait` verbs -- each on a `SoupSession` of that thread and linked to
+  the job's `GCancellable`, so `Stop` cancels the flight. The first
   `Network.Probe = …` stopped every worker at load, and the xlsx and task tests
   went red with *Network is not defined*; the asynchronous `Http` is not there
   because its source belongs to the main loop. Anything `rad.js` hangs on a C

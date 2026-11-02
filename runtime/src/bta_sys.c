@@ -97,14 +97,18 @@ static JSValue sys_file_load(JSContext *ctx, JSValueConst this_val,
     char   *data = NULL;
     gsize   len  = 0;
     GError *err  = NULL;
+    GFile  *file = g_file_new_for_path(path);
 
-    if (!g_file_get_contents(path, &data, &len, &err)) {
+    if (!g_file_load_contents(file, bta_task_cancellable(ctx),
+                              &data, &len, NULL, &err)) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
                                        bta_gerror_text(err));
         g_clear_error(&err);
+        g_object_unref(file);
         JS_FreeCString(ctx, path);
         return e;
     }
+    g_object_unref(file);
     JS_FreeCString(ctx, path);
 
     JSValue v = JS_NewStringLen(ctx, data, len);
@@ -562,7 +566,8 @@ static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
         GFile  *dst = g_file_new_for_path(to);
         GError *error = NULL;
 
-        if (!g_file_copy(src, dst, G_FILE_COPY_NONE, NULL, NULL, NULL, &error))
+        if (!g_file_copy(src, dst, G_FILE_COPY_NONE,
+                         bta_task_cancellable(ctx), NULL, NULL, &error))
             e = JS_ThrowPlainError(ctx, "cannot copy %s to %s: %s", from, to,
                                    bta_gerror_text(error));
         g_clear_error(&error);
@@ -606,19 +611,28 @@ static JSValue sys_file_info(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "File.Info(path) needs a path");
 
     GFile     *file = g_file_new_for_path(path);
+    GError    *err  = NULL;
     GFileInfo *info = g_file_query_info(file,
         G_FILE_ATTRIBUTE_STANDARD_SIZE "," G_FILE_ATTRIBUTE_STANDARD_TYPE ","
         G_FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE "," G_FILE_ATTRIBUTE_STANDARD_ICON ","
         G_FILE_ATTRIBUTE_TIME_MODIFIED "," G_FILE_ATTRIBUTE_TIME_MODIFIED_USEC,
-        G_FILE_QUERY_INFO_NONE, NULL, NULL);
+        G_FILE_QUERY_INFO_NONE, bta_task_cancellable(ctx), &err);
 
     g_object_unref(file);
     JS_FreeCString(ctx, path);
 
     /* Absent is an ordinary state and not a fault: asking about a file that is
-     * not there is how one finds out that it is not there. */
-    if (!info)
+     * not there is how one finds out that it is not there.  A cancelled query
+     * is not absent, though, and saying null would turn a stop into a missing
+     * file the caller might report as one. */
+    if (!info) {
+        if (err && g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+            g_clear_error(&err);
+            return JS_ThrowPlainError(ctx, "File.Info: cancelled");
+        }
+        g_clear_error(&err);
         return JS_NULL;
+    }
 
     JSValue out = JS_NewObject(ctx);
 
@@ -969,7 +983,7 @@ static JSValue sys_file_trash(JSContext *ctx, JSValueConst this_val,
     GError *error = NULL;
     JSValue e     = JS_UNDEFINED;
 
-    if (!g_file_trash(file, NULL, &error))
+    if (!g_file_trash(file, bta_task_cancellable(ctx), &error))
         e = JS_ThrowPlainError(ctx, "cannot trash %s: %s", path,
                                bta_gerror_text(error));
 
@@ -2622,7 +2636,9 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
     GBytes *stdin_bytes = input ? input : g_bytes_new_static("", 0);
 
     input = NULL;   /* the operation holds its own reference to it */
-    g_subprocess_communicate_async(proc, stdin_bytes, NULL, on_exec_wait_done, &w);
+    g_subprocess_communicate_async(proc, stdin_bytes,
+                                   bta_task_cancellable(ctx),
+                                   on_exec_wait_done, &w);
     g_bytes_unref(stdin_bytes);
 
     bool     late  = false;
@@ -2650,6 +2666,12 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
         exec_wait_guard_free(force);
     }
     exec_wait_guard_free(guard);
+
+    /* A cancelled task has no `late` flag: the cancellable made communicate
+     * return `G_IO_ERROR_CANCELLED`, and the child is still running.  It is
+     * ours to end, or a stopped task leaves `sleep 10` behind. */
+    if (w.err && g_error_matches(w.err, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        exec_signal_group(proc, pid, true);
 
     g_main_context_pop_thread_default(priv);
     g_main_context_unref(priv);
@@ -3811,14 +3833,18 @@ static JSValue sys_file_load_bytes(JSContext *ctx, JSValueConst this_val,
     char   *data = NULL;
     gsize   len  = 0;
     GError *err  = NULL;
+    GFile  *file = g_file_new_for_path(path);
 
-    if (!g_file_get_contents(path, &data, &len, &err)) {
+    if (!g_file_load_contents(file, bta_task_cancellable(ctx),
+                              &data, &len, NULL, &err)) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
                                        bta_gerror_text(err));
         g_clear_error(&err);
+        g_object_unref(file);
         JS_FreeCString(ctx, path);
         return e;
     }
+    g_object_unref(file);
 
     JSValue out = bta_bytes_new(ctx, data, len);
     g_free(data);

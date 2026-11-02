@@ -1273,6 +1273,9 @@ void bta_task_init(JSContext *ctx, JSValue global);
  * else that touches GTK) ask this before constructing, because GTK off the
  * main thread is a crash and not an error. */
 bool bta_task_is_worker(JSContext *ctx);
+/* This worker's cancellable, for a native call that blocks; NULL on the main
+ * thread.  Borrowed: it is cancelled by `Stop`, `Timeout` and `KillAfter`. */
+GCancellable *bta_task_cancellable(JSContext *ctx);
 /* A Task still owed an answer, for the console loop's pending sum. */
 guint bta_task_pending(void);
 void bta_task_cleanup(void);   /* stops and joins workers still running */
