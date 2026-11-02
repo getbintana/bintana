@@ -88,8 +88,10 @@
   when every blocking call of a worker took the job's signal, `Stop` -- which
   raises it at once -- refused the very calls a `Run` makes to wind down after
   `Stopping`. `File.Hash`, `Gzip`'s four verbs and `ZipArchive.ExtractAll`
-  take one too and ask it between two blocks or two entries; a call handed
-  none still waits for the flag or `KillAfter` between opcodes.
+  take one too and ask it between two blocks or two entries. A call handed
+  none is left alone by the asking stage and ended by the insisting one:
+  `Timeout`, `KillAfter` and teardown raise the job's second signal, which
+  every blocking call hears.
   `ZipWriter.AddFile` takes none: stopped part-way it would leave an entry
   half-written in an archive that is still being made.
 - **A token raised before the work starts must stop it from starting.**

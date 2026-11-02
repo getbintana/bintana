@@ -109,10 +109,19 @@ class DownloadsForm extends Form {
                           Locale.Text("failed: {0}", m));
 
         this.made++;
+        /* Counted once it is running: a `Start` that throws -- over
+         * `Task.Max`, say -- owes no answer, and a count taken before it
+         * would keep Clear disabled for a download that never began. */
+        try {
+            t.Start({ url, path: File.Join(this.dir, nameOf(url, this.made)) },
+                    { Timeout: ms > 0 ? ms : undefined }, this.all);
+        } catch (e) {
+            row.state.Text   = Locale.Text("failed: {0}", e.message);
+            row.stop.Enabled = false;
+            return;
+        }
         this.running++;
         this.idle();
-        t.Start({ url, path: File.Join(this.dir, nameOf(url, this.made)) },
-                { Timeout: ms > 0 ? ms : undefined }, this.all);
     }
 
     /* One row: the address, what became of it, and its own ✕. */

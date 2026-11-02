@@ -1669,6 +1669,16 @@ class WidgetsForm extends Form {
         ed.Diagnostic(2, 1, 1, "Info", "nothing above");
         eq("an empty line with nothing above it underlines nothing", drawn(), "");
 
+        /* Text typed inside an underline takes it -- GTK gives inserted text
+         * the tags around it -- so the range grows rather than splitting in
+         * two, and the reader, which reads one range, answers all of it. */
+        ed.ClearDiagnostics();
+        ed.Text = "let foobar = 1";
+        ed.Diagnostic(1, 5, 6, "Error", "foobar");
+        ed.Select(1, 8, 0);
+        ed.Insert("X");
+        eq("text typed inside a diagnostic widens it", drawn(), "1:5+7");
+
         ed.Delete();
     }
 
@@ -25281,6 +25291,11 @@ class Form1 extends Form {
         eq("...and refuses one given as an option",
            refusal(() => Http.GetWait("http://127.0.0.1:9/", { Cancellable: raised })),
            "Http.GetWait: a Cancellable is the last argument, not an option");
+        /* Where a body goes, an object naming `Cancellable` is still the
+         * options, refused -- not posted as `{"Cancellable":{}}`. */
+        eq("...where a body would go, too",
+           refusal(() => Http.PostWait("http://127.0.0.1:9/", { Cancellable: raised })),
+           "Http.PostWait: a Cancellable is the last argument, not an option");
 
         const fast = Exec(["python3", "-m", "http.server", "8471",
                            "--directory", "/tmp"]);
@@ -27323,6 +27338,20 @@ class Form1 extends Form {
                () => new TaskWork().Start({}, { Cancellable: token }));
         throws("Exec.Wait refuses a Cancellable given as an option",
                () => Exec.Wait(["true"], { Cancellable: token }));
+        /* ...and anywhere but last, where it was taken for the options and
+         * never heard; a trailing `undefined` does not hide it, and `null`
+         * as an option is the absent value it always was. */
+        eq("a Cancellable before the options is refused",
+           refusal(() => Exec.Wait(["true"], token, { Timeout: 1000 })),
+           "Exec.Wait: a Cancellable is the last argument, after the options");
+        eq("...for a file verb too",
+           refusal(() => Directory.List(SCRATCH, token, "*")),
+           "Directory.List: a Cancellable is the last argument, after the options");
+        check("a trailing undefined does not hide the token",
+              String(refusal(() => Exec.Wait(["sleep", "3"], {}, token, undefined))).includes("cancelled"),
+              String(refusal(() => Exec.Wait(["sleep", "3"], {}, token, undefined))));
+        eq("{ Cancellable: null } is no token, and no refusal",
+           Exec.Wait(["true"], { Cancellable: null }).ExitCode, 0);
 
         const sh = ["/bin/sh", "-c", "sleep 5"];
         for (const [how, fn] of [
@@ -27790,6 +27819,44 @@ class Form1 extends Form {
                 t.Start({ mode: "endless", verb, out });
             });
         }
+
+        /*
+         * **A deadline ends the task even through a call handed nothing.**
+         * The token is explicit so a `Run` winding down after `Stopping` can
+         * still do I/O; but `Timeout` and `KillAfter` mean *end now*, and
+         * with only the explicit token a `Run` blocked in a call handed none
+         * ended when the call did -- `sleep 10` past a 1 s Timeout.  The task's
+         * second, internal signal reaches every blocking call.
+         */
+        steps.push(() => {
+            const t    = new TaskWork();
+            const from = Date.now();
+
+            t.Done  = () => fail("a timed-out task must not reach Done");
+            t.Error = (m) => {
+                check("a Timeout ends a call handed no token",
+                      String(m).includes("timed out"), String(m));
+                check("...at the deadline, not when the call ends",
+                      Date.now() - from < 3000, String(Date.now() - from));
+                next();
+            };
+            t.Start({ mode: "block-plain" }, { Timeout: 1000 });
+        });
+        steps.push(() => {
+            const t = new TaskWork();
+            let   from = 0;
+
+            t.Progress = () => { from = Date.now(); t.Stop({ KillAfter: 500 }); };
+            t.Done  = () => fail("a forced task must not reach Done");
+            t.Error = (m) => {
+                check("KillAfter ends a call handed no token",
+                      String(m).includes("cancelled"), String(m));
+                check("...at KillAfter, not when the call ends",
+                      Date.now() - from < 2500, String(Date.now() - from));
+                next();
+            };
+            t.Start({ mode: "block-plain" });
+        });
 
         /* Cancellable is what reaches a native wait: the flag alone cannot. */
         steps.push(() => {

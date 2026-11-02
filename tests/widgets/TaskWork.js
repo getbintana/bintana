@@ -355,6 +355,14 @@ class TaskWork extends Task {
             return { saw: true };
         }
 
+        /* Blocked in a call handed **no** token: only the *end now* stage --
+         * a Timeout, KillAfter -- can reach it, and it must. */
+        if (msg.mode === "block-plain") {
+            this.Report({ ready: true });
+            Exec.Wait(["/bin/sh", "-c", "sleep 10"], { Timeout: 0 });
+            return { done: true };
+        }
+
         /* A child that would outlive the task unless Stop cancels it. */
         if (msg.mode === "block") {
             Exec.Wait(["/bin/sh", "-c", "sleep 10"], this.Cancellable);

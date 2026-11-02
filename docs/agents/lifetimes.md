@@ -338,8 +338,15 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   worker to it implicitly (`bta_task_cancellable`), and `Stop` cancels at
   once, so a `Run` that saw `Stopping` and wound down by reading a file or
   running a command had each of those calls refused -- the cooperative stage
-  could do no I/O. A call handed nothing is reached only between opcodes or
-  by the two-second teardown bound. The streaming verbs -- `File.Hash`,
+  could do no I/O. **And then the opposite trap**: with only the explicit
+  token, a call handed nothing was reached by nothing -- a `Timeout` of 2 s
+  on `Exec.Wait(["sleep", "8"])` ended at 8 s, and on a command that never
+  ends, never. So a job has a second signal, `hard`, raised by `Timeout`,
+  `KillAfter` and teardown only, and `bta_cancel_scope` links it to every
+  blocking call of a worker; the asking stage still reaches only what was
+  handed `this.Cancellable`. Teardown raised neither signal at first: a `Run`
+  blocked in `Exec.Wait` waited out the two-second grace and was cast adrift
+  with its child running (`tests/smoke` `testTaskTeardown`). The streaming verbs -- `File.Hash`,
   `Gzip`'s four, `ZipArchive.ExtractAll` -- ask the token between two 64 KB
   blocks or two entries, which is what lets a stop end a hash of `/dev/zero`.
   **The operation holds a reference, so the job's cancel outlives the job's
@@ -352,6 +359,11 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `this.Cancellable` is the job's own, so a call handed it hears all three;
   `task_ending` reads the shared one too, because `Cancel()` sets the flag
   before it emits the signal (see `docs/notes/task-threads.md`).
+- **A token is last and nowhere else.** `bta_cancellable_arg` refuses one in
+  any other position -- `Exec.Wait(argv, token, opts)` read the token as the
+  options and never heard it -- and drops trailing `undefined`s first.
+  `Cancellable` is in `HTTP_OPT_KEYS` so `PostWait(url, { Cancellable: c })`
+  is read as options and refused instead of posted as the body.
 - **A token is an argument, never an option.** `{ Cancellable }` read with
   `JS_GetPropertyStr` and then `JS_FreeValue`d left a borrowed `GCancellable*`
   behind, and a getter that made a fresh token handed over the only reference:

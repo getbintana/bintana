@@ -16363,7 +16363,7 @@
           "Params": 1,
           "Signature": "([options])",
           "Returns": "",
-          "Doc": "**asks** it to end, and enforces `KillAfter` ms later (5000 by default, 0 = at once). Two stages like `Exec`'s guard. Raises `this.Cancellable` at once, so a blocking call `Run` handed it returns. Answers whether there was a live job to ask",
+          "Doc": "**asks** it to end, and enforces `KillAfter` ms later (5000 by default, 0 = at once). Two stages like `Exec`'s guard. Raises `this.Cancellable` at once, so a blocking call `Run` handed it returns; at `KillAfter` every blocking call ends, handed it or not, as at the `Timeout`. Answers whether there was a live job to ask",
           "Native": true
         },
         {
@@ -17409,7 +17409,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "ask for HTTP/1.1 rather than HTTP/2. Default `false`. Over HTTP/2 libsoup notices a cancel only when the server next sends something, so a `Stop`, a `Timeout` or a `Cancellable` ends a request late; a program whose requests must stop when told sets this. `{ Http1 }` on one call does the same for that call",
+          "Doc": "ask for HTTP/1.1 rather than HTTP/2. Default `false`. Over HTTP/2 libsoup notices a cancel only when the server next sends something, so a `Stop`, a `Timeout` or a `Cancellable` ends a request late; a program whose requests must stop when told sets this. `{ Http1 }` on one call does the same for that call. Needs libsoup 3.4; before it a request asking is refused, naming `SOUP_FORCE_HTTP1`",
           "Native": true
         },
         {

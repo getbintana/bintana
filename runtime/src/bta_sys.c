@@ -84,11 +84,9 @@ const char *bta_file_path(JSContext *ctx, JSValueConst v, const char *who)
     return JS_ToCString(ctx, v);
 }
 
-static JSValue sys_file_load(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
+static JSValue sys_file_load_in(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv, GCancellable *cancel)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
-
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Load(path) needs a path");
 
@@ -117,6 +115,7 @@ static JSValue sys_file_load(JSContext *ctx, JSValueConst this_val,
     g_free(data);
     return v;
 }
+BTA_CANCEL_SCOPED(sys_file_load, "File.Load")
 
 static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
@@ -545,11 +544,9 @@ static JSValue sys_file_rename(JSContext *ctx, JSValueConst this_val,
  * Refuses to clobber, like `Rename` and for the same reason: overwriting is a
  * thing one means to do, and doing it by accident is silent.
  */
-static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
+static JSValue sys_file_copy_in(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv, GCancellable *cancel)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
-
     if (argc < 2)
         return JS_ThrowTypeError(ctx, "File.Copy(from, to) needs both paths");
 
@@ -583,6 +580,7 @@ static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, to);
     return e;
 }
+BTA_CANCEL_SCOPED(sys_file_copy, "File.Copy")
 
 /*
  * File.Info(path) -- what the desktop knows about a file, in one call.
@@ -607,11 +605,9 @@ static JSValue sys_file_copy(JSContext *ctx, JSValueConst this_val,
  * question one asks of it (is this newer than what I read?) is a comparison
  * `Date` already does.
  */
-static JSValue sys_file_info(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
+static JSValue sys_file_info_in(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv, GCancellable *cancel)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
-
     const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "File.Info") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "File.Info(path) needs a path");
@@ -685,6 +681,7 @@ static JSValue sys_file_info(JSContext *ctx, JSValueConst this_val,
     g_object_unref(info);
     return out;
 }
+BTA_CANCEL_SCOPED(sys_file_info, "File.Info")
 
 /*
  * File.Open(path) -- hand it to whatever the desktop opens that kind of file
@@ -975,11 +972,9 @@ static JSValue sys_file_delete(JSContext *ctx, JSValueConst this_val,
  * A folder goes whole, children and all, which is what GIO does and what the
  * desktop does.
  */
-static JSValue sys_file_trash(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
+static JSValue sys_file_trash_in(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv, GCancellable *cancel)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
-
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.Trash(path) needs a path");
 
@@ -1000,6 +995,7 @@ static JSValue sys_file_trash(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, path);
     return e;
 }
+BTA_CANCEL_SCOPED(sys_file_trash, "File.Trash")
 
 /* ------------------------------------------------------------------- Dir */
 
@@ -1057,11 +1053,9 @@ static bool copy_tree(GFile *src, GFile *dst, GCancellable *cancel,
     return ok;
 }
 
-static JSValue sys_dir_copy(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
+static JSValue sys_dir_copy_in(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv, GCancellable *cancel)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
-
     const char *from = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.Copy") : NULL;
     const char *to   = argc > 1 ? bta_file_path(ctx, argv[1], "Directory.Copy") : NULL;
 
@@ -1093,6 +1087,7 @@ static JSValue sys_dir_copy(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, to);
     return e;
 }
+BTA_CANCEL_SCOPED(sys_dir_copy, "Directory.Copy")
 
 /*
  * Two deletes, and the dangerous one says so in its name.
@@ -1151,11 +1146,9 @@ static JSValue sys_dir_delete(JSContext *ctx, JSValueConst this_val,
     return e;
 }
 
-static JSValue sys_dir_delete_tree(JSContext *ctx, JSValueConst this_val,
-                                   int argc, JSValueConst *argv)
+static JSValue sys_dir_delete_tree_in(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv, GCancellable *cancel)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
-
     const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.DeleteTree") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "Directory.DeleteTree(path) needs a path");
@@ -1179,13 +1172,12 @@ static JSValue sys_dir_delete_tree(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, path);
     return e;
 }
+BTA_CANCEL_SCOPED(sys_dir_delete_tree, "Directory.DeleteTree")
 
 
-static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv)
+static JSValue sys_dir_list_in(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv, GCancellable *cancel)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
-
     const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.List") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "Directory.List(path) needs a path");
@@ -1263,6 +1255,7 @@ static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, pattern);
     return arr;
 }
+BTA_CANCEL_SCOPED(sys_dir_list, "Directory.List")
 
 static JSValue sys_dir_make(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
@@ -1402,7 +1395,11 @@ static bool dir_walk(const char *root, GPatternSpec *spec, bool recursive,
 static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv, int magic)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+    GCancellable *cancel;
+
+    if (!bta_cancellable_arg(ctx, &argc, argv, 1,
+                             magic ? "Directory.Folders" : "Directory.Files", &cancel))
+        return JS_EXCEPTION;
 
     const char *path = argc > 0 ? bta_file_path(ctx, argv[0], magic ? "Directory.Folders" : "Directory.Files") : NULL;
     if (!path)
@@ -1438,8 +1435,11 @@ static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
     GPatternSpec *spec  = pattern ? g_pattern_spec_new(pattern) : NULL;
     GPtrArray    *found = g_ptr_array_new_with_free_func(g_free);
     GError       *err   = NULL;
+    BtaCancelScope sc;
     bool          ok    = dir_walk(path, spec, recursive, magic != 0, found,
-                                    cancel, &err);
+                                    bta_cancel_scope(ctx, cancel, &sc), &err);
+
+    bta_cancel_scope_end(&sc);
 
     /* The folder asked about could not be read: the same refusal `List`
      * makes, where this used to answer `[]` -- an empty folder's answer. */
@@ -2670,7 +2670,10 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
     /* `Wait(argv, [options], [cancellable])`: borrowed, argv holds it. */
-    GCancellable *opt_cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+    GCancellable *opt_cancel;
+
+    if (!bta_cancellable_arg(ctx, &argc, argv, 1, "Exec.Wait", &opt_cancel))
+        return JS_EXCEPTION;
 
     if (argc < 1 || !JS_IsArray(argv[0]))
         return JS_ThrowTypeError(ctx,
@@ -2743,7 +2746,9 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
      * option has been read -- a getter among them can raise it -- and before
      * anything exists to be undone.
      */
-    if (opt_cancel && g_cancellable_is_cancelled(opt_cancel)) {
+    if ((opt_cancel && g_cancellable_is_cancelled(opt_cancel)) ||
+        (bta_task_hard_cancellable(ctx) &&
+         g_cancellable_is_cancelled(bta_task_hard_cancellable(ctx)))) {
         g_object_unref(launcher);
         g_ptr_array_unref(args);
         g_clear_pointer(&input, g_bytes_unref);
@@ -2792,9 +2797,11 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
      */
     GBytes *stdin_bytes = input ? input : g_bytes_new_static("", 0);
     GCancellable *canc        = g_cancellable_new();
-    /* A local signal linked to the caller's: the operation's own guard must
-     * not cancel that one for the next call. */
-    gulong opt_link  = bta_cancellable_link(opt_cancel, canc);
+    /* A local signal linked to the caller's and to the task's *end now*: the
+     * operation's own guard must not cancel either for the next call. */
+    GCancellable *hard      = bta_task_hard_cancellable(ctx);
+    gulong        opt_link  = bta_cancellable_link(opt_cancel, canc);
+    gulong        hard_link = bta_cancellable_link(hard, canc);
 
     input = NULL;   /* the operation holds its own reference to it */
     g_subprocess_communicate_async(proc, stdin_bytes, canc,
@@ -2835,6 +2842,8 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
 
     if (opt_link)
         g_cancellable_disconnect(opt_cancel, opt_link);
+    if (hard_link)
+        g_cancellable_disconnect(hard, hard_link);
     g_object_unref(canc);
 
     g_main_context_pop_thread_default(priv);
@@ -3984,11 +3993,9 @@ static JSValue js_monotonic(JSContext *ctx, JSValueConst this_val,
  * *return type* is what differs, and a function whose answer is a string or an
  * object depending on an argument is the shape every caller gets wrong once.
  */
-static JSValue sys_file_load_bytes(JSContext *ctx, JSValueConst this_val,
-                                   int argc, JSValueConst *argv)
+static JSValue sys_file_load_bytes_in(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv, GCancellable *cancel)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
-
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "File.LoadBytes(path) needs a path");
 
@@ -4017,6 +4024,7 @@ static JSValue sys_file_load_bytes(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, path);
     return out;
 }
+BTA_CANCEL_SCOPED(sys_file_load_bytes, "File.LoadBytes")
 
 static JSValue sys_file_save_bytes(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
@@ -4372,10 +4380,9 @@ static JSValue sys_hash_verify(JSContext *ctx, JSValueConst this_val,
  * file it cannot hold, and a text load would also refuse anything that is not
  * UTF-8, which is most of what gets hashed.
  */
-static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
-                             int argc, JSValueConst *argv)
+static JSValue sys_file_hash_in(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv, GCancellable *cancel)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
     const char   *path = argc > 0 ? bta_file_path(ctx, argv[0], "File.Hash") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "File.Hash(path, [algorithm]) needs a path");
@@ -4429,6 +4436,7 @@ static JSValue sys_file_hash(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, path);
     return out;
 }
+BTA_CANCEL_SCOPED(sys_file_hash, "File.Hash")
 
 /* ------------------------------------------------------------------ init */
 

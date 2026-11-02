@@ -341,11 +341,13 @@ static JSValue gzip_compress(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
     const char   *who    = "Gzip.Compress";
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+    GCancellable *cancel;
     size_t        len;
     const char   *text;
     int           level;
 
+    if (!bta_cancellable_arg(ctx, &argc, argv, 1, who, &cancel))
+        return JS_EXCEPTION;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Gzip.Compress(data, [{ Level }]) needs the data");
     if (!gz_level(ctx, argc > 1 ? argv[1] : JS_UNDEFINED, who, &level))
@@ -356,9 +358,13 @@ static JSValue gzip_compress(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     GConverter *conv = G_CONVERTER(g_zlib_compressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP, level));
-    GzSource    src  = { .mem = data, .memlen = len, .cancel = cancel };
+    BtaCancelScope sc;
+    GzSource    src  = { .mem = data, .memlen = len,
+                         .cancel = bta_cancel_scope(ctx, cancel, &sc) };
     GzSink      sink = { .mem = g_byte_array_new(), .max = UINT64_MAX };
     char       *why  = gz_run(conv, false, &src, &sink);
+
+    bta_cancel_scope_end(&sc);
 
     if (text)
         JS_FreeCString(ctx, text);
@@ -369,10 +375,12 @@ static JSValue gzip_decompress(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
 {
     const char   *who    = "Gzip.Decompress";
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+    GCancellable *cancel;
     size_t        len;
     uint64_t      max;
 
+    if (!bta_cancellable_arg(ctx, &argc, argv, 1, who, &cancel))
+        return JS_EXCEPTION;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Gzip.Decompress(bytes, [{ MaxSize }]) needs the bytes");
     const uint8_t *data = bta_bytes_get(argv[0], &len);
@@ -383,9 +391,13 @@ static JSValue gzip_decompress(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     GConverter *conv = G_CONVERTER(g_zlib_decompressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP));
-    GzSource    src  = { .mem = data, .memlen = len, .cancel = cancel };
+    BtaCancelScope sc;
+    GzSource    src  = { .mem = data, .memlen = len,
+                         .cancel = bta_cancel_scope(ctx, cancel, &sc) };
     GzSink      sink = { .mem = g_byte_array_new(), .max = max };
     char       *why  = gz_run(conv, true, &src, &sink);
+
+    bta_cancel_scope_end(&sc);
 
     return gz_finish_memory(ctx, conv, why, sink.mem, who);
 }
@@ -395,7 +407,10 @@ static JSValue gzip_decompress(JSContext *ctx, JSValueConst this_val,
 static JSValue gz_file(JSContext *ctx, int argc, JSValueConst *argv,
                        const char *who, bool inflate)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+    GCancellable *cancel;
+
+    if (!bta_cancellable_arg(ctx, &argc, argv, 1, who, &cancel))
+        return JS_EXCEPTION;
     int      level = 6;
     uint64_t max = UINT64_MAX;
 
@@ -441,10 +456,12 @@ static JSValue gz_file(JSContext *ctx, int argc, JSValueConst *argv,
         GConverter *conv = inflate
             ? G_CONVERTER(g_zlib_decompressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP))
             : G_CONVERTER(g_zlib_compressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP, level));
-        GzSource src  = { .file = in, .cancel = cancel };
+        BtaCancelScope sc;
+        GzSource src  = { .file = in, .cancel = bta_cancel_scope(ctx, cancel, &sc) };
         GzSink   sink = { .file = out, .max = max };
 
         why = gz_run(conv, inflate, &src, &sink);
+        bta_cancel_scope_end(&sc);
         written = sink.total;
         g_object_unref(conv);
 

@@ -127,6 +127,7 @@ class TestForm extends Form {
         this.testContainers();
         this.testPrelude();
         this.testConsoleExit();
+        this.testTaskTeardown();
         this.testLook();
         this.testTests();
         this.testCheck();
@@ -687,6 +688,54 @@ class TestForm extends Form {
                 eq(name, res.ExitCode, want);
             }
         } finally {
+            Directory.DeleteTree(dir);
+        }
+    }
+
+    /*
+     * **Quitting ends a task blocked in native code, and its child.**  The
+     * teardown set the flag that reaches JavaScript between two opcodes, and
+     * raised neither of the job's signals: a `Run` blocked in `Exec.Wait` --
+     * handed its token or not -- waited out the two-second grace and was cast
+     * adrift, its `sleep` still running after the program had gone.
+     */
+    testTaskTeardown() {
+        const dir = File.Join(Environment.TempDirectory,
+                              `bta-smoke-teardown-${Environment.ProcessId}`);
+        const mark = `29.${Environment.ProcessId % 1000}`;
+
+        Directory.Make(dir);
+        File.Save(File.Join(dir, "project.json"),
+                  JSON.stringify({ name: "smoke-teardown", main: "Main", version: "1.0",
+                                   sources: ["Sleeper.js", "Main.js"] }));
+        File.Save(File.Join(dir, "Sleeper.js"),
+            "class Sleeper extends Task {\n" +
+            "    Run(m) {\n" +
+            `        if (m.token) Exec.Wait(["sleep", "${mark}1"], { Timeout: 0 }, this.Cancellable);\n` +
+            `        else Exec.Wait(["sleep", "${mark}2"], { Timeout: 0 });\n` +
+            "    }\n" +
+            "}\n");
+        File.Save(File.Join(dir, "Main.js"),
+            "function Main() {\n" +
+            "    for (const token of [true, false]) {\n" +
+            "        const t = new Sleeper();\n" +
+            "        t.Done = t.Error = () => {};\n" +
+            "        t.Start({ token });\n" +
+            "    }\n" +
+            "    Timer.After(500, () => Application.Quit(0));\n" +
+            "}\n");
+
+        try {
+            const from = Date.now();
+            const res  = Exec.Wait([Application.Executable, dir], { Timeout: 20000 });
+            const took = Date.now() - from;
+
+            eq("a program quitting with tasks blocked in Exec.Wait ends 0", res.ExitCode, 0);
+            check("...without waiting out the teardown's grace", took < 1900, String(took));
+            const left = Exec.Wait(["pgrep", "-f", `sleep ${mark}`]);
+            eq("...and leaves no child running, token or not", left.Output.trim(), "");
+        } finally {
+            Exec.Wait(["pkill", "-f", `sleep ${mark}`]);
             Directory.DeleteTree(dir);
         }
     }

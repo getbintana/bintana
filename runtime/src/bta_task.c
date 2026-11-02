@@ -180,6 +180,8 @@ struct BtaTaskJob {
     bool       ended;           /* the thread is on its way out, under task_lock */
     GThread   *thread;
     GCancellable *cancel;       /* the job's own: `Stop`, `Timeout` and `KillAfter` cancel it */
+    GCancellable *hard;         /* *end now*: `Timeout`, `KillAfter`, teardown -- reaches
+                                 * every blocking call, handed a token or not */
     gulong     cancel_link;     /* what wakes `stop` when `cancel` is raised */
     GCancellable *shared;       /* `Start`'s Cancellable argument, or NULL; only read */
     gulong     shared_link;     /* forwards `shared` into `cancel`, one way */
@@ -280,6 +282,7 @@ static void task_job_unref(gpointer data)
     if (job->cancel_link)
         g_cancellable_disconnect(job->cancel, job->cancel_link);
     g_clear_object(&job->cancel);
+    g_clear_object(&job->hard);
     g_free(job->app_name);
     g_free(job->app_version);
     g_free(job->app_dir);
@@ -325,6 +328,35 @@ static BtaTaskEnv *task_env(JSContext *ctx)
     return JS_GetRuntimeOpaque(JS_GetRuntime(ctx));
 }
 
+/*
+ * The job's *end now* signal, for every blocking call a worker makes, or NULL
+ * on the main thread.  Borrowed: the job owns it and outlives the call.
+ *
+ * Two signals, because a stop has two stages.  `this.Cancellable` is the
+ * asking one -- `Stop()` raises it at once, and it reaches only the calls
+ * `Run` handed it, so a `Run` winding down after `Stopping` can still read
+ * and run things.  This one is the insisting one: `Timeout`, `KillAfter` and
+ * teardown raise it, and `bta_cancel_scope` links it to every blocking call
+ * whatever it was handed.  With only the first, a `Timeout` of 2 s on a `Run`
+ * blocked in `sleep 8` -- handed nothing -- ended at 8 s, and on a command
+ * that never ends, never: a deadline that did not end the task.
+ */
+GCancellable *bta_task_hard_cancellable(JSContext *ctx)
+{
+    BtaTaskEnv *env = task_env(ctx);
+
+    return env && env->job ? env->job->hard : NULL;
+}
+
+/* Raise both of a job's signals: the stage that insists. */
+static void task_end_now(BtaTaskJob *job)
+{
+    if (job->cancel)
+        g_cancellable_cancel(job->cancel);
+    if (job->hard)
+        g_cancellable_cancel(job->hard);
+}
+
 /* The job's signal was raised -- forwarded from a shared `Cancellable`, or by
  * `Stop`/`Timeout`/`KillAfter`, which set `stop` first: the task is asked to
  * stop, exactly as `Stop()` asks it.  It does not force the run -- only `Stop` has a
@@ -364,7 +396,8 @@ static const JSCFunctionListEntry task_props[] = {
      *   **asks** it to end, and enforces `KillAfter` ms later (5000 by
      *   default, 0 = at once). Two stages like `Exec`'s guard. Raises
      *   `this.Cancellable` at once, so a blocking call `Run` handed it
-     *   returns. Answers whether there was a live job to ask
+     *   returns; at `KillAfter` every blocking call ends, handed it or not,
+     *   as at the `Timeout`. Answers whether there was a live job to ask
      */
     JS_CFUNC_DEF("Stop",   1, task_stop),
     /* Report(value)
@@ -1917,8 +1950,7 @@ static gboolean task_timeout(gpointer data)
     if (task_find_locked(job->self) && !job->dead) {
         job->timeout_src = 0;
         g_atomic_int_set(&job->stop, 2);
-        if (job->cancel)
-            g_cancellable_cancel(job->cancel);
+        task_end_now(job);
     }
     g_mutex_unlock(&task_lock);
     return G_SOURCE_REMOVE;
@@ -1935,8 +1967,7 @@ static gboolean task_force(gpointer data)
     if (task_find_locked(job->self) && !job->dead) {
         job->force_src = 0;
         g_atomic_int_set(&job->stop, 3);
-        if (job->cancel)
-            g_cancellable_cancel(job->cancel);
+        task_end_now(job);
     }
     g_mutex_unlock(&task_lock);
     return G_SOURCE_REMOVE;
@@ -1991,7 +2022,8 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Task.Start needs the message to send");
     /* `Start(msg, [opts], [cancellable])`: the token is the last argument. */
-    given = bta_cancellable_arg(ctx, &argc, argv, 1);
+    if (!bta_cancellable_arg(ctx, &argc, argv, 1, "Task.Start", &given))
+        return JS_EXCEPTION;
     if (argc > 1 && !bta_cancellable_not_option(ctx, argv[1], "Task.Start"))
         return JS_EXCEPTION;
     if (argc > 1 && !task_opt_timeout(ctx, argv[1], &timeout))
@@ -2056,6 +2088,7 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
      * stops every task linked to it; stopping one task must not raise it, or
      * one task's timeout ends its siblings and reads as a Cancel nobody made. */
     job->cancel     = g_cancellable_new();
+    job->hard       = g_cancellable_new();
     job->shared     = given ? g_object_ref(given) : NULL;
     job->shared_link = bta_cancellable_link(given, job->cancel);
     job->cancel_link = g_cancellable_connect(job->cancel,
@@ -2164,9 +2197,10 @@ static JSValue task_stop(JSContext *ctx, JSValueConst this_val,
          * winding down after `Stopping`, is left to finish. */
         if (job->cancel)
             g_cancellable_cancel(job->cancel);
-        if (after <= 0)
+        if (after <= 0) {
             g_atomic_int_set(&job->stop, 3);
-        else
+            task_end_now(job);              /* `KillAfter: 0` insists at once */
+        } else
             job->force_src = g_timeout_add((guint)after, task_force, job);
         running = true;
     } else if (job && !job->dead) {
@@ -2267,8 +2301,14 @@ void bta_task_cleanup(void)
     /* Forced outright and all at once: teardown has no time to ask politely,
      * and asking N threads one at a time would serialise N waits that could
      * have overlapped. */
-    for (GList *l = jobs; l; l = l->next)
+    /* Both signals too: the flag reaches JavaScript between two opcodes and
+     * nothing in C, so a `Run` blocked in `Exec.Wait` -- even one handed its
+     * token -- waited out the grace and was cast adrift with its child still
+     * running. */
+    for (GList *l = jobs; l; l = l->next) {
         g_atomic_int_set(&((BtaTaskJob *)l->data)->stop, 3);
+        task_end_now(l->data);
+    }
 
     for (GList *l = jobs; l; l = l->next) {
         BtaTaskJob *job = l->data;

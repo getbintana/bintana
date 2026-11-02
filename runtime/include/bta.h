@@ -1280,13 +1280,43 @@ GCancellable *bta_cancellable_get(JSContext *ctx, JSValueConst v);
  * id for `g_cancellable_disconnect`, or 0. */
 gulong bta_cancellable_link(GCancellable *from, GCancellable *to);
 /* A trailing Cancellable argument past the first `fixed`: its signal
- * (borrowed), with `*argc` dropped by one; NULL when there is none. */
-GCancellable *bta_cancellable_arg(JSContext *ctx, int *argc, JSValueConst *argv,
-                                  int fixed);
+ * (borrowed) in `*out`, with `*argc` dropped by one, or NULL when there is
+ * none.  False, with a TypeError naming `who`, for a token anywhere else. */
+bool bta_cancellable_arg(JSContext *ctx, int *argc, JSValueConst *argv,
+                         int fixed, const char *who, GCancellable **out);
 /* False, with a TypeError naming the argument, when `opts` carries a
  * `Cancellable` -- the spelling that moved to the last argument. */
 bool bta_cancellable_not_option(JSContext *ctx, JSValueConst opts,
                                 const char *who);
+/* The worker's *end now* signal -- raised by a task's `Timeout`, `KillAfter`
+ * and teardown -- or NULL on the main thread.  Borrowed. */
+GCancellable *bta_task_hard_cancellable(JSContext *ctx);
+/* What a blocking call hands GIO: `given` joined with the worker's end-now
+ * signal (see bta_cancellable.c).  End the scope on every path. */
+typedef struct {
+    GCancellable *use, *given, *hard;
+    gulong        link_g, link_h;
+} BtaCancelScope;
+GCancellable *bta_cancel_scope(JSContext *ctx, GCancellable *given,
+                               BtaCancelScope *s);
+void          bta_cancel_scope_end(BtaCancelScope *s);
+/* A verb whose last argument may be a Cancellable, written as `fn##_in(ctx,
+ * this_val, argc, argv, cancel)`: this defines `fn`, which takes the token,
+ * joins it with the worker's end-now signal, calls the body and ends the
+ * scope -- so no return path of the body can forget to. */
+#define BTA_CANCEL_SCOPED(fn, who)                                              \
+    static JSValue fn(JSContext *ctx, JSValueConst this_val, int argc,        \
+                      JSValueConst *argv)                                     \
+    {                                                                         \
+        BtaCancelScope sc_;                                                   \
+        GCancellable  *given_;                                                \
+        if (!bta_cancellable_arg(ctx, &argc, argv, 1, who, &given_))          \
+            return JS_EXCEPTION;                                              \
+        JSValue r_ = fn##_in(ctx, this_val, argc, argv,                       \
+                             bta_cancel_scope(ctx, given_, &sc_));            \
+        bta_cancel_scope_end(&sc_);                                           \
+        return r_;                                                            \
+    }
 /* True when this context runs inside a worker thread. Widgets (and anything
  * else that touches GTK) ask this before constructing, because GTK off the
  * main thread is a crash and not an error. */

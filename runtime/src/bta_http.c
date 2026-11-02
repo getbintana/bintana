@@ -497,6 +497,10 @@ static bool http_bool_opt(JSContext *ctx, JSValueConst opts, const char *key,
 static const char *const HTTP_OPT_KEYS[] = {
     "Query", "Headers", "Timeout", "FollowRedirects", "ContentType", "Body", "Auth",
     "Http1",
+    /* Not an option any more -- the token is the last argument -- but named
+     * here so `PostWait(url, { Cancellable: c })` is read as the options it
+     * was meant as and refused, instead of being posted as the body. */
+    "Cancellable",
 };
 
 /* True when the object names any of them: then it is options, not a body. */
@@ -2332,8 +2336,24 @@ static bool http_build(JSContext *ctx, HttpClientData *c, const char *method,
      * servers offer and what the rest of a program wants.  This is the
      * per-request answer `SOUP_FORCE_HTTP1` gave only for the whole process.
      */
-    if (http_bool_opt(ctx, opts, "Http1", c ? c->http1 : false, NULL))
+    if (http_bool_opt(ctx, opts, "Http1", c ? c->http1 : false, NULL)) {
+#if SOUP_CHECK_VERSION(3, 4, 0)
         soup_message_set_force_http1(msg, TRUE);
+#else
+        /* libsoup before 3.4 has no per-message switch, and asking for one
+         * must not quietly be HTTP/2 after all: the process-wide variable is
+         * the road that remains, and the sentence names it. */
+        JS_ThrowPlainError(ctx, "%s: Http1 needs libsoup 3.4 or newer -- "
+                                "set SOUP_FORCE_HTTP1 before the first request "
+                                "instead", who);
+        g_object_unref(msg);
+        g_free(full);
+        g_free(auth_user);
+        g_free(auth_pass);
+        JS_FreeValue(ctx, eff_opts_body);
+        return false;
+#endif
+    }
     if (fresh)
         soup_message_add_flags(msg, SOUP_MESSAGE_NEW_CONNECTION);
 
@@ -2757,9 +2777,11 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     g_main_context_push_thread_default(priv);
 
     GCancellable *canc        = g_cancellable_new();
-    /* A local one, linked to the caller's: the operation's own Timeout must
-     * not cancel that one for the next call. */
+    /* A local one, linked to the caller's and to the task's *end now*: the
+     * operation's own Timeout must not cancel either for the next call. */
+    GCancellable *hard        = bta_task_hard_cancellable(ctx);
     gulong        opt_link    = bta_cancellable_link(opt_cancel, canc);
+    gulong        hard_link   = bta_cancellable_link(hard, canc);
     HttpWaitState w = { false, NULL, NULL, NULL };
     bool jar_borrowed = false;
 
@@ -2806,6 +2828,8 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     g_main_context_unref(priv);
     if (opt_link)
         g_cancellable_disconnect(opt_cancel, opt_link);
+    if (hard_link)
+        g_cancellable_disconnect(hard, hard_link);
     g_object_unref(canc);
     if (jar_borrowed && c->jar)
         soup_session_remove_feature(sess, SOUP_SESSION_FEATURE(c->jar));
@@ -2845,8 +2869,10 @@ static JSValue http_wait_call(JSContext *ctx, HttpClientData *c, SoupSession *se
                               int argc, JSValueConst *argv, const char *who)
 {
     /* `(url, [body], [opts], [cancellable])`: borrowed, argv holds it. */
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
+    GCancellable *cancel;
 
+    if (!bta_cancellable_arg(ctx, &argc, argv, 1, who, &cancel))
+        return JS_EXCEPTION;
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "%s(url, [body], [opts]): needs a URL", who);
     for (int i = 0; i < argc; i++) {
@@ -3036,7 +3062,8 @@ static const JSCFunctionListEntry http_client_props[] = {
      *   libsoup notices a cancel only when the server next sends something,
      *   so a `Stop`, a `Timeout` or a `Cancellable` ends a request late; a
      *   program whose requests must stop when told sets this. `{ Http1 }` on
-     *   one call does the same for that call
+     *   one call does the same for that call. Needs libsoup 3.4; before it a
+     *   request asking is refused, naming `SOUP_FORCE_HTTP1`
      */
     JS_CGETSET_DEF("Http1",           http_client_get_http1,   http_client_set_http1),
     /* Language

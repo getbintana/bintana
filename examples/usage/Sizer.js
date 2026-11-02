@@ -62,6 +62,10 @@ class Sizer extends Task {
                 subs = Directory.Folders(dir, this.Cancellable);
                 names = Directory.Files(dir, this.Cancellable);
             } catch (e) {
+                /* Stopped: what threw is the cancel, not a locked folder, and
+                 * counting it would report every folder left as an error. */
+                if (this.Stopping)
+                    break;
                 errors++;
                 continue;
             }

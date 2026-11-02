@@ -729,10 +729,9 @@ static JSValue zip_extract(JSContext *ctx, JSValueConst this_val, int argc, JSVa
     return r;
 }
 
-static JSValue zip_extract_all(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
+static JSValue zip_extract_all_in(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv, GCancellable *cancel)
 {
-    GCancellable *cancel = bta_cancellable_arg(ctx, &argc, argv, 1);
-
     BtaZip *z = zip_this(ctx, this_val);
 
     if (!z)
@@ -816,6 +815,7 @@ static JSValue zip_extract_all(JSContext *ctx, JSValueConst this_val, int argc, 
     JS_FreeCString(ctx, dir);
     return r;
 }
+BTA_CANCEL_SCOPED(zip_extract_all, "ZipArchive.ExtractAll")
 
 static JSValue zip_close(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv)
 {

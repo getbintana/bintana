@@ -149,30 +149,48 @@ GCancellable *bta_cancellable_get(JSContext *ctx, JSValueConst v)
  * A trailing `Cancellable`: the one road by which a call is handed one.
  *
  * When the last of more than `fixed` arguments is a Cancellable, its signal is
- * returned and `*argc` drops by one, so the rest of the function reads its
- * arguments as if the token had not been there.  Borrowed: `argv` holds it for
- * the length of the call.  NULL when there is none.
+ * put in `*out` and `*argc` drops by one, so the rest of the function reads
+ * its arguments as if the token had not been there.  Borrowed: `argv` holds
+ * it for the length of the call.  NULL when there is none; false, with a
+ * TypeError naming `who`, when one is somewhere other than last.
  *
  * An argument and not an option, for two reasons.  An option is read through
  * whatever getter the object has, which may hand out a token nothing else
  * holds -- freed with its wrapper the moment the runtime let go of the value.
- * And nothing is cancelled that the caller did not hand over: inside a task,
- * `Stop` reaches a blocking call because `Run` passed `this.Cancellable`, and
- * a call `Run` makes to wind down after `Stopping` is left alone.
+ * And a stop that only asks cancels nothing the caller did not hand over:
+ * inside a task, `Stop` reaches a blocking call because `Run` passed
+ * `this.Cancellable`, and a call `Run` makes to wind down after `Stopping` is
+ * left alone -- until the insisting stage, whose signal every blocking call
+ * hears (`bta_cancel_scope`).
  */
-GCancellable *bta_cancellable_arg(JSContext *ctx, int *argc, JSValueConst *argv,
-                                  int fixed)
+bool bta_cancellable_arg(JSContext *ctx, int *argc, JSValueConst *argv,
+                         int fixed, const char *who, GCancellable **out)
 {
-    (void)ctx;
-    if (*argc <= fixed)
-        return NULL;
+    *out = NULL;
 
-    BtaCancellable *c = cancellable_of(argv[*argc - 1]);
+    /* A trailing `undefined` is an argument not given -- what a wrapper that
+     * forwards `(a, b, c)` passes -- so it does not hide a token before it. */
+    while (*argc > fixed && JS_IsUndefined(argv[*argc - 1]))
+        (*argc)--;
 
-    if (!c)
-        return NULL;
-    (*argc)--;
-    return c->cancel;
+    BtaCancellable *c = *argc > fixed ? cancellable_of(argv[*argc - 1]) : NULL;
+
+    if (c) {
+        (*argc)--;
+        *out = c->cancel;
+    }
+
+    /* **A token anywhere else is refused**, not read as the options it is
+     * not: `Exec.Wait(argv, token, opts)` took the token for the options,
+     * found no key on it, and the cancel never arrived. */
+    for (int i = fixed; i < *argc; i++) {
+        if (cancellable_of(argv[i])) {
+            JS_ThrowTypeError(ctx, "%s: a Cancellable is the last argument, "
+                                   "after the options", who);
+            return false;
+        }
+    }
+    return true;
 }
 
 /* `{ Cancellable }` in an options object is the spelling that used to work:
@@ -189,7 +207,9 @@ bool bta_cancellable_not_option(JSContext *ctx, JSValueConst opts,
     if (JS_IsException(v))
         return false;
 
-    bool set = !JS_IsUndefined(v);
+    /* `null` is the absent value it always was: `{ Cancellable: x || null }`
+     * names no token, and refusing it would refuse code that has none. */
+    bool set = !JS_IsUndefined(v) && !JS_IsNull(v);
 
     JS_FreeValue(ctx, v);
     if (set) {
@@ -213,6 +233,47 @@ gulong bta_cancellable_link(GCancellable *from, GCancellable *to)
     if (!from || !to)
         return 0;
     return g_cancellable_connect(from, G_CALLBACK(cancellable_forward), to, NULL);
+}
+
+/*
+ * The signal a blocking call passes to GIO: the token it was handed, joined
+ * with the worker's *end now* signal (`bta_task_hard_cancellable`), so a
+ * task's `Timeout` and `KillAfter` reach a call handed nothing.
+ *
+ * No allocation in the common cases: on the main thread the answer is the
+ * token itself, and in a worker handed none it is the job's signal.  Only a
+ * worker call handed a token makes a third, linked to both.  Every return
+ * path of the caller ends the scope.
+ */
+GCancellable *bta_cancel_scope(JSContext *ctx, GCancellable *given,
+                               BtaCancelScope *s)
+{
+    GCancellable *hard = bta_task_hard_cancellable(ctx);
+
+    *s = (BtaCancelScope){ 0 };
+    if (!hard)
+        return s->use = given;
+    if (!given)
+        return s->use = hard;
+
+    s->use    = g_cancellable_new();
+    s->given  = given;
+    s->hard   = hard;
+    s->link_g = bta_cancellable_link(given, s->use);
+    s->link_h = bta_cancellable_link(hard, s->use);
+    return s->use;
+}
+
+void bta_cancel_scope_end(BtaCancelScope *s)
+{
+    if (!s->given)
+        return;                 /* nothing was made: `use` is borrowed */
+    if (s->link_g)
+        g_cancellable_disconnect(s->given, s->link_g);
+    if (s->link_h)
+        g_cancellable_disconnect(s->hard, s->link_h);
+    g_clear_object(&s->use);
+    s->given = NULL;
 }
 
 void bta_cancellable_init(JSContext *ctx, JSValue global)

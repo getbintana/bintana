@@ -244,7 +244,10 @@ each rule below; read it before changing a level.
   `Environment.Set` before the first request covers worker threads too.
   `bintana-docs` documents both in `Http.md#cancelling-over-http2`;
   `examples/downloads` uses `Http1`. The suite cannot assert the timing: its
-  servers are local and speak HTTP/1.1. Searched on
+  servers are local and speak HTTP/1.1. `soup_message_set_force_http1` is
+  `SOUP_AVAILABLE_IN_3_4` and the build asks for no minimum, so it is behind
+  `SOUP_CHECK_VERSION(3, 4, 0)`; below that, a request asking for `Http1` is
+  refused naming `SOUP_FORCE_HTTP1` (exercised by forcing the check). Searched on
   2026-11-02: no libsoup issue or MR covers it; the nearest is #367 (*HTTP/2:
   Socket I/O timeout not reported to app*), the same `check_status` not being
   called. When an upstream report exists, link it here and in `Http.md`.

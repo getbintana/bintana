@@ -292,8 +292,36 @@ static const BtaClass *deferring_class(JSContext *ctx, JSValueConst obj,
 {
     const BtaClass *own = bta_class_find(type);
 
-    if (own && own->deferred && *own->deferred)
-        return own;
+    /*
+     * A runtime class answers by its parents' names, once: the table does not
+     * change while the process lives, and every node of every form -- a
+     * `Label`, a `Button` -- asked this, scanning the whole table at each
+     * level of its prototype chain.  The walk below is for a class of the
+     * project, which has no row and no parent name to follow.
+     */
+    if (own) {
+        /* By name, never by row: the table is a GArray a plugin can grow,
+         * and a row's address moves with it.  The names are static. */
+        static GHashTable *answered;            /* name -> name, main thread */
+        gpointer           hit;
+
+        if (!answered)
+            answered = g_hash_table_new(g_str_hash, g_str_equal);
+        if (g_hash_table_lookup_extended(answered, own->name, NULL, &hit))
+            return bta_class_find(hit);
+
+        const BtaClass *found = own;
+
+        for (const BtaClass *c = own; c;
+             c = c->parent ? bta_class_find(c->parent) : NULL) {
+            if (c->deferred && *c->deferred) {
+                found = c;
+                break;
+            }
+        }
+        g_hash_table_insert(answered, (gpointer)own->name, (gpointer)found->name);
+        return found;
+    }
 
     int       n;
     BtaClass *table = bta_class_table(&n);
