@@ -26,7 +26,7 @@ Four things that are the design rather than detail:
   event and is reported and consumed. The caller passed the function and is on
   the stack; and a PDF that threw leaves no file, as the control's does.
 - **Not in a `Task`.** A worker installs no `Painter` (cairo and pango are
-  drawing, `docs/plans/task-plan.md`), so it has no `Drawing` either.
+  drawing, and a worker has neither), so it has no `Drawing` either.
 - **`Text` with no font kept the last one.** `metrics_prepare` set a font only
   when one was given, on a layout shared by every call -- with a desktop the
   fallback is `gtk-font-name` and it never showed, and in a console project

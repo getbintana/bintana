@@ -12,7 +12,7 @@
  * One shot: a Task runs once, answers exactly once (`Done` xor `Error`), and
  * is done.  Work that repeats is a new Task, the way a child that runs again
  * is a new `Exec`.  The surface is docs/reference/globals/Task.md and the
- * argument is docs/plans/task-plan.md; what is here is how.
+ * design record is docs/notes/task-threads.md; what is here is how.
  *
  * ## Why threads, and why shaped like this
  *
@@ -1340,8 +1340,8 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      * Not here: the bta_painter_init / bta_metrics_init pair (cairo and pango,
      * which is drawing), bta_http_init and bta_media_init (callbacks on the
      * loop -- the elements API included: a signal handler is the main loop's,
-     * and the thread that emitted it waits for it), and every GTK one.  Each
-     * is named in docs/plans/task-plan.md with the reason.
+     * and the thread that emitted it waits for it), and every GTK one.  The
+     * reason is the callback frontier in docs/notes/task-threads.md.
      *
      * `Locale` is here whole, and not as the facts half it used to get: the
      * catalogue is thread-local now (bta_locale.c), and the worker builds its

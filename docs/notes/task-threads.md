@@ -28,15 +28,15 @@
   `g_file_set_contents`, atomic by temporary-and-rename, so two threads saving
   one path cannot tear it; what concurrency costs here is the **lost update**,
   which is a *sequence* and which no lock the runtime puts on a call could
-  ever reach. The writes came back before `Lock` did, and the plan's phase 2
-  turned out not to depend on its phase 3 at all. **Before promising a feature
+  ever reach. The writes came back before `Lock` did, and the second phase
+  turned out not to depend on the third at all. **Before promising a feature
   will lift a refusal, measure whether the refusal is about anything.**
 - **A refusal states its expiry or it becomes doctrine.** The writes are
   refused today with *"a task cannot write yet -- two writers need a lock to
   order them, and there is none"*, not with *"a task reads the disk, it never
-  writes it"*. The first is a deadline with `docs/plans/task-plan.md` behind
-  it; the second is a philosophy nobody agreed to, and it is what got the
-  first attempt abandoned.
+  writes it"*. The first is a deadline with a named condition behind it; the
+  second is a philosophy nobody agreed to, and it is what got the first
+  attempt abandoned.
 - **`bta_widgets_init` cannot run twice, and that is what split the prelude.**
   It keeps each class's `proto` and `ctor` in the process-global class table,
   so a second runtime running it would overwrite the main thread's with values
@@ -85,8 +85,7 @@
   the job's blocking verbs: `Exec.Wait`, `Http.*Wait`, the GIO file verbs and
   the directory walk (`List`, `Files`, `Folders`, `Copy`, `DeleteTree`).
   `File.Hash` and the compressors still take none, and still wait for the flag
-  or `KillAfter` between opcodes. See docs/plans/task-plan.md.
-
+  or `KillAfter` between opcodes.
 - **A token cancelled from the main thread can wake the worker before the
   job's flag is up.** `g_cancellable_cancel` sets `Cancelled` first and emits
   the signal afterwards; a `Run` polling `this.Cancellable.Cancelled` can

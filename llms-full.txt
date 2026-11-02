@@ -2177,6 +2177,30 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   NULL, so the branch it described could not happen. The same cleanup leaked
   its own reference on the server's auth domain, which `http_server_free`
   always released.
+- **A job's `GCancellable` is cancelled, not freed, by the stop.** `BtaTaskJob`
+  owns it; `Stop`, `Timeout` and `KillAfter` cancel it from the main thread, and
+  `task_job_unref` drops the last reference. A native call that takes it
+  (`Exec.Wait`, `Http.*Wait`, `g_file_load_contents`, `g_file_query_info`,
+  `g_file_copy`, `g_file_trash`, `g_file_enumerate_children`) returns
+  `G_IO_ERROR_CANCELLED`; a call that does not, such as `File.Hash` or the
+  compressors, is still only reached between opcodes or by the two-second
+  teardown bound. **The operation holds a reference, so the job's cancel
+  outlives the job's `Stop` request** -- and the thread that sees the
+  cancellation is the worker, not the caller. A shared `Cancellable` links to
+  the same object, so the worker's `this.Cancellable` and the main thread's
+  token see one state; `task_ending` reads it too, because `Cancel()` sets the
+  flag before it emits the signal (see `docs/notes/task-threads.md`).
+- **A borrowed string from the catalogue can die inside the call that formats
+  it.** `bta_locale_lookup` returns a pointer into this thread's `L.entries`,
+  and `bta_locale_format` calls `JS_ToCString` on the arguments before it walks
+  the template -- so a `toString` that assigns `Locale.Current` reloads the
+  catalogue and frees the entry the template points into. The copy at the top
+  of `bta_locale_format` is what keeps one call on one catalogue; the
+  reentrancy assertion in `testLocale` is a heap-use-after-free under
+  `tests/asan.sh` without it. A lock around the lookup is not the fix: the
+  pointer outlives the lock, and one held across `JS_ToCString` deadlocks the
+  reload. This is the same-thread half of the catalogue problem; the
+  cross-thread half is the `GPrivate` in `bta_locale.c`.
 
 ---
 
@@ -2969,20 +2993,26 @@ still counts a `typeof`, since its getter throws for one as for any read.
 
 ## The language: what the curation took and what it left
 
-- **A worker gets `Locale`'s facts and not its catalogue, and the split is the
-  process boundary.** `Number`, `Date`, `Currency`, `Parse`, `DecimalPoint`,
-  `Compare` and `Matches` read `localeconv` and the C library's collation --
-  properties of the process that every thread inherits, which is why .NET's
-  `CultureInfo`, Java's `Collator` and Qt's `QCollator` all work off the main
-  thread. `Text`, `Plural`, `Context`, `Current` and `Available` read `L`, the
-  process-global hash table the main thread fills and can reload mid-run, so
-  they are a race and not merely prose out of place; `Read`/`Write` go with
-  them, being the catalogue editor's pair. `bta_locale_init_facts` builds the
-  object from **the same `locale_props` table** and deletes the prose names, so
-  there is one definition of the surface and the extractor and the docs see one
-  list -- a second table would be a second list to keep in step. The assertion
-  is `testTask`'s: a worker orders `Ana` before `Bruno`, folds `Córdoba`, and
-  has no `Locale.Text`.
+- **A worker gets the whole `Locale`, in a catalogue of its own.** The
+  `GHashTable` lives in a `GPrivate`, so every thread has one; the main thread
+  can reload its own with `Locale.Current` while a worker reads its own, and
+  neither frees the other's. `bta_locale_init_for` builds the worker's from the
+  same `po/` directories with the language the application had at `Start`, so
+  a task translates with the words it started with. `Read`/`Write` are the
+  catalogue editor's pair and touch no catalogue at all, so they come too. The
+  object is still built from **the same `locale_props` table**, so the surface
+  has one definition and the extractor and the docs see one list. The assertion
+  is `testTask`'s: a worker orders `Ana` before `Bruno`, folds `Córdoba`,
+  translates `Name:` as `NOMBRE:`, and keeps `zz` after the main thread has
+  changed `Locale.Current` back to `""`.
+- **The template is copied before the arguments are converted, and that is not
+  about threads.** `bta_locale_lookup` returns a pointer into the catalogue;
+  `bta_locale_format` then calls `JS_ToCString` on the arguments, and a
+  `toString` can assign `Locale.Current` and free the entry the template points
+  into. A lock around the lookup does not help -- the pointer outlives it -- and
+  holding one across the conversion deadlocks the reload. Copying the template
+  at the top of `bta_locale_format` makes one call see one catalogue. This is
+  the same-thread half that a per-worker table does not fix by itself.
 - **A wrong answer that looks like the right tool is worse than a missing one,
   and `localeCompare` was the case that proves it.** With no ICU it compared
   code units, so `"Álvarez".localeCompare("Zapata")` was `1` -- and measured,
@@ -3000,9 +3030,9 @@ still counts a `typeof`, since its getter throws for one as for any read.
   hatches), so the `gone[]` list is one catalogue and not two. The worker used
   to get a **different sentence**, because `Locale` was not installed there at
   all and sending it to `Locale.Compare` would have been the second wrong
-  answer in a row; `bta_locale_init_facts` gives a worker the half of `Locale`
-  that needs no catalogue (`ISSUE-worker-locale-order`, deleted as answered),
-  so it is one sentence on both sides now.
+  answer in a row; `bta_locale_init_for` gives a worker its own catalogue and
+  the whole `Locale` (`ISSUE-worker-locale-order`, deleted as answered), so it
+  is one sentence on both sides now.
 - **The bare `sort()` is the half of that which cannot be refused**, and after
   the refusal above it is the one that stays silent. It gives the same wrong
   order and never consults the locale -- a comparator-less `sort` compares UTF-16
@@ -3293,7 +3323,11 @@ it settled:
   imported -- and the re-exports are live bindings. A library file not loaded
   yet (in a worker, or a library later in `uses`) is compiled there; a script
   file of the library is skipped, so `import { Chart } from "charts"` refuses
-  until `lib/charts` exports.
+  until `lib/charts` exports. **A worker uses the library's `worker` list when
+  it declares one**: only those files are evaluated (`sources` stays the main
+  thread's), a script named there is an error rather than a skip, and an empty
+  list refuses instead of falling back. Without the key, the worker falls back
+  to `sources`, which is how a one-module library like `xlsx` crosses.
 - **What an import brought in is handed out after the module that imported it
   ran**, from a pending list `load_file` fills, so it reaches later files by
   name like any module. A re-export (`export { withIva } from "./P.js"`) is the
@@ -9291,9 +9325,12 @@ each rule below; read it before changing a level.
 - **`Probe` must not follow redirects**: the redirect is the answer. Put
   `FollowRedirects: true` back in it and `testNetwork` goes red on the portal
   rows.
-- **A `Task` worker runs `rad.js` and has no `Network`** (nor `Http`): the
-  first `Network.Probe = …` stopped every worker at load, and the xlsx and task
-  tests went red with *Network is not defined*. Anything `rad.js` hangs on a C
+- **A `Task` worker runs `rad.js` and has no `Network`**, and only the blocking
+  `Http.*Wait` verbs -- each on a `SoupSession` of that thread and linked to
+  the job's `GCancellable`, so `Stop` cancels the flight. The first
+  `Network.Probe = …` stopped every worker at load, and the xlsx and task tests
+  went red with *Network is not defined*; the asynchronous `Http` is not there
+  because its source belongs to the main loop. Anything `rad.js` hangs on a C
   global is guarded with `typeof … !== "undefined"`.
 - **A timeout in a `tests/widgets` test is measured against the whole suite's
   blocking calls.** Tests run in order but their waits overlap, and later tests
@@ -9761,7 +9798,7 @@ Four things that are the design rather than detail:
   event and is reported and consumed. The caller passed the function and is on
   the stack; and a PDF that threw leaves no file, as the control's does.
 - **Not in a `Task`.** A worker installs no `Painter` (cairo and pango are
-  drawing, `docs/plans/task-plan.md`), so it has no `Drawing` either.
+  drawing, and a worker has neither), so it has no `Drawing` either.
 - **`Text` with no font kept the last one.** `metrics_prepare` set a font only
   when one was given, on a layout shared by every call -- with a desktop the
   fallback is `gtk-font-name` and it never showed, and in a console project
@@ -10298,15 +10335,15 @@ the two `install` roads, `bta_runtime.c` **and** `bta_task.c`.
   `g_file_set_contents`, atomic by temporary-and-rename, so two threads saving
   one path cannot tear it; what concurrency costs here is the **lost update**,
   which is a *sequence* and which no lock the runtime puts on a call could
-  ever reach. The writes came back before `Lock` did, and the plan's phase 2
-  turned out not to depend on its phase 3 at all. **Before promising a feature
+  ever reach. The writes came back before `Lock` did, and the second phase
+  turned out not to depend on the third at all. **Before promising a feature
   will lift a refusal, measure whether the refusal is about anything.**
 - **A refusal states its expiry or it becomes doctrine.** The writes are
   refused today with *"a task cannot write yet -- two writers need a lock to
   order them, and there is none"*, not with *"a task reads the disk, it never
-  writes it"*. The first is a deadline with `docs/plans/task-plan.md` behind
-  it; the second is a philosophy nobody agreed to, and it is what got the
-  first attempt abandoned.
+  writes it"*. The first is a deadline with a named condition behind it; the
+  second is a philosophy nobody agreed to, and it is what got the first
+  attempt abandoned.
 - **`bta_widgets_init` cannot run twice, and that is what split the prelude.**
   It keeps each class's `proto` and `ctor` in the process-global class table,
   so a second runtime running it would overwrite the main thread's with values
@@ -10351,9 +10388,19 @@ the two `install` roads, `bta_runtime.c` **and** `bta_task.c`.
   now, so the deliberate leak is said in the same vocabulary as everything else
   that holds one. Freeing memory a live thread still writes to is
   worse than leaking it on the last line before exit. `GCancellable` is the
-  only thing that reaches a thread blocked in native code, and it was measured
-  and deferred: one of the six verbs a worker can block in takes one, and it
-  is not the one that hangs. See docs/plans/task-plan.md.
+  only thing that reaches a thread blocked in native code, and it now reaches
+  the job's blocking verbs: `Exec.Wait`, `Http.*Wait`, the GIO file verbs and
+  the directory walk (`List`, `Files`, `Folders`, `Copy`, `DeleteTree`).
+  `File.Hash` and the compressors still take none, and still wait for the flag
+  or `KillAfter` between opcodes.
+- **A token cancelled from the main thread can wake the worker before the
+  job's flag is up.** `g_cancellable_cancel` sets `Cancelled` first and emits
+  the signal afterwards; a `Run` polling `this.Cancellable.Cancelled` can
+  return in between, and `task_ending` then read `stop == 0` and reported
+  `Done` for a run the caller had stopped. `task_ending` consults
+  `g_cancellable_is_cancelled(job->cancel)` as well -- the signal is the job's
+  own, so its state is the same answer and is already visible. The test is
+  *a cancelled token must not reach Done*.
 - **`Lock.Hold` releases in C, and that is what makes it correct rather than
   tidy.** A forced `Stop()` ends a worker at an arbitrary opcode, so an
   `Enter`/`Leave` pair written in JavaScript would leave the lock held for the
@@ -12390,7 +12437,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10024 assertions
+./tests/run.sh                          # all seven projects, 10205 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

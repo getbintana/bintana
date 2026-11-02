@@ -93,7 +93,7 @@ Five decisions, each with the reason it is not the other way:
   the caller owns for the length of the call: it is painted from directly, no
   copy and no cache.
 - **A worker gets everything but `Paint`.** `New`, `Get`, `Set`, `Fill`,
-  `Copy`, `Load` and `Save` are memory and GIO, which the task plan's frontier
+  `Copy`, `Load` and `Save` are memory and GIO, which the task's frontier
   (callbacks, not I/O) allows; `Paint` is cairo and pango, which a worker does
   not install — the same split `Drawing` already has, and for the same reason.
 

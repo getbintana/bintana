@@ -7,7 +7,7 @@ so that picking it up does not mean having the argument again.
 What was **built** along the way -- `Exec.Wait` and the `Timeout` guard, and
 later `Task` -- is described where it lives
 ([runtime-api.md](https://github.com/getbintana/bintana-docs/blob/main/docs/runtime-api.md#exec), [Task.md](https://github.com/getbintana/bintana-docs/blob/main/docs/reference/globals/Task.md),
-[task-plan.md](task-plan.md)) and named here only where it changed the
+[task-threads.md](../notes/task-threads.md)) and named here only where it changed the
 argument. This document used to carry that reference half as well, and it was
 a second description of a built feature sitting in the directory for things
 that are not.
@@ -143,7 +143,7 @@ trap to get wrong."*
 ## The half a thread answered
 
 **`async`/`await` is for waiting on I/O. What this runtime had to wait for was
-work** -- and [`Task`](task-plan.md) moves work to a thread, where the sequence
+work** -- and [`Task`](../notes/task-threads.md) moves work to a thread, where the sequence
 is ordinary straight-line code inside `Run`: a `for` with an `if` in it, and no
 new word anywhere.
 

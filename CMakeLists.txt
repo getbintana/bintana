@@ -151,7 +151,7 @@ endif()
 # executable; regenerating is part of the build.
 # Two halves, because a Task's worker thread runs the language without the
 # widgets: rad.js has to be evaluable with no `Widget` in the runtime, and
-# forms.js is everything that is not. See docs/plans/task-plan.md.
+# forms.js is everything that is not. See docs/notes/task-threads.md.
 set(PRELUDE_JS  ${CMAKE_SOURCE_DIR}/runtime/js/rad.js)
 set(PRELUDE_H   ${CMAKE_BINARY_DIR}/generated/bta_prelude.h)
 add_custom_command(

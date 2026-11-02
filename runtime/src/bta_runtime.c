@@ -2533,7 +2533,7 @@ static bool install_globals(BtaApp *app)
      * process-global table that a second runtime would overwrite.  They share
      * the global lexical scope, so forms.js still sees rad.js's captures --
      * which is why the order is this one and both run before the hatches
-     * close.  See docs/plans/task-plan.md.
+     * close.  See docs/notes/task-threads.md.
      */
     JSValue r = JS_Eval(ctx, bta_prelude_js, strlen(bta_prelude_js),
                         "<rad.js>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT);
