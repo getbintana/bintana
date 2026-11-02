@@ -80,7 +80,7 @@ class TestForm extends Form {
         check("Report is here with the others",   typeof Report === "function");
         check("and Markdown", typeof Markdown === "function");
         check("and Chart",    typeof Chart === "function");
-        check("and both of the questions", typeof Confirm === "function" &&
+        check("and both of the questions, and the about box", typeof Confirm === "function" && typeof AboutBox === "function" &&
                                        typeof AskText === "function");
 
         /* `lib/dialog`'s two classes are `Form` subclasses, so *building* one
@@ -112,6 +112,12 @@ class TestForm extends Form {
            Confirm.TextProperties.join(","), "BtnAccept,BtnCancel");
         eq("and the prompt its own two",
            AskText.TextProperties.join(","), "BtnOk,BtnCancel");
+
+        /* The third class, which is not a question: built and not shown, for
+         * the reason the two above are. */
+        const about = new AboutBox();
+        eq("the about box is a form too", about instanceof AboutBox, true);
+        eq("whose Close is what Escape presses", about.BtnClose.Cancel, true);
 
         /* And the table they used to keep a copy of each is one table. */
         eq("a paper size is the runtime's", Printer.Papers.A4.Width, 595);

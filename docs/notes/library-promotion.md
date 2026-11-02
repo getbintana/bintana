@@ -76,3 +76,18 @@ it was seen**, and it is why `docs/issues/README.md`'s "a library with no page a
 all is invisible to the check" has a companion worth remembering: a library whose
 members are all statics is *counted* and not *checked*, and the reference pages
 are what check it.
+
+**The third class, `AboutBox`, and the name a default library may not take.**
+The IDE's `AboutForm` and a one-line `Message.Info` in each of `bintana-project`
+and `bintana-box` were the three copies. It was written as `About` first, and a
+probe project with its own `class About` stopped before anything ran with
+`SyntaxError: redeclaration of 'About'`: **a library's classes and a project's
+share one scope, and a library every new project names in `uses` takes its
+class names away from all of them.** `About` is exactly what a project calls
+its own -- `examples/hello` has one, a component -- so a class in a default
+library is named for what it is *and* for being unlikely in a program, which is
+why it is `AboutBox`. The IDE keeps its own `AboutForm`, for the reason it keeps
+`AskForm` and `ConfirmForm` above: naming `dialog` in the IDE's `uses` would put the
+library's classes in the IDE's own process, and whether completion then offers
+`Confirm.` to a project that does not use it -- `tests/ide`'s completion phase
+asserts it must not -- is a question for that piece of work, and was not tried here.

@@ -17625,6 +17625,62 @@ class Form1 extends Form {
         /* Both windows are closed now, so nothing is left on screen for the
          * next test to measure -- which is the whole of why the file-dialog
          * test above asserts refusals only. */
+
+        /* --- the about box, which asks nothing ---------------------------- */
+        /* **What the project already says is not asked again**: with no
+         * options the name and the version are `project.json`'s, and the
+         * version line carries the runtime's too, which is the pair a bug
+         * report needs. */
+        const bare = AboutBox.Show();
+        eq("the about box is modal", bare.Modal, true);
+        eq("named after the project", bare.LblName.Text, Application.Name);
+        eq("and titled after it", bare.Text, `About ${Application.Name}`);
+        check("saying which runtime it is on",
+              bare.LblVersion.Text.includes(BTA_VERSION), bare.LblVersion.Text);
+        check("and which version of the program, when the project has one",
+              !Application.Version
+              || bare.LblVersion.Text.includes(Application.Version),
+              `${bare.LblVersion.Text} / ${Application.Version}`);
+        /* **Hidden until given, every one of them** -- the assertion that
+         * catches an about box with an empty line in the middle of it. */
+        eq("no summary, link or copyright that was not given",
+           bare.LblSummary.Visible || bare.LnkWebsite.Visible
+           || bare.LblCopyright.Visible, false);
+        eq("and a picture only when the project ships its icon",
+           bare.ImgIcon.Visible,
+           !!Application.Id && Application.HasIcon(Application.Id));
+        eq("Escape closes it, through the button declared Cancel",
+           bare.CancelButton === bare.BtnClose, true);
+        until("the about box takes the focus", () => bare.BtnClose.Focused, () => {
+            eq("and the focus is on Close, so Enter closes it too",
+               bare.BtnClose.Focused, true);
+        });
+        bare.BtnClose_Click();
+        eq("and closing it takes the window away", bare.Visible, false);
+
+        const full = AboutBox.Show({
+            Summary: "What it is.", Copyright: "Copyright © 2026 Somebody",
+            Website: "https://example.org/", Icon: "dialog-information-symbolic",
+            Name: "Other", Version: "Release 7", Title: "Who" });
+        eq("a summary given is shown", [full.LblSummary.Visible,
+                                        full.LblSummary.Text].join("|"),
+           "true|What it is.");
+        eq("so is the copyright", [full.LblCopyright.Visible,
+                                   full.LblCopyright.Text].join("|"),
+           "true|Copyright © 2026 Somebody");
+        eq("and the website, as a link to it",
+           [full.LnkWebsite.Visible, full.LnkWebsite.Uri].join("|"),
+           "true|https://example.org/");
+        eq("an icon given is the one drawn",
+           [full.ImgIcon.Visible, full.ImgIcon.Icon].join("|"),
+           "true|dialog-information-symbolic");
+        eq("and the caller's words replace the project's",
+           [full.LblName.Text, full.LblVersion.Text, full.Text].join("|"),
+           "Other|Release 7|Who");
+        eq("with one label of its own declared for the catalogue",
+           AboutBox.TextProperties.join(","), "BtnClose");
+        full.BtnClose_Click();
+        eq("and that one closes as well", full.Visible, false);
     }
 
     /*

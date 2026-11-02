@@ -18777,6 +18777,22 @@
       "Name": "dialog",
       "Classes": [
         {
+          "Name": "AboutBox",
+          "Parent": "Form",
+          "Members": [
+            {
+              "Name": "Show",
+              "Kind": "Static",
+              "Params": 1,
+              "Signature": "(options)",
+              "Returns": "",
+              "Doc": "builds the about box, shows it modal, and answers the shown window. The name, version and icon come out of `project.json` unless given; the summary, copyright and website are shown only when given. There is no callback: nothing is asked",
+              "Native": false
+            }
+          ],
+          "Events": []
+        },
+        {
           "Name": "AskText",
           "Parent": "Form",
           "Members": [

@@ -1,0 +1,105 @@
+{
+  "format": "bintana-form/1",
+  "class": "AboutBox",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Resizable": false,
+    "Text": "",
+    "Width": 420
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "PnlContent",
+      "properties": {
+        "Arrangement": "Vertical",
+        "Expand": true,
+        "Margin": 12,
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "Image",
+          "name": "ImgIcon",
+          "properties": {
+            "Size": 96,
+            "AccessibleHidden": true,
+            "Visible": false
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblName",
+          "properties": {
+            "Alignment": "Center",
+            "HAlign": "Fill",
+            "Style": "title-1",
+            "Wrap": true
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblVersion",
+          "properties": {
+            "Alignment": "Center",
+            "HAlign": "Fill",
+            "Style": "dim-label",
+            "Wrap": true
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblSummary",
+          "properties": {
+            "Alignment": "Center",
+            "HAlign": "Fill",
+            "Visible": false,
+            "Width": 388,
+            "Wrap": true
+          }
+        },
+        {
+          "type": "LinkButton",
+          "name": "LnkWebsite",
+          "properties": {
+            "HAlign": "Center",
+            "Visible": false
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblCopyright",
+          "properties": {
+            "Alignment": "Center",
+            "HAlign": "Fill",
+            "Style": "dim-label",
+            "Visible": false,
+            "Wrap": true
+          }
+        },
+        {
+          "type": "Panel",
+          "name": "PnlButtons",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "End",
+            "Spacing": 8,
+            "VAlign": "End",
+            "VExpand": true
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnClose",
+              "properties": {
+                "Style": "suggested-action",
+                "Text": "Close",
+                "Cancel": true
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
