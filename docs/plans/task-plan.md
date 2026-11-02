@@ -356,3 +356,17 @@ The order matters, and it is the one thing this plan got wrong the first time:
 refusal justified by a missing feature is only honest while the feature is
 what is missing — and here it was a measurement, not a feature. Stating the
 trigger is what made that findable.
+
+### Deferred, and what reopens each
+
+The rest is not a roadmap; each waits for a program that asks for it:
+
+| | the program that reopens it |
+|---|---|
+| `markdown`'s parser as a worker module | a task that parses a `.md` — an index of notes, a table of contents, a document exported off the main thread. The viewer and the IDE help run on the page, so they do not. |
+| `Environment`/`Settings` in a worker | a task that needs configuration or an environment value it cannot receive in `msg`. |
+| `Exec` synchronous in a worker | a task that must run an external tool; today the async `Exec` on the main thread is the only door. |
+| `Http` synchronous in a worker | a task that must fetch or upload on its own thread; async `Http` already serves the main one. |
+| `Bytes` in messages | a task that moves binary data rather than a path. |
+| a cap on live tasks | an application that starts more than it can afford; `examples/usage` already caps itself at the processor count. |
+| `GCancellable`, a debugger in a worker | named above, with the same rule: a measured need, not a symmetry. |
