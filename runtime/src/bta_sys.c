@@ -1219,7 +1219,7 @@ static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
 
         if (!info) {
             if (err)
-                failed = true;      /* cancelled or an unreadable entry */
+                failed = true;      /* cancelled, or the read broke off */
             break;
         }
 
@@ -1229,16 +1229,23 @@ static JSValue sys_dir_list(JSContext *ctx, JSValueConst this_val,
             g_ptr_array_add(names, g_strdup(name));
         g_object_unref(info);
     }
-    g_clear_error(&err);
     g_file_enumerator_close(walk, cancel, NULL);
     g_object_unref(walk);
     if (spec)
         g_pattern_spec_free(spec);
 
+    /*
+     * **A read that broke off throws, and says why.**  `g_dir_read_name` used
+     * to end such a listing quietly, as if the folder held fewer names; the
+     * enumerator that replaced it (it takes a cancellable) reports the
+     * error, and the first version threw a fixed "unreadable" and dropped the
+     * reason -- an I/O error, a share that went away -- on the floor.
+     */
     if (failed) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot list %s: %s", path,
                                        g_cancellable_is_cancelled(cancel)
-                                           ? "cancelled" : "unreadable");
+                                           ? "cancelled" : bta_gerror_text(err));
+        g_clear_error(&err);
         g_ptr_array_unref(names);
         JS_FreeCString(ctx, path);
         JS_FreeCString(ctx, pattern);
@@ -1306,19 +1313,35 @@ static int dir_info_cmp(const void *a, const void *b)
     return g_strcmp0(g_file_info_get_name(ia), g_file_info_get_name(ib));
 }
 
+/*
+ * False when the walk was cancelled -- or, for the folder asked about
+ * (`error` given), when it cannot be read at all: that is a refusal with a
+ * reason, not an empty folder.  A folder met on the way down that cannot be
+ * read is skipped (`error` NULL), which is the bargain `Files` makes.
+ */
 static bool dir_walk(const char *root, GPatternSpec *spec, bool recursive,
-                     bool want_dirs, GPtrArray *out, GCancellable *cancel)
+                     bool want_dirs, GPtrArray *out, GCancellable *cancel,
+                     GError **error)
 {
-    GFile *dir = g_file_new_for_path(root);
+    GFile  *dir      = g_file_new_for_path(root);
+    GError *open_err = NULL;
     GFileEnumerator *walk = g_file_enumerate_children(
         dir,
         G_FILE_ATTRIBUTE_STANDARD_NAME "," G_FILE_ATTRIBUTE_STANDARD_TYPE ","
         G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK,
-        G_FILE_QUERY_INFO_NONE, cancel, NULL);
+        G_FILE_QUERY_INFO_NONE, cancel, &open_err);
 
     g_object_unref(dir);
-    if (!walk)
-        return !g_cancellable_is_cancelled(cancel);   /* unreadable: skipped */
+    if (!walk) {
+        bool cancelled = g_cancellable_is_cancelled(cancel);
+
+        if (!cancelled && error) {
+            g_propagate_error(error, open_err);
+            return false;
+        }
+        g_clear_error(&open_err);
+        return !cancelled;                      /* on the way down: skipped */
+    }
 
     GError   *err     = NULL;
     GPtrArray *entries = g_ptr_array_new_with_free_func(g_object_unref);
@@ -1359,7 +1382,7 @@ static bool dir_walk(const char *root, GPatternSpec *spec, bool recursive,
             g_ptr_array_add(out, g_strdup(full));
 
         if (recursive && is_dir && !is_link)
-            ok = dir_walk(full, spec, recursive, want_dirs, out, cancel);
+            ok = dir_walk(full, spec, recursive, want_dirs, out, cancel, NULL);
 
         g_free(full);
     }
@@ -1405,16 +1428,23 @@ static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
 
     GPatternSpec *spec  = pattern ? g_pattern_spec_new(pattern) : NULL;
     GPtrArray    *found = g_ptr_array_new_with_free_func(g_free);
+    GError       *err   = NULL;
     bool          ok    = dir_walk(path, spec, recursive, magic != 0, found,
-                                    cancel);
+                                    cancel, &err);
 
+    /* The folder asked about could not be read: the same refusal `List`
+     * makes, where this used to answer `[]` -- an empty folder's answer. */
     if (!ok) {
         g_ptr_array_unref(found);
         if (spec)
             g_pattern_spec_free(spec);
-        JSValue e = JS_ThrowPlainError(ctx, "%s: cancelled",
-                                       magic ? "Directory.Folders"
-                                             : "Directory.Files");
+        JSValue e = err
+            ? JS_ThrowPlainError(ctx, "cannot list %s: %s", path,
+                                 bta_gerror_text(err))
+            : JS_ThrowPlainError(ctx, "%s: cancelled",
+                                 magic ? "Directory.Folders"
+                                       : "Directory.Files");
+        g_clear_error(&err);
         JS_FreeCString(ctx, path);
         JS_FreeCString(ctx, pattern);
         return e;
@@ -4598,8 +4628,9 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      */
     JS_SetPropertyStr(ctx, dir, "List", JS_NewCFunction(ctx, sys_dir_list, "List", 3));
     /* Files(path, [options], [cancellable]) -> string[]
-     *   the **full paths** of the files, sorted. A `Cancellable` last stops
-     *   the walk
+     *   the **full paths** of the files, sorted. A folder it cannot read
+     *   throws, as `List` does; one met on the way down is skipped. A
+     *   `Cancellable` last stops the walk
      */
     JS_SetPropertyStr(ctx, dir, "Files",
                       JS_NewCFunctionMagic(ctx, sys_dir_walk, "Files", 3,

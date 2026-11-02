@@ -134,7 +134,15 @@ class UsageForm extends Form {
         this.List.Clear();
         this.BtnOpen.Enabled = false;
 
-        const roots = Directory.Folders(this.folder);
+        /* A folder that cannot be read says so, and why; it is not an empty
+         * one, which is what the window said when the walk answered `[]`. */
+        let roots;
+        try {
+            roots = Directory.Folders(this.folder);
+        } catch (e) {
+            this.LblStatus.Text = e.message;
+            return;
+        }
         if (!roots.length) {
             this.LblStatus.Text = Locale.Text("Nothing in there.");
             return;

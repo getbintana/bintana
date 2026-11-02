@@ -14116,7 +14116,7 @@
           "Params": 3,
           "Signature": "(path, [options], [cancellable])",
           "Returns": "string[]",
-          "Doc": "the **full paths** of the files, sorted. A `Cancellable` last stops the walk",
+          "Doc": "the **full paths** of the files, sorted. A folder it cannot read throws, as `List` does; one met on the way down is skipped. A `Cancellable` last stops the walk",
           "Native": true
         },
         {

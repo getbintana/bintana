@@ -22592,6 +22592,38 @@ class Form1 extends Form {
            JSON.stringify(Directory.Files(SCRATCH, "*.js").map((p) => File.Name(p))),
            JSON.stringify(["one.js", "two.js"]));
 
+        /*
+         * **A folder that cannot be read is refused, not empty.** `Files` and
+         * `Folders` answered `[]` for one -- an empty folder's answer -- while
+         * `List` said why; now all three say it.  A folder met on the way down
+         * is still skipped, the bargain a walk makes.  Root reads a `000`
+         * folder anyway, so as root there is nothing to assert.
+         */
+        const closed = File.Join(SCRATCH, "closed");
+        const tree   = File.Join(SCRATCH, "walk-locked");
+        Directory.Make(closed);
+        Directory.Make(File.Join(tree, "locked"));
+        File.Save(File.Join(tree, "seen.txt"), "1");
+        File.Save(File.Join(tree, "locked", "hidden.txt"), "2");
+        Exec.Wait(["chmod", "000", closed, File.Join(tree, "locked")]);
+        let asRoot = false;
+        try { Directory.List(closed); asRoot = true; } catch (e) { /* refused, as it should be */ }
+        if (asRoot) {
+            print("Dir: running as root, an unreadable folder reads; that half is skipped");
+        } else {
+            for (const [name, fn] of [["List", () => Directory.List(closed)],
+                                      ["Files", () => Directory.Files(closed)],
+                                      ["Folders", () => Directory.Folders(closed)]])
+                eq(`${name} refuses a folder it cannot read, and says why`,
+                   refusal(fn), `cannot list ${closed}: permission denied`);
+            eq("...while a walk skips one it meets on the way down",
+               Directory.Files(tree, { Recursive: true }).map((p) => File.Name(p)).join(","),
+               "seen.txt");
+        }
+        Exec.Wait(["chmod", "755", closed, File.Join(tree, "locked")]);
+        Directory.DeleteTree(closed);
+        Directory.DeleteTree(tree);
+
         /* One level unless asked, which is the same bargain `List` makes. */
         check("shallow by default",
               !Directory.Files(SCRATCH).some((p) => p.includes("/deep/")),
