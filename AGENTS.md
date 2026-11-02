@@ -224,7 +224,8 @@ skips `On` silently.
 an ordinary JS assignment through the real setter (properties first,
 `Arrangement` first and `Action` last, then children; a class may also **defer**
 a property until after its children -- `ListBox.Index` and `ComboBox.Index` see
-the rows `Items` brought -- and that order is declared in the class row).
+the rows `Items` brought, `RowList.Index` the rows its children are -- and that
+order is declared in the class row).
 The serialiser in `rad.js` is its exact inverse: it saves every accessor with **both** a getter
 and a setter whose value differs from a fresh control's. So **a property added
 in C is designable, serialisable and editable with no other change**, and a

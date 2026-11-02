@@ -1660,7 +1660,10 @@ void bta_layout_register(void)
                        false, "Text", "Toggle"),
         BTA_CLASS_BARE("Overlay", "Container", build_overlay,            false, NULL),
         /* `Select` first: it is the default event, the one a double click in the
-         * designer writes. `Filter` is asked of the form, never raised by it. */
+         * designer writes. `Filter` is asked of the form, never raised by it.
+         * `Index` waits for the children: a row list's rows *are* its
+         * children, and the serialiser writes `Index` among the properties,
+         * which are applied before them -- it selected nothing. */
         /* Select()
          *   the selection moved. Ask `Index` or `Selection` for which rows;
          *   what is *in* them is the widgets you put there
@@ -1672,8 +1675,8 @@ void bta_layout_register(void)
          *   asked while the list is laid out. **Returning `false` hides the
          *   row**; no handler shows every one. A lookup and nothing else
          */
-        BTA_CLASS     ("RowList", "Container", build_rowlist, rowlist_props, false,
-                       "Select,Activate,Filter"),
+        BTA_CLASS_DEFERRED("RowList", "Container", build_rowlist, rowlist_props,
+                           false, NULL, NULL, "Select,Activate,Filter", "Index"),
         /* Scroll(x, y)
          *   the position moved — by the user, the wheel, the keyboard, or an
          *   assignment. **Both axes are reported together**, so a diagonal

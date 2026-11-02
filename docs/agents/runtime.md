@@ -390,7 +390,9 @@ icon when the theme has one by that name (`gtkapplication.c`).
   other order. Both orders happen, so neither may be the one that breaks.
   **A property that cannot be applied until the children exist is declared,
   not remembered by its setter**: the class row's `deferred` list names it
-  (`ListBox.Index` and `ComboBox.Index` are the callers), and both loaders --
+  (`ListBox.Index`, `ComboBox.Index` and `RowList.Index` are the callers -- the
+  last was missed, and a row list from a `.form` opened with nothing
+  selected), and both loaders --
   `bta_form.c` and `forms.js`'s `AddNode` -- apply it after `build_children`.
   It is the same answer `Widget.DeferredProperties(type)` publishes. The first
   version of the list fix was a pending index in each setter, which would have

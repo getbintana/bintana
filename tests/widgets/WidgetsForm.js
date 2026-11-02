@@ -12862,6 +12862,20 @@ class Form1 extends Form {
             panel.Delete();
         }
 
+        /* A RowList's rows are its children, which come after every
+         * property -- so its Index waits for them, by both loaders.  It was
+         * not declared deferred, and both read -1. */
+        const rowsOf = (prefix) => ["A", "B", "C"].map((t) => (
+            { type: "Label", name: prefix + t, properties: { Text: t } }));
+        {
+            const panel = new Panel();
+            this.Fixed1.Add(panel);
+            panel.BuildChildren({ children: [{ type: "RowList", name: "IdxRows",
+                properties: { Index: 1 }, children: rowsOf("IdxRow") }] });
+            eq("RowList: a declared Index waits for its rows", panel.Children[0].Index, 1);
+            panel.Delete();
+        }
+
         /* The serialiser's order: what the designer saves, and what the C
          * loader reads back from disk. */
         const list = new ListBox();
@@ -12891,6 +12905,8 @@ class Form1 extends Form {
                   properties: { Index: 2, Items: ["A", "B", "C"] } },
                 { type: "IdxCombo", name: "SubCmb",
                   properties: { Index: 2, Items: ["A", "B", "C"] } },
+                { type: "RowList", name: "Rws", properties: { Index: 1 },
+                  children: rowsOf("FormRow") },
             ],
         }, null, 2));
 
@@ -12909,6 +12925,8 @@ class Form1 extends Form {
             eq("a project's ComboBox subclass: the C loader defers Index too",
                form.SubCmb.Index, 2);
             eq("...and Text says which row", form.SubCmb.Text, "C");
+            eq("RowList: the C loader applies a declared Index after its rows",
+               form.Rws.Index, 1);
         } finally {
             File.Delete(path);
         }

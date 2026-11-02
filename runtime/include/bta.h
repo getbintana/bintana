@@ -704,9 +704,9 @@ void bta_table_register(void);      /* bta_tree.c     */
                    is_form, options, texts, events)
 /*
  * ...and for one whose `.form` node applies a property **after its children**
- * (see BtaClass.deferred): `ListBox` and `ComboBox` are the callers, and
- * `deferred` is the comma-separated list.  `options` and `texts` are both
- * passed because either kind of class can have one.
+ * (see BtaClass.deferred): `ListBox`, `ComboBox` and `RowList` are the
+ * callers, and `deferred` is the comma-separated list.  `options` and `texts`
+ * are both passed because either kind of class can have one.
  */
 #define BTA_CLASS_DEFERRED(cname, parent, build, props, is_form, options,    \
                            texts, events, deferred)                          \

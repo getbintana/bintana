@@ -3415,8 +3415,9 @@ static JSValue w_property_names_by_type(JSContext *ctx, JSValueConst this_val,
  * The one answer both loaders share -- `bta_form.c` for the file a form is
  * built from, and `forms.js`'s `AddNode` for a node a designer builds -- so a
  * class does not have to state its order twice, and a setter does not have to
- * keep a pending value. `ListBox.Index` and `ComboBox.Index` are the callers:
- * a selection needs rows, and `Items` is applied before the children.
+ * keep a pending value. `ListBox.Index` and `ComboBox.Index` are the callers,
+ * and `RowList.Index`: a selection needs rows, and `Items` is applied before
+ * the children -- which are a row list's rows.
  *
  * A name that is no class of this runtime answers `[]` rather than throwing:
  * a project's class has no row here.  Both loaders then ask the classes it
