@@ -22,7 +22,9 @@
       "type": "Connection",
       "name": "Db",
       "properties": {
-        "Path": "uptime.db"
+        "Path": "uptime.db",
+        "Record": "Check",
+        "TableName": "checks"
       }
     },
     {

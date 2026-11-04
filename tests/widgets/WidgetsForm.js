@@ -16930,9 +16930,14 @@ class Form1 extends Form {
 
         const conn = FormPart.New("Connection");
         check("Connection is a part", conn instanceof FormPart);
-        eq("with Path as its property", conn.PropertyNames().join(","), "Name,Path");
+        eq("with its path and its record",
+           conn.PropertyNames().join(","), "Name,Path,Record,TableName");
         conn.Path = "data/pulse.db";
+        conn.Record = "Check";
+        conn.TableName = "checks";
         eq("the path it was given", conn.Path, "data/pulse.db");
+        eq("the record it selects", conn.Record, "Check");
+        eq("the table it writes", conn.TableName, "checks");
         eq("and the type it writes", conn.Serialize().type, "Connection");
         conn.Stop();
 

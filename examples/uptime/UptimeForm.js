@@ -13,24 +13,6 @@
  */
 "use strict";
 
-/* One check in the database.  This is the shape `Table` uses: the column
- * names come from `Naming`, the key is what `Save` follows, and `Insert` is
- * the insert.  `Record` + `Table` are the runtime's ORM; only the
- * `CREATE TABLE` below is still written by hand (the plan wants the shape to
- * write it, one day). */
-class Check extends Record {
-    static Naming = "snake";
-    static Fields = {
-        Id:     Field.Int({ key: true }),
-        At:     Field.Text({ required: true }),
-        Site:   Field.Text({ required: true }),
-        Url:    Field.Text({ required: true }),
-        Status: Field.Int(),
-        Ms:     Field.Int(),
-        Error:  Field.Text(),
-    };
-}
-
 class UptimeForm extends Form {
 
     Form_Open() {
@@ -40,14 +22,9 @@ class UptimeForm extends Form {
         this.count    = 0;
         this.queue    = [];
 
-        this.Db.Script(
-            "CREATE TABLE IF NOT EXISTS checks (" +
-            "id INTEGER PRIMARY KEY, at TEXT NOT NULL, site TEXT NOT NULL, " +
-            "url TEXT NOT NULL, status INTEGER NOT NULL, " +
-            "ms INTEGER NOT NULL, error TEXT NOT NULL)");
-
-        /* The ORM: one shape, one table, no hand-built row. */
-        this.Checks = this.Db.Table("checks", Check);
+        /* The Connection part selected `Check.record` and the table `checks`;
+         * `Model` creates the table from the shape on first use. */
+        this.Checks = this.Db.Model;
 
         for (const row of this.Checks.All()) {
             if (this.History.Count >= 200) this.History.RemoveRow(0);

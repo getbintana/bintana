@@ -474,7 +474,9 @@ icon when the theme has one by that name (`gtkapplication.c`).
   the C classes have those names too (`Connection` is a type), which is why the
   registry carries the `.form` spelling and `FormPart.TypeName(part)` is what
   the serialiser and the tree write. `Timer` is the only part that is also its
-  class.
+  class. A `Connection` also carries `Record` and `TableName`; `Model` is its
+  `Table`, and `Ensure` writes the `CREATE TABLE` from `Record.Shape` -- see
+  [`data.md`](data.md#a-connection-part-and-the-table-a-record-asks-for).
 - **The loader calls JavaScript for this half.** `bta_form.c` builds the
   controls, then calls `Form.BuildParts(root)`, because the classes live in
   `rad.js` and nothing about them is C. `FormPart.New(type)` resolves the

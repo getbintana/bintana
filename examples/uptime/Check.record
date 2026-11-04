@@ -1,0 +1,14 @@
+{
+  "format": "bta-record/1",
+  "class": "Check",
+  "naming": "snake",
+  "fields": {
+    "Id":     { "kind": "int", "key": true },
+    "At":     { "kind": "text", "required": true },
+    "Site":   { "kind": "text", "required": true },
+    "Url":    { "kind": "text", "required": true },
+    "Status": { "kind": "int" },
+    "Ms":     { "kind": "int" },
+    "Error":  { "kind": "text" }
+  }
+}

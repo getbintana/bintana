@@ -1577,7 +1577,9 @@ icon when the theme has one by that name (`gtkapplication.c`).
   the C classes have those names too (`Connection` is a type), which is why the
   registry carries the `.form` spelling and `FormPart.TypeName(part)` is what
   the serialiser and the tree write. `Timer` is the only part that is also its
-  class.
+  class. A `Connection` also carries `Record` and `TableName`; `Model` is its
+  `Table`, and `Ensure` writes the `CREATE TABLE` from `Record.Shape` -- see
+  [`data.md`](data.md#a-connection-part-and-the-table-a-record-asks-for).
 - **The loader calls JavaScript for this half.** `bta_form.c` builds the
   controls, then calls `Form.BuildParts(root)`, because the classes live in
   `rad.js` and nothing about them is C. `FormPart.New(type)` resolves the
@@ -6849,11 +6851,13 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   is one of them: without it the grid called a method the base class did not
   have and a click on the palette failed after the part was made. `Timer`
   declares `Properties = ["Delay", "Enabled"]` and `Events = ["Tick"]`;
-  `Connection` declares `Path`, and `HttpClient` declares `BaseUrl`, `Timeout`,
-  `Http1` and `FollowRedirects`. The last two are **registered under those
-  names** while their classes are wrappers (`ConnectionPart`, `HttpClientPart`):
-  `FormPart.TypeName(part)` is what the tree, the tray and the save write, not
-  `constructor.name`.
+  `Connection` declares `Path`, `Record` and `TableName`, and `HttpClient`
+  declares `BaseUrl`, `Timeout`, `Http1` and `FollowRedirects`. The last two are
+  **registered under those names** while their classes are wrappers
+  (`ConnectionPart`, `HttpClientPart`): `FormPart.TypeName(part)` is what the
+  tree, the tray and the save write, not `constructor.name`. `Connection`'s
+  `Record` row is the project's records, the same list a form's own `Record`
+  uses.
 
 ## IDE traps
 
@@ -8596,6 +8600,30 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   error. Every bind goes through `bind_ok` now, which throws sqlite's own
   message for that parameter; a `Bytes` past `INT_MAX` is refused up front
   rather than truncated into a shorter length.
+
+## A Connection part, and the table a record asks for
+
+- **A form's `Connection` part selects a `.record` by name** (`Record`) and the
+  table it lives in (`TableName`); `Db.Model` is the `Table` for it. The first
+  use calls `Ensure`, which writes `CREATE TABLE IF NOT EXISTS` from
+  `Record.Shape`: text/enum/date/time/datetime/decimal are `TEXT`, int/bool are
+  `INTEGER`, number is `REAL`, bytes is `BLOB`, a single integer key is
+  `INTEGER PRIMARY KEY`, and `required` adds `NOT NULL`. `Naming` is the same
+  rule `Table` uses, so `At` reaches the column `at`.
+- **A flat record only.** `Field.List` and `Field.Record` are not columns; the
+  schema refuses them by name. A table whose shape has a detail is two tables
+  and a `Where`, and the shape is not the place to hide the join.
+- **`Ensure` creates, it does not migrate.** An existing table whose columns
+  disagree with the shape is still `Table`'s refusal on the first statement;
+  adding a field to a `.record` is a migration somebody has to choose, not a
+  quiet `ALTER` this runtime runs at start-up.
+- **The IDE's property grid offers `Record` from the project's records**, the
+  same list a form's own `Record` row uses. `TableName` stays text because
+  there is no schema browser; it is empty by default and the record's class
+  name would be the table.
+- **The example is `examples/uptime`**: a `Check.record` with `Id`, `At`,
+  `Site`, `Url`, `Status`, `Ms` and `Error`, selected by the form's
+  `Connection`, and the table is made from it on the first model use.
 
 ---
 
@@ -12701,7 +12729,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10415 assertions
+./tests/run.sh                          # all seven projects, 10417 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

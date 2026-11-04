@@ -23,8 +23,10 @@ one-page answer to *what is new since the release I have*.
   through a `Connection`.
 - **`examples/uptime`** is the other shape of it: every 30 seconds a Timer asks
   a list of URLs through an `HttpClient` and writes one row per site into a
-  `Connection` -- a failure included, with status 0 and the reason. The rows
-  are a `Record` through `Table`, not hand-built SQL.
+  `Connection` -- a failure included, with status 0 and the reason. The
+  connection selects `Check.record` and `TableName: "checks"`; its `Model`
+  creates the table from the shape and the rows are `Record`/`Table`, not
+  hand-built SQL.
 
 ## 0.3.0 — 2026-11-04
 
