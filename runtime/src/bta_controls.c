@@ -2508,6 +2508,14 @@ static void image_icon_again(GObject *from, GParamSpec *pspec, gpointer image)
     image_apply_icon(image);
 }
 
+/* A `GtkImage` that was already resolved left-to-right has to ask again when
+ * the direction changes: the theme's mirrored variant is a different file. */
+static void image_direction_changed(GtkWidget *image, GtkTextDirection previous,
+                                    gpointer user_data)
+{
+    image_apply_icon(image);
+}
+
 /*
  * Show a named icon on a GtkImage.  Every icon the runtime draws goes through
  * here, so no application can put one on GTK's icon thread by accident.
@@ -2531,6 +2539,8 @@ void bta_image_set_icon(GtkWidget *image, const char *name)
         g_object_set_data(G_OBJECT(image), "bta-icon-watched", GINT_TO_POINTER(1));
         g_signal_connect(image, "notify::scale-factor",
                          G_CALLBACK(image_icon_again), image);
+        g_signal_connect(image, "direction-changed",
+                         G_CALLBACK(image_direction_changed), image);
         if (theme)
             g_signal_connect_object(theme, "changed",
                                     G_CALLBACK(image_apply_icon), image,
