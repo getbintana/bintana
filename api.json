@@ -14807,6 +14807,15 @@
           "Native": false
         },
         {
+          "Name": "Events",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "(type)",
+          "Returns": "",
+          "Doc": "the events a part class declares",
+          "Native": false
+        },
+        {
           "Name": "Form",
           "Kind": "ReadOnly",
           "Params": -1,
@@ -14821,7 +14830,7 @@
           "Params": 1,
           "Signature": "(type)",
           "Returns": "",
-          "Doc": "a new part of `type` -- `Timer`, `Connection` or `HttpClient`; a name that is not a part is refused by name",
+          "Doc": "a new part of `type` -- `Timer`, `Connection`, `Model` or `HttpClient`; a name that is not a part is refused by name",
           "Native": false
         },
         {
@@ -14831,6 +14840,15 @@
           "Signature": "(event, handler)",
           "Returns": "",
           "Doc": "assign `handler` to `event`; assigning again replaces it, the way a control's `On` does",
+          "Native": false
+        },
+        {
+          "Name": "Properties",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "(type)",
+          "Returns": "",
+          "Doc": "the settable properties of a part class, `Name` first -- the list a palette, a property grid or a `.form` dialog asks for with only a type",
           "Native": false
         },
         {

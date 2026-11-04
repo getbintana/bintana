@@ -568,8 +568,25 @@ GLOBAL.FormPart = class FormPart {
     }
 
     /**
-     * a new part of `type` -- `Timer`, `Connection` or `HttpClient`; a name
-     * that is not a part is refused by name
+     * the settable properties of a part class, `Name` first -- the list a
+     * palette, a property grid or a `.form` dialog asks for with only a type
+     */
+    static Properties(type) {
+        if (!hasOwn.call(formPartTypes, type))
+            throw new TypeError(`FormPart.Properties: no part '${type}'`);
+        return ["Name", ...(formPartTypes[type].Properties || [])];
+    }
+
+    /** the events a part class declares */
+    static Events(type) {
+        if (!hasOwn.call(formPartTypes, type))
+            throw new TypeError(`FormPart.Events: no part '${type}'`);
+        return (formPartTypes[type].Events || []).slice();
+    }
+
+    /**
+     * a new part of `type` -- `Timer`, `Connection`, `Model` or `HttpClient`; a
+     * name that is not a part is refused by name
      */
     static New(type) {
         if (!hasOwn.call(formPartTypes, type))

@@ -16996,6 +16996,16 @@ class Form1 extends Form {
               FormPart.Types().includes("Connection") &&
               FormPart.Types().includes("Model") &&
               FormPart.Types().includes("HttpClient"));
+
+        eq("a part class says its properties without an instance",
+           FormPart.Properties("Connection").join(","), "Name,Path");
+        eq("and a Model's",
+           FormPart.Properties("Model").join(","),
+           "Name,Connection,Record,TableName");
+        eq("a part class says its events",
+           FormPart.Events("Timer").join(","), "Tick");
+        throws("and refuses a name that is not a part",
+               () => FormPart.Properties("Nope"));
     }
 
     Clock_Tick() {

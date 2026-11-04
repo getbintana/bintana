@@ -1,12 +1,12 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10429 assertions
+./tests/run.sh                          # all seven projects, 10433 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
 ./tests/run.sh ide list                 # what it can be asked for
-./tests/pack.sh                         # lib/package, the packaging step's output: 91 assertions
+./tests/pack.sh                         # lib/package, the packaging step's output: 107 assertions
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
 BINTANA_PROFILE=/tmp/caps ./tests/run.sh
