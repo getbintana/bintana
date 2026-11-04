@@ -2474,12 +2474,42 @@ static JSValue w_restack(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    GtkWidget *slot = gtk_widget_get_parent(bta_child_holder(w->gtk));
+    GtkWidget *holder = bta_child_holder(w->gtk);
+    GtkWidget *slot   = gtk_widget_get_parent(holder);
     if (!slot)
         return JS_UNDEFINED;
 
+    /* A notebook page's GTK parent is the notebook's internal stack, not the
+     * notebook, and `Reorder` wants the notebook: ask for the ancestor. */
+    GtkWidget *book = gtk_widget_get_ancestor(holder, GTK_TYPE_NOTEBOOK);
+    if (book && gtk_notebook_page_num(GTK_NOTEBOOK(book), holder) >= 0)
+        slot = book;
+
+    if (GTK_IS_NOTEBOOK(slot)) {
+        BtaWidget *own  = g_object_get_data(G_OBJECT(slot), BTA_WIDGET_QUARK);
+        int        n    = gtk_notebook_get_n_pages(GTK_NOTEBOOK(slot));
+        int        at   = gtk_notebook_page_num(GTK_NOTEBOOK(slot), holder);
+
+        if (!own || n < 2 || at < 0)
+            return JS_UNDEFINED;
+
+        int to;
+        switch (magic) {
+        case STACK_RAISE:    to = n - 1; break;
+        case STACK_LOWER:    to = 0;     break;
+        case STACK_FORWARD:  to = at + 1; break;
+        default:             to = at - 1; break;
+        }
+
+        if (to < 0 || to >= n || to == at)
+            return JS_UNDEFINED;
+
+        return bta_container_reorder(ctx, own, w, to)
+             ? JS_UNDEFINED : JS_EXCEPTION;
+    }
+
     if (GTK_IS_OVERLAY(slot) || GTK_IS_FLOW_BOX(slot) || GTK_IS_LIST_BOX(slot) ||
-        GTK_IS_NOTEBOOK(slot) || GTK_IS_STACK(slot)) {
+        GTK_IS_STACK(slot)) {
         BtaWidget *own = g_object_get_data(G_OBJECT(slot), BTA_WIDGET_QUARK);
         int        n   = bta_container_count(slot);
 
@@ -2487,7 +2517,6 @@ static JSValue w_restack(JSContext *ctx, JSValueConst this_val,
             return JS_UNDEFINED;
 
         int at = 0;
-        GtkWidget *holder = bta_child_holder(w->gtk);
         for (GtkWidget *c = bta_slot_first_child(slot); c;
              c = gtk_widget_get_next_sibling(c)) {
             if (c == holder || bta_slot_child(c) == w)
@@ -2528,7 +2557,6 @@ static JSValue w_restack(JSContext *ctx, JSValueConst this_val,
         return JS_UNDEFINED;
     }
 
-    GtkWidget *holder = bta_child_holder(w->gtk);
     GtkWidget *target = magic == STACK_FORWARD
                             ? gtk_widget_get_next_sibling(holder)
                             : gtk_widget_get_prev_sibling(holder);

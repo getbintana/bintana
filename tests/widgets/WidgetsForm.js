@@ -1083,6 +1083,25 @@ class WidgetsForm extends Form {
         c.MoveBackward();
         eq("and back", order(), "CAB");
 
+        /* A notebook page's GTK parent is its internal stack, so its step
+         * asks the notebook and the tab order follows. */
+        const nb = new Notebook();
+        const q1 = new Panel(), q2 = new Panel(), q3 = new Panel();
+        q1.Name = "Q1"; q2.Name = "Q2"; q3.Name = "Q3";
+        const tab = (text) => {
+            const label = new Label();
+            label.Text = text;
+            return label;
+        };
+        nb.Append(q1, tab("A"));
+        nb.Append(q2, tab("B"));
+        nb.Append(q3, tab("C"));
+        q1.MoveForward();
+        eq("a notebook page steps", nb.Children.map((p) => p.Name).join(""), "Q2Q1Q3");
+        eq("and its tab moves with it", JSON.stringify(nb.Tabs), '["B","A","C"]');
+        q1.MoveBackward();
+        eq("and back", nb.Children.map((p) => p.Name).join(""), "Q1Q2Q3");
+
         c.Delete();
         eq("Delete drops it from the tree", order(), "AB");
         eq("a deleted widget has no parent", c.Serialize().type, "Button");
