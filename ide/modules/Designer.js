@@ -1531,6 +1531,8 @@ export class Designer {
         this.ide.ActDelCtl.Enabled = has;
         this.ide.ActRaise.Enabled  = this.canStep(true);
         this.ide.ActLower.Enabled  = this.canStep(false);
+        this.ide.ActToFront.Enabled = this.canStep(true);
+        this.ide.ActToBack.Enabled  = this.canStep(false);
 
         /* Renaming is two things with one condition: the canvas's command
          * renames the selection, the tree's renames the row the pointer is on.
@@ -1656,6 +1658,36 @@ export class Designer {
         for (const move of moves) {
             if (toFront) move.control.MoveForward();
             else         move.control.MoveBackward();
+        }
+        this.chrome.position();
+        this.touch();
+    }
+
+    /*
+     * The all-the-way pair the menu carries: `Raise`/`Lower`, which are the
+     * runtime's verbs for it.  The selection keeps its relative order -- the
+     * forward road raises in order, the backward road lowers in reverse -- and
+     * a control already at that end is not an edit.
+     */
+    restackAll(toFront) {
+        if (!this.selection.length) return;
+
+        const moves = [];
+        for (const control of this.selection) {
+            if (typeof control.Raise !== "function") continue;
+
+            const parent = this.parentOf(control);
+            const at = parent && parent.Children ? parent.Children.indexOf(control) : -1;
+            if (at < 0) continue;
+            if (toFront ? at >= parent.Children.length - 1 : at <= 0) continue;
+            moves.push(control);
+        }
+        if (!moves.length) return;
+
+        this.pushUndo();
+        for (const control of toFront ? moves : moves.slice().reverse()) {
+            if (toFront) control.Raise();
+            else         control.Lower();
         }
         this.chrome.position();
         this.touch();

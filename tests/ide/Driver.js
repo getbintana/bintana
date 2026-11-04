@@ -2965,6 +2965,16 @@ function* p_palette(ide) {
     eq("Bring forward brings it back", names(), "Ok,Msg,CheckButton1");
     check("at the front again, forward is grey", !ide.ActRaise.Enabled);
 
+    /* The all-the-way pair is in the menu, not on the bar. */
+    ide.designer.select(byName(ide, "Ok"));
+    yield;
+    ide.ActToFront.Execute();
+    eq("the menu sends it to the front", names(), "Msg,CheckButton1,Ok");
+    ide.ActToBack.Execute();
+    eq("and back to the bottom", names(), "Ok,Msg,CheckButton1");
+    ide.designer.select(byName(ide, "CheckButton1"));
+    yield;
+
     /* --- designer: deleting --------------------------------------------- */
     ide.ActDelCtl_Execute();
     eq("deleting removes it from the surface",

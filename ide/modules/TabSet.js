@@ -133,6 +133,8 @@ const CANVAS_MENU = [
     { separator: true },
     { action: "ActRaise" },
     { action: "ActLower" },
+    { action: "ActToFront" },
+    { action: "ActToBack" },
 ];
 
 export class TabSet {

@@ -231,7 +231,9 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `Widget.MoveForward`/`MoveBackward`: one sibling, from the front backwards or
   the back forwards when several are selected, so two controls do not step over
   one another. `Raise`/`Lower` remain the runtime's all-the-way verbs and are
-  what the tests use to put a painted order back.
+  what the tests use to put a painted order back; the *Form* menu and both
+  context menus carry them as `ActToFront`/`ActToBack`, which call
+  `Designer.restackAll` and are grey at the same edges.
 - **The arrows follow the control tree.** Its rows are in paint order, so the
   front is the last row: forward is `go-down-symbolic` and backward
   `go-up-symbolic`. A `Fixed` has no `Reorder` to call (`Raise`/`Lower` were its

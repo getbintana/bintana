@@ -27,6 +27,18 @@
       "enabled": false
     },
     {
+      "name": "ActToFront",
+      "text": "Bring to front",
+      "icon": "go-bottom",
+      "enabled": false
+    },
+    {
+      "name": "ActToBack",
+      "text": "Send to back",
+      "icon": "go-top",
+      "enabled": false
+    },
+    {
       "name": "ActRenameCtl",
       "text": "Rename...",
       "enabled": false
@@ -801,6 +813,12 @@
         },
         {
           "action": "ActLower"
+        },
+        {
+          "action": "ActToFront"
+        },
+        {
+          "action": "ActToBack"
         },
         {
           "separator": true

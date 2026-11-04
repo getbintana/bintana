@@ -908,6 +908,14 @@ msgstr ""
 msgid "Send backward"
 msgstr ""
 
+#: forms/MainForm.form: action ActToFront
+msgid "Bring to front"
+msgstr ""
+
+#: forms/MainForm.form: action ActToBack
+msgid "Send to back"
+msgstr ""
+
 #: forms/MainForm.form: action ActPrevPage
 msgid "Previous page"
 msgstr ""

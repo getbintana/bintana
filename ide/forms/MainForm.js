@@ -2797,6 +2797,8 @@ export class MainForm extends Form {
     ActDelCtl_Execute()   { this.designer.deleteSelected(); }
     ActRaise_Execute()    { this.designer.restack(true); }
     ActLower_Execute()    { this.designer.restack(false); }
+    ActToFront_Execute()  { this.designer.restackAll(true); }
+    ActToBack_Execute()   { this.designer.restackAll(false); }
 
     /* --- menu ------------------------------------------------------------
      * The items duplicate the toolbar on purpose: the menu is what carries the

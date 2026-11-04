@@ -44,6 +44,8 @@ const TREE_MENU = [
     { separator: true },
     { action: "ActRaise" },
     { action: "ActLower" },
+    { action: "ActToFront" },
+    { action: "ActToBack" },
     { separator: true },
     { action: "ActTrExpand" },
     { action: "ActTrCollapse" },
@@ -61,6 +63,8 @@ const TREE_OPTIONS = [
     { action: "ActDelCtl" },
     { action: "ActRaise" },
     { action: "ActLower" },
+    { action: "ActToFront" },
+    { action: "ActToBack" },
 ];
 
 /* What the columns start at with no remembered width; see Session.divider. */

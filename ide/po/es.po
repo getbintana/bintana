@@ -846,6 +846,14 @@ msgstr "Traer adelante"
 msgid "Send backward"
 msgstr "Enviar atrás"
 
+#: forms/MainForm.form: action ActToFront
+msgid "Bring to front"
+msgstr "Traer al frente"
+
+#: forms/MainForm.form: action ActToBack
+msgid "Send to back"
+msgstr "Enviar al fondo"
+
 #: forms/MainForm.form: action ActPrevPage
 msgid "Previous page"
 msgstr "Página anterior"
