@@ -3,6 +3,8 @@
   "startup": "UptimeForm",
   "version": "1.0",
   "sources": [
+    "Config.js",
+    "Site.js",
     "Check.js",
     "UptimeForm.js"
   ],

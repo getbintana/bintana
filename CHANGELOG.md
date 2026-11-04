@@ -28,9 +28,11 @@ one-page answer to *what is new since the release I have*.
 - **`examples/uptime`** is the other shape of it: every 30 seconds a Timer asks
   a list of URLs through an `HttpClient` and writes one row per site into a
   `Model` over the one `Connection` -- a failure included, with status 0 and
-  the reason. The `Checks` Model names `Check.record` and `TableName:
-  "checks"`, creates the table from the shape, and the rows are
-  `Record`/`Table`, not hand-built SQL.
+  the reason. `Checks`, `Sites` and `Config` are three Models over the same
+  `Db`; `Config` holds the interval and timeout, and the first time the
+  database is created `sites.json` is imported into the `sites` table once
+  (`Seeded`), then the table is the source. The rows are `Record`/`Table`, not
+  hand-built SQL.
 
 ## 0.3.0 — 2026-11-04
 

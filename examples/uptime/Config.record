@@ -1,0 +1,11 @@
+{
+  "format": "bta-record/1",
+  "class": "Config",
+  "naming": "snake",
+  "fields": {
+    "Id":       { "kind": "int", "key": true },
+    "Interval": { "kind": "int", "def": 30 },
+    "Timeout":  { "kind": "int", "def": 5000 },
+    "Seeded":   { "kind": "bool" }
+  }
+}
