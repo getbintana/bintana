@@ -2,7 +2,7 @@
   "format": "bintana-form/1",
   "class": "UptimeSettings",
   "properties": {
-    "Width": 243,
+    "Width": 266,
     "Height": 116,
     "Arrangement": "Vertical",
     "Spacing": 8,
@@ -14,11 +14,11 @@
       "name": "Grid1",
       "properties": {
         "ColumnSpacing": 6,
-        "Columns": 3,
+        "Columns": 2,
         "Height": 74,
         "RowSpacing": 6,
         "Spacing": 6,
-        "Width": 243
+        "Width": 266
       },
       "children": [
         {
@@ -31,22 +31,17 @@
           }
         },
         {
-          "type": "SpinBox",
+          "type": "DecimalBox",
           "name": "SpinInterval",
           "properties": {
+            "Decimals": 0,
             "HExpand": true,
             "Max": 3600,
             "Min": 1,
+            "Step": 1,
+            "Suffix": " s",
             "Value": 30,
-            "Width": 130
-          }
-        },
-        {
-          "type": "Label",
-          "name": "LblSeconds",
-          "properties": {
-            "Text": "s",
-            "VAlign": "Center"
+            "Width": 178
           }
         },
         {
@@ -59,23 +54,17 @@
           }
         },
         {
-          "type": "SpinBox",
+          "type": "DecimalBox",
           "name": "SpinTimeout",
           "properties": {
+            "Decimals": 0,
             "HExpand": true,
             "Max": 60000,
             "Min": 100,
             "Step": 100,
+            "Suffix": " ms",
             "Value": 5000,
-            "Width": 130
-          }
-        },
-        {
-          "type": "Label",
-          "name": "LblMillis",
-          "properties": {
-            "Text": "ms",
-            "VAlign": "Center"
+            "Width": 178
           }
         }
       ]
@@ -87,7 +76,7 @@
         "Height": 24,
         "Icon": "document-save-symbolic",
         "Text": "Save",
-        "Width": 231
+        "Width": 254
       }
     }
   ]

@@ -12,10 +12,10 @@ class UptimeSettings extends Component {
 
     static Events = ["Save"];
 
-    get Interval() { return this.SpinInterval.Value; }
+    get Interval() { return this.SpinInterval.Value.Number(); }
     set Interval(value) { this.SpinInterval.Value = value; }
 
-    get Timeout() { return this.SpinTimeout.Value; }
+    get Timeout() { return this.SpinTimeout.Value.Number(); }
     set Timeout(value) { this.SpinTimeout.Value = value; }
 
     BtnSave_Click() {
