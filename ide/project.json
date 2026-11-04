@@ -44,6 +44,7 @@
     "modules/Diff.js",
     "modules/Git.js",
     "modules/Changes.js",
+    "modules/Data.js",
     "modules/Problems.js",
     "modules/Tests.js",
     "modules/Snippets.js",

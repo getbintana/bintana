@@ -43,6 +43,7 @@
     "../../ide/modules/Diff.js",
     "../../ide/modules/Git.js",
     "../../ide/modules/Changes.js",
+    "../../ide/modules/Data.js",
     "../../ide/modules/Problems.js",
     "../../ide/modules/Tests.js",
     "../../ide/modules/Snippets.js",

@@ -320,6 +320,12 @@ export class ProjectTree {
              * file get the same picture, the images' rule. */
             records:    ["x-office-address-book-symbolic", "view-list-symbolic",
                          "bta-file-symbolic"],
+            /* A connection says where a database is; the category and the file
+             * wear the same picture, the images' rule. */
+            conns:      ["network-server-symbolic", "x-office-spreadsheet-symbolic",
+                         "bta-file-symbolic"],
+            conn:       ["network-server-symbolic", "x-office-spreadsheet-symbolic",
+                         "bta-file-symbolic"],
             /* A document and the category it is in: what the desktop draws for
              * a page of text, with the runtime's own file behind it. */
             docs:       ["x-office-document-symbolic", "text-x-generic-symbolic",
@@ -540,8 +546,13 @@ export class ProjectTree {
          * opened as text but handed to its own editor, and a category is how
          * this tree already says "these are a different kind of thing". */
         const records = loose.filter((f) => ext(f) === "record");
+        /* A connection is a project resource like a record: not opened as text
+         * but handed to the Data view, and a category is how this tree says
+         * "these are a different kind of thing". */
+        const conns = loose.filter((f) => ext(f) === "conn");
         const rest  = loose.filter((f) => ext(f) !== "js" && ext(f) !== "md" &&
                                           ext(f) !== "record" &&
+                                          ext(f) !== "conn" &&
                                           !Translations.isCatalogue(f) &&
                                           !isImageFile(f) &&
                                           !isSoundFile(f));
@@ -621,6 +632,12 @@ export class ProjectTree {
                               this.icon("records"));
             for (const f of records)
                 this.addLeaf(f, File.Name(f), catKey("records"), "records");
+        }
+        if (conns.length) {
+            this.node(catKey("conns"), Locale.Text("Connections"), parentKey,
+                              this.icon("conns"));
+            for (const f of conns)
+                this.addLeaf(f, File.Name(f), catKey("conns"), "conn");
         }
         if (rest.length) {
             this.node(catKey("other"), Locale.Text("Other"), parentKey,

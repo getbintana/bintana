@@ -277,6 +277,9 @@ export class MainForm extends Form {
     /* The changed files as a page of the side bar, with the message box: the
      * Changes window is for reading a diff, and this is for living in. */
     changes   = new Changes(this);
+    /* The project's databases, their schema and a console over them: a page of
+     * the side bar and a page of the bottom panel. */
+    data      = new Data(this);
     /* Everything that is wrong, in one list. It runs no check of its own: what
      * it collects is what the save, the lint and the failed run already found
      * and had nowhere to say. */
@@ -332,6 +335,10 @@ export class MainForm extends Form {
      * shows it, no tab opens, and a double click hands it to `RecordForm`. */
     selectedRecord = null;
 
+    /* A `.conn` is the same shape again: a file in the tree that is not
+     * opened as text, and a double click shows its database in the Data view. */
+    selectedConnection = null;
+
     /* And the one that is neither: something the files view showed and no
      * editor here can hold. */
     selectedOther = null;
@@ -376,6 +383,10 @@ export class MainForm extends Form {
          * somebody watches happen: `Form_Open` runs before the window is
          * presented, so what is restored here is what it is mapped at. */
         this.session.restoreWindow();
+
+        /* The side bar's and the bottom panel's Data pages, before either list
+         * of views is dressed: how many there are is this module's answer. */
+        this.data.install();
 
         this.dressTabActions();
         this.dressViews();
@@ -644,6 +655,11 @@ export class MainForm extends Form {
          * would propose is a different answer now. */
         this.completion.forget();
         this.projectTree.build();
+
+        /* What the project's databases hold is read from the same scan: a
+         * `.conn` or a `Connection` part that changed is a schema that
+         * changed. */
+        if (this.data) this.data.refresh();
 
         /*
          * And what git says about each row, put on after the rows exist.
@@ -1403,6 +1419,9 @@ export class MainForm extends Form {
         } else if (this.selectedRecord) {
             status = Locale.Text("{0}   double click to edit its fields",
                                  this.selectedRecord);
+        } else if (this.selectedConnection) {
+            status = Locale.Text("{0}   double click to show its tables",
+                                 this.selectedConnection);
         } else if (!this.activeFile) {
             status = Locale.Plural("{0} file", "{0} files", this.files.length);
         } else {
@@ -1656,13 +1675,15 @@ export class MainForm extends Form {
          */
         const wasCatalogue = this.selectedCatalogue;
         const wasRecord    = this.selectedRecord;
+        const wasConnection = this.selectedConnection;
         this.selectedCatalogue = null;
         this.selectedImage     = null;
         this.selectedRecord    = null;
+        this.selectedConnection = null;
         this.selectedOther     = null;
 
         if (!name) {
-            if (wasCatalogue || wasRecord) this.refresh();
+            if (wasCatalogue || wasRecord || wasConnection) this.refresh();
             return;
         }
 
@@ -1683,7 +1704,7 @@ export class MainForm extends Form {
         /* Letting go of one changes the menu and the bar, and selecting the file
          * that is *already* open does nothing else -- so without this the item
          * stays enabled for a catalogue nobody is pointing at any more. */
-        if (wasCatalogue || wasRecord) this.refresh();
+        if (wasCatalogue || wasRecord || wasConnection) this.refresh();
 
         /*
          * An image is the catalogue's case exactly: the tree shows it, nothing
@@ -1707,6 +1728,17 @@ export class MainForm extends Form {
          */
         if (File.IsExtension(name, "record")) {
             this.selectedRecord = name;
+            this.refresh();
+            return;
+        }
+
+        /*
+         * A connection is the same case once more: a `.conn` says where a
+         * database is, and the double click hands it to the Data view rather
+         * than to a text editor full of JSON.
+         */
+        if (File.IsExtension(name, "conn")) {
+            this.selectedConnection = name;
             this.refresh();
             return;
         }
@@ -1750,6 +1782,7 @@ export class MainForm extends Form {
         if (this.selectedCatalogue)  this.openCatalogue(this.selectedCatalogue);
         else if (this.selectedImage) ImageForm.show(this, this.selectedImage);
         else if (this.selectedRecord) this.editRecord(this.selectedRecord);
+        else if (this.selectedConnection) this.data.openFile(this.selectedConnection);
         else if (this.selectedOther) this.openOutside(this.selectedOther);
     }
 
@@ -2106,7 +2139,8 @@ export class MainForm extends Form {
      *   show   what brings it up, on the panel that owns it
      */
     sideViews() {
-        return [...ProjectTree.sideEntries, ...Changes.sideEntries];
+        return [...ProjectTree.sideEntries, ...Changes.sideEntries,
+                ...Data.sideEntries];
     }
 
     /*
@@ -2430,7 +2464,8 @@ export class MainForm extends Form {
         if (!page) return null;
 
         return { LogView: this.LogView, DebugPage: this.StackList,
-                 ProblemView: this.ProblemView, Shell: this.Shell }[page.Name] || null;
+                 ProblemView: this.ProblemView, Shell: this.Shell,
+                 DataConsole: this.data ? this.data.Sql : null }[page.Name] || null;
     }
 
     /*

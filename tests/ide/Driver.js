@@ -6164,8 +6164,9 @@ function* p_views(ide) {
     yield;
 
     /* --- the chooser -------------------------------------------------------- */
-    eq("the side bar offers three views", ide.CmbView.Count, 3);
+    eq("the side bar offers four views", ide.CmbView.Count, 4);
     eq("and starts on the project's", ide.CmbView.Index, 0);
+    eq("the last is the database view", ide.sideViews()[3].page, ide.data.sidePage);
 
     /* The strip that opens one of them while the panel is folded is the same
      * list with pictures, and every picture resolves: the last entry of each
@@ -12274,6 +12275,146 @@ function* p_records(ide) {
 }
 
 /*
+ * A database in the project: the schema tree, the models over it, and the
+ * console.
+ *
+ * The fixture is a real SQLite file and a real `.conn`, because the view's
+ * whole claim is that it reads what the runtime reads.  `Shop.form` adds the
+ * other road -- a `Connection` part and a `Model` -- so both name the same
+ * file and the model's record is what the fields under the table come from.
+ */
+function* p_data(ide) {
+    let hasSqlite = true;
+    try {
+        const probe = Database.Sqlite(":memory:");
+        probe.Close();
+    } catch (e) {
+        hasSqlite = false;
+    }
+    if (!hasSqlite) {
+        print("Data: this build has no sqlite; skipped");
+        return;
+    }
+
+    const dbRel  = "shop.db";
+    const dbPath = File.Join(TMP, dbRel);
+
+    try { File.Delete(dbPath); } catch (e) {}
+
+    const live = Database.Sqlite(dbPath);
+    live.Execute("CREATE TABLE clients (id INTEGER PRIMARY KEY, name TEXT NOT NULL)");
+    live.Execute("INSERT INTO clients (name) VALUES ('Ana'), ('Beto')");
+    live.Close();
+
+    File.SaveJson(File.Join(TMP, "shop.conn"), { kind: "sqlite", path: dbRel });
+    File.Save(File.Join(TMP, "Client.record"),
+              JSON.stringify({
+                  format: "bta-record/1",
+                  class: "Client",
+                  naming: "snake",
+                  fields: {
+                      Id:   { kind: "int", key: true },
+                      Name: { kind: "text", required: true },
+                  },
+              }, null, 2) + "\n");
+    File.Save(File.Join(TMP, "Shop.form"),
+              JSON.stringify({
+                  format: "bintana-form/1",
+                  class: "Shop",
+                  properties: { Text: "shop", Width: 320, Height: 200 },
+                  components: [
+                      { type: "Connection", name: "Db",
+                        properties: { Path: dbRel } },
+                      { type: "Model", name: "Clients",
+                        properties: { Connection: "Db", Record: "Client",
+                                      TableName: "clients" } },
+                  ],
+                  children: [],
+              }, null, 2) + "\n");
+
+    ide.listFiles();
+    yield* settled(ide);
+
+    check("a .conn is a category of the project", ide.FileTree.Exists("cat:conns"),
+          JSON.stringify(ide.classes.files));
+    check("with the connection in it", ide.FileTree.Exists("shop.conn"));
+    check("the Data view is one of the side bar's",
+          ide.sideViews().some((v) => v.page === ide.data.sidePage),
+          JSON.stringify(ide.sideViews().map((v) => v.text)));
+    check("the database is in its list", ide.data.DbList.Items.includes("shop"),
+          JSON.stringify(ide.data.DbList.Items));
+    check("the table is in the schema", ide.data.Schema.Exists(ide.data.tableKeys["clients"]));
+    check("with its columns", ide.data.Schema.Exists(ide.data.columnKeys["clients.name"]));
+    check("the model is under the table", ide.data.Schema.Exists(ide.data.modelKeys["Clients"]));
+    check("and its record's fields are there",
+          ide.data.Schema.Exists(ide.data.fieldKeys["Client.Name"]));
+
+    /* The .conn row in the project tree: a double click brings the view up on
+     * that database. */
+    ide.FileTree.Key = "shop.conn";
+    eq("selecting a .conn names it in the bar", ide.selectedConnection, "shop.conn");
+    ide.FileTree_Activate();
+    yield* settled(ide);
+
+    check("the double click brings the Data view up",
+          ide.SideStack.Current === ide.data.sidePage);
+    eq("on the database the .conn names", ide.data.current.name, "shop");
+
+    /* A table in the schema, activated as a double click would. */
+    ide.data.Schema.Key = ide.data.tableKeys["clients"];
+    ide.data.activate();
+    yield* until(() => ide.data.Rows.Count > 0);
+
+    eq("a table previews its rows", ide.data.Rows.Count, 2);
+    eq("with what the query answered", ide.data.Rows.Cell(0, 1), "Ana");
+    check("the SQL is in the console", ide.data.Sql.Text.includes("clients"),
+          ide.data.Sql.Text);
+    check("and the console page is the one showing",
+          ide.ConsoleBox.Current === ide.data.consolePage);
+
+    /* A query the person typed. */
+    ide.data.Sql.Text = "select name from clients order by name desc";
+    ide.data.run();
+    yield* until(() => ide.data.Rows.Count === 2 && ide.data.Rows.Cell(0, 0) === "Beto");
+    eq("a typed query replaces the rows", ide.data.Rows.Cell(0, 0), "Beto");
+
+    /* A statement: the answer is what changed, not rows. */
+    ide.data.Sql.Text = "update clients set name = 'Carla' where name = 'Beto'";
+    ide.data.run();
+    yield* until(() => ide.data.Rows.Count === 1 && ide.data.Rows.Cell(0, 0) === "1");
+    eq("a statement says what it changed", ide.data.Rows.Cell(0, 0), "1");
+
+    ide.data.Sql.Text = "select name from clients order by name";
+    ide.data.run();
+    yield* until(() => ide.data.Rows.Count === 2 && ide.data.Rows.Cell(1, 0) === "Carla");
+    eq("and the update is visible", ide.data.Rows.Cell(1, 0), "Carla");
+
+    /* The other road: a form's `Connection` part, with no `.conn` file at all.
+     * The model is the same one, so the table and its record stay. */
+    try { File.Delete(File.Join(TMP, "shop.conn")); } catch (e) {}
+    ide.listFiles();
+    yield* settled(ide);
+    check("a form's Connection is a database too",
+          ide.data.DbList.Items.includes("Db"), JSON.stringify(ide.data.DbList.Items));
+    check("with the model it declares",
+          ide.data.Schema.Exists(ide.data.modelKeys["Clients"]));
+
+    /* Cleanup: the fixture's files and the database, so the phases after this
+     * one see the project they were written for.  `shop.conn` may already be
+     * gone: the form-only half above deleted it. */
+    for (const name of ["Shop.form", "Client.record", "shop.conn"]) {
+        const path = File.Join(TMP, name);
+        if (File.Exists(path)) File.Delete(path);
+    }
+    if (File.Exists(dbPath)) File.Delete(dbPath);
+
+    ide.listFiles();
+    yield* settled(ide);
+    check("the database leaves the list with its file",
+          !ide.data.DbList.Items.includes("shop"));
+}
+
+/*
  * Exporting the project as one .tar.
  *
  * **Nothing here opens the chooser.** A file dialog is a modal surface nothing
@@ -12692,14 +12833,15 @@ function* p_errors(ide) {
     eq("...and the tab says what it is", ide.ConsoleBox.Tabs[0], "Output");
 
     /*
-     * *Output*, *Debug*, *Problems* and *Tests* are declared in the `.form`; the
-     * terminal is a fifth page that exists only where a child can be run in it, which is
-     * `Widget.Available`'s question -- a runtime built without VTE gets no tab
-     * promising a terminal that would refuse.  This build has VTE, so both
-     * branches are stated and the one that holds here is checked.
+     * *Output*, *Debug*, *Problems* and *Tests* are declared in the `.form`;
+     * *Data* is built in code; the terminal is the page after it that exists
+     * only where a child can be run in it, which is `Widget.Available`'s
+     * question -- a runtime built without VTE gets no tab promising a
+     * terminal that would refuse.  This build has VTE, so both branches are
+     * stated and the one that holds here is checked.
      */
     eq("there is a terminal page exactly when this build can run one",
-       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 5 : 4);
+       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 6 : 5);
     eq("...and a Shell to go with it", ide.Shell !== null, Widget.Available("Terminal"));
 
     if (Widget.Available("Terminal")) {
@@ -16993,7 +17135,7 @@ function* p_session(ide) {
 
     check("the button folds the project panel away", !ide.SideView.Visible);
     check("and leaves the strip that opens a view", ide.SideStrip.Visible);
-    eq("with a button for each view", ide.sideButtons.length, 3);
+    eq("with a button for each view", ide.sideButtons.length, 4);
     check("all of them showing", ide.sideButtons.every((b) => b.Visible),
           JSON.stringify(ide.sideButtons.map((b) => b.Visible)));
     check("the half of the split is a strip now",
@@ -17723,6 +17865,7 @@ const PHASES = [
     { name: "settings", run: p_settings },
     { name: "columns", run: p_columns },
     { name: "records", run: p_records },
+    { name: "data", run: p_data },
     { name: "export", run: p_export },
     { name: "installer", run: p_installer },
     { name: "apps", run: p_apps },

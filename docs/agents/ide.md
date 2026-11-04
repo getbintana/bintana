@@ -33,10 +33,10 @@ MainForm extends Form`, since a form's name is what the runtime looks it up by.
 What one file uses of another is exported where it is declared and reached by
 its bare name, with no `import`; everything else is the file's own. It was
 `Namespace("Ide")` and `Ide.Designer` until the modules plan, and the move
-found what the shared scope had been hiding: of 326 top-level names, **99 are
-exported** -- the 45 classes, the 26 forms and 28 more another file uses
-(`SOURCE_LINK`, `PALETTE`, `inFolder` ...) -- and the other 227 are private
-now. The list was taken from fork patch 16's
+found what the shared scope had been hiding: of its top-level names, **100 are
+exported** -- the 46 classes, the 26 forms and 28 more another file uses
+(`SOURCE_LINK`, `PALETTE`, `inFolder` ...) -- and the rest are private now. The
+list was taken from fork patch 16's
 free names, not from a search for words, which also offered `lines`, `snap`
 and `plain` -- locals of the same spelling in other files. **A name a test
 reads** (`GRID`, `PALETTE_TABS`, `completionScopeNames`) is exported for that
@@ -184,6 +184,44 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `constructor.name`. A `Model`'s `Connection` row is the form's Connection
   parts and its `Record` row the project's records, the same list a form's own
   `Record` uses.
+
+## The data view
+
+- **It is a page of the side bar and a page of the bottom panel, both built in
+  code.** `Data.install()` appends the schema page to `SideStack` and the
+  console page to `ConsoleBox`; `MainForm.Form_Open` calls it before
+  `dressViews` and before `buildTerminal`, because both of those fill lists
+  from the pages that exist. A page built in code is not on the form, so
+  `consoleFocus` names it (`DataConsole`) and `Data` holds the widgets; adding
+  it to `MainForm.form` instead would mean two pages of a `.form` that depends
+  on the project.
+- **The path is the identity of a database.** A `.conn` file, a form's
+  `Connection` part and a loose `.db`/`.sqlite` file all become descriptors
+  keyed by the absolute path, so `uptime.db` named by both a form and a `.conn`
+  is one entry and its models are merged. The name the first one found wins;
+  the `.conn` is read first so the project's resource names it.
+- **A missing database is not created by looking.** `Database.Sqlite(path)`
+  creates a file, so the view checks `File.Exists` and says *not created*
+  instead. It also opens a connection only to read `Tables`/`Columns` and
+  closes it again; the console opens its own for a run.
+- **A model is a mapping, not a schema.** `Connection`/`Model` components are
+  read from the `.form` JSON, the record fields come from `Binding.records()`,
+  and a model whose table has not been created is listed with that sentence
+  rather than dropped.
+- **`Query` and `Execute` are chosen by the first word**, with comments and
+  space skipped: `SELECT`, `WITH`, `PRAGMA` and `EXPLAIN` answer rows; the rest
+  answer `{ Changes, LastId }`. The first word is read here and not by a second
+  SQL parse.
+- **The `.conn` row belongs to `Data`.** `ProjectTree` files a `.conn` under
+  *Connections*, `MainForm` keeps `selectedConnection` beside the record and
+  image cases, and a double click calls `Data.openFile` -- the same
+  `selected*`/`Activate` shape the other two use, so the status bar and the
+  menu cannot disagree.
+- **`tests/ide`'s `data` phase is the guard.** It builds a real SQLite file and
+  a `.conn`, adds a `Shop.form` with a `Connection` and a `Model`, presses the
+  `.conn` row, previews a table, runs a query and an update, then removes the
+  `.conn` and asserts the form's own Connection still names the database. A
+  build without sqlite skips it and says so.
 
 ## IDE traps
 
