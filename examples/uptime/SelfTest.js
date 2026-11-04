@@ -27,10 +27,8 @@ export class SelfTest {
     start() {
         if (!this.active) return;
 
-        /* The same two properties the Save button writes, then Save itself. */
-        this.form.SpinInterval.Value = 1;
-        this.form.SpinTimeout.Value  = 2000;
-        this.form.saveConfig();
+        /* The same event the Save button raises; the host's handler saves. */
+        this.form.settings.Emit("Save", 1, 2000);
 
         this.server = Http.Server({ Host: "local", Port: 0 });
         this.server.Request = (req) => {
@@ -48,6 +46,12 @@ export class SelfTest {
         ];
         this.form.Clock.Delay = 500;
         this.form.Clock.Start();
+
+        /* The popover needs a shown anchor, so open and close it once now. */
+        Timer.After(0, () => {
+            this.form.BtnSettings_Click();
+            Timer.After(50, () => Popover.Close(this.form.settings));
+        });
     }
 
     afterRound() {

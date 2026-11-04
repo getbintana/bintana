@@ -33,7 +33,9 @@ class UptimeForm extends Form {
         this.count  = 0;
         this.queue  = [];
 
-        this.settings = this.buildSettings();
+        this.settings = new UptimeSettings();
+        this.settings.On("Save", (interval, timeout) =>
+            this.saveConfig(interval, timeout));
 
         /* The form's Models are parts over the one `Db` connection and the
          * `.record` shapes beside this file; the first use creates each table
@@ -57,60 +59,6 @@ class UptimeForm extends Form {
     }
 
     /* --- the settings popover ---------------------------------------------- */
-
-    buildSettings() {
-        const panel = new Panel();
-        panel.Arrangement = "Vertical";
-        panel.Spacing     = 8;
-        panel.Margin      = 12;
-        panel.Width       = 300;
-
-        const row = (text, spin, suffix) => {
-            const line = new Panel();
-            line.Arrangement = "Horizontal";
-            line.Spacing     = 6;
-
-            const label = new Label();
-            label.Text   = text;
-            label.Width  = 80;
-            label.VAlign = "Center";
-            line.Add(label);
-            line.Add(spin);
-
-            if (suffix) {
-                const unit = new Label();
-                unit.Text   = suffix;
-                unit.VAlign = "Center";
-                line.Add(unit);
-            }
-            return line;
-        };
-
-        this.SpinInterval = new SpinBox();
-        this.SpinInterval.Min   = 1;
-        this.SpinInterval.Max   = 3600;
-        this.SpinInterval.Step  = 1;
-        this.SpinInterval.Value = 30;
-        this.SpinInterval.Width = 100;
-
-        this.SpinTimeout = new SpinBox();
-        this.SpinTimeout.Min   = 100;
-        this.SpinTimeout.Max   = 60000;
-        this.SpinTimeout.Step  = 100;
-        this.SpinTimeout.Value = 5000;
-        this.SpinTimeout.Width = 110;
-
-        panel.Add(row("Every", this.SpinInterval, "s"));
-        panel.Add(row("Timeout", this.SpinTimeout, "ms"));
-
-        const save = new Button();
-        save.Text = "Save";
-        save.Icon = "document-save-symbolic";
-        save.On("Click", () => this.saveConfig());
-        panel.Add(save);
-
-        return panel;
-    }
 
     BtnSettings_Click() {
         if (Popover.IsOpen(this.settings)) {
@@ -170,17 +118,17 @@ class UptimeForm extends Form {
         const interval = Math.max(1, Number(cfg.Interval) || 30);
         const timeout  = Math.max(100, Number(cfg.Timeout) || 5000);
 
-        this.SpinInterval.Value = interval;
-        this.SpinTimeout.Value  = timeout;
-        this.Api.Timeout        = timeout;
+        this.settings.Interval = interval;
+        this.settings.Timeout  = timeout;
+        this.Api.Timeout       = timeout;
         this.Clock.Delay        = interval * 1000;
         this.Clock.Start();
         this.LblStatus.Text = `every ${interval} s — ${this.sites.length} sites`;
     }
 
-    saveConfig() {
-        this.config.Interval = this.SpinInterval.Value;
-        this.config.Timeout  = this.SpinTimeout.Value;
+    saveConfig(interval, timeout) {
+        this.config.Interval = interval === undefined ? this.settings.Interval : interval;
+        this.config.Timeout  = timeout  === undefined ? this.settings.Timeout  : timeout;
         this.Config.Save(this.config);
         this.applyConfig(this.config);
         this.LblStatus.Text = `saved: every ${this.config.Interval} s, ${this.config.Timeout} ms`;

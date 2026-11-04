@@ -1,0 +1,71 @@
+{
+  "format": "bintana-form/1",
+  "class": "UptimeSettings",
+  "properties": {
+    "Width": 300,
+    "Height": 160,
+    "Arrangement": "Vertical",
+    "Spacing": 8,
+    "Padding": 12
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "RowEvery",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 6
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblEvery",
+          "properties": { "Text": "Every", "Width": 80, "VAlign": "Center" }
+        },
+        {
+          "type": "SpinBox",
+          "name": "SpinInterval",
+          "properties": { "Min": 1, "Max": 3600, "Step": 1, "Value": 30, "Width": 100 }
+        },
+        {
+          "type": "Label",
+          "name": "LblSeconds",
+          "properties": { "Text": "s", "VAlign": "Center" }
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "RowTimeout",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 6
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblTimeout",
+          "properties": { "Text": "Timeout", "Width": 80, "VAlign": "Center" }
+        },
+        {
+          "type": "SpinBox",
+          "name": "SpinTimeout",
+          "properties": { "Min": 100, "Max": 60000, "Step": 100, "Value": 5000, "Width": 110 }
+        },
+        {
+          "type": "Label",
+          "name": "LblMillis",
+          "properties": { "Text": "ms", "VAlign": "Center" }
+        }
+      ]
+    },
+    {
+      "type": "Button",
+      "name": "BtnSave",
+      "properties": {
+        "Text": "Save",
+        "Icon": "document-save-symbolic"
+      }
+    }
+  ]
+}
