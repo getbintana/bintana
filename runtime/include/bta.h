@@ -141,6 +141,11 @@ struct BtaWidget {
     /* Read by the surface this widget sits on; meaningless anywhere else,
      * the way Expand is meaningless here. Default Start, i.e. stay put. */
     BtaAlign   halign, valign;
+    /* 0 inherits the parent's direction, 1 is left-to-right, 2 right-to-left.
+     * Kept as our own answer because `gtk_widget_get_direction` reports the
+     * inherited one, and the serialiser has to tell *I said this* from *my
+     * parent did*. */
+    int        direction;
     /*
      * Where Tab stops on this one, among the children of a `Fixed` surface.
      * Carried out by `bta_fixed_focus`, and meaningless in a box for the same

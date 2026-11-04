@@ -12381,6 +12381,15 @@
           "Native": false
         },
         {
+          "Name": "Direction",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`LeftToRight` `RightToLeft`, or `\"\"` to inherit the parent's. GTK carries it to every child, so a box mirrors its order and a label's `Start` moves to the right; a `Fixed` mirrors its coordinates here because those are ours",
+          "Native": true
+        },
+        {
           "Name": "DragData",
           "Kind": "Property",
           "Params": -1,

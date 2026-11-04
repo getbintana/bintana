@@ -137,12 +137,15 @@ void bta_widget_bind(BtaWidget *w, JSValueConst form, const char *name)
  * of it that only GTK can carry out. */
 static void widget_apply_align(BtaWidget *w);
 
+/* Defined below, beside `Direction`: a child that arrives under an explicit
+ * direction has to hear it, or a `GtkBox` built later never mirrors. */
+static void direction_apply(GtkWidget *widget, GtkTextDirection inherited);
+
 void bta_widget_adopt(JSContext *ctx, JSValueConst parent_val, BtaWidget *parent,
                       JSValueConst child_val, BtaWidget *child)
 {
     if (!parent || !child)
         return;
-
     JSValue *slot = bta_widget_note(parent, BTA_NOTE_CHILDREN);
     if (!JS_IsArray(*slot)) {
         JS_FreeValue(ctx, *slot);
@@ -166,6 +169,12 @@ void bta_widget_adopt(JSContext *ctx, JSValueConst parent_val, BtaWidget *parent
      * is. Said here because this is the one place every way of adding a child
      * goes through -- a page appended to a notebook never sees relayout. */
     widget_apply_align(child);
+
+    /* The parent's direction is explicit on its own widget, and a container
+     * built after this child arrived -- a panel's `Arrangement` swapping in a
+     * GtkBox -- only mirrors if the direction reached the child as a change. */
+    direction_apply(child->gtk, gtk_widget_get_direction(parent->gtk));
+    bta_widget_relayout(child);
 
     /* ...and a `Separator` computes the room its size means here too, for the
      * roads that arrive without `bta_container_attach` (a page appended to a
@@ -1381,6 +1390,87 @@ static JSValue w_set_align(JSContext *ctx, JSValueConst this_val,
     else
         w->valign = chosen;
 
+    bta_widget_relayout(w);
+    return JS_UNDEFINED;
+}
+
+/*
+ * Which way this control reads: `LeftToRight`, `RightToLeft`, or `""` to
+ * inherit the parent's.  GTK carries it down to every child, which is what
+ * makes a box mirror its order and a label put `Start` on the right; the
+ * `Fixed` surface reads it too, because its coordinates are ours and do not
+ * mirror by themselves.
+ *
+ * The stored value is ours and not `gtk_widget_get_direction`'s: that answers
+ * the inherited direction, and a form would then write down `LeftToRight` just
+ * because its parent -- the desktop -- was that way.
+ */
+static void direction_apply(GtkWidget *widget, GtkTextDirection inherited)
+{
+    BtaWidget *bw = g_object_get_data(G_OBJECT(widget), BTA_WIDGET_QUARK);
+    GtkTextDirection dir = inherited;
+
+    /* A child that said its own direction keeps it; everything else follows
+     * the one being set.  An explicit direction on every internal widget is
+     * also what makes a GtkBox re-pack: it mirrors when it hears
+     * `direction-changed`, and a child added under a silent parent never
+     * hears one. */
+    if (bw && bw->direction == 1)
+        dir = GTK_TEXT_DIR_LTR;
+    else if (bw && bw->direction == 2)
+        dir = GTK_TEXT_DIR_RTL;
+
+    gtk_widget_set_direction(widget, dir);
+    for (GtkWidget *c = gtk_widget_get_first_child(widget); c;
+         c = gtk_widget_get_next_sibling(c))
+        direction_apply(c, dir);
+}
+
+static JSValue w_get_direction(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    switch (w->direction) {
+    case 1:  return JS_NewString(ctx, "LeftToRight");
+    case 2:  return JS_NewString(ctx, "RightToLeft");
+    default: return JS_NewString(ctx, "");
+    }
+}
+
+static JSValue w_set_direction(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *s = JS_ToCString(ctx, val);
+    if (!s)
+        return JS_EXCEPTION;
+
+    GtkTextDirection dir;
+    int             stored;
+
+    if (!*s || !g_ascii_strcasecmp(s, "Auto")) {
+        dir    = GTK_TEXT_DIR_NONE;
+        stored = 0;
+    } else if (!g_ascii_strcasecmp(s, "LeftToRight")) {
+        dir    = GTK_TEXT_DIR_LTR;
+        stored = 1;
+    } else if (!g_ascii_strcasecmp(s, "RightToLeft")) {
+        dir    = GTK_TEXT_DIR_RTL;
+        stored = 2;
+    } else {
+        JSValue e = JS_ThrowRangeError(ctx,
+            "Direction must be LeftToRight, RightToLeft or '', not '%s'", s);
+        JS_FreeCString(ctx, s);
+        return e;
+    }
+    JS_FreeCString(ctx, s);
+
+    w->direction = stored;
+    direction_apply(w->gtk, dir);
     bta_widget_relayout(w);
     return JS_UNDEFINED;
 }
@@ -7981,6 +8071,13 @@ static const JSCFunctionListEntry widget_props[] = {
      *   the same, vertically
      */
     JS_CGETSET_MAGIC_DEF("VAlign",  w_get_align,  w_set_align,  ALIGN_V),
+    /* Direction
+     *   `LeftToRight` `RightToLeft`, or `""` to inherit the parent's. GTK
+     *   carries it to every child, so a box mirrors its order and a label's
+     *   `Start` moves to the right; a `Fixed` mirrors its coordinates here
+     *   because those are ours
+     */
+    JS_CGETSET_DEF("Direction", w_get_direction, w_set_direction),
     /* ColumnSpan
      *   how many columns of a `Grid` it runs under. `1`
      */
@@ -8862,6 +8959,11 @@ bool bta_container_attach(JSContext *ctx, BtaWidget *parent, BtaWidget *child)
     /* A radio's set is its container, so arriving in one joins it. */
     bta_radio_regroup(slot, child->gtk);
     bta_grid_reflow(slot);
+
+    /* The loader takes this road and never adopts, so the parent's direction
+     * is said here as well: a `Panel` whose `Arrangement` swaps in a GtkBox
+     * after this point only mirrors if it already knows. */
+    direction_apply(child->gtk, gtk_widget_get_direction(parent->gtk));
 
     /* ...and a `Separator` asks what its own size means here, where every way
      * of adding a child arrives -- the loader's included, which is the one that

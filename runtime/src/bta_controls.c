@@ -2478,9 +2478,11 @@ GtkIconPaintable *bta_icon_paintable(GtkWidget *widget, const char *name, int si
         return NULL;
 
     int scale = widget ? gtk_widget_get_scale_factor(widget) : 1;
+    GtkTextDirection dir = widget ? gtk_widget_get_direction(widget)
+                                  : GTK_TEXT_DIR_LTR;
 
     return gtk_icon_theme_lookup_icon(theme, name, NULL, size > 0 ? size : 16,
-                                      scale > 0 ? scale : 1, GTK_TEXT_DIR_LTR, 0);
+                                      scale > 0 ? scale : 1, dir, 0);
 }
 
 #define IMG_NAME_KEY "bta-icon-name"
@@ -2550,7 +2552,9 @@ bool bta_icon_available(GtkWidget *widget, const char *name)
         return false;
 
     GtkIconPaintable *icon = gtk_icon_theme_lookup_icon(theme, name, NULL, 16, 1,
-                                                        GTK_TEXT_DIR_LTR, 0);
+                                                        widget ? gtk_widget_get_direction(widget)
+                                                               : GTK_TEXT_DIR_LTR,
+                                                        0);
     if (!icon)
         return false;
 

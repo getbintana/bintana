@@ -612,7 +612,7 @@ const TESTS = [
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
      * the note below. */
-    "DefaultButton", "ActivatesDefault", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
+    "DefaultButton", "ActivatesDefault", "Direction", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
@@ -6920,6 +6920,77 @@ class Form1 extends Form {
         sp.WideHandle = true;
         eq("and a grip when it is",                sp.WideHandle, true);
         sp.Delete();
+    }
+
+    /* --- which way a form reads ----------------------------------------- */
+    /*
+     * A direction is GTK's, inherited down the tree: a box mirrors its order,
+     * a label's Start moves to the right, and a `Fixed` -- whose coordinates
+     * are ours -- mirrors itself.  The panel is stretched past the width it was
+     * drawn at so the anchors have slack to show.
+     */
+    testDirection() {
+        const f = new Form();
+        f.Resize(300, 200);
+        f.Direction = "RightToLeft";
+
+        const a = new Label();
+        f.Add(a);
+        a.Text = "a"; a.X = 10; a.Y = 10; a.Width = 80; a.Height = 20;
+        a.HAlign = "Start";
+
+        const b = new Label();
+        f.Add(b);
+        b.Text = "b"; b.X = 10; b.Y = 40; b.Width = 80; b.Height = 20;
+        b.HAlign = "End";
+
+        const box = new Panel();
+        f.Add(box);
+        box.X = 10; box.Y = 70; box.Width = 200; box.Height = 40;
+        box.Arrangement = "Horizontal";
+
+        const c = new Button();
+        box.Add(c);
+        c.Text = "c"; c.Width = 60; c.Height = 30;
+
+        const d = new Button();
+        box.Add(d);
+        d.Text = "d"; d.Width = 60; d.Height = 30;
+
+        eq("a control inherits until it says", new Label().Direction, "");
+        eq("Direction round-trip", f.Direction, "RightToLeft");
+        eq("...and saves it", f.Serialize().properties.Direction, "RightToLeft");
+        throws("a direction nobody defined is refused", () => { f.Direction = "Sideways"; });
+        eq("and the last good one stands", f.Direction, "RightToLeft");
+
+        f.Show();
+
+        until("the window is up", () => f.Bounds().Width > 0, () => {
+            f.Resize(400, 200);
+
+            until("the window has the slack", () => f.Bounds().Width > 300, () => {
+                check("a Start child moves to the right edge",
+                      a.Bounds(f).X > 200, `${a.Bounds(f).X}`);
+                check("and an End child to its left",
+                      b.Bounds(f).X < a.Bounds(f).X,
+                      `${b.Bounds(f).X} against ${a.Bounds(f).X}`);
+                check("a horizontal box puts its first child on the right",
+                      c.Bounds(box).X > d.Bounds(box).X,
+                      `${c.Bounds(box).X} against ${d.Bounds(box).X}`);
+
+                f.Direction = "LeftToRight";
+                until("the window turns back", () => a.Bounds(f).X < 100, () => {
+                    check("LeftToRight puts Start back on the left",
+                          a.Bounds(f).X < 100, `${a.Bounds(f).X}`);
+                    check("and the box's first child with it",
+                          c.Bounds(box).X < d.Bounds(box).X,
+                          `${c.Bounds(box).X} against ${d.Bounds(box).X}`);
+
+                    f.Close();
+                    this.testDirectionDone = true;
+                });
+            });
+        });
     }
 
     /* --- ToggleButton --------------------------------------------------- */

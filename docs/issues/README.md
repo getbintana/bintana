@@ -17,7 +17,6 @@ in the same form.
 | [ISSUE-symmetric-encryption.md](ISSUE-symmetric-encryption.md) | No symmetric encryption |
 | [ISSUE-pdf-reading.md](ISSUE-pdf-reading.md) | The runtime writes PDFs and cannot read one |
 | [ISSUE-image-object.md](ISSUE-image-object.md) | No image object to scale, crop or rotate |
-| [ISSUE-right-to-left.md](ISSUE-right-to-left.md) | `Fixed` does not mirror and icons ask for LTR |
 | [ISSUE-object-prototype.md](ISSUE-object-prototype.md) | `Object.prototype` is writable and there is no defence |
 | [ISSUE-reference-hint-in-catch.md](ISSUE-reference-hint-in-catch.md) | The "did you mean" sentence is lost inside a `catch` |
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |

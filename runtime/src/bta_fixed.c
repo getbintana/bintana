@@ -328,6 +328,13 @@ static void bta_fixed_layout_allocate(GtkLayoutManager *manager, GtkWidget *widg
     int dx = (self->anchored && self->design_w > 0) ? width  - self->design_w : 0;
     int dy = (self->anchored && self->design_h > 0) ? height - self->design_h : 0;
 
+    /* A surface laid out in coordinates has to mirror itself: GTK mirrors the
+     * boxes it owns, and these numbers are ours.  The design rect is mirrored
+     * first and then the anchor is applied with Start and End swapped, so the
+     * slack the window gained lands on the side the anchor promises. */
+    bool rtl = gtk_widget_get_direction(widget) == GTK_TEXT_DIR_RTL;
+    int  design_w = self->design_w > 0 ? self->design_w : width;
+
     for (GtkWidget *c = gtk_widget_get_first_child(widget); c;
          c = gtk_widget_get_next_sibling(c)) {
 
@@ -354,9 +361,19 @@ static void bta_fixed_layout_allocate(GtkLayoutManager *manager, GtkWidget *widg
         gtk_widget_measure(c, GTK_ORIENTATION_HORIZONTAL, -1,
                            &floor_w, NULL, NULL, NULL);
 
-        GtkAllocation a = { cw ? cw->x : 0, cw ? cw->y : 0, 0, 0 };
-        anchor_axis(cw ? cw->halign : BTA_ALIGN_START, dx,
-                    cw ? cw->w : 0, floor_w, &a.x, &a.width);
+        int      x      = cw ? cw->x : 0;
+        int      drawn  = cw ? cw->w : 0;
+        BtaAlign align  = cw ? cw->halign : BTA_ALIGN_START;
+
+        if (rtl) {
+            int base = drawn > 0 ? drawn : floor_w;
+            x = design_w - x - base;
+            if (align == BTA_ALIGN_START)      align = BTA_ALIGN_END;
+            else if (align == BTA_ALIGN_END)   align = BTA_ALIGN_START;
+        }
+
+        GtkAllocation a = { x, cw ? cw->y : 0, 0, 0 };
+        anchor_axis(align, dx, drawn, floor_w, &a.x, &a.width);
 
         /* Height for the width it actually got: a wrapped Label needs fewer
          * lines once stretching has made it wider. */

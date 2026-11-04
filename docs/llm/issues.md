@@ -183,7 +183,6 @@ needed and what it did instead.
 | No symmetric encryption | [ISSUE-symmetric-encryption](../issues/ISSUE-symmetric-encryption.md) |
 | The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
 | No image object to scale, crop or rotate | [ISSUE-image-object](../issues/ISSUE-image-object.md) |
-| `Fixed` does not mirror and icons ask for LTR | [ISSUE-right-to-left](../issues/ISSUE-right-to-left.md) |
 | `Object.prototype` is writable and there is no defence | [ISSUE-object-prototype](../issues/ISSUE-object-prototype.md) |
 | The "did you mean" sentence is lost inside a `catch` | [ISSUE-reference-hint-in-catch](../issues/ISSUE-reference-hint-in-catch.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
