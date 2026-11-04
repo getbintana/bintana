@@ -626,7 +626,7 @@ const TESTS = [
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
     "Available", "TextProperties", "ClassIntrospection", "LibraryEvents", "Signatures", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
-    "Grid",
+    "Grid", "GridCells",
     "File", "Dir", "Trash", "Environment",
     /* Async too: its answers land on later turns of the loop, like Exec's,
      * and a run filtered to it alone would report before they arrive. */
@@ -29274,6 +29274,88 @@ class Form1 extends Form {
                 g.Delete();
                 this.testGridDone = true;
             });
+        });
+    }
+
+    /*
+     * A Grid whose children name their cells.
+     *
+     * The issue's table -- a label and a field, a wider field on the next row,
+     * a note under both -- written without a `Panel` per row.  What is asserted
+     * is that a placed child stays in its cell, that the auto flow walks around
+     * it instead of over it, and that a row span is a cell and not a taller
+     * label.
+     */
+    testGridCells() {
+        const g = new Grid();
+        this.Add(g);
+        g.Columns = 3;
+        g.Spacing = 4;
+
+        const put = (text, props) => {
+            const c = new Label();
+            g.Add(c);
+            c.Text = text;
+            for (const k in props || {}) c[k] = props[k];
+            return c;
+        };
+
+        const at = (c) => c.Bounds(g);
+
+        const a     = put("a");
+        const b     = put("b");
+        const auto  = put("auto");
+        const wide  = put("wide");
+        const below = put("below");
+        const tall  = put("tall");
+        const beside = put("beside");
+        const under = put("under");
+
+        eq("a child starts with no row",  a.GridRow, -1);
+        eq("...and no column",            a.GridColumn, -1);
+        eq("...and one row of its own",   a.GridRowSpan, 1);
+        throws("a row below -1 is refused", () => { a.GridRow = -2; });
+        throws("a column below -1 is refused", () => { a.GridColumn = -2; });
+        throws("a row span of nothing is refused", () => { a.GridRowSpan = 0; });
+
+        a.GridRow = 0;       a.GridColumn = 0;
+        b.GridRow = 0;       b.GridColumn = 2;
+        wide.GridRow = 1;    wide.GridColumn = 0;  wide.ColumnSpan = 3;
+        tall.GridRow = 3;    tall.GridColumn = 0;  tall.GridRowSpan = 2;
+        tall.VAlign = "Fill";
+        beside.GridRow = 3;  beside.GridColumn = 1;
+        under.GridRow = 4;   under.GridColumn = 1;
+
+        eq("a placed child says where it is", `${a.GridRow},${a.GridColumn}`, "0,0");
+        eq("and the row span reads back",     tall.GridRowSpan, 2);
+
+        const placedNode = tall.Serialize().properties;
+        eq("a placed cell is written down",
+           `${placedNode.GridRow},${placedNode.GridColumn},${placedNode.GridRowSpan}`,
+           "3,0,2");
+        check("a child that follows the order writes no cell",
+              new Label().Serialize().properties.GridRow === undefined);
+
+        until("the grid lays out", () => g.Bounds().Width > 1, () => {
+            check("a placed child is in its own column",
+                  at(b).X > at(a).X, `${at(a).X} and ${at(b).X}`);
+            check("...and the two share row 0",
+                  at(a).Y < at(b).Y + at(b).Height && at(b).Y < at(a).Y + at(a).Height,
+                  `${at(a).Y} and ${at(b).Y}`);
+            check("the auto child takes the free cell between them",
+                  at(auto).X > at(a).X && at(auto).X < at(b).X,
+                  `${at(a).X} < ${at(auto).X} < ${at(b).X}`);
+            check("a column span is as wide as the three columns",
+                  at(wide).Width >= at(b).X + at(b).Width - at(a).X,
+                  `${at(wide).Width}`);
+            check("the flow after a spanning row starts below it",
+                  at(below).Y > at(wide).Y, `${at(below).Y} after ${at(wide).Y}`);
+            check("a row span fills two rows, not one",
+                  at(tall).Height > at(auto).Height * 1.5,
+                  `${at(tall).Height} against ${at(auto).Height}; under ${at(under).Y},${at(under).Height}`);
+
+            g.Delete();
+            this.testGridCellsDone = true;
         });
     }
 

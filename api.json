@@ -12507,6 +12507,33 @@
           "Native": true
         },
         {
+          "Name": "GridColumn",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "which column of a `Grid` it sits in; `-1` follows the order. There is no `Column` for it to take: `Editor` answers one",
+          "Native": true
+        },
+        {
+          "Name": "GridRow",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "which row of a `Grid` it sits in; `-1` follows the order. `Row` is already a `TableView` method, so the grid's own word has the prefix",
+          "Native": true
+        },
+        {
+          "Name": "GridRowSpan",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how many rows of a `Grid` it runs down. `1`",
+          "Native": true
+        },
+        {
           "Name": "HAlign",
           "Kind": "Property",
           "Params": -1,

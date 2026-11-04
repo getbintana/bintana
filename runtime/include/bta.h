@@ -158,6 +158,18 @@ struct BtaWidget {
     /* How many of a Grid's columns this one takes. Meaningless in any other
      * container, exactly as X/Y are meaningless outside a Fixed. */
     int        span;
+    /*
+     * Where a Grid puts it, when the order is not the layout: `grid_row` and
+     * `grid_col` are 1-based, so zero is *not placed* -- which is how a value
+     * written before these existed keeps flowing -- and `row_span` is zero for
+     * one row.  `GridRow` answers the 1-based field less one, i.e. -1 when it
+     * is not placed, because -1 is what a program can tell from row 0.
+     *
+     * A child is placed explicitly only when both are set: a row without a
+     * column is half a place, and guessing the other half would be a layout
+     * nobody wrote.  Meaningless outside a Grid, as `span` is.
+     */
+    int        grid_row, grid_col, row_span;
     /* Containers: do this one's children follow it when it is resized? Kept
      * here and not on the slot, because Arrangement replaces the slot and the
      * answer has to survive that. */

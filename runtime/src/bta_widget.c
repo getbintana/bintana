@@ -7332,6 +7332,84 @@ static JSValue w_set_span(JSContext *ctx, JSValueConst this_val, JSValueConst va
 }
 
 /*
+ * Where a Grid puts this control, when the order is not the layout.
+ *
+ * `Row` and `Column` are the words WPF and Qt use, and they are **not** the
+ * words here: `Editor` already answers a read-only `Column` (the cursor's) and
+ * `TableView` a `Row(index)` method, so a base property of either name would be
+ * shadowed by two subclasses -- the one thing `docs/agents/runtime.md` says a
+ * subclass member must not do.  `GridRow`/`GridColumn` are the same fact with
+ * a name no control has claimed.
+ *
+ * -1 is *not placed*: the child flows in the grid's order, which is what every
+ * form written before this does.  Both have to be set for the place to count: a
+ * row with no column is half a place, and filling the other half in from the
+ * order would be a layout nobody wrote.
+ */
+static JSValue w_get_grid_pos(JSContext *ctx, JSValueConst this_val, int magic)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int v = magic == 0 ? w->grid_row : w->grid_col;
+    return JS_NewInt32(ctx, v > 0 ? v - 1 : -1);
+}
+
+static JSValue w_set_grid_pos(JSContext *ctx, JSValueConst this_val, JSValueConst val,
+                              int magic)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *name = magic == 0 ? "GridRow" : "GridColumn";
+    int32_t n;
+    if (!bta_to_int(ctx, val, name, &n))
+        return JS_EXCEPTION;
+    if (n < -1)
+        return JS_ThrowRangeError(ctx, magic == 0
+                                       ? "GridRow: %d is not a row"
+                                       : "GridColumn: %d is not a column", n);
+
+    if (magic == 0) w->grid_row = n < 0 ? 0 : n + 1;
+    else            w->grid_col = n < 0 ? 0 : n + 1;
+
+    bta_grid_reflow(gtk_widget_get_parent(w->gtk));
+    return JS_UNDEFINED;
+}
+
+/*
+ * How many rows of a Grid this control takes.  The companion of `ColumnSpan`,
+ * and meaningful with an explicit `GridRow` or in the flow: a cell that runs
+ * down two rows keeps the row under it from being filled by the next child.
+ */
+static JSValue w_get_row_span(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewInt32(ctx, w->row_span > 0 ? w->row_span : 1);
+}
+
+static JSValue w_set_row_span(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int32_t n;
+    if (!bta_to_int(ctx, val, "GridRowSpan", &n))
+        return JS_EXCEPTION;
+    if (n < 1)
+        return JS_ThrowRangeError(ctx, "GridRowSpan: %d is not a number of rows", n);
+
+    w->row_span = n;
+    bta_grid_reflow(gtk_widget_get_parent(w->gtk));
+    return JS_UNDEFINED;
+}
+
+/*
  * TabIndex -- where Tab stops on this control, among the children of a `Fixed`.
  *
  * **There is no `TabStop` beside it, and that is not an omission**: `Focusable`
@@ -7907,6 +7985,20 @@ static const JSCFunctionListEntry widget_props[] = {
      *   how many columns of a `Grid` it runs under. `1`
      */
     JS_CGETSET_DEF("ColumnSpan", w_get_span, w_set_span),
+    /* GridRow
+     *   which row of a `Grid` it sits in; `-1` follows the order. `Row` is
+     *   already a `TableView` method, so the grid's own word has the prefix
+     */
+    JS_CGETSET_MAGIC_DEF("GridRow", w_get_grid_pos, w_set_grid_pos, 0),
+    /* GridColumn
+     *   which column of a `Grid` it sits in; `-1` follows the order. There is
+     *   no `Column` for it to take: `Editor` answers one
+     */
+    JS_CGETSET_MAGIC_DEF("GridColumn", w_get_grid_pos, w_set_grid_pos, 1),
+    /* GridRowSpan
+     *   how many rows of a `Grid` it runs down. `1`
+     */
+    JS_CGETSET_DEF("GridRowSpan", w_get_row_span, w_set_row_span),
     /* TabIndex
      *   where Tab reaches it on a surface laid out by coordinate. Sparse,
      *   never renumbered; `0` means *in drawn order*. The IDE edits it as a

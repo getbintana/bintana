@@ -145,6 +145,19 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   dialog itself stopped being a surface -- measured, not guessed: still 15px over
   the tree's edge afterwards. What makes columns give way to each other is the
   parent being elastic.
+- **A grid cell is named by the child, and the names are not `Row` and
+  `Column`.** `GridRow` and `GridColumn` are the two, `GridRowSpan` the third;
+  `Row` is already a `TableView` method and `Column` an `Editor` read-only, so a
+  base property of either name would be shadowed by two subclasses.  Both have
+  to be set: one alone leaves the child in the flow, which is the old behaviour
+  and the one every form written before this keeps.  The flow cursor walks
+  *around* the cells a placed child took, so a mixed grid fills the gaps instead
+  of stacking.  A row span over a row with no non-spanning child is only as tall
+  as the other rows it covers -- row heights come from content, and a spanning
+  child does not give its first row a height of its own; put something in both
+  rows if the span is meant to be visible.  Two placed children in one cell are
+  not refused: GTK stacks them, and the last one is on top, which is the same
+  answer `Fixed` gives to overlapping coordinates.
 - **A form's contents can make it open wider than it was drawn, and that is what
   translation does to every dialog.** `bta_fixed_measure` reports the bounding box
   of each child's *minimum*, so a caption whose translated text outgrew its

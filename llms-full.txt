@@ -4559,6 +4559,19 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   dialog itself stopped being a surface -- measured, not guessed: still 15px over
   the tree's edge afterwards. What makes columns give way to each other is the
   parent being elastic.
+- **A grid cell is named by the child, and the names are not `Row` and
+  `Column`.** `GridRow` and `GridColumn` are the two, `GridRowSpan` the third;
+  `Row` is already a `TableView` method and `Column` an `Editor` read-only, so a
+  base property of either name would be shadowed by two subclasses.  Both have
+  to be set: one alone leaves the child in the flow, which is the old behaviour
+  and the one every form written before this keeps.  The flow cursor walks
+  *around* the cells a placed child took, so a mixed grid fills the gaps instead
+  of stacking.  A row span over a row with no non-spanning child is only as tall
+  as the other rows it covers -- row heights come from content, and a spanning
+  child does not give its first row a height of its own; put something in both
+  rows if the span is meant to be visible.  Two placed children in one cell are
+  not refused: GTK stacks them, and the last one is on top, which is the same
+  answer `Fixed` gives to overlapping coordinates.
 - **A form's contents can make it open wider than it was drawn, and that is what
   translation does to every dialog.** `bta_fixed_measure` reports the bounding box
   of each child's *minimum*, so a caption whose translated text outgrew its
@@ -6711,7 +6724,8 @@ its bare name, with no `import`; everything else is the file's own. It was
 `Namespace("Ide")` and `Ide.Designer` until the modules plan, and the move
 found what the shared scope had been hiding: of its top-level names, **100 are
 exported** -- the 46 classes, the 26 forms and 28 more another file uses
-(`SOURCE_LINK`, `PALETTE`, `inFolder` ...) -- and the rest are private now. The list was taken from fork patch 16's
+(`SOURCE_LINK`, `PALETTE`, `inFolder` ...) -- and the rest are private now. The
+list was taken from fork patch 16's
 free names, not from a search for words, which also offered `lines`, `snap`
 and `plain` -- locals of the same spelling in other files. **A name a test
 reads** (`GRID`, `PALETTE_TABS`, `completionScopeNames`) is exported for that
@@ -12781,7 +12795,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10455 assertions
+./tests/run.sh                          # all seven projects, 10471 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -14278,7 +14292,6 @@ needed and what it did instead.
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
-| A `Grid` child has no row, no column and no `RowSpan` | [ISSUE-grid-placement](../issues/ISSUE-grid-placement.md) |
 | `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
 | No masked input | [ISSUE-masked-input](../issues/ISSUE-masked-input.md) |
 | No property grid control for applications | [ISSUE-property-grid-control](../issues/ISSUE-property-grid-control.md) |

@@ -1449,12 +1449,12 @@ static const JSCFunctionListEntry rowlist_props[] = {
  * drawn in coordinates cannot do, and the reason a caption that grew in
  * translation pushes a dialog out of shape instead of widening a column.
  *
- * **Children flow into it in order**, left to right, wrapping at `Columns`.
- * There is no per-child row and column to fill in: a grid's order *is* its
- * layout, which is what makes it the same thing to add to as a box -- `Add`,
- * `Reorder` and dragging one in the designer all mean what they already meant.
- * `ColumnSpan` is the one exception, for the note that runs the width of the
- * form and the row of buttons that sits under both columns.
+ * **Children flow into it in order**, left to right, wrapping at `Columns` --
+ * unless a child names a cell with `GridRow` and `GridColumn`, which is how a
+ * table-like layout says *this field is in row 1, column 2* without nesting a
+ * grid per row.  The two are one place: both have to be set, and the flow walks
+ * around the cells a placed child took.  `ColumnSpan` and `GridRowSpan` are the
+ * sizes of the cell it fills.
  *
  * **And there is no new vocabulary for sizing.** A column is as wide as its
  * widest child needs; a child that says `HExpand` makes its column take the
@@ -1467,7 +1467,8 @@ static const JSCFunctionListEntry rowlist_props[] = {
  * layout child, so a reflow is a handful of property writes rather than the
  * remove-and-re-add dance a GtkStack needs -- and nothing has to be referenced
  * across it, because nothing is ever unparented. */
-static void grid_place(GtkWidget *grid, GtkWidget *child, int col, int row, int span)
+static void grid_place(GtkWidget *grid, GtkWidget *child, int col, int row,
+                       int span, int row_span)
 {
     GtkLayoutManager *lm = gtk_widget_get_layout_manager(grid);
     GtkLayoutChild   *lc = lm ? gtk_layout_manager_get_layout_child(lm, child) : NULL;
@@ -1479,6 +1480,27 @@ static void grid_place(GtkWidget *grid, GtkWidget *child, int col, int row, int 
     gtk_grid_layout_child_set_column(gc, col);
     gtk_grid_layout_child_set_row(gc, row);
     gtk_grid_layout_child_set_column_span(gc, span);
+    gtk_grid_layout_child_set_row_span(gc, row_span);
+}
+
+/* Whether any cell of that rectangle is already taken.  The cells are keyed by
+ * `row * columns + col`, plus one, because `GINT_TO_POINTER(0)` is NULL. */
+static bool grid_cell_taken(GHashTable *taken, int columns,
+                            int row, int col, int rows, int cols)
+{
+    for (int r = row; r < row + rows; r++)
+        for (int c = col; c < col + cols; c++)
+            if (g_hash_table_contains(taken, GINT_TO_POINTER(r * columns + c + 1)))
+                return true;
+    return false;
+}
+
+static void grid_take_cells(GHashTable *taken, int columns,
+                            int row, int col, int rows, int cols)
+{
+    for (int r = row; r < row + rows; r++)
+        for (int c = col; c < col + cols; c++)
+            g_hash_table_add(taken, GINT_TO_POINTER(r * columns + c + 1));
 }
 
 void bta_grid_reflow(GtkWidget *slot)
@@ -1490,13 +1512,21 @@ void bta_grid_reflow(GtkWidget *slot)
     if (columns < 1)
         columns = 1;
 
-    int col = 0, row = 0;
+    /* Two cursors: `flow_*` is where the next child that did not name a cell
+     * goes, and `row`/`col` is where this one goes.  A placed child does not
+     * move the flow -- it is not part of the sequence -- but its cells are in
+     * `taken`, so the flow walks around it. */
+    int flow_col = 0, flow_row = 0;
+    GHashTable *taken = g_hash_table_new(g_direct_hash, g_direct_equal);
 
     for (GtkWidget *c = gtk_widget_get_first_child(slot); c;
          c = gtk_widget_get_next_sibling(c)) {
 
-        BtaWidget *cw   = g_object_get_data(G_OBJECT(c), BTA_WIDGET_QUARK);
-        int        span = cw && cw->span > 1 ? cw->span : 1;
+        BtaWidget *cw    = g_object_get_data(G_OBJECT(c), BTA_WIDGET_QUARK);
+        int        span  = cw && cw->span > 1 ? cw->span : 1;
+        int        rspan = cw && cw->row_span > 0 ? cw->row_span : 1;
+        bool       placed = cw && cw->grid_row > 0 && cw->grid_col > 0;
+        int        row, col;
 
         /* A span wider than the grid is the grid's width, not an error: what it
          * means is "all of them", and refusing it would make a note that runs
@@ -1504,22 +1534,42 @@ void bta_grid_reflow(GtkWidget *slot)
         if (span > columns)
             span = columns;
 
-        /* It does not fit in what is left of this row, so it starts the next
-         * one -- which is what a person drawing it would expect, and what keeps
-         * a spanning child from being split across two rows. */
-        if (col + span > columns) {
-            col = 0;
-            row++;
+        if (placed) {
+            row = cw->grid_row - 1;
+            col = cw->grid_col - 1;
+            if (col >= columns)
+                col = columns - 1;
+        } else {
+            row = flow_row;
+            col = flow_col;
+
+            /* It does not fit in what is left of this row, so it starts the next
+             * one -- which is what a person drawing it would expect, and what
+             * keeps a spanning child from being split across two rows. */
+            for (;;) {
+                if (col >= columns || col + span > columns) {
+                    col = 0;
+                    row++;
+                    continue;
+                }
+                if (!grid_cell_taken(taken, columns, row, col, rspan, span))
+                    break;
+                col++;
+            }
+
+            flow_row = row;
+            flow_col = col + span;
+            if (flow_col >= columns) {
+                flow_col = 0;
+                flow_row++;
+            }
         }
 
-        grid_place(slot, c, col, row, span);
-
-        col += span;
-        if (col >= columns) {
-            col = 0;
-            row++;
-        }
+        grid_place(slot, c, col, row, span, rspan);
+        grid_take_cells(taken, columns, row, col, rspan, span);
     }
+
+    g_hash_table_destroy(taken);
 }
 
 static void build_grid(BtaWidget *w)
