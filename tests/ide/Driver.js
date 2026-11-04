@@ -1125,6 +1125,17 @@ function* p_designer(ide) {
           ide.WidgetTree.Count === ide.Surface.Children.length + 1,
           `${ide.WidgetTree.Count} nodes for ${ide.Surface.Children.length} controls`);
 
+    /* The control tree lists children in paint order, so the front is the last
+     * row: the arrow on "Bring to front" points down the tree, and the one on
+     * "Send to back" points up. They said the opposite once, which made the
+     * pair read as if it did the other thing. */
+    check("the design bar has its two stack buttons",
+          !!ide.BtnRaise && !!ide.BtnLower);
+    if (ide.BtnRaise && ide.BtnLower) {
+        eq("the front arrow points down the tree", ide.BtnRaise.Icon, "go-down-symbolic");
+        eq("and the back arrow up",                 ide.BtnLower.Icon, "go-up-symbolic");
+    }
+
     ide.WidgetTree.Key = ide.Surface.Children[1].Name;
     yield;
     eq("selecting in the tree selects on the canvas",

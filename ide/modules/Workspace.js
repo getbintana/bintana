@@ -301,10 +301,17 @@ export class Workspace {
         bar.Spacing     = 4;
         bar.Style       = "toolbar";
 
+        /*
+         * **The arrow follows the row, not the canvas.**  The control tree
+         * lists children in paint order, so the front is the last row: bringing
+         * one to the front moves it *down* the tree, and sending it back moves
+         * it up.  The icons said the opposite until this was fixed, which made
+         * the pair read as if it did the other thing.
+         */
         for (const row of [
                 ["ActDelCtl", "edit-delete-symbolic", Locale.Text("Delete control")],
-                ["ActRaise",  "go-up-symbolic",       Locale.Text("Bring to front")],
-                ["ActLower",  "go-down-symbolic",     Locale.Text("Send to back")],
+                ["ActRaise",  "go-down-symbolic",     Locale.Text("Bring to front")],
+                ["ActLower",  "go-up-symbolic",       Locale.Text("Send to back")],
                 null,
                 ["ActPrevPage", "go-previous-symbolic", Locale.Text("Previous page (Ctrl+Page Up)")],
                 ["ActNextPage", "go-next-symbolic",     Locale.Text("Next page (Ctrl+Page Down)")],
