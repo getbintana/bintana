@@ -1,6 +1,6 @@
 {
   "Format": 1,
-  "Version": "0.3.0",
+  "Version": "0.3.1",
   "Commit": "",
   "Widgets": [
     {
@@ -3828,12 +3828,30 @@
           "Native": false
         },
         {
+          "Name": "AddPart",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(part)",
+          "Returns": "",
+          "Doc": "adds a part to the form and binds it by name",
+          "Native": false
+        },
+        {
           "Name": "Bind",
           "Kind": "Method",
           "Params": 1,
           "Signature": "(record)",
           "Returns": "",
           "Doc": "shows a record on this form: every control that names a field is filled with it, and from then on the control gives its value back when the person is done with it",
+          "Native": false
+        },
+        {
+          "Name": "BuildParts",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(root)",
+          "Returns": "",
+          "Doc": "builds the `components` list of a `.form` node",
           "Native": false
         },
         {
@@ -3864,6 +3882,15 @@
           "Native": true
         },
         {
+          "Name": "ClearParts",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "removes every part the form has, stopping them",
+          "Native": false
+        },
+        {
           "Name": "Close",
           "Kind": "Method",
           "Params": 0,
@@ -3871,6 +3898,15 @@
           "Returns": "",
           "Doc": "closes it, through `Form_Close`, which may refuse. The runtime's claim on the form ends here, and on `HideOnClose` when it is put away",
           "Native": true
+        },
+        {
+          "Name": "Components",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the non-visual objects the form owns, in the order the `.form` declared them; `[]` when there are none",
+          "Native": false
         },
         {
           "Name": "Controls",
@@ -3999,6 +4035,15 @@
           "Native": true
         },
         {
+          "Name": "RemovePart",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(part)",
+          "Returns": "",
+          "Doc": "takes a part out of the form, stopping it",
+          "Native": false
+        },
+        {
           "Name": "Resizable",
           "Kind": "Property",
           "Params": -1,
@@ -4035,6 +4080,15 @@
           "Native": false
         },
         {
+          "Name": "SerializeParts",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "the parts as `.form` nodes, for the serialiser and the designer",
+          "Native": false
+        },
+        {
           "Name": "Show",
           "Kind": "Method",
           "Params": 0,
@@ -4050,6 +4104,15 @@
           "Signature": "",
           "Returns": "",
           "Doc": "the file the form's records come from, or `\"\"`",
+          "Native": false
+        },
+        {
+          "Name": "StopParts",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "stops every part that can be stopped; a closed form leaves no timer behind",
           "Native": false
         },
         {
@@ -14705,6 +14768,119 @@
       ]
     },
     {
+      "Name": "FormPart",
+      "Members": [
+        {
+          "Name": "Apply",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(properties)",
+          "Returns": "",
+          "Doc": "applies a property dictionary to the part, refusing a name it has not got",
+          "Native": false
+        },
+        {
+          "Name": "Delete",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "removes it from the form it belongs to",
+          "Native": false
+        },
+        {
+          "Name": "Emit",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(event, ...args)",
+          "Returns": "",
+          "Doc": "raise `event`: this part's own handler first, then the form's `<Name>_<Event>` method, with the arguments the event carries",
+          "Native": false
+        },
+        {
+          "Name": "EventNames",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "every event the class declares in `static Events`",
+          "Native": false
+        },
+        {
+          "Name": "Form",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the form this part belongs to, or `null` when it is a bare object",
+          "Native": false
+        },
+        {
+          "Name": "New",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "(type)",
+          "Returns": "",
+          "Doc": "a new part of `type` -- `Timer` today; a name that is not a part is refused by name",
+          "Native": false
+        },
+        {
+          "Name": "On",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(event, handler)",
+          "Returns": "",
+          "Doc": "assign `handler` to `event`; assigning again replaces it, the way a control's `On` does",
+          "Native": false
+        },
+        {
+          "Name": "PropertyNames",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "every settable property, `Name` first and then what the class declares in `static Properties` -- the list a property grid edits and a `.form` writes",
+          "Native": false
+        },
+        {
+          "Name": "PropertyOptions",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(name)",
+          "Returns": "",
+          "Doc": "the exact values a property accepts, or `null` for one written freely; a part with a closed list says it here",
+          "Native": false
+        },
+        {
+          "Name": "Serialize",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "this part as a `.form` node",
+          "Native": false
+        },
+        {
+          "Name": "TextProperties",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "the properties that hold prose a person reads -- none by default, and the reason a part's values are not looked up in a catalogue",
+          "Native": false
+        },
+        {
+          "Name": "Types",
+          "Kind": "Static",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "the names of the part classes this runtime can make, for a palette or a `.form` loader",
+          "Native": false
+        }
+      ]
+    },
+    {
       "Name": "Gzip",
       "Members": [
         {
@@ -16594,12 +16770,57 @@
           "Native": false
         },
         {
+          "Name": "Apply",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(properties)",
+          "Returns": "",
+          "Doc": "applies a property dictionary to the part, refusing a name it has not got",
+          "Native": false
+        },
+        {
+          "Name": "Delete",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "removes it from the form it belongs to",
+          "Native": false
+        },
+        {
+          "Name": "Emit",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(event, ...args)",
+          "Returns": "",
+          "Doc": "raise `event`: this part's own handler first, then the form's `<Name>_<Event>` method, with the arguments the event carries",
+          "Native": false
+        },
+        {
           "Name": "Enabled",
           "Kind": "Property",
           "Params": -1,
           "Signature": "",
           "Returns": "",
           "Doc": "whether it is running; assigning starts or stops it",
+          "Native": false
+        },
+        {
+          "Name": "EventNames",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "every event the class declares in `static Events`",
+          "Native": false
+        },
+        {
+          "Name": "Events",
+          "Kind": "Static",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the event a timer raises: `Tick`",
           "Native": false
         },
         {
@@ -16612,12 +16833,66 @@
           "Native": false
         },
         {
+          "Name": "Form",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the form this part belongs to, or `null` when it is a bare object",
+          "Native": false
+        },
+        {
+          "Name": "On",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(event, handler)",
+          "Returns": "",
+          "Doc": "assign `handler` to `event`; assigning again replaces it, the way a control's `On` does",
+          "Native": false
+        },
+        {
           "Name": "Once",
           "Kind": "Method",
           "Params": 1,
           "Signature": "(delay)",
           "Returns": "",
           "Doc": "fire one more time and stop",
+          "Native": false
+        },
+        {
+          "Name": "Properties",
+          "Kind": "Static",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "what a `.form` may set: how often it fires, and whether it is running",
+          "Native": false
+        },
+        {
+          "Name": "PropertyNames",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "every settable property, `Name` first and then what the class declares in `static Properties` -- the list a property grid edits and a `.form` writes",
+          "Native": false
+        },
+        {
+          "Name": "PropertyOptions",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(name)",
+          "Returns": "",
+          "Doc": "the exact values a property accepts, or `null` for one written freely; a part with a closed list says it here",
+          "Native": false
+        },
+        {
+          "Name": "Serialize",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "this part as a `.form` node",
           "Native": false
         },
         {
@@ -16637,6 +16912,22 @@
           "Returns": "",
           "Doc": "stops it; answers the timer",
           "Native": false
+        },
+        {
+          "Name": "TextProperties",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "the properties that hold prose a person reads -- none by default, and the reason a part's values are not looked up in a catalogue",
+          "Native": false
+        }
+      ],
+      "Events": [
+        {
+          "Name": "Tick",
+          "Signature": "()",
+          "Doc": "the timer fired: `Timer.<Name>_Tick` on the form, and then its own `On(\"Tick\")` handler. A timer declared in a `.form` with `Enabled: true` starts when the form loads; a drawing of the form does not start it"
         }
       ]
     },

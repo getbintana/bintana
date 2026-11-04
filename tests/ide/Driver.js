@@ -2254,6 +2254,54 @@ function* p_palette(ide) {
        ide.designer.selected.constructor.name, "CheckButton");
     ide.designer.deleteSelected();
 
+    /* --- designer: a non-visual part --------------------------------------
+     * A Timer has no rectangle, so the palette's click creates it in the
+     * component tray instead of on the surface.  The tree lists it, the grid
+     * edits it, and a save writes it in `components`. */
+    const beforeParts = ide.designer.allParts().length;
+    const beforeSurface = ide.Surface.Children.length;
+    palette(ide, "Timer").Click();
+    yield* settled(ide);
+
+    const timer = ide.designer.selected;
+    eq("the palette adds a Timer", timer && timer.constructor.name, "Timer");
+    eq("which is a part, not a surface child",
+       ide.Surface.Children.length, beforeSurface);
+    eq("with a free name", timer.Name, "Timer1");
+    eq("the tray shows it", ide.PartsTray.Visible, true);
+    check("and the tree lists it", ide.WidgetTree.Exists("Timer1"));
+    eq("a drawing does not start it", timer.Enabled, false);
+
+    const savedPart = ide.designer.serializeForm();
+    eq("the form writes it under components",
+       (savedPart.components || []).map((c) => `${c.type}:${c.name}`).join(","),
+       "Timer:Timer1");
+
+    /* The property grid edits it like any other selection. */
+    timer.Delay = 250;
+    eq("the grid's target is the part", ide.designer.grid.target, timer);
+
+    /* Delete and undo, the same two gestures a control has. */
+    ide.designer.deleteSelected();
+    yield* settled(ide);
+    eq("deleting takes the part out", ide.designer.allParts().length, beforeParts);
+    eq("and hides the tray", ide.PartsTray.Visible, false);
+    ide.ActUndo.Execute();
+    yield* settled(ide);
+    eq("undo brings it back", ide.designer.allParts().length, beforeParts + 1);
+    eq("with the name it had", ide.designer.allParts()[0].Name, "Timer1");
+    ide.designer.deleteSelected();
+    yield* settled(ide);
+
+    /* A drop creates it too, and has no point to honour. */
+    ide.Glass_Drop("Timer", 200, 120);
+    yield* settled(ide);
+    eq("dropping a part creates one", ide.designer.allParts().length, beforeParts + 1);
+    eq("and leaves the surface as it was",
+       ide.Surface.Children.length, beforeSurface);
+    ide.designer.deleteSelected();
+    yield* settled(ide);
+
     /* --- designer: dropping from the palette -----------------------------
      * Dragging a type to the form puts it where it is dropped, instead of in the
      * first free spot.  What arrives here is the runtime's Drop event: the same
@@ -9138,6 +9186,10 @@ function* p_projects(ide) {
      */
     const mismatched = [];
     for (const type of PALETTE) {
+        /* A part is not a widget and has no placement; the tray is its
+         * gesture and `p_palette` holds it. */
+        if (FormPart.Types().includes(type)) continue;
+
         const c = Widget.New(type);
         if (!("Placement" in c)) { c.Delete(); continue; }
 

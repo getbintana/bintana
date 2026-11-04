@@ -1,7 +1,7 @@
 {
   "name": "Bintana IDE",
   "id": "io.github.getbintana.Ide",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "startup": "MainForm",
   "sources": [
     "forms/AskForm.js",
@@ -59,6 +59,7 @@
     "modules/Document.js",
     "modules/Workspace.js",
     "modules/TabSet.js",
+    "modules/PartsTray.js",
     "modules/Completion.js",
     "modules/CallTip.js",
     "modules/Tooltip.js",

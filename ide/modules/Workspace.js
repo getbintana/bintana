@@ -102,6 +102,7 @@ export class Workspace {
         this.eventList   = null;
         this.outlineBox  = null;
         this.outlineList = null;
+        this.partsTray   = null;
 
         /* The room the canvas or the editor is given. A box, and empty: what
          * goes in it is the tab's business (a canvas, an editor, or a

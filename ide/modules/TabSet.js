@@ -382,6 +382,12 @@ export class TabSet {
             state.designer = new Designer(this.ide,
                                           { surface, glass, view: scroll, titlebar,
                                             menubar }, workspace);
+            /* The tray is under the canvas and belongs to this designer: it
+             * shows the parts the form owns, which have no surface child. */
+            const tray = new PartsTray(state.designer);
+            workspace.partsTray = tray;
+            workspace.main.Add(tray.panel);
+            state.partsTray = tray;
             /* The list, not setComponents: it has to be known before the tree is
              * built, because a component becomes a stand-in -- but filling the
              * palette is `adopt`'s job, and the switch that follows does it.
@@ -991,6 +997,7 @@ export class TabSet {
         this.ide.OutlineBox  = ws ? ws.outlineBox  : null;
         this.ide.OutlineList = ws ? ws.outlineList : null;
         this.ide.Palette     = ws ? ws.paletteBook : null;
+        this.ide.PartsTray   = ws && ws.partsTray ? ws.partsTray.panel : null;
         this.ide.WidgetTree  = ws ? ws.widgetTree  : null;
         this.ide.TreeFind    = ws ? ws.treeFind    : null;
         this.ide.TreeOptions = ws ? ws.treeOptions : null;

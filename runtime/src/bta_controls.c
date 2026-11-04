@@ -158,6 +158,36 @@ void bta_forms_remember_all(void)
 }
 
 /*
+ * A form's parts are its Timer's and its clients' -- things with no GTK
+ * widget behind them.  They are not destroyed with the window, so a timer
+ * that was running would keep firing into a form nobody has any more.  The
+ * allowed close is the moment to stop them; `StopParts` is the prelude's and
+ * it is called even on the `HideOnClose` path, where the form can be shown
+ * again and the program can start its own timer again.
+ */
+static void form_stop_parts(BtaWidget *w)
+{
+    JSContext *ctx = w->ctx;
+    JSValue    fn  = JS_GetPropertyStr(ctx, w->self, "StopParts");
+
+    if (!JS_IsFunction(ctx, fn)) {
+        JS_FreeValue(ctx, fn);
+        return;
+    }
+
+    JSValue r = JS_Call(ctx, fn, w->self, 0, NULL);
+    if (JS_IsException(r)) {
+        JSValue     e   = JS_GetException(ctx);
+        const char *msg = JS_ToCString(ctx, e);
+        fprintf(stderr, "bintana: StopParts failed: %s\n", msg ? msg : "?");
+        if (msg) JS_FreeCString(ctx, msg);
+        JS_FreeValue(ctx, e);
+    }
+    JS_FreeValue(ctx, r);
+    JS_FreeValue(ctx, fn);
+}
+
+/*
  * A form is *asked* whether it is closing, and answers by returning.
  *
  * The convention is `KeyPress`'s, for the same reason: **returning true from
@@ -198,6 +228,7 @@ static gboolean on_close_request(GtkWindow *win, gpointer user_data)
     if (!stay) {
         /* Before the drop: the size is the form's last word, and a window
          * put away by `HideOnClose` is remembered the same as one closed. */
+        form_stop_parts(w);
         form_remember(w, "save", 0, 0);
         form_drop(w);
         if (!gtk_window_get_hide_on_close(win))

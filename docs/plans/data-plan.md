@@ -385,7 +385,7 @@ which is what Delphi does, is the wrong answer for a form with twelve fields.
 |---|---|
 | Field metadata as tags in a string (`"name,notnull,size:80"`, Go's shape) | A grammar inside a value that nothing checks until it runs, in a project whose premise is that the runtime validates and says what was wrong. It also cannot generate accessors, so the boilerplate stays underneath it |
 | A separate family of data-aware controls (`TDBEdit`, Delphi's shape) | It doubles the widget table and every new control has to be written twice. A property on the ordinary control is what VB6, Gambas and Access all chose, and it is what "add a property in C and it becomes designable" already gives |
-| A non-visual `DataSource` component on the form (Gambas' shape) | The children of a `.form` are widgets; a non-visual child is a concept the runtime does not have — `Timer` is constructed in code precisely because there is nowhere to declare it. Access solves the same problem with two declared properties and no new object |
+| A non-visual `DataSource` component on the form (Gambas' shape) | The form now has non-visual parts (`FormPart`, and `Timer` is the first), so a `DataSource` is a part whose properties and event the binding could declare. The two declared properties (`Record`, `Source`) cover the same ground today |
 | The source inside the `.record` | Kills reuse of a shape across sources, and kills the JSON-first staging |
 | A scheme prefix in `Source` | The same small-language-in-a-string that was refused for tags |
 | GTK's own `g_object_bind_property` / `GtkExpression` | They bind GObject properties to GObject properties. A record's fields are JS accessors: there is nothing on the record side for GTK to bind to. The binding has to be in `rad.js` |

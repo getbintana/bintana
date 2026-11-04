@@ -187,6 +187,19 @@ class FormMembers {
      * actions; `[]` when there are none
      */
     get Actions() { return Array.isArray(this.__actions) ? this.__actions : []; }
+
+    /*
+     * Parts, as the `.form` declared them: what the form owns that is not a
+     * control.  Read-only for the same reason `Menus` and `Actions` are -- it
+     * is the declaration and the live objects together -- and a getter with no
+     * setter is how the serialiser knows the list belongs at the top level of
+     * the file beside `children`.
+     */
+    /**
+     * the non-visual objects the form owns, in the order the `.form` declared
+     * them; `[]` when there are none
+     */
+    get Components() { return Array.isArray(this.__components) ? this.__components : []; }
 }
 mixIn(FormMembers, Form);
 
@@ -205,6 +218,10 @@ mixIn(FormMembers, Form);
 /* Name is written as the node's `name`; Caption is an alias of Text and would
  * be written twice; Modified is editing state, not design state. */
 const NOT_SAVED = ["Name", "Caption", "Modified"];
+
+/* The name a `.form` may give a part: a JavaScript identifier, because the
+ * name is the prefix of its handlers (`Clock_Tick`). */
+const FORM_PART_NAME = /^[A-Za-z_$][\w$]*$/;
 
 /* Only meaningful when the parent lays children out by coordinate. */
 const POSITION = ["X", "Y"];
@@ -472,7 +489,10 @@ Widget.Signatures = {
 };
 
 Form.Signatures     = { Serialize: "()", SaveForm: "(path)", Bind: "(record)",
-                        Rows: "(record)", Reload: "()" };
+                        Rows: "(record)", Reload: "()",
+                        BuildParts: "(root)", AddPart: "(part)",
+                        RemovePart: "(part)", ClearParts: "()",
+                        StopParts: "()", SerializeParts: "()" };
 Notebook.Signatures = { Serialize: "(parentIsFixed)" };
 Container.Signatures = { AddNode: "(node)", BuildChildren: "(node)" };
 
@@ -544,6 +564,9 @@ Form.prototype.Serialize = function () {
     if (this.Actions.length) out.actions = this.Actions;
     if (this.Menus.length)   out.menus   = this.Menus;
 
+    const parts = this.SerializeParts();
+    if (parts.length) out.components = parts;
+
     const children = serializeChildren(this);
     if (children) out.children = children;
 
@@ -553,6 +576,160 @@ Form.prototype.Serialize = function () {
 /** `Serialize()` plus `File.Save`, pretty-printed */
 Form.prototype.SaveForm = function (path) {
     File.SaveJson(path, this.Serialize());
+};
+
+/* ------------------------------------------------------------------------
+ * Non-visual parts: what a form owns that has no rectangle.
+ *
+ * The `.form` carries them in `components`, a list beside `actions` and
+ * `menus`; the loader makes one, applies its properties and binds it to the
+ * form by name, and `Form.Components` answers the live list.  A part is a
+ * `FormPart`, not a `Widget`: see `rad.js` for the event rule.
+ * ---------------------------------------------------------------------- */
+
+/*
+ * One part as a `.form` node.  The same bargain as a control: what differs from
+ * a freshly made one is what is written, so a file says only what was chosen.
+ */
+/** this part as a `.form` node */
+FormPart.prototype.Serialize = function () {
+    const ctor     = this.constructor;
+    const defaults = defaultsFor(ctor);
+    const properties = {};
+
+    for (const key of this.PropertyNames()) {
+        if (key === "Name") continue;
+
+        const value = this[key];
+        if (!savableValue(value)) continue;
+        if (sameValue(value, defaults[key])) continue;
+
+        properties[key] = value;
+    }
+
+    return { type: ctor.name, name: this.Name, properties };
+};
+
+/*
+ * The other direction: every property in a node's dictionary, assigned
+ * through the real setter.  `Name` is the node's and not a property -- the
+ * loader has already set it, and a second spelling would be a name the form
+ * does not bind.
+ */
+/** applies a property dictionary to the part, refusing a name it has not got */
+FormPart.prototype.Apply = function (properties) {
+    if (properties === undefined || properties === null) return this;
+    if (typeof properties !== "object" || Array.isArray(properties))
+        throw new TypeError(`${this.constructor.name}.Apply: expected an object`);
+
+    const names = this.PropertyNames();
+    for (const key in properties) {
+        if (key === "Name")
+            throw new TypeError(`${this.constructor.name}.Apply: Name is the node's`);
+        if (!names.includes(key))
+            throw new TypeError(`${this.constructor.name}.Apply: no property '${key}'`);
+    }
+
+    /* In the order the class declares, not the order the file wrote: a Timer's
+     * `Delay` has to be in place before `Enabled` starts it. */
+    for (const key of names) {
+        if (key === "Name" || !hasOwn.call(properties, key)) continue;
+        this[key] = properties[key];
+    }
+    return this;
+};
+
+/** removes it from the form it belongs to */
+FormPart.prototype.Delete = function () {
+    if (this.Form) this.Form.RemovePart(this);
+};
+
+/*
+ * Builds the parts a `.form` node declares, replacing the ones already here.
+ *
+ * `designing` is the designer's: a part is not started (a Timer's `Enabled`
+ * is the declared value, not a running source) and its events reach nobody.
+ * The runtime passes false, which is where `Enabled: true` starts the timer.
+ */
+/** builds the `components` list of a `.form` node */
+Form.prototype.BuildParts = function (root, designing = false) {
+    this.ClearParts();
+
+    const specs = root && root.components;
+    if (specs === undefined || specs === null) return;
+
+    if (!Array.isArray(specs))
+        throw new TypeError("form: \"components\" is not a list");
+
+    const seen = new Set();
+    for (let i = 0; i < specs.length; i++) {
+        const node = specs[i];
+        if (!node || typeof node !== "object" || Array.isArray(node))
+            throw new TypeError(`form: components[${i}] is not a part`);
+        if (typeof node.type !== "string" || !node.type)
+            throw new TypeError(`form: components[${i}] has no type`);
+
+        const name = node.name;
+        if (typeof name !== "string" || !FORM_PART_NAME.test(name))
+            throw new TypeError(`form: '${name}' is not a usable component name`);
+        if (seen.has(name) || name in this)
+            throw new TypeError(`form: a form already has a member named '${name}'`);
+        seen.add(name);
+
+        const part = FormPart.New(node.type);
+        part.Name = name;
+        part.__setDesigning(designing);
+
+        part.Apply(node.properties || {});
+        this.AddPart(part);
+    }
+};
+
+/** adds a part to the form and binds it by name */
+Form.prototype.AddPart = function (part) {
+    if (!(part instanceof FormPart))
+        throw new TypeError("Form.AddPart: expected a FormPart");
+    if (typeof part.Name !== "string" || !FORM_PART_NAME.test(part.Name))
+        throw new TypeError(`Form.AddPart: '${part.Name}' is not a usable name`);
+    if (this.Components.includes(part)) return part;
+    if (this[part.Name] !== undefined && this[part.Name] !== part)
+        throw new TypeError(`Form.AddPart: a form already has a member named '${part.Name}'`);
+
+    this[part.Name] = part;
+    part.__attach(this);
+
+    if (!Array.isArray(this.__components)) this.__components = [];
+    this.__components.push(part);
+    return part;
+};
+
+/** takes a part out of the form, stopping it */
+Form.prototype.RemovePart = function (part) {
+    const list = this.Components;
+    const at   = list.indexOf(part);
+    if (at < 0) return false;
+
+    list.splice(at, 1);
+    if (this[part.Name] === part) delete this[part.Name];
+    part.__detach();
+    return true;
+};
+
+/** removes every part the form has, stopping them */
+Form.prototype.ClearParts = function () {
+    for (const part of this.Components.slice()) this.RemovePart(part);
+    this.__components = [];
+};
+
+/** stops every part that can be stopped; a closed form leaves no timer behind */
+Form.prototype.StopParts = function () {
+    for (const part of this.Components)
+        if (typeof part.Stop === "function") part.Stop();
+};
+
+/** the parts as `.form` nodes, for the serialiser and the designer */
+Form.prototype.SerializeParts = function () {
+    return this.Components.map((part) => part.Serialize());
 };
 
 /*

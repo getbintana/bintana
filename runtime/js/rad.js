@@ -438,6 +438,136 @@ GLOBAL.Settings = {
 };
 
 /* ------------------------------------------------------------------------
+ * FormPart -- something a form owns that is not a control.
+ *
+ * A Timer, a connection or a client has no rectangle: it is declared on the
+ * form, reached by name from the code like a control, and kept in the form's
+ * `components` list in the `.form`.  `FormPart` is the base they share; it is
+ * deliberately not a `Widget` -- there is no GTK control behind it, no
+ * `Children`, no `Bounds`.
+ *
+ *   "components": [
+ *       { "type": "Timer", "name": "Clock",
+ *         "properties": { "Delay": 250, "Enabled": true } }
+ *   ]
+ *
+ *   Clock_Tick() { ... }
+ *
+ * The event dispatch is the controls' rule said without GTK: the part's own
+ * `On` handlers first, then the form's `<Name>_<Event>` method.
+ * ---------------------------------------------------------------------- */
+
+/* The form a part was attached to, and the handlers it carries.  Notes off
+ * the part for the same reason the widget notes are: a part's own properties
+ * are its properties, and `--strict` must not see a table it may not change. */
+const partForms     = new WeakMap();
+const partHandlers  = new WeakMap();
+const partDesigning = new WeakMap();
+
+/* What `FormPart.New` can make.  A built-in part registers itself here; a
+ * project's own part would be added by the loader that knows its class. */
+const formPartTypes = {};
+
+GLOBAL.FormPart = class FormPart {
+
+    constructor() {
+        /** the name the form reaches it by; the prefix of its handlers */
+        this.Name = "";
+    }
+
+    /** the form this part belongs to, or `null` when it is a bare object */
+    get Form() { return partForms.get(this) || null; }
+
+    /**
+     * every settable property, `Name` first and then what the class declares
+     * in `static Properties` -- the list a property grid edits and a `.form`
+     * writes
+     */
+    PropertyNames() {
+        return ["Name", ...(this.constructor.Properties || [])];
+    }
+
+    /** every event the class declares in `static Events` */
+    EventNames() { return (this.constructor.Events || []).slice(); }
+
+    /**
+     * the properties that hold prose a person reads -- none by default, and
+     * the reason a part's values are not looked up in a catalogue
+     */
+    TextProperties() { return (this.constructor.TextProperties || []).slice(); }
+
+    /**
+     * the exact values a property accepts, or `null` for one written freely;
+     * a part with a closed list says it here
+     */
+    PropertyOptions(name) { return null; }
+
+    /**
+     * assign `handler` to `event`; assigning again replaces it, the way a
+     * control's `On` does
+     */
+    On(event, handler) {
+        if (!this.EventNames().includes(event))
+            throw new TypeError(`${this.constructor.name}.On: no event '${event}'`);
+        if (typeof handler !== "function")
+            throw new TypeError(`${this.constructor.name}.On: '${event}' needs a function`);
+
+        let bag = partHandlers.get(this);
+        if (!bag) partHandlers.set(this, bag = {});
+        bag[event] = handler;
+        return this;
+    }
+
+    /**
+     * raise `event`: this part's own handler first, then the form's
+     * `<Name>_<Event>` method, with the arguments the event carries
+     */
+    Emit(event, ...args) {
+        if (!this.EventNames().includes(event))
+            throw new TypeError(`${this.constructor.name}.Emit: no event '${event}'`);
+
+        /* A drawing of a form is not the form: a designer's Timer does not run
+         * and its handlers belong to the application, not to the IDE. */
+        if (partDesigning.get(this)) return;
+
+        const bag = partHandlers.get(this);
+        if (bag && bag[event]) bag[event].apply(this, args);
+
+        const form = partForms.get(this);
+        if (!form || !this.Name) return;
+
+        const handler = form[`${this.Name}_${event}`];
+        if (typeof handler === "function") handler.apply(form, args);
+    }
+
+    /* The loader's half.  Underscored because it is not the application's:
+     * `Form.AddPart` and `Form.RemovePart` are. */
+    __attach(form) { partForms.set(this, form); return this; }
+    __detach() {
+        partForms.delete(this);
+        if (typeof this.Stop === "function") this.Stop();
+        return this;
+    }
+    __setDesigning(on) { partDesigning.set(this, !!on); return this; }
+
+    /**
+     * the names of the part classes this runtime can make, for a palette or a
+     * `.form` loader
+     */
+    static Types() { return ownNames(formPartTypes).sort(); }
+
+    /**
+     * a new part of `type` -- `Timer` today; a name that is not a part is
+     * refused by name
+     */
+    static New(type) {
+        if (!hasOwn.call(formPartTypes, type))
+            throw new TypeError(`FormPart.New: no part '${type}'`);
+        return new formPartTypes[type]();
+    }
+};
+
+/* ------------------------------------------------------------------------
  * Timer -- scheduling with a name and a switch.
  *
  * The same thing every application was writing around the timer ids: what it
@@ -447,20 +577,37 @@ GLOBAL.Settings = {
  *   clock.Start();
  *   ...
  *   clock.Enabled = false;
+ *
+ * A timer declared in a `.form` is a `FormPart`: `Clock_Tick` is its event,
+ * and `Enabled: true` starts it when the form loads.  A timer made in code
+ * without a form is the same class and runs exactly as it always did.
  * ---------------------------------------------------------------------- */
 
-GLOBAL.Timer = class Timer {
+GLOBAL.Timer = class Timer extends FormPart {
+
+    /** the event a timer raises: `Tick` */
+    static get Events()     { return ["Tick"]; }
+    /** what a `.form` may set: how often it fires, and whether it is running */
+    static get Properties() { return ["Delay", "Enabled"]; }
 
     constructor(delay = 1000, tick = null) {
+        super();
         this.Delay = delay;
         this.Tick  = tick;
         this._id   = null;
+        this._enabled = false;
     }
 
     /** whether it is running; assigning starts or stops it */
-    get Enabled() { return this._id !== null; }
+    get Enabled() {
+        /* In a drawing the timer is not started -- the property grid still
+         * shows the value the file declared. */
+        return partDesigning.get(this) ? this._enabled === true : this._id !== null;
+    }
 
     set Enabled(on) {
+        this._enabled = !!on;
+        if (partDesigning.get(this)) return;
         if (on) this.Start();
         else    this.Stop();
     }
@@ -472,6 +619,7 @@ GLOBAL.Timer = class Timer {
     Start(delay) {
         if (delay !== undefined) this.Delay = delay;
         this.Stop();
+        this._enabled = true;
         this._id = setTimer(() => this.fire(), Math.max(0, this.Delay));
         return this;
     }
@@ -480,6 +628,7 @@ GLOBAL.Timer = class Timer {
     Stop() {
         if (this._id !== null) clearTimer(this._id);
         this._id = null;
+        this._enabled = false;
         return this;
     }
 
@@ -488,13 +637,18 @@ GLOBAL.Timer = class Timer {
     Once(delay) {
         if (delay !== undefined) this.Delay = delay;
         this.Stop();
-        this._id = setOnceTimer(() => { this._id = null; this.fire(); },
-                                Math.max(0, this.Delay));
+        this._enabled = true;
+        this._id = setOnceTimer(() => {
+            this._id = null;
+            this._enabled = false;
+            this.fire();
+        }, Math.max(0, this.Delay));
         return this;
     }
 
     fire() {
         if (typeof this.Tick === "function") this.Tick();
+        this.Emit("Tick");
     }
 
     /*
@@ -527,6 +681,9 @@ GLOBAL.Timer = class Timer {
         return tick;
     }
 };
+
+/* The first part the loader can make.  A second one registers itself here. */
+formPartTypes.Timer = GLOBAL.Timer;
 
 /* ------------------------------------------------------------------------
  * Stopwatch -- how long something took.

@@ -676,6 +676,40 @@ static int build_children(JSContext *ctx, JSValueConst form_obj,
     return 0;
 }
 
+/*
+ * The non-visual half of a form: `components` is a list of part nodes, and
+ * `Form.BuildParts` is the JavaScript that knows what a part is.  It lives
+ * there and not here because the classes are the prelude's -- a `Timer` is a
+ * class in `rad.js`, and nothing about it is a GTK widget.
+ *
+ * Called after the controls, so a part's handler can name one; a part with a
+ * declared `Enabled: true` starts on the next turn of the loop, not here.
+ */
+static int build_parts(JSContext *ctx, JSValueConst form_obj, JSValueConst root)
+{
+    JSValue fn = JS_GetPropertyStr(ctx, form_obj, "BuildParts");
+    if (JS_IsUndefined(fn) || JS_IsNull(fn)) {
+        JS_FreeValue(ctx, fn);
+        return 0;
+    }
+    if (!JS_IsFunction(ctx, fn)) {
+        JS_FreeValue(ctx, fn);
+        JS_ThrowTypeError(ctx, "form: this Form cannot build its components");
+        return -1;
+    }
+
+    JSValueConst args[1] = { root };
+    JSValue      r       = JS_Call(ctx, fn, form_obj, 1, args);
+    JS_FreeValue(ctx, fn);
+
+    if (JS_IsException(r)) {
+        JS_FreeValue(ctx, r);
+        return -1;
+    }
+    JS_FreeValue(ctx, r);
+    return 0;
+}
+
 /* --------------------------------------------------- where a class's file lives
  *
  * A project may organise its classes in directories, so <Class>.form is not
@@ -1095,6 +1129,10 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
      * after it can now find it. */
     if (rc >= 0)
         bta_labels_resolve(ctx, form_obj, w);
+
+    /* ...and the parts, which have no rectangle and are the prelude's. */
+    if (rc >= 0)
+        rc = build_parts(ctx, form_obj, root);
 
     /*
      * The size the file drew against, before any code can have changed it.

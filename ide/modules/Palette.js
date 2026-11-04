@@ -57,6 +57,7 @@ export const PALETTE_TABS = [
                               "Terminal", "RowList", "Flow", "DrawingArea", "Video"] },
     { name: "Boxes",  types: ["Panel", "Grid", "Frame", "Expander", "Scroller", "AspectFrame"] },
     { name: "Split",  types: ["Split", "Notebook", "Switcher", "Overlay"] },
+    { name: "Components", types: ["Timer"] },
 ];
 
 /*
@@ -70,6 +71,9 @@ export const PALETTE_TABS = [
  * dropped, which on a button with no text leaves an empty square.
  */
 export const PALETTE_ICON = {
+    /* A part and not a control: the clock is the one thing a Timer is, and the
+     * two theme names cover the desktops this tree is built on. */
+    Timer:    ["alarm-symbolic", "preferences-system-time-symbolic", "bta-component-symbolic"],
     Button:   ["input-mouse-symbolic",      "bta-button-symbolic"],
     Label:    ["insert-text-symbolic",      "bta-label-symbolic"],
     Image:    ["insert-image-symbolic",     "bta-image-symbolic"],
@@ -217,7 +221,8 @@ export function paletteIcon(type) {
  */
 const PALETTE_TABS_HERE = PALETTE_TABS
     .map((tab) => ({ name: tab.name,
-                     types: tab.types.filter((t) => Widget.Available(t)) }))
+                     types: tab.types.filter((t) => Widget.Available(t) ||
+                                                    FormPart.Types().includes(t)) }))
     .filter((tab) => tab.types.length);
 
 export const PALETTE = PALETTE_TABS_HERE.flatMap((tab) => tab.types);

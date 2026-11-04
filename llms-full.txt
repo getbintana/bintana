@@ -1564,6 +1564,35 @@ icon when the theme has one by that name (`gtkapplication.c`).
   and `WindowState` hold all three: a form hears `Allocated` **and** still hears
   `Resize` after it, and two controls on one window both hear theirs.
 
+## Non-visual parts
+
+- **A `FormPart` is not a `Widget`.** It has no GTK control, no `Children` and
+  no `Bounds`; the form owns it by name (`this.Clock`) and the `.form` carries
+  it in `components`, a list beside `actions` and `menus`. `Timer` is the first
+  one; a part declares `static Properties` and `static Events`, and `Emit`
+  dispatches to its own `On` handler first and then to the form's
+  `<Name>_<Event>` method -- the controls' rule without GTK.
+- **The loader calls JavaScript for this half.** `bta_form.c` builds the
+  controls, then calls `Form.BuildParts(root)`, because the classes live in
+  `rad.js` and nothing about them is C. `FormPart.New(type)` resolves the
+  runtime's own registry; a project's part would be registered by the loader
+  that knows its class. `Form.BuildParts` refuses a bad node, a name that is
+  not an identifier, a name the form already has, and a property the class does
+  not declare -- before it adds anything.
+- **`Form.AddPart` assigns the form's property first, then attaches the part
+  and appends it to `__components`.** The other order leaves a part the form
+  can reach but that is not in the list, which the serialiser would then drop.
+  `RemovePart` is the inverse and `__detach` stops a Timer.
+- **A closed form stops its parts.** `on_close_request` calls `Form.StopParts`
+  on the allowed-close path, including `HideOnClose`: a Timer's GTK source is
+  not owned by the window, so without this it would keep firing into a form
+  nobody has. `HideOnClose` can be shown again and the program can start its
+  timer again; the runtime does not restart it.
+- **The designer draws a part but does not run it.** `part.__setDesigning(true)`
+  makes `Timer.Enabled` answer the declared value while no source is armed, and
+  `Emit` returns before reaching the IDE's handlers. The tray, the tree and the
+  save are in [agents/ide.md](ide.md).
+
 ## Conversions and refusals
 
 - **A geometry is the display's range, not `int32`'s.** `bta_to_int` accepts
@@ -6790,6 +6819,31 @@ at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
 begin below it, the canvas and both panels are inside the page -- and the
 whole-project count in [`docs/testing.md`](../testing.md) moves with it.
 
+## Components on the tray
+
+- **A part is not a surface child.** `Designer.parts` holds the live
+  `FormPart`s; `buildSurface` rebuilds them from `root.components`, `snapshot`
+  and `serializeForm` carry them, and the surface's `Children` never sees one.
+  The designer creates them with `__setDesigning(true)`, so a Timer's
+  `Enabled: true` is the value the file declared and no source is armed.
+- **The tray is the part's place.** `PartsTray` is built per designer and put
+  under the canvas (`TabSet`); it is a `Flow` of flat buttons, hidden while the
+  form has none. A click selects, a double click opens the handler, and the
+  `Flow` accepts a palette drop: `addPart` gives the part a free name and the
+  tree lists it beside the controls. Dropping on the canvas does the same --
+  the gesture creates, it does not position.
+- **The tree and the name checks learn both lists.** `ControlTree` walks
+  `surface.Children` and then `designer.allParts()`; `uniqueName`, the rename
+  collision check, delete and undo include the parts. A part selected on the
+  wrong side of the canvas has no outline and no handles: `Chrome` and
+  `Designer.rectOf` answer `null` for anything without `Bounds`, which is also
+  what keeps the property grid the only place it is edited.
+- **`FormPart` answers the property grid's five questions**, and `PropertyOptions`
+  is one of them: without it the grid called a method the base class did not
+  have and a click on the palette failed after the part was made. `Timer`
+  declares `Properties = ["Delay", "Enabled"]` and `Events = ["Tick"]`; a new
+  part declares the same two lists.
+
 ## IDE traps
 
 - **A class verb asked about the edited project's name answers out of the
@@ -10937,6 +10991,13 @@ are bound to it, so their events are its own; the host that adds it renames and
 rebinds the component itself, which is what makes its `Emit` arrive as
 `Name_Event` on the host.
 
+**Not every object a form owns is a widget.** A `FormPart` is a plain class in
+`rad.js` with no GTK control behind it: a `Timer` and, later, a connection or a
+client. The `.form` lists one in `components`, `Form.BuildParts` (JavaScript,
+called by `bta_form.c` after the controls) makes it, and its event is the same
+`<Name>_<Event>` method a control's is. There is no `Children`, no `Bounds` and
+no wrapper; the form's own property is what keeps it alive.
+
 `Widget` and `Control` and `Container` are real, instantiable-by-inheritance
 classes with no `build` function of their own; constructing one throws
 ("abstract"). Subclassing works because the constructor honours `new_target`:
@@ -12345,7 +12406,7 @@ It is the install prefix, so it is extracted anywhere and runs without
 installing:
 
 ```sh
-tar xzf bintana-0.3.0-linux-x86_64.tar.gz
+tar xzf bintana-0.3.1-linux-x86_64.tar.gz
 ./bin/bintana-ide                    # the IDE
 ./bin/bintana share/bintana/examples/hello
 ```
@@ -12629,7 +12690,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10346 assertions
+./tests/run.sh                          # all seven projects, 10386 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

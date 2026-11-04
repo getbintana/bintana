@@ -461,6 +461,35 @@ icon when the theme has one by that name (`gtkapplication.c`).
   and `WindowState` hold all three: a form hears `Allocated` **and** still hears
   `Resize` after it, and two controls on one window both hear theirs.
 
+## Non-visual parts
+
+- **A `FormPart` is not a `Widget`.** It has no GTK control, no `Children` and
+  no `Bounds`; the form owns it by name (`this.Clock`) and the `.form` carries
+  it in `components`, a list beside `actions` and `menus`. `Timer` is the first
+  one; a part declares `static Properties` and `static Events`, and `Emit`
+  dispatches to its own `On` handler first and then to the form's
+  `<Name>_<Event>` method -- the controls' rule without GTK.
+- **The loader calls JavaScript for this half.** `bta_form.c` builds the
+  controls, then calls `Form.BuildParts(root)`, because the classes live in
+  `rad.js` and nothing about them is C. `FormPart.New(type)` resolves the
+  runtime's own registry; a project's part would be registered by the loader
+  that knows its class. `Form.BuildParts` refuses a bad node, a name that is
+  not an identifier, a name the form already has, and a property the class does
+  not declare -- before it adds anything.
+- **`Form.AddPart` assigns the form's property first, then attaches the part
+  and appends it to `__components`.** The other order leaves a part the form
+  can reach but that is not in the list, which the serialiser would then drop.
+  `RemovePart` is the inverse and `__detach` stops a Timer.
+- **A closed form stops its parts.** `on_close_request` calls `Form.StopParts`
+  on the allowed-close path, including `HideOnClose`: a Timer's GTK source is
+  not owned by the window, so without this it would keep firing into a form
+  nobody has. `HideOnClose` can be shown again and the program can start its
+  timer again; the runtime does not restart it.
+- **The designer draws a part but does not run it.** `part.__setDesigning(true)`
+  makes `Timer.Enabled` answer the declared value while no source is armed, and
+  `Emit` returns before reaching the IDE's handlers. The tray, the tree and the
+  save are in [agents/ide.md](ide.md).
+
 ## Conversions and refusals
 
 - **A geometry is the display's range, not `int32`'s.** `bta_to_int` accepts

@@ -153,6 +153,31 @@ at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
 begin below it, the canvas and both panels are inside the page -- and the
 whole-project count in [`docs/testing.md`](../testing.md) moves with it.
 
+## Components on the tray
+
+- **A part is not a surface child.** `Designer.parts` holds the live
+  `FormPart`s; `buildSurface` rebuilds them from `root.components`, `snapshot`
+  and `serializeForm` carry them, and the surface's `Children` never sees one.
+  The designer creates them with `__setDesigning(true)`, so a Timer's
+  `Enabled: true` is the value the file declared and no source is armed.
+- **The tray is the part's place.** `PartsTray` is built per designer and put
+  under the canvas (`TabSet`); it is a `Flow` of flat buttons, hidden while the
+  form has none. A click selects, a double click opens the handler, and the
+  `Flow` accepts a palette drop: `addPart` gives the part a free name and the
+  tree lists it beside the controls. Dropping on the canvas does the same --
+  the gesture creates, it does not position.
+- **The tree and the name checks learn both lists.** `ControlTree` walks
+  `surface.Children` and then `designer.allParts()`; `uniqueName`, the rename
+  collision check, delete and undo include the parts. A part selected on the
+  wrong side of the canvas has no outline and no handles: `Chrome` and
+  `Designer.rectOf` answer `null` for anything without `Bounds`, which is also
+  what keeps the property grid the only place it is edited.
+- **`FormPart` answers the property grid's five questions**, and `PropertyOptions`
+  is one of them: without it the grid called a method the base class did not
+  have and a click on the palette failed after the part was made. `Timer`
+  declares `Properties = ["Delay", "Enabled"]` and `Events = ["Tick"]`; a new
+  part declares the same two lists.
+
 ## IDE traps
 
 - **A class verb asked about the edited project's name answers out of the

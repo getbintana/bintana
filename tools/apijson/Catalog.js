@@ -204,9 +204,10 @@ function apiGlobals() {
 }
 
 /*
- * **The events of the two types that raise one**, which no verb can be asked:
+ * **The events of the types that raise one**, which no verb can be asked:
  * a menu item and a command are made per item by the form that declares them,
- * so there is no class to hand `Widget.EventNames`. Two entries, and
+ * so there is no class to hand `Widget.EventNames`; a `Timer` is a `FormPart`,
+ * whose events are declared as `static Events` and not in the widget table.
  * `tests/api` holds them to the C the other way round -- every `bta_emit*` in
  * the runtime has to be in the manifest somewhere, and until this table a
  * command's `Click` passed that check only because `Button` raises one too.
@@ -219,6 +220,11 @@ const API_TYPE_EVENTS = {
     MenuItem: [{ Name: "Click", Signature: "([value])",
                  Doc: "it was chosen. A check item is handed its new state, " +
                       "a dynamic one the index and the text of the entry" }],
+    Timer:    [{ Name: "Tick", Signature: "()",
+                 Doc: "the timer fired: `Timer.<Name>_Tick` on the form, and " +
+                      "then its own `On(\"Tick\")` handler. A timer declared " +
+                      "in a `.form` with `Enabled: true` starts when the form " +
+                      "loads; a drawing of the form does not start it" }],
 };
 
 /* The prototypes no global holds, named by the `type X` comment above the

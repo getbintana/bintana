@@ -605,7 +605,7 @@ const TESTS = [
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
     "CuratedLanguage", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
-    "Settings", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
+    "Settings", "Parts", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
     "Available", "TextProperties", "ClassIntrospection", "LibraryEvents", "Signatures", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
@@ -869,14 +869,14 @@ class WidgetsForm extends Form {
            JSON.stringify(original.menus[0].children.length), "6");
         eq("round-trip preserves the menus",
            JSON.stringify(reloaded.menus), JSON.stringify(original.menus));
-        /* Commands before menus before children, which is the order the loader
-         * reads them in: an item and a control may both name a command, so a
-         * file whose blocks were the other way round is a file that cannot be
-         * loaded. The serialiser writing them in that order is what keeps a
+        /* Commands, menus, components and then children, which is the order the
+         * loader reads them in: an item and a control may both name a command,
+         * so a file whose blocks were the other way round is a file that cannot
+         * be loaded. The serialiser writing them in that order is what keeps a
          * saved form loadable. */
         check("and the file puts the blocks in the order the loader needs",
               Dictionary.Keys(original).join(",") ===
-                  "format,class,properties,actions,menus,children",
+                  "format,class,properties,actions,menus,components,children",
               Dictionary.Keys(original).join(","));
 
         eq("Menus reads the spec back", this.Menus.length, 1);
@@ -16866,6 +16866,70 @@ class Form1 extends Form {
     /* --- Timer ---------------------------------------------------------------
      * The state machine here; that it fires needs frames, so tests/ide checks
      * that part where it can wait for one. */
+    /* --- a Timer declared on the form --------------------------------------
+     *
+     * The first non-visual part: it is not a control, it has no rectangle, and
+     * the `.form` carries it in `components`.  The loader binds it by name and
+     * the form's method is its event, exactly as a control's handler is.
+     */
+    testParts() {
+        check("the .form made a Timer", this.Clock instanceof Timer);
+        check("which is a FormPart", this.Clock instanceof FormPart);
+        eq("the form is its owner", this.Clock.Form, this);
+        check("and the form's Components list has it",
+              this.Components.includes(this.Clock));
+        eq("with the delay the file declared", this.Clock.Delay, 250);
+        eq("and not started, as the file declared", this.Clock.Enabled, false);
+        eq("its properties are Name and the class's",
+           this.Clock.PropertyNames().join(","), "Name,Delay,Enabled");
+        eq("and its event is Tick", this.Clock.EventNames().join(","), "Tick");
+
+        this.clockTicks = 0;
+        this.Clock.Emit("Tick");
+        eq("Clock_Tick is the form handler", this.clockTicks, 1);
+
+        const node = this.Serialize();
+        const part = (node.components || []).find((c) => c.name === "Clock");
+        check("the form serialises it in components",
+              part && part.type === "Timer", JSON.stringify(node.components));
+        eq("with the delay that differs", part.properties.Delay, 250);
+        check("and not the default Enabled",
+              !hasOwn.call(part.properties, "Enabled"), JSON.stringify(part.properties));
+
+        const extra = new Timer(5);
+        extra.Name = "Extra";
+        this.AddPart(extra);
+        eq("AddPart binds it by name", this.Extra, extra);
+        check("and lists it", this.Components.includes(extra));
+        check("RemovePart takes it out", this.RemovePart(extra));
+        eq("and unnames it", this.Extra, undefined);
+
+        const other = new Form();
+        const running = new Timer(5);
+        running.Name = "Run";
+        other.AddPart(running);
+        running.Enabled = true;
+        eq("a part can be started", running.Enabled, true);
+        other.StopParts();
+        eq("StopParts stops it", running.Enabled, false);
+        other.RemovePart(running);
+
+        throws("an unknown part type is refused", () => FormPart.New("Nope"));
+        throws("an unknown part property is refused",
+               () => FormPart.New("Timer").Apply({ Nope: 1 }));
+
+        const ordered = FormPart.New("Timer");
+        ordered.Apply({ Enabled: true, Delay: 5 });
+        eq("properties apply in the class's order, not the file's", ordered.Delay, 5);
+        ordered.Stop();
+        check("the runtime lists the parts it can make",
+              FormPart.Types().includes("Timer"));
+    }
+
+    Clock_Tick() {
+        this.clockTicks = (this.clockTicks || 0) + 1;
+    }
+
     testTimer() {
         const t = new Timer(50);
 

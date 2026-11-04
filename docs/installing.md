@@ -184,7 +184,7 @@ It is the install prefix, so it is extracted anywhere and runs without
 installing:
 
 ```sh
-tar xzf bintana-0.3.0-linux-x86_64.tar.gz
+tar xzf bintana-0.3.1-linux-x86_64.tar.gz
 ./bin/bintana-ide                    # the IDE
 ./bin/bintana share/bintana/examples/hello
 ```

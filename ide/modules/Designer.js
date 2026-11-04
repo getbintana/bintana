@@ -232,6 +232,10 @@ export class Designer {
         this.path     = null;    // .form abierto
         this.root     = null;    // root node as read, to rewrite it
         this.selection = [];     // the last one is the primary (see get selected)
+        /* The non-visual objects the form owns.  They are not `surface`
+         * children -- there is no rectangle to lay out -- so the designer keeps
+         * them in this list and the tree/tray read it. */
+        this.parts    = [];
         this.drag     = null;
         this.tabPress = null;    // a press on a tab that may become a drag
         this.band     = null;
@@ -461,6 +465,7 @@ export class Designer {
      * from the other is what made the outline sit visibly off its control.
      */
     rectOf(control) {
+        if (!control || typeof control.Bounds !== "function") return null;
         const at = control.Bounds(this.surface);
         if (!at) return null;
         return { x: at.X, y: at.Y, w: at.Width, h: at.Height };
@@ -482,6 +487,7 @@ export class Designer {
             properties: (this.root && this.root.properties) || {},
             menus: (this.root && this.root.menus) || [],
             actions: (this.root && this.root.actions) || [],
+            components: this.parts.map((part) => part.Serialize()),
             /* `nodeOf` and not `Serialize`, or an undo turns every stand-in
              * into the plain `Component` it is drawn with. */
             children: this.surface.Children.map((c) => this.nodeOf(c, true)),
@@ -530,6 +536,7 @@ export class Designer {
             .map((c) => [c.Name, c.Current]);
 
         this.buildSurface({ properties: (this.root && this.root.properties) || {},
+                            components: snap.components || [],
                             children: snap.children });
 
         for (const [name, at] of views) {
@@ -541,7 +548,8 @@ export class Designer {
          * not by reference -- and if what was undone sits on another page, the
          * selection's reveal brings that page up. */
         const names = snap.selected || [];
-        const back  = this.allControls().filter((c) => names.includes(c.Name));
+        const back  = [...this.allControls(), ...this.allParts()]
+                          .filter((c) => names.includes(c.Name));
         this.setSelection(back);
     }
 
@@ -583,6 +591,7 @@ export class Designer {
         this.applyFormLook(root.properties || {});
 
         for (const node of root.children || []) this.buildNode(this.surface, node);
+        this.buildParts(root);
     }
 
     /*
@@ -1467,14 +1476,22 @@ export class Designer {
      */
     serializeForm() {
         const root = this.root || {};
+        const parts = this.parts.map((part) => part.Serialize());
 
-        return {
+        const out = {
             ...root,
             format: "bintana-form/1",
             class: root.class || File.BaseName(this.path || ""),
             properties: root.properties || {},
-            children: this.surface.Children.map((c) => this.nodeOf(c, true)),
         };
+
+        /* The surface is the truth for both lists: a component added, deleted,
+         * renamed or edited since the file was read is what is written. */
+        delete out.components;
+        delete out.children;
+        if (parts.length) out.components = parts;
+        out.children = this.surface.Children.map((c) => this.nodeOf(c, true));
+        return out;
     }
 
     touch() {
@@ -1494,6 +1511,7 @@ export class Designer {
          * selection already makes. */
         this.tree.refresh();
         this.tree.sync();
+        if (this.workspace.partsTray) this.workspace.partsTray.refresh();
 
         /*
          * **Three assignments for twelve places**, and the reason to say it that
@@ -1511,8 +1529,9 @@ export class Designer {
          * come back.
          */
         this.ide.ActDelCtl.Enabled = has;
-        this.ide.ActRaise.Enabled  = has;
-        this.ide.ActLower.Enabled  = has;
+        const liftable = has && this.selection.every((c) => typeof c.Raise === "function");
+        this.ide.ActRaise.Enabled  = liftable;
+        this.ide.ActLower.Enabled  = liftable;
 
         /* Renaming is two things with one condition: the canvas's command
          * renames the selection, the tree's renames the row the pointer is on.
@@ -1602,6 +1621,7 @@ export class Designer {
         this.pushUndo();
 
         for (const control of this.selection) {
+            if (typeof control.Raise !== "function") continue;
             if (toFront) control.Raise();
             else         control.Lower();
         }
@@ -1812,7 +1832,8 @@ export class Designer {
      */
     align(how) {
         const anchor = this.selected;
-        if (!anchor || this.selection.length < 2) return;
+        if (!anchor || typeof anchor.Bounds !== "function" ||
+            this.selection.length < 2) return;
 
         /*
          * Aligned on the edges one can *see*, not on the coordinates: a theme
@@ -1829,7 +1850,7 @@ export class Designer {
         this.pushUndo();
 
         for (const c of this.selection) {
-            if (c === anchor) continue;
+            if (c === anchor || typeof c.Move !== "function") continue;
             const in_ = this.inset(c);
 
             switch (how) {
@@ -1973,6 +1994,76 @@ export class Designer {
             if ("Children" in c && !c.Item && !c.__node) this.allControls(c, out);
         }
         return out;
+    }
+
+    /* --- non-visual parts --------------------------------------------------
+     *
+     * A `Timer` is declared on the form and has no rectangle, so it is not a
+     * child of the surface and not in `allControls`.  The designer keeps the
+     * live objects here; the `.form` says them in `components`.
+     */
+    /** whether `type` is a part the runtime can declare on a form */
+    isPart(type) { return FormPart.Types().includes(type); }
+
+    /** the parts the drawn form owns, in declaration order */
+    allParts() { return this.parts; }
+
+    /* Builds the `components` list of a node, replacing what was there.  The
+     * parts are not attached to a form: the designer is drawing one, and a
+     * Timer must not start in the IDE. */
+    buildParts(root) {
+        for (const part of this.parts) part.__detach();
+        this.parts = [];
+
+        const specs = root && root.components;
+        if (specs === undefined || specs === null) return;
+        if (!Array.isArray(specs))
+            throw new TypeError("form: \"components\" is not a list");
+
+        const seen = new Set();
+        for (const node of specs) {
+            if (!node || typeof node !== "object" || Array.isArray(node))
+                throw new TypeError("form: a component is not an object");
+            if (typeof node.type !== "string" || !node.type)
+                throw new TypeError("form: a component has no type");
+            if (typeof node.name !== "string" || !CLASS_NAME.IsMatch(node.name))
+                throw new TypeError(`form: '${node.name}' is not a usable component name`);
+            if (seen.has(node.name) ||
+                this.allControls().some((c) => c.Name === node.name) ||
+                node.name in Form.prototype)
+                throw new TypeError(`form: a form already has a member named '${node.name}'`);
+            seen.add(node.name);
+
+            const part = FormPart.New(node.type);
+            part.Name = node.name;
+            part.__setDesigning(true);
+            part.Apply(node.properties || {});
+            this.parts.push(part);
+        }
+    }
+
+    /* A component added from the palette: no point, because there is nowhere
+     * to put it. */
+    addPart(type) {
+        if (!this.path || !this.isPart(type)) return null;
+
+        this.pushUndo();
+        const part = FormPart.New(type);
+        part.Name = this.uniqueName(type);
+        part.__setDesigning(true);
+        this.parts.push(part);
+
+        this.select(part);
+        this.touch();
+        return part;
+    }
+
+    removePart(part) {
+        const at = this.parts.indexOf(part);
+        if (at < 0) return false;
+        part.__detach();
+        this.parts.splice(at, 1);
+        return true;
     }
 
     /* Where a new control ends up: inside the selected container, which is what
@@ -2558,6 +2649,10 @@ export class Designer {
             return true;
         }
 
+        /* A part has no rectangle: there is nowhere to nudge it, and the
+         * arrows do not reorder it in the tray. */
+        if (typeof this.selected.Move !== "function") return false;
+
         /* Anywhere but on a surface the arrows reorder: there is no coordinate
          * to nudge, and the keyboard should reach what the mouse can do. In a
          * stack that is one layer up or down, which is the same sentence -- the
@@ -2641,6 +2736,14 @@ export class Designer {
     dropControl(type, x, y) {
         if (!this.path) return false;
         if (!PALETTE.includes(type) && !this.isComponent(type)) return false;
+
+        /* A part has no point to be dropped at: the gesture is creation, and
+         * the tray is where it lands.  Anywhere on the canvas is a drop that
+         * creates one, exactly as VB's component is dropped on the form. */
+        if (this.isPart(type)) {
+            this.addPart(type);
+            return true;
+        }
 
         const [w, h] = this.sizeFor(type);
 
@@ -2806,6 +2909,11 @@ export class Designer {
         if (!this.path) return;
         if (!PALETTE.includes(type) && !this.isComponent(type)) return;
 
+        if (this.isPart(type)) {
+            this.addPart(type);
+            return;
+        }
+
         const target = into || this.intoShownPage(this.dropTarget());
         if (!this.canTake(target)) return;
 
@@ -2870,7 +2978,9 @@ export class Designer {
         /* `claimed` is what a paste has already promised to the nodes it has not
          * built yet: they are not in the tree, so asking the tree alone would
          * hand the same name to both halves of one paste. */
-        const taken = this.allControls().map((c) => c.Name).concat(claimed);
+        const taken = this.allControls().map((c) => c.Name)
+                          .concat(this.allParts().map((p) => p.Name))
+                          .concat(claimed);
 
         /* Read once: `renamedNode` walks a whole pasted subtree through here. */
         const source = this.ide.formFiles.siblingSource();
@@ -2935,6 +3045,10 @@ export class Designer {
      * control and is named afresh. */
     copySelection(cut = false) {
         if (!this.selection.length) return false;
+        if (this.selection.some((c) => c instanceof FormPart)) {
+            this.ide.log("Components are not copied yet.\n");
+            return false;
+        }
         const clip = this.clipOf(this.selection);
         if (cut) {
             clip.cut  = true;
@@ -3083,7 +3197,9 @@ export class Designer {
 
         if (!quiet) this.reportOrphans(this.selection);
 
-        for (const control of this.selection) control.Delete();
+        for (const control of this.selection)
+            if (control instanceof FormPart) this.removePart(control);
+            else                            control.Delete();
         this.select(null);
         this.touch();
     }
@@ -3303,7 +3419,8 @@ export class Designer {
             this.grid.sync();
             return false;
         }
-        if (this.allControls().some((c) => c !== control && c.Name === newName)) {
+        if (this.allControls().some((c) => c !== control && c.Name === newName) ||
+            this.allParts().some((p) => p !== control && p.Name === newName)) {
             Message.Error("There is already a control named {0}.", newName);
             this.grid.sync();
             return false;

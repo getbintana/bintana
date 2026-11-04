@@ -145,7 +145,7 @@ export class Chrome {
         });
 
         const primary = this.designer.selected;
-        if (primary && this.unsized())
+        if (primary && typeof primary.Bounds === "function" && this.unsized())
             primary.On("Allocated", () => this.layout());
     }
 

@@ -119,6 +119,8 @@ export class ControlTree {
             }
         };
         walk(this.designer.surface, 0);
+        for (const part of this.designer.allParts())
+            parts.push(`part:${part.Name}:${this.typeOf(part)}`);
         return parts.join("|");
     }
 
@@ -146,6 +148,11 @@ export class ControlTree {
             }
         };
         walk(this.designer.surface, TREE_ROOT, false);
+        for (const part of this.designer.allParts()) {
+            if (!this.keeps(part, false)) continue;
+            tree.Add(part.Name, this.labelOf(part, this.designer.surface),
+                     TREE_ROOT, this.iconFor(part));
+        }
         this.muted = false;
 
         this.key = null;            // the tree was emptied; nothing is on it now
@@ -187,7 +194,8 @@ export class ControlTree {
             this.designer.select(null);      // the form itself
             return;
         }
-        const found = this.designer.allControls().find((c) => c.Name === key);
+        const found = [...this.designer.allControls(), ...this.designer.allParts()]
+                          .find((c) => c.Name === key);
         if (found) this.designer.select(found);
     }
 
@@ -204,7 +212,8 @@ export class ControlTree {
     renameFromKey(key) {
         if (!key || key === TREE_ROOT) return;  // the form is renamed from the project tree
 
-        const found = this.designer.allControls().find((c) => c.Name === key);
+        const found = [...this.designer.allControls(), ...this.designer.allParts()]
+                          .find((c) => c.Name === key);
         if (!found) return;
 
         this.designer.select(found);

@@ -4,6 +4,20 @@ What changed in each release, in the terms an application author and whoever
 runs the runtime care about. The full history is `git log`; this file is the
 one-page answer to *what is new since the release I have*.
 
+## Unreleased
+
+### Runtime and IDE
+
+- **A `Timer` can be declared in a `.form`.** The file carries it in
+  `components`, the loader binds it to the form by name, and `Timer1_Tick` is
+  the form's handler -- the same rule a control's event follows. `FormPart` is
+  the base for a form's non-visual objects; `Timer` is the first one.
+- The designer has a **component tray** under the canvas: the palette's
+  `Timer` creates one there (or a drop on the canvas does), the tree lists it,
+  the property grid edits `Delay` and `Enabled`, a double click opens the
+  handler, and a save writes `components`. A Timer is not started while the
+  form is being drawn; a closed form stops its timers.
+
 ## 0.3.0 — 2026-11-04
 
 [Compare with 0.2.1](https://github.com/getbintana/bintana/compare/v0.2.1...v0.3.0)
