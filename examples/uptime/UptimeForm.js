@@ -47,6 +47,12 @@ class UptimeForm extends Form {
         this.applyConfig(this.config);
 
         if (this.selfTest) {
+            /* Save a configuration through the form once, so the settings row
+             * is exercised as well as the network and the database. */
+            this.SpinInterval.Value = 1;
+            this.SpinTimeout.Value  = 2000;
+            this.BtnSaveConfig_Click();
+
             /* A server of our own, so the example runs the same way on a
              * machine with no network: one 200, one 500 and one refused port. */
             this.server = Http.Server({ Host: "local", Port: 0 });
