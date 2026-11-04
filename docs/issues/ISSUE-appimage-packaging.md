@@ -40,7 +40,7 @@ Electron's `electron-builder` writes all of them from one configuration.
 ## How much it mattered
 
 It works, but a part of it is noticeably worse: handing one file to a person
-who is not on the distribution's package manager is a tarball and a README,
-and the audit's own list of what a newcomer needs — "dated releases, a
-changelog, Flathub, complete examples, a forum" (docs/audit-2026-10.md §5) —
-is answered by none of it.
+who is not on the distribution's package manager is a tarball and a README.
+The audit's trust signals include a dated release, a changelog, Flathub,
+complete examples and a forum (docs/audit-2026-10.md §5); 0.3.0 supplies the
+first two, and none of them is an AppImage.
