@@ -31,8 +31,10 @@ one-page answer to *what is new since the release I have*.
   the reason. `Checks`, `Sites` and `Config` are three Models over the same
   `Db`; `Config` holds the interval and timeout, and the first time the
   database is created `sites.json` is imported into the `sites` table once
-  (`Seeded`), then the table is the source. The rows are `Record`/`Table`, not
-  hand-built SQL.
+  (`Seeded`), then the table is the source. `Config` is edited in a popover
+  behind the *Settings* button beside *Check now*, and the `--selftest` half
+  lives in `SelfTest.js` so the form reads the same either way. The rows are
+  `Record`/`Table`, not hand-built SQL.
 
 ## 0.3.0 — 2026-11-04
 

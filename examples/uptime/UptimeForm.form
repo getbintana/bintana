@@ -89,57 +89,15 @@
             "Icon": "view-refresh-symbolic",
             "Width": 130
           }
-        }
-      ]
-    },
-    {
-      "type": "Panel",
-      "name": "Settings",
-      "properties": {
-        "Arrangement": "Horizontal",
-        "Spacing": 8,
-        "HAlign": "Fill"
-      },
-      "children": [
-        {
-          "type": "Label",
-          "name": "LblEvery",
-          "properties": { "Text": "Every", "VAlign": "Center" }
-        },
-        {
-          "type": "SpinBox",
-          "name": "SpinInterval",
-          "properties": { "Min": 1, "Max": 3600, "Step": 1, "Value": 30, "Width": 90 }
-        },
-        {
-          "type": "Label",
-          "name": "LblSeconds",
-          "properties": { "Text": "s", "VAlign": "Center" }
-        },
-        {
-          "type": "Label",
-          "name": "LblTimeout",
-          "properties": { "Text": "Timeout", "VAlign": "Center" }
-        },
-        {
-          "type": "SpinBox",
-          "name": "SpinTimeout",
-          "properties": { "Min": 100, "Max": 60000, "Step": 100, "Value": 5000, "Width": 110 }
-        },
-        {
-          "type": "Label",
-          "name": "LblMillis",
-          "properties": { "Text": "ms", "VAlign": "Center" }
         },
         {
           "type": "Button",
-          "name": "BtnSaveConfig",
-          "properties": { "Text": "Save", "Icon": "document-save-symbolic", "Width": 100 }
-        },
-        {
-          "type": "Label",
-          "name": "LblSites",
-          "properties": { "Text": "", "Style": "dim-label", "HExpand": true, "VAlign": "Center" }
+          "name": "BtnSettings",
+          "properties": {
+            "Text": "Settings",
+            "Icon": "emblem-system-symbolic",
+            "Width": 120
+          }
         }
       ]
     },

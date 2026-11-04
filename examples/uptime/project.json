@@ -6,6 +6,7 @@
     "Config.js",
     "Site.js",
     "Check.js",
+    "SelfTest.js",
     "UptimeForm.js"
   ],
   "description": "Every 30 s, ask a list of URLs and keep what came back"

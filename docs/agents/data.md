@@ -713,7 +713,8 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
 - **The example is `examples/uptime`**: `Check.record`, `Site.record` and
   `Config.record` are three Models over one `Connection` (`uptime.db`).
   `Checks` is the history, `Sites` the watch list, and `Config` the one row of
-  interval/timeout settings. The first time the database is created,
-  `sites.json` is imported into `sites` and `Config.Seeded` makes that a
-  one-time act; after it the table is the source.
+  interval/timeout settings, edited in a popover from the form. The first time
+  the database is created, `sites.json` is imported into `sites` and
+  `Config.Seeded` makes that a one-time act; after it the table is the source.
+  The `--selftest` half is `SelfTest.js`, beside the form.
 

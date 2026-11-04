@@ -16,6 +16,10 @@
  * A failure is a row too -- status 0 and the message in `error` -- because the
  * question is *is it up*, and an exception is an answer.
  *
+ * The settings live in a popover behind the button beside *Check now*.  The
+ * one thing a selftest changes is in `SelfTest.js`, so this class is the same
+ * program either way.
+ *
  *   ./build/bintana examples/uptime
  *   ./build/bintana examples/uptime --selftest   # local server, then close
  */
@@ -24,11 +28,12 @@
 class UptimeForm extends Form {
 
     Form_Open() {
-        this.selfTest = Application.Arguments.includes("--selftest");
-        this.busy     = false;
-        this.rounds   = 0;
-        this.count    = 0;
-        this.queue    = [];
+        this.busy   = false;
+        this.rounds = 0;
+        this.count  = 0;
+        this.queue  = [];
+
+        this.settings = this.buildSettings();
 
         /* The form's Models are parts over the one `Db` connection and the
          * `.record` shapes beside this file; the first use creates each table
@@ -46,35 +51,73 @@ class UptimeForm extends Form {
 
         this.applyConfig(this.config);
 
-        if (this.selfTest) {
-            /* Save a configuration through the form once, so the settings row
-             * is exercised as well as the network and the database. */
-            this.SpinInterval.Value = 1;
-            this.SpinTimeout.Value  = 2000;
-            this.BtnSaveConfig_Click();
-
-            /* A server of our own, so the example runs the same way on a
-             * machine with no network: one 200, one 500 and one refused port. */
-            this.server = Http.Server({ Host: "local", Port: 0 });
-            this.server.Request = (req) => {
-                if (req.Path === "/ok")        req.Answer(200, "ok");
-                else if (req.Path === "/fail") req.Answer(500, "not today");
-                else                           req.Answer(404, "no");
-            };
-            this.server.Start();
-
-            const base = this.server.Url.replace(/\/+$/, "");
-            this.sites = [
-                { Name: "local 200", Url: `${base}/ok` },
-                { Name: "local 500", Url: `${base}/fail` },
-                { Name: "closed",    Url: "http://127.0.0.1:1" },
-            ];
-            this.Clock.Delay = 500;
-            this.Clock.Start();
-        }
-
-        this.LblSites.Text = `${this.sites.length} sites`;
+        this.test = SelfTest.For(this);
+        this.test.start();
         this.poll();
+    }
+
+    /* --- the settings popover ---------------------------------------------- */
+
+    buildSettings() {
+        const panel = new Panel();
+        panel.Arrangement = "Vertical";
+        panel.Spacing     = 8;
+        panel.Margin      = 12;
+        panel.Width       = 300;
+
+        const row = (text, spin, suffix) => {
+            const line = new Panel();
+            line.Arrangement = "Horizontal";
+            line.Spacing     = 6;
+
+            const label = new Label();
+            label.Text   = text;
+            label.Width  = 80;
+            label.VAlign = "Center";
+            line.Add(label);
+            line.Add(spin);
+
+            if (suffix) {
+                const unit = new Label();
+                unit.Text   = suffix;
+                unit.VAlign = "Center";
+                line.Add(unit);
+            }
+            return line;
+        };
+
+        this.SpinInterval = new SpinBox();
+        this.SpinInterval.Min   = 1;
+        this.SpinInterval.Max   = 3600;
+        this.SpinInterval.Step  = 1;
+        this.SpinInterval.Value = 30;
+        this.SpinInterval.Width = 100;
+
+        this.SpinTimeout = new SpinBox();
+        this.SpinTimeout.Min   = 100;
+        this.SpinTimeout.Max   = 60000;
+        this.SpinTimeout.Step  = 100;
+        this.SpinTimeout.Value = 5000;
+        this.SpinTimeout.Width = 110;
+
+        panel.Add(row("Every", this.SpinInterval, "s"));
+        panel.Add(row("Timeout", this.SpinTimeout, "ms"));
+
+        const save = new Button();
+        save.Text = "Save";
+        save.Icon = "document-save-symbolic";
+        save.On("Click", () => this.saveConfig());
+        panel.Add(save);
+
+        return panel;
+    }
+
+    BtnSettings_Click() {
+        if (Popover.IsOpen(this.settings)) {
+            Popover.Close(this.settings);
+            return;
+        }
+        Popover.Show(this.settings, this.BtnSettings, { Position: "Bottom" });
     }
 
     /* The one row of settings.  A new database gets it, and `Seeded` says
@@ -135,13 +178,16 @@ class UptimeForm extends Form {
         this.LblStatus.Text = `every ${interval} s — ${this.sites.length} sites`;
     }
 
-    BtnSaveConfig_Click() {
+    saveConfig() {
         this.config.Interval = this.SpinInterval.Value;
         this.config.Timeout  = this.SpinTimeout.Value;
         this.Config.Save(this.config);
         this.applyConfig(this.config);
         this.LblStatus.Text = `saved: every ${this.config.Interval} s, ${this.config.Timeout} ms`;
+        Popover.Close(this.settings);
     }
+
+    /* --- the checks -------------------------------------------------------- */
 
     Clock_Tick() {
         this.poll();
@@ -156,8 +202,7 @@ class UptimeForm extends Form {
      * `busy` means a slow answer cannot stack a second round on top of itself.
      */
     poll() {
-        if (this.busy || this.sites.length === 0 || !this.server && this.selfTest)
-            return;
+        if (this.busy || this.sites.length === 0) return;
 
         this.busy  = true;
         this.queue = this.sites.slice();
@@ -170,7 +215,7 @@ class UptimeForm extends Form {
             this.busy = false;
             this.rounds++;
             this.LblStatus.Text = `round ${this.rounds} — ${this.count} checks`;
-            if (this.selfTest && this.rounds >= 2) this.finish();
+            this.test.afterRound();
             return;
         }
 
@@ -203,25 +248,11 @@ class UptimeForm extends Form {
     }
 
     finish() {
-        if (this.selfTest) {
-            print(`uptime: ${this.rounds} rounds, ${this.count} checks`);
-
-            const path = File.Join(Application.Directory, this.Db.Path);
-            this.Db.Close();
-            try { File.Delete(path); } catch (e) { /* already gone */ }
-        }
-
-        if (this.server) {
-            this.server.Stop();
-            this.server = null;
-        }
+        this.test.finish();
         this.Close();
     }
 
     Form_Close() {
-        if (this.server) {
-            this.server.Stop();
-            this.server = null;
-        }
+        if (this.test) this.test.stop();
     }
 }
