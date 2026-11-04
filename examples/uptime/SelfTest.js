@@ -30,6 +30,14 @@ export class SelfTest {
         /* The same event the Save button raises; the host's handler saves. */
         this.form.settings.Emit("Save", 1, 2000);
 
+        /* Add and remove one site through the editor, so both gestures and the
+         * Site/Table round trip are exercised; the list ends as it started. */
+        this.form.settings.TxtName.Text = "selftest";
+        this.form.settings.TxtUrl.Text  = "http://127.0.0.1:1";
+        this.form.settings.BtnAdd_Click();
+        this.form.settings.TblSites.Index = this.form.settings.Sites.length - 1;
+        this.form.settings.BtnRemove_Click();
+
         this.server = Http.Server({ Host: "local", Port: 0 });
         this.server.Request = (req) => {
             if (req.Path === "/ok")        req.Answer(200, "ok");

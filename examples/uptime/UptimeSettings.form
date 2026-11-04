@@ -2,8 +2,8 @@
   "format": "bintana-form/1",
   "class": "UptimeSettings",
   "properties": {
-    "Width": 266,
-    "Height": 116,
+    "Width": 428,
+    "Height": 345,
     "Arrangement": "Vertical",
     "Spacing": 8,
     "Padding": 6
@@ -18,7 +18,7 @@
         "Height": 74,
         "RowSpacing": 6,
         "Spacing": 6,
-        "Width": 266
+        "Width": 428
       },
       "children": [
         {
@@ -41,7 +41,7 @@
             "Step": 1,
             "Suffix": " s",
             "Value": 30,
-            "Width": 178
+            "Width": 260
           }
         },
         {
@@ -64,8 +64,81 @@
             "Step": 100,
             "Suffix": " ms",
             "Value": 5000,
-            "Width": 178
+            "Width": 260
           }
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblSites",
+      "properties": {
+        "Text": "Sites",
+        "Style": "dim-label"
+      }
+    },
+    {
+      "type": "TableView",
+      "name": "TblSites",
+      "properties": {
+        "Columns": [
+          { "Text": "Name", "Width": 120 },
+          { "Text": "URL", "Width": 0 }
+        ],
+        "HAlign": "Fill",
+        "Height": 110,
+        "MinHeight": 80,
+        "VExpand": true
+      }
+    },
+    {
+      "type": "Panel",
+      "name": "AddSite",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 6,
+        "HAlign": "Fill"
+      },
+      "children": [
+        {
+          "type": "TextBox",
+          "name": "TxtName",
+          "properties": { "Placeholder": "Name", "Width": 90 }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtUrl",
+          "properties": { "Placeholder": "https://…", "Width": 160 }
+        },
+        {
+          "type": "Button",
+          "name": "BtnAdd",
+          "properties": { "Text": "Add", "Icon": "list-add-symbolic", "Width": 80 }
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "SiteButtons",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 6,
+        "HAlign": "Fill"
+      },
+      "children": [
+        {
+          "type": "Button",
+          "name": "BtnRemove",
+          "properties": {
+            "Text": "Remove",
+            "Icon": "list-remove-symbolic",
+            "Width": 120
+          }
+        },
+        {
+          "type": "Panel",
+          "name": "Spacer",
+          "properties": { "HExpand": true }
         }
       ]
     },
@@ -73,10 +146,9 @@
       "type": "Button",
       "name": "BtnSave",
       "properties": {
-        "Height": 24,
         "Icon": "document-save-symbolic",
         "Text": "Save",
-        "Width": 254
+        "Width": 416
       }
     }
   ]

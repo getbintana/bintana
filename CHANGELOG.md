@@ -33,9 +33,11 @@ one-page answer to *what is new since the release I have*.
   database is created `sites.json` is imported into the `sites` table once
   (`Seeded`), then the table is the source. `Config` is edited in a
   `UptimeSettings` component with its own `.form`, shown in a popover behind
-  the *Settings* button beside *Check now*, and the `--selftest` half lives in
-  `SelfTest.js` so the form reads the same either way. The rows are
-  `Record`/`Table`, not hand-built SQL.
+  the *Settings* button beside *Check now*: the interval and timeout are
+  `DecimalBox` fields with their units inside, and the same popover lists the
+  sites with Add/Remove. The `--selftest` half lives in `SelfTest.js` so the
+  form reads the same either way. The rows are `Record`/`Table`, not
+  hand-built SQL.
 
 ## 0.3.0 — 2026-11-04
 

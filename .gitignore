@@ -7,3 +7,4 @@ tests/widgets/RoundTrip.form
 flatpak/.flatpak-builder/
 flatpak/repo/
 build-flatpak/
+examples/uptime/*.db

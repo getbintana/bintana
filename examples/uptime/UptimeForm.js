@@ -36,6 +36,8 @@ class UptimeForm extends Form {
         this.settings = new UptimeSettings();
         this.settings.On("Save", (interval, timeout) =>
             this.saveConfig(interval, timeout));
+        this.settings.On("AddSite", (name, url) => this.addSite(name, url));
+        this.settings.On("RemoveSite", (at) => this.removeSite(at));
 
         /* The form's Models are parts over the one `Db` connection and the
          * `.record` shapes beside this file; the first use creates each table
@@ -43,6 +45,7 @@ class UptimeForm extends Form {
         this.config = this.loadConfig();
         if (!this.config.Seeded) this.seedSites();
         this.sites = this.Sites.All().filter((s) => s.Active);
+        this.settings.Sites = this.sites;
 
         for (const row of this.Checks.All()) {
             if (this.History.Count >= 200) this.History.RemoveRow(0);
@@ -112,6 +115,24 @@ class UptimeForm extends Form {
         this.LblStatus.Text = imported
             ? `imported ${imported} sites from sites.json`
             : "sites.json has no sites";
+    }
+
+    addSite(name, url) {
+        this.Sites.Insert(new Site({ Name: name, Url: url, Active: true }));
+        this.refreshSites();
+    }
+
+    removeSite(at) {
+        const rows = this.Sites.All();
+        if (at < 0 || at >= rows.length) return;
+        this.Sites.Delete(rows[at]);
+        this.refreshSites();
+    }
+
+    refreshSites() {
+        this.sites = this.Sites.All().filter((s) => s.Active);
+        this.settings.Sites = this.sites;
+        this.LblStatus.Text = `${this.sites.length} sites`;
     }
 
     applyConfig(cfg) {

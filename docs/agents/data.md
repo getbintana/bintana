@@ -714,7 +714,8 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   `Config.record` are three Models over one `Connection` (`uptime.db`).
   `Checks` is the history, `Sites` the watch list, and `Config` the one row of
   interval/timeout settings, edited by a `UptimeSettings` component with its
-  own `.form` and shown in a popover. The first time
+  own `.form` and shown in a popover; the same popover lists the sites and
+  adds or removes them through the `Sites` model. The first time
   the database is created, `sites.json` is imported into `sites` and
   `Config.Seeded` makes that a one-time act; after it the table is the source.
   The `--selftest` half is `SelfTest.js`, beside the form.
