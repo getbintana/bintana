@@ -92,9 +92,21 @@ function zipBuild(entries, extra) {
  * own (or it writes a profile into the developer's) and the `C` locale (or the
  * booleans come out as VERDADERO and the decimals with commas). `-1` as the last
  * filter token exports every sheet, one file each.
+ *
+ * **A profile of its own**, named on the command line and not only implied by
+ * `HOME`: a LibreOffice already running for the person at the machine answers
+ * the request with *its* profile, so the conversion came back in Spanish while
+ * `LANGUAGE=C` was right there in the environment.  The explicit
+ * `UserInstallation` is what starts a second process instead of talking to the
+ * first.
  */
+function sofficeProfile(home) {
+    return `-env:UserInstallation=file://${File.Join(home, "libreoffice")}`;
+}
+
 function sofficeCsv(file, outdir, home) {
-    const done = Exec.Wait(["soffice", "--headless", "--norestore", "--convert-to",
+    const done = Exec.Wait(["soffice", sofficeProfile(home), "--headless", "--norestore",
+                            "--convert-to",
                             "csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,false,false,false,-1",
                             "--outdir", outdir, file],
                            { Timeout: 120000, Environment: { HOME: home, LC_ALL: "C", LANG: "C" } });
@@ -24959,7 +24971,8 @@ class Form1 extends Form {
 
             /* The money *format* is only visible where cells are shown: the CSV
              * filter writes a number as the number it is. */
-            Exec.Wait(["soffice", "--headless", "--norestore", "--convert-to", "html", "--outdir",
+            Exec.Wait(["soffice", sofficeProfile(home), "--headless", "--norestore",
+                       "--convert-to", "html", "--outdir",
                        File.Join(dir, "html"), out],
                       { Timeout: 120000, Environment: { HOME: home, LC_ALL: "C", LANG: "C" } });
             const html = File.Exists(File.Join(dir, "html", "t.html")) ? File.Load(File.Join(dir, "html", "t.html")) : "";
