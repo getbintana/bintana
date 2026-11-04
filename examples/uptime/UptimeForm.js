@@ -13,6 +13,24 @@
  */
 "use strict";
 
+/* One check in the database.  This is the shape `Table` uses: the column
+ * names come from `Naming`, the key is what `Save` follows, and `Insert` is
+ * the insert.  `Record` + `Table` are the runtime's ORM; only the
+ * `CREATE TABLE` below is still written by hand (the plan wants the shape to
+ * write it, one day). */
+class Check extends Record {
+    static Naming = "snake";
+    static Fields = {
+        Id:     Field.Int({ key: true }),
+        At:     Field.Text({ required: true }),
+        Site:   Field.Text({ required: true }),
+        Url:    Field.Text({ required: true }),
+        Status: Field.Int(),
+        Ms:     Field.Int(),
+        Error:  Field.Text(),
+    };
+}
+
 class UptimeForm extends Form {
 
     Form_Open() {
@@ -22,10 +40,21 @@ class UptimeForm extends Form {
         this.count    = 0;
         this.queue    = [];
 
-        this.Db.Query("CREATE TABLE IF NOT EXISTS checks (" +
-                      "at TEXT NOT NULL, site TEXT NOT NULL, url TEXT NOT NULL, " +
-                      "status INTEGER NOT NULL, ms INTEGER NOT NULL, " +
-                      "error TEXT NOT NULL)");
+        this.Db.Script(
+            "CREATE TABLE IF NOT EXISTS checks (" +
+            "id INTEGER PRIMARY KEY, at TEXT NOT NULL, site TEXT NOT NULL, " +
+            "url TEXT NOT NULL, status INTEGER NOT NULL, " +
+            "ms INTEGER NOT NULL, error TEXT NOT NULL)");
+
+        /* The ORM: one shape, one table, no hand-built row. */
+        this.Checks = this.Db.Table("checks", Check);
+
+        for (const row of this.Checks.All()) {
+            if (this.History.Count >= 200) this.History.RemoveRow(0);
+            this.History.Add([row.Site, String(row.Status), String(row.Ms),
+                              row.At, row.Error]);
+            this.count++;
+        }
 
         this.sites = this.loadSites();
 
@@ -122,14 +151,15 @@ class UptimeForm extends Form {
     record(site, status, ms, error) {
         const at = Time.Now;
 
-        this.Db.Execute("INSERT INTO checks (at, site, url, status, ms, error) " +
-                        "VALUES (?, ?, ?, ?, ?, ?)",
-                        [at, site.Name, site.Url, status, ms, error]);
-        this.Checks.Add([site.Name, String(status), String(ms), at, error]);
+        this.Checks.Insert(new Check({
+            At: at, Site: site.Name, Url: site.Url,
+            Status: status, Ms: ms, Error: error,
+        }));
+        this.History.Add([site.Name, String(status), String(ms), at, error]);
         this.count++;
 
         /* The table is a window, not the record: the database keeps all of it. */
-        if (this.Checks.Count > 200) this.Checks.RemoveRow(0);
+        if (this.History.Count > 200) this.History.RemoveRow(0);
     }
 
     finish() {

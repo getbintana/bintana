@@ -69,7 +69,7 @@
     },
     {
       "type": "TableView",
-      "name": "Checks",
+      "name": "History",
       "properties": {
         "Columns": [
           { "Text": "Site",   "Width": 120 },
