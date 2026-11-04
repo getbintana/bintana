@@ -14821,7 +14821,7 @@
           "Params": 1,
           "Signature": "(type)",
           "Returns": "",
-          "Doc": "a new part of `type` -- `Timer` today; a name that is not a part is refused by name",
+          "Doc": "a new part of `type` -- `Timer`, `Connection` or `HttpClient`; a name that is not a part is refused by name",
           "Native": false
         },
         {
@@ -14867,6 +14867,15 @@
           "Signature": "()",
           "Returns": "",
           "Doc": "the properties that hold prose a person reads -- none by default, and the reason a part's values are not looked up in a catalogue",
+          "Native": false
+        },
+        {
+          "Name": "TypeName",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "(part)",
+          "Returns": "",
+          "Doc": "the name a part is written under in a `.form` -- the registry's name, which is not always the class's own (`Connection` is a part, the C `Connection` it wraps is a type)",
           "Native": false
         },
         {

@@ -222,11 +222,11 @@ rebinds the component itself, which is what makes its `Emit` arrive as
 `Name_Event` on the host.
 
 **Not every object a form owns is a widget.** A `FormPart` is a plain class in
-`rad.js` with no GTK control behind it: a `Timer` and, later, a connection or a
-client. The `.form` lists one in `components`, `Form.BuildParts` (JavaScript,
-called by `bta_form.c` after the controls) makes it, and its event is the same
-`<Name>_<Event>` method a control's is. There is no `Children`, no `Bounds` and
-no wrapper; the form's own property is what keeps it alive.
+`rad.js` with no GTK control behind it: a `Timer`, a `Connection` and an
+`HttpClient`. The `.form` lists one in `components`, `Form.BuildParts`
+(JavaScript, called by `bta_form.c` after the controls) makes it, and its event
+is the same `<Name>_<Event>` method a control's is. There is no `Children`, no
+`Bounds` and no wrapper; the form's own property is what keeps it alive.
 
 `Widget` and `Control` and `Container` are real, instantiable-by-inheritance
 classes with no `build` function of their own; constructing one throws

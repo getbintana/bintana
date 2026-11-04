@@ -13,10 +13,14 @@ one-page answer to *what is new since the release I have*.
   the form's handler -- the same rule a control's event follows. `FormPart` is
   the base for a form's non-visual objects; `Timer` is the first one.
 - The designer has a **component tray** under the canvas: the palette's
-  `Timer` creates one there (or a drop on the canvas does), the tree lists it,
-  the property grid edits `Delay` and `Enabled`, a double click opens the
-  handler, and a save writes `components`. A Timer is not started while the
-  form is being drawn; a closed form stops its timers.
+  `Timer`, `Connection` and `HttpClient` create one there (or a drop on the
+  canvas does), the tree lists it, the property grid edits it, a double click
+  opens the handler, and a save writes `components`. A Timer is not started
+  while the form is being drawn; a closed form stops its timers and closes its
+  connection.
+- **`examples/pulse`** puts the three together: a Timer polls a local
+  `Http.Server` through an `HttpClient`, and each beat is one row in SQLite
+  through a `Connection`.
 
 ## 0.3.0 — 2026-11-04
 

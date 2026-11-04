@@ -2234,7 +2234,8 @@ function* p_palette(ide) {
      * available half of the declared one, and never more than it. */
     const declared = PALETTE_TABS.flatMap((t) => t.types);
     eq("the palette offers the available half of what it declares",
-       JSON.stringify(declared.filter((t) => Widget.Available(t))),
+       JSON.stringify(declared.filter((t) => Widget.Available(t) ||
+                                           FormPart.Types().includes(t))),
        JSON.stringify(declared.filter((t) => PALETTE.includes(t))));
 
     const beforeAdd = ide.Surface.Children.length;
@@ -2301,6 +2302,20 @@ function* p_palette(ide) {
        ide.Surface.Children.length, beforeSurface);
     ide.designer.deleteSelected();
     yield* settled(ide);
+
+    /* The other two parts are on the same tray, and the grid asks the class
+     * what it has without opening a database or a client. */
+    for (const type of ["Connection", "HttpClient"]) {
+        palette(ide, type).Click();
+        yield* settled(ide);
+        const made = ide.designer.selected;
+        eq(`${type} is a part`, made instanceof FormPart, true);
+        eq(`and its type is ${type}`, FormPart.TypeName(made), type);
+        check(`${type} is in the tray`,
+              (ide.designer.workspace.partsTray.buttons[made.Name] || null) !== null);
+        ide.designer.deleteSelected();
+        yield* settled(ide);
+    }
 
     /* --- designer: dropping from the palette -----------------------------
      * Dragging a type to the form puts it where it is dropped, instead of in the

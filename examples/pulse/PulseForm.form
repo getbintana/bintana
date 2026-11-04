@@ -1,0 +1,105 @@
+{
+  "format": "bintana-form/1",
+  "class": "PulseForm",
+  "properties": {
+    "Text": "Pulse",
+    "Width": 560,
+    "Height": 300
+  },
+  "components": [
+    {
+      "type": "Timer",
+      "name": "Clock",
+      "properties": {
+        "Delay": 1000,
+        "Enabled": true
+      }
+    },
+    {
+      "type": "Connection",
+      "name": "Db",
+      "properties": {
+        "Path": "pulse.db"
+      }
+    },
+    {
+      "type": "HttpClient",
+      "name": "Api",
+      "properties": {
+        "BaseUrl": "",
+        "Timeout": 5000,
+        "Http1": true,
+        "FollowRedirects": true
+      }
+    }
+  ],
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblTitle",
+      "properties": {
+        "Text": "Pulse — Timer, Connection and HttpClient",
+        "X": 20,
+        "Y": 16,
+        "Width": 500,
+        "Height": 28,
+        "Font": "Cantarell Bold 13"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Text": "starting…",
+        "X": 20,
+        "Y": 56,
+        "Width": 510,
+        "Height": 24
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblBeat",
+      "properties": {
+        "Text": "no beat yet",
+        "X": 20,
+        "Y": 92,
+        "Width": 510,
+        "Height": 24
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblRows",
+      "properties": {
+        "Text": "no rows yet",
+        "X": 20,
+        "Y": 124,
+        "Width": 510,
+        "Height": 24
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPoll",
+      "properties": {
+        "Text": "Poll now",
+        "X": 20,
+        "Y": 176,
+        "Width": 120,
+        "Height": 36
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblHint",
+      "properties": {
+        "Text": "Each beat is one row in pulse.db; --selftest closes after three.",
+        "X": 160,
+        "Y": 184,
+        "Width": 380,
+        "Height": 24
+      }
+    }
+  ]
+}

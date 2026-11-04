@@ -75,6 +75,7 @@ export class ControlTree {
      * shown as what it will be, not as the Label standing in for it. */
     typeOf(control) {
         if (control.__node) return control.__node.type;
+        if (control instanceof FormPart) return FormPart.TypeName(control);
         return control.constructor.__type || control.constructor.name;
     }
 

@@ -557,8 +557,19 @@ GLOBAL.FormPart = class FormPart {
     static Types() { return ownNames(formPartTypes).sort(); }
 
     /**
-     * a new part of `type` -- `Timer` today; a name that is not a part is
-     * refused by name
+     * the name a part is written under in a `.form` -- the registry's name,
+     * which is not always the class's own (`Connection` is a part, the C
+     * `Connection` it wraps is a type)
+     */
+    static TypeName(part) {
+        for (const name in formPartTypes)
+            if (part && formPartTypes[name] === part.constructor) return name;
+        return part && part.constructor ? part.constructor.name : "";
+    }
+
+    /**
+     * a new part of `type` -- `Timer`, `Connection` or `HttpClient`; a name
+     * that is not a part is refused by name
      */
     static New(type) {
         if (!hasOwn.call(formPartTypes, type))
@@ -684,6 +695,186 @@ GLOBAL.Timer = class Timer extends FormPart {
 
 /* The first part the loader can make.  A second one registers itself here. */
 formPartTypes.Timer = GLOBAL.Timer;
+
+/* ------------------------------------------------------------------------
+ * Connection -- the database a form owns.
+ *
+ *   "components": [
+ *       { "type": "Connection", "name": "Db",
+ *         "properties": { "Path": "data/clients.db" } }
+ *   ]
+ *
+ *   this.Db.Query("select * from clients");
+ *
+ * The path is relative to the project.  The database is opened on first use,
+ * not while a form is loading or being drawn, and `Close()` (or the form's
+ * close, through `Stop`) releases it.
+ * ---------------------------------------------------------------------- */
+
+class ConnectionPart extends FormPart {
+
+    static get Events()     { return []; }
+    static get Properties() { return ["Path"]; }
+
+    constructor() {
+        super();
+        this._path = "";
+        this._db   = null;
+    }
+
+    /** the database file, relative to the project; `""` when it is not set */
+    get Path() { return this._path; }
+    set Path(value) {
+        if (typeof value !== "string")
+            throw new TypeError("Connection.Path: expected a file name");
+        this._path = value;
+        this.Close();
+    }
+
+    /** the live `Connection`, opened on first use */
+    get Db() {
+        if (!this._db) {
+            if (!this._path)
+                throw new Error("Connection: Path is empty");
+            this._db = Database.Sqlite(File.Join(Application.Directory, this._path));
+        }
+        return this._db;
+    }
+
+    /** runs a query and answers its rows */
+    Query(sql, params)          { return this.Db.Query(sql, params); }
+    /** runs a statement and answers what the driver answers */
+    Execute(sql, params)        { return this.Db.Execute(sql, params); }
+    /** runs several statements */
+    Script(sql)                 { return this.Db.Script(sql); }
+    /** a record class over a table: `Table("clients", Client)` */
+    Table(name, of)             { return this.Db.Table(name, of); }
+    /** every table name */
+    Tables()                    { return this.Db.Tables(); }
+    /** the columns of one table */
+    Columns(table)              { return this.Db.Columns(table); }
+    /** one transaction around `fn` */
+    Transaction(fn)             { return this.Db.Transaction(fn); }
+    /** opens it now rather than on the first query */
+    Open()                      { this.Db; return this; }
+    /** closes it; the next use opens it again */
+    Close() {
+        if (this._db) {
+            this._db.Close();
+            this._db = null;
+        }
+        return this;
+    }
+    /** the form's close, and `RemovePart`, come through here */
+    Stop() { return this.Close(); }
+}
+
+formPartTypes.Connection = ConnectionPart;
+
+/* ------------------------------------------------------------------------
+ * HttpClient -- a client a form owns, with its own base URL and session.
+ *
+ *   "components": [
+ *       { "type": "HttpClient", "name": "Api",
+ *         "properties": { "BaseUrl": "https://example.com", "Timeout": 5000 } }
+ *   ]
+ *
+ *   this.Api.Get("/status", {}, (res) => this.Lbl.Text = res.Body);
+ *
+ * The client is made on first use, and changing one of the properties below
+ * drops it: the next request starts a session with the new settings.  For
+ * anything not named here, `this.Api.Client` is the `HttpClient` itself.
+ * ---------------------------------------------------------------------- */
+
+class HttpClientPart extends FormPart {
+
+    static get Events()     { return []; }
+    static get Properties() {
+        return ["BaseUrl", "Timeout", "Http1", "FollowRedirects"];
+    }
+
+    constructor() {
+        super();
+        this._baseUrl = "";
+        this._timeout = 10000;
+        this._http1   = false;
+        this._follow  = true;
+        this._client  = null;
+    }
+
+    /** what a relative path in a request is relative to */
+    get BaseUrl() { return this._baseUrl; }
+    set BaseUrl(value) {
+        if (typeof value !== "string")
+            throw new TypeError("HttpClient.BaseUrl: expected text");
+        this._baseUrl = value;
+        this._client  = null;
+    }
+
+    /** milliseconds a call may take; `0` is the callback spelling's forever */
+    get Timeout() { return this._timeout; }
+    set Timeout(value) {
+        if (typeof value !== "number" || !isFinite(value))
+            throw new TypeError("HttpClient.Timeout: expected milliseconds");
+        this._timeout = value;
+        this._client  = null;
+    }
+
+    /** ask for HTTP/1.1; see `Http.Client`'s own `Http1` */
+    get Http1() { return this._http1; }
+    set Http1(value) { this._http1 = !!value; this._client = null; }
+
+    /** follow a `3xx`; default true */
+    get FollowRedirects() { return this._follow; }
+    set FollowRedirects(value) { this._follow = !!value; this._client = null; }
+
+    /** the `HttpClient` itself, made on first use */
+    get Client() {
+        if (!this._client) {
+            this._client = Http.Client({
+                BaseUrl:         this._baseUrl,
+                Timeout:         this._timeout,
+                Http1:           this._http1,
+                FollowRedirects: this._follow,
+            });
+        }
+        return this._client;
+    }
+
+    /** the ordinary read */
+    Get(url, opts, onDone, onError) {
+        return this.Client.Get(url, opts, onDone, onError);
+    }
+    /** the ordinary write */
+    Post(url, body, opts, onDone, onError) {
+        return this.Client.Post(url, body, opts, onDone, onError);
+    }
+    /** replace one */
+    Put(url, body, opts, onDone, onError) {
+        return this.Client.Put(url, body, opts, onDone, onError);
+    }
+    /** change part of one */
+    Patch(url, body, opts, onDone, onError) {
+        return this.Client.Patch(url, body, opts, onDone, onError);
+    }
+    /** no body */
+    Delete(url, opts, onDone, onError) {
+        return this.Client.Delete(url, opts, onDone, onError);
+    }
+    /** the headers and no body */
+    Head(url, opts, onDone, onError) {
+        return this.Client.Head(url, opts, onDone, onError);
+    }
+    /** any method, body and options */
+    Request(method, url, body, opts, onDone, onError) {
+        return this.Client.Request(method, url, body, opts, onDone, onError);
+    }
+
+    /** drops the session; the next request makes a new one */
+    Stop() { this._client = null; return this; }
+}
+
+formPartTypes.HttpClient = HttpClientPart;
 
 /* ------------------------------------------------------------------------
  * Stopwatch -- how long something took.

@@ -175,8 +175,12 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
 - **`FormPart` answers the property grid's five questions**, and `PropertyOptions`
   is one of them: without it the grid called a method the base class did not
   have and a click on the palette failed after the part was made. `Timer`
-  declares `Properties = ["Delay", "Enabled"]` and `Events = ["Tick"]`; a new
-  part declares the same two lists.
+  declares `Properties = ["Delay", "Enabled"]` and `Events = ["Tick"]`;
+  `Connection` declares `Path`, and `HttpClient` declares `BaseUrl`, `Timeout`,
+  `Http1` and `FollowRedirects`. The last two are **registered under those
+  names** while their classes are wrappers (`ConnectionPart`, `HttpClientPart`):
+  `FormPart.TypeName(part)` is what the tree, the tray and the save write, not
+  `constructor.name`.
 
 ## IDE traps
 

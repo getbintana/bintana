@@ -607,7 +607,7 @@ FormPart.prototype.Serialize = function () {
         properties[key] = value;
     }
 
-    return { type: ctor.name, name: this.Name, properties };
+    return { type: FormPart.TypeName(this), name: this.Name, properties };
 };
 
 /*

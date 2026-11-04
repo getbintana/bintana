@@ -735,6 +735,7 @@ export class PropertyGrid {
      */
     typeName() {
         if (this.target && this.target.__node) return this.target.__node.type;
+        if (this.target instanceof FormPart) return FormPart.TypeName(this.target);
         if (this.target) return this.target.constructor.name;
 
         return this.designer.root ? this.designer.root.class : "Form";

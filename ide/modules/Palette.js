@@ -57,7 +57,7 @@ export const PALETTE_TABS = [
                               "Terminal", "RowList", "Flow", "DrawingArea", "Video"] },
     { name: "Boxes",  types: ["Panel", "Grid", "Frame", "Expander", "Scroller", "AspectFrame"] },
     { name: "Split",  types: ["Split", "Notebook", "Switcher", "Overlay"] },
-    { name: "Components", types: ["Timer"] },
+    { name: "Components", types: ["Timer", "Connection", "HttpClient"] },
 ];
 
 /*
@@ -74,6 +74,10 @@ export const PALETTE_ICON = {
     /* A part and not a control: the clock is the one thing a Timer is, and the
      * two theme names cover the desktops this tree is built on. */
     Timer:    ["alarm-symbolic", "preferences-system-time-symbolic", "bta-component-symbolic"],
+    /* A database and a client are not controls and have no palette picture of
+     * their own; the runtime's own two are the fallback. */
+    Connection: ["drive-harddisk-symbolic", "bta-file-symbolic"],
+    HttpClient: ["network-workgroup-symbolic", "bta-code-symbolic"],
     Button:   ["input-mouse-symbolic",      "bta-button-symbolic"],
     Label:    ["insert-text-symbolic",      "bta-label-symbolic"],
     Image:    ["insert-image-symbolic",     "bta-image-symbolic"],

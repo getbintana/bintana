@@ -465,10 +465,16 @@ icon when the theme has one by that name (`gtkapplication.c`).
 
 - **A `FormPart` is not a `Widget`.** It has no GTK control, no `Children` and
   no `Bounds`; the form owns it by name (`this.Clock`) and the `.form` carries
-  it in `components`, a list beside `actions` and `menus`. `Timer` is the first
-  one; a part declares `static Properties` and `static Events`, and `Emit`
-  dispatches to its own `On` handler first and then to the form's
-  `<Name>_<Event>` method -- the controls' rule without GTK.
+  it in `components`, a list beside `actions` and `menus`. `Timer`, `Connection`
+  and `HttpClient` are the built-ins; a part declares `static Properties` and
+  `static Events`, and `Emit` dispatches to its own `On` handler first and then
+  to the form's `<Name>_<Event>` method -- the controls' rule without GTK.
+- **`FormPart.New(type)` names a part, not a class.** `Connection` and
+  `HttpClient` are internal wrappers around `Database.Sqlite` and `Http.Client`;
+  the C classes have those names too (`Connection` is a type), which is why the
+  registry carries the `.form` spelling and `FormPart.TypeName(part)` is what
+  the serialiser and the tree write. `Timer` is the only part that is also its
+  class.
 - **The loader calls JavaScript for this half.** `bta_form.c` builds the
   controls, then calls `Form.BuildParts(root)`, because the classes live in
   `rad.js` and nothing about them is C. `FormPart.New(type)` resolves the
@@ -479,12 +485,13 @@ icon when the theme has one by that name (`gtkapplication.c`).
 - **`Form.AddPart` assigns the form's property first, then attaches the part
   and appends it to `__components`.** The other order leaves a part the form
   can reach but that is not in the list, which the serialiser would then drop.
-  `RemovePart` is the inverse and `__detach` stops a Timer.
+  `RemovePart` is the inverse and `__detach` stops the part.
 - **A closed form stops its parts.** `on_close_request` calls `Form.StopParts`
-  on the allowed-close path, including `HideOnClose`: a Timer's GTK source is
-  not owned by the window, so without this it would keep firing into a form
-  nobody has. `HideOnClose` can be shown again and the program can start its
-  timer again; the runtime does not restart it.
+  on the allowed-close path, including `HideOnClose`: a `Timer`'s source and a
+  `Connection`'s database are not owned by the window, so without this they
+  would keep firing into, or holding open, a form nobody has. `HideOnClose` can
+  be shown again and the program can start its timer again; the runtime does
+  not restart it.
 - **The designer draws a part but does not run it.** `part.__setDesigning(true)`
   makes `Timer.Enabled` answer the declared value while no source is armed, and
   `Emit` returns before reaching the IDE's handlers. The tray, the tree and the

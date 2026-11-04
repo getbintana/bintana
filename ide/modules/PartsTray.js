@@ -59,7 +59,7 @@ export class PartsTray {
      */
     refresh() {
         const parts = this.designer ? this.designer.allParts() : [];
-        const signature = parts.map((p) => `${p.Name}:${p.constructor.name}`).join("|");
+        const signature = parts.map((p) => `${p.Name}:${FormPart.TypeName(p)}`).join("|");
 
         this.panel.Visible = parts.length > 0;
         if (signature !== this.signature) {
@@ -74,7 +74,7 @@ export class PartsTray {
         this.buttons = {};
 
         for (const part of parts) {
-            const type   = part.constructor.name;
+            const type   = FormPart.TypeName(part);
             const button = new Button();
             button.Text      = part.Name;
             button.Icon      = paletteIcon(type);

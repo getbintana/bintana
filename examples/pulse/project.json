@@ -1,0 +1,6 @@
+{
+  "name": "pulse",
+  "startup": "PulseForm",
+  "version": "1.0",
+  "description": "A Timer, a Connection and an HttpClient on one form: beats polled over HTTP and kept in SQLite"
+}

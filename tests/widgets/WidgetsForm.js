@@ -574,6 +574,9 @@ const TESTS = [
     "Notification",
     /* And a console example, run as a child: it listens on loopback and talks to itself. */
     "ExampleWebhook",
+    /* And the three parts together: a Timer polls a local server through an
+     * HttpClient and keeps each beat in SQLite, then closes on --selftest. */
+    "ExamplePulse",
     /* And the sheet reader, a Task, in a child project of its own. */
     "ExampleSheets",
     /* And its other half: lib/xlsx held to a spreadsheet program, and clients exporting its own database. */
@@ -16922,8 +16925,31 @@ class Form1 extends Form {
         ordered.Apply({ Enabled: true, Delay: 5 });
         eq("properties apply in the class's order, not the file's", ordered.Delay, 5);
         ordered.Stop();
+
+        const conn = FormPart.New("Connection");
+        check("Connection is a part", conn instanceof FormPart);
+        eq("with Path as its property", conn.PropertyNames().join(","), "Name,Path");
+        conn.Path = "data/pulse.db";
+        eq("the path it was given", conn.Path, "data/pulse.db");
+        eq("and the type it writes", conn.Serialize().type, "Connection");
+        conn.Stop();
+
+        const api = FormPart.New("HttpClient");
+        check("HttpClient is a part", api instanceof FormPart);
+        eq("with the client's settings",
+           api.PropertyNames().join(","),
+           "Name,BaseUrl,Timeout,Http1,FollowRedirects");
+        api.BaseUrl = "http://127.0.0.1:1";
+        api.Timeout = 2500;
+        eq("a base URL", api.BaseUrl, "http://127.0.0.1:1");
+        eq("a timeout", api.Timeout, 2500);
+        eq("and the type it writes", api.Serialize().type, "HttpClient");
+        api.Stop();
+
         check("the runtime lists the parts it can make",
-              FormPart.Types().includes("Timer"));
+              FormPart.Types().includes("Timer") &&
+              FormPart.Types().includes("Connection") &&
+              FormPart.Types().includes("HttpClient"));
     }
 
     Clock_Tick() {
@@ -25061,6 +25087,26 @@ class Form1 extends Form {
         check("it says so", ran.Output.includes("all six did what they should"), ran.Output);
         check("the replay was refused for its age and not its signature",
               ran.Output.includes("too old: 600 s"), ran.Output);
+    }
+
+    /* The three parts in one example: a Timer, a Connection and an HttpClient
+     * on a form that talks to itself over loopback and keeps the answers. */
+    testExamplePulse() {
+        const dir = File.Join(File.Directory(Application.Directory), "..", "examples", "pulse");
+
+        if (!File.IsDir(dir)) {
+            print("ExamplePulse: examples/pulse is not beside this suite; skipped");
+            return;
+        }
+
+        const db = File.Join(dir, "pulse.db");
+        if (File.Exists(db)) File.Delete(db);
+
+        const ran = Exec.Wait([Application.Executable, dir, "--selftest"],
+                              { Timeout: 30000 });
+        eq("the three parts run together and exit 0", ran.ExitCode, 0);
+        check("three beats were kept", ran.Output.includes("pulse: 3 beats kept"), ran.Output);
+        check("and the database is cleaned up", !File.Exists(db), db);
     }
 
     /*
