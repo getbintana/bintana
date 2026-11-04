@@ -1,0 +1,112 @@
+# Changelog
+
+What changed in each release, in the terms an application author and whoever
+runs the runtime care about. The full history is `git log`; this file is the
+one-page answer to *what is new since the release I have*.
+
+## 0.3.0 — 2026-11-04
+
+[Compare with 0.2.1](https://github.com/getbintana/bintana/compare/v0.2.1...v0.3.0)
+
+### Language
+
+- **Modules.** A file with `export` is a module: what it exports reaches every
+  other file by its bare name and the rest stays private. A name two modules
+  export, used with no `import`, is refused at load; `import` chooses between
+  them. `import()` and top-level `await` are refused by name.
+- **QuickJS 0.18.0**, the interpreter is two to three times faster in release
+  builds, and long string appends and searches are linear.
+- `--strict` makes a control refuse a property its class does not have, and
+  `bintana check --strict` is the project pass the IDE runs.
+- Uncaught errors are shown in a window of Bintana's own with a Copy button,
+  and a console program exits 1 instead of 0.
+- An error a program catches carries the same sentence on every desktop, not
+  GLib's translated one.
+
+### Runtime and libraries
+
+- **`Cancellable`.** A token shared by a `Task` stops every blocking call it
+  was handed, is the last argument of the file, directory, `Exec`, `Http`,
+  `Hash`, `Gzip` and `Zip` verbs, and a raised token starts nothing. A task's
+  `Timeout` and `KillAfter` end a call that was handed no token; `Task.Max`
+  refuses what is not a count.
+- **`Locale` in a `Task`**, whole: a catalogue per thread, pinned to the
+  language at `Start`, with `Compare`, `Matches`, `Number`, `Date`, `Currency`,
+  `Parse`, `Text`, `Plural` and `Context`.
+- **Networking.** `Network` reports connectivity, metered state and changes,
+  `Inhibit` keeps the machine awake, and `Http.Client` gained `Tls: { Ca, Cert }`,
+  an `Http1` option per client or call, cancellation while streaming, and a
+  server body cap (`MaxBody`).
+- **`Directory`** refuses a folder it cannot read with the reason, instead of
+  answering an empty list; `File.Join` normalises `.` and `..`; `Dialog.OpenFiles`
+  picks several files.
+- **Accessibility.** `AccessibleName`, `AccessibleDescription`, `Label.For` and
+  `AccessibleInfo` on every control, and an IDE check that reports a field no
+  label names, a button with no words and no short tooltip, and a picture with
+  no name.
+- **Binding.** `Form.Record`, `Control.DataField`, `Bind(record)` and
+  `Form.Source` fill a form from a record or a table and write it back, mark a
+  refused field with `Error`, and `examples/bound` is the loop-free version of
+  `examples/clients`.
+- `Record` shapes as `.record` files, XML sequence order (`static Xml.Order`),
+  XSD validation, and a `SaveXml` that no longer grows slower with every save.
+- `Zip` reads and writes archives, `Xlsx` writes workbooks, `Gzip`, `Random`
+  and `Hash.Hmac`/`Verify` arrived.
+- `Probe.Image` measures a picture from its header with no window, and a
+  drawing with no control draws its ink from the application's first window.
+
+### Controls
+
+- **`TableView`** filters (`Filter`, `Refilter`), reorders columns
+  (`Reorderable`, `ColumnOrder`, `MoveColumn`), hides one without moving the
+  numbers, declares a cell's editor (`Text`, `Number`, `Date`, `Check`, `Combo`,
+  `Custom`), carries a tree's expander in a chosen column, adds rows in one
+  batch, and publishes its row and heading geometry.
+- `ComboBox.AllowEmpty`, `RowList.Index` waiting for its rows, and a form's
+  `Activate`, `Deactivate` and `StateChange`.
+- **Touch and gestures.** `MouseCancel` when a second finger arrives,
+  `LongPress` with the context menu, `Screen.Touch`, and `Swipe`/`Transform`
+  behind the opt-in `Gestures` property.
+- A form with no frame (`Decorated`, `DragToMove`), `Popover.Show`/`Close`,
+  commands as a class of their own, and menu labels in the catalogue.
+- `Media.Element` builds GStreamer elements by name, links them, configures
+  and subscribes to them; `Notification.Send` and `Withdraw` are there too.
+
+### IDE
+
+- **The IDE is modules**, every file exporting what another uses, and its
+  workspace is per tab: palette, tree, canvas or editor and property grid.
+- A View menu for the panels and the editor's look; snippets, folding and the
+  minimap; a Problems panel that repairs what it can; the outline, completion
+  and rename follow what a module exports.
+- **The debugger** opens an object's values a level at a time (`expand`), stops
+  where a field changes (`watch`), runs to the cursor, records logpoints, and
+  *Project → Run with profiling* writes a Sysprof capture.
+- **The Changes page** is a tree of ticks per file, with stage, unstage,
+  discard and commit.
+- **`bintana check`** runs the project pass from a shell, with `--components`
+  and `--strict`; the IDE runs the same implementation.
+- An about box (`lib/dialog`'s `AboutBox`), the IDE's Spanish catalogue, and a
+  project's own accessibility severity.
+- A project can be single-instance: a second run hands its arguments to the
+  first.
+
+### Packaging and installation
+
+- The runtime, the IDE, the examples and the libraries install into a prefix;
+  `bintana-0.3.0-linux-<arch>.tar.gz` is that tree, and the Windows job builds
+  the portable zip and the per-user setup. The Windows tree now wears the
+  system's title bar, starts without a console, and carries its registry and
+  the Vulkan loader.
+- Flatpak: the BaseApp is `0.3`, the IDE and `examples/hello` are built on it,
+  and the repository publishes static deltas.
+- `tests/pack.sh` holds the Flatpak manifests and this version to the one
+  number in `CMakeLists.txt`.
+
+### Documentation
+
+- The audit was pruned to what is still owed; the answered findings are gone
+  and the comparison table was checked against the tree.
+- `api.json` is the public surface as data, and `tests/api.sh` holds it, the
+  member descriptions and the documentation links to the code.
+- `llms-full.txt` is regenerated from the pages `llm.txt` lists.

@@ -7,12 +7,16 @@ absolute coordinates, one class per form, and handlers that wire themselves up
 by name. The engine is **QuickJS** embedded in a **GTK4** runtime written in C.
 
 The language is plain modern JavaScript. What is VB-like is the *model* — forms,
-controls, `Control_Event` methods, no imports, no build step for the code.
+controls, `Control_Event` methods, no build step for the code. A file with
+`export` is a module: what it exports reaches every other file by its bare name,
+and `import` is there for the name two modules share.
 
 **The IDE is written in Bintana and runs on this runtime.** That is the rule of
 the project: the IDE has no privileges and no special API. When it needs
 something the runtime lacks, what gets added is a runtime feature that every
 application then has.
+
+What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Quickstart
 

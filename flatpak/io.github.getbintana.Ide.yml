@@ -22,7 +22,7 @@ runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk
 base: io.github.getbintana.BaseApp
-base-version: '0.2'
+base-version: '0.3'
 command: bintana-ide
 # `host` because an IDE opens and writes the projects it is pointed at;
 # the network is git, the shipped examples and the user's own Http calls.

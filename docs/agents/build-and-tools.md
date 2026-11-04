@@ -407,6 +407,57 @@ second name is ignored and the line says `[only Hash]`.
   Windows job needs no change -- libsecret has no Windows port and the `#else`
   half is what that build compiles.
 
+## Cutting a release
+
+**The version is one number in `CMakeLists.txt`.** `BTA_VERSION_STRING` is
+compiled from it (`bta_runtime.c`), so `bintana --version`, `api.json` and a
+program's `BTA_VERSION` all move together -- but only after a rebuild. Bumping
+the file and running `tools/apijson.sh` against the previous binary writes the
+old version into `api.json` and `tests/api.sh` then fails; the order is
+**`cmake --build`, then the generators**.
+
+- **`CMakeLists.txt`** -- `project(bintana VERSION x.y.z)`.
+- **`ide/project.json`** -- the IDE's own version, which `AboutBox` shows. It is
+  not `BTA_VERSION`.
+- **`flatpak/io.github.getbintana.BaseApp.yml`** -- `branch` is the major.minor
+  of `BTA_VERSION`, and the comment above it names the tag. `Package.defaults`
+  derives `base-version` from the same two numbers, so a runtime bump without
+  this makes every packaged application ask for a base that does not exist.
+- **`flatpak/io.github.getbintana.Hello.yml`** and **`...Ide.yml`** --
+  `base-version` follows that branch.
+- **`docs/installing.md`** -- `BaseApp//x.y` and the downloadable tarball's name.
+- **`tools/windows-portable.sh`** and **`windows/ci/README.md`** -- the version
+  in their examples, so a reader does not copy the previous release.
+
+**`tests/pack.sh` is the guard for all of the Flatpak half**: it reads the
+BaseApp branch, every other `flatpak/*.yml`'s `base-version` and
+`docs/installing.md`'s `BaseApp//` and requires them to equal
+`BTA_VERSION`'s major.minor. The generated files are `api.json`
+(`tools/apijson.sh`) and `llms-full.txt` (`tools/llms.sh`); neither is edited
+by hand, and `tests/api.sh` fails while either is stale.
+
+Then:
+
+```sh
+cmake --build build -j
+./tools/apijson.sh
+./tools/llms.sh
+./tests/api.sh
+./tests/pack.sh
+./tests/install.sh
+./tests/run.sh
+```
+
+Commit as `Bintana x.y.z` and tag `vx.y.z` (the existing tags are lightweight).
+**The push and the tag's push are the owner's**, and a published tag is never
+moved. The `package` job runs on every push and, on a tag, creates the release
+with generated notes and attaches the Linux tarball and `api.json`; the
+`windows` job attaches the portable zip and the setup when its toolchain can
+build it. The Flatpak repository is a separate workflow with a manual or
+scheduled trigger -- tag first, then dispatch it, so its planner sees the new
+tag and rebuilds the BaseApp and every application. The notes a changelog
+earns are in `CHANGELOG.md`; the generated release notes are the fallback.
+
 ## To review later
 
 - **Three files hold a third of the runtime's C**: `bta_widget.c` (9959 lines),
