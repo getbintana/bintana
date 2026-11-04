@@ -465,8 +465,8 @@ icon when the theme has one by that name (`gtkapplication.c`).
 
 - **A `FormPart` is not a `Widget`.** It has no GTK control, no `Children` and
   no `Bounds`; the form owns it by name (`this.Clock`) and the `.form` carries
-  it in `components`, a list beside `actions` and `menus`. `Timer`, `Connection`
-  and `HttpClient` are the built-ins; a part declares `static Properties` and
+  it in `components`, a list beside `actions` and `menus`. `Timer`, `Connection`,
+  `Model` and `HttpClient` are the built-ins; a part declares `static Properties` and
   `static Events`, and `Emit` dispatches to its own `On` handler first and then
   to the form's `<Name>_<Event>` method -- the controls' rule without GTK.
 - **`FormPart.New(type)` names a part, not a class.** `Connection` and
@@ -474,9 +474,10 @@ icon when the theme has one by that name (`gtkapplication.c`).
   the C classes have those names too (`Connection` is a type), which is why the
   registry carries the `.form` spelling and `FormPart.TypeName(part)` is what
   the serialiser and the tree write. `Timer` is the only part that is also its
-  class. A `Connection` also carries `Record` and `TableName`; `Model` is its
-  `Table`, and `Ensure` writes the `CREATE TABLE` from `Record.Shape` -- see
-  [`data.md`](data.md#a-connection-part-and-the-table-a-record-asks-for).
+  class. A `Connection` is one database file; a `Model` names it, a record and a
+  table, is the `Table` for that record, and `Ensure` writes the `CREATE TABLE`
+  from `Record.Shape`. Several models share one connection -- see
+  [`data.md`](data.md#a-connection-and-a-model).
 - **The loader calls JavaScript for this half.** `bta_form.c` builds the
   controls, then calls `Form.BuildParts(root)`, because the classes live in
   `rad.js` and nothing about them is C. `FormPart.New(type)` resolves the

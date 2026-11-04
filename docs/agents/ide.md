@@ -176,13 +176,14 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   is one of them: without it the grid called a method the base class did not
   have and a click on the palette failed after the part was made. `Timer`
   declares `Properties = ["Delay", "Enabled"]` and `Events = ["Tick"]`;
-  `Connection` declares `Path`, `Record` and `TableName`, and `HttpClient`
-  declares `BaseUrl`, `Timeout`, `Http1` and `FollowRedirects`. The last two are
-  **registered under those names** while their classes are wrappers
-  (`ConnectionPart`, `HttpClientPart`): `FormPart.TypeName(part)` is what the
-  tree, the tray and the save write, not `constructor.name`. `Connection`'s
-  `Record` row is the project's records, the same list a form's own `Record`
-  uses.
+  `Connection` declares `Path`, `Model` declares `Connection`, `Record` and
+  `TableName`, and `HttpClient` declares `BaseUrl`, `Timeout`, `Http1` and
+  `FollowRedirects`. The last three are **registered under those names** while
+  their classes are wrappers (`ConnectionPart`, `ModelPart`, `HttpClientPart`):
+  `FormPart.TypeName(part)` is what the tree, the tray and the save write, not
+  `constructor.name`. A `Model`'s `Connection` row is the form's Connection
+  parts and its `Record` row the project's records, the same list a form's own
+  `Record` uses.
 
 ## IDE traps
 

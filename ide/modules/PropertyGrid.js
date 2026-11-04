@@ -954,6 +954,8 @@ export class PropertyGrid {
          * be bound to when the form runs -- and `""` is no command. */
         const options = key === "Record"
             ? this.recordOptions()
+            : key === "Connection"
+            ? this.connectionOptions()
             : key === "DataField"
             ? this.fieldOptions()
             : key === "Source"
@@ -1284,6 +1286,18 @@ export class PropertyGrid {
      */
     recordOptions() {
         const names = this.ide.records().map((r) => r.name);
+        return names.length ? names : null;
+    }
+
+    /*
+     * The Connection parts of the drawn form, for a Model's `Connection` row.
+     * A model with no connection is legal to write and fails when it is used,
+     * which is the same shape as a `DataField` whose record is not chosen yet.
+     */
+    connectionOptions() {
+        const names = this.designer.allParts()
+                          .filter((p) => FormPart.TypeName(p) === "Connection")
+                          .map((p) => p.Name);
         return names.length ? names : null;
     }
 

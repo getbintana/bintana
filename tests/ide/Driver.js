@@ -2305,7 +2305,7 @@ function* p_palette(ide) {
 
     /* The other two parts are on the same tray, and the grid asks the class
      * what it has without opening a database or a client. */
-    for (const type of ["Connection", "HttpClient"]) {
+    for (const type of ["Connection", "Model", "HttpClient"]) {
         palette(ide, type).Click();
         yield* settled(ide);
         const made = ide.designer.selected;

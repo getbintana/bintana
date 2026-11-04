@@ -13,20 +13,24 @@ one-page answer to *what is new since the release I have*.
   the form's handler -- the same rule a control's event follows. `FormPart` is
   the base for a form's non-visual objects; `Timer` is the first one.
 - The designer has a **component tray** under the canvas: the palette's
-  `Timer`, `Connection` and `HttpClient` create one there (or a drop on the
-  canvas does), the tree lists it, the property grid edits it, a double click
-  opens the handler, and a save writes `components`. A Timer is not started
-  while the form is being drawn; a closed form stops its timers and closes its
-  connection.
+  `Timer`, `Connection`, `Model` and `HttpClient` create one there (or a drop
+  on the canvas does), the tree lists it, the property grid edits it, a double
+  click opens the handler, and a save writes `components`. A Timer is not
+  started while the form is being drawn; a closed form stops its timers and
+  closes its connection.
+- **A `Connection` is one database file; a `Model` is one record over one
+  table.** A form can carry as many Models as it needs and they share the one
+  connection -- two tables do not open the same database twice. The Model
+  creates its table from the record's shape on first use.
 - **`examples/pulse`** puts the three together: a Timer polls a local
   `Http.Server` through an `HttpClient`, and each beat is one row in SQLite
   through a `Connection`.
 - **`examples/uptime`** is the other shape of it: every 30 seconds a Timer asks
   a list of URLs through an `HttpClient` and writes one row per site into a
-  `Connection` -- a failure included, with status 0 and the reason. The
-  connection selects `Check.record` and `TableName: "checks"`; its `Model`
-  creates the table from the shape and the rows are `Record`/`Table`, not
-  hand-built SQL.
+  `Model` over the one `Connection` -- a failure included, with status 0 and
+  the reason. The `Checks` Model names `Check.record` and `TableName:
+  "checks"`, creates the table from the shape, and the rows are
+  `Record`/`Table`, not hand-built SQL.
 
 ## 0.3.0 — 2026-11-04
 

@@ -683,13 +683,19 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   message for that parameter; a `Bytes` past `INT_MAX` is refused up front
   rather than truncated into a shorter length.
 
-## A Connection part, and the table a record asks for
+## A Connection and a Model
 
-- **A form's `Connection` part selects a `.record` by name** (`Record`) and the
-  table it lives in (`TableName`); `Db.Model` is the `Table` for it. The first
-  use calls `Ensure`, which writes `CREATE TABLE IF NOT EXISTS` from
-  `Record.Shape`: text/enum/date/time/datetime/decimal are `TEXT`, int/bool are
-  `INTEGER`, number is `REAL`, bytes is `BLOB`, a single integer key is
+- **The `Connection` part is one database file, and it does not select a
+  record.** A form can have as many `Model` parts as it needs, each with its own
+  `Record` and `TableName`, and all of them share the one `Connection`:
+  `this.Checks` and `this.Probes` are two models over `this.Db`, and the file is
+  opened once. This is the RAD split -- a connection and a table are different
+  objects -- and it is why a second table does not open the same database
+  twice.
+- **`Model.Table` is the `Table` for its record**, and the first use calls
+  `Ensure`, which writes `CREATE TABLE IF NOT EXISTS` from `Record.Shape`:
+  text/enum/date/time/datetime/decimal are `TEXT`, int/bool are `INTEGER`,
+  number is `REAL`, bytes is `BLOB`, a single integer key is
   `INTEGER PRIMARY KEY`, and `required` adds `NOT NULL`. `Naming` is the same
   rule `Table` uses, so `At` reaches the column `at`.
 - **A flat record only.** `Field.List` and `Field.Record` are not columns; the
@@ -699,11 +705,13 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   disagree with the shape is still `Table`'s refusal on the first statement;
   adding a field to a `.record` is a migration somebody has to choose, not a
   quiet `ALTER` this runtime runs at start-up.
-- **The IDE's property grid offers `Record` from the project's records**, the
-  same list a form's own `Record` row uses. `TableName` stays text because
-  there is no schema browser; it is empty by default and the record's class
-  name would be the table.
+- **The IDE's property grid offers a `Model`'s `Connection` from the form's
+  Connection parts and its `Record` from the project's records**, the same list
+  a form's own `Record` row uses. `TableName` stays text because there is no
+  schema browser; it is empty by default and the record's class name would be
+  the table.
 - **The example is `examples/uptime`**: a `Check.record` with `Id`, `At`,
-  `Site`, `Url`, `Status`, `Ms` and `Error`, selected by the form's
-  `Connection`, and the table is made from it on the first model use.
+  `Site`, `Url`, `Status`, `Ms` and `Error`, a `Connection` over
+  `uptime.db` and a `Model` named `Checks`; the table is made from the record
+  on the first use.
 

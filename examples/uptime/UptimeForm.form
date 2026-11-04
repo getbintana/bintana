@@ -22,7 +22,14 @@
       "type": "Connection",
       "name": "Db",
       "properties": {
-        "Path": "uptime.db",
+        "Path": "uptime.db"
+      }
+    },
+    {
+      "type": "Model",
+      "name": "Checks",
+      "properties": {
+        "Connection": "Db",
         "Record": "Check",
         "TableName": "checks"
       }
@@ -31,10 +38,8 @@
       "type": "HttpClient",
       "name": "Api",
       "properties": {
-        "BaseUrl": "",
         "Timeout": 5000,
-        "Http1": true,
-        "FollowRedirects": true
+        "Http1": true
       }
     }
   ],

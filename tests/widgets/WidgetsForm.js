@@ -16930,16 +16930,42 @@ class Form1 extends Form {
 
         const conn = FormPart.New("Connection");
         check("Connection is a part", conn instanceof FormPart);
-        eq("with its path and its record",
-           conn.PropertyNames().join(","), "Name,Path,Record,TableName");
+        eq("with Path as its property", conn.PropertyNames().join(","), "Name,Path");
         conn.Path = "data/pulse.db";
-        conn.Record = "Check";
-        conn.TableName = "checks";
         eq("the path it was given", conn.Path, "data/pulse.db");
-        eq("the record it selects", conn.Record, "Check");
-        eq("the table it writes", conn.TableName, "checks");
         eq("and the type it writes", conn.Serialize().type, "Connection");
         conn.Stop();
+
+        const model = FormPart.New("Model");
+        check("Model is a part", model instanceof FormPart);
+        eq("with connection, record and table",
+           model.PropertyNames().join(","),
+           "Name,Connection,Record,TableName");
+        model.Connection = "Db";
+        model.Record     = "Check";
+        model.TableName  = "checks";
+        eq("the connection it names", model.Connection, "Db");
+        eq("the record it maps", model.Record, "Check");
+        eq("the table it writes", model.TableName, "checks");
+        eq("and the type it writes", model.Serialize().type, "Model");
+        model.Stop();
+
+        /* Two models over one connection: the point of splitting them. */
+        const shared = new Form();
+        const conn2  = FormPart.New("Connection");
+        conn2.Name = "Db";
+        shared.AddPart(conn2);
+        const a = FormPart.New("Model");
+        a.Name = "A"; a.Connection = "Db";
+        shared.AddPart(a);
+        const b = FormPart.New("Model");
+        b.Name = "B"; b.Connection = "Db";
+        shared.AddPart(b);
+        check("two models share the one connection",
+              a.ConnectionPart === conn2 && b.ConnectionPart === conn2);
+        shared.RemovePart(b);
+        shared.RemovePart(a);
+        shared.RemovePart(conn2);
 
         const api = FormPart.New("HttpClient");
         check("HttpClient is a part", api instanceof FormPart);
@@ -16956,6 +16982,7 @@ class Form1 extends Form {
         check("the runtime lists the parts it can make",
               FormPart.Types().includes("Timer") &&
               FormPart.Types().includes("Connection") &&
+              FormPart.Types().includes("Model") &&
               FormPart.Types().includes("HttpClient"));
     }
 

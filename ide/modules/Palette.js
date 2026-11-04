@@ -57,7 +57,7 @@ export const PALETTE_TABS = [
                               "Terminal", "RowList", "Flow", "DrawingArea", "Video"] },
     { name: "Boxes",  types: ["Panel", "Grid", "Frame", "Expander", "Scroller", "AspectFrame"] },
     { name: "Split",  types: ["Split", "Notebook", "Switcher", "Overlay"] },
-    { name: "Components", types: ["Timer", "Connection", "HttpClient"] },
+    { name: "Components", types: ["Timer", "Connection", "Model", "HttpClient"] },
 ];
 
 /*
@@ -77,6 +77,7 @@ export const PALETTE_ICON = {
     /* A database and a client are not controls and have no palette picture of
      * their own; the runtime's own two are the fallback. */
     Connection: ["drive-harddisk-symbolic", "bta-file-symbolic"],
+    Model:      ["bta-model-symbolic"],
     HttpClient: ["network-workgroup-symbolic", "bta-code-symbolic"],
     Button:   ["input-mouse-symbolic",      "bta-button-symbolic"],
     Label:    ["insert-text-symbolic",      "bta-label-symbolic"],

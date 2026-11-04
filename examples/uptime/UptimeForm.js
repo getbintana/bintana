@@ -3,6 +3,7 @@
  *
  *   Clock  a Timer, 30 s
  *   Db     a Connection, uptime.db
+ *   Checks a Model: Check.record over the Db connection
  *   Api    an HttpClient for the checks
  *
  * A failure is a row too -- status 0 and the message in `error` -- because the
@@ -22,10 +23,8 @@ class UptimeForm extends Form {
         this.count    = 0;
         this.queue    = [];
 
-        /* The Connection part selected `Check.record` and the table `checks`;
-         * `Model` creates the table from the shape on first use. */
-        this.Checks = this.Db.Model;
-
+        /* The form's `Checks` is a Model part over the `Db` connection and
+         * Check.record; the first use creates the table from the shape. */
         for (const row of this.Checks.All()) {
             if (this.History.Count >= 200) this.History.RemoveRow(0);
             this.History.Add([row.Site, String(row.Status), String(row.Ms),

@@ -714,16 +714,12 @@ formPartTypes.Timer = GLOBAL.Timer;
 class ConnectionPart extends FormPart {
 
     static get Events()     { return []; }
-    static get Properties() { return ["Path", "Record", "TableName"]; }
+    static get Properties() { return ["Path"]; }
 
     constructor() {
         super();
-        this._path       = "";
-        this._record     = "";
-        this._tableName  = "";
-        this._recordClass = null;
-        this._db         = null;
-        this._model      = null;
+        this._path = "";
+        this._db   = null;
     }
 
     /** the database file, relative to the project; `""` when it is not set */
@@ -733,106 +729,6 @@ class ConnectionPart extends FormPart {
             throw new TypeError("Connection.Path: expected a file name");
         this._path = value;
         this.Close();
-    }
-
-    /** the `.record` class this connection is for, by name; `""` when none */
-    get Record() { return this._record; }
-    set Record(value) {
-        if (typeof value !== "string")
-            throw new TypeError("Connection.Record: expected a class name");
-        this._record      = value;
-        this._recordClass = null;
-        this._model       = null;
-    }
-
-    /** the table the record is stored in; the record's name when empty */
-    get TableName() { return this._tableName; }
-    set TableName(value) {
-        if (typeof value !== "string")
-            throw new TypeError("Connection.TableName: expected a table name");
-        this._tableName = value;
-        this._model     = null;
-    }
-
-    /** the class `Record` names, resolved on first use */
-    get RecordClass() {
-        if (!this._record) return null;
-        if (!this._recordClass) {
-            let got;
-            try { got = resolveName(this._record); }
-            catch (e) { throw new TypeError(`Connection: '${this._record}' is not a class`); }
-            if (!isRecordClass(got))
-                throw new TypeError(`Connection: '${this._record}' is not a Record class`);
-            this._recordClass = got;
-        }
-        return this._recordClass;
-    }
-
-    /**
-     * the `Table` for the record this connection names, creating its table
-     * from the shape on first use; refused when no `Record` is chosen
-     */
-    get Model() {
-        if (!this._record)
-            throw new Error("Connection.Model: no Record is selected");
-        if (!this._model) {
-            this.Ensure();
-            this._model = this.Db.Table(this._tableName || this._record,
-                                        this.RecordClass);
-        }
-        return this._model;
-    }
-
-    /**
-     * creates the table the selected record needs, from the record's fields,
-     * when it is not there; a list or a nested record is refused because it is
-     * not a column
-     */
-    Ensure() {
-        if (!this._record) return this;
-
-        const cls    = this.RecordClass;
-        const shape  = Record.Shape(cls);
-        const naming = NAMINGS[cls.Naming || "same"];
-        const quote  = this.Db.Dialect.Quote;
-        const table  = this._tableName || this._record;
-
-        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table))
-            throw new TypeError(`Connection: '${table}' is not a usable table name`);
-
-        const SQL_TYPE = {
-            text: "TEXT", enum: "TEXT", date: "TEXT", time: "TEXT",
-            datetime: "TEXT", decimal: "TEXT", int: "INTEGER",
-            bool: "INTEGER", number: "REAL", bytes: "BLOB",
-        };
-        const columns = [];
-        const keys    = [];
-
-        for (const name in shape.fields) {
-            const field  = shape.fields[name];
-            const column = field.as || naming(name);
-
-            if (field.kind === "list" || field.kind === "record")
-                throw new TypeError(`Connection: ${cls.name}.${name} is a ${field.kind}, not a column`);
-            if (!SQL_TYPE[field.kind])
-                throw new TypeError(`Connection: ${cls.name}.${name} has no SQL type`);
-
-            let def = `${quote}${column}${quote} ${SQL_TYPE[field.kind]}`;
-            if (field.key) keys.push({ at: columns.length, column,
-                                       type: SQL_TYPE[field.kind] });
-            else if (field.required) def += " NOT NULL";
-            columns.push(def);
-        }
-
-        if (keys.length === 1 && keys[0].type === "INTEGER")
-            columns[keys[0].at] += " PRIMARY KEY";
-        else if (keys.length)
-            columns.push(`PRIMARY KEY (${keys.map((k) =>
-                `${quote}${k.column}${quote}`).join(", ")})`);
-
-        this.Db.Script(`CREATE TABLE IF NOT EXISTS ${quote}${table}${quote} ` +
-                       `(${columns.join(", ")})`);
-        return this;
     }
 
     /** the live `Connection`, opened on first use */
@@ -875,6 +771,181 @@ class ConnectionPart extends FormPart {
 }
 
 formPartTypes.Connection = ConnectionPart;
+
+/* ------------------------------------------------------------------------
+ * Model -- a record over one table of a connection.
+ *
+ *   "components": [
+ *     { "type": "Connection", "name": "Db",
+ *       "properties": { "Path": "uptime.db" } },
+ *     { "type": "Model", "name": "Checks",
+ *       "properties": { "Connection": "Db", "Record": "Check",
+ *                       "TableName": "checks" } }
+ *   ]
+ *
+ * One Connection can own as many Models as the form needs; they share its
+ * `Connection` and do not open the file again.  The table is created from the
+ * record's shape on first use, and is not migrated when the shape changes.
+ * ---------------------------------------------------------------------- */
+
+class ModelPart extends FormPart {
+
+    static get Events()     { return []; }
+    static get Properties() { return ["Connection", "Record", "TableName"]; }
+
+    constructor() {
+        super();
+        this._connection = "";
+        this._record     = "";
+        this._tableName  = "";
+        this._recordClass = null;
+        this._table       = null;
+    }
+
+    /** the name of the `Connection` part this model uses */
+    get Connection() { return this._connection; }
+    set Connection(value) {
+        if (typeof value !== "string")
+            throw new TypeError("Model.Connection: expected a part name");
+        this._connection = value;
+        this._table      = null;
+    }
+
+    /** the `.record` class this model maps, by name */
+    get Record() { return this._record; }
+    set Record(value) {
+        if (typeof value !== "string")
+            throw new TypeError("Model.Record: expected a class name");
+        this._record      = value;
+        this._recordClass = null;
+        this._table       = null;
+    }
+
+    /** the table; the record's name when empty */
+    get TableName() { return this._tableName; }
+    set TableName(value) {
+        if (typeof value !== "string")
+            throw new TypeError("Model.TableName: expected a table name");
+        this._tableName = value;
+        this._table     = null;
+    }
+
+    /** the class `Record` names, resolved on first use */
+    get RecordClass() {
+        if (!this._record) return null;
+        if (!this._recordClass) {
+            let got;
+            try { got = resolveName(this._record); }
+            catch (e) { throw new TypeError(`Model: '${this._record}' is not a class`); }
+            if (!isRecordClass(got))
+                throw new TypeError(`Model: '${this._record}' is not a Record class`);
+            this._recordClass = got;
+        }
+        return this._recordClass;
+    }
+
+    /** the Connection part this model names */
+    get ConnectionPart() {
+        const owner = this.Form;
+        if (!owner) throw new Error("Model: not attached to a form");
+        const conn = owner[this._connection];
+        if (!(conn instanceof ConnectionPart))
+            throw new Error(`Model: '${this._connection}' is not a Connection part`);
+        return conn;
+    }
+
+    /** the shared `Connection` handle */
+    get Db() { return this.ConnectionPart.Db; }
+
+    /**
+     * the `Table` for the record, creating its table from the shape on first
+     * use; one connection serves every model
+     */
+    get Table() {
+        if (!this._record)
+            throw new Error("Model: no Record is selected");
+        if (!this._table) {
+            this.Ensure();
+            this._table = this.Db.Table(this._tableName || this._record,
+                                        this.RecordClass);
+        }
+        return this._table;
+    }
+
+    /**
+     * creates the table this model needs from the record's fields when it is
+     * not there; a list or a nested record is refused because it is not a
+     * column
+     */
+    Ensure() {
+        if (!this._record) return this;
+
+        const cls    = this.RecordClass;
+        const shape  = Record.Shape(cls);
+        const naming = NAMINGS[cls.Naming || "same"];
+        const quote  = this.Db.Dialect.Quote;
+        const table  = this._tableName || this._record;
+
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table))
+            throw new TypeError(`Model: '${table}' is not a usable table name`);
+
+        const SQL_TYPE = {
+            text: "TEXT", enum: "TEXT", date: "TEXT", time: "TEXT",
+            datetime: "TEXT", decimal: "TEXT", int: "INTEGER",
+            bool: "INTEGER", number: "REAL", bytes: "BLOB",
+        };
+        const columns = [];
+        const keys    = [];
+
+        for (const name in shape.fields) {
+            const field  = shape.fields[name];
+            const column = field.as || naming(name);
+
+            if (field.kind === "list" || field.kind === "record")
+                throw new TypeError(`Model: ${cls.name}.${name} is a ${field.kind}, not a column`);
+            if (!SQL_TYPE[field.kind])
+                throw new TypeError(`Model: ${cls.name}.${name} has no SQL type`);
+
+            let def = `${quote}${column}${quote} ${SQL_TYPE[field.kind]}`;
+            if (field.key) keys.push({ at: columns.length, column,
+                                       type: SQL_TYPE[field.kind] });
+            else if (field.required) def += " NOT NULL";
+            columns.push(def);
+        }
+
+        if (keys.length === 1 && keys[0].type === "INTEGER")
+            columns[keys[0].at] += " PRIMARY KEY";
+        else if (keys.length)
+            columns.push(`PRIMARY KEY (${keys.map((k) =>
+                `${quote}${k.column}${quote}`).join(", ")})`);
+
+        this.Db.Script(`CREATE TABLE IF NOT EXISTS ${quote}${table}${quote} ` +
+                       `(${columns.join(", ")})`);
+        return this;
+    }
+
+    /** inserts one record, and tells it its key */
+    Insert(record)              { return this.Table.Insert(record); }
+    /** every row, as records */
+    All()                       { return this.Table.All(); }
+    /** a statement and its bound values */
+    Where(sql, ...params)       { return this.Table.Where(sql, ...params); }
+    /** one record by key */
+    Find(...key)                { return this.Table.Find(...key); }
+    /** `Insert` or `Update`, by the record's key */
+    Save(record)                { return this.Table.Save(record); }
+    /** deletes by key */
+    Delete(record)              { return this.Table.Delete(record); }
+    /** a number, building no records */
+    Count(sql, ...params)       { return this.Table.Count(sql, ...params); }
+    /** updates one existing row */
+    Update(record)              { return this.Table.Update(record); }
+
+    /** the form's close drops the table handle, not the shared connection */
+    Stop() { this._table = null; return this; }
+}
+
+formPartTypes.Model = ModelPart;
 
 /* ------------------------------------------------------------------------
  * HttpClient -- a client a form owns, with its own base URL and session.
