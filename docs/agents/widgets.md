@@ -1077,6 +1077,14 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   deprecated call, so the build stays silent. The list is replaced whole and
   every entry is checked as text before the model is touched: a refused array
   leaves the words that were there. `[]` offers nothing.
+- **`TextBox.Mask` formats on `changed`, and blocks its own handler.** The
+  entry's text is filtered into the mask in C and written back with
+  `gtk_editable_set_text`, with `changed` blocked across that write so one
+  keystroke is one `Change`. The caret goes to the end: a masked field fills in
+  order, and a caret kept mid-string while the literals move is the bug the
+  `Change`-handler version had. `Text` assigned from code is strict -- it throws
+  rather than dropping -- and a new mask that the current text does not fit is
+  refused whole, leaving the old mask and text.
 - **A `ComboBox` has no empty text and, with items, no empty state.**
   `cmb.Text = ""` throws `'' is not one of <name>'s items`, and `Index = -1`
   **moves nothing**: GTK's autoselect leaves the first row chosen the moment

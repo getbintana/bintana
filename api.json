@@ -10744,6 +10744,15 @@
           "Native": true
         },
         {
+          "Name": "Mask",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the shape of what may be typed: `0` a digit, `A` a letter, `?` any character, `*` a letter or digit, everything else a literal put in for the person. `\"\"` is no mask. What does not fit is refused — dropped while typing, a `TypeError` when `Text` is assigned from code",
+          "Native": true
+        },
+        {
           "Name": "MaxLength",
           "Kind": "Property",
           "Params": -1,

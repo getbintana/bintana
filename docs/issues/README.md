@@ -13,7 +13,6 @@ in the same form.
 | Issue | The missing capability |
 |---|---|
 | [ISSUE-postgres-driver.md](ISSUE-postgres-driver.md) | `Database` publishes `Sqlite` alone |
-| [ISSUE-masked-input.md](ISSUE-masked-input.md) | No masked input |
 | [ISSUE-property-grid-control.md](ISSUE-property-grid-control.md) | No property grid control for applications |
 | [ISSUE-symmetric-encryption.md](ISSUE-symmetric-encryption.md) | No symmetric encryption |
 | [ISSUE-pdf-reading.md](ISSUE-pdf-reading.md) | The runtime writes PDFs and cannot read one |

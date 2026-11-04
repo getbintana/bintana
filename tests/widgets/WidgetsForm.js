@@ -6590,6 +6590,43 @@ class Form1 extends Form {
         eq("an empty list offers nothing again", JSON.stringify(t.Completion), "[]");
         check("and is not written", !("Completion" in t.Serialize().properties));
 
+        /* --- the shape of what is typed ------------------------------------- */
+        eq("a field has no shape until told", t.Mask, "");
+        check("so that stays out of the .form",
+              !("Mask" in t.Serialize().properties),
+              JSON.stringify(t.Serialize().properties));
+
+        t.Text = "";
+        t.Mask = "00.000.000-0";
+        eq("Mask round-trip", t.Mask, "00.000.000-0");
+        eq("and is saved", t.Serialize().properties.Mask, "00.000.000-0");
+
+        t.Text = "123456789";
+        eq("Text takes the shape", t.Text, "12.345.678-9");
+        t.Text = "";
+        t.Insert("1");
+        t.Insert("2");
+        t.Insert("3");
+        eq("typing fills the slots and puts the literals in", t.Text, "12.3");
+
+        throws("a letter is refused", () => { t.Text = "12a"; });
+        eq("and the field keeps what it had", t.Text, "12.3");
+        throws("a mask the text does not fit is refused whole",
+               () => { t.Mask = "0"; });
+        eq("with the old mask kept", t.Mask, "00.000.000-0");
+
+        t.Text = "";
+        t.Mask = "A-0";
+        t.Text = "X9";
+        eq("a letter slot and a digit slot", t.Text, "X-9");
+        throws("a digit is not a letter", () => { t.Text = "9"; });
+
+        t.Mask = "";
+        t.Text = "libre";
+        eq("no mask takes free text again", t.Text, "libre");
+        check("and an empty mask is not written",
+              !("Mask" in t.Serialize().properties));
+
         t.Delete();
     }
 

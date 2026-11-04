@@ -2740,9 +2740,125 @@ static const JSCFunctionListEntry button_props[] = {
 
 /* --------------------------------------------------------------- TextBox */
 
+/*
+ * A mask says the shape of what may be typed: `0` a digit, `A` a letter, `?`
+ * any character, `*` a letter or digit, and every other character a literal.
+ * A literal is put in for the person; a character that does not fit the next
+ * slot is refused (dropped while typing, a `TypeError` when `Text` is assigned
+ * from code).  `11.111.111-1` is a tax id, `+00 000 00 00 00` a phone.
+ */
+static bool mask_is_token(gunichar c)
+{
+    return c == '0' || c == 'A' || c == '?' || c == '*';
+}
+
+static bool mask_accepts(gunichar token, gunichar c)
+{
+    switch (token) {
+    case '0': return g_unichar_isdigit(c);
+    case 'A': return g_unichar_isalpha(c);
+    case '*': return g_unichar_isalnum(c);
+    case '?': return TRUE;
+    default:  return FALSE;
+    }
+}
+
+/*
+ * `input` fitted into `mask`.  `strict` refuses the first character that does
+ * not fit and leaves `*bad`; otherwise it drops it and tries the next one,
+ * which is what a keystroke is -- the field refuses the key by not keeping it.
+ * The answer stops at the last character the input filled, so a half-typed
+ * mask is `12.3` and not `12.3__.___-_`.
+ */
+static char *mask_format(const char *mask, const char *input, bool strict,
+                         bool *bad, int *filled)
+{
+    GString    *out  = g_string_new(NULL);
+    const char *m    = mask;
+    const char *p    = input;
+    int         used = 0;
+
+    *bad = false;
+
+    while (*m) {
+        gunichar mc = g_utf8_get_char(m);
+
+        if (mask_is_token(mc)) {
+            if (!*p)
+                break;
+
+            gunichar c = g_utf8_get_char(p);
+            if (!mask_accepts(mc, c)) {
+                if (strict) {
+                    *bad = true;
+                    break;
+                }
+                p = g_utf8_next_char(p);
+                continue;
+            }
+            g_string_append_unichar(out, c);
+            used++;
+            p = g_utf8_next_char(p);
+        } else {
+            if (!*p)
+                break;
+            if (g_utf8_get_char(p) == mc)
+                p = g_utf8_next_char(p);
+            g_string_append_unichar(out, mc);
+        }
+        m = g_utf8_next_char(m);
+    }
+
+    if (strict && *p)
+        *bad = true;
+    if (filled)
+        *filled = used;
+
+    return g_string_free(out, FALSE);
+}
+
+/* The mask on this entry, or NULL. */
+static const char *textbox_mask(GtkWidget *entry)
+{
+    return g_object_get_data(G_OBJECT(entry), "bta-mask");
+}
+
+static void on_entry_changed(GtkEditable *e, gpointer user_data);
+
+/*
+ * The shape a typed text takes.  A field without a mask is left alone; a field
+ * with one is rewritten only when the formatted answer differs, and the
+ * `changed` signal is blocked across that write so one keystroke is one
+ * `Change`.
+ */
+static void textbox_mask_format(BtaWidget *w)
+{
+    const char *mask = textbox_mask(w->gtk);
+    if (!mask || !*mask)
+        return;
+
+    const char *text = gtk_editable_get_text(GTK_EDITABLE(w->gtk));
+    bool        bad  = false;
+    char       *out  = mask_format(mask, text, false, &bad, NULL);
+
+    if (g_strcmp0(out, text) != 0) {
+        g_signal_handlers_block_by_func(w->gtk, G_CALLBACK(on_entry_changed), w);
+        gtk_editable_set_text(GTK_EDITABLE(w->gtk), out);
+        gtk_editable_set_position(GTK_EDITABLE(w->gtk), -1);
+        g_signal_handlers_unblock_by_func(w->gtk, G_CALLBACK(on_entry_changed), w);
+    }
+    g_free(out);
+}
+
 static void on_entry_changed(GtkEditable *e, gpointer user_data)
 {
-    bta_emit((BtaWidget *)user_data, "Change", 0, NULL);
+    BtaWidget *w = user_data;
+
+    /* A mask formats before the event: a `Change` handler sees the shape the
+     * field promised, not the characters half-way through it. */
+    textbox_mask_format(w);
+
+    bta_emit(w, "Change", 0, NULL);
 }
 
 static void on_entry_activate(GtkEntry *e, gpointer user_data)
@@ -2818,8 +2934,72 @@ static JSValue textbox_set_text(JSContext *ctx, JSValueConst this_val, JSValueCo
     const char *s = JS_ToCString(ctx, val);
     if (!s)
         return JS_EXCEPTION;
-    gtk_editable_set_text(GTK_EDITABLE(w->gtk), s);
+
+    const char *mask = textbox_mask(w->gtk);
+    if (mask && *mask) {
+        bool  bad = false;
+        char *out = mask_format(mask, s, true, &bad, NULL);
+
+        if (bad) {
+            g_free(out);
+            JSValue error = JS_ThrowTypeError(ctx, "Text \"%s\" does not fit Mask \"%s\"",
+                                              s, mask);
+            JS_FreeCString(ctx, s);
+            return error;
+        }
+        gtk_editable_set_text(GTK_EDITABLE(w->gtk), out);
+        g_free(out);
+    } else {
+        gtk_editable_set_text(GTK_EDITABLE(w->gtk), s);
+    }
     JS_FreeCString(ctx, s);
+    return JS_UNDEFINED;
+}
+
+/* The shape typed text takes, as `mask_format` spells it; `""` is no mask. */
+static JSValue textbox_get_mask(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *mask = textbox_mask(w->gtk);
+    return JS_NewString(ctx, mask ? mask : "");
+}
+
+static JSValue textbox_set_mask(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    const char *mask = JS_ToCString(ctx, val);
+    if (!mask)
+        return JS_EXCEPTION;
+
+    /* A mask that the text already there does not fit is refused whole: the
+     * old mask and the old text stay, rather than a field that says one thing
+     * and holds another. */
+    const char *text = gtk_editable_get_text(GTK_EDITABLE(w->gtk));
+    char       *out  = NULL;
+    if (*mask && *text) {
+        bool bad = false;
+        out = mask_format(mask, text, true, &bad, NULL);
+        if (bad) {
+            g_free(out);
+            JSValue error = JS_ThrowTypeError(ctx, "Mask \"%s\" does not fit Text \"%s\"",
+                                              mask, text);
+            JS_FreeCString(ctx, mask);
+            return error;
+        }
+    }
+
+    g_object_set_data_full(G_OBJECT(w->gtk), "bta-mask", g_strdup(mask), g_free);
+    if (out) {
+        gtk_editable_set_text(GTK_EDITABLE(w->gtk), out);
+        g_free(out);
+    }
+    JS_FreeCString(ctx, mask);
     return JS_UNDEFINED;
 }
 
@@ -3267,6 +3447,13 @@ static const JSCFunctionListEntry textbox_props[] = {
      *   how many characters may be typed; `0` is no limit
      */
     JS_CGETSET_DEF("MaxLength", textbox_get_maxlength, textbox_set_maxlength),
+    /* Mask
+     *   the shape of what may be typed: `0` a digit, `A` a letter, `?` any
+     *   character, `*` a letter or digit, everything else a literal put in for
+     *   the person. `""` is no mask. What does not fit is refused — dropped
+     *   while typing, a `TypeError` when `Text` is assigned from code
+     */
+    JS_CGETSET_DEF("Mask", textbox_get_mask, textbox_set_mask),
     /* Purpose
      *   `Text` `Digits` `Number` `Phone` `Url` `Email` `Name` — what the
      *   keyboard and the input method should expect. Default `"Text"`. On a

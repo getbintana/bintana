@@ -5988,6 +5988,14 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   deprecated call, so the build stays silent. The list is replaced whole and
   every entry is checked as text before the model is touched: a refused array
   leaves the words that were there. `[]` offers nothing.
+- **`TextBox.Mask` formats on `changed`, and blocks its own handler.** The
+  entry's text is filtered into the mask in C and written back with
+  `gtk_editable_set_text`, with `changed` blocked across that write so one
+  keystroke is one `Change`. The caret goes to the end: a masked field fills in
+  order, and a caret kept mid-string while the literals move is the bug the
+  `Change`-handler version had. `Text` assigned from code is strict -- it throws
+  rather than dropping -- and a new mask that the current text does not fit is
+  refused whole, leaving the old mask and text.
 - **A `ComboBox` has no empty text and, with items, no empty state.**
   `cmb.Text = ""` throws `'' is not one of <name>'s items`, and `Index = -1`
   **moves nothing**: GTK's autoselect leaves the first row chosen the moment
@@ -12803,7 +12811,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10480 assertions
+./tests/run.sh                          # all seven projects, 10494 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -14300,7 +14308,6 @@ needed and what it did instead.
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
-| No masked input | [ISSUE-masked-input](../issues/ISSUE-masked-input.md) |
 | No property grid control for applications | [ISSUE-property-grid-control](../issues/ISSUE-property-grid-control.md) |
 | No symmetric encryption | [ISSUE-symmetric-encryption](../issues/ISSUE-symmetric-encryption.md) |
 | The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
