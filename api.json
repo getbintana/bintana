@@ -10717,6 +10717,15 @@
           "Native": false
         },
         {
+          "Name": "Completion",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the words it offers while somebody types, an array of strings; `[]` offers none. It completes and **does not restrict**: what is typed is still `Text`, which is the difference from a `ComboBox`",
+          "Native": true
+        },
+        {
           "Name": "Icon",
           "Kind": "Property",
           "Params": -1,

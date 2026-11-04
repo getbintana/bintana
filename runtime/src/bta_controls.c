@@ -3091,6 +3091,112 @@ static JSValue textbox_select_all(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * The words a field offers while somebody types.
+ *
+ * **It completes and does not restrict**: what is typed is still `Text`, which
+ * is the difference between this and a `ComboBox`.  `GtkEntryCompletion` gives
+ * the popup and the inline completion; the model is a one-column string store,
+ * rebuilt whole on every assignment so a refusal leaves the old list in place.
+ * An empty array is a field that offers nothing.
+ */
+static JSValue textbox_get_completion(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    GtkEntryCompletion *c = gtk_entry_get_completion(GTK_ENTRY(w->gtk));
+    GtkTreeModel       *m = c ? gtk_entry_completion_get_model(c) : NULL;
+    G_GNUC_END_IGNORE_DEPRECATIONS
+    JSValue             out = JS_NewArray(ctx);
+
+    if (!m)
+        return out;
+
+    GtkTreeIter it;
+    uint32_t    at = 0;
+
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    for (gboolean ok = gtk_tree_model_get_iter_first(m, &it); ok;
+         ok = gtk_tree_model_iter_next(m, &it)) {
+        GValue value = G_VALUE_INIT;
+        gtk_tree_model_get_value(m, &it, 0, &value);
+
+        const char *text = G_VALUE_HOLDS_STRING(&value)
+                               ? g_value_get_string(&value) : "";
+        JS_SetPropertyUint32(ctx, out, at++, JS_NewString(ctx, text ? text : ""));
+        g_value_unset(&value);
+    }
+    G_GNUC_END_IGNORE_DEPRECATIONS
+    return out;
+}
+
+static JSValue textbox_set_completion(JSContext *ctx, JSValueConst this_val,
+                                      JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    if (!JS_IsArray(val))
+        return JS_ThrowTypeError(ctx, "Completion expects an array of strings");
+
+    JSValue  lenv = JS_GetPropertyStr(ctx, val, "length");
+    uint32_t n    = 0;
+    int      rc   = JS_ToUint32(ctx, &n, lenv);
+    JS_FreeValue(ctx, lenv);
+    if (rc < 0)
+        return JS_EXCEPTION;
+
+    /* Everything converted before the store is touched: an entry that is not
+     * text is a refusal, and the list that was there stays. */
+    char **words = g_new0(char *, n + 1);
+    for (uint32_t i = 0; i < n; i++) {
+        JSValue     e  = JS_GetPropertyUint32(ctx, val, i);
+        bool        is_text = JS_IsString(e);
+        const char *s  = is_text ? JS_ToCString(ctx, e) : NULL;
+
+        if (!s) {
+            JS_FreeValue(ctx, e);
+            g_strfreev(words);
+            if (!is_text)
+                return JS_ThrowTypeError(ctx, "Completion: entry %u is not text", i);
+            return JS_EXCEPTION;
+        }
+        words[i] = g_strdup(s);
+        JS_FreeCString(ctx, s);
+        JS_FreeValue(ctx, e);
+    }
+
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    GtkEntryCompletion *c = gtk_entry_get_completion(GTK_ENTRY(w->gtk));
+    if (!c) {
+        c = gtk_entry_completion_new();
+        gtk_entry_completion_set_inline_completion(c, TRUE);
+        gtk_entry_completion_set_popup_completion(c, TRUE);
+        gtk_entry_completion_set_minimum_key_length(c, 0);
+        gtk_entry_set_completion(GTK_ENTRY(w->gtk), c);
+        g_object_unref(c);
+    }
+    G_GNUC_END_IGNORE_DEPRECATIONS
+
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    GtkListStore *store = gtk_list_store_new(1, G_TYPE_STRING);
+    for (uint32_t i = 0; i < n; i++) {
+        GtkTreeIter it;
+        gtk_list_store_append(store, &it);
+        gtk_list_store_set(store, &it, 0, words[i], -1);
+    }
+    gtk_entry_completion_set_model(c, GTK_TREE_MODEL(store));
+    gtk_entry_completion_set_text_column(c, 0);
+    G_GNUC_END_IGNORE_DEPRECATIONS
+    g_object_unref(store);
+    g_strfreev(words);
+
+    return JS_UNDEFINED;
+}
+
 /* What is highlighted right now, "" for nothing -- which is what a *Copy* or a
  * *Replace* over a field has to ask before it can do anything. */
 static JSValue textbox_get_selected(JSContext *ctx, JSValueConst this_val)
@@ -3205,6 +3311,12 @@ static const JSCFunctionListEntry textbox_props[] = {
      *   label once somebody types in it
      */
     JS_CGETSET_DEF("Placeholder", textbox_get_placeholder, textbox_set_placeholder),
+    /* Completion
+     *   the words it offers while somebody types, an array of strings; `[]`
+     *   offers none. It completes and **does not restrict**: what is typed is
+     *   still `Text`, which is the difference from a `ComboBox`
+     */
+    JS_CGETSET_DEF("Completion", textbox_get_completion, textbox_set_completion),
     /* Icon
      *   an icon **inside** the field, at the end. Clicking it raises
      *   `IconClick`

@@ -6568,6 +6568,28 @@ class Form1 extends Form {
         eq("and leaves it after what it wrote", t.Offset, 12);
         throws("Insert refuses no argument at all", () => t.Insert());
 
+        /* --- what it offers while somebody types ---------------------------- */
+        eq("a field offers nothing until told",
+           JSON.stringify(t.Completion), "[]");
+        check("so that stays out of the .form",
+              !("Completion" in t.Serialize().properties),
+              JSON.stringify(t.Serialize().properties));
+
+        t.Completion = ["Argentina", "Brasil", "Chile"];
+        eq("Completion round-trip",
+           JSON.stringify(t.Completion), '["Argentina","Brasil","Chile"]');
+        eq("and is saved", JSON.stringify(t.Serialize().properties.Completion),
+           '["Argentina","Brasil","Chile"]');
+        throws("a word is not a list", () => { t.Completion = "Chile"; });
+        throws("and neither is a list with something that is not text",
+               () => { t.Completion = ["Chile", 3]; });
+        eq("a refusal leaves the list as it was",
+           JSON.stringify(t.Completion), '["Argentina","Brasil","Chile"]');
+
+        t.Completion = [];
+        eq("an empty list offers nothing again", JSON.stringify(t.Completion), "[]");
+        check("and is not written", !("Completion" in t.Serialize().properties));
+
         t.Delete();
     }
 

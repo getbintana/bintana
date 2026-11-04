@@ -1069,6 +1069,14 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   controller for the older GTK. A signal's `version` is in the GIR
   (`/usr/share/gir-1.0/Gtk-4.0.gir`) or the docs, and a property's is too;
   check both, not only the functions.
+- **`TextBox.Completion` is `GtkEntryCompletion`, and that is deprecated.** It
+  is still the only entry completion GTK4 has -- the deprecation message says
+  *use `GListModel`*, but the completion's model is a `GtkTreeModel` and there is
+  no replacement constructor. The calls are wrapped in
+  `G_GNUC_BEGIN_IGNORE_DEPRECATIONS`, the way `bta_fixed.c` does for its one
+  deprecated call, so the build stays silent. The list is replaced whole and
+  every entry is checked as text before the model is touched: a refused array
+  leaves the words that were there. `[]` offers nothing.
 - **A `ComboBox` has no empty text and, with items, no empty state.**
   `cmb.Text = ""` throws `'' is not one of <name>'s items`, and `Index = -1`
   **moves nothing**: GTK's autoselect leaves the first row chosen the moment

@@ -5980,6 +5980,14 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   controller for the older GTK. A signal's `version` is in the GIR
   (`/usr/share/gir-1.0/Gtk-4.0.gir`) or the docs, and a property's is too;
   check both, not only the functions.
+- **`TextBox.Completion` is `GtkEntryCompletion`, and that is deprecated.** It
+  is still the only entry completion GTK4 has -- the deprecation message says
+  *use `GListModel`*, but the completion's model is a `GtkTreeModel` and there is
+  no replacement constructor. The calls are wrapped in
+  `G_GNUC_BEGIN_IGNORE_DEPRECATIONS`, the way `bta_fixed.c` does for its one
+  deprecated call, so the build stays silent. The list is replaced whole and
+  every entry is checked as text before the model is touched: a refused array
+  leaves the words that were there. `[]` offers nothing.
 - **A `ComboBox` has no empty text and, with items, no empty state.**
   `cmb.Text = ""` throws `'' is not one of <name>'s items`, and `Index = -1`
   **moves nothing**: GTK's autoselect leaves the first row chosen the moment
@@ -12795,7 +12803,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10471 assertions
+./tests/run.sh                          # all seven projects, 10480 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -14291,7 +14299,6 @@ needed and what it did instead.
 | The debugger stops in the program's own runtime and **not in a `Task`** — a background computation is unbreakpointable and unsteppable, and `Error` with its stack is the whole of what its failure says | [library.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md#task). The other ten of the eleven are built: [`docs/plans/debug-plan.md`](../plans/debug-plan.md). A loop written entirely on one line also stops only once |
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
-| No editable / autocompleting combo | [ISSUE-editable-combo](../issues/ISSUE-editable-combo.md) |
 | `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
 | No masked input | [ISSUE-masked-input](../issues/ISSUE-masked-input.md) |
 | No property grid control for applications | [ISSUE-property-grid-control](../issues/ISSUE-property-grid-control.md) |
