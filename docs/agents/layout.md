@@ -353,7 +353,7 @@ is drawn.
 - **Tab order cannot ride the child list, because paint order already does.**
   GTK4 walks the focus in child-list order and removed `GtkContainer`'s focus
   chain, so on a `BtaFixed` the drawn order is the tab order -- and that same list
-  is what `Raise`/`Lower` reorder. `Widget.TabIndex` is declared per child and
+  is what `Raise`/`Lower` and `MoveForward`/`MoveBackward` reorder. `Widget.TabIndex` is declared per child and
   carried out by `bta_fixed_focus`, the surface's own `focus` vfunc, which is the
   supported place for this and costs nothing elsewhere: a focused editor or
   `Terminal` consumes Tab long before GTK asks a container for the next target, so

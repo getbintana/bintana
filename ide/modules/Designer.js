@@ -1529,9 +1529,8 @@ export class Designer {
          * come back.
          */
         this.ide.ActDelCtl.Enabled = has;
-        const liftable = has && this.selection.every((c) => typeof c.Raise === "function");
-        this.ide.ActRaise.Enabled  = liftable;
-        this.ide.ActLower.Enabled  = liftable;
+        this.ide.ActRaise.Enabled  = this.canStep(true);
+        this.ide.ActLower.Enabled  = this.canStep(false);
 
         /* Renaming is two things with one condition: the canvas's command
          * renames the selection, the tree's renames the row the pointer is on.
@@ -1612,18 +1611,51 @@ export class Designer {
     canRedo() { return this.redoStack.length > 0; }
 
     /*
-     * Depth.  Selecting a control does not raise it, on purpose: that would
-     * reorder the .form without anyone asking.  Meanwhile the selection outline
-     * lives in Glass, so a covered control is still visible.
+     * Depth, **one place at a time**.  Selecting a control does not move it; a
+     * step moves the selected controls one sibling forward or back, and the
+     * buttons are the only road to the all-the-way `Raise`/`Lower` now.  A
+     * control already at the end of the row or the stack has nowhere to go and
+     * is not an edit.
      */
+    canStep(toFront) {
+        return this.selection.some((control) => {
+            if (typeof control.MoveForward !== "function") return false;
+            const parent = this.parentOf(control);
+            const at = parent && parent.Children ? parent.Children.indexOf(control) : -1;
+            if (at < 0) return false;
+            return toFront ? at < parent.Children.length - 1 : at > 0;
+        });
+    }
+
     restack(toFront) {
         if (!this.selection.length) return;
+
+        const moves = [];
+        for (const control of this.selection) {
+            if (typeof control.MoveForward !== "function") continue;
+
+            const parent = this.parentOf(control);
+            const at = parent && parent.Children ? parent.Children.indexOf(control) : -1;
+            if (at < 0) continue;
+            if (toFront ? at >= parent.Children.length - 1 : at <= 0) continue;
+
+            moves.push({ control, parent, at });
+        }
+        if (!moves.length) return;
+
         this.pushUndo();
 
-        for (const control of this.selection) {
-            if (typeof control.Raise !== "function") continue;
-            if (toFront) control.Raise();
-            else         control.Lower();
+        /* From the front backwards when moving forward, and from the back
+         * forwards when moving back, so two selected controls do not step over
+         * one another.  Different parents are independent. */
+        moves.sort((a, b) => {
+            if (a.parent !== b.parent) return 0;
+            return toFront ? b.at - a.at : a.at - b.at;
+        });
+
+        for (const move of moves) {
+            if (toFront) move.control.MoveForward();
+            else         move.control.MoveBackward();
         }
         this.chrome.position();
         this.touch();

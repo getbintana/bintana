@@ -1126,14 +1126,14 @@ function* p_designer(ide) {
           `${ide.WidgetTree.Count} nodes for ${ide.Surface.Children.length} controls`);
 
     /* The control tree lists children in paint order, so the front is the last
-     * row: the arrow on "Bring to front" points down the tree, and the one on
-     * "Send to back" points up. They said the opposite once, which made the
-     * pair read as if it did the other thing. */
+     * row: "Bring forward" moves one row down the tree, and "Send backward" one
+     * row up.  They said the opposite once, which made the pair read as if it
+     * did the other thing. */
     check("the design bar has its two stack buttons",
           !!ide.BtnRaise && !!ide.BtnLower);
     if (ide.BtnRaise && ide.BtnLower) {
-        eq("the front arrow points down the tree", ide.BtnRaise.Icon, "go-down-symbolic");
-        eq("and the back arrow up",                 ide.BtnLower.Icon, "go-up-symbolic");
+        eq("the forward arrow points down the tree", ide.BtnRaise.Icon, "go-down-symbolic");
+        eq("and the backward arrow up",               ide.BtnLower.Icon, "go-up-symbolic");
     }
 
     ide.WidgetTree.Key = ide.Surface.Children[1].Name;
@@ -1294,24 +1294,21 @@ function* p_designer(ide) {
     eq("...and so does the button",          ide.BtnDelCtl.Enabled, false);
     eq("rename included",                    ide.ActTrRename.Enabled, false);
 
-    /* Bring to front from the menu is the same restack the button does. Undone
-     * afterwards: painting order is what the tests below this one measure, and
-     * leaving it changed would break them from a distance. */
+    /* Bring forward from the menu is the one-step restack the button does.
+     * Undone afterwards: painting order is what the tests below this measure,
+     * and leaving it changed would break them from a distance. */
     const painted = ide.Surface.Children.map((c) => c.Name);
 
     ide.designer.select(byName(ide, painted[0]));
     yield;
     ide.ActRaise.Execute();
     yield;
-    check("choosing Bring to front restacks, as the button does",
-          ide.Surface.Children.map((c) => c.Name).join(",") !== painted.join(","),
-          `${painted} -> ${ide.Surface.Children.map((c) => c.Name)}`);
 
-    /* Raising each in turn leaves exactly the painted they were raised in. */
-    for (const name of painted) {
-        ide.designer.select(byName(ide, name));
-        ide.designer.restack(true);
-    }
+    const moved = ide.Surface.Children.map((c) => c.Name);
+    eq("choosing Bring forward moves it one place", moved[1], painted[0]);
+
+    /* The all-the-way runtime verb puts the painted order back. */
+    for (const name of painted) byName(ide, name).Raise();
     yield;
     eq("and the painted can be put back",
        ide.Surface.Children.map((c) => c.Name).join(","), painted.join(","));
@@ -2958,11 +2955,15 @@ function* p_palette(ide) {
     /* --- designer: stacking --------------------------------------------- */
     const names = () => ide.Surface.Children.map((w) => w.Name).join(",");
     eq("the new control is last, so it paints on top", names(), "Ok,Msg,CheckButton1");
+    check("at the front, forward is grey", !ide.ActRaise.Enabled);
+    check("and backward is live", ide.ActLower.Enabled);
 
     ide.ActLower_Execute();
-    eq("Al fondo sends it behind", names(), "CheckButton1,Ok,Msg");
+    eq("Send backward moves it one place", names(), "Ok,CheckButton1,Msg");
+    check("and forward comes back to life", ide.ActRaise.Enabled);
     ide.ActRaise_Execute();
-    eq("Al frente brings it back", names(), "Ok,Msg,CheckButton1");
+    eq("Bring forward brings it back", names(), "Ok,Msg,CheckButton1");
+    check("at the front again, forward is grey", !ide.ActRaise.Enabled);
 
     /* --- designer: deleting --------------------------------------------- */
     ide.ActDelCtl_Execute();
@@ -7394,6 +7395,8 @@ function* p_nested(ide) {
         children: [
             { type: "Button", name: "Ok",
               properties: { X: 20, Y: 30, Width: 80, Height: 30, Text: "ok" } },
+            { type: "Button", name: "Cancel",
+              properties: { X: 120, Y: 30, Width: 80, Height: 30, Text: "cancel" } },
         ],
     }, null, 2));
     File.Save(File.Join(TMP, "Tabs.js"),
@@ -7608,7 +7611,7 @@ function* p_nested(ide) {
     ide.openNamed("Tabs.form");
     yield;                 // let GTK allocate the design area
     eq("opening after a close works", ide.Tabs.Count, 1);
-    eq("and the form is loaded", ide.Surface.Children.length, 1);
+    eq("and the form is loaded", ide.Surface.Children.length, 2);
 
     /* --- a value the runtime refuses, on a container -------------------------
      *

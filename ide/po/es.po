@@ -839,12 +839,12 @@ msgid "Delete control"
 msgstr "Eliminar el control"
 
 #: forms/MainForm.form: action ActRaise modules/Workspace.js:305
-msgid "Bring to front"
-msgstr "Traer al frente"
+msgid "Bring forward"
+msgstr "Traer adelante"
 
 #: forms/MainForm.form: action ActLower modules/Workspace.js:306
-msgid "Send to back"
-msgstr "Enviar al fondo"
+msgid "Send backward"
+msgstr "Enviar atrás"
 
 #: forms/MainForm.form: action ActPrevPage
 msgid "Previous page"

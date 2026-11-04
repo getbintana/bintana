@@ -12687,6 +12687,24 @@
           "Native": true
         },
         {
+          "Name": "MoveBackward",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "one place toward the back, where `Lower` goes all the way",
+          "Native": true
+        },
+        {
+          "Name": "MoveForward",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "**one place** toward the front, among its siblings -- `Raise` takes it all the way. A `Fixed`, a box, a grid, a stack, a notebook, a `Flow` and a `RowList` all answer; a split and an aspect frame have no next place and do nothing",
+          "Native": true
+        },
+        {
           "Name": "Name",
           "Kind": "Property",
           "Params": -1,

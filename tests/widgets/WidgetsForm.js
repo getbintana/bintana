@@ -1068,6 +1068,21 @@ class WidgetsForm extends Form {
         eq("Lower from the top of the stack", order(), "CAB");
         eq("still at its own coordinates", c.X, 5);
 
+        /* One place, which is what the design bar's arrows do: the front is the
+         * last child, so forward is later in the list. */
+        a.MoveForward();
+        eq("MoveForward moves it one place, not to the end", order(), "CBA");
+        a.MoveBackward();
+        eq("MoveBackward puts it back one place", order(), "CAB");
+        c.MoveBackward();
+        eq("a move with nowhere to go does nothing", order(), "CAB");
+        b.MoveForward();
+        eq("nor does one at the front", order(), "CAB");
+        c.MoveForward();
+        eq("a middle step still crosses", order(), "ACB");
+        c.MoveBackward();
+        eq("and back", order(), "CAB");
+
         c.Delete();
         eq("Delete drops it from the tree", order(), "AB");
         eq("a deleted widget has no parent", c.Serialize().type, "Button");

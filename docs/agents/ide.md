@@ -223,6 +223,26 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `.conn` and asserts the form's own Connection still names the database. A
   build without sqlite skips it and says so.
 
+## The stack buttons
+
+- **The design bar's two arrows step one place; they do not go all the way.**
+  `ActRaise`/`ActLower` are the command names -- old ones, and the test names
+  still say them -- but their handlers call `Designer.restack`, which calls
+  `Widget.MoveForward`/`MoveBackward`: one sibling, from the front backwards or
+  the back forwards when several are selected, so two controls do not step over
+  one another. `Raise`/`Lower` remain the runtime's all-the-way verbs and are
+  what the tests use to put a painted order back.
+- **The arrows follow the control tree.** Its rows are in paint order, so the
+  front is the last row: forward is `go-down-symbolic` and backward
+  `go-up-symbolic`. A `Fixed` has no `Reorder` to call (`Raise`/`Lower` were its
+  only order verbs), so the runtime's step moves the GTK sibling itself; a
+  `Flow`, `RowList`, `Notebook`, `Switcher` and `Overlay` go through
+  `bta_container_reorder` because their child wrappers are not their order.
+- **At an edge the button is grey and the move is not an edit.** `canStep`
+  checks the selection against its parent, and `restack` returns before
+  `pushUndo` when no selected control has anywhere to go -- the same bargain the
+  keyboard arrows already made.
+
 ## IDE traps
 
 - **A class verb asked about the edited project's name answers out of the

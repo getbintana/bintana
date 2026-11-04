@@ -900,12 +900,12 @@ msgstr ""
 
 #: forms/MainForm.form: action ActRaise
 #: modules/Workspace.js:305
-msgid "Bring to front"
+msgid "Bring forward"
 msgstr ""
 
 #: forms/MainForm.form: action ActLower
 #: modules/Workspace.js:306
-msgid "Send to back"
+msgid "Send backward"
 msgstr ""
 
 #: forms/MainForm.form: action ActPrevPage

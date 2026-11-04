@@ -16,13 +16,13 @@
     },
     {
       "name": "ActRaise",
-      "text": "Bring to front",
+      "text": "Bring forward",
       "icon": "go-down",
       "enabled": false
     },
     {
       "name": "ActLower",
-      "text": "Send to back",
+      "text": "Send backward",
       "icon": "go-up",
       "enabled": false
     },

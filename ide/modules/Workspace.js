@@ -302,16 +302,17 @@ export class Workspace {
         bar.Style       = "toolbar";
 
         /*
-         * **The arrow follows the row, not the canvas.**  The control tree
-         * lists children in paint order, so the front is the last row: bringing
-         * one to the front moves it *down* the tree, and sending it back moves
-         * it up.  The icons said the opposite until this was fixed, which made
-         * the pair read as if it did the other thing.
+         * **One place, and the arrow follows the row.**  The control tree lists
+         * children in paint order, so the front is the last row: *Bring
+         * forward* moves one row down and *Send backward* one row up.  The
+         * all-the-way `Raise`/`Lower` are still in the runtime, but they are
+         * not what these buttons do: moving a control to the very end is the
+         * rare gesture, and the one-step is the one a person repeats.
          */
         for (const row of [
                 ["ActDelCtl", "edit-delete-symbolic", Locale.Text("Delete control")],
-                ["ActRaise",  "go-down-symbolic",     Locale.Text("Bring to front")],
-                ["ActLower",  "go-up-symbolic",       Locale.Text("Send to back")],
+                ["ActRaise",  "go-down-symbolic",     Locale.Text("Bring forward")],
+                ["ActLower",  "go-up-symbolic",       Locale.Text("Send backward")],
                 null,
                 ["ActPrevPage", "go-previous-symbolic", Locale.Text("Previous page (Ctrl+Page Up)")],
                 ["ActNextPage", "go-next-symbolic",     Locale.Text("Next page (Ctrl+Page Down)")],

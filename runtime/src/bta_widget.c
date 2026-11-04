@@ -2465,7 +2465,7 @@ static JSValue w_get_focused(JSContext *ctx, JSValueConst this_val)
  * sequence the sibling list does not move. In a stack the bottom is the layer
  * that fills, so `Lower` there means *become the base*.
  */
-enum { STACK_RAISE, STACK_LOWER };
+enum { STACK_RAISE, STACK_LOWER, STACK_FORWARD, STACK_BACKWARD };
 
 static JSValue w_restack(JSContext *ctx, JSValueConst this_val,
                          int argc, JSValueConst *argv, int magic)
@@ -2478,27 +2478,71 @@ static JSValue w_restack(JSContext *ctx, JSValueConst this_val,
     if (!slot)
         return JS_UNDEFINED;
 
-    if (GTK_IS_OVERLAY(slot) || GTK_IS_FLOW_BOX(slot) || GTK_IS_LIST_BOX(slot)) {
+    if (GTK_IS_OVERLAY(slot) || GTK_IS_FLOW_BOX(slot) || GTK_IS_LIST_BOX(slot) ||
+        GTK_IS_NOTEBOOK(slot) || GTK_IS_STACK(slot)) {
         BtaWidget *own = g_object_get_data(G_OBJECT(slot), BTA_WIDGET_QUARK);
         int        n   = bta_container_count(slot);
 
         if (!own || n < 2)
             return JS_UNDEFINED;
 
-        return bta_container_reorder(ctx, own, w,
-                                     magic == STACK_RAISE ? n - 1 : 0)
+        int at = 0;
+        GtkWidget *holder = bta_child_holder(w->gtk);
+        for (GtkWidget *c = bta_slot_first_child(slot); c;
+             c = gtk_widget_get_next_sibling(c)) {
+            if (c == holder || bta_slot_child(c) == w)
+                break;
+            at++;
+        }
+
+        int to;
+        switch (magic) {
+        case STACK_RAISE:    to = n - 1; break;
+        case STACK_LOWER:    to = 0;     break;
+        case STACK_FORWARD:  to = at + 1; break;
+        default:             to = at - 1; break;
+        }
+
+        if (to < 0 || to >= n || to == at)
+            return JS_UNDEFINED;
+
+        return bta_container_reorder(ctx, own, w, to)
              ? JS_UNDEFINED : JS_EXCEPTION;
     }
 
-    if (magic == STACK_RAISE) {
-        GtkWidget *last = gtk_widget_get_last_child(slot);
-        if (last && last != w->gtk)
-            gtk_widget_insert_after(w->gtk, slot, last);
-    } else {
-        GtkWidget *first = gtk_widget_get_first_child(slot);
-        if (first && first != w->gtk)
-            gtk_widget_insert_before(w->gtk, slot, first);
+    /* A split has two halves and an aspect frame one child: there is no next
+     * place to step to, and Raise/Lower have the same answer. */
+    if (GTK_IS_PANED(slot) || GTK_IS_ASPECT_FRAME(slot))
+        return JS_UNDEFINED;
+
+    if (magic == STACK_RAISE || magic == STACK_LOWER) {
+        if (magic == STACK_RAISE) {
+            GtkWidget *last = gtk_widget_get_last_child(slot);
+            if (last && last != w->gtk)
+                gtk_widget_insert_after(w->gtk, slot, last);
+        } else {
+            GtkWidget *first = gtk_widget_get_first_child(slot);
+            if (first && first != w->gtk)
+                gtk_widget_insert_before(w->gtk, slot, first);
+        }
+        return JS_UNDEFINED;
     }
+
+    GtkWidget *holder = bta_child_holder(w->gtk);
+    GtkWidget *target = magic == STACK_FORWARD
+                            ? gtk_widget_get_next_sibling(holder)
+                            : gtk_widget_get_prev_sibling(holder);
+    if (!target)
+        return JS_UNDEFINED;
+
+    if (magic == STACK_FORWARD)
+        gtk_widget_insert_after(w->gtk, slot, target);
+    else
+        gtk_widget_insert_before(w->gtk, slot, target);
+
+    if (GTK_IS_GRID(slot))
+        bta_grid_reflow(slot);
+
     return JS_UNDEFINED;
 }
 
@@ -8365,6 +8409,17 @@ static const JSCFunctionListEntry widget_props[] = {
      *   and to the bottom
      */
     JS_CFUNC_MAGIC_DEF("Lower", 0, w_restack, STACK_LOWER),
+    /* MoveForward()
+     *   **one place** toward the front, among its siblings -- `Raise` takes it
+     *   all the way. A `Fixed`, a box, a grid, a stack, a notebook, a `Flow`
+     *   and a `RowList` all answer; a split and an aspect frame have no next
+     *   place and do nothing
+     */
+    JS_CFUNC_MAGIC_DEF("MoveForward", 0, w_restack, STACK_FORWARD),
+    /* MoveBackward()
+     *   one place toward the back, where `Lower` goes all the way
+     */
+    JS_CFUNC_MAGIC_DEF("MoveBackward", 0, w_restack, STACK_BACKWARD),
 };
 
 const JSCFunctionListEntry *bta_widget_base_props(int *count)
