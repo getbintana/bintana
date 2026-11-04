@@ -21,6 +21,9 @@ one-page answer to *what is new since the release I have*.
 - **`examples/pulse`** puts the three together: a Timer polls a local
   `Http.Server` through an `HttpClient`, and each beat is one row in SQLite
   through a `Connection`.
+- **`examples/uptime`** is the other shape of it: every 30 seconds a Timer asks
+  a list of URLs through an `HttpClient` and writes one row per site into a
+  `Connection` -- a failure included, with status 0 and the reason.
 
 ## 0.3.0 — 2026-11-04
 

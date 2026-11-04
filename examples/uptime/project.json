@@ -1,0 +1,6 @@
+{
+  "name": "uptime",
+  "startup": "UptimeForm",
+  "version": "1.0",
+  "description": "Every 30 s, ask a list of URLs and keep what came back"
+}

@@ -577,6 +577,8 @@ const TESTS = [
     /* And the three parts together: a Timer polls a local server through an
      * HttpClient and keeps each beat in SQLite, then closes on --selftest. */
     "ExamplePulse",
+    /* The uptime monitor: one row per site per round, a failure included. */
+    "ExampleUptime",
     /* And the sheet reader, a Task, in a child project of its own. */
     "ExampleSheets",
     /* And its other half: lib/xlsx held to a spreadsheet program, and clients exporting its own database. */
@@ -25107,6 +25109,27 @@ class Form1 extends Form {
         eq("the three parts run together and exit 0", ran.ExitCode, 0);
         check("three beats were kept", ran.Output.includes("pulse: 3 beats kept"), ran.Output);
         check("and the database is cleaned up", !File.Exists(db), db);
+    }
+
+    /* The uptime monitor, on a server of its own: two rounds, three sites
+     * each, and the failure is a row like the successes. */
+    testExampleUptime() {
+        const dir = File.Join(File.Directory(Application.Directory), "..", "examples", "uptime");
+
+        if (!File.IsDir(dir)) {
+            print("ExampleUptime: examples/uptime is not beside this suite; skipped");
+            return;
+        }
+
+        const db = File.Join(dir, "uptime.db");
+        if (File.Exists(db)) File.Delete(db);
+
+        const ran = Exec.Wait([Application.Executable, dir, "--selftest"],
+                              { Timeout: 30000 });
+        eq("the monitor runs and exits 0", ran.ExitCode, 0);
+        check("two rounds of three checks", ran.Output.includes("uptime: 2 rounds, 6 checks"),
+              ran.Output);
+        check("and its database is cleaned up", !File.Exists(db), db);
     }
 
     /*

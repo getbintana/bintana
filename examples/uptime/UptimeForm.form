@@ -1,0 +1,95 @@
+{
+  "format": "bintana-form/1",
+  "class": "UptimeForm",
+  "properties": {
+    "Text": "Uptime",
+    "Width": 680,
+    "Height": 460,
+    "Arrangement": "Vertical",
+    "Spacing": 8,
+    "Padding": 12
+  },
+  "components": [
+    {
+      "type": "Timer",
+      "name": "Clock",
+      "properties": {
+        "Delay": 30000,
+        "Enabled": true
+      }
+    },
+    {
+      "type": "Connection",
+      "name": "Db",
+      "properties": {
+        "Path": "uptime.db"
+      }
+    },
+    {
+      "type": "HttpClient",
+      "name": "Api",
+      "properties": {
+        "BaseUrl": "",
+        "Timeout": 5000,
+        "Http1": true,
+        "FollowRedirects": true
+      }
+    }
+  ],
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8,
+        "HAlign": "Fill"
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblStatus",
+          "properties": {
+            "Text": "every 30 s — no check yet",
+            "HAlign": "Fill",
+            "HExpand": true,
+            "VAlign": "Center"
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnCheck",
+          "properties": {
+            "Text": "Check now",
+            "Icon": "view-refresh-symbolic",
+            "Width": 130
+          }
+        }
+      ]
+    },
+    {
+      "type": "TableView",
+      "name": "Checks",
+      "properties": {
+        "Columns": [
+          { "Text": "Site",   "Width": 120 },
+          { "Text": "Status", "Width": 80, "Alignment": "Right" },
+          { "Text": "ms",     "Width": 70, "Alignment": "Right" },
+          { "Text": "At",     "Width": 100 },
+          { "Text": "Error",  "Width": 0 }
+        ],
+        "HAlign": "Fill",
+        "VExpand": true,
+        "MinHeight": 220
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblHint",
+      "properties": {
+        "Text": "One row per request in uptime.db; a failure is a row too.",
+        "Style": "dim-label"
+      }
+    }
+  ]
+}
