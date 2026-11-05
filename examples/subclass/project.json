@@ -1,0 +1,11 @@
+{
+  "name": "Subclass",
+  "id": "io.github.getbintana.Subclass",
+  "startup": "MainForm",
+  "sources": [
+    "NameList.js",
+    "MainForm.js"
+  ],
+  "version": "1.0",
+  "description": "A ListBox with a behaviour of its own, and the designer that draws it as the ListBox it extends"
+}

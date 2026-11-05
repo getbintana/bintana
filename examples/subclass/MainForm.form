@@ -1,0 +1,47 @@
+{
+  "format": "bintana-form/1",
+  "class": "MainForm",
+  "properties": {
+    "Height": 280,
+    "Text": "Subclass",
+    "Width": 420
+  },
+  "children": [
+    {
+      "type": "NameList",
+      "name": "Names",
+      "properties": {
+        "Height": 160,
+        "Index": 1,
+        "Items": ["Ana", "Beto", "Carla"],
+        "Width": 380,
+        "X": 20,
+        "Y": 20
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRefill",
+      "properties": {
+        "Height": 32,
+        "Icon": "view-refresh-symbolic",
+        "Text": "Refill",
+        "Width": 110,
+        "X": 20,
+        "Y": 200
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Height": 32,
+        "Text": "three names",
+        "VAlign": "Center",
+        "Width": 240,
+        "X": 145,
+        "Y": 200
+      }
+    }
+  ]
+}

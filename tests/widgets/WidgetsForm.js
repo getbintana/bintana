@@ -591,6 +591,8 @@ const TESTS = [
     "ExamplePulse",
     /* The uptime monitor: one row per site per round, a failure included. */
     "ExampleUptime",
+    /* A project class that extends a control, run as a child. */
+    "ExampleSubclass",
     /* And the sheet reader, a Task, in a child project of its own. */
     "ExampleSheets",
     /* And its other half: lib/xlsx held to a spreadsheet program, and clients exporting its own database. */
@@ -25349,6 +25351,24 @@ class Form1 extends Form {
         check("two rounds of three checks", ran.Output.includes("uptime: 2 rounds, 6 checks"),
               ran.Output);
         check("and its database is cleaned up", !File.Exists(db), db);
+    }
+
+    /* A project class that extends a control: the runtime builds the real
+     * class, and the designer draws the base it extends. */
+    testExampleSubclass() {
+        const dir = File.Join(File.Directory(Application.Directory), "..",
+                              "examples", "subclass");
+
+        if (!File.IsDir(dir)) {
+            print("ExampleSubclass: examples/subclass is not beside this suite; skipped");
+            return;
+        }
+
+        const ran = Exec.Wait([Application.Executable, dir, "--selftest"],
+                              { Timeout: 30000 });
+        eq("the subclass runs and exits 0", ran.ExitCode, 0);
+        check("the runtime built the class, not a ListBox stand-in",
+              ran.Output.includes("subclass: ok"), ran.Output);
     }
 
     /*
