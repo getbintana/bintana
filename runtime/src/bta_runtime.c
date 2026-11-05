@@ -1132,6 +1132,8 @@ static const char *symbol_kind_name(JSSymbolKind kind)
     /* What a module publishes, and each name it imports (fork patch 15). */
     case JS_SYMBOL_EXPORT:        return "Export";
     case JS_SYMBOL_IMPORT:        return "Import";
+    /* A public instance field of a class: `this.total` is a use of it. */
+    case JS_SYMBOL_FIELD:         return "Field";
     }
     return "";
 }
@@ -2367,7 +2369,9 @@ static bool install_globals(BtaApp *app)
      *   what the text declares — `[{ Name, Kind, Line, Parent, Super, From,
      *   Params, End, Doc, Returns }]`, out of the parser and with nothing run.
      *   **`Kind` is `"Class"`, `"Function"`, `"Method"`, `"Static"`,
-     *   `"Getter"`, `"Setter"`, `"StaticGetter"` or `"StaticSetter"`**, or
+     *   `"Getter"`, `"Setter"`, `"StaticGetter"`, `"StaticSetter"` or
+     *   `"Field"`** (a public instance field of a class, `total = 0;`, with
+     *   `Parent` the class), or
      *   **`"Assigned"`** (a function assigned at the top level, named by its
      *   target as written — `File.LoadJson`, `Widget.prototype.Dump` — and
      *   each function an object literal holds when the literal is assigned

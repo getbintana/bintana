@@ -13724,6 +13724,38 @@ function* p_refs(ide) {
         "}",
     ]);
 
+    /* A class field, a same-named field in another class, a subclass with its
+     * own field, and a static method's `this` -- the shapes a field rename must
+     * tell apart. */
+    save("RefD.js", [
+        "class RefD {",
+        "    total = 0;",
+        "    add(n) { this.total += n; return this.total; }",
+        "    other() { let total = 1; return total; }",
+        "    static show() { return this.total; }",
+        "}",
+        "class RefE {",
+        "    total = 5;",
+        "    show() { return this.total; }",
+        "}",
+        "class RefG extends RefD {",
+        "    total = 7;",
+        "    show() { return this.total; }",
+        "}",
+    ]);
+    save("RefH.js", [
+        "class RefH { total = 0; }",
+        "class RefI extends RefH { show() { return this.total; } }",
+    ]);
+    save("RefJ.js", [
+        "class RefJ {",
+        "    total = 0;",
+        "    show() {",
+        "        return [1].map(() => this.total);",
+        "    }",
+        "}",
+    ]);
+
     /* A local and a parameter, each with a same-named binding in another
      * method: the case a rename must move one and leave the other. */
     save("RefL.js", [
@@ -13955,6 +13987,47 @@ function* p_refs(ide) {
     check("a loop variable in a block is refused, not guessed",
           loop.Refused && loop.Refused.includes("declared in a block"), loop.Refused);
 
+    /* --- a class field ------------------------------------------------------
+     *
+     * The parser reports `total = 0` as a Field of RefD; `this.total` in a
+     * method of RefD is the field, a bare `total` is a local, `this.total` in
+     * RefE is another class's field, and the static method's `this` is the
+     * class. Only the first moves.
+     */
+    const fieldSrc = File.Load(File.Join(TMP, "RefD.js"));
+    const field = ide.refactor.rename("total", "sum", {
+        file: "RefD.js", at: fieldSrc.indexOf("this.total"),
+    });
+    eq("a field rename moves the declaration and its this. uses", field.Moved, 3);
+
+    const fieldText = File.Load(File.Join(TMP, "RefD.js"));
+    check("...the declaration", fieldText.includes("sum = 0;"), fieldText);
+    check("...both this. uses", fieldText.includes("this.sum += n") &&
+          fieldText.includes("return this.sum;"), fieldText);
+    check("...the local of the same name is untouched",
+          fieldText.includes("let total = 1; return total;"), fieldText);
+    check("...the static method's this. is the class, not the field",
+          fieldText.includes("static show() { return this.total; }"), fieldText);
+    check("...another class's field is another field",
+          fieldText.includes("class RefE {\n    total = 5;") &&
+          fieldText.includes("class RefG extends RefD {\n    total = 7;"), fieldText);
+
+    const inheritedSrc = File.Load(File.Join(TMP, "RefH.js"));
+    const inherited = ide.refactor.rename("total", "sum", {
+        file: "RefH.js", at: inheritedSrc.indexOf("this.total"),
+    });
+    check("an inherited use is refused, not half-renamed",
+          inherited.Refused && inherited.Refused.includes("inherited use"),
+          inherited.Refused);
+
+    const nestedSrc = File.Load(File.Join(TMP, "RefJ.js"));
+    const nested = ide.refactor.rename("total", "sum", {
+        file: "RefJ.js", at: nestedSrc.indexOf("this.total"),
+    });
+    check("a this. inside a nested function is refused",
+          nested.Refused && nested.Refused.includes("not directly in a method"),
+          nested.Refused);
+
     /* The gesture: the caret on a local, Shift+F6, the prompt. */
     ide.openInTab("RefL.js");
     yield;
@@ -13974,7 +14047,8 @@ function* p_refs(ide) {
     /* Nothing planted outlives its phase, tabs included. */
     ide.tabs.closeByName("RefM.js", true);
     for (const f of ["RefB.js", "RefM.js", "RefN.js", "RefS.js", "RefV.js",
-                     "RefF.js", "RefF.form", "RefR.js", "RefL.js"])
+                     "RefF.js", "RefF.form", "RefR.js", "RefL.js",
+                     "RefD.js", "RefH.js", "RefJ.js"])
         File.Delete(File.Join(TMP, f));
     ide.listFiles();
 }

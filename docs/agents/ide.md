@@ -1407,7 +1407,10 @@ same model. `blockedVariable` counts braces on `Lex.blank` and refuses the
 rename with *declared in a block* -- a wrong edit that still runs is the one
 outcome worse than a refusal. A `var` is function-scoped and stays safe.
 
-**What it does not cover is a class field.** `Application.Symbols` reports no
-field at all, so `this.total` has no declaration to resolve against; the issue
-is `docs/issues/ISSUE-ide-rename-fields.md`. The method/getter/setter rename is
-the older, project-wide road and is unchanged.
+**A class field is covered too.** The parser reports `total = 0;` as a `Field`
+of its class (patch 20), and `renameField` moves the declaration and the
+`this.total` uses of that class, leaving a bare `total` (a local), another
+class's field and a static method's `this` alone. A `this.total` in a subclass
+that does not declare its own field is an inherited use and is **refused**, as
+is one in a nested function or a field initializer: those cannot be attributed
+safely, and a missed use is a wrong rename that still runs.

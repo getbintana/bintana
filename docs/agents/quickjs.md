@@ -2,11 +2,11 @@
 
 The traps and decisions of this area, each with what it cost and the rule it left. [`AGENTS.md`](../../AGENTS.md) states the rules that apply to every change; this file is the evidence behind them and the detail that only matters here.
 
-## The nineteen patches in vendor/
+## The twenty patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.18.0** plus the nineteen patches below, one commit each (the eighth
+upstream **v0.18.0** plus the twenty patches below, one commit each (the eighth
 carries a fix as a second commit until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -99,13 +99,14 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All nineteen are marked `Bintana patch` in the source, and
+Then the suite. All twenty are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
 `strictChecks`, `testDebugger`, `testCuratedLanguage`, `ReferenceHint`,
-`LongAppend`, `StringSearch`, `Modules`, `Imports`) -- the
+`refs`, `LongAppend`, `StringSearch`, `Modules`, `Imports`) -- the
 fifth of which carries the seventh, the eighth, the ninth and the thirteenth,
-the sixth the nineteenth, and the last two the fourteenth to the eighteenth. Grep the fork for the
+the sixth the nineteenth, the seventh the twentieth, and the last two the
+fourteenth to the eighteenth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 ### 1. Operators on a Decimal
 
@@ -806,6 +807,23 @@ exact-suffix parse no longer matches, so it adds nothing).
 
 **Dropping it does not fail to build**: `ReferenceHint` goes red on the caught
 message, and the uncaught path still prints once.
+
+### 20. A class field is a member
+
+`JS_SYMBOL_FIELD`: a public instance field (`total = 0;`) is reported with its
+class in `parent`, at its own line and with its documentation. A private field
+is not reached as `this.name`, and a static one belongs to the constructor and
+not to the instance, so neither is this kind. A computed name has no name to
+report.
+
+**What it is for is a rename.** `Refactor` can attribute `this.total` in a
+method of `A` to the field `A.total` only if the parser says the field exists;
+before this, a field was not a symbol at all, and `this.total` had no
+declaration to resolve against. The host maps the kind to `"Field"` and the
+editor renames the declaration and the `this.` uses of that class, leaving
+another class's `this.total` alone.
+
+**Dropping it does not fail to build**: `refs`' field assertions go red.
 
 ## The language: what the curation took and what it left
 

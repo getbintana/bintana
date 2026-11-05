@@ -40,7 +40,7 @@ const REFACTOR_WORD = /^[A-Za-z_$][\w$]*$/;
  * receiver of `Class.Make` is not something this can attribute -- the same
  * shape a method rename refuses, one level up. */
 const REFACTOR_DECLS = ["Class", "Function", "Method", "Getter", "Setter",
-                        "Static", "StaticGetter", "StaticSetter"];
+                        "Static", "StaticGetter", "StaticSetter", "Field"];
 
 /* And the ones that are members of their class rather than of an instance:
  * found as declarations, so the refusal can name what it is, and never
@@ -287,6 +287,165 @@ export class Refactor {
     }
 
     /*
+     * The declaration the caret means. A line that declares the name answers
+     * first; a `this.name` use answers with the field of the class the method
+     * belongs to; anything else falls back to the first declaration, which is
+     * the project-wide rule the other kinds have always used.
+     */
+    declarationAt(rows, word, where) {
+        if (where && where.file && where.at !== undefined) {
+            const source = this.sourceOf(where.file);
+            if (source !== null) {
+                const line = Text.LineOf(source, where.at);
+                const here = rows.find((r) => r.Decl && r.File === where.file &&
+                                               r.Line === line);
+                if (here) return here;
+
+                if (this.shapeAt(source, where.at, word) === "this") {
+                    const syms  = Application.Symbols(source);
+                    const owner = this.classOfUse(source, line, syms);
+
+                    /* `this.name` in a static method is the class's own field,
+                     * which this parser does not report; the refusal is the
+                     * existing static one. */
+                    if (owner && !owner.instance)
+                        return { Decl: "Static", File: where.file, Line: line,
+                                 Parent: owner.parent };
+
+                    if (owner) {
+                        const field = rows.find((r) => r.Decl === "Field" &&
+                            r.File === where.file &&
+                            (r.Parent === owner.parent ||
+                             this.isSubclass(syms, owner.parent, r.Parent)));
+                        if (field) return field;
+                        return { Decl: "FieldMissing", File: where.file,
+                                 Line: line, Parent: owner.parent };
+                    }
+
+                    /* A nested function or a field initializer: the field is
+                     * in this file, and `renameField` refuses the use. */
+                    const field = rows.find((r) => r.Decl === "Field" &&
+                                                   r.File === where.file);
+                    if (field) return field;
+                    return { Decl: "FieldMissing", File: where.file,
+                             Line: line, Parent: "" };
+                }
+            }
+        }
+
+        if (where && where.file) {
+            const same = rows.find((r) => r.Decl && r.File === where.file);
+            if (same) return same;
+        }
+        return rows.find((r) => r.Decl) || null;
+    }
+
+    /*
+     * The class a `this.name` use belongs to, or `null` when it is not directly
+     * in a method.
+     *
+     * The innermost `Scope` is the method only when the use is in its body; an
+     * arrow or a nested function is a scope of its own with no `Method` at its
+     * line, and `this` there is not necessarily the class. Those are refused
+     * rather than guessed. A static method is the class's `this`, not the
+     * instance's, and is marked so a field rename can leave it alone.
+     */
+    classOfUse(source, line, symbols) {
+        const syms   = symbols || Application.Symbols(source);
+        const scopes = syms.filter((s) => s.Kind === "Scope" &&
+                                          s.Line <= line && s.End >= line)
+                           .sort((a, b) => b.Line - a.Line);
+        const scope  = scopes[0];
+        if (!scope) return null;
+
+        const member = syms.find((s) => s.Line === scope.Line &&
+            (s.Kind === "Method" || s.Kind === "Getter" || s.Kind === "Setter" ||
+             s.Kind === "Static" || s.Kind === "StaticGetter" ||
+             s.Kind === "StaticSetter"));
+        if (!member) return null;
+
+        return { parent: member.Parent || "",
+                 instance: REFACTOR_MEMBERS.includes(member.Kind) };
+    }
+
+    /* Whether `child` is `parent` or extends it, by the parser's `Super` chain.
+     * A heritage that is an expression has no name and ends the walk. */
+    isSubclass(symbols, child, parent) {
+        for (let at = child, guard = 0; at && guard < 32; guard++) {
+            if (at === parent) return true;
+            const cls = symbols.find((s) => s.Kind === "Class" && s.Name === at);
+            at = cls ? (cls.Super || "") : "";
+        }
+        return false;
+    }
+
+    /*
+     * A class field: the declaration and the `this.name` uses of its class.
+     *
+     * A bare `name` is a local or a global and not the field, and `other.name`
+     * is another object's; both are left exactly as they were. A `this.name` in
+     * another class is another field, and one in a static method is the class's
+     * own -- neither moves. A `this.name` that cannot be attributed (a nested
+     * function, a field initializer) is a refusal, because a missed use is a
+     * wrong rename that still runs.
+     */
+    renameField(word, to, decl, rows) {
+        if (!decl.Parent)
+            return { Refused: `${word} is a field of an anonymous class -- this cannot name the class a use belongs to.` };
+
+        const source = this.sourceOf(decl.File);
+        if (source === null)
+            return { Refused: `${decl.File} cannot be read.` };
+
+        const syms = Application.Symbols(source);
+        const taken = syms.find((s) => s.Name === to && s.Parent === decl.Parent &&
+            (s.Kind === "Field" || REFACTOR_DECLS.includes(s.Kind)));
+        if (taken)
+            return { Refused: `${to} is already a member of ${decl.Parent}.` };
+
+        const selected = [];
+        for (const row of rows) {
+            if (row.File !== decl.File) continue;
+
+            if (row.Decl) {
+                if (row.Decl === "Field" && row.Line === decl.Line)
+                    selected.push(row);
+                continue;
+            }
+
+            if (this.shapeAt(source, row.At, word) !== "this") continue;
+
+            const owner = this.classOfUse(source, row.Line, syms);
+            if (!owner)
+                return { Refused: `this.${word} at ${row.File}:${row.Line} is not directly in a method -- this cannot tell what it means.` };
+            if (!owner.instance) continue;
+
+            if (owner.parent === decl.Parent) {
+                selected.push(row);
+            } else if (this.isSubclass(syms, owner.parent, decl.Parent)) {
+                /* The inherited field, unless the subclass declares one of its
+                 * own -- then `this.word` there is that other field. */
+                const own = syms.some((s) => s.Kind === "Field" &&
+                                             s.Parent === owner.parent &&
+                                             s.Name === word);
+                if (!own)
+                    return { Refused: `this.${word} at ${row.File}:${row.Line} uses ${decl.Parent}'s field from ${owner.parent} -- this cannot rename an inherited use safely.` };
+            }
+        }
+
+        if (!selected.some((r) => r.Decl))
+            return { Refused: `Nothing in ${decl.Parent} declares ${word}.` };
+
+        let moved = 0;
+        this.ide.tabs.rewriteSource(decl.File, (text) => {
+            const done = this.replaceRows(text, word, to, selected);
+            moved = done.moved;
+            return done.text;
+        });
+        return { Moved: moved, Files: [decl.File] };
+    }
+
+    /*
      * The line each declaration of the word sits on, by kind and by the class
      * it is in, for one file. Only asked of a file that already holds an
      * occurrence.
@@ -429,7 +588,7 @@ export class Refactor {
         }
 
         let   rows = this.references(word);
-        const decl = rows.find((r) => r.Decl);
+        const decl = this.declarationAt(rows, word, where);
 
         if (!decl)
             return { Refused: `Nothing in this project declares ${word} -- only a class, a function or a method can be renamed.` };
@@ -437,6 +596,10 @@ export class Refactor {
             return { Refused: `${word} is a control: rename it from the designer, which carries its handlers along.` };
         if (REFACTOR_STATICS.includes(decl.Decl))
             return { Refused: `${word} is a static of ${decl.Parent || "a class"} -- this cannot tell which class a member access belongs to.` };
+        if (decl.Decl === "FieldMissing")
+            return { Refused: `${word} does not name a field of ${decl.Parent || "that class"}.` };
+        if (decl.Decl === "Field")
+            return this.renameField(word, to, decl, rows);
         if (decl.Decl === "Class" && this.ide.classes.formOf(decl.File))
             return { Refused: `${word} is a form -- F2 renames it, and moves its .form, its tab and project.json with it.` };
 

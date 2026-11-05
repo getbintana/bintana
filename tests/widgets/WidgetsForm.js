@@ -16621,8 +16621,13 @@ class Form1 extends Form {
          * be listed, and with the supertype it had read before the break. */
         eq("a class that breaks in its body is still listed with its base class",
            cls("Body") !== undefined && cls("Body").Super, "Base");
-        eq("...and it is the last thing reported, as it is the one that broke",
-           shape[shape.length - 1].Name, "Body");
+        eq("...and it is the last class reported, as it is the one that broke",
+           shape.filter((x) => x.Kind === "Class").at(-1).Name, "Body");
+        /* The field it broke on is the new `Field` kind (patch 20), and it
+         * carries the class it belongs to. */
+        eq("...and the field it broke on is reported after it",
+           shape.at(-1).Name, "oops");
+        eq("...with the class it belongs to", shape.at(-1).Parent, "Body");
 
         /*
          * **`async` is refused where it is written, in every form it has.**

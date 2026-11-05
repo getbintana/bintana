@@ -181,7 +181,6 @@ needed and what it did instead.
 | `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
 | The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
-| Rename cannot move a class field | [ISSUE-ide-rename-fields](../issues/ISSUE-ide-rename-fields.md) |
 | No formatter and no multiple cursors | [ISSUE-ide-formatter](../issues/ISSUE-ide-formatter.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 
