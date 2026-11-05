@@ -134,6 +134,159 @@ export class Refactor {
     }
 
     /*
+     * The binding a use at `at` resolves to, or `null` when it is not a local
+     * or a parameter.
+     *
+     * **The parser's `Scope` is the whole of the model**: every function with
+     * its line span and its parameter list, and every `Variable` at its line.
+     * A variable belongs to the innermost scope that contains its line (or to
+     * the file, when no function does), and a use resolves to the innermost
+     * scope around it that declares the name -- walking outward, so a nested
+     * function that declares its own `sum` wins over the outer one.
+     *
+     * Block scopes are not reported by the parser, so a `let` inside an `if`
+     * is attributed to its function. That is the conservative direction for a
+     * rename: it may move a use outside the block, never one inside another
+     * binding's.
+     */
+    bindingAt(source, word, at, symbols) {
+        const line = Text.LineOf(source, at);
+        const syms = symbols || Application.Symbols(source);
+        const scopes = syms.filter((s) => s.Kind === "Scope" && s.End > 0)
+                           .sort((a, b) => a.Line - b.Line);
+
+        const within = (scope, l) => l >= scope.Line && l <= scope.End;
+        const inner  = (l) => {
+            let found = null;
+            for (const scope of scopes)
+                if (within(scope, l) && (!found || scope.Line > found.Line))
+                    found = scope;
+            return found;
+        };
+        const params = (scope) =>
+            (scope.Params || "").split(/[^A-Za-z0-9_$]+/).includes(word);
+
+        const variableOf = (scope) => syms.find((s) =>
+            s.Kind === "Variable" && s.Name === word && within(scope, s.Line) &&
+            inner(s.Line) === scope);
+
+        /* Innermost first: the first scope around the use that declares the
+         * name is the binding the use means. */
+        const around = scopes.filter((s) => within(s, line))
+                             .sort((a, b) => b.Line - a.Line);
+        for (const scope of around) {
+            const param    = params(scope);
+            const variable = variableOf(scope);
+            if (param || variable)
+                return { kind: param ? "param" : "var",
+                         scope: scope.Line, name: word,
+                         blocked: variable ? this.blockedVariable(source, variable, scope)
+                                           : false };
+        }
+
+        /* No function around it: a top-level `let`/`const`/`var` is the
+         * file's binding, and nothing else in the file may move with it. */
+        const top = syms.find((s) => s.Kind === "Variable" && s.Name === word &&
+                                     !inner(s.Line));
+        if (top)
+            return { kind: "var", scope: 0, name: word,
+                     blocked: this.blockedVariable(source, top, null) };
+
+        return null;
+    }
+
+    /*
+     * Whether the variable is one a block narrows.
+     *
+     * `Scope` is a function, and a `let`/`const` inside an `if`, a `for` or a
+     * catch belongs to the block, not to the function. Moving a use outside
+     * the block would be a wrong edit that still runs, so those are refused:
+     * the parser does not report block scopes, and a brace count is enough to
+     * know that it cannot be attributed. A `var` is function-scoped and stays
+     * safe wherever it is written.
+     */
+    blockedVariable(source, variable, scope) {
+        const line = (source.split("\n")[variable.Line - 1] || "");
+        if (!/\b(let|const)\b/.test(line))
+            return /\bcatch\b/.test(line);   /* a catch binding is block-scoped */
+
+        if (/\b(for|if|while|switch|catch)\b/.test(line))
+            return true;
+
+        const limit = scope ? 1 : 0;
+        return this.blockDepth(source, scope ? scope.Line : 1, variable.Line) > limit;
+    }
+
+    /* Braces opened between two lines, on the blanked source so a brace in a
+     * string or a comment is not one. */
+    blockDepth(source, from, to) {
+        const lines = Lex.blank(source).split("\n");
+        let   depth = 0;
+
+        for (let l = from - 1; l < to - 1; l++)
+            for (const ch of lines[l] || "") {
+                if (ch === "{") depth++;
+                else if (ch === "}") depth--;
+            }
+        return depth;
+    }
+
+    /* Whether the file declares the name at all, in any kind or scope -- the
+     * collision question a local rename asks before writing. */
+    declaresIn(symbols, name) {
+        for (const s of symbols) {
+            if (s.Name === name &&
+                (s.Kind === "Variable" || REFACTOR_DECLS.includes(s.Kind)))
+                return true;
+            if (s.Kind === "Scope" &&
+                (s.Params || "").split(/[^A-Za-z0-9_$]+/).includes(name))
+                return true;
+        }
+        return false;
+    }
+
+    /*
+     * Rename one binding and only its uses. The file is the only one a local
+     * can live in; `replaceRows` writes the occurrences the resolver chose, so
+     * a same-named local in another function is left exactly as it was.
+     */
+    renameLocal(file, source, word, to, binding, symbols) {
+        if (binding.blocked)
+            return { Refused: `${word} is declared in a block -- this rename cannot tell its uses from the block's.` };
+        if (this.declaresIn(symbols, to))
+            return { Refused: `${to} is already declared in ${file}.` };
+
+        const rows = this.occurrences(file, word).filter((row) => {
+            const at = this.bindingAt(source, word, row.At, symbols);
+            return at && at.kind === binding.kind && at.scope === binding.scope;
+        });
+
+        if (!rows.length)
+            return { Refused: `Nothing in this scope uses ${word}.` };
+
+        let moved = 0;
+        this.ide.tabs.rewriteSource(file, (text) => {
+            const done = this.replaceRows(text, word, to, rows);
+            moved = done.moved;
+            return done.text;
+        });
+        return { Moved: moved, Files: [file] };
+    }
+
+    /* The occurrences at these offsets, and only these, replaced. */
+    replaceRows(source, word, to, rows) {
+        let out = "", at = 0, moved = 0;
+
+        for (const row of rows.slice().sort((a, b) => a.At - b.At)) {
+            if (row.At < at) continue;
+            out += source.slice(at, row.At) + to;
+            at   = row.At + word.length;
+            moved++;
+        }
+        return { text: out + source.slice(at), moved };
+    }
+
+    /*
      * The line each declaration of the word sits on, by kind and by the class
      * it is in, for one file. Only asked of a file that already holds an
      * occurrence.
@@ -247,13 +400,33 @@ export class Refactor {
      * and a silent half of one is the failure this whole module is arranged
      * against. Nothing is written before every refusal has been checked.
      */
-    rename(word, to) {
+    rename(word, to, where) {
         if (!REFACTOR_WORD.test(word || ""))
             return { Refused: "Put the cursor on a name first." };
         if (!REFACTOR_WORD.test(to || ""))
             return { Refused: `"${to}" is not a name -- letters, digits, _ and $, and not starting with a digit.` };
         if (word === to)
             return { Refused: "The new name is the same as the old one." };
+
+        /* A local, a parameter or a file-level `let` is a binding a scope can
+         * name; the caret says which one, and the rename moves only the uses
+         * that resolve to it. Without a position the old project-wide answer is
+         * the only one there is, and a local is still refused there. */
+        if (where && where.file && where.at !== undefined) {
+            const source = this.sourceOf(where.file);
+            if (source !== null) {
+                try {
+                    const symbols = Application.Symbols(source);
+                    const binding = this.bindingAt(source, word, where.at, symbols);
+                    if (binding)
+                        return this.renameLocal(where.file, source, word, to,
+                                                binding, symbols);
+                } catch (e) {
+                    /* A file that does not parse is not a binding to move;
+                     * the project-wide answer below will refuse by name. */
+                }
+            }
+        }
 
         let   rows = this.references(word);
         const decl = rows.find((r) => r.Decl);

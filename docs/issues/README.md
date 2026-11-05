@@ -16,7 +16,7 @@ in the same form.
 | [ISSUE-pdf-reading.md](ISSUE-pdf-reading.md) | The runtime writes PDFs and cannot read one |
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
 | [ISSUE-ide-report-designer.md](ISSUE-ide-report-designer.md) | Reports are code or raw text, never a designed thing |
-| [ISSUE-ide-rename-locals.md](ISSUE-ide-rename-locals.md) | Rename stops at top-level declarations |
+| [ISSUE-ide-rename-fields.md](ISSUE-ide-rename-fields.md) | Rename cannot move a class field |
 | [ISSUE-ide-formatter.md](ISSUE-ide-formatter.md) | No formatter and no multiple cursors |
 
 Seventeen of them came out of the October audit

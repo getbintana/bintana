@@ -2992,7 +2992,12 @@ export class MainForm extends Form {
         this.renameSymbolPrompt = AskForm.prompt(
             Locale.Text("Rename symbol"), Locale.Text("New name:"), name,
             (newName) => {
-                const done = this.refactor.rename(name, newName);
+                /* The caret says which binding a local means; a name alone
+                 * cannot tell `total` in this method from `total` in the next. */
+                const where = File.IsExtension(this.activeFile || "", "js") &&
+                              this.Editor
+                    ? { file: this.activeFile, at: this.Editor.Offset } : null;
+                const done = this.refactor.rename(name, newName, where);
                 if (done.Refused) {
                     Message.Error(done.Refused);
                     return;

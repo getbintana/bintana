@@ -104,7 +104,10 @@ export class RefsForm extends Form {
     BtnRename_Click() {
         AskForm.prompt(Locale.Text("Rename symbol"), Locale.Text("New name:"),
                        this.word, (name) => {
-            const done = this.ide.refactor.rename(this.word, name);
+            const row  = this.rows[this.List.Index];
+            const where = row && row.At >= 0
+                ? { file: row.File, at: row.At } : null;
+            const done = this.ide.refactor.rename(this.word, name, where);
 
             if (done.Refused) {
                 Message.Error(done.Refused);

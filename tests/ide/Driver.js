@@ -13723,6 +13723,19 @@ function* p_refs(ide) {
         "    static Make() { return new RefP(); }",
         "}",
     ]);
+
+    /* A local and a parameter, each with a same-named binding in another
+     * method: the case a rename must move one and leave the other. */
+    save("RefL.js", [
+        "class RefL {",
+        "    add(total, n) {",
+        "        let sum = total + n;",
+        "        for (let i = 0; i < n; i++) { sum += i; }",
+        "        return sum;",
+        "    }",
+        "    other(total) { let sum = 0; return sum + total; }",
+        "}",
+    ]);
     ide.listFiles();
 
     const refs = ide.refactor.references("RefA");
@@ -13891,10 +13904,77 @@ function* p_refs(ide) {
           String(RefsForm.open && RefsForm.open.word));
     if (RefsForm.open) RefsForm.open.Close();
 
+    /* --- a local and a parameter --------------------------------------------
+     *
+     * The parser's `Scope` and `Variable` are enough to say which binding a use
+     * means: the innermost function around the use that declares the name, and
+     * the file when none does. A same-named local in another method is another
+     * binding and stays where it is.
+     */
+    const localSrc = File.Load(File.Join(TMP, "RefL.js"));
+    const local = ide.refactor.rename("sum", "acc", {
+        file: "RefL.js", at: localSrc.indexOf("sum"),
+    });
+    eq("a local rename moves its declaration and uses", local.Moved, 3);
+    eq("...in its one file", local.Files.length, 1);
+
+    const localText = File.Load(File.Join(TMP, "RefL.js"));
+    check("...the declaration", localText.includes("let acc = total + n;"), localText);
+    check("...the loop", localText.includes("sum += i;") === false &&
+          localText.includes("acc += i;"), localText);
+    check("...the return", localText.includes("return acc;"), localText);
+    check("and the same name in another method is untouched",
+          localText.includes("other(total) { let sum = 0; return sum + total; }"),
+          localText);
+
+    const paramSrc = File.Load(File.Join(TMP, "RefL.js"));
+    const param = ide.refactor.rename("n", "count", {
+        file: "RefL.js", at: paramSrc.indexOf(", n)") + 2,
+    });
+    eq("a parameter rename moves its signature and uses", param.Moved, 3);
+    const paramText = File.Load(File.Join(TMP, "RefL.js"));
+    check("...the signature", paramText.includes("add(total, count) {"), paramText);
+    check("...and both uses", paramText.includes("total + count") &&
+          paramText.includes("i < count"), paramText);
+
+    const outerSrc = File.Load(File.Join(TMP, "RefL.js"));
+    const outer = ide.refactor.rename("total", "base", {
+        file: "RefL.js", at: outerSrc.indexOf("total"),
+    });
+    eq("a parameter in one method does not take another method's", outer.Moved, 2);
+    const outerText = File.Load(File.Join(TMP, "RefL.js"));
+    check("...its own uses moved", outerText.includes("let acc = base + count;") &&
+          outerText.includes("base + count"), outerText);
+    check("...and the other method keeps its parameter",
+          outerText.includes("other(total)"), outerText);
+
+    const loopSrc = File.Load(File.Join(TMP, "RefL.js"));
+    const loop = ide.refactor.rename("i", "idx", {
+        file: "RefL.js", at: loopSrc.indexOf("let i") + 4,
+    });
+    check("a loop variable in a block is refused, not guessed",
+          loop.Refused && loop.Refused.includes("declared in a block"), loop.Refused);
+
+    /* The gesture: the caret on a local, Shift+F6, the prompt. */
+    ide.openInTab("RefL.js");
+    yield;
+    ide.Editor.Select(3, 12, 3);       /* `acc` on `let acc = ...` */
+    const localPrompt = ide.renameSymbol();
+    check("Shift+F6 on a local asks for the new name", !!localPrompt);
+    if (localPrompt) {
+        eq("...starting from the local", localPrompt.TxtValue.Text, "acc");
+        localPrompt.TxtValue.Text = "acc2";
+        localPrompt.BtnOk.Click();
+        check("...and writes only that binding",
+              File.Load(File.Join(TMP, "RefL.js")).includes("let acc2 = base + count;"));
+    }
+    if (RefsForm.open) RefsForm.open.Close();
+    ide.tabs.closeByName("RefL.js", true);
+
     /* Nothing planted outlives its phase, tabs included. */
     ide.tabs.closeByName("RefM.js", true);
     for (const f of ["RefB.js", "RefM.js", "RefN.js", "RefS.js", "RefV.js",
-                     "RefF.js", "RefF.form", "RefR.js"])
+                     "RefF.js", "RefF.form", "RefR.js", "RefL.js"])
         File.Delete(File.Join(TMP, f));
     ide.listFiles();
 }

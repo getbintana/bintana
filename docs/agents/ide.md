@@ -1388,3 +1388,26 @@ text field, and the page is where they are edited.
 loads `ReportDocument`, and the test project does the same so the dialog is not
 a class only the real IDE has. `tests/ide` also symlinks `ReportForm.form` like
 every other IDE form.
+
+## Renaming a local
+
+**The caret says which binding a bare name means.** `Refactor.rename(word, to,
+where)` takes `{ file, at }` from the editor (`MainForm.renameSymbol` passes
+`Editor.Offset`; `RefsForm` passes the selected row). `bindingAt` reads the
+parser's `Scope` entries -- each function with its line span and its parameter
+list -- and its `Variable` entries, and resolves a use to the innermost scope
+around it that declares the name, walking outward. A nested function that
+declares its own `sum` wins over the outer one; a use in a nested function that
+declares nothing resolves to the outer binding. A top-level `let`/`const`/`var`
+is the file's binding when no function declares it.
+
+**A block is not a `Scope`.** The parser reports functions and not `if`/`for`
+blocks, so a `let`/`const` inside one cannot be attributed to the block by the
+same model. `blockedVariable` counts braces on `Lex.blank` and refuses the
+rename with *declared in a block* -- a wrong edit that still runs is the one
+outcome worse than a refusal. A `var` is function-scoped and stays safe.
+
+**What it does not cover is a class field.** `Application.Symbols` reports no
+field at all, so `this.total` has no declaration to resolve against; the issue
+is `docs/issues/ISSUE-ide-rename-fields.md`. The method/getter/setter rename is
+the older, project-wide road and is unchanged.

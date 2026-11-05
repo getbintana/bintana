@@ -8154,6 +8154,29 @@ loads `ReportDocument`, and the test project does the same so the dialog is not
 a class only the real IDE has. `tests/ide` also symlinks `ReportForm.form` like
 every other IDE form.
 
+## Renaming a local
+
+**The caret says which binding a bare name means.** `Refactor.rename(word, to,
+where)` takes `{ file, at }` from the editor (`MainForm.renameSymbol` passes
+`Editor.Offset`; `RefsForm` passes the selected row). `bindingAt` reads the
+parser's `Scope` entries -- each function with its line span and its parameter
+list -- and its `Variable` entries, and resolves a use to the innermost scope
+around it that declares the name, walking outward. A nested function that
+declares its own `sum` wins over the outer one; a use in a nested function that
+declares nothing resolves to the outer binding. A top-level `let`/`const`/`var`
+is the file's binding when no function declares it.
+
+**A block is not a `Scope`.** The parser reports functions and not `if`/`for`
+blocks, so a `let`/`const` inside one cannot be attributed to the block by the
+same model. `blockedVariable` counts braces on `Lex.blank` and refuses the
+rename with *declared in a block* -- a wrong edit that still runs is the one
+outcome worse than a refusal. A `var` is function-scoped and stays safe.
+
+**What it does not cover is a class field.** `Application.Symbols` reports no
+field at all, so `this.total` has no declaration to resolve against; the issue
+is `docs/issues/ISSUE-ide-rename-fields.md`. The method/getter/setter rename is
+the older, project-wide road and is unchanged.
+
 ---
 
 # docs/agents/data.md
@@ -13022,7 +13045,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10649 assertions
+./tests/run.sh                          # all seven projects, 10665 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -14522,7 +14545,7 @@ needed and what it did instead.
 | The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
 | Reports are code or raw text, never a designed thing | [ISSUE-ide-report-designer](../issues/ISSUE-ide-report-designer.md) |
-| Rename stops at top-level declarations | [ISSUE-ide-rename-locals](../issues/ISSUE-ide-rename-locals.md) |
+| Rename cannot move a class field | [ISSUE-ide-rename-fields](../issues/ISSUE-ide-rename-fields.md) |
 | No formatter and no multiple cursors | [ISSUE-ide-formatter](../issues/ISSUE-ide-formatter.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 
