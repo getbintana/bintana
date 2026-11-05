@@ -11,6 +11,14 @@
  */
 class NameList extends ListBox {
 
+    /* Note
+     *   a value only this subclass declares, shown in the designer's design
+     *   mode and kept in the node -- the IDE never runs the class to ask
+     */
+    get Note() { return this._note || ""; }
+    set Note(value) { this._note = String(value || ""); }
+    static TextProperties = ["Note"];
+
     /* Refill(names)
      *   replaces the rows and selects the first one
      */

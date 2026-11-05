@@ -17,6 +17,9 @@
         "Width": 380,
         "X": 20,
         "Y": 20
+      },
+      "design": {
+        "Note": "Shown in the grid"
       }
     },
     {
