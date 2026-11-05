@@ -391,7 +391,11 @@ export class Designer {
     syncSize() {
         const { w, h } = this.clientSize();
         this.surface.Resize(w, h);
+        if (this.chrome) this.chrome.position();
     }
+
+    /* The step `snap()` uses, for the lattice the chrome draws. */
+    gridStep() { return GRID; }
 
     formMargin() {
         const p = (this.root && this.root.properties) || {};
@@ -1896,8 +1900,44 @@ export class Designer {
      */
     align(how) {
         const anchor = this.selected;
-        if (!anchor || typeof anchor.Bounds !== "function" ||
-            this.selection.length < 2) return;
+        if (!anchor || typeof anchor.Bounds !== "function") return;
+
+        /*
+         * The two centre commands are the ones that also make sense with one
+         * control: with one, they centre it in the container it lives in; with
+         * several, the others are pulled onto the primary's centre line.  The
+         * rest are edge or size relations and need somebody to relate to.
+         */
+        if (how === "centreH" || how === "centreV") {
+            const horizontal = how === "centreH";
+            const moves = [];
+
+            if (this.selection.length < 2) {
+                const one = this.centreMove(anchor, horizontal, !horizontal);
+                if (one) moves.push(one);
+            } else {
+                const cx = anchor.X + anchor.Width / 2;
+                const cy = anchor.Y + anchor.Height / 2;
+
+                for (const c of this.selection) {
+                    if (c === anchor || typeof c.Move !== "function") continue;
+
+                    const x = horizontal ? Math.max(0, Math.round(cx - c.Width / 2)) : c.X;
+                    const y = horizontal ? c.Y : Math.max(0, Math.round(cy - c.Height / 2));
+                    if (x !== c.X || y !== c.Y) moves.push({ control: c, x, y });
+                }
+            }
+
+            if (!moves.length) return;
+            this.pushUndo();
+            for (const move of moves) move.control.Move(move.x, move.y);
+            this.chrome.position();
+            this.grid.fill();
+            this.touch();
+            return;
+        }
+
+        if (this.selection.length < 2) return;
 
         /*
          * Aligned on the edges one can *see*, not on the coordinates: a theme
@@ -1941,6 +1981,43 @@ export class Designer {
             }
         }
 
+        this.chrome.position();
+        this.grid.fill();
+        this.touch();
+    }
+
+    /* Where centring one control in its parent would put it, or null when it is
+     * already there.  The parent's declared width is the coordinate space the
+     * child's X/Y are written in; a `Panel` stretched by a box keeps its drawn
+     * size as the design, the same rule the fixed surface uses. */
+    centreMove(control, horizontal, vertical) {
+        if (typeof control.Move !== "function") return null;
+
+        const parent = this.parentOf(control);
+        if (!parent) return null;
+
+        const width  = parent.Width  > 0 ? parent.Width  : parent.Bounds().Width;
+        const height = parent.Height > 0 ? parent.Height : parent.Bounds().Height;
+        const x = horizontal ? Math.max(0, Math.round((width  - control.Width)  / 2)) : control.X;
+        const y = vertical   ? Math.max(0, Math.round((height - control.Height) / 2)) : control.Y;
+
+        if (x === control.X && y === control.Y) return null;
+        return { control, x, y };
+    }
+
+    /* Centre every selected control in its own container, both axes. */
+    centreIn() {
+        if (!this.selection.length) return;
+
+        const moves = [];
+        for (const control of this.selection) {
+            const move = this.centreMove(control, true, true);
+            if (move) moves.push(move);
+        }
+        if (!moves.length) return;
+
+        this.pushUndo();
+        for (const move of moves) move.control.Move(move.x, move.y);
         this.chrome.position();
         this.grid.fill();
         this.touch();

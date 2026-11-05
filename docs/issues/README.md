@@ -23,7 +23,6 @@ in the same form.
 | [ISSUE-ide-report-designer.md](ISSUE-ide-report-designer.md) | Reports are code or raw text, never a designed thing |
 | [ISSUE-ide-rename-locals.md](ISSUE-ide-rename-locals.md) | Rename stops at top-level declarations |
 | [ISSUE-ide-formatter.md](ISSUE-ide-formatter.md) | No formatter and no multiple cursors |
-| [ISSUE-ide-align-centres.md](ISSUE-ide-align-centres.md) | No align-centres, no centre-in-form, and the grid is invisible |
 | [ISSUE-ide-control-subclass.md](ISSUE-ide-control-subclass.md) | A project's subclass of a control is a grey box in the designer |
 
 Seventeen of them came out of the October audit

@@ -1281,6 +1281,13 @@ export class MainForm extends Form {
             item.Enabled = many;
         }
 
+        /* A centre makes sense with one control too: it goes in the middle of
+         * the container it is in. */
+        for (const item of [this.ActAlignCentreH, this.ActAlignCentreV,
+                            this.ActCentreInForm]) {
+            item.Enabled = design && this.designer.selection.length > 0;
+        }
+
         /* Distributing shares the gap between the outer two: it needs three. */
         const spread = design && this.designer.selection.length > 2;
         this.ActSpreadH.Enabled = spread;
@@ -3474,6 +3481,9 @@ export class MainForm extends Form {
     ActAlignRight_Execute()  { this.designer.align("right"); }
     ActAlignTop_Execute()    { this.designer.align("top"); }
     ActAlignBottom_Execute() { this.designer.align("bottom"); }
+    ActAlignCentreH_Execute() { this.designer.align("centreH"); }
+    ActAlignCentreV_Execute() { this.designer.align("centreV"); }
+    ActCentreInForm_Execute() { this.designer.centreIn(); }
     ActSameWidth_Execute()   { this.designer.align("width"); }
     ActSameHeight_Execute()  { this.designer.align("height"); }
 

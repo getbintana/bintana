@@ -245,6 +245,26 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `pushUndo` when no selected control has anywhere to go -- the same bargain the
   keyboard arrows already made.
 
+## The lattice and the centring commands
+
+- **The board draws the grid it snaps to.** `Chrome.lattice` is one
+  `DrawingArea` over `Glass`, sized to the *form* and not to the board, painted
+  with thin lines at `Designer.gridStep()` (4). One area and not a `Panel` per
+  line: a 360x260 form is ninety vertical and sixty-five horizontal lines, and
+  that many widgets would cost more than the designer. It is added before the
+  outline bars, so selection chrome stays above it.
+- **A centre works with one control; the edge commands do not.** `AlignCentreH`
+  / `AlignCentreV` with one control centre it in its parent (`centreMove`), and
+  with several pull every other control onto the primary's centre line. The
+  edge and size commands still need two -- there is nothing to align against
+  with one -- and keep the old `many` gate.
+- **`Centre in form` is its parent's centre.** A control nested in a `Panel`
+  has coordinates in that panel; centring it in the window would mean a
+  different coordinate space. The command centres each selected control in the
+  container it is in, which is the form for the usual case. The parent's
+  declared `Width`/`Height` is the coordinate space, the same design-size rule
+  the fixed surface uses.
+
 ## IDE traps
 
 - **A class verb asked about the edited project's name answers out of the

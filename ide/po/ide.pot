@@ -1001,6 +1001,18 @@ msgstr ""
 msgid "Align bottom"
 msgstr ""
 
+#: forms/MainForm.form: action ActAlignCentreH
+msgid "Centre horizontally"
+msgstr ""
+
+#: forms/MainForm.form: action ActAlignCentreV
+msgid "Centre vertically"
+msgstr ""
+
+#: forms/MainForm.form: action ActCentreInForm
+msgid "Centre in form"
+msgstr ""
+
 #: forms/MainForm.form: action ActSameWidth
 #: forms/MainForm.form: BtnSameWidth.Tooltip
 msgid "Same width"

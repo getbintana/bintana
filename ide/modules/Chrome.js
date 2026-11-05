@@ -67,6 +67,15 @@ export class Chrome {
         this.designer = designer;
         this.glass    = designer.glass;
 
+        /* The lattice the moves snap to, under everything else the chrome
+         * draws.  One `DrawingArea` and not a `Panel` per line: a 4-pixel grid
+         * across a form is hundreds of lines, and hundreds of widgets would
+         * cost more than the whole designer. */
+        this.lattice = new DrawingArea();
+        this.lattice.Name = "DesignerGrid";
+        this.lattice.On("Draw", (p, width, height) => this.drawGrid(p, width, height));
+        this.glass.Add(this.lattice);
+
         this.outline = [];
         for (let i = 0; i < 4; i++) this.outline.push(this.bar(SELECT_COLOR));
 
@@ -107,6 +116,27 @@ export class Chrome {
         panel.Visible    = false;
         this.glass.Add(panel);
         return panel;
+    }
+
+    /* The lattice: one pass of thin lines at the step `snap()` uses, faint
+     * enough to read as paper and not as a control.  The form's own size is the
+     * area -- the board around it is not part of the drawing. */
+    drawGrid(p, width, height) {
+        const step = this.designer.gridStep();
+        if (!(step >= 2) || width < step || height < step) return;
+
+        p.Color     = p.Dark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.055)";
+        p.LineWidth = 1;
+
+        for (let x = step; x < width; x += step) {
+            p.MoveTo(x, 0);
+            p.LineTo(x, height);
+        }
+        for (let y = step; y < height; y += step) {
+            p.MoveTo(0, y);
+            p.LineTo(width, y);
+        }
+        p.Stroke();
     }
 
     /* --- the selection --------------------------------------------------- */
@@ -166,6 +196,11 @@ export class Chrome {
      */
     layout() {
         const d = this.designer;
+
+        /* The lattice is the form's rectangle, not the board's. */
+        this.lattice.Move(0, 0);
+        this.lattice.Resize(d.surface.Width, d.surface.Height);
+
         this.layoutBounds();
 
         const pool = this.outlinePool(Math.max(0, d.selection.length - 1));

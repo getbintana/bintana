@@ -926,6 +926,18 @@ msgstr "Alinear arriba"
 msgid "Align bottom"
 msgstr "Alinear abajo"
 
+#: forms/MainForm.form: action ActAlignCentreH
+msgid "Centre horizontally"
+msgstr "Centrar horizontalmente"
+
+#: forms/MainForm.form: action ActAlignCentreV
+msgid "Centre vertically"
+msgstr "Centrar verticalmente"
+
+#: forms/MainForm.form: action ActCentreInForm
+msgid "Centre in form"
+msgstr "Centrar en el formulario"
+
 #: forms/MainForm.form: action ActSameWidth BtnSameWidth.Tooltip
 msgid "Same width"
 msgstr "Igualar el ancho"

@@ -8212,8 +8212,70 @@ function* p_nested(ide) {
     ide.ActUndo.Execute();
     neq("aligning is undoable", byName(ide, "Label2").Width, anchor.Width);
 
+    /* --- centring -----------------------------------------------------------
+     * The undo above rebuilt the surface, so the controls are looked up again
+     * rather than kept across it. */
+    const centreMover  = byName(ide, "Label2");
+    const centreAnchor = byName(ide, "Group");
+
+    ide.designer.setSelection([centreMover, centreAnchor]);
+    centreMover.Move(180, 40);
+    centreAnchor.Move(20, 150);
+    yield* settled(ide);
+
+    ide.ActAlignCentreH.Execute();
+    yield* settled(ide);
+    {
+        const a = ide.designer.rectOf(centreMover);
+        const b = ide.designer.rectOf(centreAnchor);
+        eq("centre horizontally puts both on one middle",
+           a.x + a.w / 2, b.x + b.w / 2);
+    }
+
+    ide.ActAlignCentreV.Execute();
+    yield* settled(ide);
+    {
+        const a = ide.designer.rectOf(centreMover);
+        const b = ide.designer.rectOf(centreAnchor);
+        eq("centre vertically puts both on one middle",
+           a.y + a.h / 2, b.y + b.h / 2);
+    }
+
+    ide.ActCentreInForm.Execute();
+    yield* settled(ide);
+    {
+        const a = ide.designer.rectOf(centreMover);
+        check("centre in form puts it in the middle of the board",
+              Math.abs((a.x + a.w / 2) - ide.Surface.Width / 2) <= 1 &&
+              Math.abs((a.y + a.h / 2) - ide.Surface.Height / 2) <= 1,
+              `${JSON.stringify(a)} in ${ide.Surface.Width}x${ide.Surface.Height}`);
+    }
+
+    /* One control is enough for a centre. */
+    ide.designer.select(centreMover);
+    yield;
+    check("a single control can be centred", ide.ActAlignCentreH.Enabled);
+    eq("and centre-in-form too", ide.ActCentreInForm.Enabled, true);
+    ide.ActAlignCentreH.Execute();
+    yield* settled(ide);
+    {
+        const a = ide.designer.rectOf(centreMover);
+        check("centred horizontally on its own",
+              Math.abs((a.x + a.w / 2) - ide.Surface.Bounds().Width / 2) <= 1,
+              JSON.stringify(a));
+    }
+
+    /* The lattice is the snapping step made visible. */
+    check("the grid is over the board", ide.designer.chrome.lattice.Visible);
+    eq("at the form's size", ide.designer.chrome.lattice.Bounds().Width,
+       ide.Surface.Bounds().Width);
+    check("and it drew lines", ide.designer.chrome.lattice.Dump().length > 0,
+          ide.designer.chrome.lattice.Dump().slice(0, 80));
+
+    ide.designer.setSelection([centreMover, centreAnchor]);
+    yield;
     check("aligning needs two", ide.ActAlignLeft.Enabled);
-    ide.designer.select(anchor);
+    ide.designer.select(centreAnchor);
     eq("with one selected there is nothing to align to",
        ide.ActAlignLeft.Enabled, false);
 

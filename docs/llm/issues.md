@@ -189,7 +189,6 @@ needed and what it did instead.
 | Reports are code or raw text, never a designed thing | [ISSUE-ide-report-designer](../issues/ISSUE-ide-report-designer.md) |
 | Rename stops at top-level declarations | [ISSUE-ide-rename-locals](../issues/ISSUE-ide-rename-locals.md) |
 | No formatter and no multiple cursors | [ISSUE-ide-formatter](../issues/ISSUE-ide-formatter.md) |
-| No align-centres, no centre-in-form, and the grid is invisible | [ISSUE-ide-align-centres](../issues/ISSUE-ide-align-centres.md) |
 | A project's subclass of a control (`MyList extends ListBox`) is a grey box in the designer, with no `Items` or `Index` to edit | [ISSUE-ide-control-subclass](../issues/ISSUE-ide-control-subclass.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 

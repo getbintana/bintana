@@ -150,6 +150,21 @@
       "enabled": false
     },
     {
+      "name": "ActAlignCentreH",
+      "text": "Centre horizontally",
+      "enabled": false
+    },
+    {
+      "name": "ActAlignCentreV",
+      "text": "Centre vertically",
+      "enabled": false
+    },
+    {
+      "name": "ActCentreInForm",
+      "text": "Centre in form",
+      "enabled": false
+    },
+    {
       "name": "ActSameWidth",
       "text": "Same width",
       "enabled": false
@@ -834,6 +849,15 @@
         },
         {
           "action": "ActAlignBottom"
+        },
+        {
+          "action": "ActAlignCentreH"
+        },
+        {
+          "action": "ActAlignCentreV"
+        },
+        {
+          "action": "ActCentreInForm"
         },
         {
           "separator": true

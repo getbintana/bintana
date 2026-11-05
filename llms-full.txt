@@ -6971,6 +6971,26 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `pushUndo` when no selected control has anywhere to go -- the same bargain the
   keyboard arrows already made.
 
+## The lattice and the centring commands
+
+- **The board draws the grid it snaps to.** `Chrome.lattice` is one
+  `DrawingArea` over `Glass`, sized to the *form* and not to the board, painted
+  with thin lines at `Designer.gridStep()` (4). One area and not a `Panel` per
+  line: a 360x260 form is ninety vertical and sixty-five horizontal lines, and
+  that many widgets would cost more than the designer. It is added before the
+  outline bars, so selection chrome stays above it.
+- **A centre works with one control; the edge commands do not.** `AlignCentreH`
+  / `AlignCentreV` with one control centre it in its parent (`centreMove`), and
+  with several pull every other control onto the primary's centre line. The
+  edge and size commands still need two -- there is nothing to align against
+  with one -- and keep the old `many` gate.
+- **`Centre in form` is its parent's centre.** A control nested in a `Panel`
+  has coordinates in that panel; centring it in the window would mean a
+  different coordinate space. The command centres each selected control in the
+  container it is in, which is the form for the usual case. The parent's
+  declared `Width`/`Height` is the coordinate space, the same design-size rule
+  the fixed surface uses.
+
 ## IDE traps
 
 - **A class verb asked about the edited project's name answers out of the
@@ -12854,7 +12874,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10522 assertions
+./tests/run.sh                          # all seven projects, 10531 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -14361,7 +14381,6 @@ needed and what it did instead.
 | Reports are code or raw text, never a designed thing | [ISSUE-ide-report-designer](../issues/ISSUE-ide-report-designer.md) |
 | Rename stops at top-level declarations | [ISSUE-ide-rename-locals](../issues/ISSUE-ide-rename-locals.md) |
 | No formatter and no multiple cursors | [ISSUE-ide-formatter](../issues/ISSUE-ide-formatter.md) |
-| No align-centres, no centre-in-form, and the grid is invisible | [ISSUE-ide-align-centres](../issues/ISSUE-ide-align-centres.md) |
 | A project's subclass of a control (`MyList extends ListBox`) is a grey box in the designer, with no `Items` or `Index` to edit | [ISSUE-ide-control-subclass](../issues/ISSUE-ide-control-subclass.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 
