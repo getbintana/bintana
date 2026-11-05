@@ -1,12 +1,13 @@
 # Data: a plan, not a feature
 
-**No binding in this document is implemented.** It is the design for binding
-records to forms and for reading them out of a database, written down at the point
-where it was **deliberately deferred**: the machinery it needs is large and what it
-would deliver on its own — a form showing one record at a time — is small. The
-reasoning is here so that whoever picks it up does not have to have the
-conversation again, and so that the parts of it that *are* already in the tree are
-not mistaken for loose ends.
+**Most of the binding this document designs is built now** -- `Form.Record`,
+`Control.DataField`, `Form.Bind(record)` and `Form.Source`, with the designer's
+drop-downs over them -- and what is left is listed [at the end](#where-it-stands).
+It was written as the design for binding records to forms and for reading them
+out of a database, at the point where it was **deliberately deferred**: the
+machinery it needs is large and what it would deliver on its own — a form showing
+one record at a time — is small. The reasoning stays here so that whoever finishes
+it does not have to have the conversation again.
 
 **Everything under the binding has since been built**, each piece on its own
 account rather than as a first step of it: a record **holds a list of records**, so
@@ -466,7 +467,7 @@ list:
 | | |
 |---|---|
 | `sales.conn` | the connection as a project resource, with a category, an icon and a dialog. Not a section of `project.json` |
-| `Form.Record` / `Form.Source` / `Control.DataField` | three ordinary properties, so all three are designable and serialisable with no other change — the invariant the runtime rests on. **`Record` and `DataField` are built**; `Source` is not |
+| `Form.Record` / `Form.Source` / `Control.DataField` | three ordinary properties, so all three are designable and serialisable with no other change — the invariant the runtime rests on. **all three are built** |
 | the drop-downs | `DataField` from the record's fields, `Source` from the declared connections' tables and the project's `.json` files, computed the way the grid's `Style` row already is |
 | the write-back | on `Activate` and `LostFocus`, with the error marked beside the field. It asks **`Validate()`** and never `Problems`, which is the report of a load and never clears |
 
@@ -497,7 +498,8 @@ read once and kept, and `Reload()` reads them again.
 **The drop-down offers both** -- the project's `.json` and the tables of every
 connection, `shop.clients` beside `customers.json`, read out of the database and
 kept until that database changes. What is **not** built of that row: the `.conn`
-has no category, icon or dialog of its own. `Rows()` takes the record class because a project's class
+has a category and an icon in the project tree, and its double click opens the
+Data view, but no dialog edits it. `Rows()` takes the record class because a project's class
 is a lexical binding and the prelude cannot resolve a name to one.
 
 **And the designer offers both properties now**, from the project: `Record` is

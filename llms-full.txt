@@ -38,7 +38,7 @@ says which file to open for which kind of change.
 | `ide/` | the IDE, itself a Bintana project: `ide/forms/` (a `.form` beside its `.js`) and `ide/modules/` |
 | `tests/` | the suite: Bintana projects, plus console tools driven by their `.sh` |
 | `tools/` | generators and desk tools (`apijson.sh`, `llms.sh`, `pack.sh`, …), also Bintana projects |
-| `vendor/quickjs` | submodule: quickjs-ng plus eighteen patches of ours, on the fork [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana` |
+| `vendor/quickjs` | submodule: quickjs-ng plus twenty patches of ours, on the fork [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana` |
 | `examples/` | example applications; several are run by the suite |
 | `api.json` | the public surface as data, generated — never edited by hand |
 | `docs/` | technical documentation for working on the runtime |
@@ -327,7 +327,7 @@ Each of these was paid for; the evidence is in the linked file.
   `RegExp` (use `Regex`), `Promise`, `async`, `await`, `import()` and
   `localeCompare` (use `Locale.Compare`). Use `Dictionary` and `hasOwn`, never
   `key in bag`, which answers for `toString`.
-- The eighteen patches in `vendor/` **do not fail to build when dropped**;
+- The twenty patches in `vendor/` **do not fail to build when dropped**;
   `tests/widgets` asserts each of them. A patch goes in a checkout of the fork
   on branch `bintana`, and the submodule moves to the resulting commit. Fetch
   before trusting a remote-tracking ref in the submodule.
@@ -11252,14 +11252,15 @@ runtime/js/rad.js the JS half, baked into the binary
 
 `vendor/quickjs` is a submodule of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`
--- quickjs-ng **v0.18.0** plus **eighteen local patches** as one commit each,
+-- quickjs-ng **v0.18.0** plus **twenty local patches**,
 among them the
 arithmetic hook that gives `Decimal` its operators, `js_atod` so `JSON.parse`
 does not read the locale's decimal comma, the refusal message that names the
 property it would not add, the debugger's hook with its six readers, the
 refusal of `async` where it is written, and the parser's symbol report behind
-`Application.Symbols`, then string speed and modules. The fork's `BINTANA.md` is how it is rebased; all eighteen are
-in [`docs/agents/quickjs.md`](agents/quickjs.md#the-eighteen-patches-in-vendor), each with what
+`Application.Symbols`, then string speed, modules, the hint a caught
+`ReferenceError` carries, and class fields as members. The fork's `BINTANA.md` is how it is rebased; all twenty are
+in [`docs/agents/quickjs.md`](agents/quickjs.md#the-twenty-patches-in-vendor), each with what
 dropping it costs. GTK4 (4.10 or newer) and GtkSourceView 5 come from pkg-config and are
 required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0 and VTE come from
 pkg-config and are not.
@@ -12683,7 +12684,7 @@ and macOS in [plans/macos-plan.md](plans/macos-plan.md).
 | **GLib, GIO, GModule** | come with GTK. GModule is the plugin loader, `gio-unix-2.0` is `Exec`'s third stream |
 | **a C11 compiler** | gcc or clang |
 | **CMake 3.16+** and **pkg-config** | the build |
-| **QuickJS** | **not a dependency to install**: quickjs-ng v0.18.0, plus the eighteen patches of ours, is vendored in `vendor/quickjs` as a git submodule ([docs/agents/quickjs.md](agents/quickjs.md#the-eighteen-patches-in-vendor)) |
+| **QuickJS** | **not a dependency to install**: quickjs-ng v0.18.0, plus the twenty patches of ours, is vendored in `vendor/quickjs` as a git submodule ([docs/agents/quickjs.md](agents/quickjs.md#the-twenty-patches-in-vendor)) |
 
 The optional dependencies are listed below, and CMake prints what it found
 either way. Without each the runtime builds and the thing itself says which

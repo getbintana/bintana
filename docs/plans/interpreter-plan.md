@@ -242,7 +242,7 @@ Recorded so they are not tried again:
 
 Each fork change follows the rule the twelve patches follow: one commit in
 `../bintana-quickjs` on `bintana`, a row in its `BINTANA.md`, a section in
-`docs/agents/quickjs.md`'s *The eighteen patches in vendor/*, an assertion in `tests/widgets` that
+`docs/agents/quickjs.md`'s *The twenty patches in vendor/*, an assertion in `tests/widgets` that
 goes red without it, and the rebase onto v0.18.0 already done (`876442b`,
 `c359cac` were the two changes under the patches) -- a cache written against
 v0.18.0's property code is the patch most likely to conflict with the next

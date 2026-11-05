@@ -133,7 +133,7 @@ endif()
 # ---------------------------------------------------------------- QuickJS ---
 # A fork of quickjs-ng, vendored under vendor/quickjs as a submodule:
 # `getbintana/quickjs`, branch `bintana`, which is upstream v0.18.0 plus the
-# eighteen commits the runtime's patches live in.  See docs/agents/quickjs.md.
+# twenty patches the runtime needs, a commit or more each.  See docs/agents/quickjs.md.
 # A clone without `--recurse-submodules` leaves the directory empty, and the
 # answer here names the one command that fixes it rather than letting the
 # compiler fail on a missing `quickjs.c` three targets away.

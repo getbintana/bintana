@@ -28,7 +28,7 @@ says which file to open for which kind of change.
 | `ide/` | the IDE, itself a Bintana project: `ide/forms/` (a `.form` beside its `.js`) and `ide/modules/` |
 | `tests/` | the suite: Bintana projects, plus console tools driven by their `.sh` |
 | `tools/` | generators and desk tools (`apijson.sh`, `llms.sh`, `pack.sh`, …), also Bintana projects |
-| `vendor/quickjs` | submodule: quickjs-ng plus eighteen patches of ours, on the fork [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana` |
+| `vendor/quickjs` | submodule: quickjs-ng plus twenty patches of ours, on the fork [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana` |
 | `examples/` | example applications; several are run by the suite |
 | `api.json` | the public surface as data, generated — never edited by hand |
 | `docs/` | technical documentation for working on the runtime |
@@ -317,7 +317,7 @@ Each of these was paid for; the evidence is in the linked file.
   `RegExp` (use `Regex`), `Promise`, `async`, `await`, `import()` and
   `localeCompare` (use `Locale.Compare`). Use `Dictionary` and `hasOwn`, never
   `key in bag`, which answers for `toString`.
-- The eighteen patches in `vendor/` **do not fail to build when dropped**;
+- The twenty patches in `vendor/` **do not fail to build when dropped**;
   `tests/widgets` asserts each of them. A patch goes in a checkout of the fork
   on branch `bintana`, and the submodule moves to the resulting commit. Fetch
   before trusting a remote-tracking ref in the submodule.

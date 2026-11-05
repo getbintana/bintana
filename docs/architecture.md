@@ -35,14 +35,15 @@ runtime/js/rad.js the JS half, baked into the binary
 
 `vendor/quickjs` is a submodule of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`
--- quickjs-ng **v0.18.0** plus **eighteen local patches** as one commit each,
+-- quickjs-ng **v0.18.0** plus **twenty local patches**,
 among them the
 arithmetic hook that gives `Decimal` its operators, `js_atod` so `JSON.parse`
 does not read the locale's decimal comma, the refusal message that names the
 property it would not add, the debugger's hook with its six readers, the
 refusal of `async` where it is written, and the parser's symbol report behind
-`Application.Symbols`, then string speed and modules. The fork's `BINTANA.md` is how it is rebased; all eighteen are
-in [`docs/agents/quickjs.md`](agents/quickjs.md#the-eighteen-patches-in-vendor), each with what
+`Application.Symbols`, then string speed, modules, the hint a caught
+`ReferenceError` carries, and class fields as members. The fork's `BINTANA.md` is how it is rebased; all twenty are
+in [`docs/agents/quickjs.md`](agents/quickjs.md#the-twenty-patches-in-vendor), each with what
 dropping it costs. GTK4 (4.10 or newer) and GtkSourceView 5 come from pkg-config and are
 required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0 and VTE come from
 pkg-config and are not.
