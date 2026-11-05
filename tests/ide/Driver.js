@@ -653,6 +653,25 @@ function* p_files(ide) {
     ide.Editor.Text  = childSource;
     ide.ActSave.Execute();
 
+    /* --- format ------------------------------------------------------------
+     *
+     * The command is the runtime's reindenter: the IDE only offers the gesture.
+     * One undo is one format, and the file is left as it was for the next
+     * section.
+     */
+    ide.Editor.Text = "if (a) {\nb();\n}\n";
+    ide.Editor.Modified = false;
+    check("a code tab offers Format", ide.ActFormat.Enabled, true);
+    ide.ActFormat.Execute();
+    eq("Format reindents the active file",
+       ide.Editor.Text, "if (a) {\n    b();\n}\n");
+    check("and leaves it dirty", ide.Editor.Modified, true);
+    ide.ActUndo.Execute();
+    eq("one undo puts it back", ide.Editor.Text, "if (a) {\nb();\n}\n");
+
+    ide.Editor.Text = childSource;
+    ide.ActSave.Execute();
+
     /* --- no file open: a message and not a blank panel -------------------- */
     check("a tab on screen takes the empty view away", ide.Tabs.Count > 0 && !ide.EmptyBox.Visible);
     ide.closeAllTabs();
@@ -720,6 +739,7 @@ function* p_designer(ide) {
     /* There is no editor to get out of the way: an editor belongs to a code
      * tab, and this tab is a form. */
     eq("a design tab has no editor at all", ide.Editor, null);
+    eq("and Format is not on offer", ide.ActFormat.Enabled, false);
     eq("the side panel appears with it", ide.SidePanel.Visible, true);
 
     /* With the editor hidden the Notebook's page is empty.  If it kept

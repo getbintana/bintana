@@ -1188,6 +1188,17 @@ all* and *Unfold all*. What is folded is one editor's view and is not saved.
 The audit's other I1 suggestion, a live syntax check, was **not** built:
 `Live.js`'s header already argues against it and the argument holds.
 
+**Format code is the runtime's reindenter and not a second implementation.**
+Edit > *Format code* (`ActFormat`, Ctrl+Shift+I) calls `Editor.Format()` on the
+active code tab and is off on a form tab, on a read-only editor and on a
+language the reindenter does not speak -- markdown and XML open in the same
+editor, and formatting either would take the indentation out of prose and tags.
+The verb
+formats the selection when there is one and the whole file otherwise; the IDE
+does not decide the rule. `tests/ide` drives the menu item and one undo, and
+`tests/widgets`' `Format` holds the reindenter itself -- see
+[widgets.md](widgets.md).
+
 **F1 with no reference package works, and the audit that said it opened nothing
 was half out of date.** F1 on a name already fell back to the topic the runtime
 builds (`Completion.reference`); what was missing was everything around it: on

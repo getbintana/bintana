@@ -45,6 +45,11 @@ export const SOURCE_LINK = "[\\w./+-]+\\.(?:js|form|json):\\d+";
  * cost. Half of it goes when it is passed, so the trim is rare. */
 const LOG_MAX = 200000;
 
+/* The languages `Format` speaks: the ones whose nesting is delimiters. Markdown
+ * and XML are opened in a `SourceEditor` too, and formatting either of them
+ * would take the indentation out of prose and tags. */
+const FORMAT_LANGUAGES = ["js", "json", "css"];
+
 /*
  * The libraries a new *form* project starts with.
  *
@@ -1304,6 +1309,13 @@ export class MainForm extends Form {
                                       : !!this.Editor && this.Editor.CanUndo;
         this.ActRedo.Enabled = design ? this.designer.canRedo()
                                       : !!this.Editor && this.Editor.CanRedo;
+        /* Formatting is the editor's, not the designer's, and a read-only
+         * editor refuses it -- so the item is off there rather than present
+         * and failing. It is also off where the reindenter has no rule:
+         * markdown and XML open in the same editor. */
+        this.ActFormat.Enabled = !design && !!this.Editor &&
+                                 !this.Editor.ReadOnly &&
+                                 FORMAT_LANGUAGES.includes(this.Editor.Language);
 
         /* The tree's own menu speaks about the file that is open, so its state is
          * decided here with everything else that does. */
@@ -3431,6 +3443,15 @@ export class MainForm extends Form {
     ActRedo_Execute() {
         if (this.designing) this.designer.redo();
         else                this.Editor.Redo();
+        this.refresh();
+    }
+
+    /* The reindenter, over the selection when there is one and the whole file
+     * otherwise. The runtime owns the rule; the IDE only offers the gesture. */
+    ActFormat_Execute() {
+        if (this.Editor && !this.Editor.ReadOnly &&
+            FORMAT_LANGUAGES.includes(this.Editor.Language))
+            this.Editor.Format();
         this.refresh();
     }
 

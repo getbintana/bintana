@@ -906,6 +906,40 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   `TextEditor`s and used to be the source editor with `Language = ""`,
   `ShowLineNumbers = false` and `Wrap = true` -- which is what the plain one now
   is by default, and the reason it exists.
+- **`Format` is a reindenter, not a pretty-printer, and the difference is the
+  whole of its safety.** It rewrites the leading whitespace of a line and
+  nothing else: no reflow, no wrapping, no opinion about the spaces inside a
+  line. The scanner knows a brace inside a string, a comment, a template
+  literal or a regular expression is not a brace; a line that begins inside a
+  block comment or a multi-line template is copied untouched, and so is one
+  whose state cannot be attributed. The `/` heuristic is the only guess:
+  after a value it is division, after an operator or a keyword that expects an
+  expression it is a regex, and a line that begins with `/` is taken as a regex
+  when it has a closing slash -- a division continuation such as `/ 2;` has
+  none.
+  **The depth is a stack of delimiters and not only braces.** A call's
+  arguments, an array's elements and an object literal's properties each get a
+  level, and a closer aligns with the line that opened it: `});` goes with the
+  line the call and the literal share, and `}}` with the outer block. Two
+  delimiters opened on one line add one level, as `foo({` does, and the second
+  one is remembered for its closer. A line that begins `name:` is left at its
+  depth, because in this codebase it is an object's property far more often
+  than a label.
+  **A case body is a level deeper than its case, and a nested switch adds its
+  own.** The case stack remembers the depth of each switch body and the block
+  a case line opened, so `case 1: {` is not indented twice and a `} else {`
+  inside a case body stays with its `if`. A case line's colon has to be at the
+  line's own level: `case "=":` is a label and `default = 1` is not.
+  **Selection or whole file, one undo and one `Change`.** The edits are
+  leading-whitespace deletes and inserts, bottom-up, inside one user action;
+  the buffer's `changed` signal is muted while they run and one `Change` is
+  raised at the end, because a handler that redraws would otherwise pay per
+  line. The text is read with hidden characters included, so a folded line is
+  formatted rather than skipped -- and the fold opens, as it does for any edit
+  inside it. The cursor and selection are mapped by line and by their place in
+  the line, so a formatted word keeps the caret on it. `tests/widgets`
+  (`Format`) holds all of it.
+
 - **An offset is a character and an index is a JavaScript number, and the
   runtime has a verb for each so no caller crosses them by hand.**
   `Offset`/`OffsetAt(line, [column])` count **characters**, as `Column` and

@@ -31,6 +31,8 @@
  */
 #include "bta.h"
 
+#include <string.h>
+
 static GtkTextBuffer *buffer_of(BtaWidget *w)
 {
     return gtk_text_view_get_buffer(GTK_TEXT_VIEW(w->inner));
@@ -38,6 +40,12 @@ static GtkTextBuffer *buffer_of(BtaWidget *w)
 
 static void on_buffer_changed(GtkTextBuffer *buf, gpointer user_data)
 {
+    /* `Format` edits many lines and raises one event at the end, not one per
+     * line: a handler that redraws or re-reads the file would pay for every
+     * indentation it moved. */
+    if (g_object_get_data(G_OBJECT(buf), "bta-formatting"))
+        return;
+
     bta_emit((BtaWidget *)user_data, "Change", 0, NULL);
 }
 
@@ -806,6 +814,685 @@ static JSValue ed_select(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * Format: a reindenter, not a pretty-printer.
+ *
+ * **Only the leading whitespace of a line is rewritten.** The tokens are read
+ * well enough to know a brace inside a string, a comment, a template literal or
+ * a regular expression is not a brace; a line whose state cannot be attributed
+ * (inside a block comment or a multi-line template) is left exactly as it was.
+ * There is no reflow, no wrapping and no opinion about spaces inside a line.
+ *
+ * The state is the delimiters open plus the lexical state a line can end in.
+ * The regex/division decision is the one heuristic: a `/` starts a regex after an
+ * operator or a keyword that expects an expression, and is division after a
+ * value. A line that begins with `/` is taken as a regex, since a division
+ * cannot begin a statement.
+ */
+typedef struct {
+    int depth;              /* the switch body's indentation level */
+    int brace;              /* level of a block opened on the case line, or 0 */
+} IndentCase;
+
+/* A delimiter that is open, and the indentation of the line that opened it.
+ * A closer aligns with that line, not with the contents: `});` closes a call
+ * and an object literal opened on the same line, and belongs at that line's
+ * level. `contributes` is whether the opener raised the contents' level; two
+ * delimiters opened on one line raise it once, as `foo({` does. */
+typedef struct {
+    char open;
+    int  indent;
+    bool contributes;
+} IndentOpen;
+
+#define INDENT_STACK 64
+
+typedef struct {
+    int  depth;             /* indentation levels from the delimiters open */
+    int  line_indent;       /* the current line's own indentation */
+    IndentOpen stack[INDENT_STACK];
+    int  sp;
+    int  open_on_line;      /* contributed openers from this line still open */
+    int  quote;             /* 0, '\'', '"' or '`' */
+    bool escaped;
+    bool block_comment;
+    bool can_regex;
+    /* The switch bodies a `case` is open in, innermost last. A case body is
+     * one level deeper than the case, and the closing brace of the switch is
+     * not; a nested switch pushes its own. Eight is more than any file here
+     * needs, and a ninth only loses the extra level, never the indentation. */
+    IndentCase cases[8];
+    int  case_count;
+} IndentState;
+
+static bool indent_word_start(char c)
+{
+    return g_ascii_isalpha(c) || c == '_' || c == '$';
+}
+
+static bool indent_word(char c)
+{
+    return g_ascii_isalnum(c) || c == '_' || c == '$';
+}
+
+/* The opener a closer closes, or 0 when the character is not a closer. */
+static char indent_opener(char c)
+{
+    switch (c) {
+    case '}': return '{';
+    case ')': return '(';
+    case ']': return '[';
+    }
+    return 0;
+}
+
+static bool indent_regex_word(const char *s, gsize n)
+{
+    static const char *const words[] = {
+        "return", "throw", "case", "delete", "typeof", "void", "new",
+        "in", "of", "yield", "await", "else", "do", "instanceof",
+    };
+
+    for (size_t i = 0; i < G_N_ELEMENTS(words); i++) {
+        gsize len = strlen(words[i]);
+        if (len == n && !strncmp(s, words[i], n))
+            return true;
+    }
+    return false;
+}
+
+static bool indent_starts_word(const char *s, gsize n, const char *word)
+{
+    gsize len = strlen(word);
+    return n >= len && !strncmp(s, word, len) &&
+           (n == len || !indent_word(s[len]));
+}
+
+/* A line that begins with a regular expression and not a division. A division
+ * cannot begin a statement, but a continuation line can begin with one, so the
+ * closing slash is what tells them apart: `/ 2;` has none, `/a{2}/` does. */
+static bool indent_line_regex(const char *s, gsize len, gsize first)
+{
+    if (first >= len || s[first] != '/')
+        return false;
+    if (first + 1 < len &&
+        (s[first + 1] == '/' || s[first + 1] == '*' || s[first + 1] == '='))
+        return false;
+
+    bool escaped = false, in_class = false;
+    for (gsize i = first + 1; i < len; i++) {
+        char c = s[i];
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+        if (c == '\\') {
+            escaped = true;
+            continue;
+        }
+        if (c == '[') in_class = true;
+        else if (c == ']') in_class = false;
+        else if (c == '/' && !in_class) return true;
+    }
+    return false;
+}
+
+/* `case x:` or `default:`, and not a field called `default = 1`. The colon has
+ * to be at the line's own level, before an `=` or a `;`: a colon inside an
+ * object literal or a string is part of the expression, not the label. */
+static bool indent_case_line(const char *s, gsize len, gsize first)
+{
+    if (!indent_starts_word(s + first, len - first, "case") &&
+        !indent_starts_word(s + first, len - first, "default"))
+        return false;
+
+    int  depth = 0;
+    char quote = 0;
+    bool escaped = false;
+
+    for (gsize i = first; i < len; i++) {
+        char c = s[i];
+
+        if (quote) {
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == quote) {
+                quote = 0;
+            }
+            continue;
+        }
+
+        if (c == '\'' || c == '"' || c == '`') {
+            quote = c;
+            continue;
+        }
+        if (c == '/' && i + 1 < len && s[i + 1] == '/')
+            break;
+        if (c == '/' && i + 1 < len && s[i + 1] == '*') {
+            const char *close = g_strstr_len(s + i + 2, (gssize)(len - i - 2), "*/");
+            if (!close)
+                break;
+            i = (gsize)(close - s) + 1;
+            continue;
+        }
+
+        if (c == '(' || c == '[' || c == '{') {
+            depth++;
+            continue;
+        }
+        if (c == ')' || c == ']' || c == '}') {
+            if (depth > 0)
+                depth--;
+            continue;
+        }
+
+        if (depth == 0 && (c == '=' || c == ';'))
+            return false;
+        if (depth == 0 && c == ':')
+            return !(i + 1 < len && s[i + 1] == ':');
+    }
+    return false;
+}
+
+/* Walk one line, updating the lexical state and the delimiters open. */
+static void indent_scan(const char *s, gsize len, IndentState *st)
+{
+    gsize i = 0;
+
+    st->open_on_line = 0;
+
+    while (i < len) {
+        if (st->block_comment) {
+            const char *close = g_strstr_len(s + i, (gssize)(len - i), "*/");
+            if (!close) {
+                i = len;
+                break;
+            }
+            i = (gsize)(close - s) + 2;
+            st->block_comment = false;
+            continue;
+        }
+
+        if (st->quote) {
+            char c = s[i];
+            if (st->escaped) {
+                st->escaped = false;
+                i++;
+                continue;
+            }
+            if (c == '\\') {
+                st->escaped = true;
+                i++;
+                continue;
+            }
+            if (c == st->quote) {
+                st->quote = 0;
+                st->can_regex = false;
+            }
+            i++;
+            continue;
+        }
+
+        char c = s[i];
+        if (c == '/' && i + 1 < len && s[i + 1] == '*') {
+            st->block_comment = true;
+            i += 2;
+            continue;
+        }
+        if (c == '/' && i + 1 < len && s[i + 1] == '/')
+            break;
+
+        if (c == '/' && st->can_regex) {
+            bool in_class = false, escaped = false;
+            i++;
+            while (i < len) {
+                char d = s[i];
+                if (escaped) {
+                    escaped = false;
+                    i++;
+                    continue;
+                }
+                if (d == '\\') {
+                    escaped = true;
+                    i++;
+                    continue;
+                }
+                if (d == '[') in_class = true;
+                else if (d == ']') in_class = false;
+                else if (d == '/' && !in_class) {
+                    i++;
+                    break;
+                }
+                i++;
+            }
+            st->can_regex = false;
+            continue;
+        }
+
+        if (c == '\'' || c == '"' || c == '`') {
+            st->quote = c;
+            st->escaped = false;
+            st->can_regex = false;
+            i++;
+            continue;
+        }
+        if (c == '{' || c == '(' || c == '[') {
+            if (st->sp < INDENT_STACK) {
+                bool contributes = st->open_on_line == 0;
+
+                st->stack[st->sp].open = c;
+                st->stack[st->sp].indent = st->line_indent;
+                st->stack[st->sp].contributes = contributes;
+                st->sp++;
+
+                if (contributes) {
+                    st->depth++;
+                    st->open_on_line++;
+                }
+            }
+            st->can_regex = true;
+            i++;
+            continue;
+        }
+        if (c == '}' || c == ')' || c == ']') {
+            char open = indent_opener(c);
+
+            if (st->sp > 0 && st->stack[st->sp - 1].open == open) {
+                st->sp--;
+                if (st->stack[st->sp].contributes) {
+                    if (st->depth > 0) st->depth--;
+                    if (st->open_on_line > 0) st->open_on_line--;
+                }
+            }
+            st->can_regex = false;
+            i++;
+            continue;
+        }
+        if (strchr(",;:=!&|?+-*%^~<>", c)) {
+            st->can_regex = true;
+            i++;
+            continue;
+        }
+        if (indent_word_start(c)) {
+            gsize j = i + 1;
+            while (j < len && indent_word(s[j])) j++;
+            st->can_regex = indent_regex_word(s + i, j - i);
+            i = j;
+            continue;
+        }
+        if (g_ascii_isdigit(c)) {
+            i++;
+            while (i < len && (indent_word(s[i]) || s[i] == '.')) i++;
+            st->can_regex = false;
+            continue;
+        }
+        if (c == ' ' || c == '\t' || c == '\r') {
+            i++;
+            continue;
+        }
+        st->can_regex = false;
+        i++;
+    }
+
+    /* A backslash at the end of a line inside a string escapes the break, not
+     * the first character of the next line. */
+    st->escaped = false;
+}
+
+/* The indent a line gets, from the depth, its leading closers and the case
+ * body it is in. */
+static int indent_for(const char *s, gsize len, gsize first, IndentState *st)
+{
+    int  line = st->depth;
+    int  sp = st->sp;
+    gsize i = first;
+    bool closer = false;
+
+    /* A line that begins with closers aligns with the line that opened the
+     * outermost of them. The last one is the outermost: `}}` belongs with the
+     * outer block, and `});` with the line the call and the literal share. */
+    while (i < len) {
+        char open = indent_opener(s[i]);
+        if (!open || sp <= 0 || st->stack[sp - 1].open != open)
+            break;
+        sp--;
+        line = st->stack[sp].indent;
+        closer = true;
+        i++;
+    }
+
+    bool case_line = indent_case_line(s, len, first);
+
+    /* A case body is one level deeper than the case; the closing brace of the
+     * switch, which is shallower, is not. A nested switch adds its own level,
+     * so the extras are summed. A block opened on the case line provides the
+     * level itself, so its body gets no extra from that switch. A line that
+     * closes something already carries the level of the line it closes. */
+    if (!closer) {
+        int base = line;
+        for (int c = 0; c < st->case_count; c++) {
+            const IndentCase *k = &st->cases[c];
+            if (base < k->depth)
+                continue;
+            if (case_line && base == k->depth)
+                continue;
+            if (k->brace > 0 && base >= k->depth)
+                continue;
+            line++;
+        }
+    }
+
+    /* A line that begins `name:` is left at the depth it is: in this codebase
+     * it is an object's property far more often than a label, and outdenting
+     * every property to make the rare label pretty is the wrong trade. */
+    return line;
+}
+
+static gchar *indent_text(const char *text, gsize len, int width)
+{
+    GString   *out = g_string_sized_new(len + 64);
+    IndentState st = { 0 };
+    gsize       at = 0;
+
+    st.can_regex = true;
+
+    while (at < len) {
+        gsize end = at;
+        while (end < len && text[end] != '\n') end++;
+
+        gsize line_len = end - at;
+        bool  inside   = st.block_comment || st.quote != 0;
+        gsize first    = 0;
+
+        if (!inside)
+            while (first < line_len &&
+                   (text[at + first] == ' ' || text[at + first] == '\t'))
+                first++;
+
+        bool case_line = false;
+
+        if (!inside && first < line_len)
+            case_line = indent_case_line(text + at, line_len, first);
+
+        int line = st.depth;
+
+        if (inside) {
+            g_string_append_len(out, text + at, line_len);
+        } else if (first == line_len) {
+            /* A blank line stays blank: no trailing spaces. */
+        } else {
+            line = indent_for(text + at, line_len, first, &st);
+            for (int i = 0; i < line * width; i++)
+                g_string_append_c(out, ' ');
+            g_string_append_len(out, text + at + first, line_len - first);
+        }
+
+        st.line_indent = line;
+
+        /* A line that starts with a regex, not with a division continuation. */
+        if (!inside && indent_line_regex(text + at, line_len, first))
+            st.can_regex = true;
+
+        int before = st.depth;
+        indent_scan(text + at, line_len, &st);
+
+        /* Open a case body at the switch's depth; a case line is at that
+         * depth, not one deeper. A block opened on the case line is remembered
+         * so its own body is not indented twice. */
+        if (case_line) {
+            if (st.case_count == 0 ||
+                st.cases[st.case_count - 1].depth != before) {
+                if (st.case_count < (int)G_N_ELEMENTS(st.cases)) {
+                    st.cases[st.case_count].depth = before;
+                    st.cases[st.case_count].brace = 0;
+                    st.case_count++;
+                }
+            }
+            if (st.case_count > 0 &&
+                st.cases[st.case_count - 1].depth == before)
+                st.cases[st.case_count - 1].brace =
+                    st.depth > before ? st.depth : 0;
+        }
+
+        /* The closing brace of a switch is shallower than its case body. */
+        while (st.case_count > 0 &&
+               st.depth < st.cases[st.case_count - 1].depth)
+            st.case_count--;
+        if (st.case_count > 0) {
+            IndentCase *k = &st.cases[st.case_count - 1];
+            if (k->brace > 0 && st.depth < k->brace)
+                k->brace = 0;
+        }
+
+        if (end < len)
+            g_string_append_c(out, '\n');
+        at = end + 1;
+    }
+
+    return g_string_free(out, FALSE);
+}
+
+/* One line whose leading whitespace has to move, and the prefix it gets. */
+typedef struct {
+    int   line;
+    int   old_indent;
+    int   new_indent;
+    gsize new_start;        /* the prefix's offset in the formatted text */
+} IndentEdit;
+
+/*
+ * The lines in `[first, last]` whose leading whitespace differs between the
+ * text and its formatted form. Both strings have the same line breaks, since
+ * `indent_text` rewrites nothing else; the loop stops if they ever do not.
+ */
+static GArray *indent_edits(const char *text, const char *out, int first, int last)
+{
+    GArray     *edits = g_array_new(FALSE, FALSE, sizeof(IndentEdit));
+    const char *a = text, *b = out;
+    int         line = 0;
+
+    for (;;) {
+        const char *ae = strchr(a, '\n');
+        const char *be = strchr(b, '\n');
+        gsize       alen = ae ? (gsize)(ae - a) : strlen(a);
+        gsize       blen = be ? (gsize)(be - b) : strlen(b);
+
+        if (line >= first && line <= last) {
+            gsize ai = 0, bi = 0;
+            while (ai < alen && (a[ai] == ' ' || a[ai] == '\t')) ai++;
+            while (bi < blen && (b[bi] == ' ' || b[bi] == '\t')) bi++;
+
+            if (ai != bi || (ai > 0 && memcmp(a, b, ai) != 0)) {
+                IndentEdit e;
+                e.line       = line;
+                e.old_indent = (int)ai;
+                e.new_indent = (int)bi;
+                e.new_start  = (gsize)(b - out);
+                g_array_append_val(edits, e);
+            }
+        }
+
+        if (!ae || !be)
+            break;
+        a = ae + 1;
+        b = be + 1;
+        line++;
+    }
+
+    return edits;
+}
+
+/* The length of a line's leading whitespace, by 0-based line number. */
+static gsize indent_at_line(const char *text, int line)
+{
+    const char *p = text;
+
+    for (int i = 0; i < line; i++) {
+        p = strchr(p, '\n');
+        if (!p)
+            return 0;
+        p++;
+    }
+
+    gsize n = 0;
+    while (p[n] == ' ' || p[n] == '\t')
+        n++;
+    return n;
+}
+
+/* A column is kept relative to the line's content: inside the indentation it
+ * stays inside the new one, at its edge it follows the content, and after it
+ * the content moves with it. */
+static int indent_map_column(int column, gsize old_indent, gsize new_indent)
+{
+    if (column < (int)old_indent)
+        return MIN(column, (int)new_indent);
+    return (int)((gsize)column - old_indent + new_indent);
+}
+
+static void indent_map_position(const char *text, const char *out,
+                                int first, int last, int line, int column,
+                                int *new_line, int *new_column)
+{
+    gsize old_indent = indent_at_line(text, line);
+    gsize new_indent = (line >= first && line <= last)
+                     ? indent_at_line(out, line) : old_indent;
+
+    *new_line   = line;
+    *new_column = indent_map_column(column, old_indent, new_indent);
+}
+
+/* An iter at a line and a column, both clamped the way `Select` clamps. */
+static void indent_iter_at(GtkTextBuffer *buf, GtkTextIter *it,
+                           int line, int column)
+{
+    int last = gtk_text_buffer_get_line_count(buf) - 1;
+    gtk_text_buffer_get_iter_at_line(buf, it, CLAMP(line, 0, last));
+
+    GtkTextIter eol = *it;
+    if (!gtk_text_iter_ends_line(&eol))
+        gtk_text_iter_forward_to_line_end(&eol);
+
+    int max = gtk_text_iter_get_line_offset(&eol);
+    gtk_text_iter_set_line_offset(it, CLAMP(column, 0, max));
+}
+
+/* Format([indent]) -- see the table below. */
+static JSValue ed_format(JSContext *ctx, JSValueConst this_val,
+                         int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GtkTextView *view = GTK_TEXT_VIEW(w->inner);
+    if (!gtk_text_view_get_editable(view))
+        return JS_ThrowPlainError(ctx, "Format: the editor is read-only");
+
+    int width = 4;
+    if (argc > 0 && !JS_IsUndefined(argv[0])) {
+        if (!bta_to_int(ctx, argv[0], "Format", &width))
+            return JS_EXCEPTION;
+        if (width < 0 || width > 16)
+            return JS_ThrowRangeError(ctx,
+                "Format: indent %d is not 0 to 16 spaces", width);
+    }
+
+    GtkTextBuffer *buf = buffer_of(w);
+    GtkTextIter    start, end;
+    gtk_text_buffer_get_bounds(buf, &start, &end);
+
+    /* `TRUE` is folded text too: formatting must see every line the buffer
+     * holds, or the line numbers it edits would be the visible ones. */
+    char *text = gtk_text_buffer_get_text(buf, &start, &end, TRUE);
+    if (!text)
+        return JS_EXCEPTION;
+
+    gchar *out = indent_text(text, strlen(text), width);
+
+    GtkTextIter insert, bound;
+    gtk_text_buffer_get_iter_at_mark(buf, &insert, gtk_text_buffer_get_insert(buf));
+    gtk_text_buffer_get_iter_at_mark(buf, &bound,
+                                     gtk_text_buffer_get_selection_bound(buf));
+    bool has_selection = !gtk_text_iter_equal(&insert, &bound);
+
+    int first = 0, last = gtk_text_buffer_get_line_count(buf) - 1;
+    if (has_selection) {
+        GtkTextIter a, b;
+        gtk_text_buffer_get_selection_bounds(buf, &a, &b);
+        first = gtk_text_iter_get_line(&a);
+        last  = gtk_text_iter_get_line(&b);
+
+        /* A selection that ends at the start of a line does not mean that
+         * line; selecting a whole line's text leaves the next one alone. */
+        if (last > first && gtk_text_iter_get_line_offset(&b) == 0)
+            last--;
+    }
+
+    int ins_line = gtk_text_iter_get_line(&insert);
+    int ins_col  = gtk_text_iter_get_line_offset(&insert);
+    int bnd_line = gtk_text_iter_get_line(&bound);
+    int bnd_col  = gtk_text_iter_get_line_offset(&bound);
+
+    GArray *edits   = indent_edits(text, out, first, last);
+    bool    changed = edits->len > 0;
+
+    if (changed) {
+        g_object_set_data(G_OBJECT(buf), "bta-formatting", GINT_TO_POINTER(1));
+        gtk_text_buffer_begin_user_action(buf);
+
+        /* Bottom-up: a line index stays the one the caller meant while the
+         * lines above it have not moved yet. */
+        for (int i = (int)edits->len - 1; i >= 0; i--) {
+            IndentEdit *e = &g_array_index(edits, IndentEdit, i);
+            GtkTextIter a, b;
+
+            gtk_text_buffer_get_iter_at_line(buf, &a, e->line);
+            b = a;
+            if (e->old_indent > 0)
+                gtk_text_iter_forward_chars(&b, e->old_indent);
+            if (!gtk_text_iter_equal(&a, &b))
+                gtk_text_buffer_delete(buf, &a, &b);
+
+            if (e->new_indent > 0) {
+                gtk_text_buffer_get_iter_at_line(buf, &a, e->line);
+                gtk_text_buffer_insert(buf, &a, out + e->new_start,
+                                       e->new_indent);
+            }
+        }
+
+        gtk_text_buffer_end_user_action(buf);
+        g_object_set_data(G_OBJECT(buf), "bta-formatting", NULL);
+    }
+
+    if (changed) {
+        int nins_line, nins_col, nbnd_line, nbnd_col;
+        indent_map_position(text, out, first, last, ins_line, ins_col,
+                            &nins_line, &nins_col);
+        indent_map_position(text, out, first, last, bnd_line, bnd_col,
+                            &nbnd_line, &nbnd_col);
+
+        GtkTextIter pos, bound_pos;
+        indent_iter_at(buf, &pos, nins_line, nins_col);
+        indent_iter_at(buf, &bound_pos, nbnd_line, nbnd_col);
+        if (has_selection)
+            gtk_text_buffer_select_range(buf, &pos, &bound_pos);
+        else
+            gtk_text_buffer_place_cursor(buf, &pos);
+    }
+
+    g_array_free(edits, TRUE);
+    g_free(text);
+    g_free(out);
+
+    if (changed)
+        bta_emit(w, "Change", 0, NULL);
+
+    return JS_UNDEFINED;
+}
+
 static const JSCFunctionListEntry editor_props[] = {
     /* Text
      *   everything in the buffer. Assigning replaces it all and **raises
@@ -925,6 +1612,16 @@ static const JSCFunctionListEntry editor_props[] = {
      *   empties it
      */
     JS_CFUNC_DEF("Clear",    0, ed_clear),
+    /* Format([indent])
+     *   re-indents the selected lines, or every line when nothing is selected,
+     *   to the file's nesting depth — **leading whitespace only**: strings,
+     *   comments, template literals and regular expressions are not braces,
+     *   and a line it cannot attribute keeps its indentation. `indent` is
+     *   spaces per level, 4 unless told (0 to 16). One undo step; no reflow
+     *   and no wrapping. **O(n) and only when called**, so nothing is paid
+     *   while typing
+     */
+    JS_CFUNC_DEF("Format",   1, ed_format),
     /* Undo()
      *   one step back
      */

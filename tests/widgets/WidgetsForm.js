@@ -631,7 +631,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "Direction", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
@@ -1660,6 +1660,221 @@ class WidgetsForm extends Form {
         eq("...as GTK does", this.Ed.Line, 2);
 
         this.Ed.Clear();
+    }
+
+    /*
+     * `Format`: the reindenter, and only the reindenter.
+     *
+     * It moves leading whitespace and nothing else. A brace inside a string, a
+     * comment, a template literal or a regular expression is not a brace; a
+     * line it cannot attribute keeps its indentation. `case`/`default` get a
+     * body level, a nested switch its own, and a block opened on the case line
+     * is not indented twice.
+     */
+    testFormat() {
+        const ed = new SourceEditor();
+        this.Fixed1.Add(ed);
+
+        ed.Text = "const s = \" } {\";\n" +
+                  "// } {\n" +
+                  "/* } { */\n" +
+                  "const r = /[{}]/;\n" +
+                  "/[{}]/.test(s);\n" +
+                  "if (x) {\n" +
+                  "  y();\n" +
+                  "}\n";
+        ed.Format();
+        eq("a brace in a string, a comment or a regex is not a brace",
+           ed.Text,
+           "const s = \" } {\";\n" +
+           "// } {\n" +
+           "/* } { */\n" +
+           "const r = /[{}]/;\n" +
+           "/[{}]/.test(s);\n" +
+           "if (x) {\n" +
+           "    y();\n" +
+           "}\n");
+
+        const once = ed.Text;
+        ed.Format();
+        eq("formatting a formatted file changes nothing", ed.Text, once);
+
+        ed.Text = "const x = 10\n/ foo({a: 1});\nif (x) {\ny();\n}\n";
+        ed.Format();
+        eq("a line that begins with a division is not a regex",
+           ed.Text,
+           "const x = 10\n" +
+           "/ foo({a: 1});\n" +
+           "if (x) {\n" +
+           "    y();\n" +
+           "}\n");
+
+        ed.Text = "switch (x) {\ncase 1:\ny();\nbreak;\ndefault:\nz();\n}\n";
+        ed.Format();
+        eq("a case body is a level deeper than its case",
+           ed.Text,
+           "switch (x) {\n" +
+           "    case 1:\n" +
+           "        y();\n" +
+           "        break;\n" +
+           "    default:\n" +
+           "        z();\n" +
+           "}\n");
+
+        ed.Text = "switch (x) {\ncase \"=\":\ny();\nbreak;\n}\n";
+        ed.Format();
+        eq("a colon in a case's string is not the label's",
+           ed.Text,
+           "switch (x) {\n" +
+           "    case \"=\":\n" +
+           "        y();\n" +
+           "        break;\n" +
+           "}\n");
+
+        ed.Text = "switch (x) {\ncase 1: {\ny();\n}\ndefault:\nz();\n}\n";
+        ed.Format();
+        eq("a block opened on the case line is not indented twice",
+           ed.Text,
+           "switch (x) {\n" +
+           "    case 1: {\n" +
+           "        y();\n" +
+           "    }\n" +
+           "    default:\n" +
+           "        z();\n" +
+           "}\n");
+
+        ed.Text = "switch (x) {\ncase 1:\nswitch (y) {\ncase 2:\nz();\n}\nbreak;\n}\n";
+        ed.Format();
+        eq("a nested switch adds its own case body",
+           ed.Text,
+           "switch (x) {\n" +
+           "    case 1:\n" +
+           "        switch (y) {\n" +
+           "            case 2:\n" +
+           "                z();\n" +
+           "        }\n" +
+           "        break;\n" +
+           "}\n");
+
+        ed.Text = "const t = `\n}\n`;\n/*\n}\n*/\nif (x) {\n  y();\n}\n";
+        ed.Format();
+        eq("a multi-line template and a block comment keep their lines",
+           ed.Text,
+           "const t = `\n}\n`;\n/*\n}\n*/\nif (x) {\n    y();\n}\n");
+
+        ed.Text = "const x = {\nfoo: 1,\nbar: {\nbaz: 2,\n},\n};\n";
+        ed.Format();
+        eq("an object's properties are indented, not outdented as labels",
+           ed.Text,
+           "const x = {\n" +
+           "    foo: 1,\n" +
+           "    bar: {\n" +
+           "        baz: 2,\n" +
+           "    },\n" +
+           "};\n");
+
+        ed.Text = "const x = foo(\na,\nb\n);\n";
+        ed.Format();
+        eq("a call's arguments are indented and its closer is not",
+           ed.Text,
+           "const x = foo(\n" +
+           "    a,\n" +
+           "    b\n" +
+           ");\n");
+
+        ed.Text = "const x = foo({\na: 1,\n});\n";
+        ed.Format();
+        eq("a call and an object literal opened on one line indent once",
+           ed.Text,
+           "const x = foo({\n" +
+           "    a: 1,\n" +
+           "});\n");
+
+        ed.Text = "const a = [\n1,\n2,\n];\n";
+        ed.Format();
+        eq("an array's elements are indented",
+           ed.Text, "const a = [\n    1,\n    2,\n];\n");
+
+        ed.Text = "foo(\nbar(\nx\n)\n);\n";
+        ed.Format();
+        eq("nested calls each add a level",
+           ed.Text, "foo(\n    bar(\n        x\n    )\n);\n");
+
+        ed.Text = "if (a) {\nif (b) {\nx();\n}}\n";
+        ed.Format();
+        eq("two closers on one line align with the outer one",
+           ed.Text, "if (a) {\n    if (b) {\n        x();\n}}\n");
+
+        ed.Text = "if (x) {\n\ty();\n}\n";
+        ed.Format();
+        eq("a tab is rewritten as the chosen spaces",
+           ed.Text, "if (x) {\n    y();\n}\n");
+
+        ed.Text = "if (x) {\n   \n  y();\n}\n";
+        ed.Format();
+        eq("a blank line loses its trailing spaces",
+           ed.Text, "if (x) {\n\n    y();\n}\n");
+
+        ed.Text = "if (x) {\n  const  a=1;\n}\n";
+        ed.Format();
+        eq("the spaces inside a line are not touched",
+           ed.Text, "if (x) {\n    const  a=1;\n}\n");
+
+        ed.Text = "if (x) {\n  y();\n}\n    z();\n";
+        ed.Select(2, 3, 4);
+        ed.Format();
+        eq("a selection formats its own lines and leaves the rest",
+           ed.Text, "if (x) {\n    y();\n}\n    z();\n");
+        eq("...and the selected text is still the selected text",
+           ed.Selection, "y();");
+
+        ed.Text = "if (x) {\ny();\n}\n";
+        ed.Select(2, 2, 0);
+        ed.Format();
+        eq("the cursor keeps its line", ed.Line, 2);
+        eq("...and its place in the line", ed.Column, 6);
+
+        ed.Text = "if (x) {\ny();\nz();\n}\n";
+        let changes = 0;
+        ed.On("Change", () => { changes++; });
+        changes = 0;
+        ed.Format();
+        eq("several lines are one format",
+           ed.Text, "if (x) {\n    y();\n    z();\n}\n");
+        eq("...and one Change, not one per line", changes, 1);
+        ed.Undo();
+        eq("...and one undo puts them all back",
+           ed.Text, "if (x) {\ny();\nz();\n}\n");
+        ed.On("Change", null);
+
+        ed.Text = "if (x) {\ny();\n}\n";
+        ed.Format(2);
+        eq("the indent is the argument", ed.Text, "if (x) {\n  y();\n}\n");
+        ed.Format(0);
+        eq("...including none", ed.Text, "if (x) {\ny();\n}\n");
+
+        ed.Text = "if (x) {\n    y();\n}\n";
+        ed.Modified = false;
+        ed.Format();
+        eq("a file already formatted is not marked modified", ed.Modified, false);
+
+        ed.ReadOnly = true;
+        throws("a read-only editor refuses to format", () => ed.Format());
+        ed.ReadOnly = false;
+
+        throws("the indent is 0 to 16", () => ed.Format(-1));
+        throws("...at both ends", () => ed.Format(17));
+        throws("...and it is a number", () => ed.Format("four"));
+
+        const plain = new TextEditor();
+        this.Fixed1.Add(plain);
+        plain.Text = "if (x) {\ny();\n}\n";
+        plain.Format();
+        eq("the plain editor has the same verb",
+           plain.Text, "if (x) {\n    y();\n}\n");
+        plain.Delete();
+
+        ed.Delete();
     }
 
     /* --- an underline under the word, not only the line -------------------

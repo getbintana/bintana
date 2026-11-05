@@ -109,6 +109,12 @@
       "enabled": false
     },
     {
+      "name": "ActFormat",
+      "text": "Format code",
+      "shortcut": "<Control><Shift>i",
+      "enabled": false
+    },
+    {
       "name": "ActFind",
       "text": "Find...",
       "shortcut": "<Control>f",
@@ -384,6 +390,12 @@
         },
         {
           "action": "ActRedo"
+        },
+        {
+          "separator": true
+        },
+        {
+          "action": "ActFormat"
         },
         {
           "separator": true
