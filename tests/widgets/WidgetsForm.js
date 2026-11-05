@@ -616,7 +616,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "Direction", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
@@ -4613,6 +4613,72 @@ class Form1 extends Form {
                 scroller.Delete();
             });
         });
+    }
+
+    /* --- Bitmap ------------------------------------------------------------
+     *
+     * A picture as a value: load it once, transform it without a display, and
+     * hand the answer to the control that shows it.  The original never moves;
+     * every transform answers a new one.
+     */
+    testBitmap() {
+        const b = Bitmap.Load(File.Join(IMAGES, "wide.png"));
+
+        eq("a picture loads", `${b.Width}x${b.Height}`, "120x80");
+        eq("and says what it is", String(b), "Bitmap(120x80)");
+
+        const half = b.Scale(60);
+        eq("one side follows the proportions", `${half.Width}x${half.Height}`, "60x40");
+        eq("and the original is unchanged", `${b.Width}x${b.Height}`, "120x80");
+        eq("both sides are exact", `${b.Scale(60, 60).Width}x${b.Scale(60, 60).Height}`,
+           "60x60");
+        throws("a side of nothing is refused", () => b.Scale(0));
+
+        const crop = b.Crop(10, 10, 50, 20);
+        eq("Crop keeps the box", `${crop.Width}x${crop.Height}`, "50x20");
+        eq("and clips one that runs past the edge",
+           `${b.Crop(100, 60, 50, 50).Width}x${b.Crop(100, 60, 50, 50).Height}`,
+           "20x20");
+        throws("a crop with no overlap is refused", () => b.Crop(200, 200, 2, 2));
+
+        eq("a quarter turn swaps the sides", `${b.Rotate(90).Width}x${b.Rotate(90).Height}`,
+           "80x120");
+        eq("and a half turn keeps them", `${b.Rotate(180).Width}x${b.Rotate(180).Height}`,
+           "120x80");
+        const angled = b.Rotate(45);
+        check("another angle expands the canvas", angled.Width > b.Width &&
+              angled.Height > b.Height, `${angled.Width}x${angled.Height}`);
+
+        eq("Flip keeps the size", `${b.Flip(true).Width}x${b.Flip(true).Height}`, "120x80");
+
+        const png = b.ToPng();
+        check("the PNG is bytes", png instanceof Bytes && png.Length > 0,
+              String(png && png.Length));
+        const again = Bitmap.FromBytes(png);
+        eq("and reads back as the picture it was",
+           `${again.Width}x${again.Height}`, "120x80");
+
+        const out = File.Join(Application.Directory, "bitmap-test.png");
+        b.Save(out);
+        check("Save writes a file", File.Exists(out));
+        File.Delete(out);
+
+        throws("a missing file is refused", () => Bitmap.Load(File.Join(Application.Directory,
+                                                                        "nope.png")));
+        throws("bytes that are not a picture are refused",
+               () => Bitmap.FromBytes(new Bytes("not a png")));
+
+        const pic = new Picture();
+        this.Fixed1.Add(pic);
+        pic.Source = b.Scale(30);
+        eq("Picture.Source measures the Bitmap", pic.SourceWidth, 30);
+        eq("and it is the only source", pic.File, "");
+        check("the getter answers a Bitmap", pic.Source instanceof Bitmap);
+        pic.Source = null;
+        eq("null clears it", pic.Source, null);
+        eq("and leaves nothing to measure", pic.SourceWidth, 0);
+        throws("a Source that is not a Bitmap is refused", () => { pic.Source = "x"; });
+        pic.Delete();
     }
 
     /* --- Video and AudioPlayer ----------------------------------------------

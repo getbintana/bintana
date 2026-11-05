@@ -1410,6 +1410,7 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      * thread cannot move the words under a running task.
      */
     bta_bytes_init(ctx, global);
+    bta_bitmap_init(ctx, global);
     bta_decimal_init(ctx, global);
     bta_day_init(ctx, global);
     bta_database_init(ctx, global);

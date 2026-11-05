@@ -6443,6 +6443,7 @@ static void build_picture(BtaWidget *w)
  * or the second image in a viewer would be drawn at the first one's size.
  */
 #define PIC_TEXTURE_KEY "bta-picture-texture"
+#define PIC_BITMAP_KEY  "bta-picture-bitmap"
 
 static void picture_apply_zoom(BtaWidget *w)
 {
@@ -6508,6 +6509,7 @@ static JSValue picture_set_file(JSContext *ctx, JSValueConst this_val,
     if (!*path) {
         g_object_set_data(G_OBJECT(w->gtk), PIC_TEXTURE_KEY, NULL);
         g_object_set_data(G_OBJECT(w->gtk), PIC_FILE_KEY, NULL);
+        g_object_set_data(G_OBJECT(w->gtk), PIC_BITMAP_KEY, NULL);
         picture_apply_zoom(w);
         JS_FreeCString(ctx, path);
         return JS_UNDEFINED;
@@ -6526,6 +6528,7 @@ static JSValue picture_set_file(JSContext *ctx, JSValueConst this_val,
 
     g_object_set_data_full(G_OBJECT(w->gtk), PIC_TEXTURE_KEY, texture, g_object_unref);
     g_object_set_data_full(G_OBJECT(w->gtk), PIC_FILE_KEY, g_strdup(path), g_free);
+    g_object_set_data(G_OBJECT(w->gtk), PIC_BITMAP_KEY, NULL);
     picture_apply_zoom(w);      /* the new file's size, not the old one's */
     JS_FreeCString(ctx, path);
     return JS_UNDEFINED;
@@ -6559,7 +6562,59 @@ static JSValue picture_load_bytes(JSContext *ctx, JSValueConst this_val,
 
     g_object_set_data_full(G_OBJECT(w->gtk), PIC_TEXTURE_KEY, texture, g_object_unref);
     g_object_set_data(G_OBJECT(w->gtk), PIC_FILE_KEY, NULL);
+    g_object_set_data(G_OBJECT(w->gtk), PIC_BITMAP_KEY, NULL);
     picture_apply_zoom(w);      /* these bytes' size, not the last file's */
+    return JS_UNDEFINED;
+}
+
+/*
+ * A `Bitmap` to show, which is the value `Scale`/`Crop`/`Rotate` answer.
+ *
+ * It is a property and not a verb because it is the third source the control
+ * has -- `File`, `LoadBytes` and a value -- and the three are one thing: the
+ * last one wins and the other names are cleared, exactly as `File` and
+ * `LoadBytes` already do.  The serialiser never writes it: a Bitmap is not a
+ * `.form` value (`savableValue` refuses objects that are not Decimal), so this
+ * is a runtime source, like `LoadBytes`, said as a property because the reader
+ * assigns it rather than calling it.
+ */
+static JSValue picture_get_bitmap(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GdkPixbuf *pixbuf = g_object_get_data(G_OBJECT(w->gtk), PIC_BITMAP_KEY);
+    return pixbuf ? bta_bitmap_new(ctx, g_object_ref(pixbuf)) : JS_NULL;
+}
+
+static JSValue picture_set_bitmap(JSContext *ctx, JSValueConst this_val,
+                                  JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    if (JS_IsNull(val) || JS_IsUndefined(val)) {
+        g_object_set_data(G_OBJECT(w->gtk), PIC_TEXTURE_KEY, NULL);
+        g_object_set_data(G_OBJECT(w->gtk), PIC_FILE_KEY, NULL);
+        g_object_set_data(G_OBJECT(w->gtk), PIC_BITMAP_KEY, NULL);
+        picture_apply_zoom(w);
+        return JS_UNDEFINED;
+    }
+
+    GdkPixbuf *pixbuf = bta_bitmap_pixbuf(val);
+    if (!pixbuf)
+        return JS_ThrowTypeError(ctx, "Source expects a Bitmap, or null");
+
+    G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    GdkTexture *texture = gdk_texture_new_for_pixbuf(pixbuf);
+    G_GNUC_END_IGNORE_DEPRECATIONS
+    g_object_set_data_full(G_OBJECT(w->gtk), PIC_TEXTURE_KEY, texture, g_object_unref);
+    g_object_set_data(G_OBJECT(w->gtk), PIC_FILE_KEY, NULL);
+    g_object_set_data_full(G_OBJECT(w->gtk), PIC_BITMAP_KEY,
+                           g_object_ref(pixbuf), g_object_unref);
+    picture_apply_zoom(w);
     return JS_UNDEFINED;
 }
 
@@ -6674,15 +6729,22 @@ static const JSCFunctionListEntry picture_props[] = {
      *   the path. What `GdkTexture` reads: PNG, JPEG, WebP, TIFF, BMP. **SVG
      *   is not among them** — a scalable icon is the pixbuf loaders'
      *   business, which is why an [`Image`](docs/reference/widgets/Image.md)
-     *   draws one and this does not
+     *   draws one and this does not. Setting it clears `Source`
      */
     JS_CGETSET_DEF("File", picture_get_file, picture_set_file),
     /* LoadBytes(bytes)
      *   the photograph out of memory instead — a download shown without a
-     *   temporary file. Clears `File`; `SourceWidth`/`SourceHeight` measure
-     *   it the same way
+     *   temporary file. Clears `File` and `Source`; `SourceWidth` and
+     *   `SourceHeight` measure it the same way
      */
     JS_CFUNC_DEF("LoadBytes", 1, picture_load_bytes),
+    /* Source
+     *   a `Bitmap` to show -- the value `Scale`, `Crop` and `Rotate` answer.
+     *   Setting it clears `File`; `null` clears it. The getter answers the
+     *   `Bitmap` it was given, or `null` for a file or bytes. **Not saved**:
+     *   a Bitmap is runtime data, like `LoadBytes`
+     */
+    JS_CGETSET_DEF("Source", picture_get_bitmap, picture_set_bitmap),
     /* Fit
      *   what to do with the room there is: `Contain` (the whole picture,
      *   letterboxed), `Cover` (fill the room, cropping), `Fill` (stretch,
@@ -6695,12 +6757,13 @@ static const JSCFunctionListEntry picture_props[] = {
      */
     JS_CGETSET_DEF("Zoom", picture_get_zoom, picture_set_zoom),
     /* SourceWidth
-     *   what is really in the file, which is the number a zoom is computed
-     *   from and the one a title bar shows. `0` when nothing is loaded
+     *   what is really in the picture — the file's or the Bitmap's — which is
+     *   the number a zoom is computed from and the one a title bar shows. `0`
+     *   when nothing is loaded
      */
     JS_CGETSET_MAGIC_DEF("SourceWidth",  picture_get_source, NULL, PIC_SOURCE_W),
     /* SourceHeight
-     *   the file's own height
+     *   the picture's own height, from the file or the Bitmap
      */
     JS_CGETSET_MAGIC_DEF("SourceHeight", picture_get_source, NULL, PIC_SOURCE_H),
 };

@@ -1625,6 +1625,18 @@ JSValue bta_bytes_new(JSContext *ctx, const void *data, size_t len);
  * one that is: an empty Bytes points at nothing rather than being nothing. */
 const uint8_t *bta_bytes_get(JSValueConst v, size_t *len);
 
+/*
+ * Bitmap: a picture as a value, with scale, crop, rotate and flip.  A
+ * GdkPixbuf underneath, so it works in a Task as well as on a form; the class
+ * is the value, `Picture` the control that shows it and `Image` the control
+ * that is not it.
+ */
+void bta_bitmap_init(JSContext *ctx, JSValue global);
+/* Takes ownership of `pixbuf`. */
+JSValue bta_bitmap_new(JSContext *ctx, GdkPixbuf *pixbuf);
+/* The pixels, borrowed; NULL when the value is not a Bitmap. */
+GdkPixbuf *bta_bitmap_pixbuf(JSValueConst v);
+
 /* Day: a calendar date as "YYYY-MM-DD" text -- the value DatePicker and
  * Field.Date already hold -- with the arithmetic JavaScript's instant cannot do
  * correctly. */

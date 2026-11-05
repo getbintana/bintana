@@ -958,11 +958,13 @@ static JSValue painter_image(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     /*
-     * A path or the bytes themselves, which is the same picture arriving by the
-     * other road: `Http` answers `Bytes` and `File.LoadBytes` reads them, and a
+     * A path, the bytes themselves or a `Bitmap`, which are the same picture
+     * arriving by three roads: `Http` answers `Bytes` and `File.LoadBytes`
+     * reads them, and `Bitmap` is the value a scale or a crop already made. A
      * drawing that had to write a temporary file to paint a downloaded logo was
      * the gap. The argument decides, because there is nothing to configure: a
-     * string is a file and `Bytes` are the image.
+     * string is a file, `Bytes` are the image, and a `Bitmap` is the picture
+     * already decoded.
      *
      * **Bytes are decoded on every call and the cache is the path's alone.** A
      * path is a stable key with an mtime behind it; bytes are a pointer that can
@@ -977,8 +979,19 @@ static JSValue painter_image(JSContext *ctx, JSValueConst this_val,
     const char      *path  = NULL;
     cairo_surface_t *img   = NULL;
     cairo_surface_t *owned = NULL;
+    bool             named_bitmap = false;
 
-    if (bta_bytes_get(argv[0], &blen)) {
+    GdkPixbuf *bitmap = bta_bitmap_pixbuf(argv[0]);
+    if (bitmap) {
+        G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+        GdkTexture *texture = gdk_texture_new_for_pixbuf(bitmap);
+        G_GNUC_END_IGNORE_DEPRECATIONS
+        owned = img = surface_of_texture(ctx, texture, "Bitmap");
+        g_object_unref(texture);
+        named_bitmap = true;
+        if (!img)
+            return JS_EXCEPTION;
+    } else if (bta_bytes_get(argv[0], &blen)) {
         char        named[32];
         GdkTexture *texture = bta_texture_from_bytes(ctx, argv[0], "Image");
 
@@ -1030,7 +1043,9 @@ static JSValue painter_image(JSContext *ctx, JSValueConst this_val,
 
     char nb[NUMLEN], nb2[NUMLEN], nb3[NUMLEN], nb4[NUMLEN], named[32];
 
-    if (!path)
+    if (named_bitmap)
+        g_snprintf(named, sizeof named, "Bitmap");
+    else if (!path)
         g_snprintf(named, sizeof named, "%zu bytes", blen);
 
     /* The dump names the source the caller gave: a file by its path, and bytes
@@ -1991,13 +2006,17 @@ static const JSCFunctionListEntry painter_props[] = {
      *   proportions. With neither it is drawn at its natural size, one image
      *   pixel to one. A **string** is a file, absolute or relative to the
      *   working directory; **`Bytes`** are the image itself, which is what
-     *   `Http` answers with. Missing, or not an image, **throws** and ends
-     *   the frame. A path is decoded once and cached, so a drawing may paint
-     *   the same logo every frame; **bytes are decoded on every call** — the
-     *   cache is keyed on the path, and bytes have no key that stays true.
-     *   Measured: 2.7 ms a call for a 640×480 PNG against 0.045 ms for the
-     *   same file cached. A handler painting the same bytes every frame wants
-     *   a `Picture` with `LoadBytes` instead
+     *   `Http` answers with; a **`Bitmap`** is a picture already decoded and
+     *   transformed, and its pixels are what get drawn. Missing, or not an
+     *   image, **throws** and ends the frame. A path is decoded once and
+     *   cached, so a drawing may paint the same logo every frame; **bytes and
+     *   a Bitmap are downloaded into cairo on every call** — the cache is
+     *   keyed on the path, and neither has a key that stays true. A `Bitmap`
+     *   is the one to reach for when the picture is scaled, cropped or turned
+     *   first: the work happens once, in the value. Measured: 2.7 ms a call
+     *   for a 640×480 PNG against 0.045 ms for the same file cached. A handler
+     *   painting the same bytes every frame wants a `Picture` with `LoadBytes`
+     *   instead
      */
     JS_CFUNC_DEF("Image", 5, painter_image),
     /* TextWidth(text, [options])

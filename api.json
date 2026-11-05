@@ -6653,7 +6653,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the path. What `GdkTexture` reads: PNG, JPEG, WebP, TIFF, BMP. **SVG is not among them** — a scalable icon is the pixbuf loaders' business, which is why an [`Image`](docs/reference/widgets/Image.md) draws one and this does not",
+          "Doc": "the path. What `GdkTexture` reads: PNG, JPEG, WebP, TIFF, BMP. **SVG is not among them** — a scalable icon is the pixbuf loaders' business, which is why an [`Image`](docs/reference/widgets/Image.md) draws one and this does not. Setting it clears `Source`",
           "Native": true
         },
         {
@@ -6671,7 +6671,16 @@
           "Params": 1,
           "Signature": "(bytes)",
           "Returns": "",
-          "Doc": "the photograph out of memory instead — a download shown without a temporary file. Clears `File`; `SourceWidth`/`SourceHeight` measure it the same way",
+          "Doc": "the photograph out of memory instead — a download shown without a temporary file. Clears `File` and `Source`; `SourceWidth` and `SourceHeight` measure it the same way",
+          "Native": true
+        },
+        {
+          "Name": "Source",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a `Bitmap` to show -- the value `Scale`, `Crop` and `Rotate` answer. Setting it clears `File`; `null` clears it. The getter answers the `Bitmap` it was given, or `null` for a file or bytes. **Not saved**: a Bitmap is runtime data, like `LoadBytes`",
           "Native": true
         },
         {
@@ -6680,7 +6689,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the file's own height",
+          "Doc": "the picture's own height, from the file or the Bitmap",
           "Native": true
         },
         {
@@ -6689,7 +6698,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "what is really in the file, which is the number a zoom is computed from and the one a title bar shows. `0` when nothing is loaded",
+          "Doc": "what is really in the picture — the file's or the Bitmap's — which is the number a zoom is computed from and the one a title bar shows. `0` when nothing is loaded",
           "Native": true
         },
         {
@@ -13562,6 +13571,101 @@
       ]
     },
     {
+      "Name": "Bitmap",
+      "Members": [
+        {
+          "Name": "Crop",
+          "Kind": "Method",
+          "Params": 4,
+          "Signature": "(x, y, width, height)",
+          "Returns": "Bitmap",
+          "Doc": "the box kept. A box that runs past the edge is clipped to it, the way `Bytes.Slice` clamps; one with no overlap at all is refused",
+          "Native": true
+        },
+        {
+          "Name": "Flip",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(horizontal, [vertical])",
+          "Returns": "Bitmap",
+          "Doc": "a mirror; both together is the same as `Rotate(180)`",
+          "Native": true
+        },
+        {
+          "Name": "FromBytes",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "(bytes)",
+          "Returns": "Bitmap",
+          "Doc": "the picture already in memory -- what `Http` answers with and `File.LoadBytes` reads -- decoded once",
+          "Native": true
+        },
+        {
+          "Name": "Height",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "pixels, read-only",
+          "Native": true
+        },
+        {
+          "Name": "Load",
+          "Kind": "Static",
+          "Params": 1,
+          "Signature": "(path)",
+          "Returns": "Bitmap",
+          "Doc": "the picture a `Picture` would show: PNG, JPEG, WebP, TIFF, BMP, and an SVG only where this machine has a loader. A path that is not one is refused by name, where `Probe.Image` answers `null`",
+          "Native": true
+        },
+        {
+          "Name": "Rotate",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(degrees)",
+          "Returns": "Bitmap",
+          "Doc": "clockwise, like `Painter.Rotate`; 90/180/270 are exact, any other angle expands the canvas to the turned rectangle",
+          "Native": true
+        },
+        {
+          "Name": "Save",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(path)",
+          "Returns": "",
+          "Doc": "writes PNG, like `DrawingArea.Save`",
+          "Native": true
+        },
+        {
+          "Name": "Scale",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(width, [height])",
+          "Returns": "Bitmap",
+          "Doc": "a new picture. One side is enough: the other follows the picture's own proportions; both make that exact size, distorting if it has to",
+          "Native": true
+        },
+        {
+          "Name": "ToPng",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "Bytes",
+          "Doc": "the same PNG in memory, for an upload or a `Record` field",
+          "Native": true
+        },
+        {
+          "Name": "Width",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "pixels, read-only",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Bytes",
       "Members": [
         {
@@ -15777,7 +15881,7 @@
           "Params": 5,
           "Signature": "(source, x, y, [width], [height])",
           "Returns": "",
-          "Doc": "a picture, put down with its top-left corner there. **One of `width`/`height` is enough** — the other follows the image's own proportions. With neither it is drawn at its natural size, one image pixel to one. A **string** is a file, absolute or relative to the working directory; **`Bytes`** are the image itself, which is what `Http` answers with. Missing, or not an image, **throws** and ends the frame. A path is decoded once and cached, so a drawing may paint the same logo every frame; **bytes are decoded on every call** — the cache is keyed on the path, and bytes have no key that stays true. Measured: 2.7 ms a call for a 640×480 PNG against 0.045 ms for the same file cached. A handler painting the same bytes every frame wants a `Picture` with `LoadBytes` instead",
+          "Doc": "a picture, put down with its top-left corner there. **One of `width`/`height` is enough** — the other follows the image's own proportions. With neither it is drawn at its natural size, one image pixel to one. A **string** is a file, absolute or relative to the working directory; **`Bytes`** are the image itself, which is what `Http` answers with; a **`Bitmap`** is a picture already decoded and transformed, and its pixels are what get drawn. Missing, or not an image, **throws** and ends the frame. A path is decoded once and cached, so a drawing may paint the same logo every frame; **bytes and a Bitmap are downloaded into cairo on every call** — the cache is keyed on the path, and neither has a key that stays true. A `Bitmap` is the one to reach for when the picture is scaled, cropped or turned first: the work happens once, in the value. Measured: 2.7 ms a call for a 640×480 PNG against 0.045 ms for the same file cached. A handler painting the same bytes every frame wants a `Picture` with `LoadBytes` instead",
           "Native": true
         },
         {

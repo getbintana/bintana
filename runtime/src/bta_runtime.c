@@ -2472,6 +2472,7 @@ static bool install_globals(BtaApp *app)
      */
     bta_locale_init(ctx, global, app->dir, app->libs);
     bta_bytes_init(ctx, global);
+    bta_bitmap_init(ctx, global);
     bta_decimal_init(ctx, global);
     bta_painter_init(ctx, global);
     bta_metrics_init(ctx, global);

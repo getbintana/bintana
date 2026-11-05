@@ -42,6 +42,22 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   and "the handler works" are different facts. The file it writes is checked by
   loading it into a `Picture` and reading `SourceWidth`/`SourceHeight` -- the
   runtime can read a PNG back, which is cheaper than a pixel probe.
+- **`Painter.Image`'s cache is the path's, so `Bytes` and a `Bitmap` are
+  downloaded into cairo on every call.** A path is a stable key with an mtime
+  behind it; bytes are a pointer that can be freed and reallocated at the same
+  address, so caching them would eventually paint the wrong picture. A `Bitmap`
+  is still the answer when the picture must be scaled, cropped or turned first:
+  that work happens once, in the value. Measured, 640×480: 2.7 ms a call for a
+  PNG path uncached against 0.045 ms cached, and a `Bitmap` decode at
+  `Bitmap.Load` rather than in the frame.
+- **GdkPixbuf has no constructor that decodes encoded bytes**:
+  `gdk_pixbuf_new_from_bytes` reads raw pixels, a colorspace and a rowstride.
+  `Bitmap.FromBytes` goes through `GdkPixbufLoader` (`write` then `close`), and
+  the decoded pixbuf must be `g_object_ref`'d before the loader is unreffed.
+  An arbitrary-angle `Bitmap.Rotate` bridges pixbuf and cairo through PNG bytes
+  for the same class of reason: handing cairo GdkPixbuf's RGBA rows swaps red
+  and blue on a little-endian machine, and the PNG stream is the lossless,
+  channel-order-free form both libraries already speak.
 - **A `void` helper that throws is a throw nobody sees.** `paint_frame` refuses a
   `Save()` asked for from inside a `Draw` -- one painter means one frame -- and
   for as long as it returned `void`, `area_save` carried on, wrote the PNG and

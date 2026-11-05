@@ -246,6 +246,7 @@ add_executable(bintana
     runtime/src/bta_network.c
     runtime/src/bta_locale.c
     runtime/src/bta_bytes.c
+    runtime/src/bta_bitmap.c
     runtime/src/bta_decimal.c
     runtime/src/bta_day.c
     runtime/src/bta_form.c
