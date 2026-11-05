@@ -16,7 +16,6 @@ in the same form.
 | [ISSUE-property-grid-control.md](ISSUE-property-grid-control.md) | No property grid control for applications |
 | [ISSUE-symmetric-encryption.md](ISSUE-symmetric-encryption.md) | No symmetric encryption |
 | [ISSUE-pdf-reading.md](ISSUE-pdf-reading.md) | The runtime writes PDFs and cannot read one |
-| [ISSUE-object-prototype.md](ISSUE-object-prototype.md) | `Object.prototype` is writable and there is no defence |
 | [ISSUE-reference-hint-in-catch.md](ISSUE-reference-hint-in-catch.md) | The "did you mean" sentence is lost inside a `catch` |
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
 | [ISSUE-ide-report-designer.md](ISSUE-ide-report-designer.md) | Reports are code or raw text, never a designed thing |

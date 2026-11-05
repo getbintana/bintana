@@ -13366,6 +13366,15 @@
           "Native": true
         },
         {
+          "Name": "ProtectPrototype",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "refuse every new name on `Object.prototype`, so code loaded later cannot change every `for...in` in the program. Existing members can still be replaced; answers `true`, also when it was already closed",
+          "Native": true
+        },
+        {
           "Name": "Quit",
           "Kind": "Method",
           "Params": 1,

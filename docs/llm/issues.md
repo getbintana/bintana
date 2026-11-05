@@ -182,7 +182,6 @@ needed and what it did instead.
 | No property grid control for applications | [ISSUE-property-grid-control](../issues/ISSUE-property-grid-control.md) |
 | No symmetric encryption | [ISSUE-symmetric-encryption](../issues/ISSUE-symmetric-encryption.md) |
 | The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
-| `Object.prototype` is writable and there is no defence | [ISSUE-object-prototype](../issues/ISSUE-object-prototype.md) |
 | The "did you mean" sentence is lost inside a `catch` | [ISSUE-reference-hint-in-catch](../issues/ISSUE-reference-hint-in-catch.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
 | Reports are code or raw text, never a designed thing | [ISSUE-ide-report-designer](../issues/ISSUE-ide-report-designer.md) |

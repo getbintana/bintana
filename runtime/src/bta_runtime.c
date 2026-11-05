@@ -2081,6 +2081,51 @@ static JSValue js_globals(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/*
+ * ProtectPrototype(): close `Object.prototype` to new names.
+ *
+ * `for...in` recites the prototype chain, so a plugin that polyfills
+ * `Object.prototype.currency` changes every enumeration in the host -- the
+ * total of an invoice among them. The language has no `Object.preventExtensions`
+ * (it went with the rest of `Object`), so the defence is a runtime verb: after
+ * this, an assignment or a `defineProperty` that would add a name to
+ * `Object.prototype` is refused, and the program's own `for...in` loops are
+ * stable again.
+ *
+ * **Existing members can still be replaced**: this is `preventExtensions`, not
+ * `freeze`. A host that wants the stronger promise can say so later; a plugin
+ * that patches `toString` is a different problem from one that adds a key.
+ * Calling it twice is harmless, and it answers `true` both times.
+ */
+static JSValue js_protect_prototype(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    (void)this_val;
+    (void)argc;
+    (void)argv;
+
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue object = JS_GetPropertyStr(ctx, global, "Object");
+    JS_FreeValue(ctx, global);
+
+    if (JS_IsException(object))
+        return object;
+
+    JSValue proto = JS_GetPropertyStr(ctx, object, "prototype");
+    JS_FreeValue(ctx, object);
+
+    if (JS_IsException(proto))
+        return proto;
+
+    int ok = JS_PreventExtensions(ctx, proto);
+    JS_FreeValue(ctx, proto);
+
+    if (!ok)
+        return JS_ThrowPlainError(ctx,
+            "ProtectPrototype: Object.prototype is not an object");
+    return JS_TRUE;
+}
+
 /* Answers false when a library carried a native plugin that cannot be used, in
  * which case the caller stops the program. See bta_plugins_load. */
 static bool install_globals(BtaApp *app)
@@ -2385,6 +2430,14 @@ static bool install_globals(BtaApp *app)
      */
     JS_SetPropertyStr(ctx, application, "Globals",
                       JS_NewCFunction(ctx, js_globals, "Globals", 0));
+    /* ProtectPrototype()
+     *   refuse every new name on `Object.prototype`, so code loaded later
+     *   cannot change every `for...in` in the program. Existing members can
+     *   still be replaced; answers `true`, also when it was already closed
+     */
+    JS_SetPropertyStr(ctx, application, "ProtectPrototype",
+                      JS_NewCFunction(ctx, js_protect_prototype,
+                                      "ProtectPrototype", 0));
 
     /* Replacements()
      *   every name this language takes away, and what to write instead. It is

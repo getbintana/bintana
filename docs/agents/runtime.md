@@ -836,3 +836,18 @@ opens a file wants the window, and the one that does not is not hurt by it.
 red with the action's name misspelt; it is skipped where `dbus-run-session` is
 absent. **`File.Join(dir, "/abs")` is `dir/abs`**, not `/abs`, which is what the
 documentation's example first got wrong.
+
+## `ProtectPrototype` and the prototype every object inherits
+
+`Application.ProtectPrototype()` is `JS_PreventExtensions` on `Object.prototype`
+and nothing else: **not `freeze`**, so an existing member can still be replaced,
+and **irreversible**, so the runtime never calls it for a program. The caller is
+a host about to load code it did not write, and the thing it buys is that
+`for...in` cannot start reciting a polyfill's key.
+
+**The test runs in a child process.** `tests/widgets` has a later test that puts
+a probe on `Object.prototype` on purpose (the curated-language table), and a
+closed prototype cannot be opened again -- so `testProtectPrototype` writes a
+`main` project into the scratch directory and runs it with `Exec.Wait`, the way
+the ApplicationId and module tests run theirs. A test that called it in the
+suite's own process would pass and take a later test down with it.

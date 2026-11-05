@@ -564,6 +564,8 @@ const TESTS = [
     /* Blocking too, and in the same group: it runs children with `Exec.Wait`
      * to see a project's own id answered, and a bad one refused. */
     "ApplicationId",
+    /* Blocking too: a child that closes Object.prototype and tries to add. */
+    "ProtectPrototype",
     "EditorMap",
     "EditorFold",
     "EditorFoldClick",
@@ -4679,6 +4681,50 @@ class Form1 extends Form {
         eq("and leaves nothing to measure", pic.SourceWidth, 0);
         throws("a Source that is not a Bitmap is refused", () => { pic.Source = "x"; });
         pic.Delete();
+    }
+
+    /* --- ProtectPrototype ---------------------------------------------------
+     *
+     * `Object.prototype` is shared by every object, so a plugin that polyfills
+     * a name changes every `for...in` in the host. The runtime has no
+     * `Object.preventExtensions`; this is the verb that closes it.
+     *
+     * **A child process, and not this one.** Closing the prototype cannot be
+     * undone, and a later test in this same process writes a probe onto it on
+     * purpose (see `testCuratedLanguage`). The child says what happened.
+     */
+    testProtectPrototype() {
+        const dir = File.Join(SCRATCH, "protect-proto");
+        Directory.Make(dir);
+
+        File.Save(File.Join(dir, "project.json"), JSON.stringify({
+            name: "protect", main: "Main", sources: ["Main.js"],
+        }));
+        File.Save(File.Join(dir, "Main.js"),
+            'function Main() {\n' +
+            '    print("first=" + Application.ProtectPrototype());\n' +
+            '    let assign = false;\n' +
+            '    try { Object.prototype.polluted = 1; } catch (e) { assign = true; }\n' +
+            '    print("assign=" + (assign ? "refused" : "allowed"));\n' +
+            '    print("added=" + (({}).polluted !== undefined));\n' +
+            '    let define = false;\n' +
+            '    try { Object.defineProperty(Object.prototype, "polluted2", { value: 1 }); }\n' +
+            '    catch (e) { define = true; }\n' +
+            '    print("define=" + (define ? "refused" : "allowed"));\n' +
+            '    print("second=" + Application.ProtectPrototype());\n' +
+            '    let n = 0; for (const k in { a: 1 }) n++;\n' +
+            '    print("forin=" + n);\n' +
+            '}\n');
+
+        const ran = Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        const out = ran.Output || "";
+
+        check("a program can close Object.prototype", ran.ExitCode === 0, out);
+        check("...and a new name is refused", out.includes("assign=refused"), out);
+        check("...and the prototype did not grow", out.includes("added=false"), out);
+        check("...and defineProperty is refused too", out.includes("define=refused"), out);
+        check("...and it is harmless twice", out.includes("second=true"), out);
+        check("...and for...in is one name again", out.includes("forin=1"), out);
     }
 
     /* --- Video and AudioPlayer ----------------------------------------------
