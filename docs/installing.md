@@ -210,7 +210,7 @@ Three things it deliberately does not do: it does not bundle GTK (the machine
 needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
 a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
 built **without** the optional dependencies (`sqlite3`, `libsoup`, GStreamer,
-VTE, `libxml2`, `libsecret`) so that none of them becomes a shared library the
+VTE, `libxml2`, `libsecret`, GnuTLS) so that none of them becomes a shared library the
 downloader has to have.
 
 ### The compiler inside the Windows build
@@ -341,6 +341,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
 | `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
 | `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | `Keyring` exists, `Available` is `false`, and every verb refuses with a sentence naming the package. It has no Windows port; the library itself is on every GNOME desktop already |
+| `Cipher` (AES-256-GCM) | `gnutls-devel` | `libgnutls28-dev` | `Cipher` exists, `Available` is `false`, and `Encrypt`/`Decrypt` refuse with a sentence naming the package. GnuTLS is already the TLS library under libsoup on a Linux desktop, but the headers are a separate package |
 | `--profile` and the runtime's marks in a Sysprof capture | `sysprof-capture-devel` | `libsysprof-capture-4-dev` | `--profile` refuses naming the package, and a capture carries no marks of ours — the samples and GTK's frame marks are Sysprof's and unaffected |
 
 `Widget.Available(type)` is how a program asks what the build it is running on
@@ -458,5 +459,5 @@ and a TagLib wrapper worked through.
 | `Package 'gtksourceview-5' not found` | `gtksourceview5-devel` / `libgtksourceview-5-dev` |
 | compile errors about `gtk_alert_dialog` or `gtk_file_dialog` | the GTK is older than 4.10 — Debian 13 / Ubuntu 24.04 or newer |
 | `no vte: Terminal exists and refuses to run one` | not an error: the optional table above |
-| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret` | likewise — a build line, not a failure |
+| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret`, `no gnutls` | likewise — a build line, not a failure |
 | `no sysprof-capture: --profile says so when asked` | likewise; a Sysprof run still shows the samples and GTK's frames |

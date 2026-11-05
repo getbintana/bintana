@@ -13,9 +13,7 @@ in the same form.
 | Issue | The missing capability |
 |---|---|
 | [ISSUE-postgres-driver.md](ISSUE-postgres-driver.md) | `Database` publishes `Sqlite` alone |
-| [ISSUE-symmetric-encryption.md](ISSUE-symmetric-encryption.md) | No symmetric encryption |
 | [ISSUE-pdf-reading.md](ISSUE-pdf-reading.md) | The runtime writes PDFs and cannot read one |
-| [ISSUE-reference-hint-in-catch.md](ISSUE-reference-hint-in-catch.md) | The "did you mean" sentence is lost inside a `catch` |
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
 | [ISSUE-ide-report-designer.md](ISSUE-ide-report-designer.md) | Reports are code or raw text, never a designed thing |
 | [ISSUE-ide-rename-locals.md](ISSUE-ide-rename-locals.md) | Rename stops at top-level declarations |

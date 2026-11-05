@@ -25,3 +25,24 @@ obvious and each cost something:
   branches cannot be compiled here (`RtlGenRandom` is fetched with
   `GetProcAddress` so the link line did not have to change blind). `Random.Int` is
   rejection sampling; `r % span` is the bias to refuse by construction.
+
+## Cipher, added later
+
+**AES-256-GCM through GnuTLS, because GnuTLS was already the TLS library under
+`libsoup`.** The headers are a separate package, so it is optional like sqlite:
+`Cipher.Available` is false without it and the verbs refuse naming the package.
+
+**The key is hashed with SHA-256, not padded.** A passphrase, an `Hash.Hmac`
+digest and `Random.Bytes(32)` are all the same 32 bytes to the cipher, and none
+of them has to be a particular length. That is a decision about the API, not
+about the strength: a passphrase a person chose is as weak as the passphrase,
+and a caller who cares stretches it before it gets here.
+
+**The sealed value is `"BTA1"`, a fresh 12-byte nonce and the ciphertext with
+its 16-byte tag.** The nonce is new every call, so two seals of one plaintext
+differ; the marker is what `Decrypt` refuses by name when the value is not one
+of ours. A wrong key, a changed byte, a truncated value or another marker is a
+throw -- GCM authenticates, so there is no plausible-looking half answer. The
+tests hold the round trip, two seals differing, a wrong key, one flipped byte,
+a text key and an empty key; there is no fixed-nonce vector because the API does
+not let a caller choose the nonce, which is the point.

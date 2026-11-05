@@ -13389,7 +13389,7 @@
           "Params": 0,
           "Signature": "()",
           "Returns": "",
-          "Doc": "every name this language takes away, and what to write instead. It is a bag keyed by the name that went: `{ setTimeout: \"Timer.After(delay, tick) — the delay comes first\", \"Object.assign\": \"{ ...a, ...b }\", … }`. **`\"\"` where there is no word for that thing here**, which is an answer rather than a gap in the table. An editor asks it of an identifier nobody can find, so a beginner meets `Timer` at the token rather than a `ReferenceError` at the next run",
+          "Doc": "every name this language takes away, and what to write instead. It is a bag keyed by the name that went: `{ setTimeout: \"Timer.After(delay, tick) — the delay comes first\", \"Object.assign\": \"{ ...a, ...b }\", … }`. **`\"\"` where there is no word for that thing here**, which is an answer rather than a gap in the table. An editor asks it of an identifier nobody can find, so a beginner meets `Timer` at the token rather than a `ReferenceError` at the next run. **The same sentence is in a caught `ReferenceError`'s `message`**, because the engine asks the table while it builds the error",
           "Native": true
         },
         {
@@ -13788,6 +13788,38 @@
           "Signature": "",
           "Returns": "boolean",
           "Doc": "whether the signal has been raised; read-only",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "Cipher",
+      "Members": [
+        {
+          "Name": "Available",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this build has a cipher at all: false without GnuTLS, and then both verbs refuse naming the package",
+          "Native": true
+        },
+        {
+          "Name": "Decrypt",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(sealed, key)",
+          "Returns": "Bytes",
+          "Doc": "the plaintext, or a **throw** when the key is wrong or the value was changed -- GCM authenticates, so there is no half-right answer",
+          "Native": true
+        },
+        {
+          "Name": "Encrypt",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(data, key)",
+          "Returns": "Bytes",
+          "Doc": "AES-256-GCM. `data` is text (its UTF-8) or `Bytes`; `key` is text or `Bytes`, hashed with SHA-256 to the 32 bytes the cipher takes. The answer is a marker, a fresh 12-byte nonce and the ciphertext with its tag -- two seals of the same data differ, and a changed byte or a wrong key is refused by `Decrypt`",
           "Native": true
         }
       ]

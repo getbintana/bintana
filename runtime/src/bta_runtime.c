@@ -538,6 +538,35 @@ static const BtaReplacement bta_object_replacements[] = {
     { "Object.isExtensible",      "" },
 };
 
+/*
+ * The suffix a `ReferenceError` carries for a name this language took away.
+ *
+ * The engine asks it while it builds the error, so a `catch` that shows
+ * `e.message` gets the sentence that used to arrive only on the terminal. The
+ * table is the same one `Application.Replacements` publishes and
+ * `bta_close_hatches` deletes from -- a name and what to write instead cannot
+ * disagree. A `""` use is a deliberate answer, not a gap.
+ */
+static bool bta_reference_hint(JSContext *ctx, const char *name,
+                               char *buf, size_t len, void *opaque)
+{
+    (void)ctx;
+    (void)opaque;
+
+    for (size_t i = 0; i < G_N_ELEMENTS(bta_replacements); i++) {
+        const BtaReplacement *r = &bta_replacements[i];
+        if (strcmp(name, r->name))
+            continue;
+
+        if (*r->use)
+            g_snprintf(buf, len, ": use %s", r->use);
+        else
+            g_snprintf(buf, len, ", and nothing here replaces it");
+        return true;
+    }
+    return false;
+}
+
 /* The bag `Application.Replacements` answers with, built from the two tables.
  * A **verb** and not a read-only property, and it is the shape every "give me
  * the list this runtime has" answer already has -- `Application.Globals()`,
@@ -2446,7 +2475,9 @@ static bool install_globals(BtaApp *app)
      *   **`""` where there is no word for that thing here**, which is an
      *   answer rather than a gap in the table. An editor asks it of an
      *   identifier nobody can find, so a beginner meets `Timer` at the token
-     *   rather than a `ReferenceError` at the next run
+     *   rather than a `ReferenceError` at the next run. **The same sentence is
+     *   in a caught `ReferenceError`'s `message`**, because the engine asks the
+     *   table while it builds the error
      */
     JS_SetPropertyStr(ctx, application, "Replacements",
                       JS_NewCFunction(ctx, js_application_replacements,
@@ -2557,6 +2588,7 @@ static bool install_globals(BtaApp *app)
     bta_lock_init(ctx, global);
     bta_random_init(ctx, global);
     bta_gzip_init(ctx, global);
+    bta_cipher_init(ctx, global);
     bta_notification_init(ctx, global);
     bta_zip_init(ctx, global);
     bta_probe_init(ctx, global);
@@ -3302,6 +3334,8 @@ JSContext *bta_new_context(JSRuntime *rt)
     JSContext *ctx = JS_NewContextRaw(rt);
     if (!ctx)
         return NULL;
+
+    JS_SetReferenceHintHandler(rt, bta_reference_hint, NULL);
 
     if (JS_AddIntrinsicBaseObjects(ctx) ||
         JS_AddIntrinsicEval(ctx) ||        /* the compiler, not the global */

@@ -1373,6 +1373,13 @@ void bta_random_init(JSContext *ctx, JSValue global);
  */
 void bta_gzip_init(JSContext *ctx, JSValue global);
 
+/*
+ * Cipher: AES-256-GCM behind `Encrypt`/`Decrypt`, with the key hashed to the 32
+ * bytes the cipher takes. Optional at build time (BTA_HAVE_GNUTLS), the sqlite
+ * mould: without it `Available` is false and the verbs refuse.
+ */
+void bta_cipher_init(JSContext *ctx, JSValue global);
+
 /* --- Notification ---------------------------------------------------------
  *
  * `Notification.Send` and `Withdraw`, through the `GApplication` so that a

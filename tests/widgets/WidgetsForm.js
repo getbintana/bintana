@@ -638,7 +638,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "ReferenceHint", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Cipher", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Parts", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -10445,6 +10445,37 @@ class Form1 extends Form {
         File.Delete(bigPath);
     }
 
+    testCipher() {
+        if (!Cipher.Available) {
+            print("  (Cipher skipped: this build has no GnuTLS)");
+            return;
+        }
+
+        const key  = Random.Bytes(32);
+        const text = "the quick brown fox";
+        const sealed = Cipher.Encrypt(text, key);
+
+        check("a sealed value is Bytes", sealed instanceof Bytes);
+        eq("...marked as one of ours", sealed.Slice(0, 4).ToText(), "BTA1");
+        eq("...and the plaintext comes back", Cipher.Decrypt(sealed, key).ToText(), text);
+        check("two seals of one text differ", !sealed.Equals(Cipher.Encrypt(text, key)));
+
+        throws("a wrong key is refused", () => Cipher.Decrypt(sealed, Random.Bytes(32)));
+
+        const list = [];
+        for (let i = 0; i < sealed.Length; i++) list.push(sealed.At(i));
+        list[list.length - 1] ^= 1;
+        throws("a changed byte is refused", () => Cipher.Decrypt(new Bytes(list), key));
+
+        eq("a text key works too",
+           Cipher.Decrypt(Cipher.Encrypt("hi", "a passphrase"), "a passphrase").ToText(), "hi");
+        throws("an empty key is refused", () => Cipher.Encrypt("x", ""));
+        eq("empty data round-trips", Cipher.Decrypt(Cipher.Encrypt("", key), key).Length, 0);
+        throws("a value that is not Bytes is refused", () => Cipher.Decrypt("nope", key));
+        throws("a value with another marker is refused",
+               () => Cipher.Decrypt(new Bytes("BTA0" + "x".repeat(28)), key));
+    }
+
     testRandom() {
         const bytes = Random.Bytes(32);
         check("Random.Bytes answers a Bytes of the length asked",
@@ -16052,6 +16083,36 @@ class Form1 extends Form {
         check("a narrow search is the C library's, not a loop",
               a.ms * 4 < Math.max(b.ms, 20),
               `narrow ${a.ms} ms against wide ${b.ms} ms`);
+    }
+
+    /* --- a caught ReferenceError keeps the hint ------------------------------
+     *
+     * The replacement sentence used to arrive only when the runtime reported an
+     * uncaught error; a `catch` that shows `e.message` got the engine's half.
+     * The engine now asks the host while it builds the error, so the handler
+     * that reads it is the one that gets the answer.
+     */
+    testReferenceHint() {
+        let caught = "";
+        try { setTimeout(() => {}, 0); }
+        catch (e) { caught = e.message; }
+
+        check("a caught ReferenceError carries the replacement",
+              caught.includes("use Timer.After(delay, tick)"), caught);
+        check("...and still says what the engine said",
+              caught.includes("setTimeout is not defined"), caught);
+
+        let none = "";
+        try { Function("x"); }
+        catch (e) { none = e.message; }
+        check("a name with no replacement says that too",
+              none.includes("nothing here replaces it"), none);
+
+        let plain = "";
+        try { someUndefinedName; }
+        catch (e) { plain = e.message; }
+        eq("a name that was never here is unchanged", plain,
+           "someUndefinedName is not defined");
     }
 
     /* --- the language a project actually gets --------------------------------

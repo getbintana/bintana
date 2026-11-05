@@ -2,11 +2,11 @@
 
 The traps and decisions of this area, each with what it cost and the rule it left. [`AGENTS.md`](../../AGENTS.md) states the rules that apply to every change; this file is the evidence behind them and the detail that only matters here.
 
-## The eighteen patches in vendor/
+## The nineteen patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.18.0** plus the eighteen patches below, one commit each (the eighth
+upstream **v0.18.0** plus the nineteen patches below, one commit each (the eighth
 carries a fix as a second commit until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -99,13 +99,13 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All eighteen are marked `Bintana patch` in the source, and
+Then the suite. All nineteen are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
-`strictChecks`, `testDebugger`, `testCuratedLanguage`, `LongAppend`,
-`StringSearch`, `Modules`, `Imports`) -- the
+`strictChecks`, `testDebugger`, `testCuratedLanguage`, `ReferenceHint`,
+`LongAppend`, `StringSearch`, `Modules`, `Imports`) -- the
 fifth of which carries the seventh, the eighth, the ninth and the thirteenth,
-and the last two the fourteenth to the eighteenth. Grep the fork for the
+the sixth the nineteenth, and the last two the fourteenth to the eighteenth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 ### 1. Operators on a Decimal
 
@@ -782,6 +782,30 @@ still counts a `typeof`, since its getter throws for one as for any read.
 
 **Dropping it does not fail to build** (the calls are the only uses):
 `Modules`' `private`, `privateAnswered` and `exportNothing` go red.
+
+### 19. A reference error carries the replacement hint
+
+`JS_SetReferenceHintHandler(rt, cb, opaque)` gives the engine the sentence a
+taken-away name should carry, and `JS_ThrowReferenceErrorNotDefined` writes it
+into the message: `setTimeout is not defined: use Timer.After(delay, tick) —
+the delay comes first`. The callback writes into a caller-provided buffer and
+returns whether it knew the name, so it allocates nothing and is safe on a
+worker; the table is `bta_replacements`, the same one `Application.Replacements`
+publishes and `bta_close_hatches` deletes from.
+
+**Why the engine and not the reporting.** The runtime's `reference_hint` adds
+the sentence when an error is *uncaught*, which is the one moment it is read on
+the terminal; a `catch` that shows `e.message` never reaches that road. The
+message is the thing the application carries, so the hint belongs in it.
+
+**The old reporting path stays.** A `ReferenceError` thrown by user code with
+the engine's sentence (`throw new ReferenceError("setTimeout is not defined")`)
+still gets the full sentence when it is uncaught; the engine's own message now
+carries the suffix and `reference_hint` recognises that it is already there (its
+exact-suffix parse no longer matches, so it adds nothing).
+
+**Dropping it does not fail to build**: `ReferenceHint` goes red on the caught
+message, and the uncaught path still prints once.
 
 ## The language: what the curation took and what it left
 

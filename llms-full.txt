@@ -62,7 +62,7 @@ cmake -S . -B build && cmake --build build -j    # needed after any C change
 Required: `gtk4` **4.10 or newer**, `gtksourceview-5` (with headers),
 `gmodule-2.0`, pkg-config. Optional, each reported by CMake either way:
 `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`, `vte-2.91-gtk4`,
-`libxml2`, `libsecret-1`, `sysprof-capture-4`. Package names per
+`libxml2`, `libsecret-1`, `gnutls`, `sysprof-capture-4`. Package names per
 distribution are in [`docs/installing.md`](docs/installing.md), with the
 `Xvfb`/`xdotool`/`openssl` the suites need.
 
@@ -2353,11 +2353,11 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 The traps and decisions of this area, each with what it cost and the rule it left. [`AGENTS.md`](../../AGENTS.md) states the rules that apply to every change; this file is the evidence behind them and the detail that only matters here.
 
-## The eighteen patches in vendor/
+## The nineteen patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.18.0** plus the eighteen patches below, one commit each (the eighth
+upstream **v0.18.0** plus the nineteen patches below, one commit each (the eighth
 carries a fix as a second commit until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -2450,13 +2450,13 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All eighteen are marked `Bintana patch` in the source, and
+Then the suite. All nineteen are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
-`strictChecks`, `testDebugger`, `testCuratedLanguage`, `LongAppend`,
-`StringSearch`, `Modules`, `Imports`) -- the
+`strictChecks`, `testDebugger`, `testCuratedLanguage`, `ReferenceHint`,
+`LongAppend`, `StringSearch`, `Modules`, `Imports`) -- the
 fifth of which carries the seventh, the eighth, the ninth and the thirteenth,
-and the last two the fourteenth to the eighteenth. Grep the fork for the
+the sixth the nineteenth, and the last two the fourteenth to the eighteenth. Grep the fork for the
 marker after a rebase; there is no build-time check that they survived.
 ### 1. Operators on a Decimal
 
@@ -3133,6 +3133,30 @@ still counts a `typeof`, since its getter throws for one as for any read.
 
 **Dropping it does not fail to build** (the calls are the only uses):
 `Modules`' `private`, `privateAnswered` and `exportNothing` go red.
+
+### 19. A reference error carries the replacement hint
+
+`JS_SetReferenceHintHandler(rt, cb, opaque)` gives the engine the sentence a
+taken-away name should carry, and `JS_ThrowReferenceErrorNotDefined` writes it
+into the message: `setTimeout is not defined: use Timer.After(delay, tick) —
+the delay comes first`. The callback writes into a caller-provided buffer and
+returns whether it knew the name, so it allocates nothing and is safe on a
+worker; the table is `bta_replacements`, the same one `Application.Replacements`
+publishes and `bta_close_hatches` deletes from.
+
+**Why the engine and not the reporting.** The runtime's `reference_hint` adds
+the sentence when an error is *uncaught*, which is the one moment it is read on
+the terminal; a `catch` that shows `e.message` never reaches that road. The
+message is the thing the application carries, so the hint belongs in it.
+
+**The old reporting path stays.** A `ReferenceError` thrown by user code with
+the engine's sentence (`throw new ReferenceError("setTimeout is not defined")`)
+still gets the full sentence when it is uncaught; the engine's own message now
+carries the suffix and `reference_hint` recognises that it is already there (its
+exact-suffix parse no longer matches, so it adds nothing).
+
+**Dropping it does not fail to build**: `ReferenceHint` goes red on the caught
+message, and the uncaught path still prints once.
 
 ## The language: what the curation took and what it left
 
@@ -10243,6 +10267,27 @@ obvious and each cost something:
   `GetProcAddress` so the link line did not have to change blind). `Random.Int` is
   rejection sampling; `r % span` is the bias to refuse by construction.
 
+## Cipher, added later
+
+**AES-256-GCM through GnuTLS, because GnuTLS was already the TLS library under
+`libsoup`.** The headers are a separate package, so it is optional like sqlite:
+`Cipher.Available` is false without it and the verbs refuse naming the package.
+
+**The key is hashed with SHA-256, not padded.** A passphrase, an `Hash.Hmac`
+digest and `Random.Bytes(32)` are all the same 32 bytes to the cipher, and none
+of them has to be a particular length. That is a decision about the API, not
+about the strength: a passphrase a person chose is as weak as the passphrase,
+and a caller who cares stretches it before it gets here.
+
+**The sealed value is `"BTA1"`, a fresh 12-byte nonce and the ciphertext with
+its 16-byte tag.** The nonce is new every call, so two seals of one plaintext
+differ; the marker is what `Decrypt` refuses by name when the value is not one
+of ours. A wrong key, a changed byte, a truncated value or another marker is a
+throw -- GCM authenticates, so there is no plausible-looking half answer. The
+tests hold the round trip, two seals differing, a wrong key, one flipped byte,
+a text key and an empty key; there is no fixed-nonce vector because the API does
+not let a caller choose the nonce, which is the point.
+
 ---
 
 # docs/notes/drawing-document.md
@@ -12718,7 +12763,7 @@ Three things it deliberately does not do: it does not bundle GTK (the machine
 needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
 a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
 built **without** the optional dependencies (`sqlite3`, `libsoup`, GStreamer,
-VTE, `libxml2`, `libsecret`) so that none of them becomes a shared library the
+VTE, `libxml2`, `libsecret`, GnuTLS) so that none of them becomes a shared library the
 downloader has to have.
 
 ### The compiler inside the Windows build
@@ -12849,6 +12894,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
 | `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
 | `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | `Keyring` exists, `Available` is `false`, and every verb refuses with a sentence naming the package. It has no Windows port; the library itself is on every GNOME desktop already |
+| `Cipher` (AES-256-GCM) | `gnutls-devel` | `libgnutls28-dev` | `Cipher` exists, `Available` is `false`, and `Encrypt`/`Decrypt` refuse with a sentence naming the package. GnuTLS is already the TLS library under libsoup on a Linux desktop, but the headers are a separate package |
 | `--profile` and the runtime's marks in a Sysprof capture | `sysprof-capture-devel` | `libsysprof-capture-4-dev` | `--profile` refuses naming the package, and a capture carries no marks of ours — the samples and GTK's frame marks are Sysprof's and unaffected |
 
 `Widget.Available(type)` is how a program asks what the build it is running on
@@ -12966,7 +13012,7 @@ and a TagLib wrapper worked through.
 | `Package 'gtksourceview-5' not found` | `gtksourceview5-devel` / `libgtksourceview-5-dev` |
 | compile errors about `gtk_alert_dialog` or `gtk_file_dialog` | the GTK is older than 4.10 — Debian 13 / Ubuntu 24.04 or newer |
 | `no vte: Terminal exists and refuses to run one` | not an error: the optional table above |
-| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret` | likewise — a build line, not a failure |
+| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret`, `no gnutls` | likewise — a build line, not a failure |
 | `no sysprof-capture: --profile says so when asked` | likewise; a Sysprof run still shows the samples and GTK's frames |
 
 ---
@@ -12976,7 +13022,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10634 assertions
+./tests/run.sh                          # all seven projects, 10649 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -14473,9 +14519,7 @@ needed and what it did instead.
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
-| No symmetric encryption | [ISSUE-symmetric-encryption](../issues/ISSUE-symmetric-encryption.md) |
 | The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
-| The "did you mean" sentence is lost inside a `catch` | [ISSUE-reference-hint-in-catch](../issues/ISSUE-reference-hint-in-catch.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
 | Reports are code or raw text, never a designed thing | [ISSUE-ide-report-designer](../issues/ISSUE-ide-report-designer.md) |
 | Rename stops at top-level declarations | [ISSUE-ide-rename-locals](../issues/ISSUE-ide-rename-locals.md) |
