@@ -11,9 +11,10 @@
  *
  * **The division is the same one `Chart` argues for**, and it is the whole of
  * the idea: the *shape* of the report -- the bands, their heights, what sits in
- * each -- is declared here, in `sections()`, and the *numbers* are handed over.
- * There is no designer; the layout is written down, which is why it can be
- * version-controlled and why the totals cannot drift from the data.
+ * each -- is data, and the *numbers* are handed over. This example writes the
+ * shape in `sections()` as the fallback; **a `Sections` designed into the
+ * `.form` wins**, and the IDE's report designer is where that one is made. The
+ * shipped form carries none, so the example runs exactly as it always has.
  *
  * **Two group levels nest: `Groups` is an ordered list, outermost first.**
  * The report groups by `Category` and then by `Client`, so a row changes level 0
@@ -56,8 +57,13 @@ class ReportForm extends Form {
         const rows = [...ORDERS].sort((a, b) =>
             Locale.Compare(a.Category, b.Category) || Locale.Compare(a.Client, b.Client));
 
-        this.Report.Sections = this.sections();
-        this.Report.Data     = rows;
+        /* A shape designed in the IDE lives in `ReportForm.form`; when it is
+         * there, it is the report. The code below is the example's own
+         * fallback, for the form as shipped. */
+        if (Dictionary.Keys(this.Report.Sections || {}).length === 0)
+            this.Report.Sections = this.sections();
+
+        this.Report.Data = rows;
         this.showPage();
     }
 
