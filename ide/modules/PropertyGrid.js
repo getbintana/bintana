@@ -581,12 +581,26 @@ export class PropertyGrid {
         /* A stand-in gets what the designer really owns -- its name and where
          * it sits -- plus whatever its class declares, read from the source. */
         if (this.target && this.target.__node) {
+            const type = this.target.__node.type;
+            const base = this.designer.subclassBase(type);
+            const own  = this.designer.componentProps(type)
+                             .filter((key) => key !== "Visible");
+
+            /* A control subclass is a real base control on the canvas, so the
+             * grid can offer everything that control has -- plus what the
+             * subclass adds.  A component is not, and keeps the short list. */
+            if (base) {
+                const keys = this.target.PropertyNames().filter((key) => {
+                    const value = this.target[key];
+                    return typeof value !== "function" && value !== undefined;
+                });
+                return [...new Set([...keys, ...own])];
+            }
+
             /* `Visible` too, because every control has it and the drawing
              * honours it: a stand-in hidden by its node had no row to show it
              * again from. It lives in the node, like the class's own. */
-            return [...STANDIN_PROPS, "Visible",
-                    ...this.designer.componentProps(this.target.__node.type)
-                        .filter((key) => key !== "Visible")];
+            return [...STANDIN_PROPS, "Visible", ...own];
         }
 
         /* With nothing selected the grid switches to editing the form itself.
@@ -621,8 +635,12 @@ export class PropertyGrid {
     designKeys() {
         if (this.target && this.target.__node) {
             const type = this.target.__node.type;
-            return this.designer.componentTexts(type) ||
-                   this.designer.componentProps(type);
+            const base = this.designer.subclassBase(type);
+            const own  = this.designer.componentTexts(type);
+
+            if (base)
+                return [...new Set([...this.target.TextProperties(), ...(own || [])])];
+            return own || this.designer.componentProps(type);
         }
         /* The prose, and after it whatever this class counts instead of
          * naming -- see DESIGN_NUMBERS. Last, because the prose is what the
@@ -643,7 +661,11 @@ export class PropertyGrid {
      * what a component counts is its own class's business and the designer
      * cannot ask it. */
     designNumbers() {
-        if (!this.target || this.target.__node) return [];
+        if (!this.target) return [];
+        if (this.target.__node) {
+            const base = this.designer.subclassBase(this.target.__node.type);
+            return base ? (DESIGN_NUMBERS[base] || []) : [];
+        }
         return DESIGN_NUMBERS[this.typeName()] || [];
     }
 
@@ -963,7 +985,10 @@ export class PropertyGrid {
             : this.target && !this.target.__node && key === "Action"
             ? ["", ...(this.designer.drawnActions || []).map((a) => a.name)]
             : this.target && this.target.__node
-            ? this.designer.componentOptions(this.target.__node.type, key)
+            ? (this.isSubclassBaseKey(key)
+                ? (this.designer.subclassOptions(this.target.__node.type, key) ||
+                   this.target.PropertyOptions(key))
+                : this.designer.componentOptions(this.target.__node.type, key))
             : (this.target ? this.target.PropertyOptions(key)
                            : this.formProbe().PropertyOptions(key));
 
@@ -1722,8 +1747,13 @@ export class PropertyGrid {
         }
 
         /* A stand-in is a Label wearing a component's name: the component's own
-         * properties are not on it, they are in the node it came from. */
+         * properties are not on it, they are in the node it came from.  A
+         * control subclass is the real base control, so its base properties
+         * are asked of the live widget; only the subclass's own are in the
+         * node. */
         if (this.target.__node && !STANDIN_PROPS.includes(key)) {
+            if (this.isSubclassBaseKey(key)) return this.target[key];
+
             const p = this.target.__node.properties || {};
             /* A boolean, so the row is the two-item drop-down; shown unless the
              * node says otherwise. */
@@ -1733,6 +1763,14 @@ export class PropertyGrid {
         if (DRAWN_NOTES.includes(key)) return this.target.Declared(key);
         if (this.lentBy(key)) return "";
         return this.target[key];
+    }
+
+    /* Whether this key is one the runtime base of a control subclass really
+     * has -- the half that must be assigned to the live control. */
+    isSubclassBaseKey(key) {
+        if (!this.target || !this.target.__node) return false;
+        const base = this.designer.subclassBase(this.target.__node.type);
+        return !!base && this.target.PropertyNames().includes(key);
     }
 
     /*
@@ -1975,7 +2013,8 @@ export class PropertyGrid {
          * does not have its class -- so it is written where it lives and where
          * the runtime will read it from: the node.
          */
-        if (this.target.__node && !STANDIN_PROPS.includes(key)) {
+        if (this.target.__node && !STANDIN_PROPS.includes(key) &&
+            !this.isSubclassBaseKey(key)) {
             const node = this.target.__node;
 
             this.beginEdit(key);
@@ -2034,6 +2073,19 @@ export class PropertyGrid {
             Message.Error(`${key}: ${e.message}`);
             this.sync();
             return;
+        }
+
+        /* A base property of a control subclass was just written to the live
+         * control; the node has to say the same or the next save drops it. */
+        if (this.target.__node && this.isSubclassBaseKey(key)) {
+            const node = this.target.__node;
+            node.properties = node.properties || {};
+            if (key === "Visible") {
+                if (value === false) node.properties.Visible = false;
+                else                 delete node.properties.Visible;
+            } else {
+                node.properties[key] = value;
+            }
         }
 
         /* Emptying a control's own label gives it the command's back, which is

@@ -84,8 +84,15 @@ export class ControlTree {
      * its own. A name the desktop turns out not to have comes back empty and
      * the tree simply shows no icon. */
     iconFor(control) {
-        const names = control.__node ? COMPONENT_ICON
-                                     : (PALETTE_ICON[this.typeOf(control)] || []);
+        const type = control.__node ? control.__node.type : this.typeOf(control);
+        const base = control.__node ? this.designer.subclassBase(type) : "";
+
+        /* A control subclass wears the base's picture, not the generic
+         * component one: a `MyList` that draws as a `ListBox` should also look
+         * like one in the tree. */
+        const names = base ? (PALETTE_ICON[base] || [])
+                    : control.__node ? COMPONENT_ICON
+                    : (PALETTE_ICON[type] || []);
         return names.find((name) => Application.HasIcon(name)) || "";
     }
 

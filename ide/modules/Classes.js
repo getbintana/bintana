@@ -255,6 +255,10 @@ export class Classes {
         this.startupClass = "";
         /* `names()`, worked out on demand and thrown away by every rescan. */
         this.cache = null;
+        /* The classes of the project's `.js` files and what each extends, for
+         * a control subclass the designer can draw as its base. Read on the
+         * first such node, not on every listing. */
+        this.controlClasses = null;
     }
 
     /*
@@ -268,6 +272,7 @@ export class Classes {
         this.startupClass = "";
         this.cache        = null;
         this.byNamespace  = null;
+        this.controlClasses = null;
         if (!this.ide.project) return;
 
         this.files      = this.scan("");
@@ -507,6 +512,79 @@ export class Classes {
         } catch (e) {
             return base;
         }
+    }
+
+    /*
+     * The classes of the project's `.js` files, and what each extends.
+     *
+     * **Read and parsed, never run.** `Application.Symbols` is the parser the
+     * completion and the checker already use; a class's `Super` is the name
+     * written after `extends`, and a heritage that is an expression is empty.
+     * That is exactly enough to know that `MyList extends ListBox` can be drawn
+     * as the `ListBox` it will be, without evaluating a line of the project.
+     *
+     * Read on the first control subclass the designer meets, and kept for the
+     * listing: a form of plain controls pays nothing.
+     */
+    classBases() {
+        if (this.controlClasses) return this.controlClasses;
+
+        const map = new Map();
+        for (const file of this.files) {
+            if (!File.IsExtension(file, "js")) continue;
+            try {
+                const source = File.Load(File.Join(this.ide.project, file));
+                for (const sym of Application.Symbols(source))
+                    if (sym.Kind === "Class" && !map.has(sym.Name))
+                        map.set(sym.Name, { super: sym.Super || "", file, source });
+            } catch (e) {
+                /* A file that does not parse is not a class to draw; the
+                 * checker, not the designer, reports it. */
+            }
+        }
+
+        this.controlClasses = map;
+        return map;
+    }
+
+    /* The runtime widget a project class ultimately extends, or "". */
+    controlBase(type) {
+        const map = this.classBases();
+        let   name = type;
+
+        for (let depth = 0; depth < 32; depth++) {
+            const info = map.get(name);
+            if (!info || !info.super) return "";
+            if (info.super === "Form" || info.super === "Component")
+                return "";
+
+            let available = false;
+            try { available = Widget.Available(info.super); } catch (e) { available = false; }
+            if (available) return info.super;
+
+            name = info.super;
+        }
+        return "";
+    }
+
+    /* What a control subclass declares itself, read from its source. */
+    subclassProperties(type) {
+        const info = this.classBases().get(type);
+        return info ? accessorsIn(info.source) : [];
+    }
+
+    subclassTexts(type) {
+        const info = this.classBases().get(type);
+        if (!info) return null;
+        const contract = contractIn(info.source);
+        return contract.textProperties || null;
+    }
+
+    subclassOptions(type, prop) {
+        const info = this.classBases().get(type);
+        if (!info) return null;
+        const contract = contractIn(info.source);
+        return contract.options[prop] || null;
     }
 
     /*

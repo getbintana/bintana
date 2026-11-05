@@ -2092,6 +2092,102 @@ function* p_designer(ide) {
        ide.tabs.tabOrder[0], ide.tabs.nameOfPage(ide.Tabs.Children[0]));
 }
 
+/*
+ * A class of the project that extends a control.
+ *
+ * The designer cannot run the project's class -- it lives in the IDE's own
+ * process, and the IDE has none of the project's classes -- so it reads the
+ * `extends` the parser reports and draws the base.  What must hold: the base's
+ * rows are there, the base's properties are in the grid, editing one reaches
+ * the live control, and the file still writes the subclass's own type.
+ */
+function* p_subclass(ide) {
+    const dir = File.Join(TMP, "subclass");
+    if (File.IsDir(dir)) Directory.DeleteTree(dir);
+    Directory.Make(dir);
+
+    File.SaveJson(File.Join(dir, "project.json"),
+                  { name: "subclass", startup: "MySub",
+                    sources: ["MySub.js", "MyList.js"] });
+    File.Save(File.Join(dir, "MyList.js"),
+              "export class MyList extends ListBox {\n" +
+              "    get Code() { return this._code || \"\"; }\n" +
+              "    set Code(value) { this._code = value; }\n" +
+              "    static TextProperties = [\"Code\"];\n" +
+              "    /** a method of its own, not a property */\n" +
+              "    Refill(rows) { this.Items = rows; }\n" +
+              "}\n");
+    File.Save(File.Join(dir, "MySub.js"), "class MySub extends Form {\n}\n");
+    File.SaveJson(File.Join(dir, "MySub.form"), {
+        format: "bintana-form/1",
+        class: "MySub",
+        properties: { Text: "subclass", Width: 360, Height: 240 },
+        children: [{
+            type: "MyList", name: "List1",
+            properties: { X: 10, Y: 10, Width: 160, Height: 100,
+                          Items: ["A", "B", "C"], Index: 1 },
+            design: { Code: "design text" },
+        }],
+    });
+
+    openFresh(ide, dir);
+    ide.listFiles();
+    ide.openNamed("MySub.form");
+    yield* settled(ide);
+
+    const list = byName(ide, "List1");
+    check("a control subclass is built as its runtime base", list !== undefined,
+          String(list));
+    if (!list) return;
+
+    eq("...which is the ListBox it extends", list.constructor.name, "ListBox");
+    eq("with the rows the .form declares", list.Count, 3);
+    eq("and its selection", list.Index, 1);
+    ide.WidgetTree.Key = "List1";
+    yield;
+    check("while the tree still calls it by its own type",
+          ide.WidgetTree.Text.includes("MyList"), ide.WidgetTree.Text);
+
+    ide.designer.select(list);
+    yield;
+    check("the grid offers the base's Items", ide.designer.grid.propKeys.includes("Items"),
+          JSON.stringify(ide.designer.grid.propKeys));
+    check("and its Index", ide.designer.grid.propKeys.includes("Index"));
+
+    /* The subclass's own prose, shown from its `design` block without its class
+     * ever running. */
+    ide.designer.grid.setDesignMode(true);
+    yield;
+    check("the subclass's own design key is offered",
+          ide.designer.grid.propKeys.includes("Code"),
+          JSON.stringify(ide.designer.grid.propKeys));
+    eq("with the value the node wrote", editor(ide, "Code").Text, "design text");
+    ide.designer.grid.setDesignMode(false);
+    yield;
+
+    const index = editor(ide, "Index");
+    if (index && index.Value !== undefined) {
+        index.Value = 2;
+        yield* settled(ide);
+    } else if (index && index.Text !== undefined) {
+        index.Text = "2";
+        index.Emit("Activate");
+        yield* settled(ide);
+    }
+    eq("editing a base property reaches the control", list.Index, 2);
+
+    ide.save();
+    const saved = File.LoadJson(File.Join(dir, "MySub.form"));
+    eq("and the file still writes the subclass", saved.children[0].type, "MyList");
+    eq("with the edited value", saved.children[0].properties.Index, 2);
+
+    ide.closeTabByName("MySub.form", true);
+    openFresh(ide, TMP);
+    Directory.DeleteTree(dir);
+    ide.openNamed("Child.form");
+    yield* settled(ide);
+}
+
 function* p_palette(ide) {
     /* --- designer: palette -----------------------------------------------
      * One tab per group and a square button per type, with an icon and with what
@@ -17927,6 +18023,7 @@ const PHASES = [
     { name: "welcome", run: p_welcome },
     { name: "files", run: p_files },
     { name: "designer", run: p_designer },
+    { name: "subclass", run: p_subclass },
     { name: "palette", run: p_palette },
     { name: "pages", run: p_pages },
     { name: "clipboard", run: p_clipboard },

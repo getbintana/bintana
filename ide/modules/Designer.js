@@ -315,7 +315,8 @@ export class Designer {
      * ones the designer owns and puts in front of them itself.
      */
     componentProps(type) {
-        return (this.ide.classes.componentProperties(type) || [])
+        const own = this.ide.classes.componentProperties(type);
+        return (own || this.ide.classes.subclassProperties(type))
                    .filter((key) => !STANDIN_PROPS.includes(key));
     }
 
@@ -323,13 +324,60 @@ export class Designer {
      * Never asked of the stand-in: a Label has an `Align` too, and it is not
      * this one's. */
     componentOptions(type, prop) {
-        return this.ide.classes.componentOptions(type, prop);
+        return this.ide.classes.componentOptions(type, prop) ||
+               this.ide.classes.subclassOptions(type, prop);
     }
 
     /* Which of its properties hold prose, or null where its class does not say
      * -- which is not the same as saying none of them do. */
     componentTexts(type) {
-        return this.ide.classes.componentTextProperties(type);
+        return this.ide.classes.componentTextProperties(type) ||
+               this.ide.classes.subclassTexts(type);
+    }
+
+    /*
+     * A class of the project that extends a runtime control, and the runtime
+     * class it extends.  The designer does not run the class; it reads the
+     * `extends` the parser reports and draws the base -- the same substitution
+     * Qt Designer's *promote to* makes, and for the same reason.
+     */
+    subclassBase(type) {
+        return this.ide.classes.controlBase(type);
+    }
+
+    subclassProps(type) {
+        return this.ide.classes.subclassProperties(type)
+                   .filter((key) => !STANDIN_PROPS.includes(key));
+    }
+
+    subclassOptions(type, prop) {
+        return this.ide.classes.subclassOptions(type, prop);
+    }
+
+    subclassTexts(type) {
+        return this.ide.classes.subclassTexts(type);
+    }
+
+    /* The settable names of the runtime base, one fresh probe per base and not
+     * per node.  A property the subclass declares but the base does not have
+     * is left in the node and out of the live control. */
+    basePropertyNames(base) {
+        this.baseProps = this.baseProps || new Map();
+        if (this.baseProps.has(base)) return this.baseProps.get(base);
+
+        let names = [];
+        try {
+            const probe = Widget.New(base);
+            names = probe.PropertyNames().filter((key) => {
+                const value = probe[key];
+                return typeof value !== "function" && value !== undefined;
+            });
+            probe.Delete();
+        } catch (e) {
+            names = [];
+        }
+        this.baseProps.set(base, names);
+        return names;
     }
 
     componentSize(type) {
@@ -681,6 +729,7 @@ export class Designer {
              * `SetDesign` would take the empty container's -1 for the page
              * the form opens on. */
             const shown = node.design && node.design.Current;
+            const base  = this.subclassBase(node.type);
             let   spec  = { ...node, children: [] };
             if (shown !== undefined) {
                 const design = {};
@@ -689,7 +738,26 @@ export class Designer {
                 spec = { ...spec, design };
             }
 
+            /*
+             * **A control subclass is drawn as its base**, with the properties
+             * the base really has.  The subclass's own accessors are not on a
+             * `ListBox`, and assigning one would throw the whole node into the
+             * grey stand-in; they stay in `__node`, where the grid and the
+             * serialiser read them.  No line of the project runs.
+             */
+            if (base) {
+                const allowed = new Set(this.basePropertyNames(base));
+                const props   = {};
+                for (const key of Dictionary.Keys(node.properties || {}))
+                    if (allowed.has(key)) props[key] = node.properties[key];
+                spec = { ...spec, type: base, properties: props };
+            }
+
             const built = parent.AddNode(spec, true);
+            if (base) {
+                built.__node = node;
+                built.__base = base;
+            }
             this.lendAction(built, node);
 
             /* ...and what a list holds while it is being drawn, which is the

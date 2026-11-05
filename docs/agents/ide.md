@@ -268,6 +268,34 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   declared `Width`/`Height` is the coordinate space, the same design-size rule
   the fixed surface uses.
 
+## Control subclasses
+
+- **The project's class is parsed, not run.** `Classes.classBases()` reads each
+  `.js` with `Application.Symbols` -- the same parser the completion and the
+  checker use -- and keeps `Super`. `controlBase(type)` follows that chain until
+  it reaches a name `Widget.Available` says this process can build; `Form` and
+  `Component` end it, because a form is not a control and a component is already
+  the other case. Nothing from the project is evaluated, which is the condition
+  this feature was waiting for.
+- **The base is built for real.** `Designer.buildNode` turns `{ type: "MyList",
+  properties: {...} }` into the base's node (`ListBox`) with only the
+  properties the base has, builds that, and puts the original node on the
+  control as `__node`. The subclass's own accessors and `design` values stay in
+  the node; the serialiser writes `type: "MyList"` back because `nodeOf` reads
+  `__node`.
+- **The property grid reads both halves.** `Designer.subclassBase` says whether
+  a `__node` target is a control subclass; `PropertyGrid.allKeys` then offers the
+  live base's `PropertyNames` plus the accessors `Classes.subclassProperties`
+  reads from the source. A base property is read and written on the live control
+  (so `Items` draws, `Index` selects), and the node is updated in the same step so
+  the next save keeps it; a property only the subclass declares lives in the
+  node, and its design value is shown from `node.design` without the class
+  running.
+- **When the chain does not end in a runtime control, the old stand-in stays.**
+  An unknown type, a base this build does not have, or a base the designer
+  cannot build is still the grey `Component` node -- the file is kept, never
+  rewritten to the base.
+
 ## IDE traps
 
 - **A class verb asked about the edited project's name answers out of the
