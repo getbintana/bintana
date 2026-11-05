@@ -110,6 +110,7 @@ class ReportTest extends Form {
             this.testAuto();
             this.testSave();
             this.testPdf();
+            this.testForm();
             this.testDocument();
             this.testDesign();
             this.testPrint();
@@ -879,6 +880,112 @@ class ReportTest extends Form {
             passed++;
         }
         check("and the half of it that existed is gone", !File.Exists(broken));
+    }
+
+    /* --------------------------------------------------------------- form
+     *
+     * `Input` and `Signature` turn a report into one page with no rows: the
+     * fields are the document. The static page is still Cairo's; `PdfForm`
+     * adds the widgets PoDoFo knows how to write.
+     */
+    testForm() {
+        const at = (name) => File.Join(SCRATCH, name);
+        const d  = new ReportDocument();
+
+        d.Paper    = "A4";
+        d.Margins  = 40;
+        d.Sections = {
+            Detail: { Height: 400, Elements: [
+                { Kind: "Text", Text: "Solicitud", X: 0, Y: 0 },
+                { Kind: "Input", Name: "nombre", Input: "Text", Value: "Matías",
+                  X: 80, Y: 40, Width: 200, Height: 24 },
+                { Kind: "Input", Name: "acepto", Input: "Check", Checked: true,
+                  X: 80, Y: 80, Width: 16, Height: 16 },
+                { Kind: "Signature", Name: "firma", Reason: "Conformidad",
+                  X: 80, Y: 110, Width: 200, Height: 60 },
+            ]},
+        };
+        d.Data = rows(1, 5);
+
+        eq("a form ignores rows and is one page", d.PageCount, 1);
+
+        const fields = d.formFields();
+        eq("...with the fields it declares", fields.length, 3);
+        eq("...the text field's name", fields[0].Name, "nombre");
+        eq("...and its type", fields[0].Type, "Text");
+        eq("...the checkbox", fields[1].Type, "Check");
+        eq("...and the signature", fields[2].Type, "Signature");
+        eq("the rectangle is turned over once", fields[0].Rect.Y, 842 - 40 - 40 - 24);
+        eq("...and moved by the page margin", fields[0].Rect.X, 40 + 80);
+
+        throws("two fields with one name are refused", () => {
+            d.Sections = { Detail: { Height: 100, Elements: [
+                { Kind: "Input", Name: "x", X: 0, Y: 0, Width: 10, Height: 10 },
+                { Kind: "Input", Name: "x", X: 0, Y: 20, Width: 10, Height: 10 },
+            ]}};
+        });
+        throws("a field with no name is refused", () => {
+            d.Sections = { Detail: { Height: 100, Elements: [
+                { Kind: "Input", Input: "Text", X: 0, Y: 0, Width: 10, Height: 10 },
+            ]}};
+        });
+        throws("a field type that is not Text or Check is refused", () => {
+            d.Sections = { Detail: { Height: 100, Elements: [
+                { Kind: "Input", Name: "x", Input: "Date", X: 0, Y: 0, Width: 10, Height: 10 },
+            ]}};
+        });
+
+        /* The form the successful document had, restored after the refusals. */
+        d.Sections = {
+            Detail: { Height: 400, Elements: [
+                { Kind: "Text", Text: "Solicitud", X: 0, Y: 0 },
+                { Kind: "Input", Name: "nombre", Input: "Text", Value: "Matías",
+                  X: 80, Y: 40, Width: 200, Height: 24 },
+                { Kind: "Input", Name: "acepto", Input: "Check", Checked: true,
+                  X: 80, Y: 80, Width: 16, Height: 16 },
+                { Kind: "Signature", Name: "firma", Reason: "Conformidad",
+                  X: 80, Y: 110, Width: 200, Height: 60 },
+            ]},
+        };
+
+        const pdf = at("form.pdf");
+        if (!PdfForm.Available) {
+            throws("a form refuses without PoDoFo", () => d.SavePdf(pdf));
+            check("...and leaves no file", !File.Exists(pdf));
+            return;
+        }
+
+        d.SavePdf(pdf);
+        eq("a form is a PDF", File.Info(pdf).Type, "application/pdf");
+        check("...with no temporary beside it", !File.Exists(pdf + ".bta-form"));
+
+        if (Application.HasCommand("pdfinfo")) {
+            const info = Exec.Wait(["pdfinfo", pdf], { Timeout: 10000 }).Output;
+            check("...and it says it is an AcroForm", /Form:\s+AcroForm/.test(info), info);
+        }
+        if (Application.HasCommand("pdfsig")) {
+            const sig = Exec.Wait(["pdfsig", pdf], { Timeout: 10000 }).Output;
+            check("...with the signature field waiting for a signer",
+                  sig.includes("Signature Field Name: firma") &&
+                  sig.includes("not signed"), sig);
+        }
+        if (Application.HasCommand("pdftotext")) {
+            const text = Exec.Wait(["pdftotext", pdf, "-"], { Timeout: 10000 }).Output;
+            check("...and the text field's value is in it", text.includes("Matías"), text);
+        }
+
+        /* The control is the same document, and its `SavePdf` is the same
+         * road: a form written from a `Report` has the fields too. */
+        const controlPdf = at("form-control.pdf");
+        this.Rep.Sections = d.Sections;
+        this.Rep.Data     = rows(1, 5);
+        this.Rep.SavePdf(controlPdf);
+        eq("a Report control writes a form too", File.Info(controlPdf).Type,
+           "application/pdf");
+        if (Application.HasCommand("pdfinfo")) {
+            const info = Exec.Wait(["pdfinfo", controlPdf], { Timeout: 10000 }).Output;
+            check("...with the same AcroForm", /Form:\s+AcroForm/.test(info), info);
+        }
     }
 
     /* ------------------------------------------------------------ document

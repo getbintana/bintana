@@ -23,7 +23,8 @@
 const ZOOM = 0.8;                 /* points to pixels in the sheet */
 const ROW_H = 34;
 const FIXED = ["ReportHeader", "PageHeader", "Detail", "ReportFooter", "PageFooter"];
-const KINDS = ["Text", "Field", "Total", "Line", "Box", "Image"];
+const KINDS = ["Text", "Field", "Total", "Line", "Box", "Image", "Input", "Signature"];
+const INPUTS = ["Text", "Check"];
 const OPS   = ["Sum", "Count", "Min", "Max", "Avg"];
 const FORMATS = ["", "Number", "Money", "Date", "Percent"];
 const ALIGNS  = ["Left", "Center", "Right"];
@@ -442,6 +443,23 @@ export class ReportForm extends Form {
             if (el.Kind === "Total")
                 this.addRow("Op", "Op", "combo", el.Op || "Sum", OPS);
             this.addRow("Format", "Format", "combo", el.Format || "", FORMATS);
+        } else if (el.Kind === "Input") {
+            this.addRow("Name", "Name", "text", el.Name || "");
+            this.addRow("Input", "Input", "combo", el.Input || "Text", INPUTS);
+            if ((el.Input || "Text") === "Check")
+                this.addRow("Checked", "Checked", "check", !!el.Checked);
+            else
+                this.addRow("Value", "Value", "text", el.Value || "");
+            this.addRow("ReadOnly", "ReadOnly", "check", !!el.ReadOnly);
+            this.addRow("Required", "Required", "check", !!el.Required);
+            if ((el.Input || "Text") === "Text") {
+                this.addRow("Multiline", "Multiline", "check", !!el.Multiline);
+                this.addRow("MaxLength", "MaxLength", "text", String(el.MaxLength || 0));
+            }
+        } else if (el.Kind === "Signature") {
+            this.addRow("Name", "Name", "text", el.Name || "");
+            this.addRow("Reason", "Reason", "text", el.Reason || "");
+            this.addRow("Required", "Required", "check", !!el.Required);
         }
 
         if (el.Kind === "Line") {
@@ -471,10 +489,11 @@ export class ReportForm extends Form {
             this.addRow("Wrap", "Wrap", "check", !!el.Wrap);
         }
 
-        if (el.Kind !== "Line" && el.Kind !== "Box" && el.Kind !== "Image") {
+        if (el.Kind === "Text" || el.Kind === "Field" || el.Kind === "Total") {
             this.addRow("Font", "Font", "font", typeof el.Font === "string" ? el.Font : "");
             this.addRow("Color", "Color", "color", typeof el.Color === "string" ? el.Color : "");
-        } else if (el.Kind === "Line" || el.Kind === "Box") {
+        } else if (el.Kind === "Line" || el.Kind === "Box" ||
+                   el.Kind === "Input" || el.Kind === "Signature") {
             this.addRow("Color", "Color", "color", typeof el.Color === "string" ? el.Color : "");
         }
 
@@ -608,6 +627,21 @@ export class ReportForm extends Form {
                 });
                 return;
             }
+        } else if (key === "Name" || key === "Value" || key === "Reason") {
+            obj[key] = String(raw);
+        } else if (key === "Input") {
+            if (obj.Input !== raw) {
+                obj.Input = String(raw);
+                Timer.After(0, () => {
+                    if (this.Visible && this.target === obj) this.fillProps();
+                });
+                return;
+            }
+        } else if (key === "Checked" || key === "ReadOnly" ||
+                   key === "Required" || key === "Multiline") {
+            obj[key] = !!raw;
+        } else if (key === "MaxLength") {
+            obj.MaxLength = Math.max(0, Math.floor(Number(raw) || 0));
         } else if (key === "Text") {
             obj.Text = String(raw);
         } else if (key === "Field") {
@@ -778,6 +812,12 @@ export class ReportForm extends Form {
             el = { Kind: "Box", X: 0, Y: bottom, Width: 200, Height: 24 };
         } else if (kind === "Image") {
             el = { Kind: "Image", File: file || "", X: 0, Y: bottom, Width: 100 };
+        } else if (kind === "Input") {
+            el = { Kind: "Input", Name: "nombre", Input: "Text",
+                   X: 0, Y: bottom, Width: 200, Height: 24 };
+        } else if (kind === "Signature") {
+            el = { Kind: "Signature", Name: "firma",
+                   X: 0, Y: bottom, Width: 200, Height: 60 };
         } else {
             return;
         }

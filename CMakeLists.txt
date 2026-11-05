@@ -118,6 +118,18 @@ pkg_check_modules(SECRET IMPORTED_TARGET libsecret-1)
 # are simply not raised. See runtime/src/bta_profile.c.
 pkg_check_modules(SYSPROF IMPORTED_TARGET sysprof-capture-4)
 
+# Optional: PoDoFo is the form layer. Cairo writes the visual PDF; PoDoFo opens
+# it and adds the AcroForm widgets a signer can fill. Optional like sqlite: a
+# program that only draws reports needs none of it, and without it `PdfForm`
+# exists, `Available` is false and `AddFields` refuses naming the package.
+# PoDoFo is C++17, which is why the language is enabled only when it is found.
+option(BTA_WITH_PODOFO "Build PdfForm with PoDoFo" ON)
+if(BTA_WITH_PODOFO)
+    pkg_check_modules(PODOFO IMPORTED_TARGET libpodofo)
+else()
+    set(PODOFO_FOUND FALSE)
+endif()
+
 # ---------------------------------------------------------------- QuickJS ---
 # A fork of quickjs-ng, vendored under vendor/quickjs as a submodule:
 # `getbintana/quickjs`, branch `bintana`, which is upstream v0.18.0 plus the
@@ -213,6 +225,15 @@ add_custom_command(
 )
 
 # ------------------------------------------------------------- bintana runtime ---
+if(PODOFO_FOUND)
+    enable_language(CXX)
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    set(BTA_PDF_SOURCES runtime/src/bta_pdf_podofo.cpp)
+else()
+    set(BTA_PDF_SOURCES)
+endif()
+
 add_executable(bintana
     runtime/src/main.c
     runtime/src/bta_runtime.c
@@ -246,6 +267,7 @@ add_executable(bintana
     runtime/src/bta_popover.c
     runtime/src/bta_desktop.c
     runtime/src/bta_printer.c
+    runtime/src/bta_pdf.c
     runtime/src/bta_database.c
     runtime/src/bta_sqlite.c
     runtime/src/bta_xml.c
@@ -261,6 +283,7 @@ add_executable(bintana
     runtime/src/bta_http.c
     runtime/src/bta_media.c
     runtime/src/bta_plugin.c
+    ${BTA_PDF_SOURCES}
     ${PRELUDE_H}
     ${FORMS_H}
     ${BASE_CSS_H}
@@ -353,6 +376,14 @@ if(SYSPROF_FOUND)
 else()
     message(STATUS "no sysprof-capture: --profile says so when asked; a Sysprof "
                    "run still shows the samples")
+endif()
+
+if(PODOFO_FOUND)
+    target_link_libraries(bintana PRIVATE PkgConfig::PODOFO)
+    target_compile_definitions(bintana PRIVATE BTA_HAVE_PODOFO=1)
+    message(STATUS "podofo ${PODOFO_VERSION}: PdfForm can add form fields")
+else()
+    message(STATUS "no podofo: PdfForm exists and refuses to add fields")
 endif()
 target_compile_definitions(bintana PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION}")
 # -Wshadow, -Wnull-dereference and -Wformat=2 are clean across runtime/src

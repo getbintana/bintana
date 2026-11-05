@@ -638,6 +638,7 @@ bool bta_paint_page(BtaWidget *w, cairo_t *cr, int width, int height, int page);
 bool bta_paint_busy(JSContext *ctx, BtaWidget *w);
 bool bta_paint_draws(BtaWidget *w);
 void bta_printer_init(JSContext *ctx, JSValue global);
+void bta_pdf_init(JSContext *ctx, JSValue global);
 /* The Painter class, which is not a widget: registered with the runtime's
  * other non-widget classes rather than in the widget table. */
 void bta_painter_init(JSContext *ctx, JSValue global);

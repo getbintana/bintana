@@ -940,6 +940,18 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   the line, so a formatted word keeps the caret on it. `tests/widgets`
   (`Format`) holds all of it.
 
+- **A PDF form is two layers, and neither one can do the other's job.** Cairo
+  writes the page and knows nothing about AcroForm; PoDoFo parses that PDF and
+  adds the widgets. `PdfForm.AddFields` is the C surface over a C++17 bridge
+  (`bta_pdf_podofo.cpp`); the coordinates are **PDF points with the origin at
+  the bottom-left**, which is why `ReportDocument.formFields` turns its
+  top-left design over exactly once. A `Signature` is a `/Sig` widget with no
+  value: the signer's own application fills it, so Bintana never holds a private
+  key. The bridge writes beside the PDF and renames, so a failed field addition
+  leaves the file as it was. `PdfForm` is optional at build time; without
+  PoDoFo it says so. `tests/report`'s `testForm` holds the one-page measure,
+  the rectangles, the AcroForm, the signature field and the text field's value.
+
 - **An offset is a character and an index is a JavaScript number, and the
   runtime has a verb for each so no caller crosses them by hand.**
   `Offset`/`OffsetAt(line, [column])` count **characters**, as `Column` and

@@ -16099,6 +16099,29 @@
       ]
     },
     {
+      "Name": "PdfForm",
+      "Members": [
+        {
+          "Name": "AddFields",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(path, fields)",
+          "Returns": "number",
+          "Doc": "adds the fields to the PDF at `path`, **in place**, and answers how many. Each field is `{ Page, Name, Type, Rect, Value, Checked, ReadOnly, Required, Multiline, MaxLength, Reason }`; `Type` is `\"Text\"`, `\"Check\"` or `\"Signature\"`, `Page` is 1-based, and `Rect` is `{ X, Y, Width, Height }` in **PDF points with the origin at the bottom-left**. A signature field is left empty for the signer's own application. The PDF must exist and be one this build's PoDoFo can parse; a failure leaves the file as it was",
+          "Native": true
+        },
+        {
+          "Name": "Available",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this build has PoDoFo, which is what `AddFields` needs; when false the verb refuses with a sentence naming the package",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Popover",
       "Members": [
         {
@@ -20058,7 +20081,7 @@
               "Params": 1,
               "Signature": "(path)",
               "Returns": "",
-              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text; the pages are the ones the last measure worked out. This is what a report is for — `Save` is for when one page is going into something else. With no display, `Document.SavePdf` is the same file",
+              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text; the pages are the ones the last measure worked out. A report with `Input`/`Signature` elements is a form, and the fields are added by `PdfForm` after the page is drawn. This is what a report is for — `Save` is for when one page is going into something else. With no display, `Document.SavePdf` is the same file",
               "Native": false
             },
             {
@@ -20193,7 +20216,7 @@
               "Params": 1,
               "Signature": "(path)",
               "Returns": "",
-              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text. **No widget and no display**: it draws through `Drawing`, which is what lets a `main` project — a report run from a timer — write one. A page that throws leaves no file",
+              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text. A report with `Input`/`Signature` elements is a form: the page is drawn first and the fields are added by `PdfForm`. **No widget and no display**: it draws through `Drawing`, which is what lets a `main` project — a report run from a timer — write one. A page that throws leaves no file",
               "Native": false
             },
             {

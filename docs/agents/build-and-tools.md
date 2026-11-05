@@ -173,13 +173,16 @@ what `.github/workflows/ci.yml` relies on. Anything you drive by hand still need
 `gtksourceview-5` (with headers), pkg-config, and `gmodule-2.0`, which is the
 plugin loader and comes with glib. QuickJS is vendored as a submodule, so
 nothing to install for it -- and a fresh clone wants `--recurse-submodules`, or
-`git submodule update --init` before the first configure. Eight are optional and CMake says what it found either
-way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`,
+`git submodule update --init` before the first configure. The optional ones are
+reported by CMake either way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`,
 **`vte-2.91-gtk4`** -- the pty behind `Terminal`, and the only dependency with
 no Windows port -- `libxml2`, which is what `Xml` parses with,
 `libsecret-1`, the system's vault behind `Keyring`, which has no Windows port
-either, and `sysprof-capture-4` (Fedora `sysprof-capture-devel`), which is what
-`--profile` and the runtime's marks in a Sysprof capture are built on. The libxml2 one is
+either, `sysprof-capture-4` (Fedora `sysprof-capture-devel`), which is what
+`--profile` and the runtime's marks in a Sysprof capture are built on, and
+`libpodofo` (Fedora `podofo-devel`), which is the AcroForm layer behind
+`PdfForm` and needs C++17 and OpenSSL. `-DBTA_WITH_PODOFO=OFF` builds the
+runtime without it, and `PdfForm.Available` then says so. The libxml2 one is
 optional in the build only: on most desktops GTK4 already loads libxml2 at
 runtime, so what the package buys is the headers. **Package names per distribution and what each
 one turns on are in [`docs/installing.md`](../installing.md)**, which is also

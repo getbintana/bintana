@@ -16,9 +16,9 @@ and macOS in [plans/macos-plan.md](plans/macos-plan.md).
 | **CMake 3.16+** and **pkg-config** | the build |
 | **QuickJS** | **not a dependency to install**: quickjs-ng v0.18.0, plus the eighteen patches of ours, is vendored in `vendor/quickjs` as a git submodule ([docs/agents/quickjs.md](agents/quickjs.md#the-eighteen-patches-in-vendor)) |
 
-Eight more are optional, and CMake prints what it found either way. Without each
-the runtime builds and the thing itself says which package is missing when it is
-called — see the table below.
+The optional dependencies are listed below, and CMake prints what it found
+either way. Without each the runtime builds and the thing itself says which
+package is missing when it is called.
 
 ### Fedora
 
@@ -210,7 +210,7 @@ Three things it deliberately does not do: it does not bundle GTK (the machine
 needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
 a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
 built **without** the optional dependencies (`sqlite3`, `libsoup`, GStreamer,
-VTE, `libxml2`, `libsecret`, GnuTLS) so that none of them becomes a shared library the
+VTE, `libxml2`, `libsecret`, GnuTLS, PoDoFo) so that none of them becomes a shared library the
 downloader has to have.
 
 ### The compiler inside the Windows build
@@ -343,6 +343,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | `Keyring` exists, `Available` is `false`, and every verb refuses with a sentence naming the package. It has no Windows port; the library itself is on every GNOME desktop already |
 | `Cipher` (AES-256-GCM) | `gnutls-devel` | `libgnutls28-dev` | `Cipher` exists, `Available` is `false`, and `Encrypt`/`Decrypt` refuse with a sentence naming the package. GnuTLS is already the TLS library under libsoup on a Linux desktop, but the headers are a separate package |
 | `--profile` and the runtime's marks in a Sysprof capture | `sysprof-capture-devel` | `libsysprof-capture-4-dev` | `--profile` refuses naming the package, and a capture carries no marks of ours — the samples and GTK's frame marks are Sysprof's and unaffected |
+| `PdfForm` (fillable PDF forms and signature fields) | `podofo-devel` | `libpodofo-dev` | `PdfForm` exists, `Available` is `false`, and `AddFields` refuses with a sentence naming the package. PoDoFo is C++17 and needs OpenSSL; a report without `Input`/`Signature` needs none of it |
 
 `Widget.Available(type)` is how a program asks what the build it is running on
 can actually do — a palette filters on it, and so should anything that offers a

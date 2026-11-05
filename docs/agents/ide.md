@@ -1400,6 +1400,17 @@ loads `ReportDocument`, and the test project does the same so the dialog is not
 a class only the real IDE has. `tests/ide` also symlinks `ReportForm.form` like
 every other IDE form.
 
+**A report with `Input` or `Signature` is a form.** The designer's palette has
+the two elements beside `Text` and `Box`, and the property grid edits the field
+name, `Input` (`Text`/`Check`), value, checked state, read-only, required,
+multiline and max length. The static page is still Cairo's; `Report.SavePdf`
+writes it, then `PdfForm.AddFields` (PoDoFo) adds the widgets. A signature field
+is left empty: the signer's own application fills it. A form is one page and
+ignores `Data`; a field in a page header or footer repeats with the band, so a
+name declared twice is refused. See
+[widgets.md](widgets.md) for the PDF layer and [build-and-tools.md](build-and-tools.md)
+for the optional PoDoFo build.
+
 ## Renaming a local
 
 **The caret says which binding a bare name means.** `Refactor.rename(word, to,

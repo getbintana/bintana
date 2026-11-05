@@ -18273,6 +18273,36 @@ function* p_report(ide) {
         dlg.setValue("X", 120);
         dlg.setValue("Y", 10);
 
+        /* A text field and a signature field: the same designer, the form's
+         * two elements. */
+        dlg.CmbAddKind.Text = "Input";
+        dlg.BtnAdd_Click();
+        dlg.rows.Name.Text  = "nombre";
+        dlg.rows.Value.Text = "Matías";
+        dlg.setValue("X", 120);
+        dlg.setValue("Y", 40);
+        dlg.setValue("Width", 200);
+        dlg.setValue("Height", 24);
+
+        dlg.CmbAddKind.Text = "Input";
+        dlg.BtnAdd_Click();
+        dlg.rows.Name.Text = "acepto";
+        dlg.setValue("Input", "Check");
+        yield;
+        dlg.setValue("Checked", true);
+        dlg.setValue("X", 300);
+        dlg.setValue("Y", 40);
+        dlg.setValue("Width", 16);
+        dlg.setValue("Height", 16);
+
+        dlg.CmbAddKind.Text = "Signature";
+        dlg.BtnAdd_Click();
+        dlg.rows.Name.Text = "firma";
+        dlg.setValue("X", 120);
+        dlg.setValue("Y", 90);
+        dlg.setValue("Width", 200);
+        dlg.setValue("Height", 60);
+
         /* A group, which adds its header and footer. */
         dlg.TxtGroup.Text = "G";
         dlg.BtnGroupAdd_Click();
@@ -18299,6 +18329,21 @@ function* p_report(ide) {
     check("and the group is there too",
           props.Sections.Groups && props.Sections.Groups[0].On === "G",
           JSON.stringify(props.Sections.Groups));
+    check("a form's text field is in the designed shape",
+          props.Sections.Detail.Elements.some((e) => e.Kind === "Input" &&
+              e.Name === "nombre" && e.Value === "Matías" &&
+              e.X === 120 && e.Y === 40 && e.Width === 200 && e.Height === 24),
+          JSON.stringify(props.Sections.Detail.Elements));
+    check("...and a checkbox with its state",
+          props.Sections.Detail.Elements.some((e) => e.Kind === "Input" &&
+              e.Name === "acepto" && e.Input === "Check" && e.Checked === true &&
+              e.X === 300 && e.Y === 40 && e.Width === 16 && e.Height === 16),
+          JSON.stringify(props.Sections.Detail.Elements));
+    check("...and its signature field",
+          props.Sections.Detail.Elements.some((e) => e.Kind === "Signature" &&
+              e.Name === "firma" && e.X === 120 && e.Y === 90 &&
+              e.Width === 200 && e.Height === 60),
+          JSON.stringify(props.Sections.Detail.Elements));
 
     check("the report designer marks the form dirty", ide.designer.dirty, "");
     ide.save();
