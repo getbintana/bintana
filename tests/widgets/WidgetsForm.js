@@ -387,6 +387,19 @@ class BadDefault extends Record {
 /* --- records inside records ---------------------------------------------
  * A child, a master with a list of them, and a shape that contains itself --
  * which is master-detail, and which is also what a menu and a `.form` are. */
+/* The shape the property grid test edits: an enum, a whole number, a tick, an
+ * exact amount, a date and text -- one field of each kind a grid has to draw. */
+class GridSettings extends Record {
+    static Fields = {
+        Paper:  Field.Enum(["A4", "A5", "Letter"]),
+        Copies: Field.Int({ min: 0, max: 99 }),
+        Duplex: Field.Bool(true),
+        Price:  Field.Decimal({ decimals: 2 }),
+        Since:  Field.Date(),
+        Note:   Field.Text(),
+    };
+}
+
 class Address extends Record {
     static Fields = {
         Street: Field.Text({ required: true, max: 40 }),
@@ -618,7 +631,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "Direction", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "Scrollbars", "Expander", "SourceEditor", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
@@ -6400,6 +6413,75 @@ class Form1 extends Form {
             box.Delete();
         }, 600);
     }
+    /* --- PropertyGrid -------------------------------------------------------
+     *
+     * The rows are asked of the target, not declared by the application: a
+     * plain object says its own keys, a `Record` its fields and their kinds, a
+     * control its `PropertyNames` and `PropertyOptions`. The edit goes through
+     * the target's own setter and `Change` says what it became.
+     */
+    testPropertyGrid() {
+        const g = new PropertyGrid();
+        this.Fixed1.Add(g);
+        g.Resize(320, 300);
+
+        const printer = { Paper: "A4", Copies: 2, Duplex: true, Note: "hi" };
+        const changes = [];
+        g.On("Change", (name, value) => changes.push([name, value]));
+        g.Target = printer;
+
+        eq("a target builds a row per property", g.Rows.Children.length, 4);
+        check("a string is a text field", g.Editor("Paper") instanceof TextBox);
+        check("a number is a number field", g.Editor("Copies") instanceof TextBox);
+        check("a boolean is a tick", g.Editor("Duplex") instanceof CheckButton);
+
+        g.Editor("Copies").Text = "3";
+        eq("editing writes the target", printer.Copies, 3);
+        eq("and says which name changed", changes.at(-1)[0], "Copies");
+        eq("...with the target's own value", changes.at(-1)[1], 3);
+
+        g.Editor("Duplex").Active = false;
+        eq("a tick writes too", printer.Duplex, false);
+        g.Editor("Paper").Text = "Letter";
+        eq("and so does text", printer.Paper, "Letter");
+
+        /* A Record says the kinds its fields declare. */
+        const settings = new GridSettings();
+        g.Target = settings;
+
+        check("a record's enum is a drop-down", g.Editor("Paper") instanceof ComboBox);
+        eq("with the values the field declares", g.Editor("Paper").Items.join(","),
+           "A4,A5,Letter");
+        g.Editor("Paper").Text = "A5";
+        eq("choosing writes the record", settings.Paper, "A5");
+
+        check("a decimal field is a DecimalBox", g.Editor("Price") instanceof DecimalBox);
+        g.Editor("Price").Value = "19.99";
+        check("and stays exact", settings.Price instanceof Decimal &&
+              `${settings.Price}` === "19.99", `${settings.Price}`);
+        check("a date field is a picker", g.Editor("Since") instanceof DatePicker);
+        check("a bool field is a tick", g.Editor("Duplex") instanceof CheckButton);
+
+        /* A control answers its own names and options. */
+        const b = new Button();
+        this.Fixed1.Add(b);
+        g.Target = b;
+        check("a control's names are rows",
+              g.Keys().includes("Text") && g.Keys().includes("Enabled"),
+              JSON.stringify(g.Keys().slice(0, 8)));
+        check("its text is a text field", g.Editor("Text") instanceof TextBox);
+        check("its enabled is a tick", g.Editor("Enabled") instanceof CheckButton);
+        g.Editor("Text").Text = "ok";
+        eq("and the grid edits it", b.Text, "ok");
+
+        g.Target = null;
+        eq("no target, no rows", g.Rows.Children.length, 0);
+        check("and it says so", g.Empty.Visible);
+
+        g.Delete();
+        b.Delete();
+    }
+
     /* --- three small controls the vocabulary was missing -------------------
      *
      * A `ProgressBar` says how far along; a `Spinner` says only that there is

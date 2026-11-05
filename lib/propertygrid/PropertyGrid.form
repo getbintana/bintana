@@ -1,0 +1,46 @@
+{
+  "format": "bintana-form/1",
+  "class": "PropertyGrid",
+  "properties": {
+    "Width": 320,
+    "Height": 300,
+    "Arrangement": "Vertical"
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "Empty",
+      "properties": {
+        "X": 8,
+        "Y": 8,
+        "Width": 304,
+        "Height": 32,
+        "Text": "No target",
+        "Style": "dim-label"
+      }
+    },
+    {
+      "type": "Scroller",
+      "name": "Scroll",
+      "properties": {
+        "HAlign": "Fill",
+        "VAlign": "Fill",
+        "Expand": true,
+        "Visible": false
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "Rows",
+          "properties": {
+            "Arrangement": "Vertical",
+            "Spacing": 4,
+            "Margin": 6,
+            "HAlign": "Fill",
+            "VAlign": "Start"
+          }
+        }
+      ]
+    }
+  ]
+}

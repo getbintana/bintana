@@ -19635,6 +19635,87 @@
       ]
     },
     {
+      "Name": "propertygrid",
+      "Classes": [
+        {
+          "Name": "PropertyGrid",
+          "Parent": "Component",
+          "Members": [
+            {
+              "Name": "Editor",
+              "Kind": "Method",
+              "Params": 1,
+              "Signature": "(name)",
+              "Returns": "",
+              "Doc": "the editor built for one property, or `null` when it is not shown -- what a test or a caller that wants to focus a row asks for",
+              "Native": false
+            },
+            {
+              "Name": "Keys",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "the property names the grid shows, in the target's own order",
+              "Native": false
+            },
+            {
+              "Name": "LabelWidth",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the width of the name column, in pixels. Default `110`",
+              "Native": false
+            },
+            {
+              "Name": "Refresh",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "rebuilds the rows from the target; call it after changing its shape in place -- a record's fields, a class's options",
+              "Native": false
+            },
+            {
+              "Name": "SetValue",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(name, value)",
+              "Returns": "",
+              "Doc": "writes one property through the target's own setter and raises `Change`, as an edit in the grid does. A refusal is the setter's and is not caught",
+              "Native": false
+            },
+            {
+              "Name": "Target",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the object whose properties are shown; `null` shows \"No target\"",
+              "Native": false
+            },
+            {
+              "Name": "Value",
+              "Kind": "Method",
+              "Params": 1,
+              "Signature": "(name)",
+              "Returns": "",
+              "Doc": "the target's value for one property",
+              "Native": false
+            }
+          ],
+          "Events": [
+            {
+              "Name": "Change",
+              "Signature": "(name, value)",
+              "Doc": "an edit the target accepted. The value is the target's own, after its setter -- a `Decimal` stays exact, a number is a number"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "Name": "qr",
       "Classes": [
         {
