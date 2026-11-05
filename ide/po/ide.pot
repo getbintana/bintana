@@ -703,6 +703,10 @@ msgstr ""
 msgid "Toolbar"
 msgstr ""
 
+#: forms/MainForm.form: menu MnuViewGrid
+msgid "Design grid"
+msgstr ""
+
 #: forms/MainForm.form: menu MnuViewLineNumbers
 msgid "Line numbers"
 msgstr ""

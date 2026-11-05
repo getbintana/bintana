@@ -519,6 +519,11 @@
           "check": true
         },
         {
+          "name": "MnuViewGrid",
+          "text": "Design grid",
+          "check": true
+        },
+        {
           "separator": true
         },
         {

@@ -161,6 +161,10 @@ const EDITOR_WRAP_KEY  = "editor.wrap";
 const EDITOR_MAP_KEY   = "editor.minimap";
 const EDITOR_THEME_KEY = "editor.theme";
 
+/* The designer's lattice is a view setting too, and it is the reader's: one
+ * answer for every form tab, written with the window's other view choices. */
+const DESIGNER_GRID_KEY = "designer.grid";
+
 /*
  * The syntax themes the runtime offers, asked of the class: the list cannot
  * drift from what `Theme` accepts, and no widget is built to ask.  The ids are
@@ -2402,6 +2406,14 @@ export class MainForm extends Form {
         this.dressViewMenu();
     }
 
+    /* The designer's lattice: one setting for every form tab, applied to the
+     * ones open now and read by the ones opened later (`Chrome` asks). */
+    MnuViewGrid_Click(on) {
+        Settings.Set(DESIGNER_GRID_KEY, on);
+        for (const state of this.openTabs.values())
+            if (state.designer) state.designer.setGrid(on);
+    }
+
     MnuViewLineNumbers_Click(on) {
         Settings.Set(EDITOR_LINES_KEY, on);
         this.tabs.eachEditor((ed) => { ed.ShowLineNumbers = on; });
@@ -2504,6 +2516,7 @@ export class MainForm extends Form {
         this.MnuViewSide.Value   = this.CmbView.Index;
         this.MnuViewBottom.Value = this.ConsoleBox.Current;
 
+        this.MnuViewGrid.Value        = Settings.Get(DESIGNER_GRID_KEY, true);
         this.MnuViewLineNumbers.Value = Settings.Get(EDITOR_LINES_KEY, true);
         this.MnuViewWrap.Value        = Settings.Get(EDITOR_WRAP_KEY, false);
         this.MnuViewMinimap.Value     = Settings.Get(EDITOR_MAP_KEY, false);

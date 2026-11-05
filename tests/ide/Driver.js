@@ -8272,6 +8272,16 @@ function* p_nested(ide) {
     check("and it drew lines", ide.designer.chrome.lattice.Dump().length > 0,
           ide.designer.chrome.lattice.Dump().slice(0, 80));
 
+    check("the View menu has the grid ticked", ide.MnuViewGrid.Value);
+    ide.MnuViewGrid.Click();
+    yield;
+    eq("hiding it puts the lattice away", ide.designer.chrome.lattice.Visible, false);
+    eq("and the tick says so", ide.MnuViewGrid.Value, false);
+    ide.MnuViewGrid.Click();
+    yield;
+    eq("and it comes back", ide.designer.chrome.lattice.Visible, true);
+    eq("with its tick", ide.MnuViewGrid.Value, true);
+
     ide.designer.setSelection([centreMover, centreAnchor]);
     yield;
     check("aligning needs two", ide.ActAlignLeft.Enabled);

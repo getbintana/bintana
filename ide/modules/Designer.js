@@ -397,6 +397,9 @@ export class Designer {
     /* The step `snap()` uses, for the lattice the chrome draws. */
     gridStep() { return GRID; }
 
+    /* View > Design grid, applied to this tab's chrome. */
+    setGrid(on) { this.chrome.setGrid(on); }
+
     formMargin() {
         const p = (this.root && this.root.properties) || {};
         return Math.max(0, parseFloat(p.Margin) || 0);

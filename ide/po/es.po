@@ -646,6 +646,10 @@ msgstr "Panel inferior"
 msgid "Toolbar"
 msgstr "Barra de herramientas"
 
+#: forms/MainForm.form: menu MnuViewGrid
+msgid "Design grid"
+msgstr "Grilla de diseño"
+
 #: forms/MainForm.form: menu MnuViewLineNumbers
 msgid "Line numbers"
 msgstr "Números de línea"

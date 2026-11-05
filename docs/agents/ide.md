@@ -252,7 +252,10 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   with thin lines at `Designer.gridStep()` (4). One area and not a `Panel` per
   line: a 360x260 form is ninety vertical and sixty-five horizontal lines, and
   that many widgets would cost more than the designer. It is added before the
-  outline bars, so selection chrome stays above it.
+  outline bars, so selection chrome stays above it. **View > Design grid**
+  hides it and shows it again; the tick is `Settings`' `designer.grid` (on by
+  default), and the handler walks every open form tab, since each designer has
+  its own chrome.
 - **A centre works with one control; the edge commands do not.** `AlignCentreH`
   / `AlignCentreV` with one control centre it in its parent (`centreMove`), and
   with several pull every other control onto the primary's centre line. The

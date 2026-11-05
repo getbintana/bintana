@@ -73,6 +73,8 @@ export class Chrome {
          * cost more than the whole designer. */
         this.lattice = new DrawingArea();
         this.lattice.Name = "DesignerGrid";
+        this.gridOn = Settings.Get("designer.grid", true);
+        this.lattice.Visible = this.gridOn;
         this.lattice.On("Draw", (p, width, height) => this.drawGrid(p, width, height));
         this.glass.Add(this.lattice);
 
@@ -116,6 +118,13 @@ export class Chrome {
         panel.Visible    = false;
         this.glass.Add(panel);
         return panel;
+    }
+
+    /* The View menu's tick: the lattice is the reader's, and hiding it costs no
+     * layout -- the area is already the form's size. */
+    setGrid(on) {
+        this.gridOn = !!on;
+        this.lattice.Visible = this.gridOn;
     }
 
     /* The lattice: one pass of thin lines at the step `snap()` uses, faint
