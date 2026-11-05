@@ -1348,3 +1348,43 @@ the parser named, or one character when it stopped on punctuation or at the end
 of the line -- the `)` it expected. `Live` writes `Warning`, so a line carrying
 a syntax error and a name complaint keeps both, which is the same rule the
 gutter has carried since the mark existed.
+
+## The report designer
+
+**A report is a component whose shape is data.** `lib/report`'s `Report` holds
+`Sections` -- bands with elements at points -- and the runtime's serialiser now
+writes a plain object or array as JSON, so `Sections` travels in the `.form` as
+an ordinary property. That one change is what makes a designed report possible:
+the loader assigns the object back through the real setter, and the report's
+`Data` stays in code.
+
+**The designer draws the same `Sections` the report prints.**
+`Designer.reportStandIn` does not build the component's `.form` (a `DrawingArea`
+that paints nothing without the project's code); it builds a `DrawingArea` whose
+`Draw` calls `ReportDocument.PaintDesign`, and a label that says how to edit it.
+Double-clicking the stand-in opens `ReportForm`, which edits a copy of
+`Sections` on a page, with `ReportDocument.DesignLayout` giving every band and
+element box in points. On OK the node's `properties` are replaced and
+`designer.touch()` marks the form dirty; `ReportForm`'s answer is the whole
+shape, so Cancel costs nothing.
+
+**A real `Report` is not built, even though the IDE uses the library.**
+`buildNode` intercepts a report before `AddNode`: the surface is `Designing`,
+and that silences the named handlers of everything inside it -- `Canvas_Draw`
+included -- so a real control would be a blank page. The stand-in's `Draw` is
+an `On` handler, which still answers under `Designing`. The `Report` library is
+in the IDE for `ReportDocument`, the dialog and the preview, not to instantiate
+the component.
+
+**What the dialog must not lose.** A `Sections` Image can hold `Bytes` (a chart
+the report drew), so the dialog's copy is not `JSON.parse(JSON.stringify())` --
+that would turn the `Bytes` into `{}` and lose the picture. `ReportForm.clone`
+shares `Bytes` and `Decimal` and copies plain data. The property grid hides
+`Sections` and `Data` for a report (`Designer.reportHidden`): they are not a
+text field, and the page is where they are edited.
+
+**The IDE uses the library it designs for.** `ide/project.json` and
+`tests/ide/project.json` both declare `uses: ["report"]`; the IDE's own runtime
+loads `ReportDocument`, and the test project does the same so the dialog is not
+a class only the real IDE has. `tests/ide` also symlinks `ReportForm.form` like
+every other IDE form.

@@ -2286,7 +2286,38 @@ function defaultsFor(ctor) {
     return bare;
 }
 
+/*
+ * A value a `.form` can carry as JSON: a primitive, an array of them, or a
+ * plain object of them.
+ *
+ * **A plain object is data and a class instance is not**, even one with a
+ * `toJSON`: the loader would read the object back as an object, and a setter
+ * that expects a `Bytes` or a `Bitmap` would refuse it.  `Decimal` is the one
+ * exception and is handled by the serialiser itself, because its setter takes
+ * the machine text `JSON.stringify` writes through its own `toJSON`.
+ *
+ * This is what makes a report's `Sections` -- and a table's `Columns`, and any
+ * other spec a control holds -- survive a save: they are plain data, written
+ * by hand or by a designer, and the loader assigns the same object back.
+ */
+function plainData(v) {
+    if (v === null) return true;
+
+    const t = typeof v;
+    if (t === "string" || t === "number" || t === "boolean") return true;
+    if (t !== "object") return false;           /* undefined, function, symbol */
+    if (v instanceof Decimal) return true;      /* its own text, read back by its setter */
+    if (Array.isArray(v)) return v.every(plainData);
+
+    const proto = prototypeOf(v);
+    if (proto !== objectProto && proto !== null) return false;
+    for (const k in v) if (!plainData(v[k])) return false;
+    return true;
+}
+
 function sameValue(a, b) {
+    if (a === b) return true;
+
     if (Array.isArray(a) || Array.isArray(b)) {
         return JSON.stringify(a) === JSON.stringify(b);
     }
@@ -2301,7 +2332,17 @@ function sameValue(a, b) {
         return a instanceof Decimal && b instanceof Decimal &&
                `${a}` === `${b}`;
     }
-    return a === b;
+    /*
+     * Two plain objects are the same when they write the same JSON.  A spec a
+     * form carries -- a report's bands, a table's columns -- is compared against
+     * the fresh control's default, and identity would write the empty one on
+     * every save.
+     */
+    if (a && b && typeof a === "object" && typeof b === "object" &&
+        plainData(a) && plainData(b))
+        return JSON.stringify(a) === JSON.stringify(b);
+
+    return false;
 }
 
 /* What a bytes field starts from: no bytes at all, shared because a `Bytes` is

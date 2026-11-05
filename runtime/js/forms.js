@@ -217,7 +217,7 @@ mixIn(FormMembers, Form);
 
 /* Name is written as the node's `name`; Caption is an alias of Text and would
  * be written twice; Modified is editing state, not design state. */
-const NOT_SAVED = ["Name", "Caption", "Modified"];
+const NOT_SAVED = ["Name", "Caption", "Modified", "Designing"];
 
 /* The name a `.form` may give a part: a JavaScript identifier, because the
  * name is the prefix of its handlers (`Clock_Tick`). */
@@ -328,8 +328,12 @@ function savableValue(v) {
      * through its own `toJSON`, so a `.form` carries its machine text and the
      * setter reads it back.  Without this a decimal property -- a `DecimalBox`'s
      * `Value` -- was skipped in silence, which is a value the file never had. */
-    return t === "string" || t === "number" || t === "boolean" || Array.isArray(v)
-        || v instanceof Decimal;
+    if (v instanceof Decimal) return true;
+    /* A plain object or array is data too -- a report's `Sections`, a table's
+     * `Columns` -- and is written as it is.  See `plainData` in rad.js for what
+     * a class instance is not. */
+    return t === "string" || t === "number" || t === "boolean" ||
+           (t === "object" && v !== null && plainData(v));
 }
 
 /*

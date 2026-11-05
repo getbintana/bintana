@@ -19976,6 +19976,15 @@
               "Native": false
             },
             {
+              "Name": "DesignLayout",
+              "Kind": "Method",
+              "Params": 1,
+              "Signature": "(sample)",
+              "Returns": "Object",
+              "Doc": "the bands as a designer stacks them: one page wide, in reading order, with every element's box. Coordinates are points, `0,0` at the sheet's top-left; `sample` is the row a `Field` or a `Total` reads, and one is made from the field names when it is not given. The stack grows past the page when the bands need more room, so a designer shows all of them rather than cutting the last band off.",
+              "Native": false
+            },
+            {
               "Name": "Margins",
               "Kind": "Property",
               "Params": -1,
@@ -20009,6 +20018,15 @@
               "Signature": "(p, page, width, height)",
               "Returns": "",
               "Doc": "draws page `page` (one-based, clamped) with `p`, scaled to fit `width`×`height` and centred — for a painter something else opened: a `DrawPage` of your own, or a `Drawing` that puts this page beside other things. Black on white, whatever the theme",
+              "Native": false
+            },
+            {
+              "Name": "PaintDesign",
+              "Kind": "Method",
+              "Params": 4,
+              "Signature": "(p, width, height, sample)",
+              "Returns": "Object",
+              "Doc": "the design on a painter: the sheet, a tint and a rule for every band, and the elements where they will print. Scaled to fit `width`×`height`, as `Paint` scales a page; answers the same layout in the painter's coordinates, which is what a hit test wants. A missing image is a placeholder box, not a throw — the designer is where it is chosen.",
               "Native": false
             },
             {

@@ -8075,6 +8075,46 @@ of the line -- the `)` it expected. `Live` writes `Warning`, so a line carrying
 a syntax error and a name complaint keeps both, which is the same rule the
 gutter has carried since the mark existed.
 
+## The report designer
+
+**A report is a component whose shape is data.** `lib/report`'s `Report` holds
+`Sections` -- bands with elements at points -- and the runtime's serialiser now
+writes a plain object or array as JSON, so `Sections` travels in the `.form` as
+an ordinary property. That one change is what makes a designed report possible:
+the loader assigns the object back through the real setter, and the report's
+`Data` stays in code.
+
+**The designer draws the same `Sections` the report prints.**
+`Designer.reportStandIn` does not build the component's `.form` (a `DrawingArea`
+that paints nothing without the project's code); it builds a `DrawingArea` whose
+`Draw` calls `ReportDocument.PaintDesign`, and a label that says how to edit it.
+Double-clicking the stand-in opens `ReportForm`, which edits a copy of
+`Sections` on a page, with `ReportDocument.DesignLayout` giving every band and
+element box in points. On OK the node's `properties` are replaced and
+`designer.touch()` marks the form dirty; `ReportForm`'s answer is the whole
+shape, so Cancel costs nothing.
+
+**A real `Report` is not built, even though the IDE uses the library.**
+`buildNode` intercepts a report before `AddNode`: the surface is `Designing`,
+and that silences the named handlers of everything inside it -- `Canvas_Draw`
+included -- so a real control would be a blank page. The stand-in's `Draw` is
+an `On` handler, which still answers under `Designing`. The `Report` library is
+in the IDE for `ReportDocument`, the dialog and the preview, not to instantiate
+the component.
+
+**What the dialog must not lose.** A `Sections` Image can hold `Bytes` (a chart
+the report drew), so the dialog's copy is not `JSON.parse(JSON.stringify())` --
+that would turn the `Bytes` into `{}` and lose the picture. `ReportForm.clone`
+shares `Bytes` and `Decimal` and copies plain data. The property grid hides
+`Sections` and `Data` for a report (`Designer.reportHidden`): they are not a
+text field, and the page is where they are edited.
+
+**The IDE uses the library it designs for.** `ide/project.json` and
+`tests/ide/project.json` both declare `uses: ["report"]`; the IDE's own runtime
+loads `ReportDocument`, and the test project does the same so the dialog is not
+a class only the real IDE has. `tests/ide` also symlinks `ReportForm.form` like
+every other IDE form.
+
 ---
 
 # docs/agents/data.md
@@ -8849,6 +8889,22 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   and "the handler works" are different facts. The file it writes is checked by
   loading it into a `Picture` and reading `SourceWidth`/`SourceHeight` -- the
   runtime can read a PNG back, which is cheaper than a pixel probe.
+- **`Painter.Image`'s cache is the path's, so `Bytes` and a `Bitmap` are
+  downloaded into cairo on every call.** A path is a stable key with an mtime
+  behind it; bytes are a pointer that can be freed and reallocated at the same
+  address, so caching them would eventually paint the wrong picture. A `Bitmap`
+  is still the answer when the picture must be scaled, cropped or turned first:
+  that work happens once, in the value. Measured, 640×480: 2.7 ms a call for a
+  PNG path uncached against 0.045 ms cached, and a `Bitmap` decode at
+  `Bitmap.Load` rather than in the frame.
+- **GdkPixbuf has no constructor that decodes encoded bytes**:
+  `gdk_pixbuf_new_from_bytes` reads raw pixels, a colorspace and a rowstride.
+  `Bitmap.FromBytes` goes through `GdkPixbufLoader` (`write` then `close`), and
+  the decoded pixbuf must be `g_object_ref`'d before the loader is unreffed.
+  An arbitrary-angle `Bitmap.Rotate` bridges pixbuf and cairo through PNG bytes
+  for the same class of reason: handing cairo GdkPixbuf's RGBA rows swaps red
+  and blue on a little-endian machine, and the PNG stream is the lossless,
+  channel-order-free form both libraries already speak.
 - **A `void` helper that throws is a throw nobody sees.** `paint_frame` refuses a
   `Save()` asked for from inside a `Draw` -- one painter means one frame -- and
   for as long as it returned `void`, `area_save` carried on, wrote the PNG and
@@ -12905,7 +12961,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 10574 assertions
+./tests/run.sh                          # all seven projects, 10606 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -14405,7 +14461,6 @@ needed and what it did instead.
 | No property grid control for applications | [ISSUE-property-grid-control](../issues/ISSUE-property-grid-control.md) |
 | No symmetric encryption | [ISSUE-symmetric-encryption](../issues/ISSUE-symmetric-encryption.md) |
 | The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
-| No image object to scale, crop or rotate | [ISSUE-image-object](../issues/ISSUE-image-object.md) |
 | `Object.prototype` is writable and there is no defence | [ISSUE-object-prototype](../issues/ISSUE-object-prototype.md) |
 | The "did you mean" sentence is lost inside a `catch` | [ISSUE-reference-hint-in-catch](../issues/ISSUE-reference-hint-in-catch.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |

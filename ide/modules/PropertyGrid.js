@@ -584,7 +584,8 @@ export class PropertyGrid {
             const type = this.target.__node.type;
             const base = this.designer.subclassBase(type);
             const own  = this.designer.componentProps(type)
-                             .filter((key) => key !== "Visible");
+                             .filter((key) => key !== "Visible" &&
+                                     !this.designer.reportHidden(type, key));
 
             /* A control subclass is a real base control on the canvas, so the
              * grid can offer everything that control has -- plus what the
@@ -607,7 +608,9 @@ export class PropertyGrid {
          * Its properties are not a control's -- the form is not on the surface,
          * it *is* the surface -- so they come from the root node. */
         if (this.target) {
+            const report = this.designer.isReportControl(this.target);
             const keys = this.target.PropertyNames().filter((key) => {
+                if (report && (key === "Sections" || key === "Data")) return false;
                 const value = this.target[key];
                 return typeof value !== "function" && value !== undefined;
             });
@@ -638,9 +641,12 @@ export class PropertyGrid {
             const base = this.designer.subclassBase(type);
             const own  = this.designer.componentTexts(type);
 
+            const keep = (key) => !this.designer.reportHidden(type, key);
+
             if (base)
-                return [...new Set([...this.target.TextProperties(), ...(own || [])])];
-            return own || this.designer.componentProps(type);
+                return [...new Set([...this.target.TextProperties(), ...(own || [])])]
+                           .filter(keep);
+            return (own || this.designer.componentProps(type)).filter(keep);
         }
         /* The prose, and after it whatever this class counts instead of
          * naming -- see DESIGN_NUMBERS. Last, because the prose is what the

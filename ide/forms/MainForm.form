@@ -62,6 +62,12 @@
       "enabled": false
     },
     {
+      "name": "ActDesignReport",
+      "text": "Design report...",
+      "icon": "x-office-document-symbolic",
+      "enabled": false
+    },
+    {
       "name": "ActNewForm",
       "text": "New form...",
       "shortcut": "<Control>n",
@@ -824,6 +830,9 @@
           "name": "MnuHandler",
           "text": "Write handler",
           "dynamic": true
+        },
+        {
+          "action": "ActDesignReport"
         },
         {
           "separator": true

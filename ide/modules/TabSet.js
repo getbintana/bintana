@@ -130,6 +130,7 @@ const CANVAS_MENU = [
     { action: "ActRenameCtl" },
     { action: "ActDelCtl" },
     { action: "ActAddPage" },
+    { action: "ActDesignReport" },
     { separator: true },
     { action: "ActRaise" },
     { action: "ActLower" },

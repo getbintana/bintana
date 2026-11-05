@@ -18019,6 +18019,145 @@ function* p_binding(ide) {
     yield* settled(ide);
 }
 
+/* --------------------------------------------------------------- report
+ *
+ * A report is a component whose shape is data (`Sections`), and the designer
+ * edits it on a page instead of a grey stand-in. The gesture is the double
+ * click, and what it must leave behind is the `.form` the running report reads:
+ * the page that prints is the page that was drawn.
+ */
+function* p_report(ide) {
+    const DIR = `/tmp/bta-test-ide-report${TAG}`;
+
+    Directory.Make(DIR);
+    wipe(DIR);
+
+    File.Save(File.Join(DIR, "project.json"),
+              JSON.stringify({ name: "reportprobe", startup: "Main",
+                               sources: ["Main.js"], uses: ["report"] }));
+    File.Save(File.Join(DIR, "Main.js"),
+              'class Main extends Form {\n' +
+              '    Form_Open() { Application.Quit(0); }\n' +
+              '}\n');
+    File.Save(File.Join(DIR, "Main.form"), JSON.stringify({
+        format: "bintana-form/1",
+        class: "Main",
+        properties: { Text: "report", Width: 640, Height: 480, Arrangement: "Fixed" },
+        children: [
+            { type: "Report", name: "Rep", properties: {
+                X: 20, Y: 20, Width: 400, Height: 440,
+                Paper: "A4", Orientation: "Portrait", Margins: 40,
+                Sections: {
+                    Detail: { Height: 30, Elements: [
+                        { Kind: "Field", Field: "Name", X: 0, Y: 0, Width: 120 }
+                    ] }
+                }
+            } },
+        ],
+    }, null, 2));
+
+    openFresh(ide, DIR);
+    ide.openNamed("Main.form");
+    yield* settled(ide);
+
+    const rep = byName(ide, "Rep");
+
+    check("a Report is drawn as itself",
+          rep && rep.__node && rep.__node.type === "Report",
+          JSON.stringify(rep && rep.Name));
+    check("with a preview sheet and a line about it",
+          rep.Children.some((c) => c.Name === "ReportSheet") &&
+          rep.Children.some((c) => c.Name === "ReportInfo"),
+          rep.Children.map((c) => c.Name).join(","));
+
+    const info = rep.Children.find((c) => c.Name === "ReportInfo");
+    if (info)
+        check("the line says how to design it", /double click/.test(info.Text), info.Text);
+
+    /* The gesture: a double click on the stand-in opens the designer. */
+    ide.Glass_DblClick(rep.X + 10, rep.Y + 10);
+    yield;
+
+    const dlg = ide.designer.reportDialog;
+    check("double clicking a report opens the report designer", !!dlg);
+
+    if (dlg) {
+        /* The Detail band is the one the file declared. */
+        const names = dlg.bandNames();
+        check("the designer lists the bands", names.includes("Detail"),
+              JSON.stringify(names));
+
+        dlg.bandName = "Detail";
+        dlg.elIndex  = -1;
+        dlg.fillBands();
+        dlg.fillProps();
+
+        /* A heading, dragged to the middle of the page. */
+        dlg.CmbAddKind.Text = "Text";
+        dlg.BtnAdd_Click();
+        dlg.rows.Text.Text = "Invoice";
+        dlg.setValue("X", 120);
+        dlg.setValue("Y", 10);
+
+        /* A group, which adds its header and footer. */
+        dlg.TxtGroup.Text = "G";
+        dlg.BtnGroupAdd_Click();
+        check("adding a group adds its two bands",
+              dlg.bandNames().includes("Groups[0].Header") &&
+              dlg.bandNames().includes("Groups[0].Footer"),
+              JSON.stringify(dlg.bandNames()));
+
+        /* The paper, and a landscape page. */
+        dlg.CmbPaper.Text       = "A5";
+        dlg.CmbOrientation.Text = "Landscape";
+        dlg.BtnOk_Click();
+        yield;
+    }
+
+    const props = rep.__node.properties;
+    check("the designed shape is in the node",
+          props.Sections && props.Sections.Detail &&
+          props.Sections.Detail.Elements.some((e) => e.Text === "Invoice" &&
+                                                    e.X === 120 && e.Y === 10),
+          JSON.stringify(props.Sections));
+    eq("with the paper it was drawn on", props.Paper, "A5");
+    eq("and the orientation", props.Orientation, "Landscape");
+    check("and the group is there too",
+          props.Sections.Groups && props.Sections.Groups[0].On === "G",
+          JSON.stringify(props.Sections.Groups));
+
+    check("the report designer marks the form dirty", ide.designer.dirty, "");
+    ide.save();
+
+    const saved = JSON.parse(File.Load(File.Join(DIR, "Main.form")));
+    const node  = saved.children.find((c) => c.name === "Rep");
+    check("the .form carries the bands", node && node.properties.Sections &&
+          node.properties.Sections.Detail.Elements.some((e) => e.Text === "Invoice"),
+          JSON.stringify(node && node.properties.Sections));
+    eq("and the paper", node.properties.Paper, "A5");
+
+    /* The page that prints is the page that was drawn: run the project and let
+     * its own `Report` read the file. */
+    File.Save(File.Join(DIR, "Main.js"),
+              'class Main extends Form {\n' +
+              '    Form_Open() {\n' +
+              '        print("report:" + JSON.stringify(this.Rep.Sections));\n' +
+              '        print("paper:" + this.Rep.Paper + "/" + this.Rep.Orientation);\n' +
+              '        Application.Quit(0);\n' +
+              '    }\n' +
+              '}\n');
+    const run = Exec.Wait([Application.Executable, DIR], { Timeout: 30000 });
+    check("the saved report loads in the running application",
+          run.Output.includes("Invoice"), run.Output);
+    check("with the paper the designer chose",
+          run.Output.includes("paper:A5/Landscape"), run.Output);
+    eq("and exits cleanly", run.ExitCode, 0);
+
+    /* Back to the project `p_running` starts, and with its launch config. */
+    openFresh(ide, TMP);
+    yield;
+}
+
 const PHASES = [
     { name: "welcome", run: p_welcome },
     { name: "files", run: p_files },
@@ -18084,6 +18223,7 @@ const PHASES = [
     { name: "git", run: p_git },
     { name: "debug", run: p_debug },
     { name: "launch", run: p_launch },
+    { name: "report", run: p_report },
     { name: "running", run: p_running },
 ];
 

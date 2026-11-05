@@ -2786,6 +2786,7 @@ export class MainForm extends Form {
      * the end, the one before, the one after -- from the design bar, and the
      * first also from the canvas's menu. */
     ActAddPage_Execute()   { if (this.designer) this.designer.addPage(); }
+    ActDesignReport_Execute() { if (this.designer) this.designer.designReport(); }
     ActPrevPage_Execute()  { if (this.designer) this.designer.stepPage(-1); }
     ActNextPage_Execute()  { if (this.designer) this.designer.stepPage(1); }
     ActTrRename_Execute() {

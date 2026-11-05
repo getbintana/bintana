@@ -243,6 +243,9 @@ export class Designer {
         this.version  = 0;       // moves on every touch(): see TabSet.contentOf
         this.undoStack = [];
         this.redoStack = [];
+        /* The report designer, while it is up: a dialog of its own, and a
+         * field so a test (and the next double click) can find it. */
+        this.reportDialog = null;
 
         /* What is drawn over the form -- outline, handles, guides, border -- and
          * the panels it is drawn with.  One per designer, like the canvas. */
@@ -299,6 +302,40 @@ export class Designer {
 
     isComponent(type) {
         return this.components.some((c) => c.name === type);
+    }
+
+    /*
+     * Whether a class is a `Report`, directly or through a project subclass.
+     *
+     * The chain is the parser's -- `Classes.classBases()` -- and it is the
+     * same walk `controlBase` makes for a control. `Report` is a component of
+     * `lib/report`, not a runtime widget, so it is not in `Widget.Available`
+     * and the answer is a name in the chain, not a probe.
+     */
+    isReport(type) {
+        if (!type) return false;
+
+        for (let name = type, guard = 0; name && guard < 32; guard++) {
+            if (name === "Report") return true;
+            const info = this.ide.classes.classBases().get(name);
+            if (!info || !info.super) return false;
+            name = info.super;
+        }
+        return false;
+    }
+
+    /* A real `Report` control -- the library is in this process because the
+     * IDE `uses` it -- or the stand-in for a project subclass. */
+    isReportControl(control) {
+        if (!control) return false;
+        if (control.__node) return this.isReport(control.__node.type);
+        return typeof Report === "function" && control instanceof Report;
+    }
+
+    /* The properties the report designer owns and the grid must not offer as a
+     * blob of `[object Object]`: the bands are edited on the page. */
+    reportHidden(type, key) {
+        return this.isReport(type) && (key === "Sections" || key === "Data");
     }
 
     /* --- what a component's class says about itself --------------------------
@@ -692,6 +729,12 @@ export class Designer {
      * itself, and written back as it came.
      */
     buildNode(parent, node) {
+        /* A report is a page the designer draws from its `Sections`, even when
+         * the library's class is in this process: the surface is `Designing`,
+         * and that silences the `Canvas_Draw` a real `Report` would need. The
+         * stand-in paints `PaintDesign` itself and carries the node. */
+        if (this.isReport(node.type)) return this.reportStandIn(parent, node);
+
         /*
          * What is left behind when it fails matters as much as the stand-in.
          * `AddNode` parents a control *before* applying its properties, so a
@@ -850,6 +893,8 @@ export class Designer {
     /* The node, shown as itself and carrying itself: what goes back to the file
      * is what came out of it, plus whatever geometry the user gave it. */
     standIn(parent, node) {
+        if (this.isReport(node.type)) return this.reportStandIn(parent, node);
+
         const props = node.properties || {};
         const tree  = this.ide.classes.componentTree(node.type);
 
@@ -964,6 +1009,135 @@ export class Designer {
         if (props.Visible === false) standIn.Visible = false;
 
         return standIn;
+    }
+
+    /* ------------------------------------------------------------ a report
+     *
+     * A `Report` is a page painted by code the designer cannot run -- but its
+     * *shape* is data (`Sections`), so this one is not a grey box: the same
+     * `ReportDocument.PaintDesign` the designer dialog uses draws the bands
+     * here. The label under it says what the file holds and how to edit it,
+     * and double-clicking the stand-in opens the designer.
+     */
+    reportStandIn(parent, node) {
+        const props = node.properties || {};
+        const standIn = Widget.New("Component");
+
+        parent.Add(standIn);
+        standIn.Name       = node.name || node.type;
+        standIn.__node     = node;
+        standIn.Background = STANDIN_BG;
+        standIn.Arrangement = "Vertical";
+        standIn.Spacing     = 4;
+        standIn.Margin      = 4;
+
+        const sheet = new DrawingArea();
+        sheet.Name    = "ReportSheet";
+        sheet.Expand  = true;
+        sheet.On("Draw", (p, w, h) => this.drawReportDesign(p, node, w, h));
+        standIn.Add(sheet);
+
+        const info = new Label();
+        info.Name  = "ReportInfo";
+        info.Text  = this.reportInfo(node);
+        info.Style = "dim-label";
+        standIn.Add(info);
+
+        const size = this.isComponent(node.type) ? this.componentSize(node.type)
+                                                 : [300, 400];
+        standIn.Resize(props.Width || size[0], props.Height || size[1]);
+        if (this.isFixed(parent)) standIn.Move(props.X || 0, props.Y || 0);
+        if (props.Visible === false) standIn.Visible = false;
+        return standIn;
+    }
+
+    /* A fresh document from the node's declared properties; no rows, so every
+     * `Field` says its own name and the aggregate says a number. */
+    reportDocument(node) {
+        const props = node.properties || {};
+        const doc   = new ReportDocument();
+
+        doc.Paper       = props.Paper || "A4";
+        doc.Orientation = props.Orientation || "Portrait";
+        if (props.Margins !== undefined) doc.Margins = props.Margins;
+        if (props.Sections) doc.Sections = props.Sections;
+        return doc;
+    }
+
+    reportInfo(node) {
+        const props = node.properties || {};
+        try {
+            const count = this.reportDocument(node).DesignLayout().Bands.length;
+            return `${props.Paper || "A4"} · ${count} band${count === 1 ? "" : "s"} — double click to design`;
+        } catch (e) {
+            return "Report — double click to design";
+        }
+    }
+
+    drawReportDesign(p, node, width, height) {
+        try {
+            this.reportDocument(node).PaintDesign(p, width, height);
+        } catch (e) {
+            p.Font  = "Sans 10";
+            p.Color = "#a00000";
+            p.Text(`Report: ${e.message}`, 6, 18);
+        }
+    }
+
+    /*
+     * Open the report designer on the selected stand-in. The dialog works on a
+     * copy and answers the whole shape; this puts it back in the node, which is
+     * what the form writes -- and what the running `Report` reads.
+     */
+    designReport() {
+        const control = this.selected;
+        if (!this.isReportControl(control)) return false;
+
+        /* A project subclass is a stand-in: its shape is the node's. The
+         * library's own `Report` is a real control, and its shape is its
+         * properties -- the serialiser writes them like any other. */
+        const node   = control.__node || null;
+        const props  = node ? (node.properties || (node.properties = {})) : null;
+        const before = this.snapshot();
+
+        const sections = node ? (props.Sections || {}) : (control.Sections || {});
+        const paper    = node ? props.Paper : control.Paper;
+        const orient   = node ? props.Orientation : control.Orientation;
+        const margins  = node ? props.Margins : control.Margins;
+
+        this.reportDialog = ReportForm.edit(sections, {
+            Paper:       paper,
+            Orientation: orient,
+            Margins:     margins,
+            Project:     this.ide.project,
+        }, (answer) => {
+            if (node) {
+                props.Sections    = answer.Sections;
+                props.Paper       = answer.Paper;
+                props.Orientation = answer.Orientation;
+                props.Margins     = answer.Margins;
+            } else {
+                control.Sections    = answer.Sections;
+                control.Paper       = answer.Paper;
+                control.Orientation = answer.Orientation;
+                control.Margins     = answer.Margins;
+            }
+
+            this.pushUndo(before);
+            this.touch();
+            this.refresh();
+
+            if (node) {
+                for (const child of control.Children) {
+                    if (child.Name === "ReportSheet") child.Redraw();
+                    if (child.Name === "ReportInfo") child.Text = this.reportInfo(node);
+                }
+            } else {
+                const canvas = control.Canvas || control.Children[0];
+                if (canvas) canvas.Redraw();
+            }
+        });
+        return true;
     }
 
     /*
@@ -1604,6 +1778,8 @@ export class Designer {
          * come back.
          */
         this.ide.ActDelCtl.Enabled = has;
+        this.ide.ActDesignReport.Enabled =
+            this.selection.length === 1 && this.isReportControl(this.selection[0]);
         this.ide.ActRaise.Enabled  = this.canStep(true);
         this.ide.ActLower.Enabled  = this.canStep(false);
         this.ide.ActToFront.Enabled = this.canStep(true);
@@ -2186,6 +2362,7 @@ export class Designer {
 
             if (!parent || parent === this.surface) return widget;
             if (parent.Item || parent.__node) return parent;
+            if (this.isReportControl(parent)) return parent;
             w = parent;
         }
         return widget;
@@ -2701,6 +2878,12 @@ export class Designer {
         }
 
         this.select(hit);
+
+        if (this.isReportControl(hit)) {
+            this.designReport();
+            return;
+        }
+
         this.ide.openHandler(hit.Name, this.defaultEvent(hit));
     }
 

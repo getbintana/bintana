@@ -111,6 +111,7 @@ class ReportTest extends Form {
             this.testSave();
             this.testPdf();
             this.testDocument();
+            this.testDesign();
             this.testPrint();
             this.testExtremes();
             this.testCharts();
@@ -1148,6 +1149,101 @@ class ReportTest extends Form {
             check("with its text as text", text.includes("Console report") && text.includes("row 39"),
                   text.slice(0, 200));
         }
+    }
+
+    /* ---------------------------------------------------------------- design
+     *
+     * A designer needs the report as a *shape* with no rows and no page
+     * breaks: every band once, in reading order, and every element's box. The
+     * sample row is what a `Field` and a `Total` say while it is drawn, and a
+     * missing image is a placeholder rather than a throw -- the dialog is
+     * where it gets chosen.
+     */
+    testDesign() {
+        const doc = new ReportDocument();
+        doc.Sections = {
+            PageHeader: { Height: 40, Elements: [
+                { Kind: "Text", Text: "Invoice", X: 0, Y: 10, Font: "Sans Bold 18" }
+            ]},
+            Detail: { Height: 30, Elements: [
+                { Kind: "Field", Field: "Name", X: 10, Y: 5, Width: 200 },
+                { Kind: "Line", X1: 0, Y1: 28, X2: 515, Y2: 28 }
+            ]},
+            ReportFooter: { Height: 30, Elements: [
+                { Kind: "Total", Field: "N", Op: "Sum", Format: "Money",
+                  X: 300, Y: 5, Width: 100, Align: "Right" }
+            ]},
+            PageFooter: { Height: 20, Elements: [
+                { Kind: "Field", Field: "@Page", X: 500, Y: 4, Width: 40, Align: "Right" }
+            ]},
+            Groups: [{ On: "G",
+                       Header: { Height: 20, Elements: [] },
+                       Footer: { Height: 24, Elements: [] } }],
+        };
+
+        const sample = { G: "g1", Name: "Widget", N: 12.5 };
+        const layout = doc.DesignLayout(sample);
+
+        eq("the design is one page wide", layout.Width, 595);
+        eq("and stacks every band once",
+           layout.Bands.map((b) => b.Name).join(","),
+           "PageHeader,Groups[0].Header,Detail,Groups[0].Footer,ReportFooter,PageFooter");
+        eq("from the top margin", layout.Bands[0].Y, 40);
+        eq("by each band's height", layout.Bands[1].Y, 80);
+        eq("and the page footer after the report footer", layout.Bands[5].Y, 184);
+
+        const detail = layout.Bands.find((b) => b.Name === "Detail");
+        eq("an element's box is in page coordinates", detail.Elements[0].X, 50);
+        eq("...and its band's", detail.Elements[0].Y, detail.Y + 5);
+        eq("a line's box is its extent", `${detail.Elements[1].Width}x${detail.Elements[1].Height}`,
+           "515x4");
+
+        const area = new DrawingArea();
+        area.Resize(600, 900);
+        area.On("Draw", (p, w, h) => doc.PaintDesign(p, w, h, sample));
+        area.Save(File.Join(SCRATCH, "design.png"), 600, 900);
+        const drawn = area.Dump();
+
+        check("the design draws the heading", drawn.includes('Text "Invoice"'), drawn);
+        check("the field's sample value", drawn.includes('Text "Widget"'), drawn);
+        check("the aggregate's formatted value", /Text ".*12.*50/.test(drawn), drawn);
+        area.Delete();
+
+        /* A file that is not there yet is the ordinary state of an Image being
+         * placed: the box is drawn and the frame goes on. */
+        const placeholder = new ReportDocument();
+        placeholder.Sections = { Detail: { Height: 40, Elements: [
+            { Kind: "Image", File: "no-such-logo.png", X: 0, Y: 0, Width: 20, Height: 20 }
+        ] } };
+        const area2 = new DrawingArea();
+        area2.Resize(300, 400);
+        area2.On("Draw", (p, w, h) => placeholder.PaintDesign(p, w, h, {}));
+        area2.Save(File.Join(SCRATCH, "placeholder.png"), 300, 400);
+        check("a missing image is a placeholder, not a throw",
+              area2.Dump().includes("Rectangle"), area2.Dump());
+        area2.Delete();
+
+        /* The serialiser, which is what puts a designed report in the `.form`:
+         * a plain object is data now, and an empty one is the default. */
+        const report = new Report();
+        report.Sections = { Detail: { Height: 30, Elements: [
+            { Kind: "Text", Text: "designed", X: 0, Y: 0 }
+        ] } };
+        const node = report.Serialize();
+        check("a report writes its Sections into the form",
+              node.properties.Sections && node.properties.Sections.Detail, JSON.stringify(node));
+
+        const read = new Report();
+        read.Sections = node.properties.Sections;
+        eq("and reads the same shape back",
+           JSON.stringify(read.Sections), JSON.stringify(report.Sections));
+
+        const empty = new Report();
+        check("an empty report writes no Sections",
+              empty.Serialize().properties.Sections === undefined);
+        report.Delete();
+        read.Delete();
+        empty.Delete();
     }
 
     /* ---------------------------------------------------------------- print

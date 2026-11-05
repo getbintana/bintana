@@ -25,6 +25,7 @@
     "../../ide/forms/StyleForm.js",
     "../../ide/forms/ImageForm.js",
     "../../ide/forms/ColumnForm.js",
+    "../../ide/forms/ReportForm.js",
     "../../ide/forms/RecordForm.js",
     "../../ide/modules/Launch.js",
     "../../ide/forms/LaunchForm.js",
@@ -83,6 +84,7 @@
     "check",
     "dialog",
     "markdown",
-    "package"
+    "package",
+    "report"
   ]
 }

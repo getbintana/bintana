@@ -1,0 +1,377 @@
+{
+  "format": "bintana-form/1",
+  "class": "ReportForm",
+  "properties": {
+    "Text": "Report designer",
+    "Width": 1000,
+    "Height": 760,
+    "Icon": "x-office-document-symbolic"
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "TopBar",
+      "properties": {
+        "X": 12,
+        "Y": 12,
+        "Width": 976,
+        "Height": 34,
+        "Arrangement": "Horizontal",
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblPaper",
+          "properties": {
+            "Text": "Paper:",
+            "Width": 54,
+            "Height": 34,
+            "VAlign": "Center",
+            "For": "CmbPaper"
+          }
+        },
+        {
+          "type": "ComboBox",
+          "name": "CmbPaper",
+          "properties": {
+            "Width": 110,
+            "Height": 34
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblOrientation",
+          "properties": {
+            "Text": "Orientation:",
+            "Width": 88,
+            "Height": 34,
+            "VAlign": "Center",
+            "For": "CmbOrientation"
+          }
+        },
+        {
+          "type": "ComboBox",
+          "name": "CmbOrientation",
+          "properties": {
+            "Width": 120,
+            "Height": 34
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblMargin",
+          "properties": {
+            "Text": "Margin:",
+            "Width": 64,
+            "Height": 34,
+            "VAlign": "Center",
+            "For": "SpnMargin"
+          }
+        },
+        {
+          "type": "SpinBox",
+          "name": "SpnMargin",
+          "properties": {
+            "Width": 90,
+            "Height": 34,
+            "Min": 0,
+            "Max": 300,
+            "Step": 4
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblHint",
+          "properties": {
+            "Text": "Click a band or an element to edit it; drag an element to move it.",
+            "HAlign": "Fill",
+            "Height": 34,
+            "VAlign": "Center",
+            "Style": "dim-label"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "Body",
+      "properties": {
+        "X": 12,
+        "Y": 54,
+        "Width": 976,
+        "Height": 650,
+        "Arrangement": "Horizontal",
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "Panel",
+          "name": "BandsPanel",
+          "properties": {
+            "Width": 200,
+            "Height": 650,
+            "Arrangement": "Vertical",
+            "Spacing": 6
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblBands",
+              "properties": {
+                "Text": "Bands",
+                "Width": 200,
+                "Height": 24,
+                "Style": "heading"
+              }
+            },
+            {
+              "type": "ListBox",
+              "name": "BandList",
+              "properties": {
+                "Width": 200,
+                "Height": 280,
+                "Expand": true
+              }
+            },
+            {
+              "type": "Panel",
+              "name": "BandAddRow",
+              "properties": {
+                "Width": 200,
+                "Height": 34,
+                "Arrangement": "Horizontal",
+                "Spacing": 4
+              },
+              "children": [
+                {
+                  "type": "ComboBox",
+                  "name": "CmbBandAdd",
+                  "properties": {
+                    "Width": 128,
+                    "Height": 34,
+                    "AccessibleName": "Band to add"
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnBandAdd",
+                  "properties": {
+                    "Text": "Add",
+                    "Width": 68,
+                    "Height": 34
+                  }
+                }
+              ]
+            },
+            {
+              "type": "Button",
+              "name": "BtnBandDel",
+              "properties": {
+                "Text": "Remove band",
+                "Width": 200,
+                "Height": 32
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblGroup",
+              "properties": {
+                "Text": "Group by field",
+                "Width": 200,
+                "Height": 22,
+                "VAlign": "End",
+                "For": "TxtGroup"
+              }
+            },
+            {
+              "type": "Panel",
+              "name": "GroupAddRow",
+              "properties": {
+                "Width": 200,
+                "Height": 34,
+                "Arrangement": "Horizontal",
+                "Spacing": 4
+              },
+              "children": [
+                {
+                  "type": "TextBox",
+                  "name": "TxtGroup",
+                  "properties": {
+                    "Width": 128,
+                    "Height": 34,
+                    "AccessibleName": "Group by field"
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnGroupAdd",
+                  "properties": {
+                    "Text": "Add",
+                    "Width": 68,
+                    "Height": 34
+                  }
+                }
+              ]
+            },
+            {
+              "type": "Button",
+              "name": "BtnGroupDel",
+              "properties": {
+                "Text": "Remove group",
+                "Width": 200,
+                "Height": 32
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblBandHint",
+              "properties": {
+                "Text": "Drag an element on the page. Drag a band's bottom edge to make it taller.",
+                "HAlign": "Fill",
+                "Height": 70,
+                "VAlign": "Start",
+                "Wrap": true,
+                "Style": "dim-label"
+              }
+            }
+          ]
+        },
+        {
+          "type": "Scroller",
+          "name": "SheetScroll",
+          "properties": {
+            "Width": 480,
+            "Height": 650,
+            "HAlign": "Fill",
+            "VAlign": "Fill",
+            "Expand": true
+          },
+          "children": [
+            {
+              "type": "DrawingArea",
+              "name": "Sheet",
+              "properties": {
+                "Width": 476,
+                "Height": 674,
+                "HAlign": "Start",
+                "VAlign": "Start"
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "PropsPanel",
+          "properties": {
+            "Width": 280,
+            "Height": 650,
+            "Arrangement": "Vertical",
+            "Spacing": 6
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblProps",
+              "properties": {
+                "Text": "Properties",
+                "Width": 280,
+                "Height": 24,
+                "Style": "heading"
+              }
+            },
+            {
+              "type": "Scroller",
+              "name": "PropsScroll",
+              "properties": {
+                "Width": 280,
+                "Height": 540,
+                "HAlign": "Fill",
+                "VAlign": "Fill",
+                "Expand": true
+              },
+              "children": [
+                {
+                  "type": "Panel",
+                  "name": "Props",
+                  "properties": {
+                    "Width": 280,
+                    "Height": 540,
+                    "Arrangement": "Vertical",
+                    "Spacing": 4,
+                    "HAlign": "Start",
+                    "VAlign": "Start"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "Panel",
+              "name": "AddRow",
+              "properties": {
+                "Width": 280,
+                "Height": 34,
+                "Arrangement": "Horizontal",
+                "Spacing": 4
+              },
+              "children": [
+                {
+                  "type": "ComboBox",
+                  "name": "CmbAddKind",
+                  "properties": {
+                    "Width": 110,
+                    "Height": 34,
+                    "AccessibleName": "Element kind"
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnAdd",
+                  "properties": {
+                    "Text": "Add",
+                    "Width": 64,
+                    "Height": 34
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnDelete",
+                  "properties": {
+                    "Text": "Delete",
+                    "Width": 90,
+                    "Height": 34
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "Button",
+      "name": "BtnCancel",
+      "properties": {
+        "X": 790,
+        "Y": 714,
+        "Width": 90,
+        "Height": 34,
+        "Text": "Cancel",
+        "Cancel": true
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnOk",
+      "properties": {
+        "X": 890,
+        "Y": 714,
+        "Width": 86,
+        "Height": 34,
+        "Text": "OK",
+        "Default": true,
+        "Style": "suggested-action"
+      }
+    }
+  ]
+}
