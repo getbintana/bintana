@@ -11,10 +11,11 @@
  *
  * **The division is the same one `Chart` argues for**, and it is the whole of
  * the idea: the *shape* of the report -- the bands, their heights, what sits in
- * each -- is data, and the *numbers* are handed over. This example writes the
- * shape in `sections()` as the fallback; **a `Sections` designed into the
- * `.form` wins**, and the IDE's report designer is where that one is made. The
- * shipped form carries none, so the example runs exactly as it always has.
+ * each -- lives in `ReportForm.form`, where the IDE's report designer draws and
+ * edits it, and the *numbers* are handed over by this file. **Double-click the
+ * `Report` in the IDE and the bands are the ones that print.** The code below
+ * sorts the rows, sets `Data`, and fills the two values that are not design:
+ * today's date (`@Today`) and the translated labels.
  *
  * **Two group levels nest: `Groups` is an ordered list, outermost first.**
  * The report groups by `Category` and then by `Client`, so a row changes level 0
@@ -57,161 +58,40 @@ class ReportForm extends Form {
         const rows = [...ORDERS].sort((a, b) =>
             Locale.Compare(a.Category, b.Category) || Locale.Compare(a.Client, b.Client));
 
-        /* A shape designed in the IDE lives in `ReportForm.form`; when it is
-         * there, it is the report. The code below is the example's own
-         * fallback, for the form as shipped. */
-        if (Dictionary.Keys(this.Report.Sections || {}).length === 0)
-            this.Report.Sections = this.sections();
-
+        this.localize();
         this.Report.Data = rows;
         this.showPage();
     }
 
-    /* ------------------------------------------------------------ the report
+    /*
+     * The two things the designer cannot know: today's date and the catalogue's
+     * words. `@Today` is the marker the form carries where the date goes; every
+     * other `Text` is looked up, so the English the designer wrote is the key
+     * and the catalogue is the language.
      *
-     * Coordinates are in points, relative to the content area's top-left (the
-     * sheet is A4 portrait, 595pt wide, minus a 40pt margin each side -- so 515
-     * across). Three columns: the date, the description, and the amount,
-     * right-aligned against the far edge.
+     * **It mutates the designed `Sections`, and that is on purpose.** The shape
+     * is the form's; this only fills the values that change between runs.
      */
-    sections() {
-        const column = { Date: 0, What: 90, Amount: 430 };
-        const shade  = "rgba(0,0,0,0.06)";
+    localize() {
+        const sec = this.Report.Sections;
 
-        return {
-            /* **The masthead, which is the one thing a report always has.**
-             * `File` is relative to the project, and one of `Width`/`Height` is
-             * enough -- the other follows the picture's own proportions, so the
-             * declaration says how tall the logo should be and not what shape
-             * the file happens to be. */
-            ReportHeader: {
-                Height: 64,
-                Elements: [
-                    { Kind: "Image", File: "logo.png", X: 0, Y: 0, Height: 44 },
-                    { Kind: "Text", Text: "Statement of account",
-                      X: 56, Y: 2, Font: "Bold 18" },
-                    { Kind: "Text", Text: Locale.Date(Day.Today, "Date"),
-                      X: 56, Y: 28 },
-                    { Kind: "Line", X1: 0, Y1: 58, X2: 515, Y2: 58 },
-                ],
-            },
-
-            PageHeader: {
-                Height: 24,
-                Elements: [
-                    { Kind: "Text", Text: Locale.Text("Date"), X: column.Date, Y: 2, Font: "Bold 10" },
-                    { Kind: "Text", Text: Locale.Text("Description"), X: column.What, Y: 2, Font: "Bold 10" },
-                    { Kind: "Text", Text: Locale.Text("Amount"), X: column.Amount, Y: 2, Width: 85,
-                      Align: "Right", Font: "Bold 10" },
-                    { Kind: "Line", X1: 0, Y1: 22, X2: 515, Y2: 22 },
-                ],
-            },
-
-            /* **The groups, outermost first.** A band's `Field` naming its own
-             * key resolves to the group's value -- the client's name in its
-             * header, the category's in its footer -- exactly as it would in a
-             * detail row. A `Total` in a footer totals that group's rows. */
-            Groups: [
-                {
-                    On: "Category",
-                    Header: {
-                        Height: 28,
-                        Elements: [
-                            /* The value alone, no "Category" label: a label beside
-                             * a fixed-position value is the overlap a translation
-                             * makes (measured: "Categoría" is 60pt, "Kategorie" 61,
-                             * and the value sat at 60). The thick rule above is
-                             * what marks the outer level, and the two points of
-                             * air above the value keep it off it. */
-                            { Kind: "Field", Field: "Category", X: 0, Y: 4, Font: "Bold 12" },
-                            { Kind: "Line", X1: 0, Y1: 26, X2: 515, Y2: 26, Thickness: 2 },
-                        ],
-                    },
-                    Footer: {
-                        Height: 28,
-                        Elements: [
-                            { Kind: "Text", Text: Locale.Text("Category total"), X: 310, Y: 10,
-                              Width: 115, Align: "Right", Font: "Bold 10" },
-                            { Kind: "Total", Field: "Amount", Op: "Sum", Format: "Money",
-                              X: column.Amount, Y: 10, Width: 85, Align: "Right", Font: "Bold 10" },
-                            { Kind: "Total", Field: "What", Op: "Count", X: 8, Y: 10 },
-                            { Kind: "Text", Text: Locale.Text("orders"), X: 48, Y: 10 },
-                        ],
-                    },
-                },
-                {
-                    On: "Client",
-                    Header: {
-                        Height: 24,
-                        Elements: [
-                            { Kind: "Box", X: 0, Y: 2, Width: 515, Height: 20, Fill: true, Color: shade },
-                            { Kind: "Field", Field: "Client", X: 8, Y: 4, Font: "Bold 11" },
-                        ],
-                    },
-                    Footer: {
-                        Height: 26,
-                        Elements: [
-                            { Kind: "Line", X1: 0, Y1: 4, X2: 515, Y2: 4 },
-                            { Kind: "Text", Text: Locale.Text("Subtotal"), X: 350, Y: 8, Width: 75,
-                              Align: "Right" },
-                            { Kind: "Total", Field: "Amount", Op: "Sum", Format: "Money",
-                              X: column.Amount, Y: 8, Width: 85, Align: "Right", Font: "Bold 10" },
-                        ],
-                    },
-                },
-            ],
-
-            /* **The row grows with its description.** `Height: "Auto"` measures
-             * the elements this row will actually draw and takes the lowest
-             * bottom, `Padding` below it -- so the order whose description takes
-             * three lines is three lines tall and the fourteen that take one are
-             * not. A declared height would have had to be the tallest of them,
-             * everywhere, or cut the long one off. */
-            Detail: {
-                Height: "Auto",
-                Padding: 6,
-                Elements: [
-                    { Kind: "Field", Field: "Placed", Format: "Date", X: column.Date, Y: 2, Width: 80 },
-                    { Kind: "Field", Field: "What", X: column.What, Y: 2, Width: 300, Wrap: true },
-                    { Kind: "Field", Field: "Amount", Format: "Money", X: column.Amount, Y: 2,
-                      Width: 85, Align: "Right" },
-                ],
-            },
-
-            PageFooter: {
-                Height: 24,
-                Elements: [
-                    { Kind: "Line", X1: 0, Y1: 2, X2: 515, Y2: 2 },
-                    { Kind: "Text",  Text: Locale.Text("Page"), X: 0, Y: 8 },
-                    { Kind: "Field", Field: "@Page",  X: 42, Y: 8 },
-                    { Kind: "Text",  Text: Locale.Text("of"), X: 58, Y: 8 },
-                    { Kind: "Field", Field: "@Pages", X: 76, Y: 8 },
-                ],
-            },
-
-            /* **The grand total gets a wider box than the column.** The amount
-             * column is 85pt, which fits a subtotal at Bold 10 and *not*
-             * `$ 1.606.235,75` at Bold 12 -- measured: it needs about 98, and
-             * a right-aligned run that does not fit grows to the left, over its
-             * own label. So the total starts where its label ends and the label
-             * moves left with it. Nothing warns about this: an element's `Width`
-             * is what `Align` measures against, not a box it is kept inside. */
-            ReportFooter: {
-                Height: 44,
-                Elements: [
-                    { Kind: "Line", X1: 0, Y1: 6, X2: 515, Y2: 6, Thickness: 2 },
-                    { Kind: "Text", Text: Locale.Text("Total"), X: 265, Y: 14, Width: 110,
-                      Align: "Right", Font: "Bold 12" },
-                    { Kind: "Total", Field: "Amount", Op: "Sum", Format: "Money", X: 385,
-                      Y: 14, Width: 130, Align: "Right", Font: "Bold 12" },
-                    { Kind: "Total", Field: "What", Op: "Count", X: 8, Y: 16, Font: "Bold 11" },
-                    { Kind: "Text", Text: Locale.Text("orders"), X: 48, Y: 16 },
-                ],
-            },
+        const band = (b) => {
+            for (const el of (b && b.Elements) || []) {
+                if (el.Kind !== "Text" || !el.Text) continue;
+                el.Text = el.Text === "@Today"
+                    ? Locale.Date(Day.Today, "Date")
+                    : Locale.Text(el.Text);
+            }
         };
-    }
 
-    /* ------------------------------------------------------------ the chrome */
+        for (const name of ["ReportHeader", "PageHeader", "Detail",
+                            "PageFooter", "ReportFooter"])
+            band(sec[name]);
+        for (const g of sec.Groups || []) {
+            band(g.Header);
+            band(g.Footer);
+        }
+    }
 
     showPage() {
         this.LblPage.Text = Locale.Text("Page {0} of {1}",

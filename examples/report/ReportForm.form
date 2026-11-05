@@ -33,7 +33,311 @@
               "name": "Report",
               "properties": {
                 "Expand": true,
-                "Margin": 8
+                "Margin": 8,
+                "Paper": "A4",
+                "Orientation": "Portrait",
+                "Margins": 40,
+                "Sections": {
+                  "ReportHeader": {
+                    "Height": 64,
+                    "Elements": [
+                      {
+                        "Kind": "Image",
+                        "File": "logo.png",
+                        "X": 0,
+                        "Y": 0,
+                        "Height": 44
+                      },
+                      {
+                        "Kind": "Text",
+                        "Text": "Statement of account",
+                        "X": 56,
+                        "Y": 2,
+                        "Font": "Bold 18"
+                      },
+                      {
+                        "Kind": "Text",
+                        "Text": "@Today",
+                        "X": 56,
+                        "Y": 28
+                      },
+                      {
+                        "Kind": "Line",
+                        "X1": 0,
+                        "Y1": 58,
+                        "X2": 515,
+                        "Y2": 58
+                      }
+                    ]
+                  },
+                  "PageHeader": {
+                    "Height": 24,
+                    "Elements": [
+                      {
+                        "Kind": "Text",
+                        "Text": "Date",
+                        "X": 0,
+                        "Y": 2,
+                        "Font": "Bold 10"
+                      },
+                      {
+                        "Kind": "Text",
+                        "Text": "Description",
+                        "X": 90,
+                        "Y": 2,
+                        "Font": "Bold 10"
+                      },
+                      {
+                        "Kind": "Text",
+                        "Text": "Amount",
+                        "X": 430,
+                        "Y": 2,
+                        "Width": 85,
+                        "Align": "Right",
+                        "Font": "Bold 10"
+                      },
+                      {
+                        "Kind": "Line",
+                        "X1": 0,
+                        "Y1": 22,
+                        "X2": 515,
+                        "Y2": 22
+                      }
+                    ]
+                  },
+                  "Groups": [
+                    {
+                      "On": "Category",
+                      "Header": {
+                        "Height": 28,
+                        "Elements": [
+                          {
+                            "Kind": "Field",
+                            "Field": "Category",
+                            "X": 0,
+                            "Y": 4,
+                            "Font": "Bold 12"
+                          },
+                          {
+                            "Kind": "Line",
+                            "X1": 0,
+                            "Y1": 26,
+                            "X2": 515,
+                            "Y2": 26,
+                            "Thickness": 2
+                          }
+                        ]
+                      },
+                      "Footer": {
+                        "Height": 28,
+                        "Elements": [
+                          {
+                            "Kind": "Text",
+                            "Text": "Category total",
+                            "X": 310,
+                            "Y": 10,
+                            "Width": 115,
+                            "Align": "Right",
+                            "Font": "Bold 10"
+                          },
+                          {
+                            "Kind": "Total",
+                            "Field": "Amount",
+                            "Op": "Sum",
+                            "Format": "Money",
+                            "X": 430,
+                            "Y": 10,
+                            "Width": 85,
+                            "Align": "Right",
+                            "Font": "Bold 10"
+                          },
+                          {
+                            "Kind": "Total",
+                            "Field": "What",
+                            "Op": "Count",
+                            "X": 8,
+                            "Y": 10
+                          },
+                          {
+                            "Kind": "Text",
+                            "Text": "orders",
+                            "X": 48,
+                            "Y": 10
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "On": "Client",
+                      "Header": {
+                        "Height": 24,
+                        "Elements": [
+                          {
+                            "Kind": "Box",
+                            "X": 0,
+                            "Y": 2,
+                            "Width": 515,
+                            "Height": 20,
+                            "Fill": true,
+                            "Color": "rgba(0,0,0,0.06)"
+                          },
+                          {
+                            "Kind": "Field",
+                            "Field": "Client",
+                            "X": 8,
+                            "Y": 4,
+                            "Font": "Bold 11"
+                          }
+                        ]
+                      },
+                      "Footer": {
+                        "Height": 26,
+                        "Elements": [
+                          {
+                            "Kind": "Line",
+                            "X1": 0,
+                            "Y1": 4,
+                            "X2": 515,
+                            "Y2": 4
+                          },
+                          {
+                            "Kind": "Text",
+                            "Text": "Subtotal",
+                            "X": 350,
+                            "Y": 8,
+                            "Width": 75,
+                            "Align": "Right"
+                          },
+                          {
+                            "Kind": "Total",
+                            "Field": "Amount",
+                            "Op": "Sum",
+                            "Format": "Money",
+                            "X": 430,
+                            "Y": 8,
+                            "Width": 85,
+                            "Align": "Right",
+                            "Font": "Bold 10"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "Detail": {
+                    "Height": "Auto",
+                    "Padding": 6,
+                    "Elements": [
+                      {
+                        "Kind": "Field",
+                        "Field": "Placed",
+                        "Format": "Date",
+                        "X": 0,
+                        "Y": 2,
+                        "Width": 80
+                      },
+                      {
+                        "Kind": "Field",
+                        "Field": "What",
+                        "X": 90,
+                        "Y": 2,
+                        "Width": 300,
+                        "Wrap": true
+                      },
+                      {
+                        "Kind": "Field",
+                        "Field": "Amount",
+                        "Format": "Money",
+                        "X": 430,
+                        "Y": 2,
+                        "Width": 85,
+                        "Align": "Right"
+                      }
+                    ]
+                  },
+                  "PageFooter": {
+                    "Height": 24,
+                    "Elements": [
+                      {
+                        "Kind": "Line",
+                        "X1": 0,
+                        "Y1": 2,
+                        "X2": 515,
+                        "Y2": 2
+                      },
+                      {
+                        "Kind": "Text",
+                        "Text": "Page",
+                        "X": 0,
+                        "Y": 8
+                      },
+                      {
+                        "Kind": "Field",
+                        "Field": "@Page",
+                        "X": 42,
+                        "Y": 8
+                      },
+                      {
+                        "Kind": "Text",
+                        "Text": "of",
+                        "X": 58,
+                        "Y": 8
+                      },
+                      {
+                        "Kind": "Field",
+                        "Field": "@Pages",
+                        "X": 76,
+                        "Y": 8
+                      }
+                    ]
+                  },
+                  "ReportFooter": {
+                    "Height": 44,
+                    "Elements": [
+                      {
+                        "Kind": "Line",
+                        "X1": 0,
+                        "Y1": 6,
+                        "X2": 515,
+                        "Y2": 6,
+                        "Thickness": 2
+                      },
+                      {
+                        "Kind": "Text",
+                        "Text": "Total",
+                        "X": 265,
+                        "Y": 14,
+                        "Width": 110,
+                        "Align": "Right",
+                        "Font": "Bold 12"
+                      },
+                      {
+                        "Kind": "Total",
+                        "Field": "Amount",
+                        "Op": "Sum",
+                        "Format": "Money",
+                        "X": 385,
+                        "Y": 14,
+                        "Width": 130,
+                        "Align": "Right",
+                        "Font": "Bold 12"
+                      },
+                      {
+                        "Kind": "Total",
+                        "Field": "What",
+                        "Op": "Count",
+                        "X": 8,
+                        "Y": 16,
+                        "Font": "Bold 11"
+                      },
+                      {
+                        "Kind": "Text",
+                        "Text": "orders",
+                        "X": 48,
+                        "Y": 16
+                      }
+                    ]
+                  }
+                }
               }
             }
           ]
