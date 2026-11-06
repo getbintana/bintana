@@ -507,10 +507,9 @@ static void detach(JSContext *ctx)
     if (dbg.breaks)
         g_ptr_array_set_size(dbg.breaks, 0);
     g_rec_mutex_unlock(&breaks_lock);
-    /* The watched fields are the main context's objects: a worker that found
-     * the IDE gone leaves them to the main thread, which finds it gone too. */
-    if (ctx == dbg.ctx)
-        unwatch_all(ctx);
+    /* This thread's own watches; another thread's are its own to put back,
+     * which it does when it finds the IDE gone too, or as its worker ends. */
+    unwatch_all(ctx);
     if (dbg.stop_on_throw) {
         dbg.stop_on_throw = false;
         JS_DebugStopOnThrow(JS_GetRuntime(ctx), false);
@@ -1096,9 +1095,20 @@ typedef struct {
     JSAtom  name;
     int     flags;      /* the data property's own, to put back */
     JSValue cell;       /* held: [value], shared by the getter and the setter */
+    /*
+     * The context the object lives in: the main one, or a `Task` worker's.
+     * **A runtime's values are touched only from its own thread**, so a watch
+     * is put back by the thread that owns it -- and one taken off from another
+     * thread (the IDE stopped in the window, unwatching a task's field) is
+     * marked `dead`: its setter stops nothing from then on, and the owner puts
+     * the data property back at its next stop or as its worker ends.
+     */
+    JSContext *ctx;
+    bool       dead;
 } BtaWatch;
 
 static GPtrArray *watches;   /* BtaWatch*, only while there are any */
+static GMutex     watches_lock;
 
 static void wait_for_orders(JSContext *ctx, int depth_now);
 
@@ -1137,23 +1147,31 @@ static JSValue watch_set(JSContext *ctx, JSValueConst this_val, int argc,
 
     /* The debugger's own writes -- `set`, an immediate -- are not the program
      * changing it, and a detached debugger stops nothing. */
-    if (changed && !here.evaluating && dbg.attached) {
+    char *text = NULL;
+    bool  live = false;
+
+    JS_ToInt32(ctx, &id, data[1]);
+    g_mutex_lock(&watches_lock);
+    for (guint i = 0; watches && i < watches->len; i++) {
+        BtaWatch *w = g_ptr_array_index(watches, i);
+        if (w->id == id && w->ctx == ctx && !w->dead) {
+            text = g_strdup(w->text);
+            live = true;
+        }
+    }
+    g_mutex_unlock(&watches_lock);
+
+    if (changed && live && !here.evaluating && dbg.attached) {
         JSValue event = JS_NewObject(ctx);
         char   *was   = render(ctx, old);
         char   *now   = render(ctx, value);
-        const char *text = NULL;
-
-        JS_ToInt32(ctx, &id, data[1]);
-        for (guint i = 0; watches && i < watches->len; i++) {
-            BtaWatch *w = g_ptr_array_index(watches, i);
-            if (w->id == id)
-                text = w->text;
-        }
 
         JS_SetPropertyStr(ctx, event, "event", JS_NewString(ctx, "stopped"));
         JS_SetPropertyStr(ctx, event, "reason", JS_NewString(ctx, "watch"));
         JS_SetPropertyStr(ctx, event, "id", JS_NewInt32(ctx, id));
         JS_SetPropertyStr(ctx, event, "text", JS_NewString(ctx, text ? text : ""));
+        if (here.name)
+            JS_SetPropertyStr(ctx, event, "thread", JS_NewString(ctx, here.name));
         JS_SetPropertyStr(ctx, event, "old", JS_NewString(ctx, was));
         JS_SetPropertyStr(ctx, event, "new", JS_NewString(ctx, now));
         /* No pc: each frame's own, and frame 0 is the one that assigned --
@@ -1168,6 +1186,7 @@ static JSValue watch_set(JSContext *ctx, JSValueConst this_val, int argc,
         wait_for_orders(ctx, JS_DebugDepth(JS_GetRuntime(ctx)));
         g_rec_mutex_unlock(&channel_lock);
     }
+    g_free(text);
     JS_FreeValue(ctx, old);
     return JS_UNDEFINED;
 }
@@ -1186,14 +1205,37 @@ static void unwatch_one(JSContext *ctx, BtaWatch *w)
     g_free(w);
 }
 
+/* This context's watches put back -- every one, or only those marked dead
+ * by another thread. Taken out of the list under its lock and put back
+ * outside it, since putting back runs the engine. */
+static void unwatch_where(JSContext *ctx, bool only_dead)
+{
+    GPtrArray *mine = g_ptr_array_new();
+
+    g_mutex_lock(&watches_lock);
+    for (guint i = 0; watches && i < watches->len; ) {
+        BtaWatch *w = g_ptr_array_index(watches, i);
+        if (w->ctx == ctx && (!only_dead || w->dead)) {
+            g_ptr_array_add(mine, w);
+            g_ptr_array_remove_index(watches, i);
+        } else {
+            i++;
+        }
+    }
+    if (watches && !watches->len) {
+        g_ptr_array_free(watches, TRUE);
+        watches = NULL;
+    }
+    g_mutex_unlock(&watches_lock);
+
+    for (guint i = 0; i < mine->len; i++)
+        unwatch_one(ctx, g_ptr_array_index(mine, i));
+    g_ptr_array_free(mine, TRUE);
+}
+
 static void unwatch_all(JSContext *ctx)
 {
-    if (!watches)
-        return;
-    for (guint i = 0; i < watches->len; i++)
-        unwatch_one(ctx, g_ptr_array_index(watches, i));
-    g_ptr_array_free(watches, TRUE);
-    watches = NULL;
+    unwatch_where(ctx, false);
 }
 
 static void say_watch(JSContext *ctx, int id, const char *text, const char *why)
@@ -1244,11 +1286,14 @@ static void watch_field(JSContext *ctx, int id, int frame, const char *owner,
 
     /* Asked first: a field already watched is a getter by now. */
     const char *why = NULL;
+    g_mutex_lock(&watches_lock);
     for (guint i = 0; watches && i < watches->len; i++) {
         BtaWatch *w = g_ptr_array_index(watches, i);
-        if (w->name == atom && JS_IsSameValue(ctx, w->owner, obj))
+        if (w->ctx == ctx && !w->dead && w->name == atom &&
+            JS_IsSameValue(ctx, w->owner, obj))
             why = "it is already watched";
     }
+    g_mutex_unlock(&watches_lock);
     if (!why)
         why = has <= 0 ? "it is not a field of that object's own"
             : (desc.flags & JS_PROP_GETSET) ? "it is a getter, not a value"
@@ -1287,9 +1332,12 @@ static void watch_field(JSContext *ctx, int id, int frame, const char *owner,
         w->flags = desc.flags & (JS_PROP_CONFIGURABLE | JS_PROP_WRITABLE |
                                  JS_PROP_ENUMERABLE);
         w->cell  = cell;                      /* the array's own reference */
+        w->ctx   = ctx;
+        g_mutex_lock(&watches_lock);
         if (!watches)
             watches = g_ptr_array_new();
         g_ptr_array_add(watches, w);
+        g_mutex_unlock(&watches_lock);
         say_watch(ctx, id, text, NULL);
     }
 
@@ -1305,15 +1353,25 @@ static void watch_field(JSContext *ctx, int id, int frame, const char *owner,
 
 static void unwatch_id(JSContext *ctx, int id)
 {
+    BtaWatch *mine = NULL;
+
+    g_mutex_lock(&watches_lock);
     for (guint i = 0; watches && i < watches->len; i++) {
         BtaWatch *w = g_ptr_array_index(watches, i);
 
-        if (w->id == id) {
+        if (w->id != id || w->dead)
+            continue;
+        if (w->ctx == ctx) {
+            mine = w;
             g_ptr_array_remove_index(watches, i);
-            unwatch_one(ctx, w);
-            return;
+        } else {
+            w->dead = true;     /* its own thread puts it back */
         }
+        break;
     }
+    g_mutex_unlock(&watches_lock);
+    if (mine)
+        unwatch_one(ctx, mine);
 }
 
 /* ------------------------------------------------------- reading commands */
@@ -1611,16 +1669,10 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
 
         JS_ToInt32(ctx, &id, iv);
         JS_ToInt32(ctx, &frame, fv);
-        /* A field of a worker's object lives in the worker's runtime, which
-         * ends with the task -- and the cell a watch holds from C would end
-         * with it, mid-watch. Refused, with the reason, until that is built. */
-        if (owner && name && ctx != dbg.ctx) {
-            char *text = g_strdup_printf("%s.%s", owner, name);
-            say_watch(ctx, id, text, "a field cannot be watched inside a Task yet");
-            g_free(text);
-        } else if (owner && name) {
+        /* In a `Task` too: the watch is the worker's, put back by its thread
+         * at the latest as the worker ends (`bta_debug_worker_done`). */
+        if (owner && name)
             watch_field(ctx, id, frame, owner, name);
-        }
         JS_FreeCString(ctx, owner);
         JS_FreeCString(ctx, name);
         JS_FreeValue(ctx, nv);
@@ -1702,6 +1754,10 @@ static bool read_order(GString *into)
 static void wait_for_orders(JSContext *ctx, int depth_now)
 {
     GString *order = g_string_new(NULL);
+
+    /* Watches another thread took off while this one ran: put back here,
+     * where their runtime is. */
+    unwatch_where(ctx, true);
 
     for (;;) {
         if (!read_order(order)) {
@@ -2128,9 +2184,11 @@ void bta_debug_worker(JSContext *ctx, const char *name)
 /* That worker's context is going: one fewer to take the lock for. */
 void bta_debug_worker_done(JSContext *ctx)
 {
-    (void)ctx;
     if (!here.name)
         return;
+    /* Every watch on the worker's objects put back before its runtime goes:
+     * the cells are held from C, and JS_FreeRuntime aborts on anything left. */
+    unwatch_all(ctx);
     here.name = NULL;
     here.ctx  = NULL;
     g_atomic_int_add(&debug_workers, -1);

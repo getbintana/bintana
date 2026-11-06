@@ -682,6 +682,10 @@ const TESTS = [
     "DebuggerTask",
     /* Async: Pause reaching a Task while the window is idle. */
     "DebuggerTaskPause",
+    /* Async: a field of a Task's object watched, and left armed as it ends. */
+    "DebuggerTaskWatch",
+    /* Async: a Task's watch taken off while the window is the one stopped. */
+    "DebuggerTaskUnwatch",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -31814,6 +31818,9 @@ class PQ extends Form {
                         send({ do: "watch", id: 9, frame: 0, owner: "msg", name: "n" });
                     } else if (kind === "watch") {
                         watched = msg;
+                        /* Armed on the worker's object, and taken off again:
+                         * it is the worker's to put back, on its thread. */
+                        send({ do: "unwatch", id: 9 });
                         send({ do: "step", kind: "over" });
                     }
                 },
@@ -31829,9 +31836,8 @@ class PQ extends Form {
                 eq("its locals are the worker's", locals,
                    "msg={ n: 4 } total=1 i=2 this={ Cancellable: {…} }");
                 eq("...and an expression is answered in its frame", evaluated, "3");
-                eq("a field of the worker cannot be watched yet, and says so",
-                   watched && `${watched.armed} ${watched.why}`,
-                   "false a field cannot be watched inside a Task yet");
+                eq("a field of the worker's object can be watched",
+                   watched && `${watched.armed} ${watched.text}`, "true msg.n");
             });
     }
 
@@ -31895,6 +31901,159 @@ class PQ extends Form {
                 eq("a spinning task paused and let go finishes", code, 0);
                 eq("Pause reached the task while the window was idle", stops.join(" "), "Spin:pause");
                 eq("...and a value changed there ended its loop", out.join(""), "done true");
+            });
+    }
+
+    /*
+     * A data breakpoint on a `Task`'s own object: armed where the worker
+     * stands, it stops the worker inside each assignment, on its thread. Left
+     * armed as the task ends, it is put back by the worker before its runtime
+     * goes -- the cells are held from C, and JS_FreeRuntime aborts on anything
+     * left, so a clean exit is the assertion.
+     */
+    testDebuggerTaskWatch() {
+        const proj = File.Join(SCRATCH, "dbgtaskwatch");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbgtaskwatch", main: "Main", sources: ["Acc.js", "Main.js"] }));
+        File.Save(File.Join(proj, "Acc.js"),
+                  '"use strict";\n' +                                  /* 1 */
+                  'class Acc extends Task {\n' +                       /* 2 */
+                  '    Run(msg) {\n' +                                 /* 3 */
+                  '        const box = { total: 0 };\n' +              /* 4 */
+                  '        for (let i = 1; i <= 3; i++) {\n' +         /* 5 */
+                  '            box.total += i;\n' +                    /* 6 */
+                  '        }\n' +                                      /* 7 */
+                  '        return box.total;\n' +                      /* 8 */
+                  '    }\n' +                                          /* 9 */
+                  '}\n');
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +
+                  'function Main() {\n' +
+                  '    const t = new Acc();\n' +
+                  '    t.Done = (r) => { print(`total ${r}`); Application.Quit(0); };\n' +
+                  '    t.Error = (m) => { print(`error ${m}`); Application.Quit(1); };\n' +
+                  '    t.Start({});\n' +
+                  '}\n');
+
+        const changes = [];
+        const out     = [];
+        let   armed   = null;
+        const send    = (o) => job.Write(JSON.stringify(o));
+
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+                    if (kind === "ready") {
+                        send({ do: "break", file: "Acc.js", line: 6, id: 1, hits: "== 1" });
+                        send({ do: "continue" });
+                    } else if (kind === "stopped" && msg.reason === "breakpoint") {
+                        send({ do: "watch", id: 7, frame: 0, owner: "box", name: "total" });
+                    } else if (kind === "watch") {
+                        armed = msg;
+                        send({ do: "continue" });
+                    } else if (kind === "stopped" && msg.reason === "watch") {
+                        changes.push(`${msg.thread}:${msg.frames[0].Line}:${msg.old}->${msg.new}`);
+                        send({ do: "continue" });
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                waiting--;
+                eq("a task's field is watched where the worker stands",
+                   armed && `${armed.armed} ${armed.text}`, "true box.total");
+                eq("each change stops the worker inside the assignment, on its thread",
+                   changes.join(" "), "Acc:6:0->1 Acc:6:1->3 Acc:6:3->6");
+                eq("left armed as the task ends, it is put back and the program ends cleanly",
+                   `${code} ${out.join("")}`, "0 total 6");
+            });
+    }
+
+    /*
+     * A task's watch taken off from another thread: the IDE is stopped in the
+     * window and unwatches a field of the worker's. The window's thread cannot
+     * touch the worker's runtime, so it marks the watch dead -- its setter
+     * stops nothing from then on -- and the worker puts it back as it ends.
+     * The change the worker makes afterwards is the assertion: no stop.
+     */
+    testDebuggerTaskUnwatch() {
+        const proj = File.Join(SCRATCH, "dbgtaskunwatch");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbgtaskunwatch", main: "Main", sources: ["Spin.js", "Main.js"] }));
+        File.Save(File.Join(proj, "Spin.js"),
+                  '"use strict";\n' +                                              /* 1 */
+                  'class Spin extends Task {\n' +                                  /* 2 */
+                  '    Run(msg) {\n' +                                             /* 3 */
+                  '        const box = { total: 0 };\n' +                          /* 4 */
+                  '        for (let i = 0; i < msg.n; i++) {\n' +                  /* 5 */
+                  '            box.total += i === msg.n - 1 ? 1 : 0;\n' +          /* 6 */
+                  '        }\n' +                                                  /* 7 */
+                  '        return box.total;\n' +                                  /* 8 */
+                  '    }\n' +                                                      /* 9 */
+                  '}\n');
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +                                              /* 1 */
+                  'function tick() {\n' +                                          /* 2 */
+                  '    return 1;\n' +                                              /* 3 */
+                  '}\n' +                                                          /* 4 */
+                  'function Main() {\n' +                                          /* 5 */
+                  '    const timer = Timer.Every(20, () => tick());\n' +           /* 6 */
+                  '    const t = new Spin();\n' +
+                  '    t.Done = (r) => { timer.Stop(); print(`total ${r}`); Application.Quit(0); };\n' +
+                  '    t.Error = (m) => { print(`error ${m}`); Application.Quit(1); };\n' +
+                  '    t.Start({ n: 4000000 });\n' +
+                  '}\n');
+
+        const stops = [];
+        const out   = [];
+        const send  = (o) => job.Write(JSON.stringify(o));
+
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 30000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+                    if (kind === "ready") {
+                        send({ do: "break", file: "Spin.js", line: 6, id: 1, hits: "== 1" });
+                        send({ do: "continue" });
+                    } else if (kind === "stopped") {
+                        stops.push(`${msg.thread || "main"}:${msg.reason}`);
+                        if (msg.reason === "breakpoint" && msg.thread) {
+                            /* In the worker: watch its field, and arm the
+                             * window's own breakpoint for its next tick. */
+                            send({ do: "clear", id: 1 });
+                            send({ do: "watch", id: 7, frame: 0, owner: "box", name: "total" });
+                            send({ do: "break", file: "Main.js", line: 3, id: 2, hits: "== 1" });
+                        } else if (msg.reason === "breakpoint") {
+                            /* In the window, the worker spinning: unwatch its
+                             * field from here, then let the window go. */
+                            send({ do: "unwatch", id: 7 });
+                            send({ do: "continue" });
+                        } else {
+                            send({ do: "continue" });
+                        }
+                    } else if (kind === "watch") {
+                        send({ do: "continue" });
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                waiting--;
+                eq("unwatched from the window, the worker's change stops nothing",
+                   stops.join(" "), "Spin:breakpoint main:breakpoint");
+                eq("...and the worker puts it back as it ends, cleanly",
+                   `${code} ${out.join("")}`, "0 total 1");
             });
     }
 

@@ -188,10 +188,16 @@ press is one stop), and the main loop reads the channel while the window is
 idle (`on_idle_orders`, a watch on stdin) -- before, orders were read only from
 the hook, so a press while the window waited for a click never arrived, which
 is exactly when a spinning task is paused (`testDebuggerTaskPause`, red
-without the watch). One thing is the main thread's alone, and said: **a data
-breakpoint** -- a worker's object dies with its runtime, and the cell a watch
-holds from C with it, so `watch` inside a task answers `armed: false` and why.
-`stopOnThrow` reaches a worker started after it was said, not one running.
+without the watch). **A data breakpoint works on a task's object too**: each
+watch remembers its context, and a runtime's values are touched only from its
+own thread -- so a watch taken off from another thread (the IDE stopped in the
+window) is marked dead, its setter stops nothing, and its owner puts the data
+property back at its next stop; and a worker puts every one of its watches
+back as it ends, before its runtime goes, since `JS_FreeRuntime` aborts on a
+cell held from C (`testDebuggerTaskWatch` ends a task with one armed, and goes
+red -- an abort -- without that; `testDebuggerTaskUnwatch` takes one off from
+the window). `stopOnThrow` reaches a worker started after it was said, not one
+running.
 
 ## The channel: ours, and minimal
 
