@@ -840,8 +840,32 @@ static void say_locals(JSContext *ctx, int frame)
     if (JS_ToUint32(ctx, &n, lenv))
         n = 0;
     JS_FreeValue(ctx, lenv);
+
+    /*
+     * **`this` once.** A method of a derived class keeps `this` in a local of
+     * that name -- it is in its dead zone until `super()` -- and the frame's
+     * own `this` is reported beside it, so every method of every `extends`
+     * class listed it twice (measured: `this, this` in K2.m2, once in K.m).
+     * The first is kept; a second row of that name is the same value. Only
+     * `this`: two `let x` in two blocks are two variables, and both are shown.
+     */
+    bool     seen_this = false;
+    uint32_t out_n     = 0;
+
     for (i = 0; i < n; i++) {
         JSValue row   = JS_GetPropertyUint32(ctx, raw, i);
+        JSValue name  = JS_GetPropertyStr(ctx, row, "Name");
+        const char *nm = JS_ToCString(ctx, name);
+        bool    is_this = nm && !strcmp(nm, "this");
+
+        JS_FreeCString(ctx, nm);
+        JS_FreeValue(ctx, name);
+        if (is_this && seen_this) {
+            JS_FreeValue(ctx, row);
+            continue;
+        }
+        seen_this = seen_this || is_this;
+
         JSValue value = JS_GetPropertyStr(ctx, row, "Value");
         char   *text  = render(ctx, value);
         JSValue item  = JS_NewObject(ctx);
@@ -852,7 +876,7 @@ static void say_locals(JSContext *ctx, int frame)
                           JS_GetPropertyStr(ctx, row, "Argument"));
         JS_SetPropertyStr(ctx, item, "Children",
                           JS_NewBool(ctx, openable(ctx, value)));
-        JS_SetPropertyUint32(ctx, items, i, item);
+        JS_SetPropertyUint32(ctx, items, out_n++, item);
 
         g_free(text);
         JS_FreeValue(ctx, value);

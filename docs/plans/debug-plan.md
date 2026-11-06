@@ -364,6 +364,12 @@ running it:
   forward. And a breakpoint with nowhere to go is said (`refused`) instead of
   dropped, so the IDE takes the mark off -- it used to stay beside a line that
   would never stop. `testDebuggerBraces` holds all four.
+- **`this` is a local of a derived class's method.** QuickJS keeps it in a
+  variable of that name -- it is in its dead zone until `super()` -- and
+  `JS_DebugLocals` reports the frame's own `this` beside it, so every method of
+  an `extends` class listed `this, this`. `say_locals` keeps the first and drops
+  a second row of that name only; two `let x` in two blocks are two variables.
+  `testDebuggerThis` holds it.
 - **"Have we left this line?" is a question about a frame, not about the
   program.** A single "last line seen" stopped a breakpoint inside a function
   called three times from firing more than once, and then made a line that

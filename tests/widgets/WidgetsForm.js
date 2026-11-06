@@ -676,6 +676,8 @@ const TESTS = [
     "DebuggerBraces",
     /* Async: hit counts, and the count read back. */
     "DebuggerHits",
+    /* Async: `this` once in a derived class's method. */
+    "DebuggerThis",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -31677,6 +31679,60 @@ class PQ extends Form {
                    "5 a hit count is a number, == n, >= n or % n");
                 eq("hits answers every pass so far, the condition's included",
                    (counts || []).map((c) => `${c.id}:${c.hits}`).join(" "), "1:10 2:10 3:10 4:5");
+            });
+    }
+
+    /*
+     * A method of a derived class keeps `this` in a local of that name, and the
+     * frame's own `this` was reported beside it: `this, this` in every method
+     * of every `extends` class. Once now, with the arguments and locals as they
+     * were.
+     */
+    testDebuggerThis() {
+        const proj = File.Join(SCRATCH, "dbgthis");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbgthis", main: "Main", sources: ["Main.js"] }));
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +                                   /* 1 */
+                  'class Base { constructor() { this.v = 1; } }\n' +    /* 2 */
+                  'class Derived extends Base {\n' +                    /* 3 */
+                  '    m(a) {\n' +                                       /* 4 */
+                  '        const b = a + this.v;\n' +                    /* 5 */
+                  '        return b;\n' +                                /* 6 */
+                  '    }\n' +                                            /* 7 */
+                  '}\n' +                                                /* 8 */
+                  'function Main() {\n' +                                /* 9 */
+                  '    new Derived().m(2);\n' +                          /* 10 */
+                  '    Application.Quit(0);\n' +                         /* 11 */
+                  '}\n');
+
+        let names = null;
+        const send = (o) => job.Write(JSON.stringify(o));
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+                    if (kind === "ready") {
+                        send({ do: "break", file: "Main.js", line: 6, id: 1 });
+                        send({ do: "continue" });
+                    } else if (kind === "stopped") {
+                        send({ do: "locals", frame: 0 });
+                    } else if (kind === "locals") {
+                        names = msg.items.map((i) => i.Name).join(", ");
+                        send({ do: "continue" });
+                    }
+                },
+            },
+            () => {},
+            (code) => {
+                waiting--;
+                eq("a derived class's method finishes under the debugger", code, 0);
+                eq("...and lists this once, beside its argument and its local", names, "a, b, this");
             });
     }
 
