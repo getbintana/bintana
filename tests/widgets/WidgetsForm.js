@@ -664,6 +664,7 @@ const TESTS = [
      * of every `/shutdown` endpoint. */
     "HttpServerStop",
     "HttpServerDropped",
+    "HttpServerHold",
     "DebuggerOrders",
     /* Async: the debugger in a module, plain and brought in by an import. */
     "ModulesDebugger",
@@ -27502,6 +27503,142 @@ class Form1 extends Form {
             eq("...and that reference really was the last", srv, null);
             done();
         }, (e) => done(`a server dropped in its handler cut the answer: ${e.Message}`));
+    }
+
+    /*
+     * `req.Hold()`: a request answered after its handler returned -- the route
+     * that has to ask something else first (audit R4). One server, a route per
+     * way a held request can end, each asserted from the client's side, which
+     * is where it matters: what arrives, and with what status.
+     */
+    testHttpServerHold() {
+        let srv = null;
+        try { srv = Http.Server({ Port: 0 }); } catch (e) { return; }   /* no libsoup */
+
+        const held   = {};          /* what the handlers keep, by route */
+        const said   = {};          /* what the handlers were told */
+        const errors = [];
+        const onError = Application.OnError;
+        Application.OnError = (message) => errors.push(message);
+
+        srv.Request = (req) => {
+            switch (req.Path) {
+            case "/later":
+                held.later = req.Hold();
+                Timer.After(50, () => { said.later = held.later.Answer(200, "later"); });
+                return;
+            case "/deadline":
+                held.deadline = req.Hold(100);
+                return;
+            case "/threw":
+                req.Hold();
+                throw new Error("a handler that holds and then throws");
+            case "/dropped":
+                req.Hold();
+                return;
+            case "/stop":
+                held.stop = req.Hold();
+                Timer.After(30, () => { held.stop.Answer(200, "bye"); srv.Stop(); });
+                return;
+            case "/twice":
+                said.negative = refusal(() => req.Hold(-1));
+                req.Hold();
+                said.twice = refusal(() => req.Hold());
+                said.inside = req.Answer(200, "inside");
+                said.after = refusal(() => req.Answer(200, "again"));
+                return;
+            default:
+                held.plain = req;
+                req.Answer(200, "plain");
+            }
+        };
+        srv.Start();
+        const url = srv.Url.replace(/\/$/, "");
+
+        waiting++;
+        const done = (why) => {
+            if (why) failures.push(why);
+            Application.OnError = onError;
+            srv.Stop();
+            waiting--;
+        };
+        /* A callback that throws would end the chain with `waiting` still
+         * owed -- a hang instead of a red line -- so a throw is a failure and
+         * the end of the test. */
+        const get = (path, then) =>
+            Http.Get(url + path, { Timeout: 5000 }, (r) => {
+                try { then(r); } catch (e) { done(`${path}: ${e.message}`); }
+            }, (e) => done(`${path} errored: ${e.Message}`));
+
+        get("/later", (r) => {
+            eq("a held request is answered after its handler returned", r.Body.ToText(), "later");
+            eq("...with its own status", r.Status, 200);
+            eq("...and that Answer said it was handed over", said.later, true);
+
+        get("/deadline", (r) => {
+            eq("a held request nobody answers is a 503 at its deadline", r.Status, 503);
+            eq("...saying so", r.Body.ToText(), "no answer within 100 ms");
+            eq("...and an Answer after it says false", held.deadline.Answer(200, "late"), false);
+            eq("...as often as it is asked", held.deadline.Answer(200, "late"), false);
+
+        get("/threw", (r) => {
+            eq("a handler that holds and throws is a 500 at once", r.Status, 500);
+            check("...and its error is reported", errors.some((m) => m.includes("holds and then throws")),
+                  JSON.stringify(errors));
+
+        get("/dropped", (r) => {
+            eq("a held request the program let go of is a 500", r.Status, 500);
+            eq("...saying why", r.Body.ToText(), "the request was dropped without an answer");
+
+        get("/twice", (r) => {
+            eq("Hold and Answer inside the handler answer at once", r.Body.ToText(), "inside");
+            eq("...and that Answer says true", said.inside, true);
+            eq("a negative deadline is refused", said.negative, "Hold: -1 is negative");
+            eq("Hold twice is refused", said.twice, "Hold: the request is already held");
+            eq("...and so is a second Answer", said.after, "Answer: the request was already answered");
+
+        get("/", (r) => {
+            eq("a request that was not held answers as before", r.Body.ToText(), "plain");
+            eq("Hold after the handler returned is refused", refusal(() => held.plain.Hold()),
+               "Hold: only inside the handler, before it returns");
+
+        /* `/shutdown` answered late: the Stop waits for the answer to be
+         * written, as it does for one written inside the handler. */
+        get("/stop", (r) => {
+            eq("a Stop right after a late Answer still sends it", r.Body.ToText(), "bye");
+            until("...and the server stops afterwards", () => !srv.Running, () => this.httpHoldStopped(done));
+        });
+        });
+        });
+        });
+        });
+        });
+        });
+    }
+
+    /* A server stopped with a request still held: the connection goes, the
+     * client hears it, and the late Answer has nowhere to go. A server of its
+     * own, since stopping is the point. */
+    httpHoldStopped(done) {
+        const srv = Http.Server({ Port: 0 });
+        let held = null;
+
+        srv.Request = (req) => {
+            held = req.Hold();
+            Timer.After(30, () => srv.Stop());
+        };
+        srv.Start();
+
+        const after = (heard) => {
+            try {
+                eq("a server stopped while a request is held ends it for the client", heard, "error");
+                eq("...and the late Answer says false", held.Answer(200, "late"), false);
+                done();
+            } catch (e) {
+                done(`a stopped server's held request: ${e.message}`);
+            }
+        };
+        Http.Get(srv.Url, { Timeout: 5000 }, () => after("answer"), () => after("error"));
     }
 
     /* --- keeping the session awake ------------------------------------------

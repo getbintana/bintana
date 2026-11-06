@@ -3729,10 +3729,33 @@ static JSClassID http_server_class_id;
  * nothing it holds is owed to anybody outside the process. */
 static GList *http_servers;
 
+/*
+ * One request as the handler sees it.
+ *
+ * **Held, it outlives its handler** (`req.Hold()`): the message is paused when
+ * the handler returns unanswered and kept, with our reference, until `Answer`
+ * unpauses it, the deadline answers 503, the client goes away (`disconnected`),
+ * or the wrapper is finalised -- which answers 500, so a request the program
+ * dropped is a refusal the client hears and never a connection left open. Each
+ * of those ends it through `http_req_release`, which is the one place the
+ * reference, the signal and the timer go.
+ */
 typedef struct {
-    SoupServerMessage *msg;  /* our ref while the handler runs; NULL after */
+    SoupServerMessage *msg;  /* our ref while the handler runs or while held */
     bool               answered;
+    bool               dispatching; /* its handler is on the stack */
+    bool               held;        /* Hold() was asked */
+    bool               gone;        /* held, and ended without our Answer */
+    int                hold_ms;     /* the deadline; 0 waits for ever */
+    guint              deadline;    /* that timer, while paused */
+    gulong             gone_id;     /* `disconnected`, while paused */
 } HttpReqData;
+
+/* Messages answered after their handler and not yet sent: a `Stop` waits for
+ * them as it waits for a handler on the stack, or the disconnect cuts the
+ * answer that was just unpaused. Global for the reason `http_dispatching` is. */
+static int http_late_inflight;
+#define HTTP_LATE_KEY "bta-http-late"
 
 static JSClassID http_request_class_id;
 
@@ -3758,6 +3781,12 @@ static gboolean http_late_stop(gpointer data)
 {
     HttpLateStop *late = data;
 
+    /* An answer given after its handler is still being written: look again
+     * shortly rather than cut it. */
+    if (http_late_inflight > 0) {
+        g_timeout_add(10, http_late_stop, late);
+        return G_SOURCE_REMOVE;
+    }
     if (late->auth_domain) {
         soup_server_remove_auth_domain(late->server, late->auth_domain);
         g_object_unref(late->auth_domain);
@@ -3789,7 +3818,7 @@ static void http_server_free(JSRuntime *rt, HttpServerData *s)
      * the other door. The struct goes now (nothing after the call reads it);
      * the socket and the gate go on an idle that owns them.
      */
-    if (http_dispatching > 0 && s->server && s->running) {
+    if ((http_dispatching > 0 || http_late_inflight > 0) && s->server && s->running) {
         HttpLateStop *late = g_new0(HttpLateStop, 1);
 
         late->server      = s->server;          /* the reference moves */
@@ -3886,6 +3915,91 @@ static void http_server_gc_mark(JSRuntime *rt, JSValueConst v, JS_MarkFunc *mark
         JS_MarkValue(rt, s->handler, mark);
 }
 
+/* The answer of a held request has been handed to soup, and is in flight
+ * until the message finishes or its connection goes -- whichever comes first,
+ * counted once. Connected with no data, so nothing here outlives a wrapper. */
+static void http_late_done(SoupServerMessage *msg, gpointer data)
+{
+    (void)data;
+    if (g_object_get_data(G_OBJECT(msg), HTTP_LATE_KEY)) {
+        g_object_set_data(G_OBJECT(msg), HTTP_LATE_KEY, NULL);
+        http_late_inflight--;
+    }
+}
+
+/*
+ * Everything a request holds, let go: the timer, the `disconnected` handler
+ * and our reference. **The one exit**, for every way a request ends -- the
+ * handler's return, `Answer`, the deadline, the client leaving, the finaliser
+ * -- so no branch can forget one of the three.
+ */
+static void http_req_release(HttpReqData *r)
+{
+    if (r->deadline) {
+        g_source_remove(r->deadline);
+        r->deadline = 0;
+    }
+    if (r->msg && r->gone_id) {
+        g_signal_handler_disconnect(r->msg, r->gone_id);
+        r->gone_id = 0;
+    }
+    g_clear_object(&r->msg);
+}
+
+/* A paused message answered and sent on its way: unpaused, counted in flight
+ * until soup says it is done, and let go. The status and body are already on
+ * it. */
+static void http_req_send_late(HttpReqData *r)
+{
+    SoupServerMessage *msg = r->msg;
+
+    g_object_set_data(G_OBJECT(msg), HTTP_LATE_KEY, GINT_TO_POINTER(1));
+    http_late_inflight++;
+    g_signal_connect(msg, "finished", G_CALLBACK(http_late_done), NULL);
+    g_signal_connect(msg, "disconnected", G_CALLBACK(http_late_done), NULL);
+    soup_server_message_unpause(msg);
+    http_req_release(r);
+}
+
+/* The runtime's own answer to a held request nobody answered: a status and a
+ * sentence, sent, and the request ended for the program -- a later `Answer`
+ * says false. */
+static void http_req_refuse_late(HttpReqData *r, guint status, const char *text)
+{
+    soup_server_message_set_status(r->msg, status, NULL);
+    soup_server_message_set_response(r->msg, "text/plain", SOUP_MEMORY_COPY,
+                                     text, strlen(text));
+    r->gone = true;
+    http_req_send_late(r);
+}
+
+static gboolean http_req_deadline(gpointer data)
+{
+    HttpReqData *r = data;
+    char         text[96];
+
+    r->deadline = 0;
+    if (r->msg && !r->answered) {
+        g_snprintf(text, sizeof text, "no answer within %d ms", r->hold_ms);
+        http_req_refuse_late(r, SOUP_STATUS_SERVICE_UNAVAILABLE, text);
+    }
+    return G_SOURCE_REMOVE;
+}
+
+/* The connection went while the request was held -- the server stopped, or
+ * soup saw the client leave -- so there is nothing to send to: the request ends
+ * here and a later `Answer` says false. **A paused message reads nothing**, so
+ * a client that merely closed its end is not seen until the answer is written
+ * (measured: a client's 150 ms timeout, and the late `Answer` still `true`). */
+static void http_req_gone(SoupServerMessage *msg, gpointer data)
+{
+    HttpReqData *r = data;
+
+    (void)msg;
+    r->gone = true;
+    http_req_release(r);
+}
+
 static void http_req_finalizer(JSRuntime *rt, JSValue v)
 {
     HttpReqData *r = JS_GetOpaque(v, http_request_class_id);
@@ -3893,8 +4007,16 @@ static void http_req_finalizer(JSRuntime *rt, JSValue v)
     (void)rt;
     if (!r)
         return;
-    if (r->msg)
-        g_object_unref(r->msg);
+    /*
+     * **A held request the program let go of is answered here**, with the
+     * `500` a handler that forgot to answer gets: otherwise the client would
+     * wait out the deadline -- or for ever, with `Hold(0)` -- for an answer
+     * nothing can give any more. Only soup is called, no JavaScript.
+     */
+    if (r->msg && r->held && !r->answered && !r->dispatching)
+        http_req_refuse_late(r, SOUP_STATUS_INTERNAL_SERVER_ERROR,
+                             "the request was dropped without an answer");
+    http_req_release(r);
     g_free(r);
 }
 
@@ -3946,10 +4068,19 @@ static JSValue http_request_answer(JSContext *ctx, JSValueConst this_val,
     char        *ctype_free = NULL;
     GBytes      *b = NULL;
 
-    if (!r || !r->msg)
+    if (!r)
         return JS_ThrowTypeError(ctx, "Answer: the request already ended");
     if (r->answered)
         return JS_ThrowTypeError(ctx, "Answer: the request was already answered");
+    if (!r->msg) {
+        /* Held, and the client left or the deadline answered first: an
+         * ordinary outcome of answering later, said with `false` and not a
+         * throw. The arguments are not even read -- there is nowhere to send
+         * them. */
+        if (r->held && r->gone)
+            return JS_FALSE;
+        return JS_ThrowTypeError(ctx, "Answer: the request already ended");
+    }
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Answer(status, [body], [opts]): needs a status");
     if (!bta_to_int(ctx, argv[0], "Answer", &status))
@@ -4050,7 +4181,46 @@ static JSValue http_request_answer(JSContext *ctx, JSValueConst this_val,
     g_free(ctype_free);
     g_free(declared_ct);
     r->answered = true;
-    return JS_UNDEFINED;
+    /* After its handler, the message is paused and ours: this is the answer
+     * that wakes it. Inside the handler soup sends it when the handler
+     * returns, as it always has. */
+    if (r->held && !r->dispatching)
+        http_req_send_late(r);
+    return JS_TRUE;
+}
+
+/*
+ * `req.Hold([timeout])`: this request is answered later.
+ *
+ * Only inside its handler, which is the one moment the decision can be made:
+ * after the return the runtime has already answered 500. The handler stores
+ * what this returns -- the request itself -- and answers through it from a
+ * callback: a `Task`'s `Done`, an `Exec`'s exit, another `Http` reply. Not a
+ * promise and not a return value the runtime waits on: one `Answer`, later.
+ */
+static JSValue http_request_hold(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    HttpReqData *r  = http_req_data(this_val);
+    int32_t      ms = 30000;
+
+    if (!r || !r->msg || !r->dispatching)
+        return JS_ThrowTypeError(ctx, "Hold: only inside the handler, before it returns");
+    if (r->answered)
+        return JS_ThrowTypeError(ctx, "Hold: the request was already answered");
+    if (r->held)
+        return JS_ThrowTypeError(ctx, "Hold: the request is already held");
+    if (argc > 1)
+        return JS_ThrowTypeError(ctx, "Hold([timeout]): too many arguments");
+    if (argc > 0 && !JS_IsUndefined(argv[0])) {
+        if (!bta_to_int(ctx, argv[0], "Hold", &ms))
+            return JS_EXCEPTION;
+        if (ms < 0)
+            return JS_ThrowRangeError(ctx, "Hold: %d is negative", ms);
+    }
+    r->held    = true;
+    r->hold_ms = ms;
+    return JS_DupValue(ctx, this_val);
 }
 
 static JSValue http_request_multipart(JSContext *ctx, JSValueConst this_val,
@@ -4096,12 +4266,27 @@ static JSValue http_request_multipart(JSContext *ctx, JSValueConst this_val,
 
 /* type HttpRequest */
 static const JSCFunctionListEntry http_request_props[] = {
-    /* Answer(status, [body], [opts])
+    /* Answer(status, [body], [opts]) -> boolean
      *   `body` follows the client's rules — an object serialises as canonical
      *   JSON — and `opts` carries `Headers` and `ContentType`. **The second
-     *   argument is always the body and the third always the options**
+     *   argument is always the body and the third always the options**.
+     *   Answers `true`; **`false` for a held request that already ended** —
+     *   the deadline answered first, or the server stopped — since answering
+     *   after that is an ordinary outcome. **A client that closed its end is
+     *   noticed only when the answer is written**, so `true` means handed to
+     *   the connection, not read. A second `Answer` throws
      */
     JS_CFUNC_DEF("Answer", 3, http_request_answer),
+    /* Hold([timeout]) -> HttpRequest
+     *   **answer this request later**: asked inside the handler, it lets the
+     *   handler return without the `500` an unanswered request gets, and
+     *   hands back the request to `Answer` from a callback — a `Task`'s
+     *   `Done`, an `Exec`'s exit, another `Http` reply. **Gives up after 30 s
+     *   with `503`**; `timeout` is in milliseconds and `0` waits for ever. A
+     *   held request the program lets go of unanswered is answered `500`, and
+     *   one whose server stops ends there. Only inside the handler, once
+     */
+    JS_CFUNC_DEF("Hold", 1, http_request_hold),
     /* Multipart() -> Multipart
      *   the upload parsed: a `Multipart` to read with `Part(index)`, or to
      *   re-post. **Refused on a plain body**
@@ -4278,26 +4463,49 @@ static void on_server_request(SoupServer *server, SoupServerMessage *msg,
      */
     JSContext *ctx = s->ctx;
 
+    bool threw = false;
+
     if (JS_IsFunction(ctx, s->handler)) {
         JSValue fn  = JS_DupValue(ctx, s->handler);
 
+        r->dispatching = true;
         http_dispatching++;
         JSValue ret = JS_Call(ctx, fn, JS_UNDEFINED, 1, &req);
         http_dispatching--;
+        r->dispatching = false;
 
-        if (JS_IsException(ret))
+        if (JS_IsException(ret)) {
+            threw = true;
             bta_dump_error(ctx);
+        }
         JS_FreeValue(ctx, ret);
         JS_FreeValue(ctx, fn);
         bta_drain_jobs(JS_GetRuntime(ctx));
     }
+
+    /*
+     * **Held and not answered yet: paused, and the request lives on** -- in the
+     * wrapper the handler kept, with our reference to the message, the
+     * deadline and the client's leaving each able to end it. A handler that
+     * threw is not trusted to answer later: it gets its 500 now.
+     */
+    if (r->held && !r->answered && !threw && r->msg) {
+        soup_server_message_pause(msg);
+        r->gone_id = g_signal_connect(msg, "disconnected", G_CALLBACK(http_req_gone), r);
+        if (r->hold_ms > 0)
+            r->deadline = g_timeout_add((guint)r->hold_ms, http_req_deadline, r);
+        JS_FreeValue(ctx, req);
+        return;
+    }
+
     /* A handler that returns without answering gets a 500: hanging the
      * connection instead would fail silently and forever. */
     if (!r->answered)
         soup_server_message_set_status(msg, 500, NULL);
     /* The message outlives nothing here: a later Answer throws instead of
      * writing into freed memory. */
-    g_clear_object(&r->msg);
+    r->held = false;
+    http_req_release(r);
     JS_FreeValue(ctx, req);
 }
 
@@ -4828,8 +5036,15 @@ static gboolean http_server_stop_idle(gpointer data)
     HttpServerData *s = data;
 
     s->stop_idle = 0;
-    if (s->stopping)
-        http_server_finish_stop(s);
+    if (!s->stopping)
+        return G_SOURCE_REMOVE;
+    /* A held request answered late is still being written: wait for it the
+     * way a handler on the stack is waited for, a little at a time. */
+    if (http_late_inflight > 0) {
+        s->stop_idle = g_timeout_add(10, http_server_stop_idle, s);
+        return G_SOURCE_REMOVE;
+    }
+    http_server_finish_stop(s);
     return G_SOURCE_REMOVE;
 }
 
@@ -4852,7 +5067,7 @@ static JSValue http_server_stop(JSContext *ctx, JSValueConst this_val,
      * still held: it is the truth about the socket and not a promise about the
      * call.
      */
-    if (http_dispatching > 0) {
+    if (http_dispatching > 0 || http_late_inflight > 0) {
         if (!s->stopping) {
             s->stopping  = true;
             s->stop_idle = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,

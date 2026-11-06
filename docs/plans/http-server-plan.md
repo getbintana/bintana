@@ -2,39 +2,14 @@
 
 `Http.Server` is built, documented under `runtime-api.md`'s `## Http Server`
 and `llm/library.md`'s, tested by `tests/widgets`' `testHttpServer` and shown
-by `examples/serve`. What that leaves is this file: three things the design
+by `examples/serve`. What that leaves is this file: two things the design
 deliberately reserved, with the argument for each written down so that
-picking one up does not mean having the conversation again.
+picking one up does not mean having the conversation again. (The third, a
+deferred answer, is built: `req.Hold()`.)
 
 The stance is the client's, and does not move: callbacks stay canonical, and
 there is no `Promise`, `async` or `fetch` to seat anything on. A request
 arrives as an event with a handler.
-
-## Deferred answers — the one that is felt
-
-A handler answers before it returns. `on_server_request` gives a `500` to a
-handler that returns without answering, and drops its hold on the message
-right after, so a later `Answer` throws rather than writing into memory that
-is gone.
-
-That is a real limit and the reference says so: a route that must ask a
-database, or another server, before it can answer has nowhere to wait. A
-`Wait` inside the handler freezes the loop the server itself answers on --
-the deadlock `testHttpServer` is written around -- and there is no other way
-to spend a turn of the loop and come back.
-
-What it would take: `soup_server_message_pause` / `unpause` exist and were
-read. The cost is the one that deferred it: answering later means the request
-object outlives the handler, its lifetime owned from C across turns like an
-`ExecJob`, and every handler that forgets to answer leaks a connection rather
-than logging a `500`. A deadline per request is probably the price of
-admission -- the same guard the client's `Timeout` already is.
-
-What it would look like, and what it must not become: an `Answer` that may
-arrive later is still one `Answer`, not a promise. `req.Hold()` returning
-something the handler stores and answers through later is the shape that
-keeps the vocabulary; a handler that returns a value the runtime waits on is
-the shape that quietly asks for `Promise` back.
 
 ## WebSocket
 

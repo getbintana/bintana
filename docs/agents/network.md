@@ -142,6 +142,34 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   it. The rule: **a deferral written into a verb is owed by every other road to
   the same effect**, and a finaliser is always one of them.
 
+## A held request: `Hold`, and what a paused message cannot see
+
+`req.Hold([timeout])` lets a handler return without the `500` and answer from
+a callback later (audit R4). The message is paused with
+`soup_server_message_pause` (libsoup 3.2; CI has 3.4) when the handler
+returns unanswered -- **not at `Hold`**, so a `Hold` and an `Answer` in the
+same handler need no pause at all -- and `HttpReqData` keeps our reference,
+the deadline timer and a `disconnected` handler until `http_req_release`, the
+one exit every ending goes through.
+
+- **A paused message reads nothing, so a client that closes its end is not
+  seen.** Measured: a client with a 150 ms `Timeout` gave up, and the late
+  `Answer` still answered `true` -- soup notices only when it writes. What
+  does end a held request is the deadline (`503`, *no answer within N ms*),
+  the server stopping (`disconnected` fires for a paused message on
+  `soup_server_disconnect`, measured), and the wrapper's finaliser (`500`).
+  `Answer` says `false` for those, and `true` means *handed to the
+  connection*.
+- **A `Stop` after a late `Answer` waits for it**, the way it waits for a
+  handler on the stack: `http_late_inflight` counts unpaused messages until
+  `finished` or `disconnected`, and the stop idle looks again every 10 ms.
+  Without it the `/shutdown`-answered-later case got *connection refused*
+  (`HttpServerHold` goes red that way).
+- **A test whose callback throws hangs instead of failing**: the chain ends
+  with `waiting` owed. The first `HttpServerHold` hung the suite for ten
+  minutes on an `until` whose condition threw on its second call; its
+  callbacks catch and call `done` now.
+
 ## Tls on a client: the abort was ours, and the hole was the cache
 
 `Http.Client`'s `Tls: { Ca, Cert }` shipped believing that **a second TLS
