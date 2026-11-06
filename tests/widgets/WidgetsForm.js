@@ -678,6 +678,8 @@ const TESTS = [
     "DebuggerHits",
     /* Async: `this` once in a derived class's method. */
     "DebuggerThis",
+    /* Async: a breakpoint inside a Task, on the worker's thread. */
+    "DebuggerTask",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -31733,6 +31735,101 @@ class PQ extends Form {
                 waiting--;
                 eq("a derived class's method finishes under the debugger", code, 0);
                 eq("...and lists this once, beside its argument and its local", names, "a, b, this");
+            });
+    }
+
+    /*
+     * A breakpoint inside a `Task`: the worker stops on its own thread, owns
+     * the channel while it is stopped, and is answered in its own context --
+     * its locals, an expression, a step -- while the main thread keeps running.
+     * A main-thread breakpoint reached meanwhile waits its turn and is said
+     * after the worker carries on, so every order is about the last stop
+     * announced. A field of the worker's cannot be watched yet, and says so.
+     */
+    testDebuggerTask() {
+        const proj = File.Join(SCRATCH, "dbgtask");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbgtask", main: "Main", sources: ["Sum.js", "Main.js"] }));
+        File.Save(File.Join(proj, "Sum.js"),
+                  '"use strict";\n' +                                    /* 1 */
+                  'class Sum extends Task {\n' +                         /* 2 */
+                  '    Run(msg) {\n' +                                   /* 3 */
+                  '        let total = 0;\n' +                           /* 4 */
+                  '        for (let i = 1; i <= msg.n; i++) {\n' +       /* 5 */
+                  '            total += i;\n' +                          /* 6 */
+                  '        }\n' +                                        /* 7 */
+                  '        return total;\n' +                            /* 8 */
+                  '    }\n' +                                            /* 9 */
+                  '}\n');
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +                                    /* 1 */
+                  'function tick() {\n' +                                /* 2 */
+                  '    return 1;\n' +                                    /* 3 */
+                  '}\n' +                                                /* 4 */
+                  'function Main() {\n' +                                /* 5 */
+                  '    let ticks = 0;\n' +                               /* 6 */
+                  '    const timer = Timer.Every(20, () => { ticks += tick(); });\n' +
+                  '    const t = new Sum();\n' +
+                  '    t.Done = (r) => { timer.Stop(); print(`sum ${r} ticks ${ticks > 3}`); Application.Quit(0); };\n' +
+                  '    t.Error = (m) => { print(`error ${m}`); Application.Quit(1); };\n' +
+                  '    t.Start({ n: 4 });\n' +
+                  '}\n');
+
+        const seen = [];
+        const out  = [];
+        let locals = "", evaluated = "", watched = null;
+        const send = (o) => job.Write(JSON.stringify(o));
+
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+                    if (kind === "ready") {
+                        send({ do: "break", file: "Sum.js", line: 6, id: 1, hits: "== 2" });
+                        send({ do: "continue" });
+                    } else if (kind === "stopped") {
+                        seen.push(`${msg.thread || "main"}:${msg.reason}:${msg.frames[0].Line}`);
+                        /* The worker held for a fifth of a second: the timer on
+                         * the main thread is what proves the window ran. */
+                        if (seen.length === 1) Timer.After(200, () => send({ do: "locals", frame: 0 }));
+                        else if (seen.length === 2) {
+                            /* Stepped once inside the worker; now a main-thread
+                             * breakpoint, and time for the timer to reach it. */
+                            send({ do: "clear", id: 1 });
+                            send({ do: "break", file: "Main.js", line: 3, id: 2, hits: "== 1" });
+                            Timer.After(300, () => send({ do: "continue" }));
+                        } else send({ do: "continue" });
+                    } else if (kind === "locals") {
+                        locals = msg.items.map((i) => `${i.Name}=${i.Value}`).join(" ");
+                        send({ do: "eval", frame: 0, text: "total + i" });
+                    } else if (kind === "eval") {
+                        evaluated = msg.value;
+                        send({ do: "watch", id: 9, frame: 0, owner: "msg", name: "n" });
+                    } else if (kind === "watch") {
+                        watched = msg;
+                        send({ do: "step", kind: "over" });
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                waiting--;
+                eq("a program whose Task was stopped finishes", code, 0);
+                eq("...with the task's answer, and the window ran while it was stopped",
+                   out.join(""), "sum 10 ticks true");
+                eq("the worker stops on its thread, steps there, and the main thread waits its turn",
+                   seen.join(" "), "Sum:breakpoint:6 Sum:step:5 main:breakpoint:2");
+                eq("its locals are the worker's", locals,
+                   "msg={ n: 4 } total=1 i=2 this={ Cancellable: {…} }");
+                eq("...and an expression is answered in its frame", evaluated, "3");
+                eq("a field of the worker cannot be watched yet, and says so",
+                   watched && `${watched.armed} ${watched.why}`,
+                   "false a field cannot be watched inside a Task yet");
             });
     }
 

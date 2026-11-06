@@ -169,6 +169,25 @@ Its window freezes, which is what every one of them does. Point 4 — pause — 
 out of the same hook: it looks at the channel as the line changes, with no extra
 thread.
 
+**A `Task` stops on its own thread, and the window does not freeze** (built
+2026-11-05). Each worker's runtime gets the same hook (`bta_debug_worker`,
+called before the task's file is compiled), and the stopped thread **owns the
+channel**: it takes `channel_lock`, says where it stopped -- with `"thread"`,
+the task's class -- and reads the IDE's orders itself, so its locals, an
+expression, a step and a hit count are answered in the worker's context while
+the main thread keeps running. **One stop at a time**: a thread that stops
+while another is stopped waits for the first to be continued, so every order is
+about the last stop announced (`testDebuggerTask` arms a main-thread breakpoint
+during a worker's stop and sees it said after). What is per thread is per
+thread (`BtaThread`: the step mode and depth, whether the debugger is
+evaluating, the poll clock); the breakpoint list and its counters are shared
+under `breaks_lock`, and a breakpoint's fields are copied out under it so a
+condition runs without holding it. Two things are the main thread's alone, and
+said: **Pause** (only the main thread polls stdin while running), and **a data
+breakpoint** -- a worker's object dies with its runtime, and the cell a watch
+holds from C with it, so `watch` inside a task answers `armed: false` and why.
+`stopOnThrow` reaches a worker started after it was said, not one running.
+
 ## The channel: ours, and minimal
 
 **Decided.** A line-oriented protocol of our own, understood by this IDE, the way
@@ -205,6 +224,7 @@ From the child, on descriptor 3:
 ```
 {"event":"ready"}
 {"event":"stopped","reason":"breakpoint"|"step"|"exception"|"pause",
+ "thread":"Sum",            ← only inside a Task: the worker's class
  "frames":[{"name":"Btn_Click","file":"Form1.js","line":42}, …]}
 {"event":"log","file":"Form1.js","line":42,"text":"total=3","failed":false}
 {"event":"resumed"}
@@ -441,6 +461,16 @@ work for a line: the clock, and `break_on_line`. The one-line loops do not
 change line, so the table did nothing for them; what they pay is a call per
 function call, where a new frame has no line yet. Two to four times the plain
 run.
+
+**What threads added (2026-11-05)**, on the same per-line path: the step mode
+and the evaluating flag became thread-local, and `break_on_line` reads a list
+another thread may change. A lock taken at every line cost 8% of a tight loop
+with a breakpoint armed elsewhere (`Debug`); taken only when a worker is alive
+-- the list is changed only by the channel's owner, and a worker becomes one
+only after a round trip to the IDE -- and with `here.ctx` written past the
+cheap return, it is about 3% (`RelWithDebInfo`, three million turns of a
+two-line body, five runs interleaved with the binary before: median 341 against
+352 ms).
 
 ## What it costs outside the code
 

@@ -82,6 +82,18 @@ static struct {
     JSContext  *ctx;
     GPtrArray  *breaks;         /* BtaBreak* */
     GHashTable *lines;          /* a project file -> the lines it can stop on */
+    bool        stop_on_throw;
+} dbg;
+
+/*
+ * **What belongs to one thread.** The main context and every `Task` worker run
+ * JavaScript on threads of their own, each with its own runtime and its own
+ * hook, so how a thread is stepping is that thread's -- a step over in a
+ * worker says nothing about the window -- and so is whether the debugger is
+ * running an expression of its own on it.
+ */
+typedef struct {
+    JSContext  *ctx;            /* the context this thread runs, set by its hook */
     BtaRunMode  mode;
     int         depth;          /* the stack depth a step began at */
     /*
@@ -91,10 +103,42 @@ static struct {
      * is a hang with the program's own stack underneath it.
      */
     bool        evaluating;
-    bool        stop_on_throw;
     gint64      polled;         /* when the channel was last asked, monotonic µs */
+    const char *name;           /* a worker's class, said with its stops; NULL on main */
+} BtaThread;
 
-} dbg;
+static _Thread_local BtaThread here;
+
+/*
+ * **One stop at a time, and the stopped thread owns the channel.** A worker
+ * that reaches a breakpoint takes `channel_lock`, says where it stopped and
+ * reads the IDE's orders itself -- the window keeps running, because its
+ * thread never stopped. A second thread that stops meanwhile waits for the
+ * first to be continued, so every order the IDE sends is about the last stop
+ * it was told of. Recursive, because the owner re-enters it (the orders it
+ * reads while stopped, `take_messages` on the main thread).
+ *
+ * `breaks_lock` is the list of breakpoints and each one's counters: the owner
+ * of the channel changes the list while the other threads' hooks read it.
+ * `emit_lock` keeps two threads' lines whole on descriptor 3.
+ */
+static GRecMutex channel_lock;
+static GRecMutex breaks_lock;
+static GMutex    emit_lock;
+
+/*
+ * **Workers alive under the debugger, and why the main thread reads the list
+ * without its lock when there are none.** A lock per new line cost 8% of a
+ * tight loop with a breakpoint armed elsewhere (`Debug`, 800 -> 865 ms over
+ * three million turns, measured), paid by every program whether it has a
+ * `Task` or not. The list is changed only by the thread that owns the channel,
+ * and with no worker that is the main thread itself; a worker can become the
+ * owner only after it exists, compiles, stops and is sent an order -- which
+ * takes the IDE a round trip, against the nanoseconds of one unlocked read.
+ * The workers always take it.
+ */
+static gint debug_workers;
+
 
 /*
  * How often a running program asks the IDE whether it said anything. Asking at
@@ -135,7 +179,10 @@ void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled)
     uint32_t i, n = 0;
     JSValue  len;
 
-    if (!dbg.on)
+    /* The main context's compiles only: a worker compiles the files the main
+     * thread already did (the task's class is a project file), and this table
+     * is not the worker's to write while the main hook reads it. */
+    if (!dbg.on || ctx != dbg.ctx)
         return;
 
     lines = JS_DebugLines(ctx, compiled);
@@ -159,6 +206,7 @@ void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled)
     g_hash_table_insert(dbg.lines, g_strdup(path), set);
 
     /* Whatever was armed against this file before it existed. */
+    g_rec_mutex_lock(&breaks_lock);
     for (guint k = 0; k < dbg.breaks->len; ) {
         BtaBreak *bp = g_ptr_array_index(dbg.breaks, k);
         int       at;
@@ -178,6 +226,7 @@ void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled)
             say_armed(ctx, bp);
         k++;
     }
+    g_rec_mutex_unlock(&breaks_lock);
 }
 
 /* ----------------------------------------------------- the functions' spans */
@@ -443,10 +492,15 @@ static void unwatch_all(JSContext *ctx);
 static void detach(JSContext *ctx)
 {
     dbg.attached = false;
-    dbg.mode     = RUN;
+    here.mode     = RUN;
+    g_rec_mutex_lock(&breaks_lock);
     if (dbg.breaks)
         g_ptr_array_set_size(dbg.breaks, 0);
-    unwatch_all(ctx);
+    g_rec_mutex_unlock(&breaks_lock);
+    /* The watched fields are the main context's objects: a worker that found
+     * the IDE gone leaves them to the main thread, which finds it gone too. */
+    if (ctx == dbg.ctx)
+        unwatch_all(ctx);
     if (dbg.stop_on_throw) {
         dbg.stop_on_throw = false;
         JS_DebugStopOnThrow(JS_GetRuntime(ctx), false);
@@ -462,11 +516,11 @@ static bool obey(JSContext *ctx, const char *line, int depth_now);
 
 static bool obey_as_debugger(JSContext *ctx, const char *line, int depth_now)
 {
-    bool was = dbg.evaluating;
+    bool was = here.evaluating;
 
-    dbg.evaluating = true;
+    here.evaluating = true;
     bool done = obey(ctx, line, depth_now);
-    dbg.evaluating = was;
+    here.evaluating = was;
     return done;
 }
 
@@ -496,8 +550,10 @@ static void emit(const char *json)
     sigaddset(&pipe_set, SIGPIPE);
     pthread_sigmask(SIG_BLOCK, &pipe_set, &was_set);
 #endif
+    g_mutex_lock(&emit_lock);
     bool failed = write(CONTROL_FD, json, len) < 0 || write(CONTROL_FD, nl, 1) < 0;
     int  why    = errno;
+    g_mutex_unlock(&emit_lock);
 #ifndef G_OS_WIN32
     if (failed && why == EPIPE) {
         struct timespec now = { 0, 0 };
@@ -515,8 +571,8 @@ static void emit(const char *json)
         /* The reader closed its end: the same as end of input, and said the
          * only way left -- the signal was held off above, so this is where it
          * arrives instead. */
-        if (errno == EPIPE && dbg.ctx)
-            detach(dbg.ctx);
+        if (errno == EPIPE && (here.ctx || dbg.ctx))
+            detach(here.ctx ? here.ctx : dbg.ctx);
     }
 }
 
@@ -708,11 +764,11 @@ static JSValue evaluate_value(JSContext *ctx, int frame, const char *expr,
                               char **error)
 {
     JSValue out;
-    bool    was = dbg.evaluating;
+    bool    was = here.evaluating;
 
-    dbg.evaluating = true;
+    here.evaluating = true;
     out = JS_DebugEval(ctx, frame, expr);
-    dbg.evaluating = was;
+    here.evaluating = was;
 
     if (JS_IsException(out)) {
         JSValue      err = JS_GetException(ctx);
@@ -767,11 +823,11 @@ static char *evaluate(JSContext *ctx, int frame, const char *expr, bool *failed,
 static bool condition_holds(JSContext *ctx, const char *expr)
 {
     JSValue out;
-    bool    yes, was = dbg.evaluating;
+    bool    yes, was = here.evaluating;
 
-    dbg.evaluating = true;
+    here.evaluating = true;
     out = JS_DebugEval(ctx, 0, expr);
-    dbg.evaluating = was;
+    here.evaluating = was;
 
     if (JS_IsException(out)) {
         JS_FreeValue(ctx, JS_GetException(ctx));
@@ -796,6 +852,10 @@ static void say_stopped(JSContext *ctx, const uint8_t *pc, const char *reason,
 
     JS_SetPropertyStr(ctx, event, "event", JS_NewString(ctx, "stopped"));
     JS_SetPropertyStr(ctx, event, "reason", JS_NewString(ctx, reason));
+    /* Stopped in a `Task`: the worker's class, so the IDE can say whose stack
+     * this is. The main thread's stops carry nothing, as they always did. */
+    if (here.name)
+        JS_SetPropertyStr(ctx, event, "thread", JS_NewString(ctx, here.name));
     /* Which breakpoint, and how many times it has been reached: the pass a
      * hit count stopped on is the number the programmer asked about. */
     if (bp) {
@@ -900,14 +960,14 @@ static JSValue expand_item(JSContext *ctx, JSValueConst owner, JSAtom atom,
                            uint32_t index, bool by_index)
 {
     JSValue item  = JS_NewObject(ctx);
-    bool    was   = dbg.evaluating;
+    bool    was   = here.evaluating;
     JSValue value;
     char   *text;
 
-    dbg.evaluating = true;
+    here.evaluating = true;
     value = by_index ? JS_GetPropertyUint32(ctx, owner, index)
                      : JS_GetProperty(ctx, owner, atom);
-    dbg.evaluating = was;
+    here.evaluating = was;
 
     if (by_index) {
         char name[16];
@@ -1067,7 +1127,7 @@ static JSValue watch_set(JSContext *ctx, JSValueConst this_val, int argc,
 
     /* The debugger's own writes -- `set`, an immediate -- are not the program
      * changing it, and a detached debugger stops nothing. */
-    if (changed && !dbg.evaluating && dbg.attached) {
+    if (changed && !here.evaluating && dbg.attached) {
         JSValue event = JS_NewObject(ctx);
         char   *was   = render(ctx, old);
         char   *now   = render(ctx, value);
@@ -1092,9 +1152,11 @@ static JSValue watch_set(JSContext *ctx, JSValueConst this_val, int argc,
         g_free(was);
         g_free(now);
 
-        dbg.mode = RUN;
+        here.mode = RUN;
+        g_rec_mutex_lock(&channel_lock);
         emit_object(ctx, event);
         wait_for_orders(ctx, JS_DebugDepth(JS_GetRuntime(ctx)));
+        g_rec_mutex_unlock(&channel_lock);
     }
     JS_FreeValue(ctx, old);
     return JS_UNDEFINED;
@@ -1317,20 +1379,23 @@ static void set_break(JSContext *ctx, JSValue cmd, bool one_shot)
         free_break(bp);
         return;
     }
+    g_rec_mutex_lock(&breaks_lock);
     if (at > 0) {
         bp->line = at;
         g_ptr_array_add(dbg.breaks, bp);
         if (!one_shot)
             say_armed(ctx, bp);
-        return;
+    } else {
+        g_ptr_array_add(dbg.breaks, bp);    /* pending */
     }
-    g_ptr_array_add(dbg.breaks, bp);    /* pending */
+    g_rec_mutex_unlock(&breaks_lock);
 }
 
 /* One run-to-cursor at a time: arming a second one takes the first out, since
  * what it was going to stop at is no longer where the caret is. */
 static void drop_one_shots(void)
 {
+    g_rec_mutex_lock(&breaks_lock);
     for (guint i = 0; i < dbg.breaks->len; ) {
         BtaBreak *bp = g_ptr_array_index(dbg.breaks, i);
 
@@ -1339,6 +1404,7 @@ static void drop_one_shots(void)
         else
             i++;
     }
+    g_rec_mutex_unlock(&breaks_lock);
 }
 
 /* The one that was just reached. */
@@ -1369,13 +1435,15 @@ static void clear_break(JSContext *ctx, JSValue cmd)
     JS_ToInt32(ctx, &id, v);
     JS_FreeValue(ctx, v);
 
+    g_rec_mutex_lock(&breaks_lock);
     for (guint i = 0; i < dbg.breaks->len; i++) {
         BtaBreak *bp = g_ptr_array_index(dbg.breaks, i);
         if (bp->id == id) {
             g_ptr_array_remove_index(dbg.breaks, i);
-            return;
+            break;
         }
     }
+    g_rec_mutex_unlock(&breaks_lock);
 }
 
 /* A command, answered.  True when the program is to carry on. */
@@ -1408,22 +1476,22 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
            because a second one means the caret moved. */
         drop_one_shots();
         set_break(ctx, cmd, true);
-        dbg.mode = RUN;
+        here.mode = RUN;
         go = true;
     } else if (!strcmp(verb, "clear")) {
         clear_break(ctx, cmd);
     } else if (!strcmp(verb, "continue")) {
-        dbg.mode = RUN;
+        here.mode = RUN;
         go = true;
     } else if (!strcmp(verb, "step")) {
         JSValue kv = JS_GetPropertyStr(ctx, cmd, "kind");
         const char *kind = JS_ToCString(ctx, kv);
 
-        dbg.mode  = !kind             ? STEP_INTO
+        here.mode  = !kind             ? STEP_INTO
                   : !strcmp(kind, "over") ? STEP_OVER
                   : !strcmp(kind, "out")  ? STEP_OUT
                   : STEP_INTO;
-        dbg.depth = depth_now;
+        here.depth = depth_now;
         JS_FreeCString(ctx, kind);
         JS_FreeValue(ctx, kv);
         go = true;
@@ -1491,11 +1559,11 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
         JS_ToInt32(ctx, &frame, fv);
         if (name && text) {
             JSValue value;
-            bool    was = dbg.evaluating;
+            bool    was = here.evaluating;
 
-            dbg.evaluating = true;
+            here.evaluating = true;
             value = JS_DebugEval(ctx, frame, text);
-            dbg.evaluating = was;
+            here.evaluating = was;
 
             if (JS_IsException(value)) {
                 JS_FreeValue(ctx, JS_GetException(ctx));
@@ -1518,7 +1586,7 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
         /* Not a stop of its own: the mode says *the next line, wherever it is*,
            and the stop happens where the program actually is. Asking twice, or
            asking one that is already stopped, changes nothing. */
-        dbg.mode = PAUSE;
+        here.mode = PAUSE;
     } else if (!strcmp(verb, "watch")) {
         /* A data breakpoint: `owner` evaluated in the frame, `name` one of its
          * own fields. Answered with `armed`, or with why it could not be. */
@@ -1532,8 +1600,16 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
 
         JS_ToInt32(ctx, &id, iv);
         JS_ToInt32(ctx, &frame, fv);
-        if (owner && name)
+        /* A field of a worker's object lives in the worker's runtime, which
+         * ends with the task -- and the cell a watch holds from C would end
+         * with it, mid-watch. Refused, with the reason, until that is built. */
+        if (owner && name && ctx != dbg.ctx) {
+            char *text = g_strdup_printf("%s.%s", owner, name);
+            say_watch(ctx, id, text, "a field cannot be watched inside a Task yet");
+            g_free(text);
+        } else if (owner && name) {
             watch_field(ctx, id, frame, owner, name);
+        }
         JS_FreeCString(ctx, owner);
         JS_FreeCString(ctx, name);
         JS_FreeValue(ctx, nv);
@@ -1549,6 +1625,7 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
         JSValue items = JS_NewArray(ctx);
         uint32_t n = 0;
 
+        g_rec_mutex_lock(&breaks_lock);
         for (guint i = 0; i < dbg.breaks->len; i++) {
             BtaBreak *bp = g_ptr_array_index(dbg.breaks, i);
             if (bp->one_shot)
@@ -1558,6 +1635,7 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
             JS_SetPropertyStr(ctx, row, "hits", JS_NewInt32(ctx, bp->hits));
             JS_SetPropertyUint32(ctx, items, n++, row);
         }
+        g_rec_mutex_unlock(&breaks_lock);
         JS_SetPropertyStr(ctx, reply, "reply", JS_NewString(ctx, "hits"));
         JS_SetPropertyStr(ctx, reply, "items", items);
         emit_object(ctx, reply);
@@ -1672,18 +1750,18 @@ static bool channel_due(void)
 {
     gint64 now = g_get_monotonic_time();
 
-    if (now - dbg.polled < POLL_EVERY_US)
+    if (now - here.polled < POLL_EVERY_US)
         return false;
-    dbg.polled = now;
+    here.polled = now;
     return true;
 }
 
 static bool step_wants_this(int depth_now)
 {
-    switch (dbg.mode) {
+    switch (here.mode) {
     case STEP_INTO: return true;
-    case STEP_OVER: return depth_now <= dbg.depth;
-    case STEP_OUT:  return depth_now <  dbg.depth;
+    case STEP_OVER: return depth_now <= here.depth;
+    case STEP_OUT:  return depth_now <  here.depth;
     case PAUSE:     return true;
     default:        return false;
     }
@@ -1703,6 +1781,12 @@ static void take_messages(JSContext *ctx, int depth_now)
 {
 #ifndef G_OS_WIN32
     struct pollfd in    = { .fd = STDIN_FILENO, .events = POLLIN };
+
+    /* A worker stopped somewhere owns the channel and is reading it: what is
+     * on stdin is its orders, not this thread's. */
+    if (!g_rec_mutex_trylock(&channel_lock))
+        return;
+
     GString      *order = g_string_new(NULL);
 
     while (poll(&in, 1, 0) > 0 && (in.revents & (POLLIN | POLLHUP))) {
@@ -1715,6 +1799,7 @@ static void take_messages(JSContext *ctx, int depth_now)
             obey_as_debugger(ctx, order->str, depth_now);
     }
     g_string_free(order, TRUE);
+    g_rec_mutex_unlock(&channel_lock);
 #else
     (void)ctx;
     (void)depth_now;
@@ -1733,16 +1818,18 @@ static void on_throw(JSContext *ctx)
 {
     int depth_now;
 
-    if (dbg.evaluating || !dbg.attached)
+    if (here.evaluating || !dbg.attached)
         return;
 
     /* An expression of the debugger's own that throws -- a broken watch, a
      * mistyped immediate -- must not stop the program it is inspecting. */
     depth_now = JS_DebugDepth(JS_GetRuntime(ctx));
 
-    dbg.mode = RUN;
+    here.mode = RUN;
+    g_rec_mutex_lock(&channel_lock);
     say_stopped(ctx, NULL, "exception", NULL);
     wait_for_orders(ctx, depth_now);
+    g_rec_mutex_unlock(&channel_lock);
 }
 
 static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
@@ -1771,12 +1858,12 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
      * to be able to arrive -- and a program that is being debugged at all is one
      * whose speed nobody is measuring.
      */
-    if (dbg.mode == RUN && dbg.breaks->len == 0 && !dbg.attached)
+    if (here.mode == RUN && dbg.breaks->len == 0 && !dbg.attached)
         return;
 
     /* The debugger is running an expression of its own -- an immediate, a watch,
      * a condition. Stopping inside it would stop the debugger in itself. */
-    if (dbg.evaluating)
+    if (here.evaluating)
         return;
 
     /* True only where the program has moved to a new line of a new frame:
@@ -1797,9 +1884,20 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
      * the IDE. The depth is a walk of the whole stack and the file a string, so
      * neither is worked out for a line that cannot stop.
      */
-    ask = dbg.attached && channel_due();
-    if (!ask && dbg.mode == RUN && !break_on_line(line))
-        return;
+    /* Only the main thread asks the channel while running: a worker has no
+     * *Pause* yet, and stdin is read by one thread at a time. */
+    ask = dbg.attached && ctx == dbg.ctx && channel_due();
+    if (!ask && here.mode == RUN) {
+        bool locked = here.name || g_atomic_int_get(&debug_workers) > 0;
+        if (locked)
+            g_rec_mutex_lock(&breaks_lock);
+        bool armed_here = break_on_line(line);
+        if (locked)
+            g_rec_mutex_unlock(&breaks_lock);
+        if (!armed_here)
+            return;
+    }
+    here.ctx = ctx;
 
     depth_now = JS_DebugDepth(JS_GetRuntime(ctx));
 
@@ -1809,9 +1907,26 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
     wanted = step_wants_this(depth_now);
     bp     = NULL;
 
+    /*
+     * **What the breakpoint says is copied out under its lock, and the
+     * condition runs outside it.** Another thread may clear it while this one
+     * evaluates -- the list is the channel owner's to change -- and holding the
+     * lock across JavaScript would stall every other thread's hook for as long
+     * as a condition takes.
+     */
+    BtaBreak seen = { 0 };
+
     if (!wanted) {
         file = JS_AtomToCString(ctx, file_atom);
-        bp   = file ? break_at(file, line) : NULL;
+        g_rec_mutex_lock(&breaks_lock);
+        bp = file ? break_at(file, line) : NULL;
+        if (bp) {
+            seen      = *bp;
+            seen.file = g_strdup(bp->file);
+            seen.when = g_strdup(bp->when);
+            seen.log  = g_strdup(bp->log);
+        }
+        g_rec_mutex_unlock(&breaks_lock);
         JS_FreeCString(ctx, file);
         if (!bp)
             return;
@@ -1819,15 +1934,30 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
         /* A condition is asked **here**, where the program is standing, and
            only for the breakpoint that matched: a stop nobody wanted costs a
            round trip to the IDE and a jump in the editor. */
-        if (bp->when && !condition_holds(ctx, bp->when))
-            return;
+        if (seen.when && !condition_holds(ctx, seen.when))
+            goto done;
 
         /* Counted after the condition and before the logpoint: a pass is one
            the condition let through, and a hit count decides for a logpoint
-           as much as for a stop -- `% 100` on a log is a sample. */
-        bp->hits++;
-        if (!hits_match(bp))
-            return;
+           as much as for a stop -- `% 100` on a log is a sample. Counted on the
+           breakpoint itself, if it is still armed. */
+        bool match;
+        g_rec_mutex_lock(&breaks_lock);
+        guint at;
+        if (g_ptr_array_find(dbg.breaks, bp, &at)) {
+            bp->hits++;
+            seen.hits = bp->hits;
+            match     = hits_match(bp);
+            /* Run-to-cursor takes itself out as it is reached, so the next
+               pass over the same line does not stop again. */
+            if (match && bp->one_shot)
+                remove_one_shot(bp);
+        } else {
+            match = false;      /* cleared while the condition ran */
+        }
+        g_rec_mutex_unlock(&breaks_lock);
+        if (!match)
+            goto done;
 
         /*
          * A logpoint records and carries on, which is the whole of what it is --
@@ -1835,30 +1965,31 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
          * it fires. The expression is evaluated the way a watch is, in the frame
          * that is about to be left.
          */
-        if (bp->log) {
+        if (seen.log) {
             bool  failed = false;
-            char *text   = evaluate(ctx, 0, bp->log, &failed, true);
+            char *text   = evaluate(ctx, 0, seen.log, &failed, true);
 
-            say_log(ctx, bp, text, failed);
+            say_log(ctx, &seen, text, failed);
             g_free(text);
-            if (bp->one_shot)
-                remove_one_shot(bp);
-            return;
+            goto done;
         }
-
-        /* Run-to-cursor takes itself out as it is reached, so the next pass over
-           the same line does not stop again. */
-        if (bp->one_shot)
-            remove_one_shot(bp);
     }
 
-    BtaRunMode was = dbg.mode;
+    BtaRunMode was = here.mode;
 
-    dbg.mode = RUN;
+    here.mode = RUN;
+    /* The channel first: another thread's stop is answered to the end before
+       this one is said, so every order is about the last stop announced. */
+    g_rec_mutex_lock(&channel_lock);
     say_stopped(ctx, pc,
                 wanted ? (was == PAUSE ? "pause" : "step") : "breakpoint",
-                wanted ? NULL : bp);
+                wanted ? NULL : &seen);
     wait_for_orders(ctx, depth_now);
+    g_rec_mutex_unlock(&channel_lock);
+done:
+    g_free(seen.file);
+    g_free(seen.when);
+    g_free(seen.log);
 }
 
 /* --------------------------------------------------------------- the gate */
@@ -1886,7 +2017,7 @@ void bta_debug_start(JSContext *ctx)
     dbg.breaks = g_ptr_array_new_with_free_func(free_break);
     dbg.lines  = g_hash_table_new_full(g_str_hash, g_str_equal, g_free,
                                        (GDestroyNotify)g_array_unref);
-    dbg.mode   = RUN;
+    here.mode   = RUN;
 
     JS_SetDebugHandler(JS_GetRuntime(ctx), on_step, NULL);
 
@@ -1906,9 +2037,12 @@ void bta_debug_start(JSContext *ctx)
      * gone past them. `ready` is the handshake, and the reply that releases it
      * is an ordinary `continue`.
      */
+    here.ctx     = ctx;
+    g_rec_mutex_lock(&channel_lock);
     emit("{\"event\":\"ready\"}");
     dbg.attached = true;
     wait_for_orders(ctx, 0);
+    g_rec_mutex_unlock(&channel_lock);
 }
 
 void bta_debug_stopping(JSContext *ctx, int code)
@@ -1927,3 +2061,34 @@ void bta_debug_stopping(JSContext *ctx, int code)
 }
 
 void bta_debug_want(void) { dbg.on = true; }
+
+/*
+ * A `Task` worker's context, under the debugger: its runtime gets the same
+ * hook, so a breakpoint in code the task runs stops the task -- on the
+ * worker's thread, which blocks there and owns the channel while it is stopped
+ * (see `channel_lock`), with the window still running. Its stops name the
+ * class, and stop-on-throw follows what the IDE last said.
+ */
+void bta_debug_worker(JSContext *ctx, const char *name)
+{
+    if (!dbg.on || !dbg.attached)
+        return;
+    here.ctx  = ctx;
+    here.name = name;
+    here.mode = RUN;
+    g_atomic_int_inc(&debug_workers);
+    JS_SetDebugHandler(JS_GetRuntime(ctx), on_step, NULL);
+    if (dbg.stop_on_throw)
+        JS_DebugStopOnThrow(JS_GetRuntime(ctx), true);
+}
+
+/* That worker's context is going: one fewer to take the lock for. */
+void bta_debug_worker_done(JSContext *ctx)
+{
+    (void)ctx;
+    if (!here.name)
+        return;
+    here.name = NULL;
+    here.ctx  = NULL;
+    g_atomic_int_add(&debug_workers, -1);
+}

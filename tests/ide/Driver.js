@@ -16809,6 +16809,14 @@ function* p_debug(ide) {
     check("...and the one left is the other",
           ide.debugger_.all()[0].line === at.line, JSON.stringify(ide.debugger_.all()));
 
+    /* A stop inside a Task: the stack is the worker's, and says so. */
+    dbg.waiting = [];
+    dbg.heard('{"event":"stopped","reason":"breakpoint","thread":"Sum","frames":[{"Name":"Run","File":"","Line":0,"Column":0}]}');
+    eq("a stop in a task says whose stack it is", ide.LblStack.Text, "Call stack: task Sum");
+    check("...and the log says it once", ide.LogView.Text.includes("Stopped in task Sum."));
+    dbg.heard('{"event":"stopped","reason":"breakpoint","frames":[{"Name":"Main","File":"","Line":0,"Column":0}]}');
+    eq("a stop on the main thread is the plain stack again", ide.LblStack.Text, "Call stack");
+
     /*
      * --- the pointer, while the program is stopped ----------------------------
      *

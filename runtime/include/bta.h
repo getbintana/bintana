@@ -1235,6 +1235,9 @@ bool bta_strict(void);
 void bta_strict_seal(JSContext *ctx, JSValueConst obj);
 void bta_debug_start(JSContext *ctx);
 void bta_debug_stopping(JSContext *ctx, int code);
+/* A Task worker's context gets the debugger's hook; its stops name `name`. */
+void bta_debug_worker(JSContext *ctx, const char *name);
+void bta_debug_worker_done(JSContext *ctx);
 /* A project file just compiled: what lines it can stop on. */
 void bta_debug_compiled(JSContext *ctx, const char *path, JSValueConst compiled);
 /* Around every compile (`bta_compile`): the parser's function spans are

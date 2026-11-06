@@ -438,7 +438,7 @@ msgstr ""
 #: forms/RefsForm.form: BtnClose.Text
 #: forms/SearchForm.form: BtnClose.Text
 #: forms/PoForm.js:393
-#: modules/Debugger.js:1042
+#: modules/Debugger.js:1053
 msgid "Close"
 msgstr ""
 
@@ -1415,6 +1415,7 @@ msgid "Run to cursor (Ctrl+F10)"
 msgstr ""
 
 #: forms/MainForm.form: LblStack.Text
+#: modules/Debugger.js:882
 msgid "Call stack"
 msgstr ""
 
@@ -1459,7 +1460,7 @@ msgid "Take the chosen breakpoint away"
 msgstr ""
 
 #: forms/MainForm.form: BtnBpToggleAll.Text
-#: modules/Debugger.js:720
+#: modules/Debugger.js:721
 msgid "Disable all"
 msgstr ""
 
@@ -2977,81 +2978,89 @@ msgstr ""
 msgid "Put the caret on a breakpoint first."
 msgstr ""
 
-#: modules/Debugger.js:703
+#: modules/Debugger.js:704
 #: modules/Problems.js:204
 msgid "Place"
 msgstr ""
 
-#: modules/Debugger.js:704
+#: modules/Debugger.js:705
 msgid "Only when"
 msgstr ""
 
-#: modules/Debugger.js:705
+#: modules/Debugger.js:706
 msgid "On pass"
 msgstr ""
 
-#: modules/Debugger.js:706
+#: modules/Debugger.js:707
 #: modules/Tests.js:219
 msgid "Message"
 msgstr ""
 
-#: modules/Debugger.js:707
+#: modules/Debugger.js:708
 msgid "Passes"
 msgstr ""
 
-#: modules/Debugger.js:720
+#: modules/Debugger.js:721
 msgid "Enable all"
 msgstr ""
 
-#: modules/Debugger.js:805
+#: modules/Debugger.js:806
 msgid "{0}:{1} cannot stop; the breakpoint moved to line {2}."
 msgstr ""
 
-#: modules/Debugger.js:831
+#: modules/Debugger.js:832
 msgid "{0}:{1} cannot stop: {2}"
 msgstr ""
 
-#: modules/Debugger.js:833
+#: modules/Debugger.js:834
 msgid "{0}:{1} cannot stop: nothing runs there or after it."
 msgstr ""
 
-#: modules/Debugger.js:842
+#: modules/Debugger.js:843
 msgid "{0} changed: {1} -> {2}"
 msgstr ""
 
-#: modules/Debugger.js:850
+#: modules/Debugger.js:851
 msgid "Stopped on pass {0}."
 msgstr ""
 
-#: modules/Debugger.js:975
+#: modules/Debugger.js:861
+msgid "Stopped in task {0}."
+msgstr ""
+
+#: modules/Debugger.js:881
+msgid "Call stack: task {0}"
+msgstr ""
+
+#: modules/Debugger.js:986
 msgid "Stops when {0} changes."
 msgstr ""
 
-#: modules/Debugger.js:980
+#: modules/Debugger.js:991
 msgid "{0} cannot be watched: {1}"
 msgstr ""
 
-#: modules/Debugger.js:1042
+#: modules/Debugger.js:1053
 msgid "Open"
 msgstr ""
 
-#: modules/Debugger.js:1100
+#: modules/Debugger.js:1111
 msgid "… {0} more"
 msgstr ""
 
-#: modules/Debugger.js:1127
+#: modules/Debugger.js:1138
 msgid "Change a value"
 msgstr ""
 
-#: modules/Debugger.js:1128
+#: modules/Debugger.js:1139
 msgid "{0} is"
 msgstr ""
 
-#: modules/Debugger.js:1142
+#: modules/Debugger.js:1153
 msgid "Stopped here"
 msgstr ""
 
-#: modules/Debugger.js:1277
+#: modules/Debugger.js:1288
 msgid "Run to cursor needs a program being debugged."
 msgstr ""
 

@@ -590,6 +590,7 @@ export class Debugger {
         this.job     = null;
         this.stopped = null;
         this.peeking = null;
+        this.thread  = "";
         this.fieldWatches.clear();
         /* What was opened is the run's objects, and the next run's are not
          * them: keeping the paths would ask a removed watch's expression again
@@ -852,6 +853,12 @@ export class Debugger {
         }
         this.stopped = msg.frames || [];
         this.frame   = 0;
+        /* A stop inside a `Task` is on the worker's thread, and the stack is
+         * the worker's: said above the stack and once in the log, since the
+         * window is still running and that is worth knowing. */
+        this.thread = msg.thread || "";
+        if (this.thread)
+            this.ide.log(`${Locale.Text("Stopped in task {0}.", this.thread)}\n`);
         this.fill();
         /* `showFrame` goes to the line and asks for that frame's values, so
          * asking here as well would be the same question twice. */
@@ -869,6 +876,10 @@ export class Debugger {
     fill() {
         const list = this.ide.StackList;
 
+        if (this.ide.LblStack)
+            this.ide.LblStack.Text = this.stopped && this.thread
+                ? Locale.Text("Call stack: task {0}", this.thread)
+                : Locale.Text("Call stack");
         list.Clear();
         if (!this.stopped) {
             this.locals = [];

@@ -1632,6 +1632,9 @@ static gpointer task_thread(gpointer data)
 
     env.job = job;
     JS_SetRuntimeOpaque(rt, &env);
+    /* Under `--debug`, the worker stops where the program does: its runtime
+     * gets the debugger's hook before a line of the task has run. */
+    bta_debug_worker(ctx, job->class_name);
     /* Listed before anything is evaluated: bta_task_is_worker is what the
      * widget constructor and Report ask, and both can be reached from the
      * first line of the file below. */
@@ -1759,6 +1762,7 @@ static gpointer task_thread(gpointer data)
     }
 
 unwind:
+    bta_debug_worker_done(ctx);
     g_mutex_lock(&task_lock);
     task_rts = g_list_remove(task_rts, rt);
     g_mutex_unlock(&task_lock);
