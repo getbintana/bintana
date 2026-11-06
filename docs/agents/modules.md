@@ -98,7 +98,8 @@ it settled:
   goes, and it was a megabyte a check of a large file.
 
 **What the IDE makes of a module is stage 4** (fork patch 15 gives it the rows):
-`completionPublished` in `Completion.js` is what a file puts in the shared scope
+`Owners.published` in `lib/check` (which `Completion`'s `completionPublished`
+delegates to) is what a file puts in the shared scope
 -- everything at its top level for a script, its exports for a module -- so a
 module's private names are offered nowhere else, while `completionScopeNames`
 still offers them, its classes and its imports inside the file; the outline adds
@@ -114,6 +115,32 @@ pass and the project check -- the sentence the runtime now refuses the load
 with (patch 16), said while typing. `ambiguous` reads words, so a file that
 declares a local of the name anywhere is skipped whole rather than guessed at;
 the runtime's half reads the bytecode and has no such gap.
+
+**A name nothing declares is the third warning** (`Names.unresolved`, live and
+in the project check). `Application.FreeNames(text)` is patch 16's walk with
+patch 18's `typeof` flag, less what the runtime answers before the program:
+the photograph (`take_runtime_names`) plus the prelude's top-level lexical
+names, which no photograph of the global object can see -- `hasOwn` is a
+`const` of `rad.js`, and the first sweep reported it in every file that wrote
+it. That set is the prelude's own free names (a script's top level is free in
+it, a local never is), compiled on first use -- 13 ms (Debug), against 29 ms of
+`Symbols` over both files at every start and in every `Task` -- and confirmed
+per context with `lexical_has` (`bta_module_runtime_binds`). What is left is
+read against `Owners.answers`: what every file of the project and of its
+libraries publishes, the `Namespace("A")` calls, and what a module keeps, which
+is said as *declared in X and not exported*.
+
+Measured over every project in the repository before it was wired in: one real
+bug (`examples/clients` lost `dialog` from `uses` in `bc9a8af` and deleted a
+client through `Confirm`), one deliberate (`someUndefinedName` in
+`tests/widgets`), and two false findings fixed where they came from. A use
+behind `typeof X` is excused for the whole file, since the file asks whether X
+exists. And `const D = (t) => new Decimal(t)` declares `D` on the line its arrow
+opens, which a `sc.Line <= line` test called a local -- so `Owners.published`
+asks for a function that starts on an *earlier* line, and completion now offers
+`D` too. `Lex.blank` runs only on a file that has a name left to place: on every
+file it was 1.3 s of the pass over `ide/` (Debug); the pass's total moved from
+about 5.3 s to 5.4 s.
 
 Three things a review of stages 2 to 4 found, each with a test in `Imports`:
 **a library cannot be imported by name from one of its own files**, nor two

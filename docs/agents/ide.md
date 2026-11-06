@@ -1436,3 +1436,27 @@ class's field and a static method's `this` alone. A `this.total` in a subclass
 that does not declare its own field is an inherited use and is **refused**, as
 is one in a nested function or a field initializer: those cannot be attributed
 safely, and a missed use is a wrong rename that still runs.
+
+## Unresolved names
+
+**`Names.unresolved` is a third pass of `Live` and of the project check**,
+beside `curated` and `ambiguous`, and the runtime half -- `Application.FreeNames`
+and why `hasOwn` needed more than the photograph -- is in
+[`modules.md`](modules.md#a-file-with-export-is-a-module). What the IDE adds:
+
+- **The program's names come from the completion's cache**, not from disk:
+  `declaredClasses().answers` is built in the same loop as `tops` and `owners`,
+  over the files on disk, the libraries the project `uses` and the open tabs'
+  live text -- so a function written in another tab and not saved is not a
+  finding. `bintana check` builds the same answer with `Owners.answers` over the
+  walk, the `sources` that live outside the project (`tests/ide` lists
+  `../../ide/...`) and the libraries.
+- **The caret rule is the same as the other two**: the word the caret is in is
+  not reported, so `modWithI` half typed says nothing until the caret leaves.
+- **A suggestion is offered only when it is unique**: one edit for a name under
+  five letters, two from five on, none under three, and a tie says nothing. The
+  candidates include the file's own locals, because `totl` is usually `total`
+  three lines up.
+- `tests/ide`'s `modules` phase holds the sentences, the columns, the caret and
+  the live round trip (a row in Problems and the word underlined).
+

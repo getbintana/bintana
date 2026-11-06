@@ -1345,6 +1345,82 @@ static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/* ------------------------------------------------------------ free names */
+
+typedef struct {
+    JSValue  list;
+    uint32_t n;
+} FreeNameSink;
+
+static void free_name_report(JSContext *ctx, JSAtom name, int line, void *opaque)
+{
+    FreeNameSink *sink = opaque;
+    const char   *s    = JS_AtomToCString(ctx, name);
+
+    if (!s) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return;
+    }
+    bool ours = bta_module_runtime_binds(ctx, s);
+    JS_FreeCString(ctx, s);
+    if (ours)
+        return;
+
+    JSValue row = JS_NewObject(ctx);
+    if (JS_IsException(row)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return;
+    }
+    JS_SetPropertyStr(ctx, row, "Name", JS_AtomToString(ctx, name));
+    JS_SetPropertyStr(ctx, row, "Line", JS_NewInt32(ctx, line));
+    JS_SetPropertyUint32(ctx, sink->list, sink->n++, row);
+}
+
+/*
+ * `Application.FreeNames(text)`: every name the text reads or writes that
+ * nothing in it binds and the runtime does not answer, one row per use, with
+ * its line -- fork patch 16's walk over the compiled bytecode, which is the
+ * compiler's own scope analysis and not a reading of it.  `typeof X` is left
+ * out (patch 18's flag): it asks whether a name exists rather than needing it
+ * to.
+ *
+ * **What the runtime answers is the photograph's, not this process's scope**
+ * (`bta_module_runtime_binds`): the IDE asks about a project it is editing,
+ * and its own exports and classes are on its global scope and on nobody
+ * else's.  A taken-away name (`setTimeout`) is not answered, so it is listed.
+ *
+ * Compiled with the loader's bookkeeping off (`bta_modules_checking`), so a
+ * text that is only looked at is not written down as a file of the program --
+ * the same guard `Symbols` and `CheckSource` keep.  A text that does not
+ * compile answers `[]`: saying why is `CheckSource`'s job, and a partial list
+ * from a broken parse would report the names past the break.
+ */
+static JSValue js_application_free_names(JSContext *ctx, JSValueConst this_val,
+                                         int argc, JSValueConst *argv)
+{
+    const char *src = argc > 0 && JS_IsString(argv[0])
+                    ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!src)
+        return JS_ThrowTypeError(ctx, "Application.FreeNames(text) needs text");
+
+    FreeNameSink sink = { JS_NewArray(ctx), 0 };
+    bool         is_module;
+
+    bta_modules_checking(ctx, true);
+    JSValue compiled = bta_compile(ctx, src, strlen(src), "<free names>", &is_module);
+    bta_modules_checking(ctx, false);
+    JS_FreeCString(ctx, src);
+
+    if (JS_IsException(compiled)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return sink.list;
+    }
+    JS_EnumFreeNamesFlags(ctx, compiled, JS_FREE_NAMES_SKIP_TYPEOF,
+                          free_name_report, &sink);
+    JS_FreeUnevaluatedModule(ctx, compiled);     /* fork patch 14 */
+    return sink.list;
+}
+
 /* Every dot-separated segment an identifier, and at least one segment. */
 static bool is_class_path(const char *s)
 {
@@ -2406,6 +2482,25 @@ static bool install_globals(BtaApp *app)
      */
     JS_SetPropertyStr(ctx, application, "Symbols",
                       JS_NewCFunction(ctx, js_application_symbols, "Symbols", 1));
+
+    /* FreeNames(text) -> { Name, Line }[]
+     *   every name the text reads, writes or calls that nothing in it
+     *   declares and the runtime does not answer — one row per use, in the
+     *   order of the code, out of the compiler and with nothing run. **What
+     *   is left is what the rest of the program has to answer**: another
+     *   file's export, a library's class, a script's top-level declaration —
+     *   or nothing, which is a `ReferenceError` on the day that line runs.
+     *   The runtime's answer is the one it had before the program's first
+     *   file, so an editor asking about another project is not answered out
+     *   of its own scope, and a name the language took away (`setTimeout`)
+     *   is listed. **`typeof X` is not a use**, since it asks whether a name
+     *   exists. In a script the file's own top-level names are listed too,
+     *   because a script's top level is the global scope; in a module they
+     *   are bound. `[]` for a text that does not compile — `CheckSource`
+     *   says why
+     */
+    JS_SetPropertyStr(ctx, application, "FreeNames",
+                      JS_NewCFunction(ctx, js_application_free_names, "FreeNames", 1));
 
     /*
      * `Application.LibraryPath(name, [project])`: where a library by that name

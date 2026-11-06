@@ -31,6 +31,13 @@
  * `this.Lbl.Te` with the caret at the end is a word half written; the same text
  * with the caret on another line is a mistake.
  *
+ * **And a name nothing declares**, which is the same kind of finished fact
+ * read from the other side: `helpr()` compiles, and the compiler already knows
+ * the name is free in this file (`Application.FreeNames`); whether anything
+ * else in the program publishes it is the completion's own cache of every
+ * file, open tabs included. `Names.unresolved` asks both, under the same caret
+ * rule -- a word half typed is not a misspelling yet.
+ *
  * **Nothing here is inferred.** Every lookup is `Completion`'s -- `controls()`,
  * `typeOf()`, `sample()` -- which is the class that already answers *what is
  * this control and what does it really have*, once per form and cached. A
@@ -118,7 +125,8 @@ export class Live {
          * three. What belongs to this class is the *moment*: the pause, and the
          * caret rule that goes with it. */
         const found = [...ide.names.curated(text, name, at),
-                       ...ide.names.ambiguous(text, name, at)];
+                       ...ide.names.ambiguous(text, name, at),
+                       ...ide.names.unresolved(text, name, at)];
 
         /*
          * **And then the two that need a form beside it, which a module does not

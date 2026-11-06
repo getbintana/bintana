@@ -754,6 +754,94 @@ static bool lexical_has(JSContext *ctx, const char *name)
     return true;
 }
 
+/*
+ * The names the prelude may have bound in the global *lexical* scope -- its
+ * top-level `const`, `let` and `class`, which the photograph cannot see because
+ * they are not properties of the global object.  `hasOwn` is the one a program
+ * is told to write, and it is one of these.
+ *
+ * **Read out of the compiler, not out of a reading of it**: a script's own
+ * top-level names are free names of that script (its top level is the global
+ * scope), and a local never is -- so the free names of `rad.js` and `forms.js`
+ * are their top-level declarations plus the globals they use, and nothing in a
+ * function body.  The set is a superset on purpose; `bta_module_runtime_binds`
+ * keeps only what this context really binds.
+ *
+ * Built on first use and kept for the process: the prelude is the binary's,
+ * and compiling it at every start was ~29 ms (Debug) that only a checker
+ * should pay.  Plain strings, so any thread's context can read it.
+ */
+static GHashTable *prelude_names;
+static GMutex      prelude_lock;
+
+static void prelude_name(JSContext *ctx, JSAtom name, int line, void *opaque)
+{
+    const char *s = JS_AtomToCString(ctx, name);
+    (void)line;
+
+    if (!s) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return;
+    }
+    g_hash_table_add(opaque, g_strdup(s));
+    JS_FreeCString(ctx, s);
+}
+
+static GHashTable *prelude_free_names(JSContext *ctx)
+{
+    g_mutex_lock(&prelude_lock);
+    if (!prelude_names) {
+        GHashTable *names = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                                  g_free, NULL);
+        const char *texts[2];
+        bta_prelude_sources(&texts[0], &texts[1]);
+
+        for (size_t i = 0; i < G_N_ELEMENTS(texts); i++) {
+            JSValue fn = JS_Eval(ctx, texts[i], strlen(texts[i]), "<prelude>",
+                                 JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT |
+                                 JS_EVAL_FLAG_COMPILE_ONLY);
+            if (JS_IsException(fn)) {
+                JS_FreeValue(ctx, JS_GetException(ctx));
+                continue;
+            }
+            JS_EnumFreeNames(ctx, fn, prelude_name, names);
+            JS_FreeValue(ctx, fn);
+        }
+        prelude_names = names;
+    }
+    g_mutex_unlock(&prelude_lock);
+    return prelude_names;
+}
+
+/*
+ * Whether the runtime answers `name` in this context before the program says
+ * anything: on the global object when the photograph was taken, or bound in
+ * the global lexical scope by the prelude.  What `Application.FreeNames` leaves
+ * out, so what it reports is what the program itself has to answer.
+ *
+ * The lexical half asks the scope as it is *now*, which in a running program
+ * also holds the program's own top-level `let`/`class` -- harmless, because a
+ * name is only asked about when the prelude names it, and a program cannot
+ * declare again a lexical name the prelude declared.  With no photograph the
+ * answer is no: nothing is left out, which over-reports rather than hides.
+ */
+bool bta_module_runtime_binds(JSContext *ctx, const char *name)
+{
+    ModState *st = state_of(ctx, false);
+    bool      on_global;
+
+    g_mutex_lock(&owners_lock);
+    on_global = st && st->runtime && g_hash_table_contains(st->runtime, name);
+    g_mutex_unlock(&owners_lock);
+    if (on_global)
+        return true;
+    if (!st || !st->runtime)
+        return false;
+
+    GHashTable *prelude = prelude_free_names(ctx);
+    return g_hash_table_contains(prelude, name) && lexical_has(ctx, name);
+}
+
 static int distribute(JSContext *ctx, JSValueConst global, JSValueConst ns,
                       JSModuleDef *m, JSAtom atom, const char *path)
 {

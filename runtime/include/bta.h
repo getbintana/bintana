@@ -831,6 +831,11 @@ bool    bta_module_exported(JSContext *ctx, const char *name);
  * was taken. What `Widget.Members` with `Sources` resolves an undeclared name
  * against, so an editor is not answered out of its own scope. */
 bool    bta_module_runtime_owns(JSContext *ctx, const char *name);
+/* Whether the runtime answers `name` before the program does: on the global
+ * object in the photograph, or a top-level lexical binding of the prelude
+ * (`hasOwn`). No when no photograph was taken. What `Application.FreeNames`
+ * leaves out. */
+bool    bta_module_runtime_binds(JSContext *ctx, const char *name);
 /* Who exports what, for a context that is going away. */
 void    bta_modules_forget(JSContext *ctx);
 /* Where this context's imports resolve: `./x.js` inside `project` or one of

@@ -304,6 +304,7 @@ export class MainForm extends Form {
     names     = new Names({
         componentEvents: (type) => this.classes.componentEvents(type),
         owners: () => this.completion.declaredClasses().owners,
+        answers: () => this.completion.declaredClasses().answers,
     });
     live      = new Live(this);
     /* Where a name is used, and moving it everywhere it means the same thing:

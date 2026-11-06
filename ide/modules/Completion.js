@@ -190,36 +190,12 @@ export function completionScopeNames(symbols, line) {
  * script, everything it declares at its top level; a module, only what it
  * exports -- the rest is its own (docs/plans/modules-plan.md). `classes` are
  * the ones whose declaration is reached by that name, which is what
- * `Widget.Members` is handed a source for.
+ * `Widget.Members` is handed a source for. **The rule is `lib/check`'s**
+ * (`Owners.published`), because the unresolved-name check reads the same
+ * answer and two readings of it would disagree about a name.
  */
 function completionPublished(symbols) {
-    const exports = symbols.filter((s) => s.Kind === "Export" &&
-                                          s.Name !== "default" && s.Name !== "*");
-    const isModule = symbols.some((s) => s.Kind === "Export" || s.Kind === "Import");
-    const classes = [];
-    const tops = [];
-    /* What the module itself declares, as opposed to what it re-exports
-     * (`export { x } from`, or an imported name exported again): only the
-     * first makes it an owner of the name, which is the runtime's rule too --
-     * one binding handed out twice is one answer. */
-    const own = [];
-
-    if (!isModule) {
-        for (const sym of symbols)
-            if (sym.Kind === "Class") classes.push(sym.Name);
-        for (const e of completionScopeNames(symbols, 0))
-            if (e.Detail === "top level" || e.Detail === "function") tops.push(e.Text);
-        return { classes, tops, own, module: false };
-    }
-    const imported = new Set(symbols.filter((s) => s.Kind === "Import").map((s) => s.Name));
-    for (const e of exports) {
-        if (!tops.includes(e.Name)) tops.push(e.Name);
-        if (!e.From && !imported.has(e.Parent) && !own.includes(e.Name)) own.push(e.Name);
-        if (!e.From && e.Parent === e.Name &&
-            symbols.some((s) => s.Kind === "Class" && s.Name === e.Name))
-            classes.push(e.Name);
-    }
-    return { classes, tops, own, module: true };
+    return Owners.published(symbols);
 }
 
 /*
@@ -1005,6 +981,12 @@ export class Completion {
         const sources = new Map();
         const tops = [];
         const owners = new Map();
+        /* What the program answers by name, for `Names.unresolved`: every name
+         * a file publishes or a `Namespace` call makes, and what a module keeps
+         * to itself, with who keeps it. The same reading `Owners.answers` makes
+         * from disk, made here over the tabs' live text. */
+        const known = new Set();
+        const kept  = new Map();
 
         for (const [path, text] of live) {
             let cached = this._parsed.get(path);
@@ -1012,21 +994,31 @@ export class Completion {
                 let classes = [];
                 let tops = [];
                 let own = [];
+                let held = [];
                 let module = false;
                 try {
                     /* What the file declares at its top level is a name every
                      * other file of the project can write: they are evaluated
                      * into one global scope -- all of it for a script, what it
                      * exports for a module. */
-                    ({ classes, tops, own, module } = completionPublished(Application.Symbols(text)));
+                    ({ classes, tops, own, kept: held, module } =
+                        completionPublished(Application.Symbols(text)));
                 } catch (e) { /* half a file is still a file */ }
-                cached = { text, classes, tops, own, module };
+                cached = { text, classes, tops, own, held, module,
+                           spaces: Owners.namespaces(text) };
                 this._parsed.set(path, cached);
                 changed = true;
             }
             for (const c of cached.classes)
                 if (!sources.has(c)) { sources.set(c, text); names.push(c); }
             for (const t of cached.tops) if (!tops.includes(t)) tops.push(t);
+            for (const n of cached.tops)    known.add(n);
+            for (const n of cached.classes) known.add(n);
+            for (const n of cached.spaces)  known.add(n);
+            for (const n of cached.held) {
+                if (!kept.has(n)) kept.set(n, []);
+                kept.get(n).push(path);
+            }
             /* Who exports each name, so a name two modules export can be said
              * to be ambiguous where it is used (`Names.ambiguous`). */
             if (cached.module)
@@ -1043,7 +1035,8 @@ export class Completion {
             return this._declared;
 
         this.generation = (this.generation || 0) + 1;
-        this._declared = { names, sources, forms: formList, tops, owners };
+        this._declared = { names, sources, forms: formList, tops, owners,
+                           answers: { known, kept } };
         return this._declared;
     }
 

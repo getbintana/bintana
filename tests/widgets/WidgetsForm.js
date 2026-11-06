@@ -622,7 +622,7 @@ const TESTS = [
     /* Children too: a project's own class named like a runtime global. */
     "ClassNamedLikeAGlobal",
     /* Children too: a file with `export` is a module. */
-    "Modules", "Imports", "Records", "DataBinding", "SettableCache",
+    "Modules", "FreeNames", "Imports", "Records", "DataBinding", "SettableCache",
     "Time",
     "Stopwatch", "UndoStack", "TestEq", "Network", "Inhibit",
     "Shortcut", "Decimal", "FieldDecimal",
@@ -5446,6 +5446,54 @@ class Form1 extends Form {
                     "}\n",
         });
         check("a control's type named like a global is the project's class", ran.Output.includes("TYPE true"), ran.Output);
+    }
+
+    /*
+     * `Application.FreeNames`: what a text uses that nothing in it and nothing
+     * in the runtime answers. The free names are the compiler's (fork patches
+     * 16 and 18), and the runtime's answer is the photograph taken before the
+     * program's first file, plus the prelude's own lexical names -- so what is
+     * left is exactly what the rest of a program has to declare.
+     */
+    testFreeNames() {
+        const names = (src) => Application.FreeNames(src)
+            .map((r) => `${r.Line}:${r.Name}`).join(" ");
+
+        eq("a local, a parameter and a runtime global are bound",
+           names("function f(a) { const b = a + 1; return Math.max(b, File.Name('x')); }\n"), "");
+        eq("a name nothing declares is listed at its line, once per use",
+           names("function f() {\n    return helpr() + helpr();\n}\n"), "2:helpr 2:helpr");
+        eq("an assignment to nothing is a use",
+           names("function f() { totl = 3; }\n"), "1:totl");
+        eq("typeof asks whether a name exists, and is not a use",
+           names("function f() { return typeof Later; }\n"), "");
+        eq("the prelude's top-level lexical names are the runtime's (hasOwn)",
+           names("function f(o) { return hasOwn.call(o, 'x'); }\n"), "");
+        eq("a name the language took away is not answered",
+           names("function f() { setTimeout(() => 0, 1); }\n"), "1:setTimeout");
+        eq("in a script, the file's own top-level names are free",
+           names("const K = 1;\nfunction f() { return K; }\n"), "2:K");
+        eq("...and in a module they are bound",
+           names("const K = 1;\nexport function f() { return K + g(); }\n"), "2:g");
+        eq("an imported name is bound",
+           names("import { Q } from './q.js';\nexport function f() { return Q; }\n"), "");
+
+        /* The runtime's answer and not the asking program's: this project's
+         * class and its top-level function are in this process's scope, and
+         * would be in nobody else's. */
+        eq("a class of the program asking is not the runtime's",
+           names("function f() { return new WidgetsForm(); }\n"), "1:WidgetsForm");
+        eq("...nor a function it put on the global object",
+           names("eq('x', 1, 1);\n"), "1:eq");
+
+        eq("a text that does not compile answers nothing",
+           names("function ( {"), "");
+        eq("no text is refused with a sentence",
+           refusal(() => Application.FreeNames()),
+           "Application.FreeNames(text) needs text");
+        eq("...and so is a number",
+           refusal(() => Application.FreeNames(3)),
+           "Application.FreeNames(text) needs text");
     }
 
     /*

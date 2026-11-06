@@ -6,6 +6,7 @@
     "ClientsForm.js"
   ],
   "uses": [
+    "dialog",
     "xlsx"
   ],
   "version": "1.0",

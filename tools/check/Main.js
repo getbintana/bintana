@@ -94,8 +94,37 @@ function main() {
         }
     }
 
+    /* What the program answers by name, for the unresolved-name check: the
+     * project's own files, a `sources` entry that lives outside it (a test
+     * project that runs the IDE's own files lists `../../ide/...`), and every
+     * library it `uses` -- read once, like the owners. A library that is not
+     * installed is skipped: the runtime says so, with every path it tried. */
+    const program = sources.slice();
+    let   manifest = {};
+    try { manifest = File.LoadJson(File.Join(root, "project.json")) || {}; }
+    catch (e) { manifest = {}; }
+    const readAll = (paths) => {
+        for (const path of paths) {
+            if (program.some((s) => File.Absolute(File.Join(root, s.path)) === path)) continue;
+            try { program.push({ path, text: File.Load(path) }); }
+            catch (e) { /* unreadable: the manifest check says so */ }
+        }
+    };
+    if (Array.isArray(manifest.sources))
+        readAll(manifest.sources
+            .filter((s) => typeof s === "string" && File.IsExtension(s, "js"))
+            .map((s) => File.Absolute(File.Join(root, s)))
+            .filter((p) => !File.Within(p, root) && File.Exists(p)));
+    if (Array.isArray(manifest.uses))
+        for (const lib of manifest.uses) {
+            const dir = typeof lib === "string" ? Application.LibraryPath(lib, root) : "";
+            if (dir) readAll(Directory.Files(dir, { Pattern: "*.js", Recursive: true }));
+        }
+    const answers = Owners.answers(program);
+
     const names   = new Names({
         owners: () => owners,
+        answers: () => answers,
         componentEvents,
     });
 

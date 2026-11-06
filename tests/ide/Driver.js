@@ -14195,6 +14195,14 @@ function* p_modules(ide) {
         "twina/ModTwin.js": "export class ModTwin {}\n",
         "twinb/ModTwin.js": "export class ModTwin {}\n",
         "ModTwinUse.js": "function modTwinUse() { return new ModTwin(); }\n",
+        /* A name nothing declares, a module's private name, a script's
+         * top-level name, and a use behind `typeof`. */
+        "ModTypo.js":   "function modTypo() {\n" +                          /* 1 */
+                        "    return modWithIv(1) + MOD_IVA + modBare();\n" + /* 2 */
+                        "}\n" +                                              /* 3 */
+                        "function modGuard() {\n" +                          /* 4 */
+                        "    return typeof ModLater === 'undefined' ? 0 : ModLater.X;\n" +
+                        "}\n",
     };
     Directory.Make(File.Join(TMP, "twina"));
     Directory.Make(File.Join(TMP, "twinb"));
@@ -14253,6 +14261,34 @@ function* p_modules(ide) {
     eq("two owners of one file name are named by their paths, as the runtime does",
        twins[0] && twins[0].text,
        "'ModTwin' is exported by twina/ModTwin.js and twinb/ModTwin.js: choose one with import");
+
+    /* --- a name nothing in the program declares ------------------------------ */
+
+    const lost = [...ide.names.unresolved(files["ModTypo.js"], "ModTypo.js", -1)]
+        .map((p) => `${p.line}:${p.column}:${p.length} ${p.text}`);
+    eq("a name nothing declares is a warning, with the name it was close to",
+       lost[0], "2:12:9 modWithIv is not declared anywhere: did you mean modWithIva?");
+    eq("...a module's private name names the file that keeps it",
+       lost[1], "2:27:7 MOD_IVA is declared in ModPrices.js and not exported: " +
+                "export it there, or this line is a ReferenceError when it runs");
+    eq("...and a script's top-level name, the runtime's and a use behind typeof are not",
+       lost.length, 2, JSON.stringify(lost));
+    const typing = files["ModTypo.js"].indexOf("modWithIv") + "modWithIv".length;
+    eq("the word under the caret is still being typed",
+       [...ide.names.unresolved(files["ModTypo.js"], "ModTypo.js", typing)]
+           .map((p) => p.text.split(" ")[0]).join(","), "MOD_IVA");
+
+    /* The live pass, which is where a person meets it: a row in Problems and
+     * the word underlined, on the tab being written. */
+    ide.openInTab("ModTypo.js");
+    yield* settled(ide);
+    ide.Editor.GotoLine(6);
+    ide.live.pass();
+    eq("the live pass reports both while the file is open",
+       ide.problems.of("names:ModTypo.js").map((p) => p.line).join(","), "2,2");
+    eq("...and underlines each word",
+       ide.Editor.Diagnostics("Warning").map((d) => `${d.Line}:${d.Column}`).join(","),
+       "2:12,2:27");
 
     /* --- a rename knows a module's own names --------------------------------- */
 

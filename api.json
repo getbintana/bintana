@@ -13276,6 +13276,15 @@
           "Native": true
         },
         {
+          "Name": "FreeNames",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(text)",
+          "Returns": "{ Name, Line }[]",
+          "Doc": "every name the text reads, writes or calls that nothing in it declares and the runtime does not answer — one row per use, in the order of the code, out of the compiler and with nothing run. **What is left is what the rest of the program has to answer**: another file's export, a library's class, a script's top-level declaration — or nothing, which is a `ReferenceError` on the day that line runs. The runtime's answer is the one it had before the program's first file, so an editor asking about another project is not answered out of its own scope, and a name the language took away (`setTimeout`) is listed. **`typeof X` is not a use**, since it asks whether a name exists. In a script the file's own top-level names are listed too, because a script's top level is the global scope; in a module they are bound. `[]` for a text that does not compile — `CheckSource` says why",
+          "Native": true
+        },
+        {
           "Name": "Globals",
           "Kind": "Method",
           "Params": 0,
