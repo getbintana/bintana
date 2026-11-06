@@ -680,6 +680,8 @@ const TESTS = [
     "DebuggerThis",
     /* Async: a breakpoint inside a Task, on the worker's thread. */
     "DebuggerTask",
+    /* Async: Pause reaching a Task while the window is idle. */
+    "DebuggerTaskPause",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -31830,6 +31832,69 @@ class PQ extends Form {
                 eq("a field of the worker cannot be watched yet, and says so",
                    watched && `${watched.armed} ${watched.why}`,
                    "false a field cannot be watched inside a Task yet");
+            });
+    }
+
+    /*
+     * Pause, pressed while the window waits and a `Task` spins: the main thread
+     * is idle -- no JavaScript to read the channel from -- so the order is read
+     * by the main loop's watch on stdin, and the first thread to reach a line
+     * takes it: the worker. A value changed there ends its loop.
+     */
+    testDebuggerTaskPause() {
+        const proj = File.Join(SCRATCH, "dbgpause");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbgpause", main: "Main", sources: ["Spin.js", "Main.js"] }));
+        File.Save(File.Join(proj, "Spin.js"),
+                  '"use strict";\n' +
+                  'class Spin extends Task {\n' +
+                  '    Run(msg) {\n' +
+                  '        let go = true;\n' +
+                  '        let n = 0;\n' +
+                  '        while (go) {\n' +
+                  '            n += 1;\n' +
+                  '        }\n' +
+                  '        return n > 0;\n' +
+                  '    }\n' +
+                  '}\n');
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +
+                  'function Main() {\n' +
+                  '    const t = new Spin();\n' +
+                  '    t.Done = (r) => { print(`done ${r}`); Application.Quit(0); };\n' +
+                  '    t.Error = (m) => { print(`error ${m}`); Application.Quit(1); };\n' +
+                  '    t.Start({});\n' +
+                  '}\n');
+
+        const stops = [];
+        const out   = [];
+        const send  = (o) => job.Write(JSON.stringify(o));
+
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+                    if (kind === "ready") {
+                        send({ do: "continue" });
+                        Timer.After(300, () => send({ do: "pause" }));
+                    } else if (kind === "stopped") {
+                        stops.push(`${msg.thread || "main"}:${msg.reason}`);
+                        send({ do: "set", frame: 0, name: "go", text: "false" });
+                        send({ do: "continue" });
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                waiting--;
+                eq("a spinning task paused and let go finishes", code, 0);
+                eq("Pause reached the task while the window was idle", stops.join(" "), "Spin:pause");
+                eq("...and a value changed there ended its loop", out.join(""), "done true");
             });
     }
 

@@ -46,6 +46,7 @@
  * loud that `--debug` is not available there.
  */
 #ifndef G_OS_WIN32
+#include <glib-unix.h>
 #include <poll.h>
 #include <pthread.h>
 #include <signal.h>
@@ -138,6 +139,15 @@ static GMutex    emit_lock;
  * The workers always take it.
  */
 static gint debug_workers;
+
+/*
+ * *Pause*, asked of whichever thread reaches a new line first. It used to be
+ * the main thread's mode, read by the main thread -- so it could not reach a
+ * `Task` spinning while the window waited for a click, which is exactly when
+ * somebody presses Pause. The first thread to see it takes it (an exchange,
+ * so one stop answers one press) and stops as a step would.
+ */
+static gint pause_wanted;
 
 
 /*
@@ -1583,10 +1593,11 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
         JS_DebugStopOnThrow(JS_GetRuntime(ctx), dbg.stop_on_throw);
         JS_FreeValue(ctx, bv);
     } else if (!strcmp(verb, "pause")) {
-        /* Not a stop of its own: the mode says *the next line, wherever it is*,
-           and the stop happens where the program actually is. Asking twice, or
-           asking one that is already stopped, changes nothing. */
-        here.mode = PAUSE;
+        /* Not a stop of its own: the next line, wherever it is and on whichever
+           thread -- the window's or a task's -- and the stop happens where the
+           program actually is. Asking twice, or asking one that is already
+           stopped, changes nothing. */
+        g_atomic_int_set(&pause_wanted, 1);
     } else if (!strcmp(verb, "watch")) {
         /* A data breakpoint: `owner` evaluated in the frame, `name` one of its
          * own fields. Answered with `armed`, or with why it could not be. */
@@ -1807,6 +1818,29 @@ static void take_messages(JSContext *ctx, int depth_now)
 }
 
 /*
+ * **The channel, read while the window is idle.** `take_messages` runs from
+ * the hook, so it hears the IDE only while the main thread is running
+ * JavaScript; a window waiting for a click heard nothing -- a breakpoint set
+ * then was armed at the next line run, and a *Pause* meant for a task spinning
+ * meanwhile never arrived. A watch on stdin in the main loop reads the same
+ * orders when there is no JavaScript on the stack to read them. It does
+ * nothing while another thread owns the channel (that thread is reading), and
+ * goes when the IDE does.
+ */
+#ifndef G_OS_WIN32
+static gboolean on_idle_orders(gint fd, GIOCondition cond, gpointer data)
+{
+    (void)fd; (void)cond; (void)data;
+
+    if (!dbg.attached)
+        return G_SOURCE_REMOVE;
+    here.ctx = dbg.ctx;
+    take_messages(dbg.ctx, 0);
+    return dbg.attached ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
+}
+#endif
+
+/*
  * Something was thrown, and the debugger was asked to stop where that happens.
  *
  * Here rather than where it is caught, which is the whole point: by the time a
@@ -1851,6 +1885,11 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
         on_throw(ctx);
         return;
     }
+
+    /* A press of Pause, taken by the first thread here. */
+    if (g_atomic_int_get(&pause_wanted) &&
+        g_atomic_int_compare_and_exchange(&pause_wanted, 1, 0))
+        here.mode = PAUSE;
 
     /*
      * The free half: with nothing armed and nobody attached there is nothing to
@@ -2043,6 +2082,10 @@ void bta_debug_start(JSContext *ctx)
     dbg.attached = true;
     wait_for_orders(ctx, 0);
     g_rec_mutex_unlock(&channel_lock);
+#ifndef G_OS_WIN32
+    if (dbg.attached)
+        g_unix_fd_add(STDIN_FILENO, G_IO_IN | G_IO_HUP, on_idle_orders, NULL);
+#endif
 }
 
 void bta_debug_stopping(JSContext *ctx, int code)

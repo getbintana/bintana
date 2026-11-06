@@ -182,8 +182,13 @@ during a worker's stop and sees it said after). What is per thread is per
 thread (`BtaThread`: the step mode and depth, whether the debugger is
 evaluating, the poll clock); the breakpoint list and its counters are shared
 under `breaks_lock`, and a breakpoint's fields are copied out under it so a
-condition runs without holding it. Two things are the main thread's alone, and
-said: **Pause** (only the main thread polls stdin while running), and **a data
+condition runs without holding it. **Pause reaches a task**: it is a request
+taken by the first thread to reach a new line (`pause_wanted`, exchanged so one
+press is one stop), and the main loop reads the channel while the window is
+idle (`on_idle_orders`, a watch on stdin) -- before, orders were read only from
+the hook, so a press while the window waited for a click never arrived, which
+is exactly when a spinning task is paused (`testDebuggerTaskPause`, red
+without the watch). One thing is the main thread's alone, and said: **a data
 breakpoint** -- a worker's object dies with its runtime, and the cell a watch
 holds from C with it, so `watch` inside a task answers `armed: false` and why.
 `stopOnThrow` reaches a worker started after it was said, not one running.
