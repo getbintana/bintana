@@ -525,7 +525,7 @@ export class Debugger {
      * buys: the thing one presses to get going is the same thing whether it has
      * started yet or not.
      */
-    start() {
+    start(testRun) {
         if (this.halted) return this.send({ do: "continue" });
         if (this.running) return false;
         if (!this.ide.project) return false;
@@ -538,8 +538,17 @@ export class Debugger {
         const options = ["--debug", ...this.ide.runner.options()];
         const plan    = this.ide.launch.plan();
 
-        this.ide.log(`> bintana ${[...options, this.ide.project,
-                                   ...plan.arguments].join(" ")}\n`);
+        /* The project's tests instead of the project: `test --json` in front,
+         * the filter after it, and the results to `Tests` rather than to the
+         * log. The run configuration's arguments are the program's, not the
+         * tests'. */
+        this.tests = testRun || null;
+        const argv = this.tests
+            ? ["test", "--json", ...options, this.ide.project,
+               ...(this.tests.test ? [this.tests.test] : [])]
+            : [...options, this.ide.project, ...plan.arguments];
+
+        this.ide.log(`> bintana ${argv.join(" ")}\n`);
         this.remember(this.ide.activeFile);
 
         this.stopped = null;
@@ -553,10 +562,10 @@ export class Debugger {
          * the control channel added. Debugging a project with different
          * arguments than running it would be a second answer to the question
          * *how is this project started*. */
-        this.job = Exec([Application.Executable, ...options, this.ide.project,
-                         ...plan.arguments],
+        const tests = this.tests;
+        this.job = Exec([Application.Executable, ...argv],
                         { ...plan.options, Control: (line) => this.heard(line) },
-                        (line) => this.ide.log(`${line}\n`),
+                        (line) => (tests ? tests.onLine(line) : this.ide.log(`${line}\n`)),
                         (code) => this.finished(code));
         /*
          * What the configuration says about stopping, applied before anything
@@ -589,6 +598,16 @@ export class Debugger {
         this.children.clear();
         this.ide.running = false;
         this.clearHere();
+        const tests = this.tests;
+        this.tests = null;
+        /* A test run answers on its own page: 1 is *a test failed*, which is an
+         * answer and not an error to go looking for a line of. */
+        if (tests) {
+            tests.onExit(code);
+            this.fill();
+            this.ide.refresh();
+            return;
+        }
         this.ide.log(code === 0 ? "\n[finished ok]\n"
                                 : `\n[finished with code ${code}]\n`);
         this.fill();

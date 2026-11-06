@@ -16963,6 +16963,54 @@ function* p_debug(ide) {
     check("...on its line in the gutter", lines().includes(at.line), JSON.stringify(lines()));
     Directory.DeleteTree(twin);
 
+    /*
+     * --- the project's tests, under the debugger: a real child ---------------
+     *
+     * `bintana test --debug --json`, its control channel to the debugger and
+     * its results to the Tests page. The caret inside a test method makes that
+     * test the only one run, which is what debugging a failing one is.
+     */
+    const testDir = File.Join(TMP, "tests");
+    Directory.Make(testDir);
+    File.Save(File.Join(testDir, "DbgTest.js"),
+              "class DbgTest extends Test {\n" +          /* 1 */
+              "    testA() {\n" +                         /* 2 */
+              "        const n = 21;\n" +                 /* 3 */
+              "        this.Eq(n * 2, 42);\n" +           /* 4 */
+              "    }\n" +                                 /* 5 */
+              "    testB() { this.Eq(1, 1); }\n" +        /* 6 */
+              "}\n");
+    ide.listFiles();
+    ide.openInTab("tests/DbgTest.js");
+    yield* settled(ide);
+    ide.Editor.GotoLine(4);
+    ide.MnuBreakpoint_Click();
+    eq("the test under the caret is the one asked for", ide.tests.testUnderCaret(), "DbgTest.testA");
+
+    ide.MnuDebugTests_Click();
+    check("Debug tests starts a debugged child", dbg.running);
+    yield* until(() => dbg.halted, 600);
+    eq("it stops on the breakpoint inside the test",
+       dbg.stopped && dbg.stopped[0] && `${dbg.stopped[0].Name}:${dbg.stopped[0].Line}`, "testA:4");
+    check("...and the command named only that test",
+          ide.LogView.Text.includes("--debug") && ide.LogView.Text.includes("DbgTest.testA"),
+          ide.LogView.Text.slice(-300));
+
+    ide.ActDebug_Execute();                       /* Continue */
+    yield* until(() => !dbg.running, 600);
+    eq("carried on, the test's result is on the Tests page",
+       ide.tests.rows.map((r) => `${r.Name}:${r.Ok}`).join(), "testA:true");
+    eq("...the page is the one on show", ide.ConsoleBox.Current, ide.tests.page);
+
+    ide.Editor.GotoLine(4);
+    ide.MnuBreakpoint_Click();
+    ide.closeTabByName("tests/DbgTest.js", true);
+    Directory.DeleteTree(testDir);
+    ide.listFiles();
+    yield* settled(ide);
+    ide.openInTab(js);
+    yield* settled(ide);
+
     /* --- back to what the phase after this one expects ----------------------- */
     /* The caret went back to the top when the tab reopened, and F9 acts where
      * the caret is -- without this it would *add* a second one on line 1. */

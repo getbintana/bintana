@@ -108,14 +108,7 @@ export class Tests {
 
     run(filter) {
         const ide = this.ide;
-        if (!ide.project) return;
-        if (this.job && this.job.Running) this.job.Stop();
-
-        ide.saveAllDirty();
-        this.rows = [];
-        this.passed = this.failed = 0;
-        this.show();
-        this.reveal();
+        if (!this.begin()) return;
 
         const plan = ide.launch.plan();
         const argv = ["test", "--json", ide.project, ...(filter ? [filter] : [])];
@@ -126,6 +119,62 @@ export class Tests {
                          (code) => this.finished(job, code));
         this.job = job;
         ide.refresh();
+    }
+
+    /* What every run starts with, plain or debugged: the files saved, the last
+     * answer cleared, the page in front. False with no project. */
+    begin() {
+        const ide = this.ide;
+        if (!ide.project) return false;
+        if (this.job && this.job.Running) this.job.Stop();
+
+        ide.saveAllDirty();
+        this.rows = [];
+        this.passed = this.failed = 0;
+        this.show();
+        this.reveal();
+        return true;
+    }
+
+    /*
+     * The tests under the debugger: breakpoints, the stack and the values as
+     * for the program, and the results on this page as for a plain run -- the
+     * child is `bintana test --debug --json`, its lines come here and its
+     * control channel goes to the debugger. **The one under the caret** when
+     * the caret is inside a `test` method of a test file, since a test that
+     * fails is the one being debugged; every test otherwise.
+     */
+    debug() {
+        if (this.ide.debugger_.running) return false;
+        const filter = this.testUnderCaret();
+        if (!this.begin()) return false;
+        return this.ide.debugger_.start({
+            test:   filter,
+            onLine: (line) => this.line(line),
+            onExit: (code) => this.finished(null, code),
+        });
+    }
+
+    /*
+     * `Class.method` of the test method the caret is in, or `""`. Asked of the
+     * parser (`Application.Symbols`): a method is a `Method` row with its class
+     * as `Parent`, and the function it opens is the `Scope` that starts on the
+     * same line -- the lines it spans say whether the caret is inside.
+     */
+    testUnderCaret() {
+        const file = this.ide.activeFile || "";
+        const ed   = this.ide.Editor;
+        if (!ed || !/^tests\/.*Test\.js$/.test(file)) return "";
+
+        let syms;
+        try { syms = Application.Symbols(ed.Text); } catch (e) { return ""; }
+        const line = ed.Line;
+        for (const m of syms) {
+            if (m.Kind !== "Method" || !m.Name.startsWith("test")) continue;
+            const body = syms.find((s) => s.Kind === "Scope" && s.Line === m.Line);
+            if (body && body.Line <= line && line <= body.End) return `${m.Parent}.${m.Name}`;
+        }
+        return "";
     }
 
     /* One line of the child's: a result, or something for Output. */

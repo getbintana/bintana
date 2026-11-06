@@ -27,7 +27,7 @@ msgstr "Agregar"
 #: forms/ActionForm.form: BtnDelete.Text forms/ColumnForm.form: BtnColDel.Text
 #: forms/ConfirmForm.form: BtnYes.Text forms/MenuForm.form:
 #: forms/RecordForm.form: BtnRecDel.Text forms/ReportForm.form:
-#: forms/MainForm.js:3245 modules/FormFiles.js:726
+#: forms/MainForm.js:3247 modules/FormFiles.js:726
 msgid "Delete"
 msgstr "Eliminar"
 
@@ -396,7 +396,7 @@ msgstr "Tirar lo que se escribió en los archivos elegidos. No hay vuelta atrás
 
 #: forms/GitForm.form: BtnClose.Text forms/ImageForm.form: forms/LogForm.form:
 #: forms/PoForm.form: forms/RefsForm.form: forms/SearchForm.form:
-#: forms/PoForm.js:393 modules/Debugger.js:1023
+#: forms/PoForm.js:393 modules/Debugger.js:1042
 msgid "Close"
 msgstr "Cerrar"
 
@@ -718,6 +718,10 @@ msgstr "Ejecutar con perfilado"
 msgid "Run tests"
 msgstr "Ejecutar tests"
 
+#: forms/MainForm.form: menu MnuDebugTests
+msgid "Debug tests"
+msgstr "Depurar tests"
+
 #: forms/MainForm.form: menu MnuStrict
 msgid "Strict checks while running"
 msgstr "Comprobaciones estrictas al ejecutar"
@@ -850,7 +854,7 @@ msgstr "Escribir un manejador"
 msgid "_Help"
 msgstr "Ay_uda"
 
-#: forms/MainForm.form: menu MnuAbout forms/MainForm.js:3583
+#: forms/MainForm.form: menu MnuAbout forms/MainForm.js:3585
 msgid "About Bintana"
 msgstr "Acerca de Bintana"
 
@@ -1105,7 +1109,7 @@ msgstr "Depurar (Ctrl+F9)"
 msgid "Stop (Shift+F9)"
 msgstr "Detener (Mayús+F9)"
 
-#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:1442
+#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:1443
 msgid "No project"
 msgstr "Sin proyecto"
 
@@ -1187,7 +1191,7 @@ msgstr ""
 "Commitear lo que está en el próximo commit con el botón de abajo. Enter "
 "escribe una línea"
 
-#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:2653
+#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:2655
 msgid "Reload"
 msgstr "Recargar"
 
@@ -1291,7 +1295,7 @@ msgstr "Puntos de corte"
 msgid "Problems"
 msgstr "Problemas"
 
-#: forms/MainForm.form: ConsoleBox.Tabs modules/Tests.js:201
+#: forms/MainForm.form: ConsoleBox.Tabs modules/Tests.js:250
 msgid "Tests"
 msgstr "Tests"
 
@@ -1370,13 +1374,15 @@ msgstr "Mantener esta expresión y contestarla de nuevo en cada parada"
 msgid ""
 "Every breakpoint of the project. The tick turns one on or off; double click "
 "goes to its line"
-msgstr "Todos los puntos de corte del proyecto. La marca activa o desactiva uno; doble clic va a su línea"
+msgstr ""
+"Todos los puntos de corte del proyecto. La marca activa o desactiva uno; "
+"doble clic va a su línea"
 
 #: forms/MainForm.form: BtnBpRemove.Tooltip
 msgid "Take the chosen breakpoint away"
 msgstr "Quitar el punto de corte elegido"
 
-#: forms/MainForm.form: BtnBpToggleAll.Text modules/Debugger.js:701
+#: forms/MainForm.form: BtnBpToggleAll.Text modules/Debugger.js:720
 msgid "Disable all"
 msgstr "Desactivar todos"
 
@@ -1567,7 +1573,7 @@ msgstr ""
 msgid "Base folder:"
 msgstr "Carpeta base:"
 
-#: forms/NewProjectForm.form: BtnCreate.Text forms/MainForm.js:3108
+#: forms/NewProjectForm.form: BtnCreate.Text forms/MainForm.js:3110
 msgid "Create"
 msgstr "Crear"
 
@@ -2210,130 +2216,130 @@ msgstr "Terminal"
 msgid "the shell ended"
 msgstr "el shell terminó"
 
-#: forms/MainForm.js:1447
+#: forms/MainForm.js:1448
 msgid "{0}   double click to edit"
 msgstr "{0}   doble clic para editar"
 
-#: forms/MainForm.js:1449
+#: forms/MainForm.js:1450
 msgid "{0}   double click to edit its fields"
 msgstr "{0}   doble clic para editar sus campos"
 
-#: forms/MainForm.js:1452
+#: forms/MainForm.js:1453
 msgid "{0}   double click to show its tables"
 msgstr "{0}   doble clic para ver sus tablas"
 
-#: forms/MainForm.js:1461
+#: forms/MainForm.js:1462
 msgid "   read-only: not UTF-8"
 msgstr "   solo lectura: no es UTF-8"
 
-#: forms/MainForm.js:1471
+#: forms/MainForm.js:1472
 msgid "   form {0}x{1}"
 msgstr "   formulario {0}x{1}"
 
-#: forms/MainForm.js:1474
+#: forms/MainForm.js:1475
 msgid "   Ln {0}, Col {1}"
 msgstr "   Lín {0}, Col {1}"
 
-#: forms/MainForm.js:1965
+#: forms/MainForm.js:1967
 msgid "Checking the project..."
 msgstr "Comprobando el proyecto..."
 
-#: forms/MainForm.js:2629
+#: forms/MainForm.js:2631
 msgid "{0} is no longer on disk."
 msgstr "{0} ya no está en el disco."
 
-#: forms/MainForm.js:2631
+#: forms/MainForm.js:2633
 msgid "{0} changed on disk, and there are unsaved changes here."
 msgstr "{0} cambió en el disco, y acá hay cambios sin guardar."
 
-#: forms/MainForm.js:2633
+#: forms/MainForm.js:2635
 msgid "{0} changed on disk."
 msgstr "{0} cambió en el disco."
 
-#: forms/MainForm.js:2654
+#: forms/MainForm.js:2656
 msgid "{0} changed on disk. Take the newer file and lose what is unsaved here?"
 msgstr ""
 "{0} cambió en el disco. ¿Tomar el archivo nuevo y perder lo que no está "
 "guardado acá?"
 
-#: forms/MainForm.js:2655
+#: forms/MainForm.js:2657
 msgid "Reload without saving"
 msgstr "Recargar sin guardar"
 
-#: forms/MainForm.js:2984 forms/MainForm.js:3006 modules/Navigator.js:72
+#: forms/MainForm.js:2986 forms/MainForm.js:3008 modules/Navigator.js:72
 msgid "Put the cursor on a name first."
 msgstr "Poné el cursor sobre un nombre primero."
 
-#: forms/MainForm.js:3011 forms/RefsForm.js:105
+#: forms/MainForm.js:3013 forms/RefsForm.js:105
 msgid "Rename symbol"
 msgstr "Renombrar símbolo"
 
-#: forms/MainForm.js:3011 forms/RefsForm.js:105
+#: forms/MainForm.js:3013 forms/RefsForm.js:105
 msgid "New name:"
 msgstr "Nombre nuevo:"
 
-#: forms/MainForm.js:3106
+#: forms/MainForm.js:3108
 msgid "Start a repository"
 msgstr "Empezar un repositorio"
 
-#: forms/MainForm.js:3107
+#: forms/MainForm.js:3109
 msgid "Create a git repository in {0}?"
 msgstr "¿Crear un repositorio git en {0}?"
 
-#: forms/MainForm.js:3163
+#: forms/MainForm.js:3165
 msgid "(no branches yet)"
 msgstr "(todavía no hay ramas)"
 
-#: forms/MainForm.js:3170
+#: forms/MainForm.js:3172
 msgid "(no other branch)"
 msgstr "(no hay otra rama)"
 
-#: forms/MainForm.js:3204
+#: forms/MainForm.js:3206
 msgid "Switch branch"
 msgstr "Cambiar de rama"
 
-#: forms/MainForm.js:3208
+#: forms/MainForm.js:3210
 msgid "Switch"
 msgstr "Cambiar"
 
-#: forms/MainForm.js:3223
+#: forms/MainForm.js:3225
 msgid "New branch"
 msgstr "Rama nueva"
 
-#: forms/MainForm.js:3223
+#: forms/MainForm.js:3225
 msgid "Called"
 msgstr "Se llama"
 
-#: forms/MainForm.js:3243
+#: forms/MainForm.js:3245
 msgid "Delete a branch"
 msgstr "Borrar una rama"
 
-#: forms/MainForm.js:3244
+#: forms/MainForm.js:3246
 msgid ""
 "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr "¿Borrar {0}? Lo que esté commiteado sólo ahí se rechaza, no se pierde."
 
-#: forms/MainForm.js:3336
+#: forms/MainForm.js:3338
 msgid "Clone a repository"
 msgstr "Clonar un repositorio"
 
-#: forms/MainForm.js:3336
+#: forms/MainForm.js:3338
 msgid "From"
 msgstr "Desde"
 
-#: forms/MainForm.js:3344
+#: forms/MainForm.js:3346
 msgid "Clone into"
 msgstr "Dónde clonarlo"
 
-#: forms/MainForm.js:3586
+#: forms/MainForm.js:3588
 msgid "Version {0}, on Bintana {1}"
 msgstr "Versión {0}, sobre Bintana {1}"
 
-#: forms/MainForm.js:3588
+#: forms/MainForm.js:3590
 msgid "On Bintana {0}"
 msgstr "Sobre Bintana {0}"
 
-#: forms/MainForm.js:3590
+#: forms/MainForm.js:3592
 msgid ""
 "A RAD environment in the spirit of Visual Basic and Gambas: QuickJS embedded "
 "in a GTK4 runtime. The IDE is written in Bintana and runs on it with no "
@@ -2343,7 +2349,7 @@ msgstr ""
 "runtime GTK4. El IDE está escrito en Bintana y corre sobre él sin "
 "privilegios propios."
 
-#: forms/MainForm.js:3591
+#: forms/MainForm.js:3593
 msgid "Copyright © 2026 Matias De lellis — MIT License"
 msgstr "Copyright © 2026 Matias De lellis — Licencia MIT"
 
@@ -2357,13 +2363,13 @@ msgstr[1] ""
 "{0} archivos tienen cambios sin guardar:\n"
 "{1}"
 
-#: forms/MainForm.js:1455 forms/QuickForm.js:265
+#: forms/MainForm.js:1456 forms/QuickForm.js:265
 msgid "{0} file"
 msgid_plural "{0} files"
 msgstr[0] "{0} archivo"
 msgstr[1] "{0} archivos"
 
-#: forms/MainForm.js:3205
+#: forms/MainForm.js:3207
 msgid ""
 "There is {0} change here. Switching keeps it, unless the two branches "
 "disagree about the same file."
@@ -2377,12 +2383,12 @@ msgstr[1] ""
 "Hay {0} cambios acá. Cambiar de rama los conserva, salvo que las dos ramas "
 "no coincidan en el mismo archivo."
 
-#: forms/MainForm.js:920 forms/MainForm.js:1686 modules/Exporter.js:38
+#: forms/MainForm.js:920 forms/MainForm.js:1688 modules/Exporter.js:38
 #: modules/Installer.js:27
 msgid "Open a project first."
 msgstr "Abrí un proyecto primero."
 
-#: forms/MainForm.js:1925
+#: forms/MainForm.js:1927
 msgid ""
 "There is no template yet. Run Project > Update translations first: it "
 "gathers every string the project shows and writes the .pot a translation "
@@ -2400,7 +2406,7 @@ msgstr ""
 "{0} no tiene project.json.\n"
 "Se puede editar igual, pero no va a poder ejecutarse."
 
-#: forms/MainForm.js:1523
+#: forms/MainForm.js:1524
 msgid ""
 "{0}\n"
 "is not there any more."
@@ -2408,19 +2414,19 @@ msgstr ""
 "{0}\n"
 "ya no está."
 
-#: forms/MainForm.js:3484
+#: forms/MainForm.js:3486
 msgid "Open a form to preview it."
 msgstr "Abrí un formulario para verlo en vista previa."
 
-#: forms/MainForm.js:3507
+#: forms/MainForm.js:3509
 msgid "Open a form's design to edit its menus."
 msgstr "Abrí el diseño de un formulario para editar sus menús."
 
-#: forms/MainForm.js:3526
+#: forms/MainForm.js:3528
 msgid "Open a form's design to edit its commands."
 msgstr "Abrí el diseño de un formulario para editar sus comandos."
 
-#: forms/MainForm.js:3562
+#: forms/MainForm.js:3564
 msgid "Open a form's design to edit its tab order."
 msgstr "Abrí el diseño de un formulario para editar su orden de tabulación."
 
@@ -2440,7 +2446,7 @@ msgstr "{0} ya existe y no es una carpeta."
 msgid "{0} is already a project."
 msgstr "{0} ya es un proyecto."
 
-#: forms/MainForm.js:1843
+#: forms/MainForm.js:1845
 msgid ""
 "Cannot open {0}:\n"
 "{1}"
@@ -2448,7 +2454,7 @@ msgstr ""
 "No se pudo abrir {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:1863 forms/MetainfoForm.js:58
+#: forms/MainForm.js:1865 forms/MetainfoForm.js:58
 msgid ""
 "Cannot read {0}:\n"
 "{1}"
@@ -2456,7 +2462,7 @@ msgstr ""
 "No se pudo leer {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:1874
+#: forms/MainForm.js:1876
 msgid ""
 "Cannot edit {0}:\n"
 "{1}"
@@ -2464,7 +2470,7 @@ msgstr ""
 "No se pudo editar {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:3361 modules/FormFiles.js:429 modules/FormFiles.js:610
+#: forms/MainForm.js:3363 modules/FormFiles.js:429 modules/FormFiles.js:610
 #: modules/Tests.js:83
 msgid "{0} already exists."
 msgstr "{0} ya existe."
@@ -2997,79 +3003,79 @@ msgstr "en la pasada"
 msgid "Put the caret on a breakpoint first."
 msgstr "Poné el cursor sobre un punto de corte primero."
 
-#: modules/Debugger.js:684 modules/Problems.js:204
+#: modules/Debugger.js:703 modules/Problems.js:204
 msgid "Place"
 msgstr "Lugar"
 
-#: modules/Debugger.js:685
+#: modules/Debugger.js:704
 msgid "Only when"
 msgstr "Solo cuando"
 
-#: modules/Debugger.js:686
+#: modules/Debugger.js:705
 msgid "On pass"
 msgstr "En la pasada"
 
-#: modules/Debugger.js:687 modules/Tests.js:170
+#: modules/Debugger.js:706 modules/Tests.js:219
 msgid "Message"
 msgstr "Mensaje"
 
-#: modules/Debugger.js:688
+#: modules/Debugger.js:707
 msgid "Passes"
 msgstr "Pasadas"
 
-#: modules/Debugger.js:701
+#: modules/Debugger.js:720
 msgid "Enable all"
 msgstr "Activar todos"
 
-#: modules/Debugger.js:786
+#: modules/Debugger.js:805
 msgid "{0}:{1} cannot stop; the breakpoint moved to line {2}."
 msgstr "{0}:{1} no puede parar; el punto de corte se movió a la línea {2}."
 
-#: modules/Debugger.js:812
+#: modules/Debugger.js:831
 msgid "{0}:{1} cannot stop: {2}"
 msgstr "{0}:{1} no se puede detener: {2}"
 
-#: modules/Debugger.js:814
+#: modules/Debugger.js:833
 msgid "{0}:{1} cannot stop: nothing runs there or after it."
 msgstr "{0}:{1} no puede parar: ahí o después no corre nada."
 
-#: modules/Debugger.js:823
+#: modules/Debugger.js:842
 msgid "{0} changed: {1} -> {2}"
 msgstr "{0} cambió: {1} -> {2}"
 
-#: modules/Debugger.js:831
+#: modules/Debugger.js:850
 msgid "Stopped on pass {0}."
 msgstr "Detenido en la pasada {0}."
 
-#: modules/Debugger.js:956
+#: modules/Debugger.js:975
 msgid "Stops when {0} changes."
 msgstr "Se detiene cuando {0} cambie."
 
-#: modules/Debugger.js:961
+#: modules/Debugger.js:980
 msgid "{0} cannot be watched: {1}"
 msgstr "No se puede vigilar {0}: {1}"
 
-#: modules/Debugger.js:1023
+#: modules/Debugger.js:1042
 msgid "Open"
 msgstr "Abrir"
 
-#: modules/Debugger.js:1081
+#: modules/Debugger.js:1100
 msgid "… {0} more"
 msgstr "… {0} más"
 
-#: modules/Debugger.js:1108
+#: modules/Debugger.js:1127
 msgid "Change a value"
 msgstr "Cambiar un valor"
 
-#: modules/Debugger.js:1109
+#: modules/Debugger.js:1128
 msgid "{0} is"
 msgstr "{0} es"
 
-#: modules/Debugger.js:1123
+#: modules/Debugger.js:1142
 msgid "Stopped here"
 msgstr "Detenido acá"
 
-#: modules/Debugger.js:1258
+#: modules/Debugger.js:1277
 msgid "Run to cursor needs a program being debugged."
 msgstr "Ejecutar hasta el cursor necesita un programa en depuración."
 
@@ -3670,15 +3676,15 @@ msgstr "Test nuevo"
 msgid "What it tests (a class name):"
 msgstr "Qué prueba (un nombre de clase):"
 
-#: modules/Tests.js:168
+#: modules/Tests.js:217
 msgid "Test"
 msgstr "Test"
 
-#: modules/Tests.js:169
+#: modules/Tests.js:218
 msgid "Time"
 msgstr "Tiempo"
 
-#: modules/Tests.js:200
+#: modules/Tests.js:249
 msgid "{0} test failed"
 msgid_plural "{0} tests failed"
 msgstr[0] "{0} test falló"

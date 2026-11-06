@@ -621,6 +621,10 @@
           "shortcut": "<Control><Shift>t"
         },
         {
+          "name": "MnuDebugTests",
+          "text": "Debug tests"
+        },
+        {
           "name": "MnuStrict",
           "text": "Strict checks while running",
           "check": true

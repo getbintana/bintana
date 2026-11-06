@@ -1329,6 +1329,7 @@ export class MainForm extends Form {
         this.MnuPreview.Enabled   = this.formOf(this.activeFile) !== null;
         this.MnuNewTest.Enabled   = !!this.project;
         this.MnuRunTests.Enabled  = !!this.project;
+        this.MnuDebugTests.Enabled = !!this.project && !this.debugger_.running;
         this.MnuFtRename.Enabled  = this.activeFile !== null;
         this.MnuFtDelete.Enabled  = this.activeFile !== null;
         /* Editing is for a translation; starting one is for the template. The
@@ -1553,6 +1554,7 @@ export class MainForm extends Form {
 
     MnuNewTest_Click()  { this.tests.newTest(); }
     MnuRunTests_Click() { this.tests.run(); }
+    MnuDebugTests_Click() { this.tests.debug(); }
     MnuProfile_Click()  { this.runner.start(true); }
 
     /* Both delegate to `Runner`, and these two are here because `tests/ide`
