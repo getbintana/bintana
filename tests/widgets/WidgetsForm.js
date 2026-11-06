@@ -686,6 +686,8 @@ const TESTS = [
     "DebuggerTaskWatch",
     /* Async: a Task's watch taken off while the window is the one stopped. */
     "DebuggerTaskUnwatch",
+    /* Async: a class's members replaced while the program runs. */
+    "DebuggerReplace",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -32054,6 +32056,112 @@ class PQ extends Form {
                    stops.join(" "), "Spin:breakpoint main:breakpoint");
                 eq("...and the worker puts it back as it ends, cleanly",
                    `${code} ${out.join("")}`, "0 total 1");
+            });
+    }
+
+    /*
+     * Edit and continue, the runtime's half: `replace` puts a member's new text
+     * on the running class, so the next call runs it. A method calling `super`
+     * and a static one reach the same base; a getter changes and its setter
+     * stays; a method taken off is gone. And every refusal says why rather
+     * than installing something that fails later: a name a module keeps to
+     * itself, a private field, a class a module does not export, a text that
+     * does not compile -- the last leaving the member as it was.
+     */
+    testDebuggerReplace() {
+        const proj = File.Join(SCRATCH, "dbgreplace");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbgreplace", main: "Main", sources: ["Calc.js", "Mod.js", "Main.js"] }));
+        File.Save(File.Join(proj, "Calc.js"),
+                  '"use strict";\n' +
+                  'class Base {\n' +
+                  '    f() { return "base"; }\n' +
+                  '    static s() { return "sbase"; }\n' +
+                  '}\n' +
+                  'class Calc extends Base {\n' +
+                  '    f() {\n' +
+                  '        return "old " + super.f();\n' +
+                  '    }\n' +
+                  '    get v() { return 1; }\n' +
+                  '    set v(x) { this.saved = x; }\n' +
+                  '    static s() { return "old " + super.s(); }\n' +
+                  '    gone() { return "here"; }\n' +
+                  '}\n');
+        File.Save(File.Join(proj, "Mod.js"),
+                  'const RATE = 3;\n' +
+                  'class Hidden { m() { return 1; } }\n' +
+                  'export class Loan {\n' +
+                  '    pay() { return RATE; }\n' +
+                  '}\n');
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +
+                  'function Main() {\n' +
+                  '    const c = new Calc();\n' +
+                  '    let n = 0;\n' +
+                  '    Timer.Every(30, () => {\n' +
+                  '        n++;\n' +
+                  '        let gone;\n' +
+                  '        try { gone = c.gone(); } catch (e) { gone = "gone"; }\n' +
+                  '        c.v = 5;\n' +
+                  '        print(`${c.f()} v=${c.v} saved=${c.saved} ${Calc.s()} ${gone} loan=${new Loan().pay()}`);\n' +
+                  '        if (n >= 5) Application.Quit(0);\n' +
+                  '    });\n' +
+                  '}\n');
+
+        const out     = [];
+        const answers = {};
+        const send    = (o) => job.Write(JSON.stringify(o));
+
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+                    if (kind === "ready") send({ do: "continue" });
+                    else if (kind === "replace") answers[msg.id] = msg.applied ? "applied" : msg.why;
+                },
+            },
+            (line) => {
+                out.push(line);
+                if (out.length !== 1) return;
+                send({ do: "replace", id: 1, class: "Calc", name: "f", kind: "Method",
+                       text: "f() {\n    return 'new ' + super.f();\n}" });
+                send({ do: "replace", id: 2, class: "Calc", name: "v", kind: "Getter",
+                       text: "get v() { return 2; }" });
+                send({ do: "replace", id: 3, class: "Calc", name: "s", kind: "Static",
+                       text: "static s() { return 'new ' + super.s(); }" });
+                send({ do: "replace", id: 4, class: "Calc", name: "gone", kind: "Method", remove: true });
+                send({ do: "replace", id: 5, class: "Loan", name: "pay", kind: "Method",
+                       text: "pay() { return RATE * 2; }" });
+                send({ do: "replace", id: 6, class: "Calc", name: "p", kind: "Method",
+                       text: "p() { return this.#x; }" });
+                send({ do: "replace", id: 7, class: "Hidden", name: "m", kind: "Method",
+                       text: "m() { return 2; }" });
+                send({ do: "replace", id: 8, class: "Calc", name: "f", kind: "Method",
+                       text: "f() { return (; }" });
+            },
+            (code) => {
+                waiting--;
+                eq("a program changed while it ran finishes", code, 0);
+                eq("before: the text it started with",
+                   out[0], "old base v=1 saved=5 old sbase here loan=3");
+                eq("after: the next calls run the new members, super and the kept setter included",
+                   out[out.length - 1], "new base v=2 saved=5 new sbase gone loan=3");
+                eq("the four that can be taken are",
+                   [1, 2, 3, 4].map((i) => answers[i]).join(), "applied,applied,applied,applied");
+                eq("a name its module keeps to itself is refused",
+                   answers[5], "it uses RATE, which the program cannot reach from here -- " +
+                               "a name its module keeps to itself");
+                check("...a private field", (answers[6] || "").includes("private field"), answers[6]);
+                eq("...a class its module does not export",
+                   answers[7], "Hidden cannot be reached by its name -- a class its module " +
+                               "keeps to itself cannot be changed while it runs");
+                check("...a text that does not compile, leaving the member as it was",
+                      (answers[8] || "").startsWith("it does not compile"), answers[8]);
             });
     }
 

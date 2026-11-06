@@ -1374,6 +1374,262 @@ static void unwatch_id(JSContext *ctx, int id)
         unwatch_one(ctx, mine);
 }
 
+/* -------------------------------------------------- replacing a member */
+
+/*
+ * **Edit and continue, the part of it that can be honest.** A class's method,
+ * getter, setter or static, edited and saved while the program runs, is
+ * compiled again and put on the class the program is running -- so the next
+ * call runs the new text. Nothing already running changes: a call in
+ * progress finishes with the code it started with, and a function already
+ * created (an arrow handed to a timer) is the function it was.
+ *
+ * **How.** The member's text is compiled into an anonymous class built on the
+ * same base as the running one -- `(function (b) { return class extends b {
+ * … }; })` called with the running class's own parent -- and its property is
+ * copied onto the running class. Measured in QuickJS before it was written:
+ * a `super.m()` in the new text reaches the same base, instance and static; an
+ * anonymous class leaves the class's own name to resolve to the running class
+ * (a named one bound it to the copy); a getter and a static come across; and a
+ * method using a private field (`#v`) throws on an object of the running
+ * class, whose brand it does not carry -- so that one is refused, by the IDE
+ * before it is sent and by the compile here when it is not.
+ *
+ * **Refused, with the reason**, rather than installed to fail later: a class
+ * the program cannot reach by its name (one a module keeps to itself), a text
+ * that does not compile, and a free name the program cannot resolve from the
+ * global scope -- a module's private `const` would be a ReferenceError at the
+ * next call. And inside a `Task`'s stop: the class to change is the window's,
+ * on another thread.
+ */
+typedef struct {
+    JSContext *ctx;
+    char      *missing;     /* the first free name nothing answers */
+} ReplaceNames;
+
+static bool name_reachable(JSContext *ctx, const char *name)
+{
+    JSValue v = JS_Eval(ctx, name, strlen(name), "<replace>", JS_EVAL_TYPE_GLOBAL);
+
+    if (JS_IsException(v)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return false;
+    }
+    JS_FreeValue(ctx, v);
+    return true;
+}
+
+static void replace_name(JSContext *ctx, JSAtom name, int line, void *opaque)
+{
+    ReplaceNames *r = opaque;
+    const char   *s;
+
+    (void)line;
+    if (r->missing)
+        return;
+    s = JS_AtomToCString(ctx, name);
+    if (!s) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return;
+    }
+    if (strcmp(s, "__bta_base") && !name_reachable(ctx, s))
+        r->missing = g_strdup(s);
+    JS_FreeCString(ctx, s);
+}
+
+static void say_replaced(JSContext *ctx, int id, const char *why)
+{
+    JSValue out = JS_NewObject(ctx);
+
+    JS_SetPropertyStr(ctx, out, "reply", JS_NewString(ctx, "replace"));
+    JS_SetPropertyStr(ctx, out, "id", JS_NewInt32(ctx, id));
+    JS_SetPropertyStr(ctx, out, "applied", JS_NewBool(ctx, why == NULL));
+    if (why)
+        JS_SetPropertyStr(ctx, out, "why", JS_NewString(ctx, why));
+    emit_object(ctx, out);
+}
+
+static char *cmd_string(JSContext *ctx, JSValueConst cmd, const char *key)
+{
+    JSValue     v = JS_GetPropertyStr(ctx, cmd, key);
+    const char *s = JS_IsString(v) ? JS_ToCString(ctx, v) : NULL;
+    char       *out = s ? g_strdup(s) : NULL;
+
+    JS_FreeCString(ctx, s);
+    JS_FreeValue(ctx, v);
+    return out;
+}
+
+static char *replace_member_why(JSContext *ctx, const char *cls_name,
+                                const char *name, const char *kind,
+                                const char *text)
+{
+    bool    is_static = g_str_has_prefix(kind, "Static");
+    bool    is_get    = !strcmp(kind, "Getter") || !strcmp(kind, "StaticGetter");
+    bool    is_set    = !strcmp(kind, "Setter") || !strcmp(kind, "StaticSetter");
+    char   *why       = NULL;
+    JSValue cls, target = JS_UNDEFINED, base = JS_UNDEFINED, compiled = JS_UNDEFINED;
+    JSValue maker = JS_UNDEFINED, made = JS_UNDEFINED, source = JS_UNDEFINED;
+    JSAtom  atom = JS_ATOM_NULL;
+
+    if (ctx != dbg.ctx)
+        return g_strdup("the program is stopped inside a Task; save again once it carries on");
+
+    cls = bta_lookup_global(ctx, cls_name);
+    if (JS_IsException(cls) || !JS_IsConstructor(ctx, cls)) {
+        if (JS_IsException(cls))
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        JS_FreeValue(ctx, cls);
+        return g_strdup_printf("%s cannot be reached by its name -- a class its module "
+                               "keeps to itself cannot be changed while it runs", cls_name);
+    }
+    target = is_static ? JS_DupValue(ctx, cls) : JS_GetPropertyStr(ctx, cls, "prototype");
+    atom   = JS_NewAtom(ctx, name);
+
+    /* Taken away: the next call finds nothing, which is what the text says. */
+    if (!text) {
+        if (JS_DeleteProperty(ctx, target, atom, 0) < 0) {
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            why = g_strdup_printf("%s could not be taken off", name);
+        }
+        goto out;
+    }
+
+    /* The running class's own parent; a class with no `extends` has
+     * Function.prototype, which is no constructor and builds a plain class. */
+    base = JS_GetPrototype(ctx, cls);
+    bool derived = JS_IsConstructor(ctx, base);
+    char *src = derived
+        ? g_strdup_printf("(function (__bta_base) { return class extends __bta_base {\n%s\n}; })", text)
+        : g_strdup_printf("(function () { return class {\n%s\n}; })", text);
+
+    compiled = JS_Eval(ctx, src, strlen(src), "<replace>",
+                       JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT | JS_EVAL_FLAG_COMPILE_ONLY);
+    g_free(src);
+    if (JS_IsException(compiled)) {
+        JSValue     err = JS_GetException(ctx);
+        const char *msg = JS_ToCString(ctx, err);
+        why = g_strdup_printf("it does not compile: %s", msg ? msg : "a syntax error");
+        JS_FreeCString(ctx, msg);
+        JS_FreeValue(ctx, err);
+        compiled = JS_UNDEFINED;
+        goto out;
+    }
+
+    ReplaceNames names = { ctx, NULL };
+    JS_EnumFreeNamesFlags(ctx, compiled, JS_FREE_NAMES_SKIP_TYPEOF, replace_name, &names);
+    if (names.missing) {
+        why = g_strdup_printf("it uses %s, which the program cannot reach from here -- "
+                              "a name its module keeps to itself", names.missing);
+        g_free(names.missing);
+        goto out;
+    }
+
+    maker = JS_EvalFunction(ctx, compiled);     /* takes `compiled` */
+    compiled = JS_UNDEFINED;
+    if (JS_IsException(maker)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        why = g_strdup("it could not be built");
+        goto out;
+    }
+    made = JS_Call(ctx, maker, JS_UNDEFINED, derived ? 1 : 0, (JSValueConst *)&base);
+    if (JS_IsException(made)) {
+        JSValue     err = JS_GetException(ctx);
+        const char *msg = JS_ToCString(ctx, err);
+        why = g_strdup_printf("it could not be built: %s", msg ? msg : "an error");
+        JS_FreeCString(ctx, msg);
+        JS_FreeValue(ctx, err);
+        goto out;
+    }
+    source = is_static ? JS_DupValue(ctx, made) : JS_GetPropertyStr(ctx, made, "prototype");
+
+    JSPropertyDescriptor nd, od;
+    int has_new = JS_GetOwnProperty(ctx, &nd, source, atom);
+    if (has_new <= 0) {
+        if (has_new < 0)
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        why = g_strdup_printf("%s is not in the text that was sent", name);
+        goto out;
+    }
+
+    int flags = JS_PROP_HAS_CONFIGURABLE | JS_PROP_CONFIGURABLE | JS_PROP_HAS_ENUMERABLE;
+    JSValue getter = JS_UNDEFINED, setter = JS_UNDEFINED, value = JS_UNDEFINED;
+
+    if (is_get || is_set) {
+        /* One half of a pair changed: the other half is the running one. */
+        int has_old = JS_GetOwnProperty(ctx, &od, target, atom);
+        if (has_old < 0)
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        getter = JS_DupValue(ctx, is_get ? nd.getter
+                             : (has_old > 0 ? od.getter : JS_UNDEFINED));
+        setter = JS_DupValue(ctx, is_set ? nd.setter
+                             : (has_old > 0 ? od.setter : JS_UNDEFINED));
+        if (has_old > 0) {
+            JS_FreeValue(ctx, od.value);
+            JS_FreeValue(ctx, od.getter);
+            JS_FreeValue(ctx, od.setter);
+        }
+        flags |= JS_PROP_HAS_GET | JS_PROP_HAS_SET;
+    } else {
+        value  = JS_DupValue(ctx, nd.value);
+        flags |= JS_PROP_HAS_VALUE | JS_PROP_HAS_WRITABLE | JS_PROP_WRITABLE;
+    }
+    if (JS_DefineProperty(ctx, target, atom, value, getter, setter, flags) < 0) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        why = g_strdup_printf("%s could not be put on %s", name, cls_name);
+    }
+    JS_FreeValue(ctx, value);
+    JS_FreeValue(ctx, getter);
+    JS_FreeValue(ctx, setter);
+    JS_FreeValue(ctx, nd.value);
+    JS_FreeValue(ctx, nd.getter);
+    JS_FreeValue(ctx, nd.setter);
+
+out:
+    if (atom != JS_ATOM_NULL)
+        JS_FreeAtom(ctx, atom);
+    JS_FreeValue(ctx, source);
+    JS_FreeValue(ctx, made);
+    JS_FreeValue(ctx, maker);
+    JS_FreeValue(ctx, compiled);
+    JS_FreeValue(ctx, base);
+    JS_FreeValue(ctx, target);
+    JS_FreeValue(ctx, cls);
+    return why;
+}
+
+static void replace_member(JSContext *ctx, JSValueConst cmd)
+{
+    JSValue iv = JS_GetPropertyStr(ctx, cmd, "id");
+    int     id = 0;
+    char   *cls  = cmd_string(ctx, cmd, "class");
+    char   *name = cmd_string(ctx, cmd, "name");
+    char   *kind = cmd_string(ctx, cmd, "kind");
+    char   *text = cmd_string(ctx, cmd, "text");
+    char   *why;
+
+    JS_ToInt32(ctx, &id, iv);
+    JS_FreeValue(ctx, iv);
+    if (!cls || !name || !kind) {
+        why = g_strdup("replace needs a class, a name and a kind");
+    } else {
+        /* The debugger's own work: building the class must not stop in it. */
+        bool was = here.evaluating;
+        here.evaluating = true;
+        JSValue rv     = JS_GetPropertyStr(ctx, cmd, "remove");
+        bool    remove = JS_ToBool(ctx, rv) > 0;
+        JS_FreeValue(ctx, rv);
+        why = replace_member_why(ctx, cls, name, kind, remove ? NULL : text);
+        here.evaluating = was;
+    }
+    say_replaced(ctx, id, why);
+    g_free(why);
+    g_free(cls);
+    g_free(name);
+    g_free(kind);
+    g_free(text);
+}
+
 /* ------------------------------------------------------- reading commands */
 
 static void set_break(JSContext *ctx, JSValue cmd, bool one_shot)
@@ -1679,6 +1935,8 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
         JS_FreeValue(ctx, ov);
         JS_FreeValue(ctx, fv);
         JS_FreeValue(ctx, iv);
+    } else if (!strcmp(verb, "replace")) {
+        replace_member(ctx, cmd);
     } else if (!strcmp(verb, "hits")) {
         /* How often each breakpoint has been reached, asked at any time --
            running or stopped -- which is what a count-only breakpoint is read

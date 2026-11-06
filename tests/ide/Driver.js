@@ -17004,14 +17004,66 @@ function* p_debug(ide) {
           ide.LogView.Text.includes("--debug") && ide.LogView.Text.includes("DbgTest.testA"),
           ide.LogView.Text.slice(-300));
 
+    /*
+     * --- edit and continue, while it is stopped in testA ---------------------
+     *
+     * What changed is compared against what the program started with: two
+     * method bodies go to the running class -- one of them the method the
+     * program is stopped in, which is told it finishes with its old code --
+     * and a field added is refused on its line, in Problems.
+     */
+    const plan = HotSwap.Plan(
+        "class K {\n    x = 1;\n    a() {\n        return 1;\n    }\n    b() { return 2; }\n}\n",
+        "class K {\n    x = 1;\n    // a comment\n    a() {\n        return 10;\n    }\n    c() { return 3; }\n}\n");
+    eq("a changed body and a new method are to be replaced",
+       plan.replace.map((m) => `${m.name}@${m.line}`).join(), "a@4,c@7");
+    eq("...one taken away is to be removed", plan.remove.map((m) => m.name).join(), "b");
+    eq("...and a comment outside a method refuses nothing", plan.refused.length, 0);
+    const fieldPlan = HotSwap.Plan("class K {\n    x = 1;\n}\n", "class K {\n    x = 2;\n}\n");
+    eq("a field changed is refused on its line", fieldPlan.refused.map((r) => r.line).join(), "2");
+    const privatePlan = HotSwap.Plan("class K {\n    #v = 1;\n    a() { return 1; }\n}\n",
+                                     "class K {\n    #v = 1;\n    a() { return this.#v; }\n}\n");
+    check("a method using a private field is refused, saying so",
+          privatePlan.replace.length === 0 &&
+          (privatePlan.refused[0] || {}).why.includes("private field"), JSON.stringify(privatePlan));
+    eq("a text that does not compile is one refusal, and nothing else",
+       HotSwap.Plan("class K {}\n", "class K {\n").refused.length, 1);
+
+    const before = ide.LogView.Text.length;
+    ide.Editor.Text = ide.Editor.Text
+        .replace("this.Eq(n * 2, 42);", "this.Eq(n * 2, 42, \"twice\");")
+        .replace("testB() { this.Eq(1, 1); }", "testB() { this.Eq(2, 2); }");
+    ide.tabs.save();
+    yield* until(() => ide.LogView.Text.slice(before).includes("takes"), 300);
+    check("the running program takes both methods",
+          ide.LogView.Text.slice(before).includes("tests/DbgTest.js: the running program takes testA, testB."),
+          ide.LogView.Text.slice(before));
+    check("...and the one it is stopped in finishes with its old code",
+          ide.LogView.Text.slice(before).includes("This call of testA finishes with the code it started with"),
+          ide.LogView.Text.slice(before));
+
+    ide.Editor.Text = ide.Editor.Text.replace("class DbgTest extends Test {\n",
+                                              "class DbgTest extends Test {\n    extra = 1;\n");
+    ide.tabs.save();
+    yield* until(() => ide.problems.of("hotswap:tests/DbgTest.js").length > 0, 300);
+    eq("a field added is refused, on its line in Problems",
+       ide.problems.of("hotswap:tests/DbgTest.js").map((p) => p.line).join(), "2");
+    check("...and its tab says the program runs an earlier version",
+          ide.tabs.openTabs.get("tests/DbgTest.js").label.Text.startsWith("<i>"),
+          ide.tabs.openTabs.get("tests/DbgTest.js").label.Text);
+
     ide.ActDebug_Execute();                       /* Continue */
     yield* until(() => !dbg.running, 600);
     eq("carried on, the test's result is on the Tests page",
        ide.tests.rows.map((r) => `${r.Name}:${r.Ok}`).join(), "testA:true");
+    eq("...and what was refused for that run is gone with it",
+       ide.problems.of("hotswap:tests/DbgTest.js").length, 0);
     eq("...the page is the one on show", ide.ConsoleBox.Current, ide.tests.page);
 
-    ide.Editor.GotoLine(4);
-    ide.MnuBreakpoint_Click();
+    /* Wherever the editing moved it: the added field pushed it a line down. */
+    for (const b of dbg.list().filter((b) => b.file === "tests/DbgTest.js"))
+        dbg.forget(b.file, b.line);
+    dbg.changed();
     ide.closeTabByName("tests/DbgTest.js", true);
     Directory.DeleteTree(testDir);
     ide.listFiles();

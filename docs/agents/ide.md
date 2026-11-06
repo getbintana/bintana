@@ -1487,3 +1487,22 @@ ones only) cannot disagree with the gutter.
 - **The passes are asked at every stop** (`{"do":"hits"}`) and cleared when a
   run starts, not when it ends, so the last run's counts stay on the page.
 
+## Edit and continue
+
+**`HotSwap.Plan` is pure and the debugger is the plumbing.** `Debugger.start`
+reads every project `.js` from disk after the save (`loaded`), `TabSet.save`
+and `saveAllDirty` call `debugger_.saved(file, text)` after `checkSyntax`, and
+the answers are collected per save (`swaps`, by the command id) before one
+report. The design and the measured limits are in
+[`plans/debug-plan.md`](../plans/debug-plan.md#edit-and-continue-a-member-at-a-time).
+
+- **A save the program does not take whole is not the new baseline**, so the
+  next save sends the applied members again (the runtime answers the same) and
+  the refusal stays said until the run ends.
+- **The tab's italics are `TabSet.render` asking `debugger_.behind(file)`**;
+  every place that changes it calls `render`, since the label is only redrawn
+  there.
+- **A breakpoint moves with the editing that a hot save is**: the debug phase's
+  cleanup forgets its file's breakpoints wherever they are, since F9 on the old
+  line would add one.
+

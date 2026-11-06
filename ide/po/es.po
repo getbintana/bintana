@@ -396,7 +396,7 @@ msgstr "Tirar lo que se escribió en los archivos elegidos. No hay vuelta atrás
 
 #: forms/GitForm.form: BtnClose.Text forms/ImageForm.form: forms/LogForm.form:
 #: forms/PoForm.form: forms/RefsForm.form: forms/SearchForm.form:
-#: forms/PoForm.js:393 modules/Debugger.js:1053
+#: forms/PoForm.js:393 modules/Debugger.js:1161
 msgid "Close"
 msgstr "Cerrar"
 
@@ -549,7 +549,7 @@ msgid "Recent projects"
 msgstr "Proyectos recientes"
 
 #: forms/MainForm.form: menu MnuCloseTab TabActions.Menu MnuTabClose
-#: modules/TabSet.js:682
+#: modules/TabSet.js:690
 msgid "Close tab"
 msgstr "Cerrar la pestaña"
 
@@ -1323,7 +1323,7 @@ msgstr "Salir (Ctrl+Mayús+F8)"
 msgid "Run to cursor (Ctrl+F10)"
 msgstr "Ejecutar hasta el cursor (Ctrl+F10)"
 
-#: forms/MainForm.form: LblStack.Text modules/Debugger.js:882
+#: forms/MainForm.form: LblStack.Text modules/Debugger.js:990
 msgid "Call stack"
 msgstr "Pila de llamadas"
 
@@ -1382,7 +1382,7 @@ msgstr ""
 msgid "Take the chosen breakpoint away"
 msgstr "Quitar el punto de corte elegido"
 
-#: forms/MainForm.form: BtnBpToggleAll.Text modules/Debugger.js:721
+#: forms/MainForm.form: BtnBpToggleAll.Text modules/Debugger.js:829
 msgid "Disable all"
 msgstr "Desactivar todos"
 
@@ -2353,7 +2353,7 @@ msgstr ""
 msgid "Copyright © 2026 Matias De lellis — MIT License"
 msgstr "Copyright © 2026 Matias De lellis — Licencia MIT"
 
-#: forms/MainForm.js:1071 modules/TabSet.js:799
+#: forms/MainForm.js:1071 modules/TabSet.js:807
 msgid "{1} has unsaved changes."
 msgid_plural ""
 "{0} files have unsaved changes:\n"
@@ -2546,15 +2546,15 @@ msgstr "Traducciones — {0} *"
 msgid "Translations — {0}"
 msgstr "Traducciones — {0}"
 
-#: forms/PoForm.js:394 modules/TabSet.js:683
+#: forms/PoForm.js:394 modules/TabSet.js:691
 msgid "Close {0} without saving the changes?"
 msgstr "¿Cerrar {0} sin guardar los cambios?"
 
-#: forms/PoForm.js:395 modules/TabSet.js:684 modules/TabSet.js:778
+#: forms/PoForm.js:395 modules/TabSet.js:692 modules/TabSet.js:786
 msgid "Close without saving"
 msgstr "Cerrar sin guardar"
 
-#: forms/PoForm.js:397 modules/TabSet.js:779
+#: forms/PoForm.js:397 modules/TabSet.js:787
 msgid "Save and close"
 msgstr "Guardar y cerrar"
 
@@ -3003,89 +3003,109 @@ msgstr "en la pasada"
 msgid "Put the caret on a breakpoint first."
 msgstr "Poné el cursor sobre un punto de corte primero."
 
-#: modules/Debugger.js:704 modules/Problems.js:204
+#: modules/Debugger.js:740
+msgid "{0} (taken off)"
+msgstr "{0} (quitado)"
+
+#: modules/Debugger.js:757
+msgid "{0}: the running program takes {1}."
+msgstr "{0}: el programa en marcha toma {1}."
+
+#: modules/Debugger.js:778
+msgid ""
+"This call of {0} finishes with the code it started with; the next one runs "
+"the new."
+msgstr "Esta llamada de {0} termina con el código con que empezó; la próxima usa el nuevo."
+
+#: modules/Debugger.js:812 modules/Problems.js:204
 msgid "Place"
 msgstr "Lugar"
 
-#: modules/Debugger.js:705
+#: modules/Debugger.js:813
 msgid "Only when"
 msgstr "Solo cuando"
 
-#: modules/Debugger.js:706
+#: modules/Debugger.js:814
 msgid "On pass"
 msgstr "En la pasada"
 
-#: modules/Debugger.js:707 modules/Tests.js:219
+#: modules/Debugger.js:815 modules/Tests.js:219
 msgid "Message"
 msgstr "Mensaje"
 
-#: modules/Debugger.js:708
+#: modules/Debugger.js:816
 msgid "Passes"
 msgstr "Pasadas"
 
-#: modules/Debugger.js:721
+#: modules/Debugger.js:829
 msgid "Enable all"
 msgstr "Activar todos"
 
-#: modules/Debugger.js:806
+#: modules/Debugger.js:914
 msgid "{0}:{1} cannot stop; the breakpoint moved to line {2}."
 msgstr "{0}:{1} no puede parar; el punto de corte se movió a la línea {2}."
 
-#: modules/Debugger.js:832
+#: modules/Debugger.js:940
 msgid "{0}:{1} cannot stop: {2}"
 msgstr "{0}:{1} no se puede detener: {2}"
 
-#: modules/Debugger.js:834
+#: modules/Debugger.js:942
 msgid "{0}:{1} cannot stop: nothing runs there or after it."
 msgstr "{0}:{1} no puede parar: ahí o después no corre nada."
 
-#: modules/Debugger.js:843
+#: modules/Debugger.js:951
 msgid "{0} changed: {1} -> {2}"
 msgstr "{0} cambió: {1} -> {2}"
 
-#: modules/Debugger.js:851
+#: modules/Debugger.js:959
 msgid "Stopped on pass {0}."
 msgstr "Detenido en la pasada {0}."
 
-#: modules/Debugger.js:861
+#: modules/Debugger.js:969
 msgid "Stopped in task {0}."
 msgstr "Detenido en la tarea {0}."
 
-#: modules/Debugger.js:881
+#: modules/Debugger.js:989
 msgid "Call stack: task {0}"
 msgstr "Pila de llamadas: tarea {0}"
 
-#: modules/Debugger.js:986
+#: modules/Debugger.js:1094
 msgid "Stops when {0} changes."
 msgstr "Se detiene cuando {0} cambie."
 
-#: modules/Debugger.js:991
+#: modules/Debugger.js:1099
 msgid "{0} cannot be watched: {1}"
 msgstr "No se puede vigilar {0}: {1}"
 
-#: modules/Debugger.js:1053
+#: modules/Debugger.js:1161
 msgid "Open"
 msgstr "Abrir"
 
-#: modules/Debugger.js:1111
+#: modules/Debugger.js:1219
 msgid "… {0} more"
 msgstr "… {0} más"
 
-#: modules/Debugger.js:1138
+#: modules/Debugger.js:1246
 msgid "Change a value"
 msgstr "Cambiar un valor"
 
-#: modules/Debugger.js:1139
+#: modules/Debugger.js:1247
 msgid "{0} is"
 msgstr "{0} es"
 
-#: modules/Debugger.js:1153
+#: modules/Debugger.js:1261
 msgid "Stopped here"
 msgstr "Detenido acá"
 
-#: modules/Debugger.js:1288
+#: modules/Debugger.js:1396
 msgid "Run to cursor needs a program being debugged."
 msgstr "Ejecutar hasta el cursor necesita un programa en depuración."
+
+#: modules/Debugger.js:759
+msgid "{1}: {0} change is not taken while it runs (see Problems)."
+msgid_plural "{1}: {0} changes are not taken while it runs (see Problems)."
+msgstr[0] "{1}: {0} cambio no se toma mientras corre (ver Problemas)."
+msgstr[1] "{1}: {0} cambios no se toman mientras corre (ver Problemas)."
 
 #: modules/Designer.js:3694
 msgid "the menu bar"
@@ -3362,6 +3382,23 @@ msgstr "{0} cambiado"
 #: modules/Git.js:538
 msgid "{0} is not a remote of this repository."
 msgstr "{0} no es un remoto de este repositorio."
+
+#: modules/HotSwap.js:87
+msgid "It does not compile, so nothing of it was applied: {0}"
+msgstr "No compila, así que no se aplicó nada: {0}"
+
+#: modules/HotSwap.js:106
+msgid ""
+"A change outside a method's body -- a field, the constructor, a class's "
+"heading, top-level code -- is not taken by a running program; start it again "
+"to use it"
+msgstr "Un cambio fuera del cuerpo de un método -- un campo, el constructor, el encabezado de una clase, código de nivel superior -- no lo toma un programa en marcha; volvé a iniciarlo para usarlo"
+
+#: modules/HotSwap.js:113
+msgid ""
+"{0} uses a private field (#), which belongs to the class the program started "
+"with; start it again to use it"
+msgstr "{0} usa un campo privado (#), que pertenece a la clase con que empezó el programa; volvé a iniciarlo para usarlo"
 
 #: modules/Installer.js:40
 msgid "Write installer script"
@@ -3660,7 +3697,13 @@ msgid ""
 msgstr ""
 "{0} no es UTF-8: está abierto en solo lectura y el IDE no lo va a guardar."
 
-#: modules/TabSet.js:777
+#: modules/TabSet.js:672
+msgid ""
+"The running program uses an earlier version of this file; start it again to "
+"use this one"
+msgstr "El programa en marcha usa una versión anterior de este archivo; volvé a iniciarlo para usar esta"
+
+#: modules/TabSet.js:785
 msgid "Close tabs"
 msgstr "Cerrar pestañas"
 
@@ -3668,7 +3711,7 @@ msgstr "Cerrar pestañas"
 msgid "The project has no {0}."
 msgstr "El proyecto no tiene {0}."
 
-#: modules/TabSet.js:1052 modules/TabSet.js:1290
+#: modules/TabSet.js:1060 modules/TabSet.js:1301
 msgid ""
 "Could not save {0}:\n"
 "{1}"

@@ -438,7 +438,7 @@ msgstr ""
 #: forms/RefsForm.form: BtnClose.Text
 #: forms/SearchForm.form: BtnClose.Text
 #: forms/PoForm.js:393
-#: modules/Debugger.js:1053
+#: modules/Debugger.js:1161
 msgid "Close"
 msgstr ""
 
@@ -602,7 +602,7 @@ msgstr ""
 
 #: forms/MainForm.form: menu MnuCloseTab
 #: forms/MainForm.form: TabActions.Menu MnuTabClose
-#: modules/TabSet.js:682
+#: modules/TabSet.js:690
 msgid "Close tab"
 msgstr ""
 
@@ -1415,7 +1415,7 @@ msgid "Run to cursor (Ctrl+F10)"
 msgstr ""
 
 #: forms/MainForm.form: LblStack.Text
-#: modules/Debugger.js:882
+#: modules/Debugger.js:990
 msgid "Call stack"
 msgstr ""
 
@@ -1460,7 +1460,7 @@ msgid "Take the chosen breakpoint away"
 msgstr ""
 
 #: forms/MainForm.form: BtnBpToggleAll.Text
-#: modules/Debugger.js:721
+#: modules/Debugger.js:829
 msgid "Disable all"
 msgstr ""
 
@@ -2378,7 +2378,7 @@ msgid "Copyright © 2026 Matias De lellis — MIT License"
 msgstr ""
 
 #: forms/MainForm.js:1071
-#: modules/TabSet.js:799
+#: modules/TabSet.js:807
 msgid "{1} has unsaved changes."
 msgid_plural ""
 "{0} files have unsaved changes:\n"
@@ -2534,18 +2534,18 @@ msgid "Translations — {0}"
 msgstr ""
 
 #: forms/PoForm.js:394
-#: modules/TabSet.js:683
+#: modules/TabSet.js:691
 msgid "Close {0} without saving the changes?"
 msgstr ""
 
 #: forms/PoForm.js:395
-#: modules/TabSet.js:684
-#: modules/TabSet.js:778
+#: modules/TabSet.js:692
+#: modules/TabSet.js:786
 msgid "Close without saving"
 msgstr ""
 
 #: forms/PoForm.js:397
-#: modules/TabSet.js:779
+#: modules/TabSet.js:787
 msgid "Save and close"
 msgstr ""
 
@@ -2978,91 +2978,109 @@ msgstr ""
 msgid "Put the caret on a breakpoint first."
 msgstr ""
 
-#: modules/Debugger.js:704
+#: modules/Debugger.js:740
+msgid "{0} (taken off)"
+msgstr ""
+
+#: modules/Debugger.js:757
+msgid "{0}: the running program takes {1}."
+msgstr ""
+
+#: modules/Debugger.js:778
+msgid "This call of {0} finishes with the code it started with; the next one runs the new."
+msgstr ""
+
+#: modules/Debugger.js:812
 #: modules/Problems.js:204
 msgid "Place"
 msgstr ""
 
-#: modules/Debugger.js:705
+#: modules/Debugger.js:813
 msgid "Only when"
 msgstr ""
 
-#: modules/Debugger.js:706
+#: modules/Debugger.js:814
 msgid "On pass"
 msgstr ""
 
-#: modules/Debugger.js:707
+#: modules/Debugger.js:815
 #: modules/Tests.js:219
 msgid "Message"
 msgstr ""
 
-#: modules/Debugger.js:708
+#: modules/Debugger.js:816
 msgid "Passes"
 msgstr ""
 
-#: modules/Debugger.js:721
+#: modules/Debugger.js:829
 msgid "Enable all"
 msgstr ""
 
-#: modules/Debugger.js:806
+#: modules/Debugger.js:914
 msgid "{0}:{1} cannot stop; the breakpoint moved to line {2}."
 msgstr ""
 
-#: modules/Debugger.js:832
+#: modules/Debugger.js:940
 msgid "{0}:{1} cannot stop: {2}"
 msgstr ""
 
-#: modules/Debugger.js:834
+#: modules/Debugger.js:942
 msgid "{0}:{1} cannot stop: nothing runs there or after it."
 msgstr ""
 
-#: modules/Debugger.js:843
+#: modules/Debugger.js:951
 msgid "{0} changed: {1} -> {2}"
 msgstr ""
 
-#: modules/Debugger.js:851
+#: modules/Debugger.js:959
 msgid "Stopped on pass {0}."
 msgstr ""
 
-#: modules/Debugger.js:861
+#: modules/Debugger.js:969
 msgid "Stopped in task {0}."
 msgstr ""
 
-#: modules/Debugger.js:881
+#: modules/Debugger.js:989
 msgid "Call stack: task {0}"
 msgstr ""
 
-#: modules/Debugger.js:986
+#: modules/Debugger.js:1094
 msgid "Stops when {0} changes."
 msgstr ""
 
-#: modules/Debugger.js:991
+#: modules/Debugger.js:1099
 msgid "{0} cannot be watched: {1}"
 msgstr ""
 
-#: modules/Debugger.js:1053
+#: modules/Debugger.js:1161
 msgid "Open"
 msgstr ""
 
-#: modules/Debugger.js:1111
+#: modules/Debugger.js:1219
 msgid "… {0} more"
 msgstr ""
 
-#: modules/Debugger.js:1138
+#: modules/Debugger.js:1246
 msgid "Change a value"
 msgstr ""
 
-#: modules/Debugger.js:1139
+#: modules/Debugger.js:1247
 msgid "{0} is"
 msgstr ""
 
-#: modules/Debugger.js:1153
+#: modules/Debugger.js:1261
 msgid "Stopped here"
 msgstr ""
 
-#: modules/Debugger.js:1288
+#: modules/Debugger.js:1396
 msgid "Run to cursor needs a program being debugged."
 msgstr ""
+
+#: modules/Debugger.js:759
+msgid "{1}: {0} change is not taken while it runs (see Problems)."
+msgid_plural "{1}: {0} changes are not taken while it runs (see Problems)."
+msgstr[0] ""
+msgstr[1] ""
 
 #: modules/Designer.js:3694
 msgid "the menu bar"
@@ -3321,6 +3339,18 @@ msgstr ""
 
 #: modules/Git.js:538
 msgid "{0} is not a remote of this repository."
+msgstr ""
+
+#: modules/HotSwap.js:87
+msgid "It does not compile, so nothing of it was applied: {0}"
+msgstr ""
+
+#: modules/HotSwap.js:106
+msgid "A change outside a method's body -- a field, the constructor, a class's heading, top-level code -- is not taken by a running program; start it again to use it"
+msgstr ""
+
+#: modules/HotSwap.js:113
+msgid "{0} uses a private field (#), which belongs to the class the program started with; start it again to use it"
 msgstr ""
 
 #: modules/Installer.js:40
@@ -3592,7 +3622,11 @@ msgstr ""
 msgid "{0} is not UTF-8: it is open read-only and will not be saved from the IDE."
 msgstr ""
 
-#: modules/TabSet.js:777
+#: modules/TabSet.js:672
+msgid "The running program uses an earlier version of this file; start it again to use this one"
+msgstr ""
+
+#: modules/TabSet.js:785
 msgid "Close tabs"
 msgstr ""
 
@@ -3600,8 +3634,8 @@ msgstr ""
 msgid "The project has no {0}."
 msgstr ""
 
-#: modules/TabSet.js:1052
-#: modules/TabSet.js:1290
+#: modules/TabSet.js:1060
+#: modules/TabSet.js:1301
 msgid ""
 "Could not save {0}:\n"
 "{1}"

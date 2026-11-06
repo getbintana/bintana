@@ -161,8 +161,11 @@ afternoon, and it is what technique 2 is then compared against for correctness.
 IDE — which is what Visual Basic did, and what gave it *edit and continue* —
 **cannot work here**: stopping means blocking the interpreter without blocking
 the interface, and with one GTK main loop that forces a nested one, which
-re-enters the very program that is stopped. So *edit and continue* is out, and
-neither Delphi nor Gambas nor Lazarus has it either.
+re-enters the very program that is stopped. So *edit and continue* in Visual
+Basic's sense -- the running frame rewritten -- is out, and neither Delphi nor
+Gambas nor Lazarus has it either. **The honest half of it is built**: a member
+saved while the program runs is put on the running class, so the next call runs
+it -- see [Edit and continue, a member at a time](#edit-and-continue-a-member-at-a-time).
 
 Stopping is therefore **blocking the child**, reading commands where it stands.
 Its window freezes, which is what every one of them does. Point 4 — pause — falls
@@ -198,6 +201,53 @@ cell held from C (`testDebuggerTaskWatch` ends a task with one armed, and goes
 red -- an abort -- without that; `testDebuggerTaskUnwatch` takes one off from
 the window). `stopOnThrow` reaches a worker started after it was said, not one
 running.
+
+## Edit and continue, a member at a time
+
+**Built 2026-11-06.** A class's method, getter, setter or static, saved while
+the program runs under the debugger, is compiled again and put on the running
+class; the next call runs the new text. It is HotSwap's bargain (Java) and not
+Visual Basic's: nothing already running changes.
+
+**The two halves.** The IDE (`HotSwap.Plan`) compares the text the program was
+started with against the text saved: a member is its own lines -- its row in
+`Application.Symbols` to the end of the `Scope` that starts there -- and
+everything else is the *skeleton*, compared blanked and without blank lines or
+indentation. Each changed member is sent as `{"do":"replace","id","class",
+"name","kind","text"}` (or `"remove":true`), and the runtime answers
+`{"reply":"replace","id","applied"}` or `"applied":false` with `"why"`.
+
+**How the runtime puts it on.** The text is compiled into an *anonymous* class
+built on the running class's own parent -- `(function (b) { return class
+extends b { … }; })`, called with it -- and the property copied across, a
+getter merged with the running setter and the other way round. Measured in
+QuickJS first, with the fork's `qjs`: `super` in a method and in a static
+reaches the same base; a named class expression bound its own name to the copy,
+so `new Calc()` inside the new method made the wrong class, and an anonymous one
+leaves the name to the running class; getters and statics come across.
+
+**The limits, each refused with its reason rather than installed to fail:**
+
+| what | why it cannot be taken | who says it |
+|---|---|---|
+| a call already running, a function already made | they hold the code they were made with | the IDE, when the stopped frame is in a replaced member |
+| a field, the constructor, a class's heading, top-level code | a field's initializer ran when each object was made; the constructor *is* the class every object points to; top-level code ran once | the IDE (the skeleton), on the line |
+| a private field (`#x`) | a method compiled on another class throws on an object of the running one, whose brand it lacks (measured) | the IDE, and the compile when it is not |
+| a name a module keeps to itself | compiled in the global scope, the next call would be a ReferenceError -- found by the member's free names (patch 16) | the runtime |
+| a class a module does not export | it cannot be reached by its name | the runtime |
+| a text that does not compile | nothing of the file is sent | the IDE (`CheckSource`) |
+| a stop inside a `Task` | the class is the window's, on another thread | the runtime |
+
+**Where it is said**: a line in the log per save (*takes …*, *N changes are not
+taken*), a row per refusal in Problems on its line (`hotswap:<file>`, cleared
+when the run ends), the tab in italics with a tooltip while the program runs an
+earlier text, and -- when the program is stopped inside a member just replaced
+-- *this call finishes with the code it started with*. A save the program takes
+whole becomes what later saves are compared against.
+
+`testDebuggerReplace` drives the runtime half (red without the free-name check:
+the method using a module's `RATE` installed and the program broke on the next
+call); `tests/ide`'s debug phase the IDE half, in a debugged test run.
 
 ## The channel: ours, and minimal
 

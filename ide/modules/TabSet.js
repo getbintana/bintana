@@ -662,7 +662,15 @@ export class TabSet {
             const name  = this.tabOrder[i];
             const state = this.openTabs.get(name);
             if (!state || !state.label) continue;
-            state.label.Text = this.dirtyOf(name, state) ? `${name} *` : name;
+            const text = this.dirtyOf(name, state) ? `${name} *` : name;
+            /* In italics while the program running under the debugger has not
+             * taken all of what this file now says: it runs an earlier text. */
+            const behind = this.ide.debugger_ && this.ide.debugger_.behind(name);
+            state.label.Markup  = behind;
+            state.label.Text    = behind ? `<i>${Text.Escape(text)}</i>` : text;
+            state.label.Tooltip = behind
+                ? Locale.Text("The running program uses an earlier version of this file; start it again to use this one")
+                : "";
         }
     }
 
@@ -1062,6 +1070,9 @@ export class TabSet {
         state.changedOnDisk = false;
         this.ide.log(`Saved ${this.ide.activeFile}\n`);
         this.checkSyntax(this.ide.activeFile, this.ide.Editor);
+        /* A program running under the debugger is offered what changed. */
+        if (state.mode !== "design")
+            this.ide.debugger_.saved(this.ide.activeFile, this.ide.Editor.Text);
         /* A saved `.form` is a different set of controls to propose. */
         this.ide.completion.forget();
         this.render();
@@ -1295,6 +1306,7 @@ export class TabSet {
                 state.onDisk = state.editor.Text;   /* ours, not somebody else's */
                 state.changedOnDisk = false;
                 this.checkSyntax(name, state.editor);
+                this.ide.debugger_.saved(name, state.editor.Text);
             }
             state.dirty = false;
         }

@@ -558,6 +558,17 @@ export class Debugger {
         this.hitCounts.clear();
         this.changed();
 
+        /* What the program is started with, file by file: what a save is
+         * compared against to know what changed (`HotSwap.Plan`). Read after
+         * the save above, so it is the text the child loads. */
+        this.loaded = new Map();
+        for (const f of this.ide.classes.files || []) {
+            if (!File.IsExtension(f, "js")) continue;
+            try { this.loaded.set(f, File.Load(File.Join(this.ide.project, f))); }
+            catch (e) { /* unreadable: nothing to compare a save against */ }
+        }
+        this.swaps = new Map();
+
         /* The same plan Run uses -- arguments, directory and environment -- with
          * the control channel added. Debugging a project with different
          * arguments than running it would be a second answer to the question
@@ -591,6 +602,13 @@ export class Debugger {
         this.stopped = null;
         this.peeking = null;
         this.thread  = "";
+        /* What was refused was about this run; the next starts from the files. */
+        for (const file of this.swapped || []) this.ide.problems.clear(`hotswap:${file}`);
+        this.swapped = new Set();
+        this.loaded  = null;
+        this.swaps   = new Map();
+        this.lagging = new Set();
+        this.ide.tabs.render();
         this.fieldWatches.clear();
         /* What was opened is the run's objects, and the next run's are not
          * them: keeping the paths would ask a removed watch's expression again
@@ -663,6 +681,7 @@ export class Debugger {
         else if (kind === "expand")  this.expanded(msg);
         else if (kind === "watch")   this.watchAnswered(msg);
         else if (kind === "hits")    this.counted(msg);
+        else if (kind === "replace") this.replaced(msg);
     }
 
     /*
@@ -671,6 +690,95 @@ export class Debugger {
      * the program is still going, and a logpoint inside a loop would fill any
      * list.
      */
+    /* --- a save, while the program runs -------------------------------------- */
+
+    /*
+     * A `.js` saved while a program runs under the debugger: what changed is
+     * offered to the running program (`HotSwap.Plan`), one member at a time,
+     * and what cannot be taken is said where it is. The answers arrive one per
+     * member; `swapDone` reports once all of one save's have.
+     */
+    saved(file, text) {
+        if (!this.running || !this.loaded || !File.IsExtension(file, "js")) return false;
+        const before = this.loaded.get(file);
+        if (before === undefined) return false;
+
+        const plan = HotSwap.Plan(before, text);
+        const save = { file, text, applied: [], refused: plan.refused.slice(), waiting: 0 };
+
+        for (const m of plan.replace) this.sendSwap(save, m, false);
+        for (const m of plan.remove)  this.sendSwap(save, m, true);
+        if (!save.waiting) this.swapDone(save);
+        return true;
+    }
+
+    sendSwap(save, m, remove) {
+        const id = this.nextSwap = (this.nextSwap || 0) + 1;
+        const command = { do: "replace", id, class: m.cls, name: m.name, kind: m.kind };
+        if (remove) command.remove = true;
+        else        command.text = m.text;
+
+        save.waiting++;
+        this.swaps.set(id, { save, member: m, remove });
+        this.send(command);
+    }
+
+    /* Whether the running program has not taken all of what `file` says: the
+     * tab shows it, until a save it takes whole or the run's end. */
+    behind(file) {
+        return !!(this.running && this.lagging && this.lagging.has(file));
+    }
+
+    /* The runtime's answer for one member. */
+    replaced(msg) {
+        const one = this.swaps.get(msg.id);
+        if (!one) return;
+        this.swaps.delete(msg.id);
+
+        const { save, member, remove } = one;
+        if (msg.applied)
+            save.applied.push(remove ? Locale.Text("{0} (taken off)", member.name) : member.name);
+        else
+            save.refused.push({ line: remove ? 0 : member.line,
+                                why: `${member.cls}.${member.name}: ${msg.why}` });
+        if (--save.waiting === 0) this.swapDone(save);
+    }
+
+    /*
+     * One save, answered: a line in the log, every refusal a row in Problems on
+     * its line, and -- when the program is stopped inside a member that was
+     * just replaced -- the reminder that this call finishes with the code it
+     * started with. When nothing was refused, the saved text is what the
+     * program runs from now on.
+     */
+    swapDone(save) {
+        const { file, applied, refused } = save;
+        if (applied.length)
+            this.ide.log(`${Locale.Text("{0}: the running program takes {1}.", file, applied.join(", "))}\n`);
+        if (refused.length)
+            this.ide.log(`${Locale.Plural("{1}: {0} change is not taken while it runs (see Problems).",
+                                          "{1}: {0} changes are not taken while it runs (see Problems).",
+                                          refused.length, file)}\n`);
+
+        this.swapped = this.swapped || new Set();
+        this.swapped.add(file);
+        this.ide.problems.report(`hotswap:${file}`, refused.map((r) => ({
+            kind: "Warning", file, line: r.line, text: r.why })));
+        if (!refused.length) this.loaded.set(file, save.text);
+        this.lagging = this.lagging || new Set();
+        if (refused.length) this.lagging.add(file);
+        else                this.lagging.delete(file);
+        this.ide.tabs.render();
+
+        const top = this.stopped && this.stopped[this.frame];
+        if (top && top.Line && this.projectName(top.File) === file) {
+            const inside = HotSwap.Members(save.text);
+            for (const m of inside ? inside.values() : [])
+                if (applied.includes(m.name) && m.line <= top.Line && top.Line <= m.end)
+                    this.ide.log(`${Locale.Text("This call of {0} finishes with the code it started with; the next one runs the new.", m.name)}\n`);
+        }
+    }
+
     /* Every breakpoint's passes so far, by the id it was armed with. */
     counted(msg) {
         for (const row of msg.items || []) {
