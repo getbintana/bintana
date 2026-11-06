@@ -9830,6 +9830,15 @@
           "Native": true
         },
         {
+          "Name": "ColumnWidths",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how wide each declared column is drawn, in pixels, by declared index -- `0` for a hidden one. **Measured on the headings**, so a column that sized itself answers its real width; `Columns` keeps what was declared. With `Headers` off, the width a column was fixed at",
+          "Native": true
+        },
+        {
           "Name": "Columns",
           "Kind": "Property",
           "Params": -1,
@@ -9956,6 +9965,15 @@
           "Native": true
         },
         {
+          "Name": "Headers",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the row of column headings is shown. Default `true`; off for a table that is part of something larger -- a frozen half, a row of totals",
+          "Native": true
+        },
+        {
           "Name": "Index",
           "Kind": "Property",
           "Params": -1,
@@ -10064,12 +10082,30 @@
           "Native": true
         },
         {
+          "Name": "ScrollMaxX",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the largest `ScrollX`: the columns' width less one view. `0` when they all fit",
+          "Native": true
+        },
+        {
           "Name": "ScrollMaxY",
           "Kind": "ReadOnly",
           "Params": -1,
           "Signature": "",
           "Returns": "",
           "Doc": "the largest `ScrollY` that still shows a row: the rows' height less one view. `0` when there is nothing to scroll",
+          "Native": true
+        },
+        {
+          "Name": "ScrollX",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how far across the columns are scrolled, in pixels. Assigning **clamps** to `[0, ScrollMaxX]`. What a row of totals under a wide table follows, from that table's `Scroll`",
           "Native": true
         },
         {
@@ -10250,6 +10286,11 @@
           "Name": "Scroll",
           "Signature": "(x, y)",
           "Doc": "the position moved — the wheel, a scrollbar, the keyboard or an assignment. **Both axes are reported together**, so a diagonal move is one event"
+        },
+        {
+          "Name": "ColumnResize",
+          "Signature": "(column, width)",
+          "Doc": "the person dragged a heading's edge: `column` is the declared index and `width` the pixels it has now. Raised while the drag moves. Not raised by assigning `Columns`"
         },
         {
           "Name": "MouseDown",

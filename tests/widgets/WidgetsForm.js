@@ -665,6 +665,8 @@ const TESTS = [
     "HttpServerStop",
     "HttpServerDropped",
     "HttpServerHold",
+    /* Async-ish: a child with a real pointer on a heading's edge. */
+    "TableColumnResize",
     "DebuggerOrders",
     /* Async: the debugger in a module, plain and brought in by an import. */
     "ModulesDebugger",
@@ -10146,6 +10148,113 @@ class Form1 extends Form {
      * (its title is still the child it was). Skipped, never failed, without
      * `xdotool`.
      */
+    /*
+     * What a table beside another one -- a frozen half, a row of totals --
+     * needs to stay in line with it: the widths really drawn (`ColumnWidths`,
+     * measured on the headings, a self-sized column included), the edge of a
+     * heading dragged with a real pointer (`ColumnResize`, and the widths after
+     * it), the horizontal position (`ScrollX`, clamped to `ScrollMaxX`) and a
+     * table with no headings at all (`Headers`). Skipped, never failed,
+     * without `xdotool`.
+     */
+    testTableColumnResize() {
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real resize: it needs xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "table-column-resize");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "tablecolumnresize", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 440, Height: 220 } });
+        File.Save(File.Join(proj, "Form1.js"), `
+class Form1 extends Form {
+    Form_Open() {
+        const t = new TableView();
+        t.Name = "T";
+        t.Resize(300, 180);
+        t.Columns = [{ Text: "A", Width: 100 }, { Text: "B", Width: 120 },
+                     { Text: "C", Width: 0 }, { Text: "D", Width: 140 }];
+        t.Add(["a", "b", "a fairly long cell", "d"]);
+        this.Add(t);
+        const bare = new TableView();
+        bare.Name = "Bare";
+        bare.Move(0, 190); bare.Resize(300, 30);
+        bare.Columns = [{ Text: "X", Width: 70 }];
+        bare.Headers = false;
+        this.Add(bare);
+        this.t = t; this.bare = bare; this.log = [];
+        this.dir = Application.Directory;
+        this.wait();
+    }
+    T_ColumnResize(c, w) { this.log.push(c + ":" + w); }
+    wait() {
+        const t = this.t;
+        if (!(t.HeaderHeight > 0)) { Timer.After(50, () => this.wait()); return; }
+        this.before = t.ColumnWidths;
+        this.maxX = t.ScrollMaxX;
+        t.ScrollX = 10000;
+        this.clampedX = t.ScrollX;
+        t.ScrollX = 0;
+        const b = t.Bounds();
+        File.Save(this.dir + "/geom", [b.X + 99, b.Y + t.HeaderHeight / 2].map(Math.round).join(" "));
+        this.poll();
+    }
+    poll() {
+        if (!File.Exists(this.dir + "/done")) { Timer.After(30, () => this.poll()); return; }
+        File.SaveJson(this.dir + "/out.json", {
+            before: this.before, after: this.t.ColumnWidths, log: this.log,
+            maxX: this.maxX, clampedX: this.clampedX,
+            headers: this.bare.Headers, bareHeight: this.bare.HeaderHeight,
+            bareWidths: this.bare.ColumnWidths, declared: this.t.Columns.map((c) => c.Width),
+        });
+        Application.Quit(0);
+    }
+}
+`);
+        for (const gone of ["geom", "out.json", "done"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/geom\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "read x y < \"$dir/geom\"\n" +
+                  "sleep 0.3\n" +
+                  "xdotool mousemove $x $y mousedown 1; sleep 0.1\n" +
+                  "for f in 1 2 3 4 5; do xdotool mousemove $(($x+10*f)) $y; sleep 0.05; done\n" +
+                  "sleep 0.2; xdotool mouseup 1; sleep 0.4\n" +
+                  ": > \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj], { Timeout: 20000 });
+        let out = null;
+        try { out = File.LoadJson(File.Join(proj, "out.json")); } catch (e) { out = null; }
+        check("the child answered", out !== null, ran.Output);
+        if (!out) return;
+
+        eq("ColumnWidths is the drawn width of each declared column",
+           [out.before[0], out.before[1], out.before[3]].join(), "100,120,140");
+        check("...a self-sized column answering its real width, not the 0 declared",
+              out.before[2] > 0 && out.declared[2] === 0, JSON.stringify(out));
+        check("a heading's edge dragged raises ColumnResize for that column",
+              out.log.length > 0 && out.log.every((e) => e.startsWith("0:")), JSON.stringify(out.log));
+        eq("...the last one saying the width it was left at",
+           out.log.length ? Number(out.log[out.log.length - 1].split(":")[1]) : -1, out.after[0]);
+        check("...which is wider than it was", out.after[0] > 100, JSON.stringify(out.after));
+        eq("...while Columns keeps what was declared", out.declared[0], 100);
+        check("a table wider than its view can scroll across", out.maxX > 0, String(out.maxX));
+        eq("...and ScrollX clamps to ScrollMaxX", out.clampedX, out.maxX);
+        eq("a table can hide its headings", `${out.headers} ${out.bareHeight}`, "false 0");
+        eq("...and then answers the width a column was fixed at", out.bareWidths.join(), "70");
+    }
+
     testTableReorderDrag() {
         if (!Application.HasCommand("xdotool")) {
             print("  (skipping the real drag: it needs xdotool)");

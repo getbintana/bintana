@@ -279,6 +279,7 @@ typedef struct {
     bool           dragging;
     guint          drag_epoch;
     int            header_min;    /* a floor for the row of column headings */
+    bool           headers_off;   /* `Headers = false`: the row of headings hidden */
 
     /* **The current cell**: the row the reader is on, held, and its column.
      * `NULL` when there is none. The row is held so the address survives the
@@ -5011,6 +5012,25 @@ static float alignment_of(JSContext *ctx, JSValueConst col, const char *where,
 
 /* Builds the GtkColumnViewColumns from the declaration. Every existing column
  * goes first: this is a declaration of what the table *has*, not an append. */
+/*
+ * A heading's edge was dragged: GTK sets the column's fixed width, and this is
+ * the one place that hears it. Raised as `ColumnResize(column, width)` with the
+ * declared index -- what a table beside this one, or a row of totals under it,
+ * needs to stay in line.
+ */
+static void on_column_resized(GObject *obj, GParamSpec *pspec, gpointer data)
+{
+    BtaWidget           *w = data;
+    GtkColumnViewColumn *c = GTK_COLUMN_VIEW_COLUMN(obj);
+    int                  width = gtk_column_view_column_get_fixed_width(c);
+
+    (void)pspec;
+    if (width <= 0)
+        return;
+    JSValue argv[2] = { JS_NewInt32(w->ctx, column_declared(c)), JS_NewInt32(w->ctx, width) };
+    bta_emit(w, "ColumnResize", 2, argv);
+}
+
 static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
 {
     GtkColumnView *view = GTK_COLUMN_VIEW(w->inner);
@@ -5192,6 +5212,7 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
     GListModel *have = gtk_column_view_get_columns(view);
     for (guint i = g_list_model_get_n_items(have); i > 0; i--) {
         GtkColumnViewColumn *c = g_list_model_get_item(have, i - 1);
+        bta_widget_forget(w, c);            /* its resize handler goes with it */
         gtk_column_view_remove_column(view, c);
         g_object_unref(c);
     }
@@ -5250,6 +5271,12 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
          * is still draggable: the number is where it starts, not a cage. */
         gtk_column_view_column_set_fixed_width(c, px > 0 ? px : -1);
         gtk_column_view_column_set_resizable(c, TRUE);
+        /* After the width above, so a column being made raises nothing: what
+         * `ColumnResize` reports is the person dragging a heading's edge, which
+         * GTK answers by setting this same property. Watched, since the column
+         * is not the widget and outlives nothing of it. */
+        g_signal_connect(c, "notify::fixed-width", G_CALLBACK(on_column_resized), w);
+        bta_widget_watch(w, c);
 
         /*
          * **Applied here, because this is the only place a column is made.**
@@ -5905,6 +5932,81 @@ static JSValue table_get_row_height(JSContext *ctx, JSValueConst this_val)
  * A heading with a floor is the honest way to buy the room -- and the height it
  * reaches is what `HeaderHeight` answers.
  */
+/*
+ * How wide each declared column is drawn, in pixels: `[0]` the first declared
+ * column wherever it is shown, `0` for one that is hidden. **Measured on the
+ * headings** (`table_titles_shown`, the walk `HeaderClick` already makes), so a
+ * column that sized itself answers its real width and not the `0` it was
+ * declared with -- which `Columns` keeps, on purpose, for the `.form`. With
+ * the headings hidden there is nothing to measure, and a column answers the
+ * width it was fixed at, by its declaration or by a drag.
+ */
+static JSValue table_get_column_widths(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
+    guint       n    = g_list_model_get_n_items(cols);
+    int        *px   = g_new0(int, n ? n : 1);
+
+    for (guint i = 0; i < n; i++) {
+        GtkColumnViewColumn *c = g_list_model_get_item(cols, i);
+        int d = column_declared(c);
+        if (d >= 0 && (guint)d < n && gtk_column_view_column_get_visible(c)) {
+            int fixed = gtk_column_view_column_get_fixed_width(c);
+            px[d] = fixed > 0 ? fixed : 0;
+        }
+        g_object_unref(c);
+    }
+
+    GArray *titles = table_titles_shown(w);
+    for (guint i = 0; i < titles->len; i++) {
+        TableTitle *t = &g_array_index(titles, TableTitle, i);
+        if (t->declared >= 0 && (guint)t->declared < n)
+            px[t->declared] = (int)(t->r.size.width + 0.5);
+    }
+    g_array_free(titles, TRUE);
+
+    JSValue out = JS_NewArray(ctx);
+    for (guint i = 0; i < n; i++)
+        JS_SetPropertyUint32(ctx, out, i, JS_NewInt32(ctx, px[i]));
+    g_free(px);
+    return out;
+}
+
+/*
+ * Whether the row of column headings is shown. A table that is a part of
+ * something larger -- the frozen half of a grid, a row of totals under one --
+ * has its headings elsewhere or none at all. The same walk to the heading
+ * `HeaderMinHeight` makes over GTK's own structure.
+ */
+static JSValue table_get_headers(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, !table_state(w)->headers_off);
+}
+
+static JSValue table_set_headers(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int on = JS_ToBool(ctx, val);
+    if (on < 0)
+        return JS_EXCEPTION;
+    table_state(w)->headers_off = !on;
+
+    GtkWidget *header = gtk_widget_get_first_child(w->inner);
+    if (header)
+        gtk_widget_set_visible(header, on);
+    return JS_UNDEFINED;
+}
+
 static JSValue table_get_header_min(JSContext *ctx, JSValueConst this_val)
 {
     BtaWidget *w = bta_this(ctx, this_val);
@@ -7095,6 +7197,30 @@ static const JSCFunctionListEntry table_props[] = {
      *   one view. `0` when there is nothing to scroll
      */
     JS_CGETSET_MAGIC_DEF("ScrollMaxY", bta_scroll_get, NULL, BTA_SCROLL_MAX_Y),
+    /* ScrollX
+     *   how far across the columns are scrolled, in pixels. Assigning
+     *   **clamps** to `[0, ScrollMaxX]`. What a row of totals under a wide
+     *   table follows, from that table's `Scroll`
+     */
+    JS_CGETSET_MAGIC_DEF("ScrollX",    bta_scroll_get, bta_scroll_set, BTA_SCROLL_X),
+    /* ScrollMaxX
+     *   the largest `ScrollX`: the columns' width less one view. `0` when they
+     *   all fit
+     */
+    JS_CGETSET_MAGIC_DEF("ScrollMaxX", bta_scroll_get, NULL, BTA_SCROLL_MAX_X),
+    /* ColumnWidths
+     *   how wide each declared column is drawn, in pixels, by declared index
+     *   -- `0` for a hidden one. **Measured on the headings**, so a column that
+     *   sized itself answers its real width; `Columns` keeps what was declared.
+     *   With `Headers` off, the width a column was fixed at
+     */
+    JS_CGETSET_DEF("ColumnWidths", table_get_column_widths, NULL),
+    /* Headers
+     *   whether the row of column headings is shown. Default `true`; off for a
+     *   table that is part of something larger -- a frozen half, a row of
+     *   totals
+     */
+    JS_CGETSET_DEF("Headers",     table_get_headers,   table_set_headers),
     /* RowHeight
      *   how tall one row is, as GTK measured it. `0` while the table holds no
      *   row or has not been laid out
@@ -7462,9 +7588,14 @@ void bta_table_register(void)
          *   assignment. **Both axes are reported together**, so a diagonal
          *   move is one event
          */
+        /* ColumnResize(column, width)
+         *   the person dragged a heading's edge: `column` is the declared index
+         *   and `width` the pixels it has now. Raised while the drag moves.
+         *   Not raised by assigning `Columns`
+         */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
-                            "Select,Activate,Data,Filter,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,ColumnMove,Scroll"),
+                            "Select,Activate,Data,Filter,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,ColumnMove,Scroll,ColumnResize"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

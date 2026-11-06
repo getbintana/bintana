@@ -489,3 +489,31 @@ same number without naming what sits above it.
   `gtk_column_view_get_columns`. `ColumnOrder` is read-only on purpose: with a
   setter the serialiser would write `[0, 1, 2]` into every `.form` with a
   table, and the order is the person's, not the design's.
+
+## A table beside a table: widths, the horizontal position, no headings
+
+What a frozen half or a row of totals needs from the table it stands beside,
+added 2026-11-06 and measured first with two real tables on `Xvfb`:
+
+- **Two tables scrolled together stay in line to the last row.** `ScrollY`
+  assigned from the other's `Scroll`, with one of them wider than its view and
+  so carrying a horizontal bar: both answered the same `ScrollMaxY` (6825 over
+  200 rows), because GTK 4's scrollbars overlay the content and take no room.
+  A theme with non-overlay scrollbars would change that, and has not been
+  measured.
+- **`Columns` answers what was declared, on purpose** (a `.form` must not
+  save a measurement), so `ColumnWidths` is the drawn one: measured on the
+  headings with `table_titles_shown`, the walk `HeaderClick` makes, which is
+  the only place a self-sized column's real width exists. With `Headers` off
+  there is nothing to measure, and a column answers its fixed width.
+- **`ColumnResize` is `notify::fixed-width` on each column**, which GTK sets
+  when a heading's edge is dragged; connected after the declared width is set,
+  so building columns raises nothing, and watched (`bta_widget_watch`) and
+  forgotten when columns are rebuilt, since the column is not the widget.
+  `testTableColumnResize` drags an edge with `xdotool`.
+- **`Headers = false` hides the header row widget** -- the first child of the
+  column view, the same node `HeaderMinHeight` sizes -- and `HeaderHeight`
+  answers `0`.
+- `ScrollX`/`ScrollMaxX` are the shared `bta_scroll_get`/`set` the `Scroller`
+  and the editors use; the table's scrolled window already had both axes.
+
