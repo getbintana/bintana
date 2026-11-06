@@ -13045,7 +13045,8 @@ function* p_errors(ide) {
     eq("...and the tab says what it is", ide.ConsoleBox.Tabs[0], "Output");
 
     /*
-     * *Output*, *Debug*, *Problems* and *Tests* are declared in the `.form`;
+     * *Output*, *Debug*, *Breakpoints*, *Problems* and *Tests* are declared in
+     * the `.form`;
      * *Data* is built in code; the terminal is the page after it that exists
      * only where a child can be run in it, which is `Widget.Available`'s
      * question -- a runtime built without VTE gets no tab promising a
@@ -13053,7 +13054,7 @@ function* p_errors(ide) {
      * stated and the one that holds here is checked.
      */
     eq("there is a terminal page exactly when this build can run one",
-       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 6 : 5);
+       ide.ConsoleBox.Count, Widget.Available("Terminal") ? 7 : 6);
     eq("...and a Shell to go with it", ide.Shell !== null, Widget.Available("Terminal"));
 
     if (Widget.Available("Terminal")) {
@@ -16858,6 +16859,109 @@ function* p_debug(ide) {
     check("an answer that comes after the pointer left shows nothing", !ide.tooltip.visible);
     dbg.finished(0);
     dbg.waiting = null;
+
+    /*
+     * --- the breakpoints page, on and off, and the session -------------------
+     *
+     * Every breakpoint in one table: the tick is a real cell edit, and off is
+     * still a breakpoint -- hollow in the gutter, kept with its settings, not
+     * armed. What the session keeps is the same list, put back by `load`, and
+     * loading another project's forgets this one's.
+     */
+    eq("the page lists the breakpoint", ide.BreakView.Count, 1);
+    eq("...by its place", ide.BreakView.Cell(0, 1), `${js}:${at.line}`);
+    eq("...ticked, since it is on", ide.BreakView.Cell(0, 0), "true");
+
+    dbg.waiting = [];
+    dbg.job = { Write: (t) => { dbg.waiting.push(t); return true; } };   /* a run, as far as the queue knows */
+    dbg.ids.set(`${js}:${at.line}`, 41);
+    check("unticking it is a real cell edit", ide.BreakView.EditCell(0, 0));
+    yield* settled(ide);
+    eq("unticked, it is off", dbg.list()[0].on, false);
+    eq("...hollow in the gutter",
+       ide.Editor.Marks().filter((m) => m.Line === at.line).map((m) => m.Kind).join(), "Inactive");
+    eq("...the running program is told to clear it",
+       dbg.waiting.map((t) => JSON.parse(t)).filter((c) => c.do === "clear").map((c) => c.id).join(), "41");
+    eq("...and a run would not arm it", dbg.all().length, 0);
+    eq("the button offers to switch every one back on", ide.BtnBpToggleAll.Text, "Enable all");
+
+    ide.BtnBpToggleAll_Click();
+    eq("Enable all switches it back on", dbg.list()[0].on, true);
+    eq("...a full mark again",
+       ide.Editor.Marks().filter((m) => m.Line === at.line).map((m) => m.Kind).join(), "Bookmark");
+    check("...and armed again on the running program",
+          dbg.waiting.map((t) => JSON.parse(t)).some((c) => c.do === "break" && c.line === at.line));
+
+    dbg.ids.set(`${js}:${at.line}`, 41);
+    dbg.heard('{"reply":"hits","items":[{"id":41,"hits":12}]}');
+    eq("the passes arrive in the page", ide.BreakView.Cell(0, 5), "12");
+    dbg.job = null;
+    dbg.waiting = null;
+
+    /* The session: what it keeps, and what loading another forgets. */
+    dbg.setCondition(js, at.line, "n > 1");
+    dbg.setEnabled(js, at.line, false);
+    dbg.watch("total * 2");
+    ide.session.saveTabs();
+    const kept = ide.session.debugOf(ide.project);
+    eq("the session keeps the breakpoint, off, with its condition",
+       JSON.stringify(kept && kept.breakpoints),
+       JSON.stringify([{ file: js, line: at.line, off: true, when: "n > 1" }]));
+    eq("...and the watches", JSON.stringify(kept && kept.watches), '["total * 2"]');
+
+    /* What `load` replaces is the debugger's own memory -- the files that are
+     * closed; an open tab's marks are its editor's, and a project being left
+     * has had its tabs discarded before this runs. So the open file is set
+     * aside here. */
+    dbg.load({ breakpoints: [{ file: "Other.js", line: 3 }, { file: 7 }, { file: "x", line: -1 }] });
+    const closed = () => dbg.list().filter((b) => b.file !== js);
+    eq("loading another project's forgets this one's",
+       JSON.stringify(closed()), '[{"file":"Other.js","line":3,"on":true}]');
+    eq("...a broken entry is skipped", closed().length, 1);
+    eq("...and the watches go too", dbg.watches.length, 0);
+
+    /* Back: this project's own, as reopening it would put them. Its tab is
+     * open, so the editor -- which `load` does not touch -- still holds the
+     * hollow mark, and the page reads it live. */
+    eq("loading the kept session puts it back", dbg.load(kept), 1);
+    eq("...off, as it was", dbg.list().filter((b) => b.file === js).map((b) => b.on).join(), "false");
+    eq("...with its condition", dbg.whens.get(`${js}:${at.line}`), "n > 1");
+    eq("...and the watch", dbg.watches.join(), "total * 2");
+    dbg.watches = [];
+    dbg.setEnabled(js, at.line, true);
+    dbg.setCondition(js, at.line, "");
+
+    /* Remove all empties the page, and the gutter with it. */
+    ide.BtnBpClear_Click();
+    eq("Remove all takes every breakpoint away", dbg.list().length, 0);
+    eq("...and the page is empty", ide.BreakView.Count, 0);
+    ide.Editor.GotoLine(at.line);
+    ide.MnuBreakpoint_Click();
+    eq("(one put back for what follows)", dbg.all().length, 1);
+
+    /*
+     * And the road that leaked: another project whose file has the same
+     * relative path. It used to inherit this one's breakpoint, since the map is
+     * keyed by that path and nothing cleared it; it opens with none now, and
+     * coming back puts this one's back from the session.
+     */
+    const twin = `${TMP}-twin`;
+    Directory.Make(File.Join(twin, File.Directory(js) || "."));
+    File.Save(File.Join(twin, "project.json"),
+              JSON.stringify({ name: "twin", startup: startup, sources: [js] }));
+    File.Save(File.Join(twin, js), ide.Editor.Text);
+    ide.openProject(twin);
+    yield* settled(ide);
+    eq("another project with a file of the same name has no breakpoints", dbg.list().length, 0);
+
+    ide.openProject(TMP);
+    yield* settled(ide);
+    eq("coming back puts this project's back", JSON.stringify(dbg.list()),
+       JSON.stringify([{ file: js, line: at.line, on: true }]));
+    ide.openInTab(js);
+    yield* settled(ide);
+    check("...on its line in the gutter", lines().includes(at.line), JSON.stringify(lines()));
+    Directory.DeleteTree(twin);
 
     /* --- back to what the phase after this one expects ----------------------- */
     /* The caret went back to the top when the tab reopened, and F9 acts where

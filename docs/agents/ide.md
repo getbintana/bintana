@@ -1460,3 +1460,30 @@ and why `hasOwn` needed more than the photograph -- is in
 - `tests/ide`'s `modules` phase holds the sentences, the columns, the caret and
   the live round trip (a row in Problems and the word underlined).
 
+## Breakpoints: on, off, kept
+
+**The marks are the state, both kinds.** A breakpoint on is a `Bookmark`
+mark, one off is an `Inactive` mark (a runtime kind added for it: a hollow
+circle that moves with the editing like any mark), and `Debugger.list()` reads
+them live from every open editor and from `marks`/`offMarks` for closed files
+-- so the Breakpoints page, `snapshot()` and `all()` (what a run arms: the on
+ones only) cannot disagree with the gutter.
+
+- **Switching projects never cleared the debugger.** `marks` is keyed by the
+  project-relative path, so a project opened after another armed the other's
+  `Main.js:12` in its own `Main.js`. `openProject` now calls
+  `debugger_.load(session.debugOf(dir))` -- which `reset()`s first -- after the
+  tabs are discarded and before `restoreTabs`, so each reopened tab finds its
+  marks in the map the way a closed file's always did. `tests/ide`'s debug phase
+  opens a twin project with a file of the same path, and goes red without it.
+- **`load` touches no editor.** What it replaces is the memory of closed files;
+  an open tab's marks are its editor's. In the real flow the tabs are gone by
+  then; a test that calls `load` with a tab open has to set that file aside.
+- **The session keeps the debugger in `session.projects[dir].debug`**:
+  `{ breakpoints: [{ file, line, off?, when?, log?, hits? }], watches }`, and an
+  entry with no tabs but a breakpoint is kept. A settings file is something a
+  person edits, so `load` skips an entry of the wrong shape and a hit count the
+  dialog would refuse.
+- **The passes are asked at every stop** (`{"do":"hits"}`) and cleared when a
+  run starts, not when it ends, so the last run's counts stay on the page.
+

@@ -8303,7 +8303,7 @@
           "Params": 3,
           "Signature": "(line, kind, [text])",
           "Returns": "",
-          "Doc": "a gutter mark. `kind` is `Error` `Warning` `Info` `Bookmark` — or `Added` `Removed` `Gap`, which **paint the line** — and `text` is its tooltip",
+          "Doc": "a gutter mark. `kind` is `Error` `Warning` `Info` `Bookmark`, or `Inactive` — a hollow circle, a mark that is there and switched off (a disabled breakpoint) — or `Added` `Removed` `Gap`, which **paint the line** — and `text` is its tooltip. Like every mark it moves with the editing",
           "Native": true
         },
         {

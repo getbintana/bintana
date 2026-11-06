@@ -28,6 +28,10 @@ const BREAK_MARK = "Bookmark";
  * rather than by colour alone. */
 const HERE_MARK = "Info";
 
+/* A breakpoint that is there and switched off: a hollow circle, and a mark of
+ * its own so it keeps its line as the file is edited -- which only a mark does. */
+const OFF_MARK = "Inactive";
+
 /* What a breakpoint's settings are keyed by, here and in the runtime's `id`. */
 function breakKey(file, line) { return `${file}:${line}`; }
 
@@ -79,6 +83,8 @@ export class Debugger {
          * of *static* helpers over a plain object and not a class to build --
          * the open tabs are kept in a `Map` for the same reason. */
         this.marks = new Map();
+        /* ...and the ones switched off, the same way: file -> [line]. */
+        this.offMarks = new Map();
         /* "file:line" -> the id the protocol knows that breakpoint by. */
         this.ids = new Map();
         /* And what a breakpoint can be told to do: a condition, a message, or
@@ -134,21 +140,71 @@ export class Debugger {
 
         const line = this.ide.Editor.Line;
         const on   = this.linesOf(this.ide.Editor).includes(line);
+        const off  = this.offLinesOf(this.ide.Editor).includes(line);
 
-        if (on) {
-            this.ide.Editor.Unmark(line, BREAK_MARK);
-            /* A breakpoint taken away takes its condition and its message with
-             * it: both described a stop that no longer exists. */
-            this.whens.delete(breakKey(file, line));
-            this.logs.delete(breakKey(file, line));
-            this.hitSpecs.delete(breakKey(file, line));
+        /* F9 on a breakpoint takes it away, on or off: the gesture that put it
+         * down is the one that removes it, and switching off is the panel's. */
+        if (on || off) {
+            this.forget(file, line);
         } else {
             this.ide.Editor.Mark(line, BREAK_MARK, this.markText(file, line));
+            this.remember(file);
+            if (this.running) this.send(this.armCommand(file, line));
         }
+        this.changed();
+        return true;
+    }
 
-        this.remember(file);
-        if (this.running) this.send(on ? { do: "clear", id: this.idOf(file, line) }
-                                       : this.armCommand(file, line));
+    /*
+     * One breakpoint taken away, wherever it is: its mark, its settings -- a
+     * condition, a message and a hit count describe a stop that no longer
+     * exists -- and the runtime's copy.
+     */
+    forget(file, line) {
+        const ed  = this.editorFor(file);
+        const key = breakKey(file, line);
+        const was = ed ? this.linesOf(ed).includes(line)
+                       : (this.marks.get(file) || []).includes(line);
+
+        if (ed) {
+            ed.Unmark(line, BREAK_MARK);
+            ed.Unmark(line, OFF_MARK);
+            this.remember(file, ed);
+        } else {
+            for (const map of [this.marks, this.offMarks])
+                if (map.has(file)) map.set(file, map.get(file).filter((l) => l !== line));
+        }
+        this.whens.delete(key);
+        this.logs.delete(key);
+        this.hitSpecs.delete(key);
+        this.hitCounts.delete(key);
+        if (was && this.running) this.send({ do: "clear", id: this.idOf(file, line) });
+    }
+
+    /*
+     * A breakpoint switched on or off. **Off is still a breakpoint**: it keeps
+     * its line, its condition, its message and its count, and the gutter shows
+     * it hollow -- what changes is only that the runtime is not told of it.
+     */
+    setEnabled(file, line, on) {
+        const ed   = this.editorFor(file);
+        const now  = ed ? this.linesOf(ed).includes(line)
+                        : (this.marks.get(file) || []).includes(line);
+        if (now === on) return false;
+
+        if (ed) {
+            ed.Unmark(line, on ? OFF_MARK : BREAK_MARK);
+            ed.Mark(line, on ? BREAK_MARK : OFF_MARK, this.markText(file, line, on));
+            this.remember(file, ed);
+        } else {
+            const from = on ? this.offMarks : this.marks;
+            const to   = on ? this.marks : this.offMarks;
+            from.set(file, (from.get(file) || []).filter((l) => l !== line));
+            to.set(file, [...(to.get(file) || []), line].sort((a, b) => a - b));
+        }
+        if (this.running) this.send(on ? this.armCommand(file, line)
+                                       : { do: "clear", id: this.idOf(file, line) });
+        this.changed();
         return true;
     }
 
@@ -158,12 +214,13 @@ export class Debugger {
      * of their own -- one mark kind is one picture -- so the tooltip is where a
      * breakpoint's settings are visible from.
      */
-    markText(file, line) {
+    markText(file, line, on = true) {
         const key  = breakKey(file, line);
         const when = this.whens.get(key);
         const log  = this.logs.get(key);
         const hits = this.hitSpecs.get(key);
-        let   text = Locale.Text("Stop here while debugging");
+        let   text = on ? Locale.Text("Stop here while debugging")
+                        : Locale.Text("Breakpoint switched off");
 
         if (when) text += ` · ${Locale.Text("only when")}: ${when}`;
         if (log)  text += ` · ${Locale.Text("message")}: ${log}`;
@@ -181,15 +238,17 @@ export class Debugger {
         const ed = editor || this.ide.Editor;
         if (!ed || !file) return;
         this.marks.set(file, this.linesOf(ed));
+        this.offMarks.set(file, this.offLinesOf(ed));
     }
 
     /* A file renamed: the same lines under the new name, and the settings with
      * them -- a condition describes the line and not the path. */
     renamed(oldName, newName) {
-        if (this.marks.has(oldName)) {
-            this.marks.set(newName, this.marks.get(oldName));
-            this.marks.delete(oldName);
-        }
+        for (const map of [this.marks, this.offMarks])
+            if (map.has(oldName)) {
+                map.set(newName, map.get(oldName));
+                map.delete(oldName);
+            }
 
         for (const map of [this.whens, this.logs, this.hitSpecs])
             for (const [key, value] of [...map]) {
@@ -223,13 +282,103 @@ export class Debugger {
         return editor.Marks(BREAK_MARK).map((m) => m.Line);
     }
 
+    /* ...and the ones switched off. */
+    offLinesOf(editor) {
+        return editor.Marks(OFF_MARK).map((m) => m.Line);
+    }
+
     /* Put the marks back on a tab that has just opened. */
     restore(file, editor) {
-        const lines = this.marks.get(file);
-        if (!lines) return;
-
-        for (const line of lines)
+        for (const line of this.marks.get(file) || [])
             editor.Mark(line, BREAK_MARK, this.markText(file, line));
+        for (const line of this.offMarks.get(file) || [])
+            editor.Mark(line, OFF_MARK, this.markText(file, line, false));
+    }
+
+    /*
+     * Every breakpoint, on and off, as `{ file, line, on }` in file and line
+     * order: what the panel lists and what a session keeps. An open tab is read
+     * live, as `all()` does and for the same reason.
+     */
+    list() {
+        const out = [];
+        const add = (file, line, on) => out.push({ file, line, on });
+
+        for (const [file, state] of this.ide.openTabs) {
+            if (!state.editor) continue;
+            for (const line of this.linesOf(state.editor))    add(file, line, true);
+            for (const line of this.offLinesOf(state.editor)) add(file, line, false);
+        }
+        for (const [map, on] of [[this.marks, true], [this.offMarks, false]])
+            for (const [file, lines] of map) {
+                const state = this.ide.openTabs.get(file);
+                if (state && state.editor) continue;
+                for (const line of lines) add(file, line, on);
+            }
+        return out.sort((a, b) => Locale.Compare(a.file, b.file) || a.line - b.line);
+    }
+
+    /*
+     * What a session keeps of the debugger: every breakpoint with its settings,
+     * and the watches -- the expressions a person typed, which are as much the
+     * project's as the lines are. Plain data, for `Settings`.
+     */
+    snapshot() {
+        const breakpoints = this.list().map((b) => {
+            const key = breakKey(b.file, b.line);
+            const one = { file: b.file, line: b.line };
+            if (!b.on) one.off = true;
+            if (this.whens.has(key))    one.when = this.whens.get(key);
+            if (this.logs.has(key))     one.log  = this.logs.get(key);
+            if (this.hitSpecs.has(key)) one.hits = this.hitSpecs.get(key);
+            return one;
+        });
+        return { breakpoints, watches: this.watches.slice() };
+    }
+
+    /*
+     * Everything about the project being left, forgotten: breakpoints, their
+     * settings, the watches. It was never done, and a project opened after
+     * another inherited its breakpoints by relative path -- `Main.js:12` of the
+     * last project armed in this one's `Main.js`.
+     */
+    reset() {
+        for (const map of [this.marks, this.offMarks, this.ids, this.whens, this.logs,
+                           this.hitSpecs, this.hitCounts, this.answers])
+            map.clear();
+        this.watches = [];
+        this.changed();
+    }
+
+    /*
+     * A session's breakpoints and watches, put back -- before the tabs reopen,
+     * so each tab finds its marks waiting the way a closed file's always do.
+     * What is not plain data of the right shape is skipped, since a settings
+     * file is something a person can edit.
+     */
+    load(saved) {
+        this.reset();
+        if (!saved || typeof saved !== "object") return 0;
+
+        let n = 0;
+        for (const b of Array.isArray(saved.breakpoints) ? saved.breakpoints : []) {
+            if (!b || typeof b.file !== "string" || !b.file) continue;
+            const line = Number(b.line);
+            if (!Number.isInteger(line) || line < 1) continue;
+
+            const map = b.off ? this.offMarks : this.marks;
+            map.set(b.file, [...(map.get(b.file) || []), line]);
+            const key = breakKey(b.file, line);
+            if (typeof b.when === "string" && b.when) this.whens.set(key, b.when);
+            if (typeof b.log === "string" && b.log)   this.logs.set(key, b.log);
+            if (typeof b.hits === "string" && BreakpointForm.IsHitCount(b.hits) && b.hits)
+                this.hitSpecs.set(key, b.hits);
+            n++;
+        }
+        for (const w of Array.isArray(saved.watches) ? saved.watches : [])
+            if (typeof w === "string" && w && !this.watches.includes(w)) this.watches.push(w);
+        this.changed();
+        return n;
     }
 
     /*
@@ -298,15 +447,21 @@ export class Debugger {
 
         this.refreshMark(file, line);
         this.rearm(file, line);
+        this.changed();
     }
 
     /* The breakpoint's tooltip, redrawn where it is on screen. */
     refreshMark(file, line) {
         const ed = this.editorFor(file);
-        if (!ed || !this.linesOf(ed).includes(line)) return;
+        if (!ed) return;
 
-        ed.Unmark(line, BREAK_MARK);
-        ed.Mark(line, BREAK_MARK, this.markText(file, line));
+        if (this.linesOf(ed).includes(line)) {
+            ed.Unmark(line, BREAK_MARK);
+            ed.Mark(line, BREAK_MARK, this.markText(file, line));
+        } else if (this.offLinesOf(ed).includes(line)) {
+            ed.Unmark(line, OFF_MARK);
+            ed.Mark(line, OFF_MARK, this.markText(file, line, false));
+        }
     }
 
     /* The open editor of a file, whichever tab it is, or null. */
@@ -325,6 +480,10 @@ export class Debugger {
      */
     rearm(file, line) {
         if (!this.running) return;
+        const ed = this.editorFor(file);
+        const on = ed ? this.linesOf(ed).includes(line)
+                      : (this.marks.get(file) || []).includes(line);
+        if (!on) return;            /* off is not armed, and has nothing to re-arm */
 
         this.send({ do: "clear", id: this.idOf(file, line) });
         this.send(this.armCommand(file, line));
@@ -342,7 +501,7 @@ export class Debugger {
         if (!file || !ed) return false;
 
         const line = ed.Line;
-        if (!this.linesOf(ed).includes(line)) {
+        if (!this.linesOf(ed).includes(line) && !this.offLinesOf(ed).includes(line)) {
             this.ide.log(`${Locale.Text("Put the caret on a breakpoint first.")}\n`);
             return false;
         }
@@ -385,6 +544,10 @@ export class Debugger {
 
         this.stopped = null;
         this.ide.running = true;
+        /* A run counts from nothing; the last run's counts stay readable in the
+         * panel until this one starts. */
+        this.hitCounts.clear();
+        this.changed();
 
         /* The same plan Run uses -- arguments, directory and environment -- with
          * the control channel added. Debugging a project with different
@@ -419,7 +582,6 @@ export class Debugger {
         this.stopped = null;
         this.peeking = null;
         this.fieldWatches.clear();
-        this.hitCounts.clear();
         /* What was opened is the run's objects, and the next run's are not
          * them: keeping the paths would ask a removed watch's expression again
          * at the first stop of a program that has nothing to do with it. */
@@ -480,6 +642,7 @@ export class Debugger {
         else if (kind === "eval")    this.answered(msg);
         else if (kind === "expand")  this.expanded(msg);
         else if (kind === "watch")   this.watchAnswered(msg);
+        else if (kind === "hits")    this.counted(msg);
     }
 
     /*
@@ -488,6 +651,93 @@ export class Debugger {
      * the program is still going, and a logpoint inside a loop would fill any
      * list.
      */
+    /* Every breakpoint's passes so far, by the id it was armed with. */
+    counted(msg) {
+        for (const row of msg.items || []) {
+            const key = this.keyOfId(row.id);
+            if (key) this.hitCounts.set(key, row.hits);
+        }
+        this.changed();
+    }
+
+    /* --- the breakpoints page ----------------------------------------------- */
+
+    /* Something about the breakpoints moved: the page says so. */
+    changed() {
+        this.fillBreakpoints();
+    }
+
+    /*
+     * The page: one row per breakpoint, on or off, with what it is told to do
+     * and how often it has been passed. Built from `list()`, which reads the
+     * open editors live, so a row is never a second opinion about the gutter.
+     */
+    fillBreakpoints() {
+        const table = this.ide.BreakView;
+        if (!table) return;
+
+        if (!this.breakDressed) {
+            this.breakDressed = true;
+            table.Columns = [
+                { Text: "", Width: 36, Alignment: "Center",
+                  Editor: { Kind: "Check", ActiveText: "true", InactiveText: "false" } },
+                { Text: Locale.Text("Place"), Width: 200 },
+                { Text: Locale.Text("Only when"), Width: 160 },
+                { Text: Locale.Text("On pass"), Width: 80 },
+                { Text: Locale.Text("Message"), Width: 160 },
+                { Text: Locale.Text("Passes") } ];
+        }
+        table.Clear();
+        this.breakRows = this.list();
+        for (const b of this.breakRows) {
+            const key  = breakKey(b.file, b.line);
+            const seen = this.hitCounts.get(key);
+            table.Add([b.on ? "true" : "false", `${b.file}:${b.line}`,
+                       this.whens.get(key) || "", this.hitSpecs.get(key) || "",
+                       this.logs.get(key) || "", seen === undefined ? "" : String(seen)]);
+        }
+        if (this.ide.BtnBpToggleAll)
+            this.ide.BtnBpToggleAll.Text = this.breakRows.some((b) => b.on)
+                ? Locale.Text("Disable all") : Locale.Text("Enable all");
+    }
+
+    /* The tick: on or off, answered with what the cell keeps. */
+    ticked(row, text) {
+        const b = (this.breakRows || [])[row];
+        if (!b) return text;
+        this.setEnabled(b.file, b.line, text === "true");
+        return text;
+    }
+
+    /* A row activated: its line, in its file. */
+    goToBreakpoint(row) {
+        const b = (this.breakRows || [])[row];
+        if (!b || !this.ide.openInTab(b.file)) return false;
+        if (this.ide.Editor) this.ide.Editor.GotoLine(b.line);
+        return true;
+    }
+
+    removeBreakpoint(row) {
+        const b = (this.breakRows || [])[row];
+        if (!b) return false;
+        this.forget(b.file, b.line);
+        this.changed();
+        return true;
+    }
+
+    /* Every one off when any is on, every one on otherwise: the button says
+     * which it will do. */
+    toggleAll() {
+        const on = !this.list().some((b) => b.on);
+        for (const b of this.list()) this.setEnabled(b.file, b.line, on);
+        this.changed();
+    }
+
+    removeAll() {
+        for (const b of this.list()) this.forget(b.file, b.line);
+        this.changed();
+    }
+
     /* The "file:line" a protocol id stands for, or "". */
     keyOfId(id) {
         for (const [key, known] of this.ids) if (known === id) return key;
@@ -535,6 +785,7 @@ export class Debugger {
         /* The newline is the log's business and not the translator's. */
         this.ide.log(`${Locale.Text("{0}:{1} cannot stop; the breakpoint moved to line {2}.",
                                     name, from, msg.line)}\n`);
+        this.changed();
     }
 
     /*
@@ -562,6 +813,7 @@ export class Debugger {
         else
             this.ide.log(`${Locale.Text("{0}:{1} cannot stop: nothing runs there or after it.",
                                         name, msg.line)}\n`);
+        this.changed();
     }
 
     halt(msg) {
@@ -586,6 +838,9 @@ export class Debugger {
          * asking here as well would be the same question twice. */
         this.showFrame(0);
         for (const text of this.watches) this.ask(text);
+        /* How often every breakpoint has been passed, for the panel: the stop
+         * is when a person looks, and one question answers all of them. */
+        this.send({ do: "hits" });
         this.ide.refresh();
     }
 

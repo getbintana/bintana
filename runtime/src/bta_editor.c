@@ -1215,6 +1215,11 @@ static JSValue ed_show_completion(JSContext *ctx, JSValueConst this_val,
  * different in each of them, and an icon that is not on this desktop draws a
  * blank square with nothing to say why (`Button.Icon` has the same problem and
  * the same answer).  The four are the ones an editor actually has to say.
+ *
+ * **And a fifth for a mark that is there and switched off**: "Inactive", a
+ * hollow circle. A disabled breakpoint is the one an IDE asked for -- off, but
+ * keeping its line, which only a mark does: GtkSourceView moves a mark with
+ * the editing, and a line number kept beside the editor would not move.
  */
 /*
  * **A list of icons per kind and not one**, for the reason a `.form` naming a
@@ -1262,6 +1267,7 @@ static const MarkKind MARK_KINDS[] = {
     { "Warning",  { "dialog-warning-symbolic",     "dialog-warning",     NULL }, 2, NULL },
     { "Info",     { "dialog-information-symbolic", "dialog-information", NULL }, 1, NULL },
     { "Bookmark", { "user-bookmarks-symbolic",     "user-bookmarks",     NULL }, 0, NULL },
+    { "Inactive", { "radio-symbolic",              "media-record-symbolic", NULL }, 0, NULL },
     { "Added",    { "list-add-symbolic",           "list-add",           NULL }, 0,
       "rgba(64,190,96,0.22)" },
     { "Removed",  { "list-remove-symbolic",        "list-remove",        NULL }, 0,
@@ -1378,7 +1384,7 @@ static JSValue ed_mark(JSContext *ctx, JSValueConst this_val,
     if (!k) {
         JSValue e = JS_ThrowTypeError(ctx,
             "Mark: \"%s\" is not a kind -- Error, Warning, Info, Bookmark, "
-            "Added, Removed or Gap", name);
+            "Inactive, Added, Removed or Gap", name);
         JS_FreeCString(ctx, name);
         return e;
     }
@@ -1427,7 +1433,7 @@ static int mark_category(JSContext *ctx, int argc, JSValueConst *argv, int at,
     JS_FreeCString(ctx, name);
     if (!k) {
         JS_ThrowTypeError(ctx, "not a mark kind -- Error, Warning, Info, "
-                               "Bookmark, Added, Removed or Gap");
+                               "Bookmark, Inactive, Added, Removed or Gap");
         return -1;
     }
     *out = k->kind;
@@ -2989,9 +2995,11 @@ static const JSCFunctionListEntry source_props[] = {
      */
     JS_CFUNC_DEF("ShowCompletion", 0, ed_show_completion),
     /* Mark(line, kind, [text])
-     *   a gutter mark. `kind` is `Error` `Warning` `Info` `Bookmark` — or
-     *   `Added` `Removed` `Gap`, which **paint the line** — and `text` is its
-     *   tooltip
+     *   a gutter mark. `kind` is `Error` `Warning` `Info` `Bookmark`, or
+     *   `Inactive` — a hollow circle, a mark that is there and switched off
+     *   (a disabled breakpoint) — or `Added` `Removed` `Gap`, which **paint
+     *   the line** — and `text` is its tooltip. Like every mark it moves with
+     *   the editing
      */
     JS_CFUNC_DEF("Mark",       3, ed_mark),
     /* Unmark(line, [kind])

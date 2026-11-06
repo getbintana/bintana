@@ -511,6 +511,11 @@ export class MainForm extends Form {
         this.log(`Project: ${dir}\n`);
         this.reportProject();
 
+        /* Its breakpoints and watches first, so each tab that reopens below
+         * finds its marks waiting -- and the last project's are forgotten here,
+         * which they never used to be. */
+        this.debugger_.load(this.session.debugOf(dir));
+
         /* What was open the last time this project was, reopened before anything
          * is offered: the recovered text below lands in these same tabs. */
         const back = this.session.restoreTabs(dir);
@@ -3044,6 +3049,16 @@ export class MainForm extends Form {
      * dialog because they are one question, and the runtime has carried both
      * since conditions and logpoints were built. */
     MnuBreakpointProps_Click() { this.debugger_.editBreakpoint(); }
+
+    /* The Breakpoints page: the tick switches one, a double click goes to it,
+     * and the bar removes one, switches all, or removes all. */
+    BreakView_CellEdit(row, column, text) {
+        return column === 0 ? this.debugger_.ticked(row, text) : text;
+    }
+    BreakView_Activate()    { this.debugger_.goToBreakpoint(this.BreakView.Index); }
+    BtnBpRemove_Click()     { this.debugger_.removeBreakpoint(this.BreakView.Index); }
+    BtnBpToggleAll_Click()  { this.debugger_.toggleAll(); }
+    BtnBpClear_Click()      { this.debugger_.removeAll(); }
 
     /* Stopping where a throw happens, which is **every** throw and not only the
      * ones nobody catches: whether something above will catch it is not a

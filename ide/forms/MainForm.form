@@ -2087,6 +2087,7 @@
                         "Tabs": [
                           "Output",
                           "Debug",
+                          "Breakpoints",
                           "Problems",
                           "Tests"
                         ]
@@ -2315,6 +2316,67 @@
                                   "properties": {
                                     "Text": "Watch",
                                     "Tooltip": "Keep this expression and answer it again at every stop"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "Panel",
+                          "name": "BreakPage",
+                          "properties": {
+                            "Arrangement": "Vertical",
+                            "Spacing": 2
+                          },
+                          "children": [
+                            {
+                              "type": "TableView",
+                              "name": "BreakView",
+                              "properties": {
+                                "Expand": true,
+                                "HAlign": "Fill",
+                                "HExpand": true,
+                                "VAlign": "Fill",
+                                "VExpand": true,
+                                "RowLines": false,
+                                "Tooltip": "Every breakpoint of the project. The tick turns one on or off; double click goes to its line"
+                              }
+                            },
+                            {
+                              "type": "Panel",
+                              "name": "BreakBar",
+                              "properties": {
+                                "Arrangement": "Horizontal",
+                                "Spacing": 4,
+                                "Margin": 2
+                              },
+                              "children": [
+                                {
+                                  "type": "Button",
+                                  "name": "BtnBpRemove",
+                                  "properties": {
+                                    "Text": "Remove",
+                                    "Tooltip": "Take the chosen breakpoint away",
+                                    "Height": 30
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnBpToggleAll",
+                                  "properties": {
+                                    "Text": "Disable all",
+                                    "Tooltip": "Turn every breakpoint off, or every one back on",
+                                    "Height": 30
+                                  }
+                                },
+                                {
+                                  "type": "Button",
+                                  "name": "BtnBpClear",
+                                  "properties": {
+                                    "Text": "Remove all",
+                                    "Tooltip": "Take every breakpoint away",
+                                    "Height": 30
                                   }
                                 }
                               ]

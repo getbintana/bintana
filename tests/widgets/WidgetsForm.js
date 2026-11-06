@@ -3068,6 +3068,20 @@ class Form1 extends Form {
         eq("and each can be asked for on its own", this.Ed.Marks("Added").length, 1);
         this.Ed.ClearMarks();
 
+        /* A mark that is there and switched off -- a disabled breakpoint -- is
+         * a kind of its own, so it keeps its line as the editing moves it. */
+        this.Ed.Mark(2, "Bookmark");
+        this.Ed.Mark(3, "Inactive", "off");
+        this.Ed.GotoLine(1);
+        this.Ed.Insert("arriba\n");
+        eq("an inactive mark is a kind like the others, and moves with the text",
+           JSON.stringify(this.Ed.Marks().map((m) => `${m.Kind}@${m.Line}`)),
+           '["Bookmark@3","Inactive@4"]');
+        eq("...asked for on its own", this.Ed.Marks("Inactive").length, 1);
+        eq("...carrying its text", this.Ed.Marks("Inactive")[0].Text, "off");
+        this.Ed.ClearMarks();
+        this.Ed.Text = "cero\nuno\ndos\ntres\ncuatro\n";      /* as it was */
+
         /* --- Select: reaching a match, not just a line --- */
         this.Ed.Select(4, 2, 3);
         eq("Select lands on the line", this.Ed.Line, 4);

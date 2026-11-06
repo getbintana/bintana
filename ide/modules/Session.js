@@ -362,6 +362,13 @@ export class Session {
             ? saved : {};
     }
 
+    /* A project's breakpoints and watches, as `Debugger.snapshot` wrote them,
+     * or null. */
+    debugOf(dir) {
+        const one = this.projects()[dir];
+        return one && one.debug && typeof one.debug === "object" ? one.debug : null;
+    }
+
     /* What is remembered for one project, or null. */
     tabsOf(dir) {
         const one = this.projects()[dir];
@@ -394,11 +401,23 @@ export class Session {
 
         const all = this.projects();
 
-        /* Nothing open is nothing to restore, so the entry goes rather than
-         * being kept as an empty one: the map holds sessions, and a session with
-         * no tabs in it is not one. */
-        if (files.length) all[ide.project] = { files, active: ide.activeFile || "" };
-        else delete all[ide.project];
+        /* The breakpoints and watches are the project's too: kept with its tabs,
+         * in the person's settings and never in the project, for the reason at
+         * the head of this file -- where *I* stop is not part of what is handed
+         * to somebody else. */
+        const debug = ide.debugger_ ? ide.debugger_.snapshot() : null;
+        const kept  = debug && (debug.breakpoints.length || debug.watches.length) ? debug : null;
+
+        /* Nothing open and nothing kept is nothing to restore, so the entry
+         * goes rather than being kept as an empty one: the map holds sessions,
+         * and a session with nothing in it is not one. */
+        if (files.length || kept) {
+            const one = { files, active: ide.activeFile || "" };
+            if (kept) one.debug = kept;
+            all[ide.project] = one;
+        } else {
+            delete all[ide.project];
+        }
 
         return Settings.Set(PROJECTS_KEY, this.pruned(all));
     }
