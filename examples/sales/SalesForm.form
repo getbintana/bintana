@@ -1,0 +1,115 @@
+{
+  "format": "bintana-form/1",
+  "class": "SalesForm",
+  "properties": {
+    "Text": "Sales",
+    "Width": 900,
+    "Height": 560,
+    "Arrangement": "Vertical"
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 6,
+        "Margin": 6,
+        "HAlign": "Fill"
+      },
+      "children": [
+        {
+          "type": "TextBox",
+          "name": "TxtFilter",
+          "properties": {
+            "Width": 240,
+            "Placeholder": "Filter by client or product",
+            "AccessibleName": "Filter"
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblCount",
+          "properties": {
+            "HExpand": true,
+            "HAlign": "Start",
+            "Style": "dim-label",
+            "Text": ""
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnCopy",
+          "properties": {
+            "Text": "Copy rows",
+            "Tooltip": "The selected rows, for a spreadsheet (Ctrl+C)"
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnPaste",
+          "properties": {
+            "Text": "Paste",
+            "Tooltip": "Rows from a spreadsheet, from the current cell (Ctrl+V)"
+          }
+        }
+      ]
+    },
+    {
+      "type": "DataGrid",
+      "name": "Grid",
+      "properties": {
+        "Expand": true,
+        "HAlign": "Fill",
+        "VAlign": "Fill",
+        "Columns": [
+          {
+            "Text": "Sale",
+            "Width": 80
+          },
+          {
+            "Text": "Client",
+            "Width": 170
+          },
+          {
+            "Text": "Date",
+            "Width": 100
+          },
+          {
+            "Text": "Product",
+            "Width": 140
+          },
+          {
+            "Text": "Qty",
+            "Width": 70,
+            "Alignment": "Right",
+            "Editor": "Text",
+            "Total": "sum"
+          },
+          {
+            "Text": "Price",
+            "Width": 110,
+            "Alignment": "Right",
+            "Editor": "Text",
+            "Total": "avg",
+            "Decimals": 2
+          },
+          {
+            "Text": "Amount",
+            "Width": 130,
+            "Alignment": "Right",
+            "Total": "sum",
+            "Decimals": 2
+          },
+          {
+            "Text": "Region",
+            "Width": 100
+          }
+        ],
+        "Frozen": 2,
+        "Sortable": true,
+        "MultiSelect": true
+      }
+    }
+  ]
+}

@@ -667,6 +667,8 @@ const TESTS = [
     "HttpServerHold",
     /* Async: lib/datagrid, laid out and scrolled. */
     "DataGrid",
+    /* A child: examples/sales' self-test. */
+    "ExampleSales",
     /* Async-ish: a child with a real pointer on a heading's edge. */
     "TableColumnResize",
     "DebuggerOrders",
@@ -6709,6 +6711,32 @@ class Form1 extends Form {
             box.Delete();
         }, 600);
     }
+    /*
+     * `examples/sales`, run the way the suite runs an example: as a child with
+     * `--selftest`, which does what a person would -- an edit refused and one
+     * kept with the amount worked out again, the filter, Copy, a sort -- and
+     * prints what it saw. The rows are generated, the same ones every time, so
+     * the totals are numbers to compare.
+     */
+    testExampleSales() {
+        const dir = File.Join(File.Directory(Application.Directory), "..", "examples", "sales");
+        if (!File.Exists(File.Join(dir, "project.json"))) {
+            print("ExampleSales: examples/sales is not beside this suite; skipped");
+            return;
+        }
+        const ran = Exec.Wait([Application.Executable, dir, "--selftest"], { Timeout: 20000 });
+        eq("the example's self-test ends cleanly", ran.ExitCode, 0, ran.Output);
+        eq("...and saw what the example is for", ran.Output.trim().split("\n").filter((l) => !l.startsWith("MESA")).join("\n"),
+           "rows 400\n" +
+           "frozen Sale,Client\n" +
+           "totals 8101 72174411.50\n" +
+           "edit refused false\n" +
+           "edit kept 10 amount 84000.00\n" +
+           "filter keeps 48\n" +
+           "copy V-1002|Casa Rivas\n" +
+           "sorted true");
+    }
+
     /* --- DataGrid -----------------------------------------------------------
      *
      * `lib/datagrid`: frozen leading columns, a row of totals under its

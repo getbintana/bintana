@@ -1,0 +1,8 @@
+{
+  "name": "Sales",
+  "version": "1.0",
+  "startup": "SalesForm",
+  "uses": ["datagrid"],
+  "sources": ["Sales.js", "SalesForm.js"],
+  "description": "lib/datagrid over a year of sales: frozen columns, exact totals, sorting, a filter, and rows to and from a spreadsheet"
+}
