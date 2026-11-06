@@ -16653,6 +16653,41 @@ function* p_debug(ide) {
           !(ide.Editor.Marks("Bookmark")[0] || {}).Text.includes("n >"),
           JSON.stringify(ide.Editor.Marks("Bookmark")));
 
+    /* --- which pass it stops on ---------------------------------------------
+     *
+     * The runtime's grammar, checked in the dialog: a count that is not one
+     * keeps the dialog open and says so beside the field, rather than arriving
+     * as a breakpoint the runtime refuses and the gutter loses. */
+    ide.debugger_.editBreakpoint();
+    ide.breakpointDialog.TxtHits.Text = "every 3";
+    eq("a hit count that is not one keeps the dialog open",
+       ide.breakpointDialog.accept(), false);
+    check("...saying what one is",
+          ide.breakpointDialog.LblHits.Text.includes(">= n"), ide.breakpointDialog.LblHits.Text);
+    ide.breakpointDialog.TxtHits.Text = ">= 3";
+    eq("a real one closes it", ide.breakpointDialog.accept(), true);
+
+    eq("the hit count is kept", ide.debugger_.hitSpecs.get(key), ">= 3");
+    eq("and goes to the runtime", ide.debugger_.armCommand(js, at.line).hits, ">= 3");
+    check("and the mark says so",
+          (ide.Editor.Marks("Bookmark")[0] || {}).Text.includes(">= 3"),
+          JSON.stringify(ide.Editor.Marks("Bookmark")));
+
+    /* A stop on it says which pass, in the runtime's words. */
+    const armedId = ide.debugger_.armCommand(js, at.line).id;
+    const logged  = ide.LogView.Text.length;
+    ide.debugger_.heard(JSON.stringify({ event: "stopped", reason: "breakpoint", id: armedId,
+                                         hits: 4, frames: [{ Name: "Main", File: "", Line: 0 }] }));
+    check("a stop on a counted breakpoint says the pass",
+          ide.LogView.Text.slice(logged).includes("Stopped on pass 4."),
+          ide.LogView.Text.slice(logged));
+    eq("...and remembers it", ide.debugger_.hitCounts.get(key), 4);
+    ide.debugger_.finished(0);
+
+    ide.debugger_.editBreakpoint();
+    ide.breakpointDialog.BtnClear_Click();
+    eq("clear takes the hit count away too", ide.debugger_.hitSpecs.get(key), undefined);
+
     /*
      * --- run to cursor ------------------------------------------------------
      *

@@ -71,6 +71,9 @@ struct BtaBreakStruct {
     char *when;         /* a condition, or NULL */
     char *log;          /* an expression to record and not stop on, or NULL */
     bool  one_shot;     /* run-to-cursor: takes itself out when it is reached */
+    int   hits;         /* passes so far that met the condition */
+    char  hit_op;       /* '=' the nth only, '>' from the nth on, '%' every nth; 0 none */
+    int   hit_n;
 };
 
 static struct {
@@ -366,7 +369,7 @@ static void say_armed(JSContext *ctx, BtaBreak *bp)
  * IDE drew a mark for it -- and a mark beside a line that will never stop is
  * the lie `armed` exists to prevent. It used to be dropped without a word.
  */
-static void say_refused(JSContext *ctx, BtaBreak *bp)
+static void say_refused_why(JSContext *ctx, BtaBreak *bp, const char *why)
 {
     JSValue said = JS_NewObject(ctx);
 
@@ -374,7 +377,54 @@ static void say_refused(JSContext *ctx, BtaBreak *bp)
     JS_SetPropertyStr(ctx, said, "id", JS_NewInt32(ctx, bp->id));
     JS_SetPropertyStr(ctx, said, "file", JS_NewString(ctx, bp->file));
     JS_SetPropertyStr(ctx, said, "line", JS_NewInt32(ctx, bp->asked));
+    if (why)
+        JS_SetPropertyStr(ctx, said, "why", JS_NewString(ctx, why));
     emit_object(ctx, said);
+}
+
+static void say_refused(JSContext *ctx, BtaBreak *bp)
+{
+    say_refused_why(ctx, bp, NULL);
+}
+
+/*
+ * A hit count, in the words Visual Studio taught everybody: `5` or `== 5` is
+ * the fifth pass only, `>= 5` the fifth and every one after, `% 10` every
+ * tenth. Whitespace anywhere, a count of at least one, nothing after it. False
+ * for anything else -- which is refused with a sentence, never armed as a
+ * breakpoint that silently stops every time.
+ */
+static bool parse_hits(const char *text, char *op, int *n)
+{
+    const char *p = text;
+    char       *end;
+    long        v;
+
+    while (g_ascii_isspace(*p)) p++;
+    if (p[0] == '=' && p[1] == '=')      { *op = '='; p += 2; }
+    else if (p[0] == '>' && p[1] == '=') { *op = '>'; p += 2; }
+    else if (p[0] == '%')                { *op = '%'; p += 1; }
+    else                                 { *op = '='; }
+    while (g_ascii_isspace(*p)) p++;
+    if (!g_ascii_isdigit(*p))
+        return false;
+    v = strtol(p, &end, 10);
+    while (g_ascii_isspace(*end)) end++;
+    if (*end || v < 1 || v > G_MAXINT)
+        return false;
+    *n = (int)v;
+    return true;
+}
+
+/* Whether this pass -- already counted -- is one the hit count stops on. */
+static bool hits_match(const BtaBreak *bp)
+{
+    switch (bp->hit_op) {
+    case '=': return bp->hits == bp->hit_n;
+    case '>': return bp->hits >= bp->hit_n;
+    case '%': return bp->hits % bp->hit_n == 0;
+    default:  return true;
+    }
 }
 
 /* ------------------------------------------------------------------ writing */
@@ -739,12 +789,19 @@ static JSValue frames_of(JSContext *ctx, const uint8_t *pc)
     return JS_DebugBacktrace(ctx, pc);
 }
 
-static void say_stopped(JSContext *ctx, const uint8_t *pc, const char *reason)
+static void say_stopped(JSContext *ctx, const uint8_t *pc, const char *reason,
+                        const BtaBreak *bp)
 {
     JSValue event = JS_NewObject(ctx);
 
     JS_SetPropertyStr(ctx, event, "event", JS_NewString(ctx, "stopped"));
     JS_SetPropertyStr(ctx, event, "reason", JS_NewString(ctx, reason));
+    /* Which breakpoint, and how many times it has been reached: the pass a
+     * hit count stopped on is the number the programmer asked about. */
+    if (bp) {
+        JS_SetPropertyStr(ctx, event, "id", JS_NewInt32(ctx, bp->id));
+        JS_SetPropertyStr(ctx, event, "hits", JS_NewInt32(ctx, bp->hits));
+    }
     JS_SetPropertyStr(ctx, event, "frames", frames_of(ctx, pc));
     emit_object(ctx, event);
 }
@@ -765,6 +822,7 @@ static void say_log(JSContext *ctx, BtaBreak *bp, const char *text, bool failed)
     JS_SetPropertyStr(ctx, event, "line", JS_NewInt32(ctx, bp->line));
     JS_SetPropertyStr(ctx, event, "text", JS_NewString(ctx, text));
     JS_SetPropertyStr(ctx, event, "failed", JS_NewBool(ctx, failed));
+    JS_SetPropertyStr(ctx, event, "hits", JS_NewInt32(ctx, bp->hits));
     emit_object(ctx, event);
 }
 
@@ -1204,6 +1262,23 @@ static void set_break(JSContext *ctx, JSValue cmd, bool one_shot)
     }
     JS_FreeValue(ctx, v);
 
+    v = JS_GetPropertyStr(ctx, cmd, "hits");
+    if (JS_IsString(v)) {
+        const char *hits = JS_ToCString(ctx, v);
+        bool        ok   = !hits || !*hits || parse_hits(hits, &bp->hit_op, &bp->hit_n);
+
+        JS_FreeCString(ctx, hits);
+        JS_FreeValue(ctx, v);
+        if (!ok) {
+            bp->asked = bp->line;
+            say_refused_why(ctx, bp, "a hit count is a number, == n, >= n or % n");
+            free_break(bp);
+            return;
+        }
+    } else {
+        JS_FreeValue(ctx, v);
+    }
+
     /*
      * Moved to a line that exists, and the IDE is told where it went: a mark in
      * the gutter beside a line that can never stop is a lie the programmer then
@@ -1441,6 +1516,27 @@ static bool obey(JSContext *ctx, const char *line, int depth_now)
         JS_FreeValue(ctx, ov);
         JS_FreeValue(ctx, fv);
         JS_FreeValue(ctx, iv);
+    } else if (!strcmp(verb, "hits")) {
+        /* How often each breakpoint has been reached, asked at any time --
+           running or stopped -- which is what a count-only breakpoint is read
+           with: a hit count no pass matches never stops, and this says how
+           many went by. One-shots are the caret's and are not listed. */
+        JSValue reply = JS_NewObject(ctx);
+        JSValue items = JS_NewArray(ctx);
+        uint32_t n = 0;
+
+        for (guint i = 0; i < dbg.breaks->len; i++) {
+            BtaBreak *bp = g_ptr_array_index(dbg.breaks, i);
+            if (bp->one_shot)
+                continue;
+            JSValue row = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, row, "id", JS_NewInt32(ctx, bp->id));
+            JS_SetPropertyStr(ctx, row, "hits", JS_NewInt32(ctx, bp->hits));
+            JS_SetPropertyUint32(ctx, items, n++, row);
+        }
+        JS_SetPropertyStr(ctx, reply, "reply", JS_NewString(ctx, "hits"));
+        JS_SetPropertyStr(ctx, reply, "items", items);
+        emit_object(ctx, reply);
     } else if (!strcmp(verb, "unwatch")) {
         JSValue iv = JS_GetPropertyStr(ctx, cmd, "id");
         int     id = 0;
@@ -1621,7 +1717,7 @@ static void on_throw(JSContext *ctx)
     depth_now = JS_DebugDepth(JS_GetRuntime(ctx));
 
     dbg.mode = RUN;
-    say_stopped(ctx, NULL, "exception");
+    say_stopped(ctx, NULL, "exception", NULL);
     wait_for_orders(ctx, depth_now);
 }
 
@@ -1702,6 +1798,13 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
         if (bp->when && !condition_holds(ctx, bp->when))
             return;
 
+        /* Counted after the condition and before the logpoint: a pass is one
+           the condition let through, and a hit count decides for a logpoint
+           as much as for a stop -- `% 100` on a log is a sample. */
+        bp->hits++;
+        if (!hits_match(bp))
+            return;
+
         /*
          * A logpoint records and carries on, which is the whole of what it is --
          * and it is checked after the condition, so `when` still decides whether
@@ -1729,7 +1832,8 @@ static void on_step(JSContext *ctx, const uint8_t *pc, void *opaque)
 
     dbg.mode = RUN;
     say_stopped(ctx, pc,
-                wanted ? (was == PAUSE ? "pause" : "step") : "breakpoint");
+                wanted ? (was == PAUSE ? "pause" : "step") : "breakpoint",
+                wanted ? NULL : bp);
     wait_for_orders(ctx, depth_now);
 }
 

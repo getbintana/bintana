@@ -4,7 +4,8 @@
 breakpoints and logpoints, stopping, stopping where a throw happens, the call
 stack, standing in a frame further up, its arguments and variables by name,
 step into / over / out, run to the cursor, an immediate window, watches, and
-changing a value. **Ten of the eleven.**
+changing a value -- and hit counts (2026-11-05), the half of point 2 that was
+left. **All eleven.**
 Stage 5 -- the bytecode patch, which was about what the hook costs and not about
 what the debugger does -- is [retired](#stage-5-retired-by-a-second-dispatch-table):
 a second dispatch table took the hook out of the ordinary road (2026-10-29). The
@@ -229,6 +230,16 @@ From the IDE, on stdin:
 {"do":"break", … ,"when":"n > 3"}                      ← built
 {"do":"break", … ,"log":"\"n=\" + n"}                  ← built (a logpoint: records
                                                         and carries on)
+{"do":"break", … ,"hits":">= 5"}                       ← built (`5`/`== 5` the nth
+                                                        pass, `>= 5` from it on,
+                                                        `% 10` every tenth; counted
+                                                        after `when`, and deciding
+                                                        for a `log` too)
+   ⇠ {"event":"refused","id":7,…,"why":"a hit count is a number, == n, >= n or % n"}
+   ⇢ {"event":"stopped","reason":"breakpoint","id":7,"hits":9,"frames":[…]}
+   ⇢ {"event":"log",…,"hits":8}
+{"do":"hits"}                                          ← built (any time)
+   → {"reply":"hits","items":[{"id":7,"hits":12}, …]}
 {"do":"eval","frame":0,"text":"this.Ok.Text"}         ← built
    → {"reply":"eval","frame":0,"text":…,"value":"\"ok\"","failed":false,
       "children":false}

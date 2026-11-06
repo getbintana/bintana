@@ -20,13 +20,14 @@ msgstr "Comandos de este formulario"
 
 #: forms/ActionForm.form: BtnAdd.Text forms/ColumnForm.form: BtnColAdd.Text
 #: forms/LaunchForm.form: BtnLcAdd.Text forms/RecordForm.form: BtnRecAdd.Text
+#: forms/ReportForm.form: BtnBandAdd.Text BtnGroupAdd.Text
 msgid "Add"
 msgstr "Agregar"
 
 #: forms/ActionForm.form: BtnDelete.Text forms/ColumnForm.form: BtnColDel.Text
 #: forms/ConfirmForm.form: BtnYes.Text forms/MenuForm.form:
-#: forms/RecordForm.form: BtnRecDel.Text forms/MainForm.js:3154
-#: modules/FormFiles.js:726
+#: forms/RecordForm.form: BtnRecDel.Text forms/ReportForm.form:
+#: forms/MainForm.js:3230 modules/FormFiles.js:726
 msgid "Delete"
 msgstr "Eliminar"
 
@@ -69,14 +70,16 @@ msgstr "Habilitado al abrir la ventana"
 #: forms/MenuForm.form: forms/MetainfoForm.form: forms/NewProjectForm.form:
 #: forms/PreviewForm.form: forms/ProjectForm.form: BtnPrCancel.Text
 #: forms/QuickForm.form: forms/RecordForm.form: BtnRecCancel.Text
-#: forms/StyleForm.form: forms/SymbolForm.form: forms/TabOrderForm.form:
+#: forms/ReportForm.form: forms/StyleForm.form: forms/SymbolForm.form:
+#: forms/TabOrderForm.form:
 msgid "Cancel"
 msgstr "Cancelar"
 
 #: forms/ActionForm.form: BtnOk.Text forms/AskForm.form:
 #: forms/BreakpointForm.form: forms/ColumnForm.form: BtnColOk.Text
 #: forms/MenuForm.form: forms/ProjectForm.form: BtnPrOk.Text
-#: forms/RecordForm.form: BtnRecOk.Text forms/TabOrderForm.form:
+#: forms/RecordForm.form: BtnRecOk.Text forms/ReportForm.form:
+#: forms/TabOrderForm.form:
 msgid "OK"
 msgstr "Aceptar"
 
@@ -87,7 +90,7 @@ msgstr "Instalar como aplicación de usuario"
 #: forms/AppForm.form: LblAppName.Text forms/LaunchForm.form: LblLcName.Text
 #: forms/MetainfoForm.form: LblName.Text forms/NewProjectForm.form:
 #: forms/ProjectForm.form: LblPrName.Text forms/RecordForm.form:
-#: LblRecName.Text modules/ControlTree.js:214 modules/Strings.js:319
+#: LblRecName.Text modules/ControlTree.js:231 modules/Strings.js:319
 msgid "Name:"
 msgstr "Nombre:"
 
@@ -153,6 +156,16 @@ msgstr "Mensaje (una expresión, se registra sin detenerse):"
 msgid "e.g. \"total=\" + total - empty stops when the condition holds"
 msgstr ""
 "p. ej. \"total=\" + total - vacío se detiene cuando se cumple la condición"
+
+#: forms/BreakpointForm.form: LblHits.Text
+msgid "Stop on pass:"
+msgstr "Detener en la pasada:"
+
+#: forms/BreakpointForm.form: TxtHits.Placeholder
+msgid ""
+"5 or == 5 the fifth, >= 5 from the fifth on, % 10 every tenth - empty is "
+"every pass"
+msgstr "5 o == 5 la quinta, >= 5 desde la quinta, % 10 cada diez - vacío es cada pasada"
 
 #: forms/BreakpointForm.form: BtnClear.Text
 msgid "Clear"
@@ -317,12 +330,12 @@ msgstr ""
 "arrastrar, diga lo que diga acá. Una opción vacía conserva su valor por "
 "defecto."
 
-#: forms/ConfirmForm.form: BtnOther.AccessibleName modules/ProjectTree.js:626
+#: forms/ConfirmForm.form: BtnOther.AccessibleName modules/ProjectTree.js:643
 msgid "Other"
 msgstr "Otros"
 
 #: forms/GitForm.form: GitForm.Text forms/MainForm.form: SideStack.Tabs
-#: modules/Changes.js:74
+#: modules/Changes.js:74 modules/Data.js:697
 msgid "Changes"
 msgstr "Cambios"
 
@@ -381,7 +394,7 @@ msgstr "Tirar lo que se escribió en los archivos elegidos. No hay vuelta atrás
 
 #: forms/GitForm.form: BtnClose.Text forms/ImageForm.form: forms/LogForm.form:
 #: forms/PoForm.form: forms/RefsForm.form: forms/SearchForm.form:
-#: forms/PoForm.js:393 modules/Debugger.js:731
+#: forms/PoForm.js:393 modules/Debugger.js:767
 msgid "Close"
 msgstr "Cerrar"
 
@@ -410,7 +423,7 @@ msgid "Find"
 msgstr "Buscar"
 
 #: forms/IconForm.form: IconForm.Text forms/AppForm.js:93
-#: modules/PropertyGrid.js:1040
+#: modules/PropertyGrid.js:1074
 msgid "Choose an icon"
 msgstr "Elegir un icono"
 
@@ -459,7 +472,8 @@ msgstr "Configuraciones:"
 msgid "A new configuration, with the defaults below copied into it"
 msgstr "Una configuración nueva, con los valores de abajo copiados dentro"
 
-#: forms/LaunchForm.form: BtnLcRemove.Text
+#: forms/LaunchForm.form: BtnLcRemove.Text forms/ReportForm.js:710
+#: forms/ReportForm.js:758
 msgid "Remove"
 msgstr "Quitar"
 
@@ -533,7 +547,7 @@ msgid "Recent projects"
 msgstr "Proyectos recientes"
 
 #: forms/MainForm.form: menu MnuCloseTab TabActions.Menu MnuTabClose
-#: modules/TabSet.js:673
+#: modules/TabSet.js:682
 msgid "Close tab"
 msgstr "Cerrar la pestaña"
 
@@ -550,7 +564,7 @@ msgstr "Eliminar del proyecto..."
 msgid "Autosave..."
 msgstr "Autoguardado..."
 
-#: forms/MainForm.form: menu MnuQuit forms/MainForm.js:1039
+#: forms/MainForm.form: menu MnuQuit forms/MainForm.js:1065
 msgid "Quit"
 msgstr "Salir"
 
@@ -834,19 +848,19 @@ msgstr "Escribir un manejador"
 msgid "_Help"
 msgstr "Ay_uda"
 
-#: forms/MainForm.form: menu MnuAbout forms/MainForm.js:3480
+#: forms/MainForm.form: menu MnuAbout forms/MainForm.js:3568
 msgid "About Bintana"
 msgstr "Acerca de Bintana"
 
-#: forms/MainForm.form: action ActDelCtl modules/Workspace.js:304
+#: forms/MainForm.form: action ActDelCtl modules/Workspace.js:317
 msgid "Delete control"
 msgstr "Eliminar el control"
 
-#: forms/MainForm.form: action ActRaise modules/Workspace.js:305
+#: forms/MainForm.form: action ActRaise modules/Workspace.js:318
 msgid "Bring forward"
 msgstr "Traer adelante"
 
-#: forms/MainForm.form: action ActLower modules/Workspace.js:306
+#: forms/MainForm.form: action ActLower modules/Workspace.js:319
 msgid "Send backward"
 msgstr "Enviar atrás"
 
@@ -866,9 +880,13 @@ msgstr "Página anterior"
 msgid "Next page"
 msgstr "Página siguiente"
 
-#: forms/MainForm.form: action ActAddPage modules/Workspace.js:310
+#: forms/MainForm.form: action ActAddPage modules/Workspace.js:323
 msgid "Add page"
 msgstr "Agregar página"
+
+#: forms/MainForm.form: action ActDesignReport
+msgid "Design report..."
+msgstr "Diseñar reporte..."
 
 #: forms/MainForm.form: action ActNewForm
 msgid "New form..."
@@ -894,11 +912,16 @@ msgstr "Deshacer"
 msgid "Redo"
 msgstr "Rehacer"
 
+#: forms/MainForm.form: action ActFormat
+msgid "Format code"
+msgstr "Formatear código"
+
 #: forms/MainForm.form: action ActFind
 msgid "Find..."
 msgstr "Buscar..."
 
 #: forms/MainForm.form: action ActRun forms/LaunchForm.js:155
+#: modules/Data.js:228
 msgid "Run"
 msgstr "Ejecutar"
 
@@ -1011,7 +1034,7 @@ msgstr "Quitar el filtro"
 msgid "Filter files"
 msgstr "Filtrar archivos"
 
-#: forms/MainForm.form: action ActFocusTreeFilter modules/Workspace.js:174
+#: forms/MainForm.form: action ActFocusTreeFilter modules/Workspace.js:179
 msgid "Filter controls"
 msgstr "Filtrar controles"
 
@@ -1080,7 +1103,7 @@ msgstr "Depurar (Ctrl+F9)"
 msgid "Stop (Shift+F9)"
 msgstr "Detener (Mayús+F9)"
 
-#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:1397
+#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:1437
 msgid "No project"
 msgstr "Sin proyecto"
 
@@ -1121,7 +1144,7 @@ msgstr "Abrir en editor externo"
 msgid "Show only the files whose name contains this"
 msgstr "Muestra solo los archivos cuyo nombre contiene esto"
 
-#: forms/MainForm.form: BtnFtOptions.Tooltip modules/Workspace.js:182
+#: forms/MainForm.form: BtnFtOptions.Tooltip modules/Workspace.js:187
 msgid "Tree options"
 msgstr "Opciones del árbol"
 
@@ -1162,7 +1185,7 @@ msgstr ""
 "Commitear lo que está en el próximo commit con el botón de abajo. Enter "
 "escribe una línea"
 
-#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:2580
+#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:2648
 msgid "Reload"
 msgstr "Recargar"
 
@@ -1512,11 +1535,11 @@ msgstr ""
 msgid "Base folder:"
 msgstr "Carpeta base:"
 
-#: forms/NewProjectForm.form: BtnCreate.Text forms/MainForm.js:3017
+#: forms/NewProjectForm.form: BtnCreate.Text forms/MainForm.js:3093
 msgid "Create"
 msgstr "Crear"
 
-#: forms/PoForm.form: PoForm.Text modules/ProjectTree.js:566
+#: forms/PoForm.form: PoForm.Text modules/ProjectTree.js:577
 msgid "Translations"
 msgstr "Traducciones"
 
@@ -1708,6 +1731,59 @@ msgstr ""
 msgid "References"
 msgstr "Referencias"
 
+#: forms/ReportForm.form: ReportForm.Text
+msgid "Report designer"
+msgstr "Diseñador de reportes"
+
+#: forms/ReportForm.form: LblPaper.Text
+msgid "Paper:"
+msgstr "Papel:"
+
+#: forms/ReportForm.form: LblOrientation.Text
+msgid "Orientation:"
+msgstr "Orientación:"
+
+#: forms/ReportForm.form: LblMargin.Text
+msgid "Margin:"
+msgstr "Margen:"
+
+#: forms/ReportForm.form: LblHint.Text
+msgid "Click a band or an element to edit it; drag an element to move it."
+msgstr "Hacé clic en una banda o en un elemento para editarlo; arrastrá un elemento para moverlo."
+
+#: forms/ReportForm.form: LblBands.Text
+msgid "Bands"
+msgstr "Bandas"
+
+#: forms/ReportForm.form: CmbBandAdd.AccessibleName
+msgid "Band to add"
+msgstr "Banda a agregar"
+
+#: forms/ReportForm.form: BtnBandDel.Text forms/ReportForm.js:708
+msgid "Remove band"
+msgstr "Quitar banda"
+
+#: forms/ReportForm.form: LblGroup.Text TxtGroup.AccessibleName
+msgid "Group by field"
+msgstr "Agrupar por campo"
+
+#: forms/ReportForm.form: BtnGroupDel.Text forms/ReportForm.js:756
+msgid "Remove group"
+msgstr "Quitar grupo"
+
+#: forms/ReportForm.form: LblBandHint.Text
+msgid ""
+"Drag an element on the page. Drag a band's bottom edge to make it taller."
+msgstr "Arrastrá un elemento sobre la página. Arrastrá el borde inferior de una banda para hacerla más alta."
+
+#: forms/ReportForm.form: LblProps.Text modules/Workspace.js:433
+msgid "Properties"
+msgstr "Propiedades"
+
+#: forms/ReportForm.form: CmbAddKind.AccessibleName
+msgid "Element kind"
+msgstr "Tipo de elemento"
+
 #: forms/SearchForm.form: SearchForm.Text
 msgid "Find in project"
 msgstr "Buscar en el proyecto"
@@ -1839,7 +1915,8 @@ msgstr "Se instalará para este usuario como {0}.desktop, en {1}"
 msgid "Update"
 msgstr "Actualizar"
 
-#: forms/AppForm.js:95 modules/ProjectTree.js:587
+#: forms/AppForm.js:95 forms/ReportForm.js:591 forms/ReportForm.js:779
+#: modules/ProjectTree.js:598
 msgid "Images"
 msgstr "Imágenes"
 
@@ -1855,6 +1932,10 @@ msgstr "Una aplicación necesita un nombre para aparecer."
 #: forms/ClassForm.js:216 forms/ColumnForm.js:315
 msgid "{0}"
 msgstr "{0}"
+
+#: forms/BreakpointForm.js:59
+msgid "Stop on pass: a number, == n, >= n or % n"
+msgstr "Detener en la pasada: un número, == n, >= n o % n"
 
 #: forms/ClassForm.js:65
 msgid "Class {0}"
@@ -2053,166 +2134,170 @@ msgid_plural "{0} files in this commit"
 msgstr[0] "{0} archivo en este commit"
 msgstr[1] "{0} archivos en este commit"
 
-#: forms/MainForm.js:479
+#: forms/MainForm.js:500
 msgid "Bintana IDE -- {0}"
 msgstr "IDE de Bintana — {0}"
 
-#: forms/MainForm.js:587
+#: forms/MainForm.js:608
 msgid "(select a control)"
 msgstr "(elegí un control)"
 
-#: forms/MainForm.js:602 forms/MainForm.js:609
+#: forms/MainForm.js:623 forms/MainForm.js:630
 msgid "(none yet)"
 msgstr "(todavía ninguno)"
 
-#: forms/MainForm.js:737
+#: forms/MainForm.js:763
 msgid "Leave the project"
 msgstr "Dejar el proyecto"
 
-#: forms/MainForm.js:738
+#: forms/MainForm.js:764
 msgid "Discard and continue"
 msgstr "Descartar y seguir"
 
-#: forms/MainForm.js:739
+#: forms/MainForm.js:765
 msgid "Save all and continue"
 msgstr "Guardar todo y seguir"
 
-#: forms/MainForm.js:1043
+#: forms/MainForm.js:1069
 msgid "Quit without saving"
 msgstr "Salir sin guardar"
 
-#: forms/MainForm.js:1045
+#: forms/MainForm.js:1071
 msgid "Save all and quit"
 msgstr "Guardar todo y salir"
 
-#: forms/MainForm.js:1156
+#: forms/MainForm.js:1182
 msgid "Terminal"
 msgstr "Terminal"
 
-#: forms/MainForm.js:1195
+#: forms/MainForm.js:1221
 msgid "the shell ended"
 msgstr "el shell terminó"
 
-#: forms/MainForm.js:1402
+#: forms/MainForm.js:1442
 msgid "{0}   double click to edit"
 msgstr "{0}   doble clic para editar"
 
-#: forms/MainForm.js:1404
+#: forms/MainForm.js:1444
 msgid "{0}   double click to edit its fields"
 msgstr "{0}   doble clic para editar sus campos"
 
-#: forms/MainForm.js:1413
+#: forms/MainForm.js:1447
+msgid "{0}   double click to show its tables"
+msgstr "{0}   doble clic para ver sus tablas"
+
+#: forms/MainForm.js:1456
 msgid "   read-only: not UTF-8"
 msgstr "   solo lectura: no es UTF-8"
 
-#: forms/MainForm.js:1423
+#: forms/MainForm.js:1466
 msgid "   form {0}x{1}"
 msgstr "   formulario {0}x{1}"
 
-#: forms/MainForm.js:1426
+#: forms/MainForm.js:1469
 msgid "   Ln {0}, Col {1}"
 msgstr "   Lín {0}, Col {1}"
 
-#: forms/MainForm.js:1903
+#: forms/MainForm.js:1960
 msgid "Checking the project..."
 msgstr "Comprobando el proyecto..."
 
-#: forms/MainForm.js:2556
+#: forms/MainForm.js:2624
 msgid "{0} is no longer on disk."
 msgstr "{0} ya no está en el disco."
 
-#: forms/MainForm.js:2558
+#: forms/MainForm.js:2626
 msgid "{0} changed on disk, and there are unsaved changes here."
 msgstr "{0} cambió en el disco, y acá hay cambios sin guardar."
 
-#: forms/MainForm.js:2560
+#: forms/MainForm.js:2628
 msgid "{0} changed on disk."
 msgstr "{0} cambió en el disco."
 
-#: forms/MainForm.js:2581
+#: forms/MainForm.js:2649
 msgid "{0} changed on disk. Take the newer file and lose what is unsaved here?"
 msgstr ""
 "{0} cambió en el disco. ¿Tomar el archivo nuevo y perder lo que no está "
 "guardado acá?"
 
-#: forms/MainForm.js:2582
+#: forms/MainForm.js:2650
 msgid "Reload without saving"
 msgstr "Recargar sin guardar"
 
-#: forms/MainForm.js:2908 forms/MainForm.js:2930 modules/Navigator.js:72
+#: forms/MainForm.js:2979 forms/MainForm.js:3001 modules/Navigator.js:72
 msgid "Put the cursor on a name first."
 msgstr "Poné el cursor sobre un nombre primero."
 
-#: forms/MainForm.js:2935 forms/RefsForm.js:105
+#: forms/MainForm.js:3006 forms/RefsForm.js:105
 msgid "Rename symbol"
 msgstr "Renombrar símbolo"
 
-#: forms/MainForm.js:2935 forms/RefsForm.js:105
+#: forms/MainForm.js:3006 forms/RefsForm.js:105
 msgid "New name:"
 msgstr "Nombre nuevo:"
 
-#: forms/MainForm.js:3015
+#: forms/MainForm.js:3091
 msgid "Start a repository"
 msgstr "Empezar un repositorio"
 
-#: forms/MainForm.js:3016
+#: forms/MainForm.js:3092
 msgid "Create a git repository in {0}?"
 msgstr "¿Crear un repositorio git en {0}?"
 
-#: forms/MainForm.js:3072
+#: forms/MainForm.js:3148
 msgid "(no branches yet)"
 msgstr "(todavía no hay ramas)"
 
-#: forms/MainForm.js:3079
+#: forms/MainForm.js:3155
 msgid "(no other branch)"
 msgstr "(no hay otra rama)"
 
-#: forms/MainForm.js:3113
+#: forms/MainForm.js:3189
 msgid "Switch branch"
 msgstr "Cambiar de rama"
 
-#: forms/MainForm.js:3117
+#: forms/MainForm.js:3193
 msgid "Switch"
 msgstr "Cambiar"
 
-#: forms/MainForm.js:3132
+#: forms/MainForm.js:3208
 msgid "New branch"
 msgstr "Rama nueva"
 
-#: forms/MainForm.js:3132
+#: forms/MainForm.js:3208
 msgid "Called"
 msgstr "Se llama"
 
-#: forms/MainForm.js:3152
+#: forms/MainForm.js:3228
 msgid "Delete a branch"
 msgstr "Borrar una rama"
 
-#: forms/MainForm.js:3153
+#: forms/MainForm.js:3229
 msgid ""
 "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr "¿Borrar {0}? Lo que esté commiteado sólo ahí se rechaza, no se pierde."
 
-#: forms/MainForm.js:3245
+#: forms/MainForm.js:3321
 msgid "Clone a repository"
 msgstr "Clonar un repositorio"
 
-#: forms/MainForm.js:3245
+#: forms/MainForm.js:3321
 msgid "From"
 msgstr "Desde"
 
-#: forms/MainForm.js:3253
+#: forms/MainForm.js:3329
 msgid "Clone into"
 msgstr "Dónde clonarlo"
 
-#: forms/MainForm.js:3483
+#: forms/MainForm.js:3571
 msgid "Version {0}, on Bintana {1}"
 msgstr "Versión {0}, sobre Bintana {1}"
 
-#: forms/MainForm.js:3485
+#: forms/MainForm.js:3573
 msgid "On Bintana {0}"
 msgstr "Sobre Bintana {0}"
 
-#: forms/MainForm.js:3487
+#: forms/MainForm.js:3575
 msgid ""
 "A RAD environment in the spirit of Visual Basic and Gambas: QuickJS embedded "
 "in a GTK4 runtime. The IDE is written in Bintana and runs on it with no "
@@ -2222,11 +2307,11 @@ msgstr ""
 "runtime GTK4. El IDE está escrito en Bintana y corre sobre él sin "
 "privilegios propios."
 
-#: forms/MainForm.js:3488
+#: forms/MainForm.js:3576
 msgid "Copyright © 2026 Matias De lellis — MIT License"
 msgstr "Copyright © 2026 Matias De lellis — Licencia MIT"
 
-#: forms/MainForm.js:1040 modules/TabSet.js:790
+#: forms/MainForm.js:1066 modules/TabSet.js:799
 msgid "{1} has unsaved changes."
 msgid_plural ""
 "{0} files have unsaved changes:\n"
@@ -2236,13 +2321,13 @@ msgstr[1] ""
 "{0} archivos tienen cambios sin guardar:\n"
 "{1}"
 
-#: forms/MainForm.js:1407 forms/QuickForm.js:265
+#: forms/MainForm.js:1450 forms/QuickForm.js:265
 msgid "{0} file"
 msgid_plural "{0} files"
 msgstr[0] "{0} archivo"
 msgstr[1] "{0} archivos"
 
-#: forms/MainForm.js:3114
+#: forms/MainForm.js:3190
 msgid ""
 "There is {0} change here. Switching keeps it, unless the two branches "
 "disagree about the same file."
@@ -2256,12 +2341,12 @@ msgstr[1] ""
 "Hay {0} cambios acá. Cambiar de rama los conserva, salvo que las dos ramas "
 "no coincidan en el mismo archivo."
 
-#: forms/MainForm.js:889 forms/MainForm.js:1638 modules/Exporter.js:38
+#: forms/MainForm.js:915 forms/MainForm.js:1681 modules/Exporter.js:38
 #: modules/Installer.js:27
 msgid "Open a project first."
 msgstr "Abrí un proyecto primero."
 
-#: forms/MainForm.js:1863
+#: forms/MainForm.js:1920
 msgid ""
 "There is no template yet. Run Project > Update translations first: it "
 "gathers every string the project shows and writes the .pot a translation "
@@ -2271,7 +2356,7 @@ msgstr ""
 "traducciones: junta cada cadena que el proyecto muestra y escribe el .pot "
 "del que arranca una traducción."
 
-#: forms/MainForm.js:463
+#: forms/MainForm.js:484
 msgid ""
 "{0} has no project.json.\n"
 "It can still be edited, but it will not be able to run."
@@ -2279,7 +2364,7 @@ msgstr ""
 "{0} no tiene project.json.\n"
 "Se puede editar igual, pero no va a poder ejecutarse."
 
-#: forms/MainForm.js:1475
+#: forms/MainForm.js:1518
 msgid ""
 "{0}\n"
 "is not there any more."
@@ -2287,23 +2372,23 @@ msgstr ""
 "{0}\n"
 "ya no está."
 
-#: forms/MainForm.js:3384
+#: forms/MainForm.js:3469
 msgid "Open a form to preview it."
 msgstr "Abrí un formulario para verlo en vista previa."
 
-#: forms/MainForm.js:3407
+#: forms/MainForm.js:3492
 msgid "Open a form's design to edit its menus."
 msgstr "Abrí el diseño de un formulario para editar sus menús."
 
-#: forms/MainForm.js:3426
+#: forms/MainForm.js:3511
 msgid "Open a form's design to edit its commands."
 msgstr "Abrí el diseño de un formulario para editar sus comandos."
 
-#: forms/MainForm.js:3459
+#: forms/MainForm.js:3547
 msgid "Open a form's design to edit its tab order."
 msgstr "Abrí el diseño de un formulario para editar su orden de tabulación."
 
-#: forms/MainForm.js:455
+#: forms/MainForm.js:476
 msgid ""
 "No such directory:\n"
 "{0}"
@@ -2311,15 +2396,15 @@ msgstr ""
 "No existe el directorio:\n"
 "{0}"
 
-#: forms/MainForm.js:745
+#: forms/MainForm.js:771
 msgid "{0} already exists and is not a folder."
 msgstr "{0} ya existe y no es una carpeta."
 
-#: forms/MainForm.js:755
+#: forms/MainForm.js:781
 msgid "{0} is already a project."
 msgstr "{0} ya es un proyecto."
 
-#: forms/MainForm.js:1781
+#: forms/MainForm.js:1838
 msgid ""
 "Cannot open {0}:\n"
 "{1}"
@@ -2327,7 +2412,7 @@ msgstr ""
 "No se pudo abrir {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:1801 forms/MetainfoForm.js:58
+#: forms/MainForm.js:1858 forms/MetainfoForm.js:58
 msgid ""
 "Cannot read {0}:\n"
 "{1}"
@@ -2335,7 +2420,7 @@ msgstr ""
 "No se pudo leer {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:1812
+#: forms/MainForm.js:1869
 msgid ""
 "Cannot edit {0}:\n"
 "{1}"
@@ -2343,7 +2428,7 @@ msgstr ""
 "No se pudo editar {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:3270 modules/FormFiles.js:429 modules/FormFiles.js:610
+#: forms/MainForm.js:3346 modules/FormFiles.js:429 modules/FormFiles.js:610
 #: modules/Tests.js:83
 msgid "{0} already exists."
 msgstr "{0} ya existe."
@@ -2419,15 +2504,15 @@ msgstr "Traducciones — {0} *"
 msgid "Translations — {0}"
 msgstr "Traducciones — {0}"
 
-#: forms/PoForm.js:394 modules/TabSet.js:674
+#: forms/PoForm.js:394 modules/TabSet.js:683
 msgid "Close {0} without saving the changes?"
 msgstr "¿Cerrar {0} sin guardar los cambios?"
 
-#: forms/PoForm.js:395 modules/TabSet.js:675 modules/TabSet.js:769
+#: forms/PoForm.js:395 modules/TabSet.js:684 modules/TabSet.js:778
 msgid "Close without saving"
 msgstr "Cerrar sin guardar"
 
-#: forms/PoForm.js:397 modules/TabSet.js:770
+#: forms/PoForm.js:397 modules/TabSet.js:779
 msgid "Save and close"
 msgstr "Guardar y cerrar"
 
@@ -2562,6 +2647,28 @@ msgid "{0} reference"
 msgid_plural "{0} references"
 msgstr[0] "{0} referencia"
 msgstr[1] "{0} referencias"
+
+#: forms/ReportForm.js:590 forms/ReportForm.js:778
+msgid "Choose an image"
+msgstr "Elegir una imagen"
+
+#: forms/ReportForm.js:709
+msgid "Remove the {0} band and everything in it?"
+msgstr "¿Quitar la banda {0} y todo lo que contiene?"
+
+#: forms/ReportForm.js:757
+msgid "Remove group {0} and its header and footer?"
+msgstr "¿Quitar el grupo {0} con su encabezado y su pie?"
+
+#: forms/ReportForm.js:856
+msgid ""
+"A report Image held as Bytes cannot be saved in a form. Choose a File for it "
+"instead."
+msgstr "Una Image de reporte guardada como Bytes no se puede guardar en un formulario. Elegí un File en su lugar."
+
+#: forms/ReportForm.js:868
+msgid "The report is not valid: {0}"
+msgstr "El reporte no es válido: {0}"
 
 #: forms/SearchForm.js:120
 msgid "Every file"
@@ -2726,84 +2833,190 @@ msgstr "Comprobación: {0} hallazgos\n"
 msgid "Check: nothing wrong with the project\n"
 msgstr "Comprobación: nada mal en el proyecto\n"
 
-#: modules/Classes.js:358
+#: modules/Classes.js:363
 msgid "Put the class in {0}, like the others here"
 msgstr "Poner la clase en {0}, como las demás de acá"
 
-#: modules/ControlTree.js:214
+#: modules/ControlTree.js:231
 msgid "Rename control"
 msgstr "Renombrar el control"
 
-#: modules/Debugger.js:158
+#: modules/Data.js:97 modules/Data.js:200 modules/Data.js:264
+msgid "Data"
+msgstr "Datos"
+
+#: modules/Data.js:98
+msgid "Show the database view"
+msgstr "Mostrar la vista de bases de datos"
+
+#: modules/Data.js:172
+msgid "Which database to show"
+msgstr "Qué base de datos mostrar"
+
+#: modules/Data.js:178
+msgid "Read the project and its databases again"
+msgstr "Volver a leer el proyecto y sus bases de datos"
+
+#: modules/Data.js:408
+msgid "(not created)"
+msgstr "(sin crear)"
+
+#: modules/Data.js:446
+msgid "No databases in this project."
+msgstr "Este proyecto no tiene bases de datos."
+
+#: modules/Data.js:458
+msgid "{0} is a {1} connection, which the IDE cannot open yet."
+msgstr "{0} es una conexión {1}, que el IDE todavía no puede abrir."
+
+#: modules/Data.js:466
+msgid "{0} is not there yet. Run the application to create it."
+msgstr "{0} todavía no existe. Ejecutá la aplicación para crearla."
+
+#: modules/Data.js:509
+msgid "required"
+msgstr "obligatorio"
+
+#: modules/Data.js:510
+msgid "key"
+msgstr "clave"
+
+#: modules/Data.js:523
+msgid "Model {0} -> {1}"
+msgstr "Modelo {0} -> {1}"
+
+#: modules/Data.js:532
+msgid "Record {0}"
+msgstr "Registro {0}"
+
+#: modules/Data.js:549
+msgid "Model {0} -> {1} (table not created)"
+msgstr "Modelo {0} -> {1} (tabla sin crear)"
+
+#: modules/Data.js:555
+msgid "This database has no tables."
+msgstr "Esta base de datos no tiene tablas."
+
+#: modules/Data.js:636
+msgid "Choose a database first."
+msgstr "Elegí una base de datos primero."
+
+#: modules/Data.js:640
+msgid "{0} is not there yet."
+msgstr "{0} todavía no existe."
+
+#: modules/Data.js:644
+msgid "The console speaks SQLite."
+msgstr "La consola habla SQLite."
+
+#: modules/Data.js:650
+msgid "Type a statement first."
+msgstr "Escribí una sentencia primero."
+
+#: modules/Data.js:684
+msgid "No rows."
+msgstr "Sin filas."
+
+#: modules/Data.js:692
+msgid "Showing {0} of {1} rows."
+msgstr "Se muestran {0} de {1} filas."
+
+#: modules/Data.js:698
+msgid "Last id"
+msgstr "Último id"
+
+#: modules/Data.js:701
+msgid "Statement executed."
+msgstr "Sentencia ejecutada."
+
+#: modules/Data.js:693
+msgid "{0} row"
+msgid_plural "{0} rows"
+msgstr[0] "{0} fila"
+msgstr[1] "{0} filas"
+
+#: modules/Debugger.js:166
 msgid "Stop here while debugging"
 msgstr "Parar acá mientras se depura"
 
-#: modules/Debugger.js:160
+#: modules/Debugger.js:168
 msgid "only when"
 msgstr "solo cuando"
 
-#: modules/Debugger.js:161
+#: modules/Debugger.js:169
 msgid "message"
 msgstr "mensaje"
 
-#: modules/Debugger.js:334
+#: modules/Debugger.js:170
+msgid "on pass"
+msgstr "en la pasada"
+
+#: modules/Debugger.js:346
 msgid "Put the caret on a breakpoint first."
 msgstr "Poné el cursor sobre un punto de corte primero."
 
-#: modules/Debugger.js:515
+#: modules/Debugger.js:535
 msgid "{0}:{1} cannot stop; the breakpoint moved to line {2}."
 msgstr "{0}:{1} no puede parar; el punto de corte se movió a la línea {2}."
 
-#: modules/Debugger.js:536
+#: modules/Debugger.js:560
+msgid "{0}:{1} cannot stop: {2}"
+msgstr "{0}:{1} no se puede detener: {2}"
+
+#: modules/Debugger.js:562
 msgid "{0}:{1} cannot stop: nothing runs there or after it."
 msgstr "{0}:{1} no puede parar: ahí o después no corre nada."
 
-#: modules/Debugger.js:544
+#: modules/Debugger.js:570
 msgid "{0} changed: {1} -> {2}"
 msgstr "{0} cambió: {1} -> {2}"
 
-#: modules/Debugger.js:664
+#: modules/Debugger.js:578
+msgid "Stopped on pass {0}."
+msgstr "Detenido en la pasada {0}."
+
+#: modules/Debugger.js:700
 msgid "Stops when {0} changes."
 msgstr "Se detiene cuando {0} cambie."
 
-#: modules/Debugger.js:669
+#: modules/Debugger.js:705
 msgid "{0} cannot be watched: {1}"
 msgstr "No se puede vigilar {0}: {1}"
 
-#: modules/Debugger.js:731
+#: modules/Debugger.js:767
 msgid "Open"
 msgstr "Abrir"
 
-#: modules/Debugger.js:789
+#: modules/Debugger.js:825
 msgid "… {0} more"
 msgstr "… {0} más"
 
-#: modules/Debugger.js:816
+#: modules/Debugger.js:852
 msgid "Change a value"
 msgstr "Cambiar un valor"
 
-#: modules/Debugger.js:817
+#: modules/Debugger.js:853
 msgid "{0} is"
 msgstr "{0} es"
 
-#: modules/Debugger.js:831
+#: modules/Debugger.js:867
 msgid "Stopped here"
 msgstr "Detenido acá"
 
-#: modules/Debugger.js:938
+#: modules/Debugger.js:974
 msgid "Run to cursor needs a program being debugged."
 msgstr "Ejecutar hasta el cursor necesita un programa en depuración."
 
-#: modules/Designer.js:3183
+#: modules/Designer.js:3694
 msgid "the menu bar"
 msgstr "la barra de menús"
 
-#: modules/Designer.js:984
+#: modules/Designer.js:1242
 msgid "{0} holds controls of its own, so there is nothing to draw an item in."
 msgstr ""
 "{0} contiene controles propios, así que no hay dónde dibujar un elemento."
 
-#: modules/Designer.js:1224
+#: modules/Designer.js:1482
 msgid ""
 "An aspect frame holds one child.\n"
 "Put a container in it to hold more."
@@ -2811,7 +3024,7 @@ msgstr ""
 "Un marco de proporción sostiene un solo hijo.\n"
 "Poné un contenedor adentro para tener más."
 
-#: modules/Designer.js:1231 modules/Designer.js:3006
+#: modules/Designer.js:1489 modules/Designer.js:3515
 msgid ""
 "A split holds exactly two children.\n"
 "Put a container in one of its halves to hold more."
@@ -2819,7 +3032,7 @@ msgstr ""
 "Un Split sostiene exactamente dos hijos.\n"
 "Poné un contenedor en una de sus mitades para tener más."
 
-#: modules/Designer.js:3238 modules/Designer.js:3320
+#: modules/Designer.js:3749 modules/Designer.js:3832
 msgid ""
 "The code already has handlers for {0}: {1}.\n"
 "Rename or delete them first."
@@ -2827,11 +3040,11 @@ msgstr ""
 "El código ya tiene handlers para {0}: {1}.\n"
 "Renombralos o borralos primero."
 
-#: modules/Designer.js:3302
+#: modules/Designer.js:3813
 msgid "\"{0}\" is not usable as a control name."
 msgstr "\"{0}\" no sirve como nombre de control."
 
-#: modules/Designer.js:3307
+#: modules/Designer.js:3819
 msgid "There is already a control named {0}."
 msgstr "Ya hay un control llamado {0}."
 
@@ -3126,6 +3339,10 @@ msgstr ""
 msgid "Nothing in this project declares {0}."
 msgstr "Nada en este proyecto declara {0}."
 
+#: modules/PartsTray.js:36 modules/ProjectTree.js:501
+msgid "Components"
+msgstr "Componentes"
+
 #: modules/Problems.js:204
 msgid "Place"
 msgstr "Lugar"
@@ -3164,71 +3381,71 @@ msgstr "Archivos"
 msgid "Show the files view"
 msgstr "Mostrar la vista de archivos"
 
-#: modules/ProjectTree.js:493
+#: modules/ProjectTree.js:499
 msgid "Forms"
 msgstr "Formularios"
 
-#: modules/ProjectTree.js:495
-msgid "Components"
-msgstr "Componentes"
-
-#: modules/ProjectTree.js:518
+#: modules/ProjectTree.js:524
 msgid "design"
 msgstr "diseño"
 
-#: modules/ProjectTree.js:523
+#: modules/ProjectTree.js:529
 msgid "code"
 msgstr "código"
 
-#: modules/ProjectTree.js:550
+#: modules/ProjectTree.js:561
 msgid "Modules"
 msgstr "Módulos"
 
-#: modules/ProjectTree.js:601
+#: modules/ProjectTree.js:612
 msgid "Sounds"
 msgstr "Sonidos"
 
-#: modules/ProjectTree.js:614
+#: modules/ProjectTree.js:625
 msgid "Documents"
 msgstr "Documentos"
 
-#: modules/ProjectTree.js:620
+#: modules/ProjectTree.js:631
 msgid "Records"
 msgstr "Registros"
 
-#: modules/PropertyGrid.js:563 modules/Workspace.js:416
+#: modules/ProjectTree.js:637
+msgid "Connections"
+msgstr "Conexiones"
+
+#: modules/PropertyGrid.js:563 modules/Workspace.js:429
 msgid "Inspector"
 msgstr "Inspector"
 
-#: modules/PropertyGrid.js:722
+#: modules/PropertyGrid.js:750
 msgid "Essential"
 msgstr "Esenciales"
 
-#: modules/PropertyGrid.js:725
+#: modules/PropertyGrid.js:753
 msgid "Appearance"
 msgstr "Apariencia"
 
-#: modules/PropertyGrid.js:726
+#: modules/PropertyGrid.js:754
 msgid "Layout"
 msgstr "Disposición"
 
-#: modules/PropertyGrid.js:727
+#: modules/PropertyGrid.js:755
 msgid "Behaviour"
 msgstr "Comportamiento"
 
-#: modules/PropertyGrid.js:860
+#: modules/PropertyGrid.js:889
 msgid "Back to the theme's"
 msgstr "Volver al del tema"
 
-#: modules/PropertyGrid.js:926
+#: modules/PropertyGrid.js:955
 msgid "Fill with a sample"
 msgstr "Llenar con una muestra"
 
-#: modules/PropertyGrid.js:928
+#: modules/PropertyGrid.js:957
 msgid "How many the designer shows; the application decides the real number"
 msgstr "Cuántos muestra el diseñador; la aplicación decide el número real"
 
-#: modules/PropertyGrid.js:938
+#: modules/PropertyGrid.js:967
 msgid ""
 "The page the application opens on. Which page the designer shows is only "
 "where you are looking, and is not saved as this."
@@ -3236,32 +3453,32 @@ msgstr ""
 "La página en la que abre la aplicación. La página que muestra el diseñador "
 "es solo la que estás mirando, y no se guarda como esta."
 
-#: modules/PropertyGrid.js:996
+#: modules/PropertyGrid.js:1030
 msgid "Add a class"
 msgstr "Agregar una clase"
 
-#: modules/PropertyGrid.js:1047
+#: modules/PropertyGrid.js:1081
 msgid "Edit the columns"
 msgstr "Editar las columnas"
 
-#: modules/PropertyGrid.js:1312
+#: modules/PropertyGrid.js:1358
 msgid "The field of the record this form edits"
 msgstr "El campo del registro que edita este formulario"
 
-#: modules/PropertyGrid.js:1316 modules/PropertyGrid.js:1319
+#: modules/PropertyGrid.js:1362 modules/PropertyGrid.js:1365
 msgid "The field of {0} this form edits"
 msgstr "El campo de {0} que edita este formulario"
 
-#: modules/PropertyGrid.js:1320
+#: modules/PropertyGrid.js:1366
 msgid "{0} is not a field of {1}"
 msgstr "{0} no es un campo de {1}"
 
-#: modules/PropertyGrid.js:1617
+#: modules/PropertyGrid.js:1663
 msgid "Taken from the command {0}. Type a value to use this control's own."
 msgstr ""
 "Tomado del comando {0}. Escribí un valor para que el control use el suyo."
 
-#: modules/PropertyGrid.js:1627
+#: modules/PropertyGrid.js:1673
 msgid ""
 "The class goes on this control's {0} node. One written for another node is "
 "saved and does nothing."
@@ -3269,19 +3486,19 @@ msgstr ""
 "La clase va en el nodo {0} de este control. Una escrita para otro nodo se "
 "guarda y no hace nada."
 
-#: modules/PropertyGrid.js:1665
+#: modules/PropertyGrid.js:1711
 msgid "An overlay stacks its children: HAlign and VAlign place this one."
 msgstr "Un overlay apila sus hijos: HAlign y VAlign colocan a este."
 
-#: modules/PropertyGrid.js:1667
+#: modules/PropertyGrid.js:1713
 msgid "This container gives its one child the whole of its room."
 msgstr "Este contenedor le da a su único hijo todo su espacio."
 
-#: modules/PropertyGrid.js:1669
+#: modules/PropertyGrid.js:1715
 msgid "The box this control is in decides where it goes."
 msgstr "La caja en la que está este control decide dónde va."
 
-#: modules/PropertyGrid.js:1671
+#: modules/PropertyGrid.js:1717
 msgid ""
 "Nothing hands out spare room on a fixed surface: HAlign and VAlign anchor a "
 "control instead."
@@ -3289,15 +3506,15 @@ msgstr ""
 "Nada reparte el espacio sobrante en una superficie fija: HAlign y VAlign "
 "anclan el control en su lugar."
 
-#: modules/PropertyGrid.js:1677
+#: modules/PropertyGrid.js:1723
 msgid "Does nothing while {0} is off."
 msgstr "No hace nada mientras {0} esté apagada."
 
-#: modules/PropertyGrid.js:1784
+#: modules/PropertyGrid.js:1843
 msgid "{0}: {1} is not a valid size."
 msgstr "{0}: {1} no es un tamaño válido."
 
-#: modules/PropertyGrid.js:1859
+#: modules/PropertyGrid.js:1918
 msgid "{0}: {1} is not a number of rows."
 msgstr "{0}: {1} no es un número de filas."
 
@@ -3357,25 +3574,25 @@ msgstr ""
 "llega. Una regla propia en app.css sí: ver la sección de estilos de docs/"
 "widgets.md."
 
-#: modules/TabSet.js:295
+#: modules/TabSet.js:298
 msgid "This project"
 msgstr "Este proyecto"
 
-#: modules/TabSet.js:440
+#: modules/TabSet.js:449
 msgid ""
 "{0} is not UTF-8: it is open read-only and will not be saved from the IDE."
 msgstr ""
 "{0} no es UTF-8: está abierto en solo lectura y el IDE no lo va a guardar."
 
-#: modules/TabSet.js:768
+#: modules/TabSet.js:777
 msgid "Close tabs"
 msgstr "Cerrar pestañas"
 
-#: modules/TabSet.js:447
+#: modules/TabSet.js:456
 msgid "The project has no {0}."
 msgstr "El proyecto no tiene {0}."
 
-#: modules/TabSet.js:1042 modules/TabSet.js:1280
+#: modules/TabSet.js:1052 modules/TabSet.js:1290
 msgid ""
 "Could not save {0}:\n"
 "{1}"
@@ -3457,57 +3674,53 @@ msgstr "No se pudo ejecutar {0}: {1}"
 msgid "{0} is not installed, or not on the PATH."
 msgstr "{0} no está instalado, o no está en el PATH."
 
-#: modules/Workspace.js:160
+#: modules/Workspace.js:165
 msgid "Toolbox"
 msgstr "Herramientas"
 
-#: modules/Workspace.js:175
+#: modules/Workspace.js:180
 msgid "Show only the controls whose name or type contains this"
 msgstr "Muestra solo los controles cuyo nombre o tipo contiene esto"
 
-#: modules/Workspace.js:212
+#: modules/Workspace.js:217
 msgid "Structure"
 msgstr "Estructura"
 
-#: modules/Workspace.js:308
+#: modules/Workspace.js:321
 msgid "Previous page (Ctrl+Page Up)"
 msgstr "Página anterior (Ctrl+RePág)"
 
-#: modules/Workspace.js:309
+#: modules/Workspace.js:322
 msgid "Next page (Ctrl+Page Down)"
 msgstr "Página siguiente (Ctrl+AvPág)"
 
-#: modules/Workspace.js:362
+#: modules/Workspace.js:375
 msgid "Design values"
 msgstr "Valores de diseño"
 
-#: modules/Workspace.js:363
+#: modules/Workspace.js:376
 msgid ""
 "Edit what the designer shows instead of what the application will run with"
 msgstr ""
 "Editar lo que muestra el diseñador en lugar de lo que va a usar la aplicación"
 
-#: modules/Workspace.js:379
+#: modules/Workspace.js:392
 msgid "Filter properties"
 msgstr "Filtrar propiedades"
 
-#: modules/Workspace.js:380
+#: modules/Workspace.js:393
 msgid "Show only the properties whose name contains this"
 msgstr "Muestra sólo las propiedades cuyo nombre contiene esto"
 
-#: modules/Workspace.js:408
+#: modules/Workspace.js:421
 msgid "Double click an event to write its handler, or to go to it"
 msgstr "Doble clic en un evento para escribir su manejador, o para ir a él"
 
-#: modules/Workspace.js:420
-msgid "Properties"
-msgstr "Propiedades"
-
-#: modules/Workspace.js:421
+#: modules/Workspace.js:434
 msgid "Events"
 msgstr "Eventos"
 
-#: modules/Workspace.js:440
+#: modules/Workspace.js:453
 msgid "Outline"
 msgstr "Contenido"
 

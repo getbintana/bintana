@@ -4,7 +4,7 @@
   "properties": {
     "Text": "Breakpoint",
     "Width": 452,
-    "Height": 228,
+    "Height": 294,
     "Resizable": false
   },
   "children": [
@@ -76,11 +76,38 @@
       }
     },
     {
+      "type": "Label",
+      "name": "LblHits",
+      "properties": {
+        "X": 12,
+        "Y": 172,
+        "Width": 428,
+        "Height": 20,
+        "Text": "Stop on pass:",
+        "HAlign": "Fill",
+        "For": "TxtHits"
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtHits",
+      "properties": {
+        "X": 12,
+        "Y": 196,
+        "Width": 428,
+        "Height": 34,
+        "Text": "",
+        "Placeholder": "5 or == 5 the fifth, >= 5 from the fifth on, % 10 every tenth - empty is every pass",
+        "HAlign": "Fill",
+        "ActivatesDefault": true
+      }
+    },
+    {
       "type": "Button",
       "name": "BtnClear",
       "properties": {
         "X": 12,
-        "Y": 184,
+        "Y": 250,
         "Width": 90,
         "Height": 32,
         "Text": "Clear",
@@ -93,7 +120,7 @@
       "name": "BtnCancel",
       "properties": {
         "X": 242,
-        "Y": 184,
+        "Y": 250,
         "Width": 90,
         "Height": 32,
         "Text": "Cancel",
@@ -113,7 +140,7 @@
         "VAlign": "End",
         "Width": 100,
         "X": 340,
-        "Y": 184,
+        "Y": 250,
         "Default": true
       }
     }

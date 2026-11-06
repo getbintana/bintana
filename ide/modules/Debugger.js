@@ -86,6 +86,12 @@ export class Debugger {
          * and `log` beside it now; these are what the IDE sends. */
         this.whens = new Map();
         this.logs  = new Map();
+        /* And which pass it stops on: `5`, `>= 5`, `% 10` -- the runtime's
+         * grammar, checked in `BreakpointForm` before it gets here. */
+        this.hitSpecs = new Map();
+        /* How often each breakpoint has been reached in this run, by its key:
+         * the stop says it, and `hits` answers all of them at once. */
+        this.hitCounts = new Map();
         /* The child while it is being debugged, and what it last said. */
         this.job     = null;
         this.stopped = null;      /* the frames, innermost first */
@@ -135,6 +141,7 @@ export class Debugger {
              * it: both described a stop that no longer exists. */
             this.whens.delete(breakKey(file, line));
             this.logs.delete(breakKey(file, line));
+            this.hitSpecs.delete(breakKey(file, line));
         } else {
             this.ide.Editor.Mark(line, BREAK_MARK, this.markText(file, line));
         }
@@ -155,10 +162,12 @@ export class Debugger {
         const key  = breakKey(file, line);
         const when = this.whens.get(key);
         const log  = this.logs.get(key);
+        const hits = this.hitSpecs.get(key);
         let   text = Locale.Text("Stop here while debugging");
 
         if (when) text += ` · ${Locale.Text("only when")}: ${when}`;
         if (log)  text += ` · ${Locale.Text("message")}: ${log}`;
+        if (hits) text += ` · ${Locale.Text("on pass")}: ${hits}`;
         return text;
     }
 
@@ -182,7 +191,7 @@ export class Debugger {
             this.marks.delete(oldName);
         }
 
-        for (const map of [this.whens, this.logs])
+        for (const map of [this.whens, this.logs, this.hitSpecs])
             for (const [key, value] of [...map]) {
                 const at = key.lastIndexOf(":");
                 if (key.slice(0, at) !== oldName) continue;
@@ -195,7 +204,7 @@ export class Debugger {
     /* One setting moving from one address to another: a breakpoint the runtime
      * resolved to a different line, or a file that was renamed. */
     moveNotes(fromKey, toKey) {
-        for (const map of [this.whens, this.logs]) {
+        for (const map of [this.whens, this.logs, this.hitSpecs]) {
             if (!map.has(fromKey)) continue;
 
             map.set(toKey, map.get(fromKey));
@@ -259,8 +268,10 @@ export class Debugger {
          * was. */
         const when = this.whens.get(key);
         const log  = this.logs.get(key);
+        const hits = this.hitSpecs.get(key);
         if (when) command.when = when;
         if (log)  command.log  = log;
+        if (hits) command.hits = hits;
         return command;
     }
 
@@ -272,6 +283,7 @@ export class Debugger {
 
     setCondition(file, line, text) { this.setNote(this.whens, file, line, text); }
     setMessage(file, line, text)   { this.setNote(this.logs,  file, line, text); }
+    setHits(file, line, text)      { this.setNote(this.hitSpecs, file, line, text); }
 
     /*
      * One setting changed: written down, drawn again, and -- if a program is
@@ -338,10 +350,11 @@ export class Debugger {
         const key = breakKey(file, line);
         this.ide.breakpointDialog = BreakpointForm.edit(
             `${File.Name(file)}:${line}`,
-            this.whens.get(key), this.logs.get(key),
-            (condition, message) => {
+            this.whens.get(key), this.logs.get(key), this.hitSpecs.get(key),
+            (condition, message, hits) => {
                 this.setCondition(file, line, condition);
                 this.setMessage(file, line, message);
+                this.setHits(file, line, hits);
             });
         return true;
     }
@@ -405,6 +418,7 @@ export class Debugger {
         this.job     = null;
         this.stopped = null;
         this.fieldWatches.clear();
+        this.hitCounts.clear();
         /* What was opened is the run's objects, and the next run's are not
          * them: keeping the paths would ask a removed watch's expression again
          * at the first stop of a program that has nothing to do with it. */
@@ -473,6 +487,12 @@ export class Debugger {
      * the program is still going, and a logpoint inside a loop would fill any
      * list.
      */
+    /* The "file:line" a protocol id stands for, or "". */
+    keyOfId(id) {
+        for (const [key, known] of this.ids) if (known === id) return key;
+        return "";
+    }
+
     recorded(msg) {
         this.ide.log(`${this.projectName(msg.file)}:${msg.line}: ${msg.text}\n`);
     }
@@ -529,12 +549,18 @@ export class Debugger {
         if (lines) this.marks.set(name, lines.filter((l) => l !== msg.line));
         this.whens.delete(breakKey(name, msg.line));
         this.logs.delete(breakKey(name, msg.line));
+        this.hitSpecs.delete(breakKey(name, msg.line));
 
         const state = this.ide.openTabs.get(name);
         if (state && state.editor) state.editor.Unmark(msg.line, BREAK_MARK);
 
-        this.ide.log(`${Locale.Text("{0}:{1} cannot stop: nothing runs there or after it.",
-                                    name, msg.line)}\n`);
+        /* The runtime says why when it has a reason other than the line -- a
+         * hit count it cannot read. */
+        if (msg.why)
+            this.ide.log(`${Locale.Text("{0}:{1} cannot stop: {2}", name, msg.line, msg.why)}\n`);
+        else
+            this.ide.log(`${Locale.Text("{0}:{1} cannot stop: nothing runs there or after it.",
+                                        name, msg.line)}\n`);
     }
 
     halt(msg) {
@@ -542,6 +568,16 @@ export class Debugger {
          * reason, and the line is the one that wrote it. */
         if (msg.reason === "watch")
             this.ide.log(`${Locale.Text("{0} changed: {1} -> {2}", msg.text, msg.old, msg.new)}\n`);
+        /* A breakpoint says which pass this is, and one with a hit count says it
+         * out loud: the pass is what was asked for. */
+        if (msg.reason === "breakpoint" && msg.id) {
+            const key = this.keyOfId(msg.id);
+            if (key) {
+                this.hitCounts.set(key, msg.hits);
+                if (this.hitSpecs.has(key))
+                    this.ide.log(`${Locale.Text("Stopped on pass {0}.", msg.hits)}\n`);
+            }
+        }
         this.stopped = msg.frames || [];
         this.frame   = 0;
         this.fill();

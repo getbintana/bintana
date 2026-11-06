@@ -674,6 +674,8 @@ const TESTS = [
     "DebuggerWatch",
     /* Async: breakpoints on braces stay in their function. */
     "DebuggerBraces",
+    /* Async: hit counts, and the count read back. */
+    "DebuggerHits",
     /* Async: a line that arrives a third of a second after its child ended. */
     "ExecControlLate",
     /* Async: more into a child's stdin than a pipe holds, while it echoes. */
@@ -31574,6 +31576,94 @@ class PQ extends Form {
             });
 
         check("a logpoint answers the write", typeof job.Write === "function");
+    }
+
+    /*
+     * A hit count: which pass a breakpoint stops on, in Visual Studio's words --
+     * `== n` (a bare `n` too) the nth only, `>= n` from the nth on, `% n` every
+     * nth. Counted after the condition, so a pass the condition turns away is
+     * not a pass; deciding for a logpoint as for a stop, so `% 4` on a log is a
+     * sample; refused with a sentence when it is not one of the three; and read
+     * back at any time with `hits`, which is what a breakpoint that never stops
+     * is for.
+     */
+    testDebuggerHits() {
+        const proj = File.Join(SCRATCH, "dbghits");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.json"),
+                  JSON.stringify({ name: "dbghits", main: "Main", sources: ["Main.js"] }));
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +                          /* 1 */
+                  'function Main() {\n' +                      /* 2 */
+                  '    let total = 0;\n' +                     /* 3 */
+                  '    for (let i = 0; i < 10; i++) {\n' +     /* 4 */
+                  '        total += i;\n' +                    /* 5 */
+                  '        total += 1;\n' +                    /* 6 */
+                  '        total += 2;\n' +                    /* 7 */
+                  '        total -= 3;\n' +                    /* 8 */
+                  '    }\n' +                                  /* 9 */
+                  '    print(`total ${total}`);\n' +           /* 10 */
+                  '    Application.Quit(0);\n' +               /* 11 */
+                  '}\n');
+
+        const stops   = [];         /* { id, hits, i } */
+        const logs    = [];
+        const refused = [];
+        let   counts  = null;
+        let   current = null;
+        const out     = [];
+        const send    = (o) => job.Write(JSON.stringify(o));
+
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+
+                    if (kind === "ready") {
+                        send({ do: "break", file: "Main.js", line: 5, id: 1, hits: "== 3" });
+                        send({ do: "break", file: "Main.js", line: 6, id: 2, hits: "% 4", log: "i" });
+                        send({ do: "break", file: "Main.js", line: 7, id: 3, hits: " >=9 " });
+                        send({ do: "break", file: "Main.js", line: 8, id: 4, hits: "2",
+                               when: "i % 2 === 0" });
+                        send({ do: "break", file: "Main.js", line: 10, id: 5, hits: "every 3" });
+                        send({ do: "continue" });
+                    } else if (kind === "refused") {
+                        refused.push(msg);
+                    } else if (kind === "log") {
+                        logs.push(msg);
+                    } else if (kind === "stopped") {
+                        current = { id: msg.id, hits: msg.hits, i: null };
+                        stops.push(current);
+                        send({ do: "eval", frame: 0, text: "i" });
+                    } else if (kind === "eval") {
+                        current.i = msg.value;
+                        if (current.id === 3 && current.hits === 10) send({ do: "hits" });
+                        else send({ do: "continue" });
+                    } else if (kind === "hits") {
+                        counts = msg.items;
+                        send({ do: "continue" });
+                    }
+                },
+            },
+            (line) => out.push(line),
+            (code) => {
+                waiting--;
+                eq("a program with hit counts finishes", code, 0);
+                const said = stops.map((s) => `${s.id}:${s.hits}:${s.i}`).join(" ");
+                eq("each stops on the pass it names, and says which pass",
+                   said, "1:3:2 4:2:2 3:9:8 3:10:9");
+                eq("a counted logpoint is a sample", logs.map((l) => `${l.text}@${l.hits}`).join(" "),
+                   "3@4 7@8");
+                eq("a hit count that is not one is refused, with a sentence",
+                   refused.map((r) => `${r.id} ${r.why}`).join(),
+                   "5 a hit count is a number, == n, >= n or % n");
+                eq("hits answers every pass so far, the condition's included",
+                   (counts || []).map((c) => `${c.id}:${c.hits}`).join(" "), "1:10 2:10 3:10 4:5");
+            });
     }
 
     testExecKill() {
