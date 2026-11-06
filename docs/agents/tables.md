@@ -517,3 +517,10 @@ added 2026-11-06 and measured first with two real tables on `Xvfb`:
 - `ScrollX`/`ScrollMaxX` are the shared `bta_scroll_get`/`set` the `Scroller`
   and the editors use; the table's scrolled window already had both axes.
 
+**`lib/datagrid` is the first user of all of this**: frozen columns, totals and
+one sort out of four tables. Two things it found: a component added from code
+raises its events on itself (`On`), not on the form -- only the `.form` loader
+binds it -- so a test listens with `On`; and a script library's helpers are
+globals in every project that `uses` it (`api.sh`'s count of top-level names
+in `lib/` went from 38 to 43), so it is a module and exports `DataGrid` alone.
+

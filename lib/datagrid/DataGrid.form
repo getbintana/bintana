@@ -1,0 +1,69 @@
+{
+  "format": "bintana-form/1",
+  "class": "DataGrid",
+  "properties": {
+    "Width": 480,
+    "Height": 300,
+    "Arrangement": "Vertical"
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Body",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Expand": true,
+        "HAlign": "Fill",
+        "VAlign": "Fill"
+      },
+      "children": [
+        {
+          "type": "TableView",
+          "name": "FrozenView",
+          "properties": {
+            "VExpand": true,
+            "VAlign": "Fill",
+            "Visible": false
+          }
+        },
+        {
+          "type": "TableView",
+          "name": "MainView",
+          "properties": {
+            "Expand": true,
+            "HAlign": "Fill",
+            "VAlign": "Fill"
+          }
+        }
+      ]
+    },
+    {
+      "type": "Panel",
+      "name": "Foot",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "HAlign": "Fill",
+        "Visible": false
+      },
+      "children": [
+        {
+          "type": "TableView",
+          "name": "FrozenTotals",
+          "properties": {
+            "Headers": false,
+            "Visible": false
+          }
+        },
+        {
+          "type": "TableView",
+          "name": "MainTotals",
+          "properties": {
+            "Headers": false,
+            "HExpand": true,
+            "HAlign": "Fill"
+          }
+        }
+      ]
+    }
+  ]
+}

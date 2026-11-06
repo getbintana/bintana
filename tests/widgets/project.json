@@ -16,6 +16,7 @@
     "dialog",
     "xlsx",
     "qr",
-    "propertygrid"
+    "propertygrid",
+    "datagrid"
   ]
 }

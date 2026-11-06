@@ -19400,6 +19400,201 @@
       ]
     },
     {
+      "Name": "datagrid",
+      "Classes": [
+        {
+          "Name": "DataGrid",
+          "Parent": "Component",
+          "Members": [
+            {
+              "Name": "Add",
+              "Kind": "Method",
+              "Params": 1,
+              "Signature": "(row)",
+              "Returns": "",
+              "Doc": "adds a row, the array of its values in declared column order",
+              "Native": false
+            },
+            {
+              "Name": "AddRows",
+              "Kind": "Method",
+              "Params": 1,
+              "Signature": "(rows)",
+              "Returns": "",
+              "Doc": "adds many rows in one change to both halves",
+              "Native": false
+            },
+            {
+              "Name": "Cell",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(row, column)",
+              "Returns": "",
+              "Doc": "one value, by row and declared column",
+              "Native": false
+            },
+            {
+              "Name": "Clear",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "takes every row away",
+              "Native": false
+            },
+            {
+              "Name": "Columns",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the columns, as `TableView`'s `{ Text, Width, Alignment, Editor, Link, Visible }` with `Total` (`\"sum\"`, `\"count\"`, `\"avg\"`, `\"min\"`, `\"max\"`) and `Decimals` for the row of totals. A column is always its declared index, in whichever half it is drawn",
+              "Native": false
+            },
+            {
+              "Name": "Copy",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "the selected rows as tab-separated text, every column in declared order -- what a spreadsheet pastes -- put on the clipboard and answered",
+              "Native": false
+            },
+            {
+              "Name": "Count",
+              "Kind": "ReadOnly",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "how many rows the grid holds",
+              "Native": false
+            },
+            {
+              "Name": "Frozen",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "how many leading columns stay put while the rest scroll across. Default `0`, every column scrolling",
+              "Native": false
+            },
+            {
+              "Name": "Index",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the selected row, `-1` for none. Assigning selects it in both halves",
+              "Native": false
+            },
+            {
+              "Name": "MultiSelect",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "more than one row at a time, in both halves. Default `false`",
+              "Native": false
+            },
+            {
+              "Name": "Paste",
+              "Kind": "Method",
+              "Params": 1,
+              "Signature": "(text)",
+              "Returns": "",
+              "Doc": "writes tab-separated text from the current cell down and across: a spreadsheet's copied rows, or `text` when given. Each cell is raised as `CellEdit` with `\"paste\"`, so a handler can refuse it. Rows past the last one are not made. With no `text` the clipboard is read, which answers later",
+              "Native": false
+            },
+            {
+              "Name": "Refilter",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "asks `Filter` of every row again, in both halves",
+              "Native": false
+            },
+            {
+              "Name": "RemoveRow",
+              "Kind": "Method",
+              "Params": 1,
+              "Signature": "(index)",
+              "Returns": "",
+              "Doc": "takes one row out",
+              "Native": false
+            },
+            {
+              "Name": "Row",
+              "Kind": "Method",
+              "Params": 1,
+              "Signature": "(index)",
+              "Returns": "",
+              "Doc": "that row's values, in declared column order",
+              "Native": false
+            },
+            {
+              "Name": "Selection",
+              "Kind": "ReadOnly",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "every selected row, as an array of indices in order",
+              "Native": false
+            },
+            {
+              "Name": "SetCell",
+              "Kind": "Method",
+              "Params": 3,
+              "Signature": "(row, column, value)",
+              "Returns": "",
+              "Doc": "writes one value, by row and declared column, in whichever half draws it",
+              "Native": false
+            },
+            {
+              "Name": "Sortable",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "whether a click on a heading sorts the rows, in both halves. Default `false`",
+              "Native": false
+            },
+            {
+              "Name": "Totals",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "the row of totals as it is drawn: one value per declared column, `\"\"` where a column declares none",
+              "Native": false
+            }
+          ],
+          "Events": [
+            {
+              "Name": "Select",
+              "Signature": "()",
+              "Doc": "the selection moved, in either half"
+            },
+            {
+              "Name": "Activate",
+              "Signature": "()",
+              "Doc": "a double click or Enter on a row"
+            },
+            {
+              "Name": "CellEdit",
+              "Signature": "(row, column, text, how)",
+              "Doc": "an edit ended, as `TableView`'s, with `column` the declared index; `how` is `\"paste\"` for a cell `Paste` wrote. **`false` refuses it**, a string is kept instead of the text"
+            },
+            {
+              "Name": "Filter",
+              "Signature": "(row)",
+              "Doc": "asked of each row, as `TableView`'s; **`false` hides it** in both halves"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "Name": "dialog",
       "Classes": [
         {

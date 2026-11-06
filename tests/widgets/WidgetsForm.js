@@ -665,6 +665,8 @@ const TESTS = [
     "HttpServerStop",
     "HttpServerDropped",
     "HttpServerHold",
+    /* Async: lib/datagrid, laid out and scrolled. */
+    "DataGrid",
     /* Async-ish: a child with a real pointer on a heading's edge. */
     "TableColumnResize",
     "DebuggerOrders",
@@ -6707,6 +6709,98 @@ class Form1 extends Form {
             box.Delete();
         }, 600);
     }
+    /* --- DataGrid -----------------------------------------------------------
+     *
+     * `lib/datagrid`: frozen leading columns, a row of totals under its
+     * columns, one sort for both halves, and rows to and from a spreadsheet --
+     * four tables kept in line by properties every table has. Every column is
+     * its declared index, whichever half draws it.
+     */
+    testDataGrid() {
+        const g = new DataGrid();
+        this.Fixed1.Add(g);
+        g.Resize(480, 300);
+
+        throws("Total is one of the five", () => { g.Columns = [{ Text: "x", Total: "median" }]; });
+        throws("Frozen is a count", () => { g.Frozen = -1; });
+
+        g.Columns = [
+            { Text: "Code", Width: 60 }, { Text: "Name", Width: 110 },
+            { Text: "Qty", Width: 70, Total: "sum" },
+            { Text: "Price", Width: 80, Total: "avg", Decimals: 2 },
+            { Text: "A", Width: 120 }, { Text: "B", Width: 120 }, { Text: "C", Width: 120 },
+        ];
+        g.Frozen = 2;
+        g.Sortable = true;
+        const rows = [];
+        for (let i = 0; i < 60; i++)
+            rows.push([`${i}`, `item ${i}`, i % 7, `${(i * 1.25).toFixed(2)}`, "a", "b", "c"]);
+        g.AddRows(rows);
+
+        eq("the rows are the grid's", g.Count, 60);
+        eq("the frozen columns are one table", g.FrozenView.Columns.map((c) => c.Text).join(), "Code,Name");
+        eq("...the rest another", g.MainView.Columns.map((c) => c.Text).join(), "Qty,Price,A,B,C");
+        eq("a column is its declared index in either half", `${g.Cell(5, 1)} ${g.Cell(5, 2)}`, "item 5 5");
+        eq("the totals are worked out exactly, avg rounded",
+           g.Totals().join("|"), "||174|36.88|||");
+        eq("...and drawn under their columns", `${g.MainTotals.Cell(0, 0)} ${g.MainTotals.Cell(0, 1)}`, "174 36.88");
+
+        const selects = [];
+        g.On("Select", () => selects.push(g.Index));
+        const edits = [];
+        g.On("CellEdit", (row, column, text, how) => {
+            edits.push(`${row}:${column}:${text}:${how}`);
+            return text === "no" ? false : undefined;
+        });
+
+        waiting++;
+        until("the grid is laid out", () => g.MainView.HeaderHeight > 0 && g.MainView.ScrollMaxY > 0, () => {
+            eq("a row of totals has the widths its table draws",
+               g.MainTotals.Columns.map((c) => c.Width).join(), g.MainView.ColumnWidths.join());
+            g.MainView.ScrollY = 400;
+            g.MainView.ScrollX = 150;
+            until("the halves follow", () => g.FrozenView.ScrollY === 400 && g.MainTotals.ScrollX === 150, () => {
+              /* A throw here would end the chain with `waiting` owed: a hang
+               * instead of a red line. */
+              try {
+                eq("scrolled down, the frozen half follows", g.FrozenView.ScrollY, 400);
+                eq("scrolled across, the totals follow", g.MainTotals.ScrollX, 150);
+
+                g.FrozenView.Index = 5;
+                eq("a row chosen in one half is chosen in the other", g.MainView.Index, 5);
+                eq("...and the grid says so once", selects.join(), "5");
+
+                eq("an edit is said by declared column and kept",
+                   g.MainView.Emit("CellEdit", 0, 0, "10", "enter"), "10");
+                eq("...in the grid's row", g.Cell(0, 2), "10");
+                eq("...with the totals again", g.Totals()[2], "184");
+                eq("a refused edit is refused", g.MainView.Emit("CellEdit", 0, 0, "no", "enter"), false);
+                eq("...and leaves the value", g.Cell(0, 2), "10");
+
+                g.Index = 3;
+                eq("Copy is the selected rows, every column, tab-separated",
+                   g.Copy(), "3\titem 3\t3\t3.75\ta\tb\tc");
+
+                g.MainView.CurrentCell = { Row: 1, Column: 0 };
+                g.Paste("5\t9.99\n6\t1.01");
+                eq("Paste writes from the current cell down and across",
+                   `${g.Row(1).slice(2, 4)} ${g.Row(2).slice(2, 4)}`, "5,9.99 6,1.01");
+                check("...each cell said as an edit, with paste",
+                      edits.includes("1:2:5:paste") && edits.includes("2:3:1.01:paste"), JSON.stringify(edits));
+
+                g.MainView.SortColumn(0, false);
+                eq("a heading sorts the grid's rows, numbers as numbers", g.Cell(0, 2), "10");
+                eq("...and both halves are filled in that order",
+                   g.FrozenView.Cell(0, 0), g.Cell(0, 0));
+              } catch (e) {
+                failures.push(`DataGrid: ${e.message}`);
+              }
+                g.Delete();
+                waiting--;
+            });
+        });
+    }
+
     /* --- PropertyGrid -------------------------------------------------------
      *
      * The rows are asked of the target, not declared by the application: a
