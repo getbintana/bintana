@@ -17,6 +17,15 @@
  * **`Autohide` is off, unlike most popovers**, because an autohide one takes
  * the keyboard: the pointer may be resting over a name while the person goes
  * on typing, and the whole point is that the editor keeps the keys.
+ *
+ * **While a program is stopped, the question is the value and not the name.**
+ * The expression under the pointer -- `total`, `client.address.city`,
+ * `this.Ok.Text` -- is asked of the debugger where the selected frame stands
+ * (`Debugger.peek`), and the tooltip shows `name = value` when the answer
+ * comes. One that cannot be answered there (a keyword, a name out of scope)
+ * falls back to what it is, the tooltip of a program that is not running.
+ * The answer is asynchronous, so the pointer may have moved: an answer for a
+ * word that is no longer the one wanted is dropped.
  */
 export class Tooltip {
     constructor(ide) {
@@ -90,17 +99,48 @@ export class Tooltip {
             return this.close();
 
         const word = this.wordUnder(ed, at);
+        const dbg  = this.ide.debugger_;
+
+        if (word && dbg && dbg.halted) {
+            this.peekWord = word;
+            dbg.peek(word, (msg) => {
+                if (this.peekWord !== word) return;        /* the pointer moved on */
+                this.peekWord = "";
+                if (!msg.failed)
+                    return this.open(ed, x, y, word, this.valueMarkup(word, msg.value));
+                this.describe(ed, x, y, word);
+            });
+            return;
+        }
+        this.describe(ed, x, y, word);
+    }
+
+    /* What a name is, from the completion's reference: the tooltip of a
+     * program that is not stopped, and of a word the stopped one cannot
+     * answer. */
+    describe(ed, x, y, word) {
         const info = word ? this.ide.completion.topic(word) : null;
         if (!info)
             return this.close();
+        this.open(ed, x, y, word, this.markup(info));
+    }
 
+    /* `name = value`, the value as the runtime rendered it -- one level of an
+     * object, a quoted string -- cut where a tooltip stops being one. */
+    valueMarkup(word, value) {
+        const text = String(value);
+        const cut  = text.length > 600 ? `${text.slice(0, 600)}…` : text;
+        return `<b>${Text.Escape(word)}</b> = <tt>${Text.Escape(cut)}</tt>`;
+    }
+
+    open(ed, x, y, word, markup) {
         if (!this.label) {
             this.label = new Label();
             this.label.Markup = true;
             this.label.Wrap   = true;
             this.label.Width  = 360;
         }
-        this.label.Text = this.markup(info);
+        this.label.Text = markup;
         this.at = word;
         try {
             Popover.Show(this.label, ed, {
@@ -132,6 +172,10 @@ export class Tooltip {
     close() {
         this.stop();
         this.at = "";
+        if (this.peekWord) {
+            this.peekWord = "";
+            if (this.ide.debugger_) this.ide.debugger_.unpeek();
+        }
         if (this.label && Popover.IsOpen(this.label))
             Popover.Close(this.label);
     }

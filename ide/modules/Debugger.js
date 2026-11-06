@@ -417,6 +417,7 @@ export class Debugger {
     finished(code) {
         this.job     = null;
         this.stopped = null;
+        this.peeking = null;
         this.fieldWatches.clear();
         this.hitCounts.clear();
         /* What was opened is the run's objects, and the next run's are not
@@ -901,6 +902,25 @@ export class Debugger {
         return this.send({ do: "eval", frame: this.frame, text });
     }
 
+    /*
+     * A value for the pointer: the expression under it, asked where the
+     * selected frame stands, with the answer handed to `then` instead of the
+     * log. **One at a time** -- the pointer is in one place -- so a second peek
+     * replaces the first, and an answer for one that was replaced is dropped
+     * by its text. The runtime echoes `text` and `frame`, which is all the
+     * matching there is.
+     */
+    peek(text, then) {
+        if (!this.halted || !text) return false;
+        this.peeking = { text, frame: this.frame, then };
+        return this.send({ do: "eval", frame: this.frame, text });
+    }
+
+    /* The pointer went: whatever was asked for it is no longer wanted. */
+    unpeek() {
+        this.peeking = null;
+    }
+
     /* An expression kept, and asked again at every stop. */
     watch(text) {
         if (!text || this.watches.includes(text)) return false;
@@ -929,6 +949,15 @@ export class Debugger {
     answered(msg) {
         this.answers.set(msg.text, { value: msg.value, failed: !!msg.failed,
                                      children: !!msg.children });
+
+        /* The pointer's question, answered to the pointer: never a line of the
+         * log, which is the immediate box's conversation and not the hand's. */
+        const peek = this.peeking;
+        if (peek && peek.text === msg.text && peek.frame === msg.frame) {
+            this.peeking = null;
+            peek.then(msg);
+            if (!this.watches.includes(msg.text)) return;
+        }
 
         if (this.watches.includes(msg.text)) {
             this.fillValues();

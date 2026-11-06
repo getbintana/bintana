@@ -16808,6 +16808,57 @@ function* p_debug(ide) {
     check("...and the one left is the other",
           ide.debugger_.all()[0].line === at.line, JSON.stringify(ide.debugger_.all()));
 
+    /*
+     * --- the pointer, while the program is stopped ----------------------------
+     *
+     * A name under the pointer is asked of the stopped program, where the
+     * selected frame stands, and the tooltip is its value; one that cannot be
+     * answered there is what it is, as with nothing running. The runtime's
+     * replies are copied from a child, as above.
+     */
+    dbg.waiting = [];
+    dbg.heard('{"event":"stopped","reason":"breakpoint","frames":[{"Name":"Form_Open","File":"","Line":0,"Column":0}]}');
+    const peeks = () => (dbg.waiting || []).map((t) => JSON.parse(t))
+                                           .filter((c) => c.do === "eval").map((c) => c.text);
+    const lineText = ide.Editor.Text.split("\n")[at.line - 1];
+    ide.Editor.Select(at.line, lineText.indexOf("Form_Open") + 3);
+    yield* settled(ide);
+    let cb = ide.Editor.CursorBounds();
+    ide.Editor_MouseMove(cb.X + 1, cb.Y + 4);
+    yield* until(() => peeks().includes("Form_Open"), 120);
+    eq("resting on a name while stopped asks the program", peeks().join(","), "Form_Open");
+    check("...and shows nothing until it answers", !ide.tooltip.visible);
+
+    dbg.heard('{"reply":"eval","frame":0,"text":"Form_Open","value":"7","failed":false,"children":false}');
+    yield* until(() => ide.tooltip.visible, 60);
+    check("its value is the tooltip",
+          ide.tooltip.visible && ide.tooltip.label.Text.includes("Form_Open</b> = <tt>7</tt>"),
+          ide.tooltip.label && ide.tooltip.label.Text);
+    check("...and not a line of the log", !ide.LogView.Text.includes("Form_Open => 7"));
+    ide.tooltip.close();
+    yield;
+
+    /* An answer that failed: what the name is, as with nothing running. */
+    ide.Editor_MouseMove(cb.X + 1, cb.Y + 4);
+    yield* until(() => !!dbg.peeking, 120);
+    dbg.heard('{"reply":"eval","frame":0,"text":"Form_Open","value":"Form_Open is not defined","failed":true}');
+    yield;
+    check("a name the stopped frame cannot answer is described instead",
+          !ide.tooltip.visible || !ide.tooltip.label.Text.includes(" = "),
+          ide.tooltip.label && ide.tooltip.label.Text);
+    ide.tooltip.close();
+
+    /* And an answer for a pointer that moved away is dropped. */
+    ide.Editor_MouseMove(cb.X + 1, cb.Y + 4);
+    yield* until(() => !!dbg.peeking, 120);
+    ide.Editor_MouseLeave();
+    ide.tooltip.close();
+    dbg.heard('{"reply":"eval","frame":0,"text":"Form_Open","value":"8","failed":false}');
+    yield;
+    check("an answer that comes after the pointer left shows nothing", !ide.tooltip.visible);
+    dbg.finished(0);
+    dbg.waiting = null;
+
     /* --- back to what the phase after this one expects ----------------------- */
     /* The caret went back to the top when the tab reopened, and F9 acts where
      * the caret is -- without this it would *add* a second one on line 1. */
