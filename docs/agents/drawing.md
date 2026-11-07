@@ -273,15 +273,27 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   keeps the whole count (it is what the dialog offers the range within) and the
   settings carry the preset. The `answer` reports the pages actually rendered
   either way, which is what keeps it truthful on both roads.
-- **GTK4 has no built-in print preview: `Vista previa` opens Evince or Papers.**
-  The button is there and the dialog is GTK's, but the preview itself is a
-  temporary PDF handed to an external viewer -- on a machine with neither
-  installed the preview fails, and the failed launch takes the run down with a
-  cairo assertion in GTK's own cleanup (measured with an empty `Draw`, so it is
-  not the drawing). Documented rather than worked around: there is nothing in
-  this runtime that shows a PDF. `Cancel`, by contrast, is clean and asserted
-  nowhere -- it returns `null` and quits, verified by hand four times because
-  no suite can click a dialog.
+- **GTK4 has no built-in print preview, so the runtime has one.** The dialog's
+  *Preview* handed a temporary PDF to Evince or Papers, and on a machine with
+  neither the failed launch took the run down with a cairo assertion in GTK's
+  cleanup. `Printer.Preview(area, [setup], [cb])` is a window of `forms.js`
+  (`showPrintPreview`, looked up by name as `showError` is) that draws each
+  page with `Painter.Render` -- the control's own `DrawPage`, the code that
+  prints it -- with the pages its `Paginate` answers on the printable area GTK
+  works out (`gtk_page_setup_get_page_width`: A4 is 559 x 784 pt inside the
+  default margins), a zoom and *Print…*, which opens `Send` on the same setup.
+  It answers the window.
+- **The dialog's own *Preview* is hooked, and that hook is untested.** `Send`
+  connects the operation's `preview` signal to open the same window and end
+  GTK's preview at once (`run->previewed` keeps the `done` that follows from
+  being reported as a print). But on GTK 4.22 the dialog itself came through
+  **the desktop portal** -- outside Flatpak -- which is a service of the user's
+  real session: under `tests/try.sh` the dialog appeared on the user's screen
+  and the program sat waiting (see *A private display is not a private
+  session* in testing.md). When the portal draws the dialog, its *Preview*
+  button is the portal's and this signal is probably never emitted; the hook
+  answers only GTK's own `GtkPrintUnixDialog`. Nothing in the suite presses
+  *Print…* or opens `Send`'s dialog, for the same reason.
 - **A verb with a key that decides whether there is a dialog is two verbs.**
   `Print(area, { ToFile })` opened the print dialog, or did not, depending on a
   key in its options -- and the give-away was measurable rather than stylistic:

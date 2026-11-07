@@ -1851,6 +1851,73 @@ static JSValue painter_state(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+static bool    paint_frame_page(BtaWidget *w, cairo_t *cr, int width, int height,
+                                int page);
+static JSValue area_painter(JSContext *ctx, BtaWidget *w, BtaPainter **out);
+
+/*
+ * `Render(area, page, width, height)` -- **another control's page, drawn
+ * here**, through that control's own handler: `DrawPage(painter, page, w, h)`
+ * for a page of 1 or more, else `Draw` -- the rule `Printer` follows, so what
+ * this shows is what a printer would get. Under this painter's transform: a
+ * print preview scales a page to the screen with `Scale` and asks for it, and
+ * a thumbnail is the same call smaller.
+ *
+ * The other control gets a painter of its own over this frame's surface, with
+ * the colour, the pen and the transform put back afterwards. Refused for the
+ * control this painter belongs to, and for one already drawing a frame: one
+ * painter per control, and a handler cannot be inside itself twice.
+ */
+static JSValue painter_render(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    BtaPainter *p = painter_of(ctx, this_val);
+    if (!p)
+        return JS_EXCEPTION;
+
+    BtaWidget *w = argc > 0 ? bta_this(ctx, argv[0]) : NULL;
+    if (!w || !bta_paint_draws(w)) {
+        if (w == NULL)
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        return JS_ThrowTypeError(ctx, "Render(area, page, width, height): area is "
+                                      "a control that draws -- a DrawingArea, or "
+                                      "the Canvas of a Report or a Markdown");
+    }
+
+    int32_t page = 0, width = 0, height = 0;
+    if (argc < 4 || !bta_to_int(ctx, argv[1], "Render", &page) ||
+        !bta_to_int(ctx, argv[2], "Render", &width) ||
+        !bta_to_int(ctx, argv[3], "Render", &height)) {
+        if (!JS_HasException(ctx))
+            JS_ThrowTypeError(ctx, "Render(area, page, width, height) takes a "
+                                   "control, a page (0 for the screen's Draw) and "
+                                   "a size");
+        return JS_EXCEPTION;
+    }
+    if (page < 0 || width < 1 || height < 1)
+        return JS_ThrowRangeError(ctx, "Render: page is 0 or more, and the size "
+                                       "at least 1 by 1");
+
+    BtaPainter *theirs = NULL;
+    JSValue     held   = area_painter(ctx, w, &theirs);
+    bool        self   = theirs == p;
+    bool        busy   = theirs && theirs->cr;
+
+    JS_FreeValue(ctx, held);
+    if (self)
+        return JS_ThrowTypeError(ctx, "Render: a control cannot draw itself into "
+                                      "its own frame");
+    if (busy)
+        return JS_ThrowTypeError(ctx, "Render: that control is drawing a frame "
+                                      "of its own already");
+
+    note(p, "Render %s %d %dx%d", w->name ? w->name : "", page, width, height);
+    cairo_save(p->cr);
+    bool ok = paint_frame_page(w, p->cr, width, height, page);
+    cairo_restore(p->cr);
+    return ok ? JS_UNDEFINED : JS_EXCEPTION;
+}
+
 enum { XFORM_TRANSLATE, XFORM_SCALE, XFORM_ROTATE };
 
 static JSValue painter_transform(JSContext *ctx, JSValueConst this_val,
@@ -2049,6 +2116,13 @@ static const JSCFunctionListEntry painter_props[] = {
      *   degrees, like `Arc`
      */
     JS_CFUNC_MAGIC_DEF("Rotate",    1, painter_transform, XFORM_ROTATE),
+    /* Render(area, page, width, height)
+     *   another control's page drawn here, at `width` by `height`, through
+     *   its own `DrawPage` -- or `Draw` for page 0, or for a control that
+     *   declares none -- as `Printer` would draw it. Under this painter's
+     *   transform, so `Scale` first makes a preview or a thumbnail
+     */
+    JS_CFUNC_DEF("Render", 4, painter_render),
 };
 
 /* A painter comes from a `Draw`, and there is nothing a constructor could make:

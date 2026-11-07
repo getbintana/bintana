@@ -643,7 +643,7 @@ const TESTS = [
     "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "Action", "Groups",
-    "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
+    "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
@@ -9266,6 +9266,93 @@ function Main() {
      * where the numbers meant, and that was checked by rendering
      * (`tests/manual`, and the plan's own screenshots).
      */
+    /*
+     * The print preview, and the painter verb it is made of.
+     *
+     * `Painter.Render(area, page, w, h)` draws another control's page here
+     * through its own `DrawPage` (or `Draw` for page 0), under this painter's
+     * transform. `Printer.Preview` is a window of the runtime's that does
+     * that per page, on the paper GTK worked out. **The Print… button is not
+     * pressed here**: it opens `Printer.Send`'s dialog, which GTK asks the
+     * desktop portal for -- the user's own screen, whatever the display.
+     */
+    testPrintPreview() {
+        const log = [];
+        const src = new DrawingArea();
+        src.Name = "PvSource";
+        this.Fixed1.Add(src);
+        src.On("Paginate", () => 3);
+        src.On("DrawPage", (p, page, w, h) => {
+            log.push(`page ${page} ${w}x${h}`);
+            p.Rectangle(0, 0, w, h);
+            p.Stroke();
+        });
+        src.On("Draw", (p, w, h) => { log.push(`draw ${w}x${h}`); });
+
+        const host = new DrawingArea();
+        host.Name = "PvHost";
+        this.Fixed1.Add(host);
+        const refused = [];
+        host.On("Draw", (p) => {
+            p.Scale(0.5);
+            p.Render(src, 2, 100, 50);
+            p.Render(src, 0, 30, 20);
+            for (const bad of [() => p.Render(host, 1, 10, 10),
+                               () => p.Render(new Button(), 1, 10, 10),
+                               () => p.Render(src, -1, 10, 10),
+                               () => p.Render(src, 1, 0, 10)])
+                try { bad(); refused.push("no"); } catch (e) { refused.push(e.name); }
+        });
+        Directory.Make(SCRATCH);
+        host.Save(File.Join(SCRATCH, "render.png"), 120, 80);
+        eq("Render draws another control's page through its own DrawPage, at the size asked",
+           log.slice(0, 2).join(" | "), "page 2 100x50 | draw 30x20");
+        eq("...refusing the painter's own control, one that does not draw, a negative page and no size",
+           refused.join(), "TypeError,TypeError,RangeError,RangeError");
+        check("...and says so in the frame's Dump", host.Dump().includes("Render PvSource 2 100x50"),
+              host.Dump());
+
+        throws("Printer.Preview wants a control that draws", () => Printer.Preview(new Button()));
+        throws("...and a paper it knows", () => Printer.Preview(src, { Paper: "B5" }));
+
+        log.length = 0;
+        const printed = [];
+        const pv = Printer.Preview(src, { Paper: "A4" }, (r) => printed.push(r));
+        eq("Printer.Preview answers its window", `${pv instanceof Form} ${pv.Text}`, "true Print preview");
+        const find = (name) => {
+            const walk = (c) => {
+                if (c.Name === name) return c;
+                for (const k of c.Children || []) { const f = walk(k); if (f) return f; }
+                return null;
+            };
+            return walk(pv);
+        };
+        eq("...with the pages Paginate answers at the paper's printable size",
+           find("PageLabel").Text, "Page 1 of 3");
+        eq("...the first page cannot go back", find("PreviousPage").Enabled, false);
+
+        waiting++;
+        until("the preview draws its first page", () => log.some((l) => l.startsWith("page 1 ")), () => {
+            try {
+                eq("...drawn by the control's own DrawPage, on A4's printable area",
+                   log.find((l) => l.startsWith("page 1 ")), "page 1 559x784");
+                find("NextPage").Emit("Click");
+                eq("Next goes to the next page", find("PageLabel").Text, "Page 2 of 3");
+                log.length = 0;
+                until("and draws it", () => log.some((l) => l.startsWith("page 2 ")), () => {
+                    try {
+                        find("NextPage").Emit("Click");
+                        eq("...and stops at the last", `${find("PageLabel").Text} ${find("NextPage").Enabled}`,
+                           "Page 3 of 3 false");
+                        eq("nothing was printed by looking", printed.length, 0);
+                    } catch (e) { check("the preview's second page", false, String(e)); }
+                    pv.Close();
+                    waiting--;
+                });
+            } catch (e) { check("the preview's first page", false, String(e)); waiting--; pv.Close(); }
+        });
+    }
+
     testDrawing() {
         const area = new DrawingArea();
         this.Fixed1.Add(area);

@@ -16180,6 +16180,15 @@
           "Native": true
         },
         {
+          "Name": "Render",
+          "Kind": "Method",
+          "Params": 4,
+          "Signature": "(area, page, width, height)",
+          "Returns": "",
+          "Doc": "another control's page drawn here, at `width` by `height`, through its own `DrawPage` -- or `Draw` for page 0, or for a control that declares none -- as `Printer` would draw it. Under this painter's transform, so `Scale` first makes a preview or a thumbnail",
+          "Native": true
+        },
+        {
           "Name": "Rotate",
           "Kind": "Method",
           "Params": 1,
@@ -16327,6 +16336,15 @@
           "Signature": "",
           "Returns": "",
           "Doc": "`{ A4: { Width, Height }, Letter: …, A5: … }`, in **points**. Read off GTK, so a size that reads 595 here is the 595 the print context hands the handler",
+          "Native": true
+        },
+        {
+          "Name": "Preview",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(area, [setup], [cb])",
+          "Returns": "Form",
+          "Doc": "the pages on the screen before paper, and the window they are in: one of this runtime's, with every page drawn by the control's own `DrawPage`, a zoom, and *Print…*, which opens `Send`'s dialog with the same setup and hands it `cb`. Also what the print dialog's own *Preview* button opens -- GTK4 has none and handed a PDF to Evince or Papers, failing without them",
           "Native": true
         },
         {

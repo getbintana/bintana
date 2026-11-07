@@ -1631,6 +1631,181 @@ function markErrors(form) {
 };
 
 /* ---------------------------------------------------------------------
+ * The print preview: `Printer.Preview`, and the print dialog's own button.
+ *
+ * GTK4 has no preview of its own -- its dialog writes a PDF and opens Evince
+ * or Papers, and failed, taking the program with it, where neither was
+ * installed. This is the runtime's, built out of the controls an application
+ * uses, and C opens it by name (`showPrintPreview`, as `showError`) with the
+ * sheet worked out by GTK: `{ Width, Height }` the printable area the control
+ * draws in, in points, `PaperWidth`, `PaperHeight`, `Left`, `Top` the paper
+ * around it, `Pages` how many (the control's `Paginate` asked), and `Paper`
+ * and `Orientation` as a setup spells them.
+ *
+ * **Every page is drawn by the control's own `DrawPage`**, through
+ * `Painter.Render` -- the code that prints it, on a white sheet with black ink
+ * as paper is, scaled to the screen. *Print…* closes this and opens
+ * `Printer.Send`'s dialog on the same setup, handing it the program's `cb`.
+ * The words are not translated: a prose position the runtime owns has no
+ * catalogue to look in, as the error window's.
+ * ------------------------------------------------------------------- */
+function showPrintPreview(area, sheet, setup, cb) {
+    const PAD   = 24;
+    const DPI   = 96 / 72;               /* 100% is the paper's real size */
+    const ZOOMS = [["Fit page", 0], ["Fit width", -1], ["50%", 0.5], ["75%", 0.75],
+                   ["100%", 1], ["150%", 1.5], ["200%", 2]];
+    const pages = Math.max(1, sheet.Pages | 0);
+    let   page  = 1;
+    let   zoom  = 0;                     /* 0 fit page, -1 fit width, else a factor */
+
+    const form = new Form();
+    form.Text        = "Print preview";
+    form.Width       = 760;
+    form.Height      = 880;
+    form.Arrangement = "Vertical";
+
+    const bar = new Panel();
+    bar.Arrangement = "Horizontal";
+    bar.Spacing     = 6;
+    bar.Margin      = 6;
+    bar.HExpand     = true;
+    form.Add(bar);
+
+    const prev = new Button();
+    prev.Name = "PreviousPage";
+    prev.Icon = "go-previous-symbolic";
+    prev.Tooltip = "Previous page";
+    prev.AccessibleName = "Previous page";
+    bar.Add(prev);
+
+    const where = new Label();
+    where.Name = "PageLabel";
+    bar.Add(where);
+
+    const next = new Button();
+    next.Name = "NextPage";
+    next.Icon = "go-next-symbolic";
+    next.Tooltip = "Next page";
+    next.AccessibleName = "Next page";
+    bar.Add(next);
+
+    const scale = new ComboBox();
+    scale.Name  = "Zoom";
+    scale.Items = ZOOMS.map((z) => z[0]);
+    scale.Index = 0;
+    scale.AccessibleName = "Zoom";
+    bar.Add(scale);
+
+    const gap = new Label();
+    gap.HExpand = true;
+    bar.Add(gap);
+
+    const print = new Button();
+    print.Name  = "PrintButton";
+    print.Text  = "Print…";
+    print.Style = "suggested-action";
+    bar.Add(print);
+
+    const close = new Button();
+    close.Name = "CloseButton";
+    close.Text = "Close";
+    bar.Add(close);
+
+    const view = new Scroller();
+    view.HExpand = true;
+    view.VExpand = true;
+    form.Add(view);
+
+    const canvas = new DrawingArea();
+    canvas.Name = "PreviewCanvas";
+    view.Add(canvas);
+
+    /* The factor a sheet is drawn at in a canvas that size. */
+    const factor = (w, h) => {
+        if (zoom > 0) return zoom * DPI;
+        const across = (w - 2 * PAD) / sheet.PaperWidth;
+        const down   = (h - 2 * PAD) / sheet.PaperHeight;
+        return Math.max(0.05, zoom < 0 ? across : Math.min(across, down));
+    };
+    /* A fixed zoom gives the canvas the sheet's size, so the view scrolls;
+     * a fit one gives it the view's. */
+    const size = () => {
+        const b = view.Bounds();
+        if (zoom > 0) {
+            const z = zoom * DPI;
+            canvas.Width  = Math.ceil(sheet.PaperWidth * z + 2 * PAD);
+            canvas.Height = Math.ceil(sheet.PaperHeight * z + 2 * PAD);
+        } else {
+            canvas.Width  = Math.max(1, b.Width - 2);
+            canvas.Height = zoom < 0 ? Math.ceil(sheet.PaperHeight * factor(b.Width - 2, 0) + 2 * PAD)
+                                     : Math.max(1, b.Height - 2);
+        }
+        canvas.Redraw();
+    };
+    const show = () => {
+        where.Text    = `Page ${page} of ${pages}`;
+        prev.Enabled  = page > 1;
+        next.Enabled  = page < pages;
+        canvas.Redraw();
+    };
+
+    canvas.On("Draw", (p, w, h) => {
+        const z  = factor(w, h);
+        const pw = sheet.PaperWidth * z, ph = sheet.PaperHeight * z;
+        const x  = Math.max(PAD, (w - pw) / 2), y = PAD;
+
+        p.Color = "rgba(0, 0, 0, 0.12)";          /* the desk, in any theme */
+        p.Rectangle(0, 0, w, h);
+        p.Fill();
+        p.Color = "white";                         /* the paper is white */
+        p.Rectangle(x, y, pw, ph);
+        p.Fill();
+        p.Color = "rgba(0, 0, 0, 0.35)";
+        p.LineWidth = 1;
+        p.Rectangle(x + 0.5, y + 0.5, pw - 1, ph - 1);
+        p.Stroke();
+
+        p.Push();
+        p.Translate(x + sheet.Left * z, y + sheet.Top * z);
+        p.Scale(z);
+        p.ClipRectangle(0, 0, sheet.Width, sheet.Height);
+        p.Color = "black";                         /* and the ink black */
+        p.Render(area, page, sheet.Width, sheet.Height);
+        p.Pop();
+    });
+
+    const go = (to) => {
+        const n = Math.min(pages, Math.max(1, to));
+        if (n !== page) { page = n; show(); }
+    };
+    prev.On("Click", () => go(page - 1));
+    next.On("Click", () => go(page + 1));
+    scale.On("Select", () => { zoom = ZOOMS[Math.max(0, scale.Index)][1]; size(); });
+    view.On("Allocated", () => { if (zoom <= 0) size(); });
+    close.On("Click", () => form.Close());
+    print.On("Click", () => {
+        const again = {};
+        for (const k of Dictionary.Keys(setup || {})) again[k] = setup[k];
+        if (sheet.Paper) again.Paper = sheet.Paper;
+        again.Orientation = sheet.Orientation;
+        form.Close();
+        Printer.Send(area, again, typeof cb === "function" ? cb : () => {});
+    });
+    form.On("KeyPress", (key) => {
+        if (key === "Page_Down" || key === "Right") { go(page + 1); return true; }
+        if (key === "Page_Up" || key === "Left")    { go(page - 1); return true; }
+        if (key === "Home") { go(1); return true; }
+        if (key === "End")  { go(pages); return true; }
+        if (key === "Escape") { form.Close(); return true; }
+        return false;
+    });
+
+    show();
+    form.Show();
+    return form;
+}
+
+/* ---------------------------------------------------------------------
  * The window an uncaught error is shown in.
  *
  * The runtime's own, built out of the controls an application uses and not out

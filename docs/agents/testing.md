@@ -193,6 +193,19 @@ or creating a control — before clicking on it.
 
 ## Verifying by hand
 
+**A private display is not a private session.** GTK4 asks the desktop portal
+(`xdg-desktop-portal`, over the session D-Bus) for the print dialog, and the
+portal is a service of the *real* session: `Printer.Send` run under
+`tests/try.sh` or an `Xvfb :97` of one's own put the dialog **on the user's
+screen**, and the program sat waiting for an answer from there -- four dialogs
+left behind, which the program's exit does not close, because they are the
+portal's. Anything that can reach a portal -- printing, a file chooser through
+the portal, `Desktop`/`OpenUri`, notifications -- runs only under a private
+bus as well: `dbus-run-session -- tests/try.sh <project>`, where no portal
+answers and GTK falls back to its own dialog inside the virtual display.
+Measured 2026-11-07, the hard way.
+
+
 Some things the suite cannot see: rendering, real key and pointer delivery,
 focus, window management. Checking them has repeatedly found what the tests
 could not — z-order occlusion, a desktop stealing a shortcut, a relative path

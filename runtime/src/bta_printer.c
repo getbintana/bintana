@@ -251,6 +251,8 @@ typedef struct {
     int         pages, from, to;
     bool        lineal;
     const char *who;        /* "Printer.Send" or "Printer.ToFile", for a message */
+    JSValue     opts;       /* the setup as given, for a preview's Print; undefined */
+    bool        previewed;  /* the dialog's Preview was answered by ours: no cb */
 } PrintRun;
 
 /*
@@ -448,6 +450,7 @@ static void print_free(PrintRun *run)
     print_runs = g_list_remove(print_runs, run);
     print_ended(run->w);
     JS_FreeValue(ctx, run->cb);
+    JS_FreeValue(ctx, run->opts);
     /* Last: letting go of the control may finalise it, and `w` with it. */
     JS_FreeValue(ctx, run->self);
     g_free(run);
@@ -507,7 +510,8 @@ static void on_print_done(GtkPrintOperation *op, GtkPrintOperationResult result,
                            err ? bta_gerror_text(err) : "the printer refused");
         bta_dump_error(ctx);
         g_clear_error(&err);
-    } else if (result == GTK_PRINT_OPERATION_RESULT_APPLY && run->ok) {
+    } else if (result == GTK_PRINT_OPERATION_RESULT_APPLY && run->ok &&
+               !run->previewed) {
         JSValueConst argv[1] = { print_answer(ctx, run, op, 1) };
         JSValue      r       = JS_Call(ctx, run->cb, JS_UNDEFINED, 1, argv);
 
@@ -628,6 +632,7 @@ static GtkPrintOperation *print_prepare(JSContext *ctx, JSValueConst area,
     run->to     = setup.to;
     run->lineal = lineal;
     run->who    = who;
+    run->opts   = JS_IsUndefined(opts) ? JS_UNDEFINED : JS_DupValue(ctx, opts);
 
     g_signal_connect(op, "begin-print", G_CALLBACK(on_begin_print), run);
     g_signal_connect(op, "draw-page", G_CALLBACK(on_draw_page), run);
@@ -636,6 +641,195 @@ static GtkPrintOperation *print_prepare(JSContext *ctx, JSValueConst area,
     print_started(w);
     *out = run;
     return op;
+}
+
+
+/* --------------------------------------------------------------- preview
+ *
+ * **GTK4 has no print preview of its own**: the dialog's *Preview* button
+ * writes a PDF and opens Evince or Papers, and on a machine with neither the
+ * launch failed and took the program down with a cairo assertion in GTK's
+ * cleanup (`docs/agents/drawing.md`). So the preview is this runtime's: a
+ * window of `forms.js` (`showPrintPreview`, looked up by name as `showError`
+ * is) that draws each page with `Painter.Render` -- the control's own
+ * `DrawPage`, the code that prints it -- with the pages, a zoom and *Print…*.
+ *
+ * Two ways in, one window: `Printer.Preview(area, [setup], [cb])` from a
+ * program, and the dialog's own *Preview* button, answered through the
+ * operation's `preview` signal instead of GTK's external viewer.
+ */
+
+/* The paper's name as the setup spells it, or NULL for one it does not. */
+static const char *paper_word(GtkPageSetup *ps)
+{
+    GtkPaperSize *size = gtk_page_setup_get_paper_size(ps);
+    const char   *name = size ? gtk_paper_size_get_name(size) : NULL;
+
+    if (!name) return NULL;
+    if (!strcmp(name, GTK_PAPER_NAME_A4))     return "A4";
+    if (!strcmp(name, GTK_PAPER_NAME_LETTER)) return "Letter";
+    if (!strcmp(name, GTK_PAPER_NAME_A5))     return "A5";
+    return NULL;
+}
+
+/*
+ * The window, opened: what the sheet is (the printable area the control draws
+ * in, the paper around it and where the one sits on the other), how many pages
+ * -- the control's `Paginate` at that size, as `begin-print` asks it, else the
+ * setup's `Pages` -- and the setup and callback *Print…* hands to `Send`.
+ */
+static JSValue preview_open(JSContext *ctx, BtaWidget *w, JSValueConst area,
+                            GtkPageSetup *ps, int pages, JSValueConst opts,
+                            JSValueConst cb)
+{
+    double pw = gtk_page_setup_get_page_width(ps, GTK_UNIT_POINTS);
+    double ph = gtk_page_setup_get_page_height(ps, GTK_UNIT_POINTS);
+
+    if (bta_has_handler(w, "Paginate")) {
+        JSValueConst argv[2] = { JS_NewInt32(ctx, (int)(pw + 0.5)),
+                                 JS_NewInt32(ctx, (int)(ph + 0.5)) };
+        bool    threw  = false;
+        JSValue answer = bta_emit_answer(w, "Paginate", 2, argv, &threw);
+        int32_t n      = 0;
+
+        if (!threw && JS_IsNumber(answer) && !JS_ToInt32(ctx, &n, answer) &&
+            n >= 1 && n <= 10000)
+            pages = n;
+        JS_FreeValue(ctx, answer);
+        if (threw)
+            return JS_ThrowPlainError(ctx, "Printer.Preview: the Paginate handler "
+                                           "threw");
+    }
+
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue fn     = JS_GetPropertyStr(ctx, global, "showPrintPreview");
+
+    JS_FreeValue(ctx, global);
+    if (!JS_IsFunction(ctx, fn)) {
+        JS_FreeValue(ctx, fn);
+        return JS_ThrowPlainError(ctx, "Printer.Preview: the preview window is "
+                                       "missing from this runtime");
+    }
+
+    JSValue     sheet = JS_NewObject(ctx);
+    const char *paper = paper_word(ps);
+
+    JS_SetPropertyStr(ctx, sheet, "Width",  JS_NewInt32(ctx, (int)(pw + 0.5)));
+    JS_SetPropertyStr(ctx, sheet, "Height", JS_NewInt32(ctx, (int)(ph + 0.5)));
+    JS_SetPropertyStr(ctx, sheet, "PaperWidth",
+        JS_NewFloat64(ctx, gtk_page_setup_get_paper_width(ps, GTK_UNIT_POINTS)));
+    JS_SetPropertyStr(ctx, sheet, "PaperHeight",
+        JS_NewFloat64(ctx, gtk_page_setup_get_paper_height(ps, GTK_UNIT_POINTS)));
+    JS_SetPropertyStr(ctx, sheet, "Left",
+        JS_NewFloat64(ctx, gtk_page_setup_get_left_margin(ps, GTK_UNIT_POINTS)));
+    JS_SetPropertyStr(ctx, sheet, "Top",
+        JS_NewFloat64(ctx, gtk_page_setup_get_top_margin(ps, GTK_UNIT_POINTS)));
+    JS_SetPropertyStr(ctx, sheet, "Pages", JS_NewInt32(ctx, pages));
+    JS_SetPropertyStr(ctx, sheet, "Paper", paper ? JS_NewString(ctx, paper) : JS_NULL);
+    JS_SetPropertyStr(ctx, sheet, "Orientation", JS_NewString(ctx,
+        gtk_page_setup_get_orientation(ps) == GTK_PAGE_ORIENTATION_LANDSCAPE
+            ? "Landscape" : "Portrait"));
+
+    JSValueConst argv[4] = { area, sheet, opts, cb };
+    JSValue      r       = JS_Call(ctx, fn, JS_UNDEFINED, 4, argv);
+
+    JS_FreeValue(ctx, sheet);
+    JS_FreeValue(ctx, fn);
+    return r;                   /* the window, or the exception */
+}
+
+/* A page setup from a setup's `Paper` and `Orientation`. Owned. */
+static GtkPageSetup *setup_page(const PrintSetup *setup)
+{
+    GtkPageSetup *ps = gtk_page_setup_new();
+
+    if (setup->paper) {
+        GtkPaperSize *size = gtk_paper_size_new(paper_size(setup->paper));
+        gtk_page_setup_set_paper_size_and_default_margins(ps, size);
+        gtk_paper_size_free(size);
+    }
+    if (setup->orient)
+        gtk_page_setup_set_orientation(ps, !strcmp(setup->orient, "Landscape")
+                                               ? GTK_PAGE_ORIENTATION_LANDSCAPE
+                                               : GTK_PAGE_ORIENTATION_PORTRAIT);
+    return ps;
+}
+
+/*
+ * The dialog's *Preview*, answered here and not by an external viewer. GTK is
+ * told the preview is over at once -- it has rendered nothing and is owed
+ * nothing -- and the run is marked, so the `done` that follows is not
+ * reported as a print. The window the person sees is the same one
+ * `Printer.Preview` opens, on the paper the dialog chose.
+ */
+static gboolean on_print_preview(GtkPrintOperation *op,
+                                 GtkPrintOperationPreview *preview,
+                                 GtkPrintContext *context, GtkWindow *parent,
+                                 gpointer data)
+{
+    PrintRun     *run = data;
+    JSContext    *ctx = run->w->ctx;
+    GtkPageSetup *ps  = gtk_print_context_get_page_setup(context);
+
+    (void)op;
+    (void)parent;
+    run->previewed = true;
+    gtk_print_operation_preview_end_preview(preview);
+
+    JSValue form = preview_open(ctx, run->w, run->self, ps, run->pages,
+                                run->opts, run->cb);
+
+    if (JS_IsException(form))
+        bta_dump_error(ctx);
+    JS_FreeValue(ctx, form);
+    return TRUE;
+}
+
+/*
+ * `Printer.Preview(area, [setup], [cb])` -- the pages on the screen before
+ * paper. The setup is `Send`'s; *Print…* in the window opens `Send`'s dialog
+ * with it and hands it `cb`, which is called as `Send` calls it.
+ */
+static JSValue printer_preview(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Printer.Preview(area, [setup], [cb]) needs "
+                                      "the control that draws");
+
+    BtaWidget *w = bta_this(ctx, argv[0]);
+    if (!w || !bta_paint_draws(w)) {
+        if (!w)
+            JS_FreeValue(ctx, JS_GetException(ctx));
+        return JS_ThrowTypeError(ctx,
+            "Printer.Preview: the first argument is a control that draws -- a "
+            "DrawingArea, or the Canvas of a Report or a Markdown");
+    }
+
+    /* `Preview(area, cb)` as well as `Preview(area, setup, cb)`. */
+    JSValueConst opts = JS_UNDEFINED, cb = JS_UNDEFINED;
+    if (argc > 1 && JS_IsFunction(ctx, argv[1]))
+        cb = argv[1];
+    else if (argc > 1) {
+        opts = argv[1];
+        if (argc > 2 && !JS_IsUndefined(argv[2])) {
+            if (!JS_IsFunction(ctx, argv[2]))
+                return JS_ThrowTypeError(ctx, "Printer.Preview: cb is a function");
+            cb = argv[2];
+        }
+    }
+
+    PrintSetup setup;
+    if (!setup_read(ctx, opts, &setup, true, bta_has_handler(w, "Paginate"),
+                    "Printer.Preview"))
+        return JS_EXCEPTION;
+
+    GtkPageSetup *ps   = setup_page(&setup);
+    JSValue       form = preview_open(ctx, w, argv[0], ps, setup.pages, opts, cb);
+
+    g_object_unref(ps);
+    setup_clear(&setup);
+    return form;
 }
 
 /*
@@ -683,6 +877,7 @@ static JSValue printer_send(JSContext *ctx, JSValueConst this_val,
     run->op = op;
     print_runs = g_list_prepend(print_runs, run);
     g_signal_connect(op, "done", G_CALLBACK(on_print_done), run);
+    g_signal_connect(op, "preview", G_CALLBACK(on_print_preview), run);
 
     /*
      * **Asynchronous on purpose, and the operation outlives this call**: GTK
@@ -906,6 +1101,16 @@ static const JSCFunctionListEntry printer_props[] = {
      *   setup is what the dialog **opens on**
      */
     JS_CFUNC_DEF("Send",   2, printer_send),
+    /* Preview(area, [setup], [cb]) -> Form
+     *   the pages on the screen before paper, and the window they are in: one
+     *   of this runtime's, with
+     *   every page drawn by the control's own `DrawPage`, a zoom, and
+     *   *Print…*, which opens `Send`'s dialog with the same setup and hands
+     *   it `cb`. Also what the print dialog's own *Preview* button opens --
+     *   GTK4 has none and handed a PDF to Evince or Papers, failing without
+     *   them
+     */
+    JS_CFUNC_DEF("Preview", 3, printer_preview),
     /* ToFile(area, path, [setup])
      *   the same sheets as one PDF, with **no dialog**; → how many pages it
      *   wrote. `Copies` is refused here, because a file has none
