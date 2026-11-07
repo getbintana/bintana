@@ -851,3 +851,13 @@ closed prototype cannot be opened again -- so `testProtectPrototype` writes a
 `main` project into the scratch directory and runs it with `Exec.Wait`, the way
 the ApplicationId and module tests run theirs. A test that called it in the
 suite's own process would pass and take a later test down with it.
+
+## The prelude is one scope
+
+`rad.js` and `forms.js` are scripts evaluated into one global scope, so a
+second top-level `function` of a name **replaces** the first in both files,
+before any line runs -- no error, no warning. A `sameValue` added for
+`Table.Update` replaced the serialiser's and `.form` files began writing every
+default; the failures surfaced in `report` and `widgets`, far from the change.
+`tests/api.sh` now counts the prelude's top-level names and refuses one
+declared twice. Name a helper for what it compares, not for comparing.

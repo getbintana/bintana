@@ -13965,12 +13965,30 @@
           "Native": true
         },
         {
+          "Name": "Cursor",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(sql, params, options)",
+          "Returns": "",
+          "Doc": "a [`Cursor`](docs/reference/globals/Database.md): the rows a statement answers, counted, and read a window at a time",
+          "Native": false
+        },
+        {
           "Name": "Dialect",
           "Kind": "Property",
           "Params": -1,
           "Signature": "",
           "Returns": "string",
           "Doc": "`{ Placeholder, Quote, NewKey }` — **what differs per engine**, so the portable half above can build SQL without knowing which engine it is talking to",
+          "Native": true
+        },
+        {
+          "Name": "Each",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(sql, [params], fn)",
+          "Returns": "number",
+          "Doc": "the rows **one at a time**: `fn(row)` for each, as `Query` would have made it, never an array of all of them -- a report over a year, an export. `fn` returning `false` stops; the answer is how many rows were handed over. `Close()` is refused while it reads",
           "Native": true
         },
         {
@@ -14084,6 +14102,65 @@
           "Signature": "(path, rows, options)",
           "Returns": "",
           "Doc": "writes rows as a CSV file, as `Format` writes them",
+          "Native": false
+        }
+      ]
+    },
+    {
+      "Name": "Cursor",
+      "Members": [
+        {
+          "Name": "Count",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how many rows the statement answers, asked once until `Refresh()`",
+          "Native": false
+        },
+        {
+          "Name": "Each",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(fn)",
+          "Returns": "",
+          "Doc": "every row, one at a time, `fn(row)` for each; `false` from `fn` stops. Answers how many were handed over. Never holds them all",
+          "Native": false
+        },
+        {
+          "Name": "Refresh",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "forgets the count and the window, so the next question reads again",
+          "Native": false
+        },
+        {
+          "Name": "Row",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(index)",
+          "Returns": "",
+          "Doc": "one row by its position, `0` to `Count - 1`, from the window around it -- a plain object as `Query` answers, or a record from `Table.Cursor`",
+          "Native": false
+        },
+        {
+          "Name": "Rows",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(start, count)",
+          "Returns": "",
+          "Doc": "`count` rows from `start`, fewer at the end; read in one statement",
+          "Native": false
+        },
+        {
+          "Name": "Window",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how many rows a window reads at once",
           "Native": false
         }
       ]
@@ -16775,6 +16852,15 @@
           "Native": false
         },
         {
+          "Name": "Cursor",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(sql, ...params)",
+          "Returns": "",
+          "Doc": "a [`Cursor`](docs/reference/globals/Database.md) over the rows a filter matches, each a record; the filter is `Where`'s, `ORDER BY` included",
+          "Native": false
+        },
+        {
           "Name": "Delete",
           "Kind": "Method",
           "Params": 1,
@@ -16834,7 +16920,7 @@
           "Params": 1,
           "Signature": "(rec)",
           "Returns": "",
-          "Doc": "UPDATE by key; **throws** when it matched no row",
+          "Doc": "UPDATE by key, **only the columns that changed** since this table read or wrote the record; **throws** when it matched no row",
           "Native": false
         },
         {
@@ -17769,12 +17855,30 @@
           "Native": true
         },
         {
+          "Name": "Cursor",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(sql, params, options)",
+          "Returns": "",
+          "Doc": "a [`Cursor`](docs/reference/globals/Database.md): the rows a statement answers, counted, and read a window at a time",
+          "Native": false
+        },
+        {
           "Name": "Dialect",
           "Kind": "Property",
           "Params": -1,
           "Signature": "",
           "Returns": "string",
           "Doc": "`{ Placeholder, Quote, NewKey }` — **what differs per engine**, so the portable half above can build SQL without knowing which engine it is talking to",
+          "Native": true
+        },
+        {
+          "Name": "Each",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(sql, [params], fn)",
+          "Returns": "number",
+          "Doc": "the rows **one at a time**: `fn(row)` for each, as `Query` would have made it, never an array of all of them -- a report over a year, an export. `fn` returning `false` stops; the answer is how many rows were handed over. `Close()` is refused while it reads",
           "Native": true
         },
         {

@@ -34,8 +34,13 @@
  * later has to answer the same:
  *
  *   Query(sql, params) -> rows        Execute(sql, params) -> { Changes, ... }
- *   Transaction(fn)                   Columns(table) -> [{ Name, Type, Required, Key }]
+ *   Each(sql, params, fn) -> count    Transaction(fn)
+ *   Columns(table) -> [{ Name, Type, Required, Key }]
  *   Tables                            Dialect -> { Placeholder, Quote, NewKey }
+ *
+ * and gets `Table` and `Cursor` for nothing, both in `rad.js`. `Each` is the
+ * one a driver cannot skip if it wants a cursor that never holds every row:
+ * stepping a statement is the engine's, and `Query`'s array is the opposite.
  *
  * `Dialect` carries the three facts that are known to differ, and three because
  * three is what can be named -- a fourth invented for symmetry would be a guess
@@ -97,9 +102,26 @@
  *
  * The cost is named where it is paid: `ORDER BY price` on such a column sorts
  * lexicographically (`'9.00' > '10.00'`) and `SUM(price)` goes through a double.
- * A collation and an aggregate built on `bta_decimal.c` are the answer and are
- * **not here yet**; until they are, order and total a decimal column in the
- * program and not in the statement.
+ * The answer is registered on every connection, built on `bta_decimal.c`: a
+ * `DECIMAL` collation and `decimal_sum`, named in the statement
+ * (`ORDER BY price COLLATE DECIMAL`, `decimal_sum(price)`) and never in a
+ * schema, which would make the file unreadable to a client without them.
+ *
+ * ## The language's order
+ *
+ * Text compares byte by byte too, which puts `Álvarez` after `Zapata`.
+ * `COLLATE LOCALE` is `Locale.Compare`'s order in a statement, and
+ * `locale_key(name)` the same order as a key worked out once per row --
+ * measured over 200 000 names, `ORDER BY name COLLATE LOCALE` 2.3 s and
+ * `ORDER BY locale_key(name)` 0.29 s, bytes 0.11 s. The key is not
+ * deterministic to sqlite on purpose: it is the desktop's, and an index on it
+ * would keep one desktop's order in a file another opens.
+ *
+ * ## Not here, measured
+ *
+ * **A cache of prepared statements.** 20 000 `Execute`s inside a transaction,
+ * each prepared afresh, took 32 ms on a RelWithDebInfo build (1.6 us each);
+ * 20 000 one-row `Query`s 36 ms. Nothing to win.
  *
  * The other four need no conversion at all, and that is not luck --
  * `Field.Bool` already takes sqlite's `0`/`1` ("the two spellings a boolean
@@ -107,8 +129,9 @@
  * sqlite's own date convention.  The field kinds were designed against SQL
  * before there was any SQL.
  *
- * BLOB is refused rather than mangled: there is no JS value here that carries
- * bytes, and handing one back as a string would corrupt it silently.
+ * BLOB is a `Bytes`, both ways -- bound from one, read back as one -- since a
+ * string would have corrupted it silently, which is why it was refused before
+ * `Bytes` existed.
  *
  * ## Optional
  *
@@ -139,6 +162,7 @@ typedef struct {
     sqlite3 *db;         /* NULL once closed: every method goes through db_of */
     char    *path;       /* for the messages, and for Path */
     int      depth;      /* nested Transaction: 0 is none, >0 is a savepoint */
+    int      reading;    /* Each() calls in progress: a statement is open */
 } BtaConn;
 
 static void conn_finalizer(JSRuntime *rt, JSValue val)
@@ -438,8 +462,63 @@ static void decimal_sum_answer(sqlite3_context *c)
  *                  median() is not numeric"*), which is a loud failure and not a
  *                  wrong answer -- so there is nothing here to rescue.
  */
+/*
+ * **`COLLATE LOCALE`: the language's order, asked for in the statement.**
+ *
+ * sqlite compares text byte by byte, which puts `Ñanculeo` after `Zapata` and
+ * `Álvarez` last -- the order `docs/plans/data-plan.md` left open for the
+ * cursor, since rows the program has not seen cannot be reordered afterwards.
+ * Of its two candidates this is the first: a collation named **per
+ * statement** (`ORDER BY name COLLATE LOCALE`), never in a schema, so the file
+ * stays readable by every other sqlite client. The comparison is
+ * `Locale.Compare`'s -- `g_utf8_collate`, the desktop's order -- so the
+ * database and the program agree on where a name goes; text that is not UTF-8
+ * falls back to bytes, as there, to keep the order total.
+ */
+static int locale_collation(void *unused, int na, const void *a, int nb,
+                            const void *b)
+{
+    char *x = g_strndup(a, (gsize)na);
+    char *y = g_strndup(b, (gsize)nb);
+    int   r = (g_utf8_validate(x, -1, NULL) && g_utf8_validate(y, -1, NULL))
+            ? g_utf8_collate(x, y)
+            : strcmp(x, y);
+
+    (void)unused;
+    g_free(x);
+    g_free(y);
+    return r < 0 ? -1 : r > 0 ? 1 : 0;
+}
+
+/*
+ * `locale_key(x)` -- the same order as `COLLATE LOCALE`, worked out once per
+ * row instead of once per comparison: glib's collation key, whose byte order
+ * is `g_utf8_collate`'s by its documentation. As a BLOB, since a key is bytes
+ * and not text, and sqlite compares a BLOB with `memcmp`. NULL stays NULL.
+ */
+static void locale_key_fn(sqlite3_context *cx, int argc, sqlite3_value **argv)
+{
+    (void)argc;
+    if (sqlite3_value_type(argv[0]) == SQLITE_NULL) {
+        sqlite3_result_null(cx);
+        return;
+    }
+
+    const char *s = (const char *)sqlite3_value_text(argv[0]);
+    int         n = sqlite3_value_bytes(argv[0]);
+    char       *key = s && g_utf8_validate(s, n, NULL)
+                    ? g_utf8_collate_key(s, n)
+                    : g_strndup(s ? s : "", (gsize)n);
+
+    sqlite3_result_blob(cx, key, (int)strlen(key), SQLITE_TRANSIENT);
+    g_free(key);
+}
+
 static void install_decimal(sqlite3 *db)
 {
+    sqlite3_create_collation(db, "LOCALE", SQLITE_UTF8, NULL, locale_collation);
+    sqlite3_create_function(db, "locale_key", 1, SQLITE_UTF8, NULL,
+                            locale_key_fn, NULL, NULL);
     sqlite3_create_collation(db, "DECIMAL", SQLITE_UTF8, NULL,
                              decimal_collation);
     sqlite3_create_function(db, "decimal_cmp", 2,
@@ -762,6 +841,100 @@ static JSValue conn_query(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/* ------------------------------------------------------------------ Each */
+
+/*
+ * `Each(sql, [params], fn)` -- the rows one at a time, never all at once.
+ *
+ * `Query` answers an array, which is right for a screenful and wrong for a
+ * report over a year: every row is an object in memory before the first is
+ * looked at. Here the statement is stepped and each row is handed to `fn` as
+ * it comes; **`fn` returning `false` stops**, and the answer is how many rows
+ * were handed over. A throw in `fn` stops it too and is the caller's.
+ *
+ * `fn` may run other statements on this connection -- sqlite allows a write
+ * while a read is stepping -- but not `Close()` it, which is refused while
+ * this is reading (`reading`).
+ */
+static JSValue conn_each(JSContext *ctx, JSValueConst this_val,
+                         int argc, JSValueConst *argv)
+{
+    BtaConn *c = conn_of(ctx, this_val);
+    if (!c)
+        return JS_EXCEPTION;
+
+    /* `Each(sql, fn)` as well as `Each(sql, params, fn)`. */
+    JSValueConst params = argc > 2 ? argv[1] : JS_UNDEFINED;
+    JSValueConst fn     = argc > 2 ? argv[2] : (argc > 1 ? argv[1] : JS_UNDEFINED);
+
+    if (argc < 2 || !JS_IsFunction(ctx, fn))
+        return JS_ThrowTypeError(ctx, "Each(sql, [params], fn): fn is called "
+                                      "with each row");
+
+    const char *sql = JS_ToCString(ctx, argv[0]);
+    if (!sql)
+        return JS_EXCEPTION;
+
+    sqlite3_stmt *st = prepare_one(ctx, c, sql);
+    if (!st) {
+        JS_FreeCString(ctx, sql);
+        return JS_EXCEPTION;
+    }
+    if (!bind_params(ctx, st, params, sql)) {
+        sqlite3_finalize(st);
+        JS_FreeCString(ctx, sql);
+        return JS_EXCEPTION;
+    }
+
+    /* Held: `fn` may drop the last reference to itself or to the connection. */
+    JSValue  call = JS_DupValue(ctx, fn);
+    JSValue  self = JS_DupValue(ctx, this_val);
+    JSValue  out  = JS_UNDEFINED;
+    int      cols = sqlite3_column_count(st);
+    int64_t  seen = 0;
+    int      rc;
+
+    c->reading++;
+    while ((rc = sqlite3_step(st)) == SQLITE_ROW) {
+        JSValue row = row_object(ctx, st, cols);
+
+        if (JS_IsException(row)) {
+            out = JS_EXCEPTION;
+            break;
+        }
+        seen++;
+
+        JSValue r = JS_Call(ctx, call, JS_UNDEFINED, 1, (JSValueConst *)&row);
+
+        JS_FreeValue(ctx, row);
+        if (JS_IsException(r)) {
+            out = JS_EXCEPTION;
+            break;
+        }
+        bool stop = JS_IsBool(r) && !JS_ToBool(ctx, r);
+
+        JS_FreeValue(ctx, r);
+        if (stop) {
+            rc = SQLITE_DONE;
+            break;
+        }
+    }
+    c->reading--;
+
+    if (JS_IsUndefined(out)) {
+        if (rc != SQLITE_DONE)
+            out = throw_sqlite(ctx, c, "cannot read", sql);
+        else
+            out = JS_NewInt64(ctx, seen);
+    }
+
+    sqlite3_finalize(st);
+    JS_FreeCString(ctx, sql);
+    JS_FreeValue(ctx, call);
+    JS_FreeValue(ctx, self);
+    return out;
+}
+
 /* --------------------------------------------------------------- Execute */
 
 static JSValue conn_execute(JSContext *ctx, JSValueConst this_val,
@@ -1055,6 +1228,14 @@ static JSValue conn_close(JSContext *ctx, JSValueConst this_val,
     if (!c)
         return JS_EXCEPTION;
 
+    /* **Not while `Each` is reading**: its statement is open, and
+     * `sqlite3_close` on a handle with one answers `SQLITE_BUSY` and closes
+     * nothing -- the handle would have been dropped here and the statement left
+     * stepping on it. Said, rather than deferred: the program closes it after. */
+    if (c->db && c->reading)
+        return JS_ThrowTypeError(ctx, "this connection is reading rows in Each() "
+                                      "-- close it after Each returns");
+
     /* Closing twice is not an error: it is what a program does in a handler
      * that may run after another one already did. */
     if (c->db) {
@@ -1201,6 +1382,13 @@ static const JSCFunctionListEntry conn_props[] = {
      *   the `GROUP BY`, the join that is not one shape
      */
     JS_CFUNC_DEF("Query",       2, conn_query),
+    /* Each(sql, [params], fn) -> number
+     *   the rows **one at a time**: `fn(row)` for each, as `Query` would have
+     *   made it, never an array of all of them -- a report over a year, an
+     *   export. `fn` returning `false` stops; the answer is how many rows were
+     *   handed over. `Close()` is refused while it reads
+     */
+    JS_CFUNC_DEF("Each",        3, conn_each),
     /* Execute(sql, [params]) -> { Changes, LastId }
      *   **one** statement, answering `{ Changes, LastId }`
      */

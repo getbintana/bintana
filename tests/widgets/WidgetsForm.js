@@ -642,7 +642,7 @@ const TESTS = [
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
-    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "Action", "Groups",
+    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
@@ -3883,6 +3883,119 @@ class Form1 extends Form {
      * sqlite is optional at build time, so this reports one assertion instead of
      * fifty on a runtime built without it.
      */
+    /*
+     * sqlite completed as the model for the drivers after it: rows **one at a
+     * time** (`Each`), rows **a window at a time** (`Cursor`, portable, over
+     * `Query`/`Each`/`Dialect`), the language's order in a statement
+     * (`COLLATE LOCALE`, `locale_key`), and an `Update` that writes only what
+     * changed, so two windows editing one row both keep their edit.
+     */
+    testDatabaseCursor() {
+        let db = null;
+        try { db = Database.Sqlite(":memory:"); } catch (e) {
+            check("built without sqlite, Database.Sqlite says which package",
+                  e.message.includes("sqlite"), e.message);
+            return;
+        }
+        db.Script("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT, city TEXT)");
+        db.Transaction(() => {
+            for (let i = 0; i < 1000; i++)
+                db.Execute("INSERT INTO t (name, city) VALUES (?, ?)", [`n${i}`, `c${i % 4}`]);
+        });
+
+        /* Each: the rows one at a time, `false` stops, a throw is the caller's. */
+        let sum = 0;
+        eq("Each hands every row over and answers how many", db.Each("SELECT id FROM t", (r) => { sum += r.id; }), 1000);
+        eq("...each row as Query makes it", sum, 500500);
+        eq("...with parameters", db.Each("SELECT id FROM t WHERE city = ?", ["c1"], () => {}), 250);
+        const firsts = [];
+        eq("false from fn stops it", db.Each("SELECT id FROM t ORDER BY id", (r) => { firsts.push(r.id); return firsts.length < 3; }), 3);
+        eq("...after the row it was handed", firsts.join(), "1,2,3");
+        throws("a throw in fn is the caller's", () => db.Each("SELECT id FROM t", () => { throw new Error("mine"); }));
+        throws("Each wants a function", () => db.Each("SELECT 1"));
+        let refused = "";
+        db.Each("SELECT 1 AS x", () => { try { db.Close(); } catch (e) { refused = e.message; } });
+        check("Close is refused while Each reads", refused.includes("Each"), refused);
+        eq("...and the connection stays open", db.Open, true);
+        eq("a write inside Each is allowed",
+           db.Each("SELECT id FROM t WHERE id <= 2", (r) => { db.Execute("UPDATE t SET city = 'x' WHERE id = ?", [r.id]); }), 2);
+        eq("...and done", db.Query("SELECT count(*) AS n FROM t WHERE city = 'x'")[0].n, 2);
+
+        /* The language's order, asked for in the statement. */
+        db.Script("CREATE TABLE p (name TEXT)");
+        const names = ["Zapata", "Álvarez", "Ñanculeo", "alba", "Óscar", "Beto", "Nuñez", "élan"];
+        for (const n of names) db.Execute("INSERT INTO p (name) VALUES (?)", [n]);
+        const want = names.slice().sort(Locale.Compare).join();
+        check("ORDER BY alone is the bytes' order, not the language's",
+              db.Query("SELECT name FROM p ORDER BY name").map((r) => r.name).join() !== want, "");
+        eq("COLLATE LOCALE is Locale.Compare's order",
+           db.Query("SELECT name FROM p ORDER BY name COLLATE LOCALE").map((r) => r.name).join(), want);
+        eq("locale_key(name) sorts the same",
+           db.Query("SELECT name FROM p ORDER BY locale_key(name)").map((r) => r.name).join(), want);
+        eq("...and COLLATE LOCALE compares too",
+           db.Query("SELECT count(*) AS n FROM p WHERE name < 'B' COLLATE LOCALE")[0].n, 2);
+        eq("locale_key keeps NULL", db.Query("SELECT locale_key(NULL) AS k")[0].k, null);
+        throws("locale_key cannot be indexed: an index would keep one desktop's order in the file",
+               () => db.Script("CREATE INDEX pk ON p (locale_key(name))"));
+
+        /* Cursor: counted, a window at a time, the statement's own order. */
+        const c = db.Cursor("SELECT id, name FROM t ORDER BY id -- the last line\n ;", [], { Window: 100 });
+        eq("Cursor counts the statement's rows", c.Count, 1000);
+        eq("Row(i) is that row", `${c.Row(0).id} ${c.Row(999).name} ${c.Row(150).id}`, "1 n999 151");
+        eq("...a window at a time", c.Window, 100);
+        throws("a row that is not there is refused", () => c.Row(1000));
+        throws("...nor below zero", () => c.Row(-1));
+        eq("Rows(start, count) reads several, fewer at the end",
+           c.Rows(998, 5).map((r) => r.id).join(), "999,1000");
+        let each = 0;
+        eq("Cursor.Each walks it", c.Each(() => { each++; }), 1000);
+        const p = db.Cursor("SELECT id FROM t WHERE city = ? ORDER BY id", ["c3"], { Window: 7 });
+        eq("parameters, and LIMIT and OFFSET numbered after them", `${p.Count} ${p.Row(20).id}`, "250 84");
+        db.Execute("INSERT INTO t (name, city) VALUES ('new', 'c3')");
+        eq("what it read it keeps until Refresh", p.Count, 250);
+        eq("...and Refresh reads again", p.Refresh().Count, 251);
+        throws("Window is a count", () => db.Cursor("SELECT 1", [], { Window: 0 }));
+        throws("the parameters are an array", () => db.Cursor("SELECT ?", "x"));
+        eq("a Cursor is the connection's, portable", c instanceof Cursor, true);
+
+        /* Table.Cursor: records; Update writes what changed. */
+        class Town extends Record {
+            static Fields = {
+                id:   Field.Int({ key: true }),
+                name: Field.Text(),
+                city: Field.Text(),
+            };
+        }
+        const towns = db.Table("t", Town);
+        const tc = towns.Cursor("city = ? ORDER BY id", "c2");
+        eq("Table.Cursor answers records", `${tc.Count} ${tc.Row(0) instanceof Town} ${tc.Row(0).name}`, "250 true n2");
+
+        const a = towns.Find(10), b = towns.Find(10);
+        a.name = "Ana";
+        b.city = "Rosario";
+        towns.Update(a);
+        towns.Update(b);
+        eq("two records of one row, each changing a field: both kept",
+           JSON.stringify(db.Query("SELECT name, city FROM t WHERE id = 10")[0]), '{"name":"Ana","city":"Rosario"}');
+        const r = tc.Row(1);
+        r.name = "Beto";
+        towns.Update(r);
+        eq("...a record from a cursor too", db.Query("SELECT name FROM t WHERE id = ?", [r.id])[0].name, "Beto");
+
+        const gone = towns.Find(11);
+        db.Execute("DELETE FROM t WHERE id = 11");
+        eq("nothing changed is no statement at all", towns.Update(gone), gone);
+        gone.name = "late";
+        throws("...and a change to a row that is gone still throws", () => towns.Update(gone));
+
+        const built = new Town();
+        built.id = 12; built.name = "whole";
+        towns.Update(built);
+        eq("a record the program built writes every column",
+           JSON.stringify(db.Query("SELECT name, city FROM t WHERE id = 12")[0]), '{"name":"whole","city":""}');
+        db.Close();
+    }
+
     testDatabase() {
         let db = null;
 
@@ -23366,6 +23479,13 @@ class Form1 extends Form {
               (member("Label", "Caption").Doc || "").includes("alias of `Text`") &&
               (member("Form", "Controls").Doc || "").includes("creation order"),
               member("Label", "Caption").Doc);
+        /* Two classes the prelude never installs both say `Record`: the mixin
+         * copied into `Form` and a part's. The one copied into the class is the
+         * answer -- it was a hash table's order, and adding classes to rad.js
+         * turned it over. */
+        check("...the mixin copied into that class, when another one shares the member's name",
+              (member("Form", "Record").Doc || "").includes("this form edits"),
+              member("Form", "Record").Doc);
         const jsdoc = [
             "/** A thing that counts. */",                   /* 1 */
             "class Counter {",                               /* 2 */

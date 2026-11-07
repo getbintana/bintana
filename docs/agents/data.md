@@ -720,3 +720,25 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   `Config.Seeded` makes that a one-time act; after it the table is the source.
   The `--selftest` half is `SelfTest.js`, beside the form.
 
+
+## The cursor, `Each`, and the language's order
+
+- **`Cursor` is portable, in `rad.js`**: it asks a connection for `Query`,
+  `Dialect` and `Each`, and wraps the statement as a subquery after a newline
+  (a trailing `-- comment` would take the `LIMIT` with it) and without a
+  trailing `;`. `LIMIT`/`OFFSET` placeholders are numbered after the program's
+  own, through `Dialect.Placeholder`. It does not add an `ORDER BY`: the
+  statement must say one.
+- **`Each` is the driver's**, since stepping a statement is the engine's.
+  `Close()` inside it is refused (`reading`): `sqlite3_close` with a statement
+  open answers `SQLITE_BUSY`, and the old `conn_close` set `db = NULL` anyway --
+  a handle dropped with a statement still stepping on it.
+- **Preparing is not worth a cache**: 20 000 `Execute`s in a transaction, each
+  prepared, 32 ms on RelWithDebInfo.
+- **`COLLATE LOCALE` and `locale_key`** -- see `docs/plans/data-plan.md` for the
+  numbers. `locale_key` is registered without `SQLITE_DETERMINISTIC` so that
+  `CREATE INDEX ... (locale_key(name))` is refused; the test asserts it.
+- **`Update` writes what changed** from a `WeakMap` in `rad.js` (record -> the
+  table, the connection and `Serialize(true)` as read or last written). A
+  record the program built has no entry and writes every column; nothing
+  changed is no statement, and so no "no row" throw either.

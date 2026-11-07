@@ -5209,6 +5209,57 @@ static GHashTable *decl_index_build(JSContext *ctx, char **sources, int count)
  * the binary and cannot change while it runs. */
 static GHashTable *prelude_index;
 
+/*
+ * **Which class each mixin was copied into**, read off the prelude's own
+ * `mixIn(From, Into, ...)` calls: mixin name -> space-separated targets,
+ * padded with spaces so a target is looked for as ` Name `.
+ *
+ * The lookup below used to take the first class the prelude declares and
+ * never installs that had the member -- in a hash table's order. Two such
+ * classes with one member name (`BoundMembers.Record`, copied into `Form`, and
+ * `ModelPart.Record`, a part's) made `Form.Record`'s description whichever came
+ * first, and adding unrelated classes to `rad.js` turned the answer over:
+ * `api.json` said a form's `Record` was "the `.record` class this model maps".
+ * The calls say where each mixin went, so the answer is read and not guessed.
+ */
+static GHashTable *prelude_mixins;
+
+static void mixins_scan(GHashTable *into, const char *src)
+{
+    for (const char *at = src; (at = strstr(at, "mixIn(")) != NULL; at += 6) {
+        /* The call, not the function's own declaration `function mixIn(`. */
+        if (at > src && (g_ascii_isalnum(at[-1]) || at[-1] == '_'))
+            continue;
+        if (at >= src + 9 && !strncmp(at - 9, "function ", 9))
+            continue;
+
+        const char *p = at + 6;
+        const char *close = strchr(p, ')');
+        if (!close)
+            break;
+
+        char  *args  = g_strndup(p, (gsize)(close - p));
+        char **parts = g_strsplit(args, ",", -1);
+        char  *from  = parts[0] ? g_strstrip(g_strdup(parts[0])) : NULL;
+
+        if (from && *from && !strpbrk(from, " ."))   /* a name, not `...into` */
+        {
+            GString *targets = g_string_new(" ");
+            for (int i = 1; parts[i]; i++) {
+                char *t = g_strstrip(g_strdup(parts[i]));
+                if (*t)
+                    g_string_append_printf(targets, "%s ", t);
+                g_free(t);
+            }
+            g_hash_table_replace(into, from, g_string_free(targets, FALSE));
+            from = NULL;
+        }
+        g_free(from);
+        g_strfreev(parts);
+        g_free(args);
+    }
+}
+
 static DeclMember *decl_find(DeclClass *d, const char *member, bool is_static)
 {
     for (guint i = 0; i < d->members->len; i++) {
@@ -5231,9 +5282,31 @@ static void prelude_mark(JSContext *ctx, JSValue out, uint32_t was,
         bta_prelude_sources(&rad, &forms);
         char *srcs[] = { (char *)rad, (char *)forms };
         prelude_index = decl_index_build(ctx, srcs, 2);
+        prelude_mixins = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+        mixins_scan(prelude_mixins, rad);
+        mixins_scan(prelude_mixins, forms);
     }
     DeclClass *d = g_hash_table_lookup(prelude_index, owner);
     DeclMember *m = d ? decl_find(d, member, is_static) : NULL;
+
+    /* A mixin copied into this very class, first; then any mixin. */
+    if (!m && !is_static) {
+        char          *want = g_strdup_printf(" %s ", owner);
+        GHashTableIter it;
+        gpointer       key, val;
+
+        for (int pass = 0; pass < 2 && !m; pass++) {
+            g_hash_table_iter_init(&it, prelude_mixins);
+            while (!m && g_hash_table_iter_next(&it, &key, &val)) {
+                if (pass == 0 && !strstr(val, want))
+                    continue;
+                DeclClass *mx = g_hash_table_lookup(prelude_index, key);
+                if (mx)
+                    m = decl_find(mx, member, false);
+            }
+        }
+        g_free(want);
+    }
 
     /* **A class the prelude declares and never installs is a mixin**: forms.js
      * writes the accessors it adds to a class the C made (`Caption`,

@@ -140,6 +140,36 @@ function checkLibraryScopes(root, problems) {
 }
 
 /*
+ * **The prelude may not declare one top-level name twice either.**
+ *
+ * `rad.js` and `forms.js` run as scripts into one global scope, where a second
+ * `function` of a name is not an error: it *replaces* the first, for the
+ * whole of both files, from before the first line runs. A `sameValue` written
+ * for `Table.Update` replaced the serialiser's own, and `.form` files began
+ * writing every default -- four assertions away from the change, in `report`
+ * and `widgets`. A second `const` would at least have refused to start.
+ */
+function checkPreludeScope(root, problems) {
+    const owners = {};
+    let   names  = 0;
+
+    for (const file of ["runtime/js/rad.js", "runtime/js/forms.js"]) {
+        for (const m of TOP_LEVEL.Matches(File.Load(File.Join(root, file)))) {
+            const n = m.Group(1);
+            if (!owners[n]) owners[n] = [];
+            owners[n].push(File.Name(file));
+            names++;
+        }
+    }
+    for (const n in owners)
+        if (owners[n].length > 1)
+            problems.push(`the prelude declares a top-level \`${n}\` ` +
+                          `${owners[n].length} times (${owners[n].join(", ")}) -- ` +
+                          `the last one replaces the others everywhere`);
+    return names;
+}
+
+/*
  * The C this reads.
  *
  * **A name starting with a dot is not a source.** An editor open on a file
@@ -847,6 +877,7 @@ function Main() {
     const verbs   = checkGlobalSignatures(root, problems);
     const docs    = checkDocs(root, problems);
     const libs    = checkLibraryScopes(root, problems);
+    const prelude = checkPreludeScope(root, problems);
     const shadows = checkShadows(root, members, problems);
     const api     = checkApiJson(root, problems, members, events);
     const named   = api.ok ? checkGlobalsListed(problems, api.catalog) : 0;
@@ -862,7 +893,8 @@ function Main() {
           `in C and in JavaScript, ${shadows} member${shadows === 1 ? "" : "s"} ` +
           `checked for shadowing a base one, ${api.checked} members held to ` +
           `api.json, ${libs.names} top-level names in lib/ with no two ` +
-          `libraries claiming one, and all ${named} globals the runtime ` +
+          `libraries claiming one and ${prelude} in the prelude with none ` +
+          `declared twice, and all ${named} globals the runtime ` +
           `installs accounted for -- and ${links.links} link${links.links === 1 ? "" : "s"} ` +
           `over the ${links.pages} pages of docs/ that stayed land somewhere`);
     Application.Quit(problems.length ? 1 : 0);

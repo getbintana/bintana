@@ -259,10 +259,17 @@ text and is the right answer for a screenful of rows.
 It stops being an answer at **stage 3's cursor**: `LIMIT`/`OFFSET` over rows the
 program has not seen cannot be reordered afterwards, so the ordering has to be in
 the statement. And a collation of ours in the schema is the trade the decimals
-just refused. So the cursor's ordering is an open question with two candidates —
-a collation named *per statement*, or a collation-key column indexed as plain
-bytes (`g_utf8_collate_key`, which glib has for exactly this) — and it is worth
-settling before the cursor rather than during it.
+just refused.
+
+**Settled, with both candidates**: every sqlite connection registers
+`COLLATE LOCALE` -- `Locale.Compare`'s `g_utf8_collate`, named per statement --
+and `locale_key(x)`, glib's collation key, whose byte order is the same. Over
+200 000 names `ORDER BY locale_key(name)` took 0.29 s, `COLLATE LOCALE` 2.3 s and
+bytes 0.11 s, so the key is for sorting and the collation for comparing. Neither
+can be indexed -- the key is not deterministic to sqlite on purpose, since an
+index would keep one desktop's order in a file another opens -- so a cursor
+ordered by it sorts on every window (0.45 s at the end of 200 000 rows); a column
+of its own holding the key, indexed, is the program's choice to make.
 
 ## The shape it would take
 
@@ -427,13 +434,18 @@ which is what Delphi does, is the wrong answer for a form with twelve fields.
 2. **`sales.conn` and sqlite** — **half built.** `Database.Sqlite` and `Table` are
    there and tested: a record reads and writes a table, and `snake` stopped being
    unused. What is left is the declarative half, which is
-   [below](#where-it-stands). Still missing underneath: `#o`, so an `UPDATE` touches
-   only what changed — which matters for two windows editing different fields of
-   one row, since today the last writer replaces every column. **Cascade save is no
+   [below](#where-it-stands). **`Update` touches only what changed**: a `Table`
+   keeps what each row was when it read or wrote it (a `WeakMap` beside the
+   record, never in it), so two windows editing different fields of one row both
+   keep their edit. **Cascade save is no
    longer a prerequisite**, and the storage format is settled: see the two rows
    about it in [what was rejected](#what-was-rejected-and-why).
-3. **Many records** — navigation, or the grid. What it needs from stage 2 is a
-   **cursor**: a `COUNT(*)` and a window refilled with `LIMIT`/`OFFSET`, because
+3. **Many records** — navigation, or the grid. **The cursor is built**:
+   `conn.Cursor(sql, params, { Window })` and `table.Cursor(filter, ...params)`,
+   portable in `rad.js` over `Query`, `Dialect` and the driver's `Each`, which
+   steps a statement and never builds the array. Over 200 000 rows ordered by the
+   key: `Count` 5 ms, the last window 2 ms, `Each` 118 ms against `Query`'s
+   142 ms for the whole array. What the plan asked of it: a `COUNT(*)` and a window refilled with `LIMIT`/`OFFSET`, because
    `Data(row, col)` runs while the row is being drawn and has to be a lookup. Two
    things to write down before anybody starts it: `LIMIT`/`OFFSET` without an
    `ORDER BY` is undefined, so a cursor with no order asked for gets one; and on a

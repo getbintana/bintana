@@ -4754,6 +4754,9 @@ function sqliteAffinity(declared) {
  *     Query(sql, params)   Execute(sql, params)   Transaction(fn)
  *     Dialect -> { Placeholder, Quote, NewKey }
  *
+ * and `Each(sql, params, fn)` for `Cursor.Each`, the one place a row at a time
+ * is the point.
+ *
  * So a `Database.Postgres` written later changes nothing in this class: the
  * three facts known to differ between engines -- how a bound value is spelled,
  * how a name is quoted, how the key of a new row comes back -- are read off
@@ -4788,7 +4791,8 @@ function sqliteAffinity(declared) {
  * this applies -- which is why the driver is named for the library it is.
  *
  * There is an opt-in [extension](../src/bta_sqlite.c) -- a `DECIMAL` collation
- * and `decimal_sum` -- for a program that wants the database to do it anyway.
+ * and `decimal_sum`, and for names `COLLATE LOCALE` and `locale_key` -- for a
+ * program that wants the database to do it anyway.
  * Naming it in a **schema** makes the file unreadable by every client that has
  * not registered it, so it is documented as the trade it is rather than
  * recommended.
@@ -4804,6 +4808,21 @@ function sqliteAffinity(declared) {
  * make lazy loading safe, and lazy loading is what turns one screen into a
  * thousand statements and hides it.  See `docs/plans/data-plan.md`.
  */
+/*
+ * **What a row was when a `Table` read it**, so an `Update` writes only what
+ * changed. Two windows editing different fields of one row both keep their
+ * edit -- the last writer replaced every column before (stage 2 of
+ * `docs/plans/data-plan.md`). Kept beside the record, never in it: a
+ * `WeakMap` from the record to the table's name and the row as `Serialize(true)`
+ * spelled it, renewed by every read and every write that goes through a
+ * `Table`.
+ */
+const tableRowSeen = new WeakMap();
+
+/* A cursor's way of turning a row into what it hands out, not offered to
+ * programs: `Table.Cursor` passes one that loads a record and notes the row. */
+const CURSOR_LOAD = Symbol("load");
+
 GLOBAL.Table = class Table {
     #conn;
     #name;
@@ -5015,7 +5034,33 @@ GLOBAL.Table = class Table {
         const rows  = this.#conn.Query(
             `SELECT * FROM ${this.#quote(this.#name)}${where}`, params);
 
-        return rows.map((row) => this.#of.Load(row));
+        return rows.map((row) => this.#load(row));
+    }
+
+    /*
+     * The same rows as `Where`, **a window at a time**: a `Cursor` whose rows
+     * are records of this table, for a grid over a table bigger than a screen
+     * and a loop over one bigger than memory.
+     */
+    /**
+     * a [`Cursor`](docs/reference/globals/Database.md) over the rows a filter
+     * matches, each a record; the filter is `Where`'s, `ORDER BY` included
+     */
+    Cursor(sql, ...params) {
+        this.#fit();
+
+        const where = sql ? ` WHERE ${sql}` : "";
+        return new GLOBAL.Cursor(this.#conn,
+            `SELECT * FROM ${this.#quote(this.#name)}${where}`, params,
+            { [CURSOR_LOAD]: (row) => this.#load(row) });
+    }
+
+    /* A row into a record of this shape, noting what it was. */
+    #load(row) {
+        const rec = this.#of.Load(row);
+
+        tableRowSeen.set(rec, { table: this.#name, conn: this.#conn, row: rec.Serialize(true) });
+        return rec;
     }
 
     /** every row, as records */
@@ -5046,7 +5091,7 @@ GLOBAL.Table = class Table {
         const rows  = this.#conn.Query(
             `SELECT * FROM ${this.#quote(this.#name)} WHERE ${where}`, key);
 
-        return rows.length ? this.#of.Load(rows[0]) : null;
+        return rows.length ? this.#load(rows[0]) : null;
     }
 
     /* How many, which is a number and not a list of records nobody asked to
@@ -5110,7 +5155,13 @@ GLOBAL.Table = class Table {
                     `inserting`);
             rec[this.#property(blanks[0])] = done.LastId;
         }
+        this.#seen(rec);
         return rec;
+    }
+
+    /* What the row is now, after a write that went through here. */
+    #seen(rec) {
+        tableRowSeen.set(rec, { table: this.#name, conn: this.#conn, row: rec.Serialize(true) });
     }
 
     /*
@@ -5120,19 +5171,37 @@ GLOBAL.Table = class Table {
      * save that saved nothing and said so is the shape of bug that is found
      * days later by somebody looking for the value they typed.
      */
-    /** UPDATE by key; **throws** when it matched no row */
+    /**
+     * UPDATE by key, **only the columns that changed** since this table read
+     * or wrote the record; **throws** when it matched no row
+     */
     Update(rec) {
         this.#fit();
         this.#mine(rec);
 
         const keys = this.#keys();
         const row  = rec.Serialize(true);
-        const cols = ownKeys(row).filter(
+        let   cols = ownKeys(row).filter(
             (c) => !keys.some((k) => k.Column === c));
 
         if (!cols.length)
             throw new Error(`${rec.constructor.name} is all key, so there is ` +
                             `nothing to update`);
+
+        /*
+         * **Only what changed**, when this table knows what the row was: read
+         * by it, or written by it since. A record built by the program and
+         * given a key has no such past, and every column is written. Nothing
+         * changed is no statement at all -- and so no check that the row is
+         * still there, since there is nothing to lose.
+         */
+        const was = tableRowSeen.get(rec);
+        if (was && was.table === this.#name && was.conn === this.#conn &&
+            keys.every((k) => sameColumnValue(was.row[k.Column], row[k.Column]))) {
+            cols = cols.filter((c) => !hasOwn.call(was.row, c) || !sameColumnValue(was.row[c], row[c]));
+            if (!cols.length)
+                return rec;
+        }
 
         let at    = 0;
         const set = cols.map((c) => `${this.#quote(c)} = ${this.#mark(++at)}`)
@@ -5147,6 +5216,7 @@ GLOBAL.Table = class Table {
             throw new Error(
                 `no row in ${this.#name} with ` +
                 `${keys.map((k) => `${k.Column} = ${row[k.Column]}`).join(" and ")}`);
+        this.#seen(rec);
         return rec;
     }
 
@@ -5233,4 +5303,151 @@ if (GLOBAL.Connection) {
     GLOBAL.Connection.prototype.Table = function (name, of) {
         return new GLOBAL.Table(this, name, of);
     };
+
+    /**
+     * a [`Cursor`](docs/reference/globals/Database.md): the rows a statement
+     * answers, counted, and read a window at a time
+     */
+    GLOBAL.Connection.prototype.Cursor = function (sql, params, options) {
+        return new GLOBAL.Cursor(this, sql, params, options);
+    };
 }
+
+/* Two row values the same, for `Update`: text, numbers, booleans and null by
+ * value; anything else (a `Bytes`) only when it is the same object, so a
+ * column holding one is written whenever it is there. Not `sameValue`, which
+ * is the serialiser's (above): a second declaration of that name replaced the
+ * first for the whole file, and `.form` files began writing defaults. */
+function sameColumnValue(a, b) {
+    return a === b;
+}
+
+/*
+ * Cursor -- the rows a statement answers, **without all of them at once**.
+ *
+ * Stage 3 of `docs/plans/data-plan.md`: a grid over a table bigger than a
+ * screen (`TableView`'s on-demand `Count` and `Data`) and a loop over one
+ * bigger than memory. Three ways in:
+ *
+ *   Count       how many rows, by `SELECT count(*)` over the statement
+ *   Row(i)      one row, from a **window** of `Window` rows read with
+ *               `LIMIT`/`OFFSET` around it -- `Data(row, column)` runs while
+ *               the row is drawn, so it has to be a lookup, and a window is a
+ *               few dozen lookups per statement
+ *   Each(fn)    every row, one at a time, never an array (the driver's `Each`)
+ *
+ * **The statement says its order.** `LIMIT`/`OFFSET` over a statement with no
+ * `ORDER BY` is undefined in SQL, so two windows could overlap or miss a row;
+ * nothing here can add one to a statement it does not parse. Order by a key,
+ * and for names by `locale_key(name)`, which is the language's order and not
+ * the bytes'.
+ *
+ * **What it has read, it keeps until `Refresh()`**: the count and the window.
+ * A grid that wrote a row asks again.
+ *
+ * Portable: it asks a connection for `Query`, `Each` and `Dialect` and nothing
+ * else, so a second driver has it for nothing. The statement is wrapped as a
+ * subquery, after a newline -- a `--` comment at its end would otherwise take
+ * the `LIMIT` with it -- and without a trailing `;`.
+ */
+GLOBAL.Cursor = class Cursor {
+    #conn;
+    #sql;
+    #params;
+    #window;
+    #load;
+    #count = -1;
+    #from  = -1;
+    #rows  = [];
+
+    constructor(conn, sql, params, options) {
+        if (!conn || typeof conn.Query !== "function")
+            throw new TypeError("Cursor: expected a connection -- one a driver " +
+                                "opened, like Database.Sqlite(path)");
+        if (typeof sql !== "string" || !sql.trim())
+            throw new TypeError("Cursor: expected a statement");
+        if (params !== undefined && params !== null && !Array.isArray(params))
+            throw new TypeError("Cursor: the parameters are an array");
+        const opts   = options || {};
+        const window = opts.Window === undefined ? 200 : Number(opts.Window);
+        if (!Number.isInteger(window) || window < 1)
+            throw new RangeError("Cursor: Window is a count of rows, 1 or more");
+
+        this.#conn   = conn;
+        let end = sql.length;
+        while (end > 0 && (sql[end - 1] === ";" || sql[end - 1].trim() === "")) end--;
+        this.#sql    = sql.slice(0, end);
+        this.#params = params ? params.slice() : [];
+        this.#window = window;
+        this.#load   = typeof opts[CURSOR_LOAD] === "function" ? opts[CURSOR_LOAD]
+                                                               : (row) => row;
+    }
+
+    /** how many rows a window reads at once */
+    get Window() { return this.#window; }
+
+    /** how many rows the statement answers, asked once until `Refresh()` */
+    get Count() {
+        if (this.#count < 0) {
+            const rows = this.#conn.Query(
+                `SELECT count(*) AS n FROM (\n${this.#sql}\n)`, this.#params);
+            this.#count = Number(rows[0].n);
+        }
+        return this.#count;
+    }
+
+    /**
+     * one row by its position, `0` to `Count - 1`, from the window around it
+     * -- a plain object as `Query` answers, or a record from `Table.Cursor`
+     */
+    Row(index) {
+        if (!Number.isInteger(index) || index < 0 || index >= this.Count)
+            throw new RangeError(`Cursor: ${index} is not a row -- there are ${this.Count}`);
+        if (this.#from < 0 || index < this.#from || index >= this.#from + this.#rows.length) {
+            const from = index - (index % this.#window);
+            this.#rows = this.#read(from, this.#window).map(this.#load);
+            this.#from = from;
+        }
+        return this.#rows[index - this.#from];
+    }
+
+    /** `count` rows from `start`, fewer at the end; read in one statement */
+    Rows(start, count) {
+        if (!Number.isInteger(start) || start < 0)
+            throw new RangeError("Cursor: Rows(start, count) starts at a row, 0 or more");
+        if (!Number.isInteger(count) || count < 0)
+            throw new RangeError("Cursor: Rows(start, count) takes a count, 0 or more");
+        return count ? this.#read(start, count).map(this.#load) : [];
+    }
+
+    /**
+     * every row, one at a time, `fn(row)` for each; `false` from `fn` stops.
+     * Answers how many were handed over. Never holds them all
+     */
+    Each(fn) {
+        if (typeof fn !== "function")
+            throw new TypeError("Cursor: Each(fn) is called with each row");
+        if (typeof this.#conn.Each !== "function")
+            throw new TypeError("Cursor: this connection cannot read row by row");
+        return this.#conn.Each(this.#sql, this.#params, (row) => fn(this.#load(row)));
+    }
+
+    /** forgets the count and the window, so the next question reads again */
+    Refresh() {
+        this.#count = -1;
+        this.#from  = -1;
+        this.#rows  = [];
+        return this;
+    }
+
+    /* `LIMIT`/`OFFSET` around the statement, its placeholders numbered on. */
+    #read(from, count) {
+        const p  = this.#conn.Dialect.Placeholder;
+        const at = this.#params.length;
+        const mark = (n) => (p.includes("%d") ? p.replace("%d", `${n}`) : p);
+
+        return this.#conn.Query(
+            `SELECT * FROM (\n${this.#sql}\n) LIMIT ${mark(at + 1)} OFFSET ${mark(at + 2)}`,
+            this.#params.concat([count, from]));
+    }
+};
