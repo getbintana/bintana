@@ -813,6 +813,34 @@ static GtkWidget *table_list_view(BtaWidget *w)
 }
 
 /*
+ * **GTK's focus position follows a row chosen from code.** A list keeps where
+ * its keyboard focus is apart from what is selected, and goes back there when
+ * the focus comes in again -- measured, and read in GTK 4.22's `gtklistbase.c`:
+ * with the focus position on a row that was scrolled away and has no widget,
+ * coming in grabs that row *and selects it*. A table filled in one change has
+ * its focus position on row 0, so a `DataGrid` half chosen by assignment and
+ * entered with Shift+Tab chose another row of its own (the last one, under
+ * GTK's default tab behaviour). So a row chosen from code -- `Index`,
+ * `CurrentCell`, a press this table claimed -- is also where the focus goes
+ * back to. `gtk_column_view_scroll_to` with `FOCUS` moves the position, and
+ * grabs the focus only if it is already within the list; it also brings the
+ * row, and with `column` the cell, into view. 4.12; on 4.10 the focus position
+ * is GTK's own.
+ */
+static void table_focus_follows(BtaWidget *w, guint at, GtkColumnViewColumn *column)
+{
+#if GTK_CHECK_VERSION(4, 12, 0)
+    GtkSelectionModel *sel = table_model(w);
+
+    if (at < g_list_model_get_n_items(G_LIST_MODEL(sel)))
+        gtk_column_view_scroll_to(GTK_COLUMN_VIEW(w->inner), at, column,
+                                  GTK_LIST_SCROLL_FOCUS, NULL);
+#else
+    (void)w; (void)at; (void)column;
+#endif
+}
+
+/*
  * Selects this visible position and only it, **the way GTK's own click
  * does** -- through the list's `list.select-item` action, which also makes it
  * the anchor a Shift+click extends from. Selecting through the model leaves
@@ -828,6 +856,7 @@ static void table_select_at(BtaWidget *w, guint at)
     if (!list || !gtk_widget_activate_action(list, "list.select-item", "(ubb)",
                                              at, FALSE, FALSE))
         gtk_selection_model_select_item(table_model(w), at, TRUE);
+    table_focus_follows(w, at, NULL);
 }
 
 /* Put the highlight on this node, opening the way to it first: a node under a
@@ -1367,6 +1396,13 @@ refuse:
  * `CellEdit`.
  */
 #define CELL_KEY "bta-cell"
+
+/* On the widget each cell's item hangs on (its box, or a tree's expander):
+ * the `GtkListItem`, borrowed -- the item holds the widget -- and the declared
+ * column. What a row widget's position and a plain cell's address are read
+ * from (`table_row_position`, `table_press_plain`). */
+#define ITEM_KEY        "bta-list-item"
+#define COLUMN_OF_KEY   "bta-list-column"
 
 typedef struct {
     GWeakRef     table;     /* the TableView's w->gtk: asked, never trusted */
@@ -2539,6 +2575,20 @@ static void on_check_toggled(GtkCheckButton *b, gpointer data)
         cell_begin_later(c);
 }
 
+/* Where a row is drawn, whichever shape: a tree's node by its row, an
+ * on-demand row by the index it stands for, a held one through the filter
+ * and the sort. -1 for a row with no place in the view. */
+static int table_view_position(BtaWidget *w, BtaTableRow *row)
+{
+    if (!row)
+        return -1;
+    if (table_state(w)->tree)
+        return table_position_of(w, row);
+    if (!row->cells)
+        return (int)row->index;
+    return table_row_to_view(w, table_index_in(table_store_of(w, row), row));
+}
+
 /* Puts the highlight on the row a cell belongs to, whichever shape. */
 static void cell_select_row(BtaWidget *w, BtaTableRow *row)
 {
@@ -2660,6 +2710,54 @@ static BtaCell *cell_of_selection(BtaWidget *w)
  * is then an ordinary cell: it selects, and a double click activates. A press
  * inside an open editor is the editor's.
  */
+/*
+ * **A cell with no editor is the reader's cell too.** Only an editing column
+ * carries a `BtaCell`, so a press on any other cell chose no cell: a grid with
+ * one editable column did not know which of the others the reader was on, and
+ * Tab in `lib/datagrid` started from the row's first. The row and the column
+ * are read off the widget the item hangs on (`ITEM_KEY`, `COLUMN_OF_KEY`), the
+ * cell becomes current, and the press is **not** claimed: GTK selects the row
+ * as it always did. Ctrl and Shift on a `MultiSelect` table leave it, as below.
+ */
+static void table_press_plain(BtaWidget *w, GtkGestureClick *g, GtkWidget *at)
+{
+    GtkWidget *x = NULL;
+
+    if (gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g)) != GDK_BUTTON_PRIMARY)
+        return;
+    if (table_state(w)->multi &&
+        (gtk_event_controller_get_current_event_state(GTK_EVENT_CONTROLLER(g)) &
+         (GDK_CONTROL_MASK | GDK_SHIFT_MASK)))
+        return;
+
+    for (GtkWidget *up = at; up && up != w->inner && !x; up = gtk_widget_get_parent(up))
+        if (g_object_get_data(G_OBJECT(up), ITEM_KEY))
+            x = up;
+    for (GtkWidget *down = at; down && !x; down = gtk_widget_get_first_child(down))
+        if (g_object_get_data(G_OBJECT(down), ITEM_KEY))
+            x = down;
+    if (!x)
+        return;
+
+    GtkListItem *item = g_object_get_data(G_OBJECT(x), ITEM_KEY);
+    gpointer     what = gtk_list_item_get_item(item);
+    BtaTableRow *row  = NULL;
+
+    if (GTK_IS_TREE_LIST_ROW(what))
+        row = gtk_tree_list_row_get_item(what);
+    else if (what)
+        row = g_object_ref(what);
+    if (!row)
+        return;
+
+    /* The program runs in `CellChange`: the wrapper is held across it. */
+    JSValue self = JS_DupValue(w->ctx, w->self);
+
+    table_current_set(w, row, GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(x), COLUMN_OF_KEY)));
+    g_object_unref(row);
+    JS_FreeValue(w->ctx, self);
+}
+
 static void on_view_pressed(GtkGestureClick *g, int n, double x, double y,
                             gpointer data)
 {
@@ -2681,7 +2779,11 @@ static void on_view_pressed(GtkGestureClick *g, int n, double x, double y,
     if (c && c->editor && at && (at == c->editor || gtk_widget_is_ancestor(at, c->editor)))
         c->pressed = g_get_monotonic_time();
 
-    if (!c || !c->row || c->editor ||
+    if (!c) {
+        table_press_plain(w, g, at);
+        return;
+    }
+    if (!c->row || c->editor ||
         gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(g)) != GDK_BUTTON_PRIMARY)
         return;
 
@@ -3009,7 +3111,6 @@ static void table_current_clear(BtaWidget *w)
  * children; the class is put on them at the program's word and again at every
  * bind, since a scroll moves a widget to another position.
  */
-#define ITEM_KEY        "bta-list-item"
 #define ROW_HOVER_CLASS "bta-row-hover"
 
 /* The visible position a drawn row widget stands for, or -1: down its first
@@ -3196,12 +3297,16 @@ static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
 
         gtk_tree_expander_set_child(GTK_TREE_EXPANDER(expander), box);
         g_object_set_data(G_OBJECT(expander), ITEM_KEY, item);
+        g_object_set_data(G_OBJECT(expander), COLUMN_OF_KEY,
+                          g_object_get_data(G_OBJECT(f), COLUMN_INDEX_KEY));
         gtk_list_item_set_child(item, expander);
         return;
     }
     /* Borrowed: the item holds the box. What a row widget's position is read
      * from (`table_row_position`). */
     g_object_set_data(G_OBJECT(box), ITEM_KEY, item);
+    g_object_set_data(G_OBJECT(box), COLUMN_OF_KEY,
+                      g_object_get_data(G_OBJECT(f), COLUMN_INDEX_KEY));
     gtk_list_item_set_child(item, box);
 }
 
@@ -5032,6 +5137,12 @@ static void build_table(BtaWidget *w)
     gtk_single_selection_set_can_unselect(sel, TRUE);
 
     w->inner = gtk_column_view_new(GTK_SELECTION_MODEL(sel));
+#if GTK_CHECK_VERSION(4, 12, 0)
+    /* **Tab leaves the table**, the convention of a list: GTK's default
+     * walks every row with it and, coming in backwards, goes to the last one
+     * -- selecting it, when it was scrolled away. The arrows walk the rows. */
+    gtk_column_view_set_tab_behavior(GTK_COLUMN_VIEW(w->inner), GTK_LIST_TAB_ITEM);
+#endif
     gtk_column_view_set_show_row_separators(GTK_COLUMN_VIEW(w->inner), TRUE);
     gtk_column_view_set_reorderable(GTK_COLUMN_VIEW(w->inner), FALSE);
 
@@ -7065,12 +7176,27 @@ static JSValue table_set_current(JSContext *ctx, JSValueConst this_val,
     JS_FreeValue(ctx, rv);
 
     /* `Select` runs the program first, and a handler that remade the table
-     * or took the row away leaves nothing to be current. */
+     * or took the row away leaves nothing to be current. **A row already
+     * selected keeps the selection as it is**: moving the cell along a row
+     * of a `MultiSelect` table -- Tab in a grid -- must not undo the rows
+     * chosen with it. */
     guint epoch = st->epoch;
+    int   at    = table_view_position(w, row);
 
-    cell_select_row(w, row);
-    if (st->epoch == epoch && (!row->cells || table_still_holds(w, row) >= 0))
+    if (at < 0 || !gtk_selection_model_is_selected(table_model(w), (guint)at))
+        cell_select_row(w, row);
+    if (st->epoch == epoch && (!row->cells || table_still_holds(w, row) >= 0)) {
         table_current_set(w, row, (guint)col);
+
+        /* And the cell is brought into view, across as well as down. */
+        at = st->epoch == epoch ? table_view_position(w, row) : -1;
+        if (at >= 0) {
+            GtkColumnViewColumn *c = table_column(w, col);
+
+            table_focus_follows(w, (guint)at, c);
+            g_clear_object(&c);
+        }
+    }
     g_clear_object(&row);
     return JS_UNDEFINED;
 }
@@ -7334,7 +7460,9 @@ static const JSCFunctionListEntry table_props[] = {
      */
     JS_CGETSET_DEF("Count",       table_get_count,     table_set_count),
     /* Index
-     *   the selected row, `-1` for none. Assigning selects it. Default `-1`
+     *   the selected row, `-1` for none. Assigning selects it, brings it
+     *   into view, and makes it the row the keyboard comes back to when Tab
+     *   brings the focus in again. Default `-1`
      */
     JS_CGETSET_DEF("Index",       table_get_index,     table_set_index),
     /* Selection
@@ -7438,8 +7566,11 @@ static const JSCFunctionListEntry table_props[] = {
      *   the cell the reader is on, as `{ Row, Column }` — the row is a key in
      *   a tree and an index in a flat table, the column is an index — or
      *   `null` for none. **Assigning moves it and selects the row**, opening
-     *   the way to it; `null` clears it. A cell that is not editable is a
-     *   cell all the same: it can be current, and F2 is what opens it
+     *   the way to it and bringing the cell into view -- **a row already
+     *   selected keeps the selection as it is**, so a cell moved along a row
+     *   of a `MultiSelect` table leaves the other rows chosen; `null` clears
+     *   it. A press on any cell makes it current, editable or not: a cell that
+     *   is not editable is a cell all the same, and F2 is what opens it
      */
     JS_CGETSET_DEF("CurrentCell", table_get_current, table_set_current),
     /* AutoExpand

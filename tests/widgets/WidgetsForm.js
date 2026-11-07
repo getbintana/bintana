@@ -597,6 +597,9 @@ const TESTS = [
     "TableColumnResize",
     /* And the row under the pointer, said and drawn beside. */
     "TableHover",
+    /* And Tab: out of a table and back without choosing a row, and a grid's
+     * cells walked across both halves. */
+    "TableTab",
     "SingleInstance",
     /* Blocking too: a console child under `--profile`, whose capture the
      * parent reads back. */
@@ -10493,6 +10496,110 @@ class Form1 extends Form {
         eq("...and refuses what is not a number", out.refused, "TypeError");
         eq("a table beside it follows, row for row", out.mirrored.join(), "2,0,-1,0,-1");
         eq("...and is left with none once the pointer is gone", out.last, -1);
+    }
+
+    testTableTab() {
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real keys: it needs xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "table-tab");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "tabletab", startup: "Form1", sources: ["Form1.js"], uses: ["datagrid"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 760, Height: 300 } });
+        File.Save(File.Join(proj, "Form1.js"), `
+class Form1 extends Form {
+    Form_Open() {
+        const mk = (name, x) => {
+            const t = new TableView(); t.Name = name; t.Move(x, 10); t.Resize(110, 240);
+            t.Columns = [{ Text: name, Width: 80 }];
+            for (let i = 0; i < 400; i++) t.Add([name + i]);
+            this.Add(t); return t;
+        };
+        this.l = mk("L", 10); this.r = mk("R", 130);
+        const g = new DataGrid(); g.Move(260, 10); g.Resize(480, 240);
+        g.Columns = [{ Text: "K", Width: 60 }, { Text: "N", Width: 80 },
+                     { Text: "P", Width: 80 }, { Text: "Q", Width: 80, Editor: "Text" }];
+        g.Frozen = 2;
+        const rows = []; for (let i = 0; i < 400; i++) rows.push(["k" + i, "n" + i, "p" + i, "" + i]);
+        g.AddRows(rows);
+        this.Add(g); this.g = g;
+        this.log = []; this.last = "";
+        this.dir = Application.Directory;
+        this.wait();
+    }
+    state() {
+        const g = this.g;
+        const f = this.l.Focused ? "L" : this.r.Focused ? "R" : g.FrozenView.Focused ? "frozen"
+                : g.MainView.Focused ? "main" : "out";
+        return \`\${this.l.Index} \${this.r.Index} \${g.Index} \${g.FrozenView.Index} \${g.current.Row}:\${g.current.Column} \${f}\`;
+    }
+    wait() {
+        const t = this.r, m = this.g.MainView;
+        if (!(t.RowHeight > 0 && m.RowHeight > 0)) { Timer.After(50, () => this.wait()); return; }
+        const rb = t.Bounds(), gb = m.Bounds();
+        const row = (b, view, i) => Math.round(b.Y + view.HeaderHeight + view.RowHeight * (i + 0.5));
+        File.Save(this.dir + "/geom", [rb.X + 40, row(rb, t, 1), gb.X + 40, row(gb, m, 2),
+                                       gb.X + 40, row(gb, m, 0)].join(" "));
+        this.poll();
+    }
+    poll() {
+        if (File.Exists(this.dir + "/mark")) { File.Delete(this.dir + "/mark"); this.log.push(this.state()); }
+        if (!File.Exists(this.dir + "/done")) { Timer.After(30, () => this.poll()); return; }
+        File.SaveJson(this.dir + "/out.json", { log: this.log });
+        Application.Quit(0);
+    }
+}
+`);
+        for (const gone of ["geom", "out.json", "done", "mark"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        /* After every key, a mark the child answers with what it sees. */
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/geom\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "read rx ry gx gy g0x g0y < \"$dir/geom\"\n" +
+                  "mark() { : > \"$dir/mark\"; i=0; while [ -f \"$dir/mark\" ] && [ $i -lt 50 ]; do sleep 0.05; i=$((i+1)); done; }\n" +
+                  "press() { xdotool key $1; sleep 0.3; mark; }\n" +
+                  "sleep 0.3\n" +
+                  "xdotool mousemove $rx $ry click 1; sleep 0.4; mark\n" +
+                  "press shift+Tab; press Tab\n" +
+                  "xdotool mousemove $gx $gy click 1; sleep 0.4; mark\n" +
+                  "press Tab; press Tab; press shift+Tab; press shift+Tab; press shift+Tab\n" +
+                  "xdotool mousemove $g0x $g0y click 1; sleep 0.4; mark\n" +
+                  "press shift+Tab; press shift+Tab; press shift+Tab\n" +
+                  ": > \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj], { Timeout: 30000 });
+        let out = null;
+        try { out = File.LoadJson(File.Join(proj, "out.json")); } catch (e) { out = null; }
+        check("the child answered", out !== null, ran.Output);
+        if (!out) return;
+        const log = out.log;
+        /* L R grid frozen current focus */
+        eq("a row clicked in a table of 400", log[0], "-1 1 -1 -1 -1:-1 R");
+        eq("Shift+Tab into the table before it chooses nothing there (it chose the last row)",
+           log[1], "-1 1 -1 -1 -1:-1 L");
+        eq("...and Tab back finds the row as it was", log[2], "-1 1 -1 -1 -1:-1 R");
+        eq("a cell clicked in the grid's scrolling half", log[3], "-1 1 2 2 2:2 main");
+        eq("Tab is the next cell", log[4], "-1 1 2 2 2:3 main");
+        eq("...and past the row's end, the next row's first, in the frozen half", log[5], "-1 1 3 3 3:0 frozen");
+        eq("Shift+Tab is the cell before, back across the halves", log[6], "-1 1 2 2 2:3 main");
+        eq("...along the row", log[7], "-1 1 2 2 2:2 main");
+        eq("...and into the frozen half on the same row", log[8], "-1 1 2 2 2:1 frozen");
+        eq("the grid's first row", log[9], "-1 1 0 0 0:2 main");
+        eq("...Shift+Tab walks back to its first cell", log[11], "-1 1 0 0 0:0 frozen");
+        eq("...and past it the focus leaves the grid, the rows as they were",
+           log[12], "-1 1 0 0 0:0 R");
     }
 
     testTableReorderDrag() {
@@ -20969,6 +21076,19 @@ class Form1 extends Form {
             eq("removing the current row clears the cell", t.CurrentCell, null);
             eq("and raises the clearing", this.curSeen.length, gone + 1);
             eq("with null and -1", JSON.stringify(this.curSeen[gone]), "[null,-1]");
+
+            /* A cell moved along a row of a multiple selection -- Tab in a
+             * grid -- leaves the rows chosen as they were. */
+            t.Add(["cuatro", "4"]);
+            t.MultiSelect = true;
+            t.DeselectAll();
+            t.Select(0); t.Select(2);
+            t.CurrentCell = { Row: 2, Column: 1 };
+            eq("a cell on a row already selected keeps the selection", t.Selection.join(), "0,2");
+            t.CurrentCell = { Row: 1, Column: 0 };
+            eq("...and one on a row that is not selects it alone, as a press would",
+               t.Selection.join(), "1");
+            t.MultiSelect = false;
 
             t.CurrentCell = { Row: 0, Column: 1 };
             t.Clear();

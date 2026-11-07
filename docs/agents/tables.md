@@ -555,3 +555,33 @@ outweighs `listview:not(:focus-within) > row:selected`), so the mirrored rule
 does too: limited to a focused table, a row chosen above and then the totals
 chosen below left the row above blue in the half under the pointer and grey in
 the other -- `srgb(52,124,211)` against `srgb(197,197,197)`, now both the first.
+
+## Tab, and where the focus comes back to
+
+**GTK's default walked every row with Tab and, coming in backwards, chose the
+last row.** Read in GTK 4.22.5's `gtklistbase.c`: under `GTK_LIST_TAB_ALL`
+(the default) a list entered with Shift+Tab focuses item `n_items - 1`
+whenever its focus position is valid -- and it is, as soon as the list was
+filled in one `items-changed` (the item manager moves an invalid tracker to 0).
+If that item has no widget (scrolled away, which is every long table), the
+fallback is `gtk_list_base_grab_focus_on_item(..., select = TRUE)`: **it is
+selected**. In `lib/datagrid` that was one Shift+Tab from the scrolling half to
+the frozen one choosing row 399 of 400 -- and with 20 rows, nothing, since the
+last item had a widget. Measured with two plain tables too: no grid needed.
+
+- `gtk_column_view_set_tab_behavior(GTK_LIST_TAB_ITEM)` (4.12): Tab leaves the
+  table, and coming in goes back to the focus position.
+- The focus position follows a row chosen from code: `table_select_at` and
+  `CurrentCell` call `gtk_column_view_scroll_to(..., GTK_LIST_SCROLL_FOCUS)`,
+  which moves the position and grabs the focus **only if it is already within
+  the list** (`GTK_STATE_FLAG_FOCUS_WITHIN`), and brings the row into view.
+- A row the person scrolled away from and then Tabs back to is still grabbed
+  through the fallback, which selects that same row: harmless for one row, and
+  on a `MultiSelect` table it narrows the selection to it -- not fixed.
+- **A press on a cell with no editor makes it current** (`table_press_plain`):
+  only editing columns carry a `BtaCell`, so before this a grid with one
+  editable column did not know which other cell was clicked. The address is
+  read off `ITEM_KEY`/`COLUMN_OF_KEY` on the cell's top widget, and the press is
+  not claimed.
+- `CurrentCell` on a row already selected leaves the selection alone, so Tab
+  along a row of a `MultiSelect` grid keeps the rows chosen.

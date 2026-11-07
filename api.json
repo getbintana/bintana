@@ -9862,7 +9862,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the cell the reader is on, as `{ Row, Column }` — the row is a key in a tree and an index in a flat table, the column is an index — or `null` for none. **Assigning moves it and selects the row**, opening the way to it; `null` clears it. A cell that is not editable is a cell all the same: it can be current, and F2 is what opens it",
+          "Doc": "the cell the reader is on, as `{ Row, Column }` — the row is a key in a tree and an index in a flat table, the column is an index — or `null` for none. **Assigning moves it and selects the row**, opening the way to it and bringing the cell into view -- **a row already selected keeps the selection as it is**, so a cell moved along a row of a `MultiSelect` table leaves the other rows chosen; `null` clears it. A press on any cell makes it current, editable or not: a cell that is not editable is a cell all the same, and F2 is what opens it",
           "Native": true
         },
         {
@@ -9988,7 +9988,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the selected row, `-1` for none. Assigning selects it. Default `-1`",
+          "Doc": "the selected row, `-1` for none. Assigning selects it, brings it into view, and makes it the row the keyboard comes back to when Tab brings the focus in again. Default `-1`",
           "Native": true
         },
         {
