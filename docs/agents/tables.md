@@ -524,3 +524,34 @@ binds it -- so a test listens with `On`; and a script library's helpers are
 globals in every project that `uses` it (`api.sh`'s count of top-level names
 in `lib/` went from 38 to 43), so it is a module and exports `DataGrid` alone.
 
+
+**Two tables that are one grid draw two selections unless told otherwise.**
+The theme greys a selected row whose list does not hold the focus
+(`listview:not(:focus-within) > row:selected`), so `lib/datagrid` showed the
+same rows blue in the half clicked and grey in the other. The answer is a rule
+in `runtime/css/base.css`, not a property: a container wearing
+`shared-selection` draws the unfocused tables' selection with the theme's
+`@theme_selected_bg_color`/`fg_color` while any table inside has the focus.
+There is no widget snapshot to assert it with from a test; it was measured on
+an `Xvfb` with `xfwm4` and `tests/probe.sh pixel` -- the frozen half
+`srgb(197,197,197)` without the class, `srgb(53,132,228)` with it, and both
+grey once the focus moved to a button.
+
+**And the hover is one too.** `:hover` belongs to the table the pointer is in,
+so the row beside it stayed plain. A table now says which row is under the
+pointer (`Hover(row)`, a motion controller on the column view: the picked
+widget up to the internal list's child, then down its first cell to the
+widget carrying its `GtkListItem` -- GTK keeps no position on a row widget)
+and draws a row a program names as hovered (`HoverRow`, class `bta-row-hover`
+on the row widget, put again at every bind since a scroll moves a widget to
+another position). The colours in `base.css` are the theme's weights in its
+named colours: `alpha(@theme_fg_color, 0.05)` is Adwaita's `rgba(46,52,54,0.05)`
+and `mix(@theme_selected_bg_color, @theme_fg_color, 0.1)` its `#347cd3`.
+Measured: both halves `srgb(244,245,245)` on a plain row, `srgb(52,124,211)` on
+the selected one, the row of totals the same. After a wheel scroll GTK's own
+hover is gone until the pointer moves, and so is the mirrored one.
+The theme hovers a *grey* selection blue as well (`row.activatable:selected:hover`
+outweighs `listview:not(:focus-within) > row:selected`), so the mirrored rule
+does too: limited to a focused table, a row chosen above and then the totals
+chosen below left the row above blue in the half under the pointer and grey in
+the other -- `srgb(52,124,211)` against `srgb(197,197,197)`, now both the first.

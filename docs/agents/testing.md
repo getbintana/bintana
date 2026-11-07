@@ -286,6 +286,13 @@ Three things that will waste your time:
   child sat in `read` with the `break` order still queued in the parent until
   the 20 s were up. Found with `eu-stack` on the parent, whose main thread was
   in `sys_exec_wait`. It is `testModulesDebugger` now, beside `DebuggerOrders`.
+  Again with `TableColumnResize`, `ExampleSales` and `TableHover` placed after
+  the `Http` tests: alone each passed, together their `Exec.Wait`s held the loop
+  past the `Http` and `Clipboard` timeouts (six red lines, every one
+  "cannot reach ... timeout"). **A child that moves the pointer goes in the
+  blocking head, beside `TableReorderDrag`** -- two of them running at once in
+  the tail would fight over one pointer -- and one with no pointer is an async
+  `Exec` in the tail, as `ExampleSales` is now.
 - **The phases are a narrative, so a run can stop early but not start late.**
   `./tests/run.sh ide designer` runs the prefix ending at that phase —
   460 assertions against 3560 for the whole project -- 10 s against about 344 s on

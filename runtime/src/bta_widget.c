@@ -8185,7 +8185,9 @@ static const JSCFunctionListEntry widget_props[] = {
      *   first thing to reach for**: the theme draws `suggested-action`,
      *   `destructive-action`, `dim-label`, `title-1`…`title-4`, `heading`,
      *   `card`, `frame`, `boxed-list`, `toolbar`, `flat`, `linked`, `pill`,
-     *   `monospace`. A name that could not be a class is refused
+     *   `monospace`; the runtime adds `shared-selection`, for a container
+     *   whose tables are one grid: their selection is drawn as focused while
+     *   any of them has the focus. A name that could not be a class is refused
      */
     JS_CGETSET_DEF("Style", w_get_style, w_set_style),
     /* Background

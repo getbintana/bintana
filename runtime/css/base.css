@@ -96,3 +96,43 @@ label.bta-fold-chip:hover {
 label.bta-fold-tail {
     font-family: monospace;
 }
+
+/* **One selection drawn in several tables** (`shared-selection`).  The theme
+ * draws a selected row in the selection colour only while its own list holds
+ * the focus, and grey otherwise (`listview:not(:focus-within) > row:selected`)
+ * -- right for one table, wrong for two that are one grid: `lib/datagrid`'s
+ * frozen half and the rest showed the same rows blue on one side and grey on
+ * the other.  Under a container wearing the class, a table without the focus
+ * draws its selection as focused while *any* table in the container has it;
+ * when the focus leaves the container, every table goes grey together, as the
+ * theme says.  The colours are the theme's named ones, not a literal: the
+ * table holding the focus keeps the theme's own rule, hover included. */
+.shared-selection:focus-within listview:not(:focus-within) > row:selected {
+    background-color: @theme_selected_bg_color;
+    color: @theme_selected_fg_color;
+}
+
+/* **The row another table points at** (`TableView.HoverRow`, class
+ * `bta-row-hover`): drawn as the theme draws the row under the pointer, so two
+ * tables that are one grid light the same row.  The weights are the theme's
+ * own, written in its named colours: a plain row under the pointer is
+ * `alpha(@theme_fg_color, 0.05)`, and a selected one the selection colour
+ * with a tenth of the ink in it (`#347cd3` from `#3584e4` and `#2e3436`, as
+ * Adwaita's light theme draws it).  **A grey selection is hovered blue too**,
+ * because the theme does that to the pointer's own row (its
+ * `row.activatable:selected:hover` outweighs the grey of
+ * `listview:not(:focus-within) > row:selected`): with the rule limited to a
+ * focused table, choosing a row of totals and then pointing at the selected
+ * row above lit one half blue and left the other grey.  The second selector
+ * outweighs `shared-selection`'s own rule above.  The last one is the
+ * pointer's own row in a `shared-selection` table without the focus: the rule
+ * above that paints its selection would otherwise paint over its hover. */
+columnview > listview > row.bta-row-hover:not(:selected) {
+    background-color: alpha(@theme_fg_color, 0.05);
+}
+
+columnview > listview > row.bta-row-hover:selected,
+.shared-selection:focus-within columnview > listview > row.bta-row-hover:selected,
+.shared-selection:focus-within columnview > listview > row:selected:hover {
+    background-color: mix(@theme_selected_bg_color, @theme_fg_color, 0.1);
+}

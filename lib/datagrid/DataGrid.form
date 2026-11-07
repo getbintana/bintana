@@ -12,6 +12,7 @@
       "name": "Body",
       "properties": {
         "Arrangement": "Horizontal",
+        "Style": "shared-selection",
         "Expand": true,
         "HAlign": "Fill",
         "VAlign": "Fill"
@@ -42,6 +43,7 @@
       "name": "Foot",
       "properties": {
         "Arrangement": "Horizontal",
+        "Style": "shared-selection",
         "HAlign": "Fill",
         "Visible": false
       },

@@ -281,6 +281,15 @@ typedef struct {
     int            header_min;    /* a floor for the row of column headings */
     bool           headers_off;   /* `Headers = false`: the row of headings hidden */
 
+    /* **The row under the pointer, and the one drawn as if it were**: the
+     * visible position the pointer is over (-1 off every row), which `Hover`
+     * reports when it changes; and `HoverRow`, the position the program asked
+     * to be drawn hovered, -1 for none. `hover_painted` says the class may be
+     * on some drawn row, so a bind that has nothing to say skips the walk. */
+    int            hover_at;
+    int            hover_shown;
+    bool           hover_painted;
+
     /* **The current cell**: the row the reader is on, held, and its column.
      * `NULL` when there is none. The row is held so the address survives the
      * store telling its cells changed; the verbs that empty a table -- `Clear`,
@@ -2985,6 +2994,134 @@ static void table_current_clear(BtaWidget *w)
     table_current_set(w, NULL, 0);
 }
 
+/* ------------------------------------------------------------ the row hovered
+ *
+ * **Two tables that are one grid point at one row.** The theme draws the row
+ * under the pointer with `:hover`, which only the table the pointer is in can
+ * have; the same row in the table beside it stays plain. So a table says which
+ * row the pointer is over (`Hover`), and draws the row a program names as if
+ * the pointer were there (`HoverRow`), with a class the runtime's sheet styles
+ * in the theme's own colours (`bta-row-hover`, `runtime/css/base.css`).
+ *
+ * **A row is its visible position**, as `Index` is, and GTK keeps no position
+ * on a row widget: each cell's top widget carries its `GtkListItem`, and the
+ * item knows where it is drawn. The row widgets are the internal list's
+ * children; the class is put on them at the program's word and again at every
+ * bind, since a scroll moves a widget to another position.
+ */
+#define ITEM_KEY        "bta-list-item"
+#define ROW_HOVER_CLASS "bta-row-hover"
+
+/* The visible position a drawn row widget stands for, or -1: down its first
+ * cell to the widget that carries the item. */
+static int table_row_position(GtkWidget *row)
+{
+    for (GtkWidget *x = row ? gtk_widget_get_first_child(row) : NULL; x;
+         x = gtk_widget_get_first_child(x)) {
+        GtkListItem *item = g_object_get_data(G_OBJECT(x), ITEM_KEY);
+
+        if (item) {
+            guint at = gtk_list_item_get_position(item);
+            return at == GTK_INVALID_LIST_POSITION ? -1 : (int)at;
+        }
+    }
+    return -1;
+}
+
+/* The row widget around any widget inside one -- the child of the internal
+ * list on the way up -- or NULL above the rows (a heading, the scrollbar). */
+static GtkWidget *table_row_widget(BtaWidget *w, GtkWidget *at)
+{
+    for (GtkWidget *up = at; up && up != w->inner; up = gtk_widget_get_parent(up)) {
+        GtkWidget *parent = gtk_widget_get_parent(up);
+
+        if (parent && GTK_IS_LIST_VIEW(parent))
+            return up;
+    }
+    return NULL;
+}
+
+/* One drawn row, marked hovered or not by what `HoverRow` says. */
+static void table_hover_mark(BtaWidget *w, GtkWidget *row)
+{
+    TableState *st = table_state(w);
+    int         at = table_row_position(row);
+
+    if (st->hover_shown >= 0 && at == st->hover_shown)
+        gtk_widget_add_css_class(row, ROW_HOVER_CLASS);
+    else
+        gtk_widget_remove_css_class(row, ROW_HOVER_CLASS);
+}
+
+/* Every drawn row, after `HoverRow` moved. */
+static void table_hover_paint(BtaWidget *w)
+{
+    GtkWidget *list = table_list_view(w);
+
+    for (GtkWidget *row = list ? gtk_widget_get_first_child(list) : NULL; row;
+         row = gtk_widget_get_next_sibling(row))
+        table_hover_mark(w, row);
+}
+
+/* The pointer is over another row, or none (-1): `Hover(row)`, once a row. */
+static void table_hover_moved(BtaWidget *w, int at)
+{
+    TableState *st = table_state(w);
+
+    if (at == st->hover_at)
+        return;
+    st->hover_at = at;
+
+    JSValue argv[1] = { JS_NewInt32(w->ctx, at) };
+    bta_emit(w, "Hover", 1, argv);
+}
+
+static void on_rows_motion(GtkEventControllerMotion *m, double x, double y,
+                           gpointer data)
+{
+    BtaWidget *w  = data;
+    GtkWidget *at = gtk_widget_pick(w->inner, x, y, GTK_PICK_DEFAULT);
+
+    (void)m;
+    table_hover_moved(w, table_row_position(table_row_widget(w, at)));
+}
+
+static void on_rows_leave(GtkEventControllerMotion *m, gpointer data)
+{
+    (void)m;
+    table_hover_moved(data, -1);
+}
+
+static JSValue table_get_hover_row(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+
+    if (!w)
+        return JS_EXCEPTION;
+    return JS_NewInt32(ctx, table_state(w)->hover_shown);
+}
+
+static JSValue table_set_hover_row(JSContext *ctx, JSValueConst this_val,
+                                   JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    int        i;
+
+    if (!w)
+        return JS_EXCEPTION;
+    if (!bta_to_int(ctx, val, "HoverRow", &i))
+        return JS_EXCEPTION;
+
+    TableState *st = table_state(w);
+
+    st->hover_shown = i < 0 ? -1 : i;
+    if (st->hover_shown >= 0)
+        st->hover_painted = true;
+    if (st->hover_painted)
+        table_hover_paint(w);
+    return JS_UNDEFINED;
+}
+
 static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
                           gpointer user_data)
 {
@@ -3058,9 +3195,13 @@ static void on_setup_cell(GtkSignalListItemFactory *f, GtkListItem *item,
         GtkWidget *expander = gtk_tree_expander_new();
 
         gtk_tree_expander_set_child(GTK_TREE_EXPANDER(expander), box);
+        g_object_set_data(G_OBJECT(expander), ITEM_KEY, item);
         gtk_list_item_set_child(item, expander);
         return;
     }
+    /* Borrowed: the item holds the box. What a row widget's position is read
+     * from (`table_row_position`). */
+    g_object_set_data(G_OBJECT(box), ITEM_KEY, item);
     gtk_list_item_set_child(item, box);
 }
 
@@ -3480,6 +3621,14 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
 
     if (owned)
         g_clear_object(&row);
+
+    /* A widget scrolled to another position wears the hover of that one. */
+    if (table_state(w)->hover_painted) {
+        GtkWidget *rw = table_row_widget(w, gtk_list_item_get_child(item));
+
+        if (rw)
+            table_hover_mark(w, rw);
+    }
 }
 
 /*
@@ -4856,6 +5005,8 @@ static void build_table(BtaWidget *w)
      * means nothing until this table is one. */
     st->autoexpand = true;
     st->drag_col   = -1;
+    st->hover_at    = -1;
+    st->hover_shown = -1;
 
     /* `g_object_ref` because the selection takes ownership of what it is given
      * (transfer full) and the state keeps the store too: without it the model
@@ -4925,6 +5076,12 @@ static void build_table(BtaWidget *w)
     gtk_event_controller_set_propagation_phase(motion, GTK_PHASE_CAPTURE);
     g_signal_connect(motion, "motion", G_CALLBACK(on_header_motion), w);
     gtk_widget_add_controller(w->inner, motion);
+
+    /* The row under the pointer, for `Hover`. */
+    GtkEventController *hover = gtk_event_controller_motion_new();
+    g_signal_connect(hover, "motion", G_CALLBACK(on_rows_motion), w);
+    g_signal_connect(hover, "leave", G_CALLBACK(on_rows_leave), w);
+    gtk_widget_add_controller(w->inner, hover);
 
     GtkEventController *release = gtk_event_controller_legacy_new();
     gtk_event_controller_set_propagation_phase(release, GTK_PHASE_CAPTURE);
@@ -7221,6 +7378,13 @@ static const JSCFunctionListEntry table_props[] = {
      *   totals
      */
     JS_CGETSET_DEF("Headers",     table_get_headers,   table_set_headers),
+    /* HoverRow
+     *   the row drawn as if the pointer were over it, by position as shown,
+     *   `-1` for none: what a table beside this one assigns from its own
+     *   `Hover`, so two tables that are one grid light the same row. The
+     *   pointer's own row is the theme's and is not this
+     */
+    JS_CGETSET_DEF("HoverRow",    table_get_hover_row, table_set_hover_row),
     /* RowHeight
      *   how tall one row is, as GTK measured it. `0` while the table holds no
      *   row or has not been laid out
@@ -7593,9 +7757,13 @@ void bta_table_register(void)
          *   and `width` the pixels it has now. Raised while the drag moves.
          *   Not raised by assigning `Columns`
          */
+        /* Hover(row)
+         *   the pointer moved onto another row: its position as shown, or
+         *   `-1` when it left the rows. Once per row, not per motion
+         */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
-                            "Select,Activate,Data,Filter,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,ColumnMove,Scroll,ColumnResize"),
+                            "Select,Activate,Data,Filter,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,ColumnMove,Scroll,ColumnResize,Hover"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

@@ -9974,6 +9974,15 @@
           "Native": true
         },
         {
+          "Name": "HoverRow",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the row drawn as if the pointer were over it, by position as shown, `-1` for none: what a table beside this one assigns from its own `Hover`, so two tables that are one grid light the same row. The pointer's own row is the theme's and is not this",
+          "Native": true
+        },
+        {
           "Name": "Index",
           "Kind": "Property",
           "Params": -1,
@@ -10291,6 +10300,11 @@
           "Name": "ColumnResize",
           "Signature": "(column, width)",
           "Doc": "the person dragged a heading's edge: `column` is the declared index and `width` the pixels it has now. Raised while the drag moves. Not raised by assigning `Columns`"
+        },
+        {
+          "Name": "Hover",
+          "Signature": "(row)",
+          "Doc": "the pointer moved onto another row: its position as shown, or `-1` when it left the rows. Once per row, not per motion"
         },
         {
           "Name": "MouseDown",
@@ -12967,7 +12981,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the CSS classes it wears, space separated: `\"card title-3\"`. **The first thing to reach for**: the theme draws `suggested-action`, `destructive-action`, `dim-label`, `title-1`…`title-4`, `heading`, `card`, `frame`, `boxed-list`, `toolbar`, `flat`, `linked`, `pill`, `monospace`. A name that could not be a class is refused",
+          "Doc": "the CSS classes it wears, space separated: `\"card title-3\"`. **The first thing to reach for**: the theme draws `suggested-action`, `destructive-action`, `dim-label`, `title-1`…`title-4`, `heading`, `card`, `frame`, `boxed-list`, `toolbar`, `flat`, `linked`, `pill`, `monospace`; the runtime adds `shared-selection`, for a container whose tables are one grid: their selection is drawn as focused while any of them has the focus. A name that could not be a class is refused",
           "Native": true
         },
         {

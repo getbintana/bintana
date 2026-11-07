@@ -593,6 +593,10 @@ const TESTS = [
     "TableReorderDrag",
     /* And a heading clicked in a right-to-left table. */
     "TableRtlHeadings",
+    /* And a heading's edge dragged, the widths and the horizontal position. */
+    "TableColumnResize",
+    /* And the row under the pointer, said and drawn beside. */
+    "TableHover",
     "SingleInstance",
     /* Blocking too: a console child under `--profile`, whose capture the
      * parent reads back. */
@@ -667,10 +671,8 @@ const TESTS = [
     "HttpServerHold",
     /* Async: lib/datagrid, laid out and scrolled. */
     "DataGrid",
-    /* A child: examples/sales' self-test. */
+    /* Async: examples/sales' self-test, a child with no pointer. */
     "ExampleSales",
-    /* Async-ish: a child with a real pointer on a heading's edge. */
-    "TableColumnResize",
     "DebuggerOrders",
     /* Async: the debugger in a module, plain and brought in by an import. */
     "ModulesDebugger",
@@ -6724,17 +6726,24 @@ class Form1 extends Form {
             print("ExampleSales: examples/sales is not beside this suite; skipped");
             return;
         }
-        const ran = Exec.Wait([Application.Executable, dir, "--selftest"], { Timeout: 20000 });
-        eq("the example's self-test ends cleanly", ran.ExitCode, 0, ran.Output);
-        eq("...and saw what the example is for", ran.Output.trim().split("\n").filter((l) => !l.startsWith("MESA")).join("\n"),
-           "rows 400\n" +
-           "frozen Sale,Client\n" +
-           "totals 8101 72174411.50\n" +
-           "edit refused false\n" +
-           "edit kept 10 amount 84000.00\n" +
-           "filter keeps 48\n" +
-           "copy V-1002|Casa Rivas\n" +
-           "sorted true");
+        waiting++;
+        const lines = [];
+        Exec([Application.Executable, dir, "--selftest"], { Timeout: 20000 }, (line) => lines.push(line), (code) => {
+          waiting--;
+          const output = lines.join("\n");
+          try {
+            eq("the example's self-test ends cleanly", code, 0, output);
+            eq("...and saw what the example is for", output.trim().split("\n").filter((l) => !l.startsWith("MESA")).join("\n"),
+               "rows 400\n" +
+               "frozen Sale,Client\n" +
+               "totals 8101 72174411.50\n" +
+               "edit refused false\n" +
+               "edit kept 10 amount 84000.00\n" +
+               "filter keeps 48\n" +
+               "copy V-1002|Casa Rivas\n" +
+               "sorted true");
+          } catch (e) { check("ExampleSales answered without throwing", false, String(e)); }
+        });
     }
 
     /* --- DataGrid -----------------------------------------------------------
@@ -6772,6 +6781,14 @@ class Form1 extends Form {
         eq("the totals are worked out exactly, avg rounded",
            g.Totals().join("|"), "||174|36.88|||");
         eq("...and drawn under their columns", `${g.MainTotals.Cell(0, 0)} ${g.MainTotals.Cell(0, 1)}`, "174 36.88");
+        g.MainView.Emit("Hover", 4);
+        eq("the row under the pointer in one half is lit in the other", g.FrozenView.HoverRow, 4);
+        g.FrozenView.Emit("Hover", 2);
+        g.MainView.Emit("Hover", -1);
+        eq("...both ways, and none once it leaves",
+           `${g.MainView.HoverRow} ${g.FrozenView.HoverRow}`, "2 -1");
+        g.MainTotals.Emit("Hover", 0);
+        eq("the row of totals is lit in both halves too", g.FrozenTotals.HoverRow, 0);
 
         const selects = [];
         g.On("Select", () => selects.push(g.Index));
@@ -6797,6 +6814,15 @@ class Form1 extends Form {
                 g.FrozenView.Index = 5;
                 eq("a row chosen in one half is chosen in the other", g.MainView.Index, 5);
                 eq("...and the grid says so once", selects.join(), "5");
+                g.FrozenTotals.Index = 0;
+                eq("the row of totals chosen is chosen in both halves", g.MainTotals.Index, 0);
+                eq("...and lets go of the rows, in both", `${g.Index} ${g.FrozenView.Index} ${g.MainView.Index}`, "-1 -1 -1");
+                eq("...which the grid says", selects.join(), "5,-1");
+                g.MainView.Index = 5;
+                eq("a row chosen again lets go of the totals, in both",
+                   `${g.FrozenTotals.Index} ${g.MainTotals.Index}`, "-1 -1");
+                eq("...and is the grid's", `${g.Index} ${g.FrozenView.Index}`, "5 5");
+                eq("...and said", selects.join(), "5,-1,5");
 
                 eq("an edit is said by declared column and kept",
                    g.MainView.Emit("CellEdit", 0, 0, "10", "enter"), "10");
@@ -10375,6 +10401,98 @@ class Form1 extends Form {
         eq("...and ScrollX clamps to ScrollMaxX", out.clampedX, out.maxX);
         eq("a table can hide its headings", `${out.headers} ${out.bareHeight}`, "false 0");
         eq("...and then answers the width a column was fixed at", out.bareWidths.join(), "70");
+    }
+
+    testTableHover() {
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real pointer: it needs xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "table-hover");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "tablehover", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 520, Height: 260 } });
+        File.Save(File.Join(proj, "Form1.js"), `
+class Form1 extends Form {
+    Form_Open() {
+        const make = (name, x) => {
+            const t = new TableView();
+            t.Name = name;
+            t.Move(x, 0); t.Resize(200, 240);
+            t.Columns = [{ Text: name, Width: 150 }];
+            for (let i = 0; i < 6; i++) t.Add([name + i]);
+            this.Add(t);
+            return t;
+        };
+        this.t = make("T", 0);
+        this.o = make("O", 260);
+        this.log = []; this.mirrored = [];
+        this.dir = Application.Directory;
+        const o = this.o;
+        this.start = o.HoverRow;
+        o.HoverRow = 3;   this.set = o.HoverRow;
+        o.HoverRow = -7;  this.cleared = o.HoverRow;
+        try { o.HoverRow = "row"; this.refused = "no"; } catch (e) { this.refused = e.name; }
+        this.wait();
+    }
+    T_Hover(row) { this.log.push(row); this.o.HoverRow = row; this.mirrored.push(this.o.HoverRow); }
+    wait() {
+        const t = this.t;
+        if (!(t.HeaderHeight > 0 && t.RowHeight > 0)) { Timer.After(50, () => this.wait()); return; }
+        const b = t.Bounds(), top = b.Y + t.HeaderHeight;
+        const at = (y) => Math.round(y);
+        File.Save(this.dir + "/geom", [b.X + 40, at(top + t.RowHeight * 2.5), at(top + t.RowHeight * 0.5),
+                                       at(b.Y + t.HeaderHeight / 2), b.X + 230].join(" "));
+        this.poll();
+    }
+    poll() {
+        if (!File.Exists(this.dir + "/done")) { Timer.After(30, () => this.poll()); return; }
+        File.SaveJson(this.dir + "/out.json", {
+            log: this.log, mirrored: this.mirrored, start: this.start, set: this.set,
+            cleared: this.cleared, refused: this.refused, last: this.o.HoverRow,
+        });
+        Application.Quit(0);
+    }
+}
+`);
+        for (const gone of ["geom", "out.json", "done"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        /* Each place twice, a pixel apart: a jump is a crossing, and the
+         * second position is the motion. */
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/geom\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "read x row2 row0 head away < \"$dir/geom\"\n" +
+                  "sleep 0.3\n" +
+                  "for y in $row2 $row0 $head; do xdotool mousemove $x $y; sleep 0.1; xdotool mousemove $(($x+1)) $y; sleep 0.2; done\n" +
+                  "xdotool mousemove $x $row0; sleep 0.1; xdotool mousemove $(($x+1)) $row0; sleep 0.2\n" +
+                  "xdotool mousemove $away $row0; sleep 0.1; xdotool mousemove $(($away+1)) $row0; sleep 0.3\n" +
+                  ": > \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj], { Timeout: 20000 });
+        let out = null;
+        try { out = File.LoadJson(File.Join(proj, "out.json")); } catch (e) { out = null; }
+        check("the child answered", out !== null, ran.Output);
+        if (!out) return;
+
+        eq("the pointer over a row raises Hover with its position, once a row; the headings and leaving are -1",
+           out.log.join(), "2,0,-1,0,-1");
+        eq("HoverRow is the row drawn as hovered from code, -1 for none at first", out.start, -1);
+        eq("...it keeps what it is given", out.set, 3);
+        eq("...and anything below 0 is none", out.cleared, -1);
+        eq("...and refuses what is not a number", out.refused, "TypeError");
+        eq("a table beside it follows, row for row", out.mirrored.join(), "2,0,-1,0,-1");
+        eq("...and is left with none once the pointer is gone", out.last, -1);
     }
 
     testTableReorderDrag() {

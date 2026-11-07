@@ -6888,6 +6888,18 @@ binds it -- so a test listens with `On`; and a script library's helpers are
 globals in every project that `uses` it (`api.sh`'s count of top-level names
 in `lib/` went from 38 to 43), so it is a module and exports `DataGrid` alone.
 
+**Two tables that are one grid draw two selections unless told otherwise.**
+The theme greys a selected row whose list does not hold the focus
+(`listview:not(:focus-within) > row:selected`), so `lib/datagrid` showed the
+same rows blue in the half clicked and grey in the other. The answer is a rule
+in `runtime/css/base.css`, not a property: a container wearing
+`shared-selection` draws the unfocused tables' selection with the theme's
+`@theme_selected_bg_color`/`fg_color` while any table inside has the focus.
+There is no widget snapshot to assert it with from a test; it was measured on
+an `Xvfb` with `xfwm4` and `tests/probe.sh pixel` -- the frozen half
+`srgb(197,197,197)` without the class, `srgb(53,132,228)` with it, and both
+grey once the focus moved to a button.
+
 ---
 
 # docs/agents/ide.md
