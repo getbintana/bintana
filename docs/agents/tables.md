@@ -585,3 +585,34 @@ last item had a widget. Measured with two plain tables too: no grid needed.
   not claimed.
 - `CurrentCell` on a row already selected leaves the selection alone, so Tab
   along a row of a `MultiSelect` grid keeps the rows chosen.
+
+## A fold the person made, a tree's batch, and a tree with no outline
+
+**`NodeToggle(key, open)`.** GTK has no fold signal on the view; each
+`GtkTreeListRow` says `notify::expanded`. The row bound to the expander
+column is watched while bound (`FOLD_*` keys on the list item, connected in the
+bind, taken off in the unbind). Two things measured:
+
+- **Closing a parent says `expanded` on its children too**, as GTK drops their
+  rows: closing `a` reported `a1` and `a2`. So the report waits for an idle --
+  no JavaScript inside GTK's change to the flattened list either -- and then
+  goes out only for a node that still has a row and is still as reported.
+- **The keyboard does not fold a table's node**: `+`, `-` and Shift+Left on a
+  focused row did nothing on 4.22, since `GtkTreeExpander`'s bindings want the
+  focus on the expander. The event promises the arrow only.
+- Verbs (`ExpandNode` …) and `AutoExpand` bump `folding`, and raise nothing:
+  a handler mirroring one table into another must not hear its own doing.
+
+**`AddRows(rows, nodes)`** -- the tree's batch. A node added with `Add` is one
+`items-changed` through the tree model and GTK's list item manager walks the
+list each time: `lib/datagrid` grouping by node took 0.8 s for 2000 rows,
+7 s for 10 000 and 23 s for 20 000 (RelWithDebInfo). In one batch -- children
+of a parent new in the batch appended before it is shown, the rest one
+`splice` per parent already shown and one for the roots -- 20 000 is 0.23 s.
+**`Style` with the node** for the same reason: 640 `SetStyle` calls on group
+rows were 390 of the 480 ms grouping 2000 rows.
+
+**`Tree: false` on every column** draws no outline at all (`carrier = -1`):
+the rows nest and fold, with no arrow and no indent. The grid's scrolling half
+uses it: with the outline, its first column's dates were indented and cut, and
+an arrow sat there that folded nothing the frozen half's did not already.

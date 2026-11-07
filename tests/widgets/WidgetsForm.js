@@ -600,6 +600,8 @@ const TESTS = [
     /* And Tab: out of a table and back without choosing a row, and a grid's
      * cells walked across both halves. */
     "TableTab",
+    /* And a node folded with its arrow. */
+    "TableNodeToggle",
     "SingleInstance",
     /* Blocking too: a console child under `--profile`, whose capture the
      * parent reads back. */
@@ -674,6 +676,8 @@ const TESTS = [
     "HttpServerHold",
     /* Async: lib/datagrid, laid out and scrolled. */
     "DataGrid",
+    /* Async: lib/datagrid grouped -- two trees folded alike. */
+    "DataGridGroups",
     /* Async: examples/sales' self-test, a child with no pointer. */
     "ExampleSales",
     "DebuggerOrders",
@@ -6744,7 +6748,10 @@ class Form1 extends Form {
                "edit kept 10 amount 84000.00\n" +
                "filter keeps 48\n" +
                "copy V-1002|Casa Rivas\n" +
-               "sorted true");
+               "sorted true\n" +
+               "grouped Centro (120), Litoral (83), Norte (93), Sur (104)\n" +
+               "group total 22743643.00\n" +
+               "folded true");
           } catch (e) { check("ExampleSales answered without throwing", false, String(e)); }
         });
     }
@@ -6756,6 +6763,90 @@ class Form1 extends Form {
      * four tables kept in line by properties every table has. Every column is
      * its declared index, whichever half draws it.
      */
+    /*
+     * `lib/datagrid` grouped: both halves are trees built alike, a group's row
+     * over its rows with its value, its count and its own totals, folded in
+     * both halves at once, and the grid still speaking of rows by index.
+     */
+    testDataGridGroups() {
+        const g = new DataGrid();
+        this.Fixed1.Add(g);
+        g.Resize(480, 300);
+        g.Columns = [
+            { Text: "Code", Width: 60 }, { Text: "Client", Width: 110 },
+            { Text: "Qty", Width: 70, Total: "sum", Editor: "Text" },
+            { Text: "Price", Width: 80, Total: "avg", Decimals: 2 },
+        ];
+        g.Frozen = 2;
+        g.AddRows([["a", "Rivas", 2, "10"], ["b", "Molino", 3, "20"], ["c", "Rivas", 5, "30"],
+                   ["d", "Alba", 1, "40"], ["e", "Molino", 4, "50"]]);
+        const selects = [];
+        g.On("Select", () => selects.push(g.Index));
+        const edits = [];
+        g.On("CellEdit", (row, column, text) => { edits.push(`${row}:${column}:${text}`); });
+
+        throws("GroupBy is a column or -1", () => { g.GroupBy = -2; });
+        g.GroupBy = 1;
+        eq("GroupBy answers the column", g.GroupBy, 1);
+        eq("the groups in the order of their value, each its rows in the grid's order",
+           g.groups.map((x) => `${x.value}:${x.rows.join("")}`).join(" "), "Alba:3 Molino:14 Rivas:02");
+        const F = g.FrozenView, M = g.MainView;
+        eq("a group's row says its value and how many, in the first column",
+           F.Cell("g2", 1), "Rivas (2)");
+        eq("...and each total worked out over its rows alone", `${M.Cell("g2", 0)} ${M.Cell("g2", 1)}`, "7 20.00");
+        eq("the grand totals are the grid's still", g.Totals().slice(2).join(" "), "15 30.00");
+        eq("a row is under its group in both halves", `${F.Cell("r2", 0)} ${M.Cell("r2", 0)}`, "c 5");
+
+        g.Index = 2;
+        eq("Index is a row's index, grouped as flat", g.Index, 2);
+        eq("...selected in both halves", `${F.Key} ${M.Key}`, "r2 r2");
+        eq("Selection too", g.Selection.join(), "2");
+
+        M.Emit("NodeToggle", "g2", false);
+        eq("a group folded in one half folds in the other", F.Expanded("g2"), false);
+        F.Emit("NodeToggle", "g2", true);
+        eq("...both ways", M.Expanded("g2"), true);
+
+        g.CollapseAll();
+        eq("CollapseAll folds every group in both halves",
+           [F, M].map((v) => g.groups.map((x) => v.Expanded(x.key)).join()).join(" | "),
+           "false,false,false | false,false,false");
+        g.ExpandAll();
+        eq("ExpandAll opens them", M.Expanded("g0") && F.Expanded("g1"), true);
+
+        M.Emit("NodeToggle", "g1", false);
+        g.Add(["f", "Molino", 6, "60"]);
+        eq("a row added lands in its group", g.groups[1].rows.join(), "1,4,5");
+        eq("...and a group folded stays folded across the rebuild", `${F.Expanded("g1")} ${M.Expanded("g1")}`, "false false");
+        eq("...its total with it", M.Cell("g1", 0), "13");
+        g.ExpandAll();
+
+        eq("a group's row opens no editor", M.Emit("CellEditor", "g2", 0), false);
+        eq("...and a row of data does", M.Emit("CellEditor", "r0", 0), undefined);
+        eq("...nor is an edit kept there", M.Emit("CellEdit", "g2", 0, "9", "enter"), false);
+        eq("a row's edit is said by index and declared column", M.Emit("CellEdit", "r0", 0, "7", "enter"), "7");
+        eq("...", edits.join(), "0:2:7");
+        eq("...and the group's total follows", M.Cell("g2", 0), "12");
+
+        g.SetCell(3, 1, "Rivas");
+        eq("a row whose group's value changed moves to that group",
+           g.groups.map((x) => `${x.value}:${x.rows.join("")}`).join(" "), "Molino:145 Rivas:023");
+
+        M.Emit("Sort", 0, false);
+        eq("sorting sorts within each group -- Qty, down", g.groups.map((x) => x.rows.map((i) => g.Cell(i, 0)).join("")).join(" "),
+           "feb acd");
+        F.Emit("Sort", 1, false);
+        eq("sorting by the group's column orders the groups", g.groups.map((x) => x.value).join(), "Rivas,Molino");
+
+        g.On("Filter", (row) => g.Cell(row, 0) !== "d");
+        g.Refilter();
+        eq("the filter is asked as the trees are built", g.groups.map((x) => `${x.value}:${x.rows.length}`).join(), "Rivas:2,Molino:3");
+
+        g.GroupBy = -1;
+        eq("GroupBy -1 is a flat grid again", `${F.Cell(0, 0)} ${M.Count}`, `${g.Cell(0, 0)} 6`);
+        g.Delete();
+    }
+
     testDataGrid() {
         const g = new DataGrid();
         this.Fixed1.Add(g);
@@ -10600,6 +10691,84 @@ class Form1 extends Form {
         eq("...Shift+Tab walks back to its first cell", log[11], "-1 1 0 0 0:0 frozen");
         eq("...and past it the focus leaves the grid, the rows as they were",
            log[12], "-1 1 0 0 0:0 R");
+    }
+
+    testTableNodeToggle() {
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real pointer: it needs xdotool)");
+            return;
+        }
+
+        const proj = File.Join(SCRATCH, "table-node-toggle");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "tablenodetoggle", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 400, Height: 300 } });
+        File.Save(File.Join(proj, "Form1.js"), `
+class Form1 extends Form {
+    Form_Open() {
+        const t = new TableView(); t.Name = "T"; t.Move(10, 10); t.Resize(300, 260);
+        t.Columns = [{ Text: "Name", Width: 150 }, { Text: "N", Width: 60 }];
+        t.Add(["a", "1"], { Key: "a" });
+        t.Add(["a1", "2"], { Key: "a1", Parent: "a" });
+        t.Add(["a2", "3"], { Key: "a2", Parent: "a" });
+        t.Add(["b", "4"], { Key: "b" });
+        t.Add(["b1", "5"], { Key: "b1", Parent: "b" });
+        this.Add(t); this.t = t; this.log = [];
+        this.dir = Application.Directory;
+        this.wait();
+    }
+    T_NodeToggle(key, open) { this.log.push(key + ":" + open); }
+    wait() {
+        const t = this.t;
+        if (!(t.RowHeight > 0)) { Timer.After(50, () => this.wait()); return; }
+        t.CollapseNode("a"); t.ExpandNode("a"); t.CollapseAll(); t.ExpandAll();
+        Timer.After(200, () => {
+            this.verbs = this.log.slice();
+            const b = t.Bounds();
+            File.Save(this.dir + "/geom", [b.X + 12, Math.round(b.Y + t.HeaderHeight + t.RowHeight / 2)].join(" "));
+            this.poll();
+        });
+    }
+    poll() {
+        if (!File.Exists(this.dir + "/done")) { Timer.After(30, () => this.poll()); return; }
+        File.SaveJson(this.dir + "/out.json", { verbs: this.verbs, log: this.log,
+                                                open: this.t.Expanded("a") });
+        Application.Quit(0);
+    }
+}
+`);
+        for (const gone of ["geom", "out.json", "done"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/geom\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "read x y < \"$dir/geom\"\n" +
+                  "sleep 0.3\n" +
+                  "xdotool mousemove $x $y click 1; sleep 0.5\n" +
+                  "xdotool mousemove $x $y click 1; sleep 0.5\n" +
+                  "xdotool mousemove $x $y click 1; sleep 0.5\n" +
+                  ": > \"$dir/done\"\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj], { Timeout: 20000 });
+        let out = null;
+        try { out = File.LoadJson(File.Join(proj, "out.json")); } catch (e) { out = null; }
+        check("the child answered", out !== null, ran.Output);
+        if (!out) return;
+
+        eq("folding from code raises no NodeToggle", out.verbs.join(), "");
+        eq("a node's arrow clicked raises NodeToggle with its key and whether it is open, "
+           + "and not for the children a closing parent hides",
+           out.log.join(), "a:false,a:true,a:false");
+        eq("...the state it reports is the table's", out.open, false);
     }
 
     testTableReorderDrag() {
@@ -20291,6 +20460,33 @@ class Form1 extends Form {
         tree.Add(["root", "0"], { Key: "r" });
         throws("a tree refuses a batch of rows", () => tree.AddRows([["x", "1"]]));
         eq("and its rows are untouched", tree.Count, 1);
+
+        /* **With the nodes beside them it is a tree's batch**: one change per
+         * parent, a parent earlier in the same batch or already there. */
+        tree.AddRows([["g", "1"], ["g1", "2"], ["g2", "3"], ["r1", "4"]],
+                     [{ Key: "g", Style: "heading" }, { Key: "g1", Parent: "g" },
+                      { Key: "g2", Parent: "g" }, { Key: "r1", Parent: "r" }]);
+        eq("a tree's batch adds every node", tree.Count, 5);
+        eq("...under a parent from the same batch", `${tree.Cell("g2", 0)} ${tree.Expanded("g")}`, "g2 true");
+        eq("...and under one already there, opened as Add opens it", `${tree.Cell("r1", 1)} ${tree.Expanded("r")}`, "4 true");
+        throws("one node per row", () => tree.AddRows([["x"]], []));
+        throws("a node with no Key is refused", () => tree.AddRows([["x"]], [{ Parent: "g" }]));
+        throws("a key already there is refused", () => tree.AddRows([["x"]], [{ Key: "g1" }]));
+        throws("a key given twice is refused",
+               () => tree.AddRows([["x"], ["y"]], [{ Key: "k" }, { Key: "k" }]));
+        throws("a parent that is nowhere is refused",
+               () => tree.AddRows([["x"], ["y"]], [{ Key: "ok" }, { Key: "y", Parent: "nope" }]));
+        eq("...and a refused batch adds none of it, not even its good nodes",
+           `${tree.Count} ${tree.Exists("ok")}`, "5 false");
+        throws("nodes is an array", () => tree.AddRows([["x"]], { Key: "x" }));
+
+        const fresh = new TableView();
+        this.Fixed1.Add(fresh);
+        fresh.Name = "BatchFresh";
+        fresh.Columns = [{ Text: "A" }];
+        fresh.AddRows([["a"], ["b"]], [{ Key: "a" }, { Key: "b", Parent: "a" }]);
+        eq("a flat table's first batch of nodes makes it a tree", `${fresh.Count} ${fresh.Cell("b", 0)}`, "2 b");
+        fresh.Delete();
         tree.Delete();
 
         /* **Asked again after the rows are read**: reading a row runs the

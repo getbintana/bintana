@@ -28,6 +28,15 @@
           }
         },
         {
+          "type": "ComboBox",
+          "name": "CmbGroup",
+          "properties": {
+            "Items": ["No groups", "By client", "By region"],
+            "Index": 0,
+            "AccessibleName": "Group"
+          }
+        },
+        {
           "type": "Label",
           "name": "LblCount",
           "properties": {

@@ -290,6 +290,11 @@ typedef struct {
     int            hover_shown;
     bool           hover_painted;
 
+    /* **Folding from code is not a `NodeToggle`**: above zero while a verb
+     * or `AutoExpand` opens or closes nodes, so the rows' `notify::expanded`
+     * it causes is not reported as the person's. */
+    int            folding;
+
     /* **The current cell**: the row the reader is on, held, and its column.
      * `NULL` when there is none. The row is held so the address survives the
      * store telling its cells changed; the verbs that empty a table -- `Clear`,
@@ -576,12 +581,16 @@ static GtkTreeListRow *table_row_of(BtaWidget *w, BtaTableRow *node)
 
 static void table_set_expanded(BtaWidget *w, BtaTableRow *node, bool open)
 {
+    table_state(w)->folding++;
     bta_tree_set_expanded(w, table_tree_model(w), node, open, &table_shape);
+    table_state(w)->folding--;
 }
 
 static void table_reveal(BtaWidget *w, BtaTableRow *node, bool with_node)
 {
+    table_state(w)->folding++;
     bta_tree_reveal(w, table_tree_model(w), node, with_node, &table_shape);
+    table_state(w)->folding--;
 }
 
 /* The node a key names, or NULL. */
@@ -3418,6 +3427,104 @@ static void cell_of(BtaWidget *w, BtaTableRow *row, guint col,
  * `unbind` has to disconnect, or the next node to use this row keeps the
  * previous one's watch. `TreeView` learned it first.
  */
+/*
+ * **A node opened or closed by the person: `NodeToggle(key, open)`.** GTK has
+ * no signal for it on the view; each `GtkTreeListRow` says `notify::expanded`,
+ * and only a row drawn can be clicked open, so the row bound to
+ * the column with the expander is watched while it is bound -- connected in
+ * the bind, taken off in the unbind (`FOLD_ROW_KEY`, `FOLD_HANDLER_KEY`).
+ * Folding from code raises nothing: `folding` is up while a verb or
+ * `AutoExpand` runs.
+ *
+ * **Raised from an idle**: the notify comes from inside GTK changing the
+ * flattened list, which no JavaScript may run in -- a handler that removed the
+ * node there would pull rows out from under it. The idle holds a weak ref to
+ * the table and the node; a node the table no longer holds by its key by then
+ * is not reported. The keyboard does not fold a table's node at all (`+`, `-`
+ * and Shift+Left on a focused row did nothing, measured on 4.22): the
+ * expander's own bindings need the focus on the expander, which a row never
+ * hands it.
+ */
+#define FOLD_ROW_KEY     "bta-fold-row"
+#define FOLD_HANDLER_KEY "bta-fold-handler"
+#define FOLD_WIDGET_KEY  "bta-fold-widget"
+
+typedef struct {
+    GWeakRef     table;
+    BtaTableRow *node;
+    bool         open;
+} FoldReport;
+
+static gboolean fold_report_cb(gpointer p)
+{
+    FoldReport *r = p;
+    GObject    *g = g_weak_ref_get(&r->table);
+    BtaWidget  *w = g ? g_object_get_data(g, BTA_WIDGET_QUARK) : NULL;
+
+    /* **Only a node still drawn, and still as it was reported.** Folding a
+     * parent drops its children's rows, and GTK says `expanded` on each as it
+     * goes -- measured: closing `a` reported `a1` and `a2` too. A node with no
+     * row now, or whose state moved again, is not the person's fold. */
+    GtkTreeListRow *row = w && r->node->key && table_node(w, r->node->key) == r->node
+                        ? table_row_of(w, r->node) : NULL;
+    bool            now = row && gtk_tree_list_row_get_expanded(row) == r->open;
+
+    g_clear_object(&row);
+    if (now) {
+        JSContext *ctx  = w->ctx;
+        JSValue    self = JS_DupValue(ctx, w->self);
+        JSValue    argv[2] = { JS_NewString(ctx, r->node->key), JS_NewBool(ctx, r->open) };
+
+        bta_emit(w, "NodeToggle", 2, argv);
+        JS_FreeValue(ctx, argv[0]);
+        JS_FreeValue(ctx, self);
+    }
+    if (g)
+        g_object_unref(g);
+    return G_SOURCE_REMOVE;
+}
+
+static void fold_report_free(gpointer p)
+{
+    FoldReport *r = p;
+
+    g_weak_ref_clear(&r->table);
+    g_object_unref(r->node);
+    g_free(r);
+}
+
+static void on_row_folded(GObject *obj, GParamSpec *pspec, gpointer item)
+{
+    BtaWidget   *w = g_object_get_data(G_OBJECT(item), FOLD_WIDGET_KEY);
+    BtaTableRow *node;
+
+    (void)pspec;
+    if (!w || table_state(w)->folding)
+        return;
+    node = gtk_tree_list_row_get_item(GTK_TREE_LIST_ROW(obj));
+    if (!node)
+        return;
+
+    FoldReport *r = g_new0(FoldReport, 1);
+
+    g_weak_ref_init(&r->table, w->gtk);
+    r->node = node;                         /* owned: get_item gave a reference */
+    r->open = gtk_tree_list_row_get_expanded(GTK_TREE_LIST_ROW(obj));
+    g_idle_add_full(G_PRIORITY_DEFAULT, fold_report_cb, r, fold_report_free);
+}
+
+/* What a bind connected on its row for `NodeToggle`, taken off. */
+static void fold_unwatch(GtkListItem *item)
+{
+    GObject *row = g_object_get_data(G_OBJECT(item), FOLD_ROW_KEY);
+    gulong   id  = GPOINTER_TO_SIZE(g_object_get_data(G_OBJECT(item), FOLD_HANDLER_KEY));
+
+    if (row && id)
+        g_signal_handler_disconnect(row, id);
+    g_object_set_data(G_OBJECT(item), FOLD_HANDLER_KEY, NULL);
+    g_object_set_data(G_OBJECT(item), FOLD_ROW_KEY, NULL);
+}
+
 static void update_expander(GListModel *children, guint pos, guint removed,
                             guint added, gpointer expander)
 {
@@ -3439,6 +3546,7 @@ static void on_unbind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
     g_object_set_data(G_OBJECT(item), WATCH_HANDLER_KEY, NULL);
     g_object_set_data(G_OBJECT(item), WATCH_MODEL_KEY, NULL);
     cell_unwatch_row(item);
+    fold_unwatch(item);
 
     /* A row being recycled must not answer for the one that had this cell: the
      * edit that finishes after the rebind would be reported with a stale
@@ -3687,6 +3795,14 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
 
             gtk_tree_expander_set_list_row(exp, tr);
             box = gtk_tree_expander_get_child(exp);
+
+            /* The row the person can fold, watched while it is bound. */
+            fold_unwatch(item);
+            g_object_set_data(G_OBJECT(item), FOLD_WIDGET_KEY, w);
+            g_object_set_data_full(G_OBJECT(item), FOLD_ROW_KEY, g_object_ref(tr),
+                                   g_object_unref);
+            g_object_set_data(G_OBJECT(item), FOLD_HANDLER_KEY, GSIZE_TO_POINTER(
+                g_signal_connect(tr, "notify::expanded", G_CALLBACK(on_row_folded), item)));
 
             /* No children, no arrow -- now, and again whenever that changes. */
             if (row && row->children) {
@@ -5320,6 +5436,7 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
     /* The column that said `Tree: true`, and the first one shown: between them
      * they say which column carries the expander, below. */
     int      marked = -1;
+    guint    declined = 0;     /* columns that say `Tree: false` */
     int      shown  = -1;
     bool     first_shown = true, marked_shown = true;
 
@@ -5443,6 +5560,8 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
             goto refuse;
         }
         bool tree_decl = JS_ToBool(ctx, rv) > 0;
+        if (JS_IsBool(rv) && !tree_decl)
+            declined++;
         JS_FreeValue(ctx, rv);
         if (tree_decl && marked >= 0) {
             JS_FreeValue(ctx, col);
@@ -5474,6 +5593,13 @@ static bool table_build_columns(JSContext *ctx, BtaWidget *w, JSValueConst list)
 
     if (!(marked >= 0 ? marked_shown : first_shown) && shown >= 0)
         carrier = shown;
+
+    /* **Every column saying `Tree: false` is a tree with no outline**: no
+     * arrow, no indent, the rows folding all the same -- by `ExpandNode`, or
+     * by a table beside it that draws the outline for both (`lib/datagrid`'s
+     * scrolling half, whose dates the indent had cut short). */
+    if (marked < 0 && n > 0 && declined == n)
+        carrier = -1;
 
     /* Out with the old. Walked backwards because removing shortens the list. */
     table_state(w)->epoch++;
@@ -5714,6 +5840,25 @@ static bool table_fill_cells(JSContext *ctx, BtaTableRow *row, JSValueConst valu
     return true;
 }
 
+/* `Style` in a node's options: the class on every cell of its row -- a group's
+ * heading, a total. One `SetStyle` per cell afterwards tells the list the row
+ * changed each time: 640 of them were 390 ms of `lib/datagrid` grouping 2000
+ * rows. As many cells as the table declares columns, or the row has. */
+static void node_style_all(BtaWidget *w, BtaTableRow *node, const char *style)
+{
+    guint cols = g_list_model_get_n_items(
+        gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner)));
+    guint n    = MAX(cols, node->cells ? node->cells->len : 0);
+
+    if (!style || !*style || !n)
+        return;
+    row_pad(&node->styles, n - 1);
+    for (guint c = 0; c < n; c++) {
+        g_free(node->styles->pdata[c]);
+        node->styles->pdata[c] = g_strdup(style);
+    }
+}
+
 /*
  * `Add(values, { Key, Parent })` -- a row that can have rows under it.
  *
@@ -5731,7 +5876,8 @@ static bool table_fill_cells(JSContext *ctx, BtaTableRow *row, JSValueConst valu
  * and moves when something above it collapses.
  */
 static JSValue table_add_node(JSContext *ctx, BtaWidget *w, JSValueConst values,
-                              const char *key, const char *pkey, const char *icon)
+                              const char *key, const char *pkey, const char *icon,
+                              const char *style)
 {
     if (!*key)
         return JS_ThrowTypeError(ctx, "Add: Key is what addresses a node, so it "
@@ -5774,6 +5920,7 @@ static JSValue table_add_node(JSContext *ctx, BtaWidget *w, JSValueConst values,
         g_free(node->icons->pdata[0]);
         node->icons->pdata[0] = g_strdup(icon);
     }
+    node_style_all(w, node, style);
 
     g_hash_table_insert(st->keys, g_strdup(key), node);
     g_list_store_append(parent ? parent->children : st->rows, node);
@@ -5803,14 +5950,16 @@ static JSValue table_add(JSContext *ctx, JSValueConst this_val,
         JSValue kv = JS_GetPropertyStr(ctx, argv[1], "Key");
         JSValue pv = JS_GetPropertyStr(ctx, argv[1], "Parent");
         JSValue iv = JS_GetPropertyStr(ctx, argv[1], "Icon");
+        JSValue sv = JS_GetPropertyStr(ctx, argv[1], "Style");
 
         if (JS_IsUndefined(kv)) {
             JS_FreeValue(ctx, kv);
             JS_FreeValue(ctx, pv);
             JS_FreeValue(ctx, iv);
+            JS_FreeValue(ctx, sv);
             return JS_ThrowTypeError(ctx, "Add: the options are "
-                                          "{ Key, Parent, Icon } -- a node is a "
-                                          "row with a Key");
+                                          "{ Key, Parent, Icon, Style } -- a node "
+                                          "is a row with a Key");
         }
 
         const char *key  = JS_ToCString(ctx, kv);
@@ -5818,9 +5967,13 @@ static JSValue table_add(JSContext *ctx, JSValueConst this_val,
                                ? NULL : JS_ToCString(ctx, pv);
         const char *icon = JS_IsUndefined(iv) || JS_IsNull(iv)
                                ? NULL : JS_ToCString(ctx, iv);
-        JSValue     out  = key ? table_add_node(ctx, w, argv[0], key, pkey, icon)
+        const char *style = JS_IsUndefined(sv) || JS_IsNull(sv)
+                               ? NULL : JS_ToCString(ctx, sv);
+        JSValue     out  = key ? table_add_node(ctx, w, argv[0], key, pkey, icon, style)
                                : JS_EXCEPTION;
 
+        JS_FreeCString(ctx, style);
+        JS_FreeValue(ctx, sv);
         JS_FreeCString(ctx, icon);
         JS_FreeCString(ctx, pkey);
         JS_FreeCString(ctx, key);
@@ -5876,6 +6029,216 @@ static JSValue table_add(JSContext *ctx, JSValueConst this_val,
  * and a batch of those is a different call with a different shape (one has not
  * been needed yet).
  */
+
+/* A node of a batch as it was read: the row built, and what its options said. */
+typedef struct {
+    BtaTableRow *node;
+    char        *pkey;
+} NodeIn;
+
+static void node_in_clear(NodeIn *in, guint n)
+{
+    for (guint i = 0; i < n; i++) {
+        g_clear_object(&in[i].node);
+        g_free(in[i].pkey);
+    }
+    g_free(in);
+}
+
+/* One option of a node, as text, or NULL when absent; `*bad` on a throw. */
+static char *node_option(JSContext *ctx, JSValueConst opts, const char *name, bool *bad)
+{
+    JSValue v = JS_GetPropertyStr(ctx, opts, name);
+    char   *out = NULL;
+
+    if (JS_IsException(v)) {
+        *bad = true;
+    } else if (!JS_IsUndefined(v) && !JS_IsNull(v)) {
+        const char *s = JS_ToCString(ctx, v);
+
+        if (s) {
+            out = g_strdup(s);
+            JS_FreeCString(ctx, s);
+        } else {
+            *bad = true;
+        }
+    }
+    JS_FreeValue(ctx, v);
+    return out;
+}
+
+/*
+ * `AddRows(rows, nodes)` -- a tree's rows in one change per parent.
+ *
+ * **`Add` with a `Key` is one change to the list per node, and that is
+ * quadratic**, the same curve `AddRows` was made for in a flat table: GTK's
+ * list item manager walks the list on every `items-changed`. `lib/datagrid`
+ * grouping 20 000 rows took 23 s, node by node. Here `nodes[i]` is the options
+ * `Add` takes for `rows[i]` -- `{ Key, Parent, Icon }` -- and a parent may be
+ * a node already in the table or one earlier in the same batch.
+ *
+ * **Everything is read and checked first**, so a refusal leaves the table as
+ * it was: a key that is empty, taken, or given twice, a parent that is
+ * nowhere. Then a node whose parent is new in the batch goes into that
+ * parent's store before the parent is shown -- nothing listens to it yet --
+ * and the rest enter with one `splice` per parent already shown and one for
+ * the roots. `AutoExpand` opens a parent already in the table that gained
+ * children, as `Add` does; new nodes come in open by the model's own flag.
+ */
+static JSValue table_add_nodes(JSContext *ctx, BtaWidget *w, JSValueConst rows,
+                               JSValueConst opts)
+{
+    uint32_t n = 0, m = 0;
+    JSValue  lv = JS_GetPropertyStr(ctx, rows, "length");
+    JSValue  mv = JS_GetPropertyStr(ctx, opts, "length");
+    int      ok = JS_ToUint32(ctx, &n, lv) >= 0 && JS_ToUint32(ctx, &m, mv) >= 0;
+
+    JS_FreeValue(ctx, lv);
+    JS_FreeValue(ctx, mv);
+    if (!ok)
+        return JS_EXCEPTION;
+    if (n != m)
+        return JS_ThrowTypeError(ctx, "AddRows(rows, nodes): one { Key, Parent, "
+                                      "Icon } per row -- %u rows and %u nodes",
+                                 (unsigned)n, (unsigned)m);
+    if (!n)
+        return JS_UNDEFINED;
+
+    NodeIn *in = g_try_new0(NodeIn, n);
+
+    if (!in)
+        return JS_ThrowRangeError(ctx, "AddRows: %u rows is more than there is "
+                                       "memory for", (unsigned)n);
+
+    /* Read: every conversion, which can run the program, before any check. */
+    for (guint i = 0; i < n; i++) {
+        JSValue v = JS_GetPropertyUint32(ctx, rows, i);
+        JSValue o = JS_GetPropertyUint32(ctx, opts, i);
+        bool    bad = JS_IsException(v) || JS_IsException(o);
+        char   *key = NULL, *icon = NULL, *style = NULL;
+
+        if (!bad && (!JS_IsObject(o) || JS_IsArray(o))) {
+            JS_ThrowTypeError(ctx, "AddRows: nodes[%u] is { Key, Parent, Icon }", i);
+            bad = true;
+        }
+        if (!bad) {
+            key        = node_option(ctx, o, "Key", &bad);
+            in[i].pkey = bad ? NULL : node_option(ctx, o, "Parent", &bad);
+            icon       = bad ? NULL : node_option(ctx, o, "Icon", &bad);
+            style      = bad ? NULL : node_option(ctx, o, "Style", &bad);
+        }
+        if (!bad) {
+            BtaTableRow *node = g_object_new(BTA_TYPE_TABLE_ROW, NULL);
+
+            node->key      = key ? key : g_strdup("");
+            key            = NULL;
+            node->children = g_list_store_new(BTA_TYPE_TABLE_ROW);
+            in[i].node     = node;
+            if (!table_fill_cells(ctx, node, v))
+                bad = true;
+            else {
+                if (icon && *icon) {
+                    row_pad(&node->icons, 0);
+                    g_free(node->icons->pdata[0]);
+                    node->icons->pdata[0] = g_strdup(icon);
+                }
+                node_style_all(w, node, style);
+            }
+        }
+        g_free(key);
+        g_free(icon);
+        g_free(style);
+        JS_FreeValue(ctx, v);
+        JS_FreeValue(ctx, o);
+        if (bad) {
+            node_in_clear(in, n);
+            return JS_EXCEPTION;
+        }
+    }
+
+    if (!table_become_tree(ctx, w)) {
+        node_in_clear(in, n);
+        return JS_EXCEPTION;
+    }
+
+    /* Check: against the table as it is now, after the program ran. */
+    TableState *st    = table_state(w);
+    GHashTable *batch = g_hash_table_new(g_str_hash, g_str_equal);
+    JSValue     err   = JS_UNDEFINED;
+
+    for (guint i = 0; i < n && JS_IsUndefined(err); i++) {
+        const char *key  = in[i].node->key;
+        const char *pkey = in[i].pkey;
+
+        if (!*key)
+            err = JS_ThrowTypeError(ctx, "AddRows: nodes[%u] has no Key -- a key "
+                                         "is what addresses a node", i);
+        else if (g_hash_table_contains(st->keys, key) || g_hash_table_contains(batch, key))
+            err = JS_ThrowRangeError(ctx, "AddRows: there is already a node with "
+                                          "the key '%s'", key);
+        else if (pkey && *pkey && !g_hash_table_contains(batch, pkey) && !table_node(w, pkey))
+            err = JS_ThrowRangeError(ctx, "AddRows: there is no node with the key "
+                                          "'%s' to put '%s' under", pkey, key);
+        else
+            g_hash_table_insert(batch, (gpointer)key, in[i].node);
+    }
+    if (!JS_IsUndefined(err)) {
+        g_hash_table_destroy(batch);
+        node_in_clear(in, n);
+        return JS_EXCEPTION;
+    }
+
+    /* Into place: under a new parent now, the rest gathered per store. */
+    GPtrArray  *roots  = g_ptr_array_new();
+    GHashTable *shown  = g_hash_table_new_full(NULL, NULL, NULL,
+                                               (GDestroyNotify)g_ptr_array_unref);
+
+    for (guint i = 0; i < n; i++) {
+        BtaTableRow *node = in[i].node;
+        const char  *pkey = in[i].pkey;
+        BtaTableRow *fresh = pkey && *pkey ? g_hash_table_lookup(batch, pkey) : NULL;
+        BtaTableRow *old   = pkey && *pkey && !fresh ? table_node(w, pkey) : NULL;
+
+        g_hash_table_insert(st->keys, g_strdup(node->key), node);
+        if (fresh) {
+            node->parent = fresh;
+            g_list_store_append(fresh->children, node);
+        } else if (old) {
+            GPtrArray *to = g_hash_table_lookup(shown, old);
+
+            node->parent = old;
+            if (!to)
+                g_hash_table_insert(shown, old, to = g_ptr_array_new());
+            g_ptr_array_add(to, node);
+        } else {
+            g_ptr_array_add(roots, node);
+        }
+    }
+
+    GHashTableIter it;
+    gpointer       parent, list;
+
+    g_hash_table_iter_init(&it, shown);
+    while (g_hash_table_iter_next(&it, &parent, &list)) {
+        GListStore *store = ((BtaTableRow *)parent)->children;
+        GPtrArray  *a     = list;
+
+        g_list_store_splice(store, g_list_model_get_n_items(G_LIST_MODEL(store)),
+                            0, a->pdata, a->len);
+        if (st->autoexpand)
+            table_reveal(w, parent, true);
+    }
+    if (roots->len)
+        g_list_store_splice(st->rows, g_list_model_get_n_items(G_LIST_MODEL(st->rows)),
+                            0, roots->pdata, roots->len);
+
+    g_ptr_array_unref(roots);
+    g_hash_table_destroy(shown);
+    g_hash_table_destroy(batch);
+    node_in_clear(in, n);      /* the stores hold the nodes now */
+    return JS_UNDEFINED;
+}
+
 static JSValue table_add_rows(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
@@ -5887,12 +6250,20 @@ static JSValue table_add_rows(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "AddRows(rows) expects an array of rows, "
                                       "each the array Add(values) takes");
 
+    /* With the nodes beside them, the rows are a tree's. */
+    if (argc > 1 && JS_IsArray(argv[1]))
+        return table_add_nodes(ctx, w, argv[0], argv[1]);
+    if (argc > 1 && !JS_IsUndefined(argv[1]))
+        return JS_ThrowTypeError(ctx, "AddRows(rows, nodes): nodes is an array, "
+                                      "one { Key, Parent, Icon } per row");
+
     TableState *st = table_state(w);
 
     if (st->tree)
         return JS_ThrowTypeError(ctx, "AddRows: this table is a tree -- every "
                                       "row in one is a node, so it needs a key: "
-                                      "Add(values, { Key, Parent })");
+                                      "AddRows(rows, nodes), one { Key, Parent } "
+                                      "per row");
 
     JSValue  lenv = JS_GetPropertyStr(ctx, argv[0], "length");
     uint32_t n    = 0;
@@ -7448,6 +7819,9 @@ static const JSCFunctionListEntry table_props[] = {
      *   index stays the declared one. One column at most says it, a flat table
      *   keeps it for when it becomes a tree, and a marked column that is
      *   `Visible: false` hands the expander to the first column shown.
+     *   **`Tree: false` on every column draws no outline at all**: the rows
+     *   still nest and fold, with no arrow and no indent -- a tree beside
+     *   another table that draws it for both.
      *   **A column is edited or a link, never both**, and a misspelt option is
      *   refused by name
      */
@@ -7605,12 +7979,13 @@ static const JSCFunctionListEntry table_props[] = {
     /* Add(values, [options])
      *   one row, as an array of strings. A row shorter than there are columns
      *   reads `""` for the rest. Clears an on-demand `Count`. **`options` is
-     *   `{ Key, Parent, Icon }`, and a row with a `Key` is a node**: the
-     *   first one makes this table a tree, `Parent` is the key of the node it
-     *   goes under (absent is a root), and `Icon` is the picture for its
-     *   first column — the same one `TreeView.Add` takes, so a node need not
-     *   be added and then decorated. **For many rows at once, `AddRows`**:
-     *   one change to the list instead of one per row
+     *   `{ Key, Parent, Icon, Style }`, and a row with a `Key` is a node**:
+     *   the first one makes this table a tree, `Parent` is the key of the
+     *   node it goes under (absent is a root), `Icon` is the picture for its
+     *   first column — the same one `TreeView.Add` takes — and `Style` the
+     *   theme class on every cell of the row (`"heading"` for a group's), so
+     *   a node need not be added and then decorated. **For many rows at once,
+     *   `AddRows`**: one change to the list instead of one per row
      */
     JS_CFUNC_DEF("Add",     2, table_add),
     /* AddRows(rows)
@@ -7618,11 +7993,16 @@ static const JSCFunctionListEntry table_props[] = {
      *   is one change to the list**, which is what makes filling a table from
      *   a query linear: `Add` appends one item and raises `items-changed` per
      *   call, so the ordinary loop was quadratic — 40 000 rows took 17 s (D3
-     *   of the October audit), and this is a `splice`. Refused on a tree,
-     *   whose rows are nodes with keys, and it clears an on-demand `Count` as
-     *   one `Add` does
+     *   of the October audit), and this is a `splice`. **`AddRows(rows,
+     *   nodes)` is a tree's**: `nodes[i]` is the `{ Key, Parent, Icon, Style }` that
+     *   `Add` takes for `rows[i]`, a parent may be earlier in the same batch,
+     *   and the nodes enter with one change per parent -- grouping 20 000 rows
+     *   node by node took 23 s. A key empty, taken or given twice, or a parent
+     *   that is nowhere, refuses the whole batch before anything changes.
+     *   Without `nodes` it is refused on a tree, and it clears an on-demand
+     *   `Count` as one `Add` does
      */
-    JS_CFUNC_DEF("AddRows", 1, table_add_rows),
+    JS_CFUNC_DEF("AddRows", 2, table_add_rows),
     /* ExpandNode(key)
      *   opens or closes it. Opening opens the way to it too, since a row only
      *   exists once its ancestors are open. Not `Expand`, which is `Widget`'s
@@ -7892,9 +8272,16 @@ void bta_table_register(void)
          *   the pointer moved onto another row: its position as shown, or
          *   `-1` when it left the rows. Once per row, not per motion
          */
+        /* NodeToggle(key, open)
+         *   the person opened or closed a node with its arrow: `key` is the
+         *   node's and `open` whether it is open now. Raised just after, not
+         *   inside the fold, and not for the children a closing parent hides.
+         *   Not raised by `ExpandNode`,
+         *   `CollapseNode`, `ExpandAll`, `CollapseAll` or `AutoExpand`
+         */
         BTA_CLASS_ENUM_TEXT("TableView", "Control", build_table, table_props, false,
                             table_options, "Columns.Text",
-                            "Select,Activate,Data,Filter,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,ColumnMove,Scroll,ColumnResize,Hover"),
+                            "Select,Activate,Data,Filter,Sort,CellEditor,CellEdit,CellChange,CellLink,HeaderClick,ColumnMove,Scroll,ColumnResize,Hover,NodeToggle"),
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }

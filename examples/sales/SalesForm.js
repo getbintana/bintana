@@ -10,6 +10,8 @@
  *   an edit        quantity and price are editable; an edit that does not read
  *                  as a number is refused, and one that does recomputes the
  *                  amount, exactly, with `SetCell` -- the totals follow
+ *   groups         by client or by region: a row per group with its count and
+ *                  its own totals over its sales, folding in both halves
  *   a spreadsheet  *Copy rows* puts the selected rows on the clipboard as
  *                  LibreOffice pastes them, *Paste* writes from the current
  *                  cell (Ctrl+C and Ctrl+V do the same)
@@ -22,7 +24,7 @@
  */
 "use strict";
 
-const CLIENT = 1, PRODUCT = 3, QTY = 4, PRICE = 5, AMOUNT = 6;
+const CLIENT = 1, PRODUCT = 3, QTY = 4, PRICE = 5, AMOUNT = 6, REGION = 7;
 
 class SalesForm extends Form {
 
@@ -54,6 +56,13 @@ class SalesForm extends Form {
         if (!this.filter) return true;
         const r = this.Grid.Row(row);
         return `${r[CLIENT]} ${r[PRODUCT]}`.toLowerCase().includes(this.filter);
+    }
+
+    /* --- groups ------------------------------------------------------------- */
+
+    CmbGroup_Select() {
+        if (!this.Grid || !this.CmbGroup) return;    /* the .form is still loading */
+        this.Grid.GroupBy = [-1, CLIENT, REGION][this.CmbGroup.Index] ?? -1;
     }
 
     /* --- an edit -------------------------------------------------------------- */
@@ -121,6 +130,14 @@ class SalesForm extends Form {
             g.MainView.SortColumn(AMOUNT - 2, false);
             const a = Number(String(g.Cell(0, AMOUNT))), b = Number(String(g.Cell(1, AMOUNT)));
             out.push(`sorted ${a >= b}`);
+
+            this.CmbGroup.Index = 2;
+            const groups = g.groups.map((x) => g.MainView.Cell(x.key, REGION - 2));
+            out.push(`grouped ${groups.join(", ")}`);
+            const first = g.groups[0];
+            out.push(`group total ${g.MainView.Cell(first.key, AMOUNT - 2)}`);
+            g.CollapseAll();
+            out.push(`folded ${g.groups.every((x) => !g.FrozenView.Expanded(x.key) && !g.MainView.Expanded(x.key))}`);
 
             print(out.join("\n"));
             Application.Quit(0);
