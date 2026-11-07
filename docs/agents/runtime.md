@@ -692,6 +692,13 @@ icon when the theme has one by that name (`gtkapplication.c`).
   property works until a `.form` assigns it, which puts an own value on the instance
   and makes the method vanish. That is the `TreeView.Expand`/`ExpandNode` trap, and
   it costs nothing to check first.
+- **Assigning over a method throws now.** `bta_seal_methods` makes every
+  public method (a capital) on each class's prototype not writable, after
+  forms.js's `mixIn`s. `class` still defines its own; only an assignment --
+  a `.form` property, a control's name bound on its form, `x.Fill = true` --
+  is refused, with `TypeError: 'Fill' is read-only`. The suite had two that
+  had passed for months: a test assigning `split.Fill = true` (laying out
+  nothing) and a label named `On` (its form lost `On()`).
 - **A subclass method that shadows a base one is a verb the base loses, and
   `api.sh` cannot see it.** Six controls -- `ListBox`, `RowList`, `TreeView`,
   `TableView`, `Notebook`, `Switcher` -- answered `Remove(index)`/`Remove(key)`

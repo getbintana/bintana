@@ -126,7 +126,8 @@ export class Live {
          * caret rule that goes with it. */
         const found = [...ide.names.curated(text, name, at),
                        ...ide.names.ambiguous(text, name, at),
-                       ...ide.names.unresolved(text, name, at)];
+                       ...ide.names.unresolved(text, name, at),
+                       ...ide.names.shadowing(text, name, at)];
 
         /*
          * **And then the two that need a form beside it, which a module does not

@@ -5224,6 +5224,40 @@ static GHashTable *prelude_index;
  */
 static GHashTable *prelude_mixins;
 
+/*
+ * **And which class each part is**: `formPartTypes.Model = ModelPart;` -- part
+ * name -> the class that implements it. A part's name (`Model`, `Connection`)
+ * is what a `.form` and `Widget.Members` say; its class is a non-global
+ * declaration of another name, which the lookup used to reach only by taking
+ * the first non-global class that had the member.
+ */
+static GHashTable *prelude_parts;
+
+static void parts_scan(GHashTable *into, const char *src)
+{
+    static const char lead[] = "formPartTypes.";
+
+    for (const char *at = src; (at = strstr(at, lead)) != NULL; at += sizeof lead - 1) {
+        const char *p = at + sizeof lead - 1, *name = p;
+
+        while (g_ascii_isalnum(*p) || *p == '_') p++;
+        if (p == name)
+            continue;
+        const char *q = p;
+        while (*q == ' ') q++;
+        if (*q != '=' || q[1] == '=')
+            continue;
+        q++;
+        while (*q == ' ') q++;
+        const char *cls = q;
+        while (g_ascii_isalnum(*q) || *q == '_') q++;
+        if (q == cls || *q == '.')         /* `GLOBAL.Timer`: a global answers itself */
+            continue;
+        g_hash_table_replace(into, g_strndup(name, (gsize)(p - name)),
+                             g_strndup(cls, (gsize)(q - cls)));
+    }
+}
+
 static void mixins_scan(GHashTable *into, const char *src)
 {
     for (const char *at = src; (at = strstr(at, "mixIn(")) != NULL; at += 6) {
@@ -5285,11 +5319,27 @@ static void prelude_mark(JSContext *ctx, JSValue out, uint32_t was,
         prelude_mixins = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
         mixins_scan(prelude_mixins, rad);
         mixins_scan(prelude_mixins, forms);
+        prelude_parts = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+        parts_scan(prelude_parts, rad);
+        parts_scan(prelude_parts, forms);
     }
     DeclClass *d = g_hash_table_lookup(prelude_index, owner);
+
+    /* A part answers from the class that implements it. */
+    if (!d) {
+        const char *impl = g_hash_table_lookup(prelude_parts, owner);
+        if (impl)
+            d = g_hash_table_lookup(prelude_index, impl);
+    }
     DeclMember *m = d ? decl_find(d, member, is_static) : NULL;
 
-    /* A mixin copied into this very class, first; then any mixin. */
+    /* A mixin copied into this very class, first; then any mixin. **Nothing
+     * after that guesses**: the lookup used to end by taking the first class
+     * the prelude declares and never installs that had the member, in a hash
+     * table's order -- which is how `Form.Record` came to read as a model's.
+     * Every name that reached a description that way is a mixin (read off
+     * `mixIn`) or a part (read off `formPartTypes`), and api.json came out the
+     * same without it. */
     if (!m && !is_static) {
         char          *want = g_strdup_printf(" %s ", owner);
         GHashTableIter it;
@@ -5308,26 +5358,6 @@ static void prelude_mark(JSContext *ctx, JSValue out, uint32_t was,
         g_free(want);
     }
 
-    /* **A class the prelude declares and never installs is a mixin**: forms.js
-     * writes the accessors it adds to a class the C made (`Caption`,
-     * `Controls`, `Item`) as a class of their own and copies them across, so
-     * that each is a declaration with a comment above it. What such a class
-     * declares documents that name wherever it was copied to. */
-    if (!m && !is_static) {
-        GHashTableIter it;
-        gpointer       key, val;
-        JSValue        global = JS_GetGlobalObject(ctx);
-        g_hash_table_iter_init(&it, prelude_index);
-        while (!m && g_hash_table_iter_next(&it, &key, &val)) {
-            JSValue g = JS_GetPropertyStr(ctx, global, key);
-            if (JS_IsUndefined(g))
-                m = decl_find(val, member, false);
-            else if (JS_IsException(g))
-                JS_FreeValue(ctx, JS_GetException(ctx));
-            JS_FreeValue(ctx, g);
-        }
-        JS_FreeValue(ctx, global);
-    }
     if (m)
         mark_jsdoc(ctx, out, was, now, m->doc, m->returns);
 }
@@ -9582,6 +9612,55 @@ BtaClass *bta_class_table(int *count)
     }
     *count = (int)class_rows->len;
     return (BtaClass *)class_rows->data;
+}
+
+/*
+ * **A control's methods cannot be assigned over.** Every control is one
+ * object with one table of names, so a method a program or a `.form` assigns
+ * to does not fail: it puts an own value on the instance and the verb is gone
+ * from that control -- `TreeView.Expand(key)` worked until a `.form` said
+ * `Expand: true`, and `ListBox.Remove(index)` hid the `Remove()` every control
+ * has. The renames that followed (`ExpandNode`, `RemoveRow`) fixed those two;
+ * this makes the next one loud. Each public method -- a capital, the
+ * runtime's convention -- on each class's prototype is made not writable, so
+ * an assignment throws `TypeError` there and then, naming the method, in the
+ * strict code every project runs as.
+ *
+ * Defining is still allowed: a subclass declares its own `Show()` with
+ * `class`, which defines on its own prototype and never assigns. Run after
+ * forms.js, whose `mixIn` defines its accessors onto these prototypes.
+ */
+void bta_seal_methods(JSContext *ctx)
+{
+    int       n;
+    BtaClass *table = bta_class_table(&n);
+
+    for (int i = 0; i < n; i++) {
+        JSValue          proto = table[i].proto;
+        JSPropertyEnum  *names = NULL;
+        uint32_t         len   = 0;
+
+        if (!JS_IsObject(proto) ||
+            JS_GetOwnPropertyNames(ctx, &names, &len, proto, JS_GPN_STRING_MASK) < 0)
+            continue;
+        for (uint32_t k = 0; k < len; k++) {
+            JSPropertyDescriptor d;
+            const char *name = JS_AtomToCString(ctx, names[k].atom);
+            bool        cap  = name && g_ascii_isupper(name[0]);
+
+            JS_FreeCString(ctx, name);
+            if (!cap || JS_GetOwnProperty(ctx, &d, proto, names[k].atom) <= 0)
+                continue;
+            if (!(d.flags & JS_PROP_GETSET) && (d.flags & JS_PROP_WRITABLE) &&
+                JS_IsFunction(ctx, d.value))
+                JS_DefineProperty(ctx, proto, names[k].atom, JS_UNDEFINED,
+                                  JS_UNDEFINED, JS_UNDEFINED, JS_PROP_HAS_WRITABLE);
+            JS_FreeValue(ctx, d.value);
+            JS_FreeValue(ctx, d.getter);
+            JS_FreeValue(ctx, d.setter);
+        }
+        JS_FreePropertyEnum(ctx, names, len);
+    }
 }
 
 BtaClass *bta_class_find(const char *name)

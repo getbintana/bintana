@@ -621,10 +621,11 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
      * exception QuickJS raises travels too, so the dialog says *no setter for
      * property* under this line's plainer sentence.
      *
-     * Not every collision lands here: a name that is a *method* -- `Close`,
-     * `Show` -- is shadowed rather than refused, and the assignment succeeds.
-     * That one stays [Ide.Check]'s, and the two are written down together in
-     * `docs/plans/strict-plan.md`.
+     * **A method's name lands here too** -- `Close`, `Show`, `On`. It used to
+     * be shadowed rather than refused: the assignment succeeded and that form
+     * lost the verb. A control's public methods are not writable now
+     * (`bta_seal_methods`), so the assignment fails like a getter's and says
+     * so; the suite's own gesture test had a label named `On` and never knew.
      *
      * `JS_SetPropertyStr` consumes `obj` whichever way it goes, so there is
      * nothing to free on this path.

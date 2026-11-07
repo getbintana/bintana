@@ -680,6 +680,8 @@ const TESTS = [
     "DataGridGroups",
     /* Async: examples/sales' self-test, a child with no pointer. */
     "ExampleSales",
+    /* Async: `bintana check` on a project whose classes hide a control's members. */
+    "CheckShadowing",
     "DebuggerOrders",
     /* Async: the debugger in a module, plain and brought in by an import. */
     "ModulesDebugger",
@@ -6840,6 +6842,57 @@ class Form1 extends Form {
      * prints what it saw. The rows are generated, the same ones every time, so
      * the totals are numbers to compare.
      */
+    /*
+     * `bintana check` holds the project's classes to the rule `tests/api.sh`
+     * holds the runtime's: a member that hides a control's with another shape.
+     * The cases that cost a rename in the runtime (`Expand(key)`,
+     * `Remove`), across a file (a class extending one declared in another),
+     * and the shapes that are an override and not a shadow.
+     */
+    testCheckShadowing() {
+        const proj = File.Join(SCRATCH, "check-shadowing");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "shadowing", startup: "Form1", sources: ["Grid.js", "Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1", properties: {} });
+        File.Save(File.Join(proj, "Grid.js"), [
+            '"use strict";',
+            "class Grid extends Component {",
+            "    Expand(key) {}",
+            "    get Remove() { return 1; }",
+            "    set Remove(v) {}",
+            "    Resize(a, b) {}",
+            "    Emit(event, ...rest) {}",
+            "    helper() {}",
+            "}",
+        ].join("\n"));
+        File.Save(File.Join(proj, "Form1.js"), [
+            '"use strict";',
+            "class Big extends Grid { Show(x) {} }",
+            "class Form1 extends Form { Form_Open() {} }",
+        ].join("\n"));
+
+        waiting++;
+        const lines = [];
+        Exec([Application.Executable, "check", proj], { Timeout: 20000 },
+             (line) => lines.push(line), () => {
+            waiting--;
+            const said = lines.filter((l) => l.includes("hides"));
+            const at = (file, line) => said.find((l) => l.startsWith(`${file}:${line}:`)) || "";
+            check("a method hiding a control's property is said, naming both",
+                  at("Grid.js", 3).includes("Grid.Expand(key) hides") && at("Grid.js", 3).includes("property"),
+                  said.join("\n"));
+            check("...a property hiding a control's method, once for its getter and setter",
+                  at("Grid.js", 4).includes("Grid.Remove hides") && said.filter((l) => l.includes("Grid.Remove")).length === 1,
+                  said.join("\n"));
+            check("...a method with another number of parameters, through a class in another file",
+                  at("Form1.js", 2).includes("Big.Show(x) hides"), said.join("\n"));
+            eq("...and an override of the same shape, a rest parameter and a lower-case helper are not",
+               said.length, 3, said.join("\n"));
+        });
+    }
+
     testExampleSales() {
         const dir = File.Join(File.Directory(Application.Directory), "..", "examples", "sales");
         if (!File.Exists(File.Join(dir, "project.json"))) {
@@ -7582,7 +7635,7 @@ class Form1 extends Form {
             split.Name = "Divider";
             f.Divider = split;
             f.Add(split);
-            split.Fill = true;
+            split.Expand = true;      /* it said `Fill = true`, which replaced the method `Fill` on this one control and laid out nothing */
             split.Add(new Panel());
             split.Add(new Panel());
             f.Resize(360, 240);
@@ -8828,6 +8881,44 @@ function Main() {
                  check("...and the form never opened", !all.includes("ran"), all);
                  check("...with the hook reaching it too",
                        all.includes("caught: TypeError"), all);
+                 waiting--;
+                 this.methodNameTakenByForm();
+             });
+    }
+
+    /*
+     * **And a method's name the same way.** A control named `Close` used to
+     * load: the assignment put the control on the instance over the method,
+     * and that form could no longer be closed by its own verb -- what the
+     * loader's comment called "shadowed rather than refused" and left to the
+     * IDE's checks. A control's methods are not writable now
+     * (`bta_seal_methods`), so the binding fails and the loader says so, as
+     * for a getter.
+     */
+    methodNameTakenByForm() {
+        waiting++;
+        const proj = File.Join(SCRATCH, "name-taken-method");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "takenmethod", startup: "Taken", sources: ["Taken.js"] });
+        File.SaveJson(File.Join(proj, "Taken.form"), {
+            format: "bintana-form/1",
+            class: "Taken",
+            properties: { Width: 200, Height: 100 },
+            children: [{ type: "Button", name: "Close", properties: { X: 1, Y: 1 } }],
+        });
+        File.Save(File.Join(proj, "Taken.js"),
+                  "Application.OnError = (m) => { print('caught: ' + m); };\n" +
+                  "class Taken extends Form { Form_Open() { print('ran'); } }\n");
+        const said = [];
+        Exec([Application.Executable, proj], { Timeout: 20000 },
+             (line) => said.push(line),
+             (code) => {
+                 const all = said.join("\n");
+                 check("a control named after a Form method stops the form too",
+                       code !== 0 && all.includes("Button 'Close'") &&
+                       all.includes("a Form already has a member of that name"), all);
+                 check("...and the form never opened", !all.includes("ran"), all);
                  waiting--;
                  this.menuNameTakenByForm();
              });
@@ -19705,10 +19796,10 @@ class Form1 extends Form {
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Text: "flick-probe", Width: 500, Height: 240 },
-                        children: [{ type: "Label", name: "On",
+                        children: [{ type: "Label", name: "Hot",
                                      properties: { Text: "on", Gestures: true, X: 20, Y: 20,
                                                    Width: 200, Height: 100 } },
-                                   { type: "Label", name: "Off",
+                                   { type: "Label", name: "Cold",
                                      properties: { Text: "off", X: 260, Y: 20,
                                                    Width: 200, Height: 100 } }] });
         File.Save(File.Join(proj, "Form1.js"),
@@ -19720,9 +19811,9 @@ class Form1 extends Form {
                   "            if (File.Exists(Application.Directory + '/done')) this.report();\n" +
                   "        });\n" +
                   "    }\n" +
-                  "    On_Swipe(vx, vy, fingers)  { this.log.push('on ' + (vx > 500 ? 'right' : 'slow') + ' ' + typeof vy + ' ' + fingers); }\n" +
-                  "    Off_Swipe(vx, vy) { this.log.push('off'); }\n" +
-                  "    On_MouseWheel(dx, dy, touch) { this.log.push('wheel ' + dy + ' ' + typeof touch + ' ' + touch); }\n" +
+                  "    Hot_Swipe(vx, vy, fingers)  { this.log.push('on ' + (vx > 500 ? 'right' : 'slow') + ' ' + typeof vy + ' ' + fingers); }\n" +
+                  "    Cold_Swipe(vx, vy) { this.log.push('off'); }\n" +
+                  "    Hot_MouseWheel(dx, dy, touch) { this.log.push('wheel ' + dy + ' ' + typeof touch + ' ' + touch); }\n" +
                   "    report() {\n" +
                   "        File.SaveJson(Application.Directory + '/out.json', { log: this.log });\n" +
                   "        Application.Quit(0);\n" +

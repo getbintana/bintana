@@ -599,6 +599,7 @@ typedef struct BtaClass {
 void      bta_register_classes(const BtaClass *rows, int n);
 BtaClass *bta_class_table(int *count);
 BtaClass *bta_class_find(const char *name);
+void      bta_seal_methods(JSContext *ctx);
 /*
  * Says which member of a class holds its value, and the event that says the
  * value is done being edited (see `BtaClass.value_member` and

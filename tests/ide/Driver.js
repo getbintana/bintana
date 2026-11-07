@@ -14402,10 +14402,14 @@ function* p_check(ide) {
           JSON.stringify(said));
     check("...as an error, because one of them is simply gone",
           said.some((r) => r.text.includes("Twice") && r.kind === "Error"));
-    check("a control whose name is a member of Form is reported",
-          has("Close is also a member of Form"), JSON.stringify(said));
-    check("...as a warning, because a method is shadowed and the form still runs",
-          said.some((r) => r.text.includes("Close is also") && r.kind === "Warning"),
+    check("a control whose name is a method of Form is reported",
+          has("Close is also a method of Form: the form will not load"), JSON.stringify(said));
+    /* An **error** now: a control's methods are not writable
+     * (`bta_seal_methods`), so binding a control over `Close` fails and the
+     * loader refuses the form -- it used to load, with that form's own
+     * `Close()` gone. */
+    check("...as an error, because the runtime refuses that form now",
+          said.some((r) => r.text.includes("Close is also") && r.kind === "Error"),
           JSON.stringify(said));
     check("a property the class does not have is reported",
           has("Button has no Txt"), JSON.stringify(said));
@@ -14436,7 +14440,7 @@ function* p_check(ide) {
     check("two commands of one name are reported",
           has("two controls are called ActDup"), JSON.stringify(said));
     check("a menu item whose name is a member of Form is reported",
-          has("Actions is also a member of Form"), JSON.stringify(said));
+          has("Actions is also a read-only member of Form"), JSON.stringify(said));
     /*
      * And as an **error**, which is the half that changed: `Actions` is
      * read-only, so the bind fails and the runtime refuses the form -- for a

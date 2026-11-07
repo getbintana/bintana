@@ -2733,6 +2733,10 @@ static bool install_globals(BtaApp *app)
         bta_dump_error(ctx);
     JS_FreeValue(ctx, r);
 
+    /* A control's methods cannot be assigned over, from here on: after
+     * forms.js, whose mixIns define onto the prototypes. */
+    bta_seal_methods(ctx);
+
     /* Last, and only after rad.js: it captured what it needs. */
     bta_close_hatches(ctx);
 
