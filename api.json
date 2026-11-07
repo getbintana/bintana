@@ -10309,7 +10309,7 @@
         {
           "Name": "NodeToggle",
           "Signature": "(key, open)",
-          "Doc": "the person opened or closed a node with its arrow: `key` is the node's and `open` whether it is open now. Raised just after, not inside the fold, and not for the children a closing parent hides. Not raised by `ExpandNode`, `CollapseNode`, `ExpandAll`, `CollapseAll` or `AutoExpand`"
+          "Doc": "the person opened or closed a node -- its arrow, or Right, Left, `+`, `-`, `*` on its row: `key` is the node's and `open` whether it is open now. Raised just after, not inside the fold, and not for the children a closing parent hides. Not raised by `ExpandNode`, `CollapseNode`, `ExpandAll`, `CollapseAll` or `AutoExpand`"
         },
         {
           "Name": "MouseDown",

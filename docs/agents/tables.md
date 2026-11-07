@@ -597,9 +597,17 @@ bind, taken off in the unbind). Two things measured:
   rows: closing `a` reported `a1` and `a2`. So the report waits for an idle --
   no JavaScript inside GTK's change to the flattened list either -- and then
   goes out only for a node that still has a row and is still as reported.
-- **The keyboard does not fold a table's node**: `+`, `-` and Shift+Left on a
-  focused row did nothing on 4.22, since `GtkTreeExpander`'s bindings want the
-  focus on the expander. The event promises the arrow only.
+- **GTK's keyboard does not fold a table's node**: `+`, `-` and Shift+Left on
+  a focused row did nothing on 4.22, since `GtkTreeExpander`'s bindings want
+  the focus on the expander. So `table_fold_key` does it, in the table's
+  capture-phase key handler: Right opens or goes to the first child, Left
+  closes or goes to the parent, `+` `-` `*` -- and reports each fold through
+  the same idle, with `folding` up so the bound row's notify is not a second
+  report. A key with nothing to do (Right on a leaf) is left to GTK.
+- **A claimed press takes the focus to the table** (`on_view_pressed`): a press
+  on an editing cell is claimed so the editor can open, and GTK's row never
+  grabbed the focus; when `CellEditor` refused, the focus stayed elsewhere --
+  `lib/datagrid`'s group row clicked in Price, and `-` went into the filter.
 - Verbs (`ExpandNode` …) and `AutoExpand` bump `folding`, and raise nothing:
   a handler mirroring one table into another must not hear its own doing.
 

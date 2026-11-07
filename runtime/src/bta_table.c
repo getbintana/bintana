@@ -2827,6 +2827,16 @@ static void on_view_pressed(GtkGestureClick *g, int n, double x, double y,
     if (!c || c->editor || c->spec->kind == ED_CHECK)
         goto out;
     gtk_gesture_set_state(GTK_GESTURE(g), GTK_EVENT_SEQUENCE_CLAIMED);
+
+    /* **A claimed press still takes the focus to the table.** GTK's row would
+     * have, had the press reached it; an editor that opens takes it from
+     * there, but one that `CellEditor` refuses left the focus where it was --
+     * measured in `lib/datagrid`, a group's row clicked in an editing column
+     * stayed selected with the keys still typing into the filter above. The
+     * row was just chosen, so the table's focus position is on it. */
+    if (!gtk_widget_has_focus(w->inner) &&
+        !(gtk_widget_get_state_flags(w->inner) & GTK_STATE_FLAG_FOCUS_WITHIN))
+        gtk_widget_grab_focus(w->inner);
     if (n == 1)
         cell_begin_later(c);
 out:
@@ -2914,6 +2924,128 @@ static gboolean table_extend(BtaWidget *w, int by)
  *
  * And Shift+Up/Down on a `MultiSelect` table, which `table_extend` answers.
  */
+static void       fold_report_queue(BtaWidget *w, BtaTableRow *node, bool open);
+static int        table_row_position(GtkWidget *row);
+static GtkWidget *table_row_widget(BtaWidget *w, GtkWidget *at);
+
+/*
+ * **Folding with the keyboard**, on the row the focus is on (else the one the
+ * reader is on): Right opens a closed node and goes to the first child of an
+ * open one, Left closes an open node and goes to the parent of a closed one or
+ * a leaf -- the convention of Windows' tree and of Nautilus -- and `+`, `-`,
+ * `*` open, close, and open everything under. Measured before: a table's node
+ * did not fold from the keyboard at all, since `GtkTreeExpander`'s own keys
+ * want the focus on the expander and a row never hands it over.
+ *
+ * **A fold made here is the person's**, so it is a `NodeToggle`: raised
+ * through the same idle as an arrow clicked, once per node that changed, and
+ * the `notify::expanded` it causes on a bound row is hushed by `folding` so
+ * it is not reported twice.
+ */
+static void fold_by_person(BtaWidget *w, BtaTableRow *node, bool open)
+{
+    GtkTreeListRow *row = table_row_of(w, node);
+
+    if (row && gtk_tree_list_row_get_expanded(row) != open) {
+        table_state(w)->folding++;
+        gtk_tree_list_row_set_expanded(row, open);
+        table_state(w)->folding--;
+        fold_report_queue(w, node, open);
+    }
+    g_clear_object(&row);
+}
+
+/* `*`: this node and every one under it, top down -- a child's row exists
+ * only once its parent is open. */
+static void fold_open_all(BtaWidget *w, BtaTableRow *node)
+{
+    guint n = g_list_model_get_n_items(G_LIST_MODEL(node->children));
+
+    if (!n)
+        return;
+    fold_by_person(w, node, true);
+    for (guint i = 0; i < n; i++) {
+        BtaTableRow *kid = g_list_model_get_item(G_LIST_MODEL(node->children), i);
+
+        fold_open_all(w, kid);
+        g_object_unref(kid);
+    }
+}
+
+/* The node the keyboard is on: the focused row, else the reader's. Owned. */
+static BtaTableRow *table_keyed_node(BtaWidget *w)
+{
+    GtkRoot   *root  = gtk_widget_get_root(w->inner);
+    GtkWidget *focus = root ? gtk_root_get_focus(root) : NULL;
+    int        at    = table_row_position(table_row_widget(w, focus));
+
+    return at >= 0 ? table_node_at(w, (guint)at) : table_selected_node(w);
+}
+
+static gboolean table_fold_key(BtaWidget *w, guint keyval, GdkModifierType state)
+{
+    if (!table_state(w)->tree || (state & (GDK_CONTROL_MASK | GDK_ALT_MASK)) ||
+        table_find_cell(w->inner, NULL, -1, -1))
+        return FALSE;
+
+    enum { NONE, RIGHT, LEFT, OPEN, CLOSE, ALL } what = NONE;
+
+    switch (keyval) {
+    case GDK_KEY_Right: case GDK_KEY_KP_Right:       what = RIGHT; break;
+    case GDK_KEY_Left:  case GDK_KEY_KP_Left:        what = LEFT;  break;
+    case GDK_KEY_plus:  case GDK_KEY_KP_Add:         what = OPEN;  break;
+    case GDK_KEY_minus: case GDK_KEY_KP_Subtract:    what = CLOSE; break;
+    case GDK_KEY_asterisk: case GDK_KEY_KP_Multiply: what = ALL;   break;
+    default: return FALSE;
+    }
+    if ((what == RIGHT || what == LEFT) && (state & GDK_SHIFT_MASK))
+        return FALSE;
+
+    BtaTableRow *node = table_keyed_node(w);
+
+    if (!node)
+        return FALSE;
+
+    bool            kids = g_list_model_get_n_items(G_LIST_MODEL(node->children)) > 0;
+    GtkTreeListRow *row  = table_row_of(w, node);
+    bool            open = row && gtk_tree_list_row_get_expanded(row);
+
+    g_clear_object(&row);
+
+    /* A key with nothing to do here -- Right on a leaf, Left on a closed
+     * root -- is not taken: GTK's own binding, if any, still has it. */
+    bool taken = true;
+
+    switch (what) {
+    case RIGHT:
+        if (kids && !open) {
+            fold_by_person(w, node, true);
+        } else if (kids) {
+            BtaTableRow *first = g_list_model_get_item(G_LIST_MODEL(node->children), 0);
+
+            table_select_node(w, first);
+            g_object_unref(first);
+        } else {
+            taken = false;
+        }
+        break;
+    case LEFT:
+        if (kids && open)
+            fold_by_person(w, node, false);
+        else if (node->parent)
+            table_select_node(w, node->parent);
+        else
+            taken = false;
+        break;
+    case OPEN:  if (kids) fold_by_person(w, node, true);  else taken = false; break;
+    case CLOSE: if (kids) fold_by_person(w, node, false); else taken = false; break;
+    case ALL:   if (kids) fold_open_all(w, node);         else taken = false; break;
+    default:    taken = false; break;
+    }
+    g_object_unref(node);
+    return taken;
+}
+
 static gboolean on_table_key(GtkEventControllerKey *k, guint keyval, guint keycode,
                              GdkModifierType state, gpointer data)
 {
@@ -2950,6 +3082,9 @@ static gboolean on_table_key(GtkEventControllerKey *k, guint keyval, guint keyco
         if (keyval == GDK_KEY_Down || keyval == GDK_KEY_KP_Down)
             return table_extend(w, 1);
     }
+
+    if (table_fold_key(w, keyval, state))
+        return TRUE;
 
     if (keyval != GDK_KEY_F2)
         return FALSE;
@@ -3440,10 +3575,10 @@ static void cell_of(BtaWidget *w, BtaTableRow *row, guint col,
  * flattened list, which no JavaScript may run in -- a handler that removed the
  * node there would pull rows out from under it. The idle holds a weak ref to
  * the table and the node; a node the table no longer holds by its key by then
- * is not reported. The keyboard does not fold a table's node at all (`+`, `-`
- * and Shift+Left on a focused row did nothing, measured on 4.22): the
- * expander's own bindings need the focus on the expander, which a row never
- * hands it.
+ * is not reported. The keyboard's folds are made in `table_fold_key`, since
+ * GTK's do not happen here at all (`+`, `-` and Shift+Left on a focused row
+ * did nothing, measured on 4.22: the expander's own bindings need the focus
+ * on the expander, which a row never hands it), and reported the same way.
  */
 #define FOLD_ROW_KEY     "bta-fold-row"
 #define FOLD_HANDLER_KEY "bta-fold-handler"
@@ -3491,6 +3626,17 @@ static void fold_report_free(gpointer p)
     g_weak_ref_clear(&r->table);
     g_object_unref(r->node);
     g_free(r);
+}
+
+/* A fold, reported from an idle; `node` is borrowed and held here. */
+static void fold_report_queue(BtaWidget *w, BtaTableRow *node, bool open)
+{
+    FoldReport *r = g_new0(FoldReport, 1);
+
+    g_weak_ref_init(&r->table, w->gtk);
+    r->node = g_object_ref(node);
+    r->open = open;
+    g_idle_add_full(G_PRIORITY_DEFAULT, fold_report_cb, r, fold_report_free);
 }
 
 static void on_row_folded(GObject *obj, GParamSpec *pspec, gpointer item)
@@ -8273,9 +8419,10 @@ void bta_table_register(void)
          *   `-1` when it left the rows. Once per row, not per motion
          */
         /* NodeToggle(key, open)
-         *   the person opened or closed a node with its arrow: `key` is the
-         *   node's and `open` whether it is open now. Raised just after, not
-         *   inside the fold, and not for the children a closing parent hides.
+         *   the person opened or closed a node -- its arrow, or Right, Left,
+         *   `+`, `-`, `*` on its row: `key` is the node's and `open` whether it
+         *   is open now. Raised just after, not inside the fold, and not for the
+         *   children a closing parent hides.
          *   Not raised by `ExpandNode`,
          *   `CollapseNode`, `ExpandAll`, `CollapseAll` or `AutoExpand`
          */

@@ -10601,10 +10601,14 @@ class Form1 extends Form {
                       { name: "tabletab", startup: "Form1", sources: ["Form1.js"], uses: ["datagrid"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
-                        properties: { Width: 760, Height: 300 } });
+                        properties: { Width: 760, Height: 420 } });
         File.Save(File.Join(proj, "Form1.js"), `
 class Form1 extends Form {
     Form_Open() {
+        const e = new TableView(); e.Name = "E"; e.Move(10, 270); e.Resize(240, 130);
+        e.Columns = [{ Text: "E", Width: 120, Editor: "Text" }];
+        for (let i = 0; i < 5; i++) e.Add(["e" + i]);
+        this.Add(e); this.e = e;
         const mk = (name, x) => {
             const t = new TableView(); t.Name = name; t.Move(x, 10); t.Resize(110, 240);
             t.Columns = [{ Text: name, Width: 80 }];
@@ -10623,19 +10627,20 @@ class Form1 extends Form {
         this.dir = Application.Directory;
         this.wait();
     }
+    E_CellEditor() { return false; }
     state() {
         const g = this.g;
-        const f = this.l.Focused ? "L" : this.r.Focused ? "R" : g.FrozenView.Focused ? "frozen"
+        const f = this.e.Focused ? "E" : this.l.Focused ? "L" : this.r.Focused ? "R" : g.FrozenView.Focused ? "frozen"
                 : g.MainView.Focused ? "main" : "out";
         return \`\${this.l.Index} \${this.r.Index} \${g.Index} \${g.FrozenView.Index} \${g.current.Row}:\${g.current.Column} \${f}\`;
     }
     wait() {
         const t = this.r, m = this.g.MainView;
         if (!(t.RowHeight > 0 && m.RowHeight > 0)) { Timer.After(50, () => this.wait()); return; }
-        const rb = t.Bounds(), gb = m.Bounds();
+        const rb = t.Bounds(), gb = m.Bounds(), eb = this.e.Bounds();
         const row = (b, view, i) => Math.round(b.Y + view.HeaderHeight + view.RowHeight * (i + 0.5));
         File.Save(this.dir + "/geom", [rb.X + 40, row(rb, t, 1), gb.X + 40, row(gb, m, 2),
-                                       gb.X + 40, row(gb, m, 0)].join(" "));
+                                       gb.X + 40, row(gb, m, 0), eb.X + 40, row(eb, this.e, 2)].join(" "));
         this.poll();
     }
     poll() {
@@ -10657,7 +10662,7 @@ class Form1 extends Form {
                   "\"$bin\" \"$dir\" &\n" +
                   "child=$!\n" +
                   "i=0; while [ ! -f \"$dir/geom\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
-                  "read rx ry gx gy g0x g0y < \"$dir/geom\"\n" +
+                  "read rx ry gx gy g0x g0y ex ey < \"$dir/geom\"\n" +
                   "mark() { : > \"$dir/mark\"; i=0; while [ -f \"$dir/mark\" ] && [ $i -lt 50 ]; do sleep 0.05; i=$((i+1)); done; }\n" +
                   "press() { xdotool key $1; sleep 0.3; mark; }\n" +
                   "sleep 0.3\n" +
@@ -10667,6 +10672,7 @@ class Form1 extends Form {
                   "press Tab; press Tab; press shift+Tab; press shift+Tab; press shift+Tab\n" +
                   "xdotool mousemove $g0x $g0y click 1; sleep 0.4; mark\n" +
                   "press shift+Tab; press shift+Tab; press shift+Tab\n" +
+                  "xdotool mousemove $ex $ey click 1; sleep 0.5; mark\n" +
                   ": > \"$dir/done\"\n" +
                   "wait $child; echo \"child=$?\"\n");
 
@@ -10691,6 +10697,8 @@ class Form1 extends Form {
         eq("...Shift+Tab walks back to its first cell", log[11], "-1 1 0 0 0:0 frozen");
         eq("...and past it the focus leaves the grid, the rows as they were",
            log[12], "-1 1 0 0 0:0 R");
+        eq("a press on an editing cell whose CellEditor refuses still takes the focus to its table",
+           log[13].split(" ").pop(), "E");
     }
 
     testTableNodeToggle() {
@@ -10716,11 +10724,13 @@ class Form1 extends Form {
         t.Add(["a2", "3"], { Key: "a2", Parent: "a" });
         t.Add(["b", "4"], { Key: "b" });
         t.Add(["b1", "5"], { Key: "b1", Parent: "b" });
+        t.Add(["b11", "6"], { Key: "b11", Parent: "b1" });
         this.Add(t); this.t = t; this.log = [];
         this.dir = Application.Directory;
         this.wait();
     }
     T_NodeToggle(key, open) { this.log.push(key + ":" + open); }
+    T_Select() { if (this.keys) this.log.push("@" + this.t.Key); }
     wait() {
         const t = this.t;
         if (!(t.RowHeight > 0)) { Timer.After(50, () => this.wait()); return; }
@@ -10728,19 +10738,21 @@ class Form1 extends Form {
         Timer.After(200, () => {
             this.verbs = this.log.slice();
             const b = t.Bounds();
-            File.Save(this.dir + "/geom", [b.X + 12, Math.round(b.Y + t.HeaderHeight + t.RowHeight / 2)].join(" "));
+            File.Save(this.dir + "/geom", [b.X + 12, Math.round(b.Y + t.HeaderHeight + t.RowHeight / 2),
+                                           b.X + 100, Math.round(b.Y + t.HeaderHeight + t.RowHeight * 1.5)].join(" "));
             this.poll();
         });
     }
     poll() {
+        if (File.Exists(this.dir + "/keys") && !this.keys) { this.keys = true; this.clicks = this.log.slice(); this.log = []; }
         if (!File.Exists(this.dir + "/done")) { Timer.After(30, () => this.poll()); return; }
-        File.SaveJson(this.dir + "/out.json", { verbs: this.verbs, log: this.log,
+        File.SaveJson(this.dir + "/out.json", { verbs: this.verbs, log: this.clicks, keyed: this.log,
                                                 open: this.t.Expanded("a") });
         Application.Quit(0);
     }
 }
 `);
-        for (const gone of ["geom", "out.json", "done"])
+        for (const gone of ["geom", "out.json", "done", "keys"])
             if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
 
         const script = File.Join(proj, "run.sh");
@@ -10750,11 +10762,14 @@ class Form1 extends Form {
                   "\"$bin\" \"$dir\" &\n" +
                   "child=$!\n" +
                   "i=0; while [ ! -f \"$dir/geom\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
-                  "read x y < \"$dir/geom\"\n" +
+                  "read x y bx by < \"$dir/geom\"\n" +
                   "sleep 0.3\n" +
                   "xdotool mousemove $x $y click 1; sleep 0.5\n" +
                   "xdotool mousemove $x $y click 1; sleep 0.5\n" +
                   "xdotool mousemove $x $y click 1; sleep 0.5\n" +
+                  "xdotool mousemove $bx $by click 1; sleep 0.4\n" +
+                  ": > \"$dir/keys\"; sleep 0.2\n" +
+                  "for k in minus plus Right Right Left Left Left asterisk; do xdotool key $k; sleep 0.35; done\n" +
                   ": > \"$dir/done\"\n" +
                   "wait $child; echo \"child=$?\"\n");
 
@@ -10769,6 +10784,10 @@ class Form1 extends Form {
            + "and not for the children a closing parent hides",
            out.log.join(), "a:false,a:true,a:false");
         eq("...the state it reports is the table's", out.open, false);
+        eq("the keyboard folds too, and says so: - and + close and open, Right goes to the "
+           + "first child of an open node, Left to the parent of a leaf, closes an open node "
+           + "and then goes up, * opens what is under",
+           out.keyed.join(), "b:false,b:true,@b1,@b11,@b1,b1:false,@b,b1:true");
     }
 
     testTableReorderDrag() {
