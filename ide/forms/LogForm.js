@@ -46,9 +46,8 @@ export class LogForm extends Form {
         return win;
     }
 
-    /* Whether it is built: a `Switcher` raises `Switch` while the `.form` is
-     * still loading, before `open()` has said which IDE this belongs to. The
-     * entry in `AGENTS.md`, and the second window to need it. */
+    /* Whether it is built: the controls named and `open()` having said which
+     * IDE this belongs to -- `GitForm.ready`'s question, asked the same way. */
     get ready() { return this.ide !== undefined && this.Commits !== undefined; }
 
     setup() {

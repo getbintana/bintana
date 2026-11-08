@@ -144,12 +144,11 @@ export class ClassForm extends Form {
      */
     showSample() {
         /*
-         * **Not while the form is being built.** A `.form` applies each property
-         * by assignment and puts a control on the form under its name only after
-         * its own properties are set -- so `Decimals` on the first spin fires
-         * `Change` while the controls below it do not exist yet, and this walks
-         * a list of them. `ready` is set once, by `edit`, when there is a form
-         * to read.
+         * **Not before `edit` has filled the fields**, which raise `Change` as
+         * it writes them: `ready` is set once, by `edit`, when there is a form
+         * to read. (The `.form`'s own `Decimals` used to raise one too, with
+         * the controls below it not yet on the form; a `.form` raises no
+         * handler by name while it loads now.)
          */
         if (!this.ready) return;
 

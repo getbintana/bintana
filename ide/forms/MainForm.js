@@ -235,21 +235,16 @@ export class MainForm extends Form {
     /*
      * The helpers this window is made of, as fields and not as `Form_Open`.
      *
-     * A control's event can arrive as early as the .form *loading* -- the
-     * Notebook fires Switch when a page is added -- which is before `Form_Open`
-     * runs, and a handler that reached for a helper that was not there yet blew
-     * up.  Being fields and not `Form_Open` is what fixes that for every event
-     * raised after the window exists.  None of them touches a widget to be
-     * built, which is what makes that safe.
+     * A control's event can arrive before `Form_Open` runs -- a Notebook
+     * fires Switch when a page is added -- and a handler that reached for a
+     * helper that was not there yet blew up.  Being fields and not `Form_Open`
+     * is what fixes that for every event raised after the window exists.  None
+     * of them touches a widget to be built, which is what makes that safe.
      *
-     * **It does not cover the load itself, and that was written here as though
-     * it did.** The `.form` is read inside `Form`'s constructor, i.e. inside
-     * `super()`, and a subclass's field initialisers run after `super()`
-     * returns -- so a handler for an event the *load* raises still finds
-     * `undefined`. Measured by adding one: `SideTabs_Switch` fires while the
-     * switcher's first page is being added, with `at Form (native)` in the
-     * traceback and every field below still unset. A handler that can be reached
-     * that way guards, and says so; see `SideTabs_Switch`.
+     * **The load itself raises nothing by name** -- the `.form` is read inside
+     * `Form`'s constructor, before these initialisers run, and `SideTabs_Switch`
+     * used to arrive there with every field below unset; the runtime keeps the
+     * named handlers quiet while a `.form` is applied now (`emit_on`).
      */
     finder    = new Finder(this);        // the find bar
     runner    = new Runner(this);        // running the project, and its output
@@ -1077,17 +1072,10 @@ export class MainForm extends Form {
               Run:  () => { if (this.saveAllDirty()) this.quit(); } });
     }
 
-    /* The Notebook fires Switch while the .form is still loading, when no tab
-     * has been opened yet: there is nothing at that index and nothing to do.
-     * (`this.tabs` is a field initialiser, so it is not there yet either when a
-     * `.form` declares pages of its own -- a handler the load can reach has to
-     * guard, which is the note over those fields.)
-     *
-     * **The page at the index and not `tabOrder[index]`**: a drag can move a tab
+    /* **The page at the index and not `tabOrder[index]`**: a drag can move a tab
      * without the IDE asking, and the notebook is where the answer is the moment
      * it has moved. `reordered` keeps the list in step; this reads the truth. */
     Tabs_Switch(index) {
-        if (!this.tabs) return;
         const name = this.tabs.nameAt(index);
         if (name) this.tabs.switchTo(name);
     }
@@ -1205,9 +1193,9 @@ export class MainForm extends Form {
         /* A tab clicked is the bottom panel moving without the menu: its mark
          * follows, before the shell's own business below.  From `index` and not
          * from `Current`: `Switch` is GTK's `switch-page`, which arrives while
-         * the notebook still reports the page it is leaving.  Not while the
-         * `.form` is still being loaded, which switches pages too: the toolbar
-         * the menu speaks about is not there yet. */
+         * the notebook still reports the page it is leaving.  Not before
+         * `Form_Open` has dressed the views: the menu it speaks about is not
+         * there yet. */
         if (this.viewDressed) {
             this.dressViewMenu();
             this.MnuViewBottom.Value = index;
@@ -1587,17 +1575,8 @@ export class MainForm extends Form {
      * whatever was selected when it was last on screen, so arriving at it is a
      * reason to look again -- and it is the only moment that is, since `fill()`
      * does nothing at all while the page is hidden.
-     *
-     * **Guarded, because this one really does arrive before the fields exist.**
-     * A `Switcher` emits `Switch` when its first page makes `Current` go from
-     * nothing to zero, and the pages are built by the `.form` -- which is loaded
-     * inside `Form`'s own constructor, i.e. inside `super()`. A subclass's field
-     * initialisers run *after* that, so `this.events` is genuinely undefined
-     * here on the way up. (The note beside those fields said an initialiser runs
-     * before any event can; that is true of every event the IDE raises later and
-     * false of the ones the load itself raises.)
      */
-    SideTabs_Switch() { if (this.events) this.events.shown(); }
+    SideTabs_Switch() { this.events.shown(); }
 
     /*
      * The property grid's design-value switch.

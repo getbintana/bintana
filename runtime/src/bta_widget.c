@@ -411,6 +411,29 @@ static JSValue emit_on(JSContext *ctx, BtaWidget *w, JSValueConst form,
         if (!name || JS_IsUndefined(form))
             return JS_UNDEFINED;
 
+        /*
+         * **A value the `.form` declared is not an event of the program's.**
+         * The loader assigns through the real setters, and GTK answers some
+         * of them with its own signal -- a `ComboBox` given `Items` and
+         * `Index` raised `Select` twice, a `TextBox` given `Text` raised
+         * `Change`, a `Notebook` given `Current` raised `Switch` -- all
+         * before `Form_Open` and with the controls declared later not yet on
+         * the form. The 19 handlers in the IDE, the libraries and the
+         * examples that heard one all guarded against it (`if (!this.CmbZoom)
+         * return`) and none wanted it -- measured over the suite and every
+         * example -- so the
+         * by-name road is closed while the form's `.form` is applied: what
+         * VB6 and Qt's `connectSlotsByName` do by connecting afterwards.
+         *
+         * **By name only.** A handler put on with `On` is the control's own
+         * wiring -- a component listening to the controls inside it -- and a
+         * component's setter applied by its host's `.form` still needs it.
+         * After the load an assignment from code raises the event as before.
+         */
+        BtaWidget *owner = bta_widget_of(form);
+        if (owner && owner->loading)
+            return JS_UNDEFINED;
+
         char *key = g_strdup_printf("%s_%s", name, event);
         fn   = JS_GetPropertyStr(ctx, form, key);
         self = form;

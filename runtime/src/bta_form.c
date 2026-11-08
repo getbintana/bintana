@@ -596,7 +596,7 @@ static int build_one(JSContext *ctx, JSValueConst form_obj,
      * it meant to put on itself, it has.
      *
      * The *form* is never sealed -- it is not built here, it is built by
-     * `bta_form_load`, and it is the application's own object: `Form_Open`
+     * `bta_form_build`, and it is the application's own object: `Form_Open`
      * assigning `this.anything` is what every program in this tree does.
      */
     bta_strict_seal(ctx, obj);
@@ -1076,6 +1076,7 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
      */
     bta_widget_styles_hold();
     held = true;
+    w->loading++;
 
     JSValue props = JS_GetPropertyStr(ctx, root, "properties");
     /* The form's own properties, before its children: a form has no class row
@@ -1148,8 +1149,10 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
     w->drawn_h = w->h;
 
 out:
-    if (held)
+    if (held) {
+        w->loading--;
         bta_widget_styles_release();
+    }
     JS_FreeValue(ctx, root);
     g_free(path);
     return rc;

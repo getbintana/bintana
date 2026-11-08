@@ -1,0 +1,48 @@
+{
+  "format": "bintana-form/1",
+  "class": "LoadQuiet",
+  "properties": {
+    "Text": "load quiet",
+    "Width": 300,
+    "Height": 160
+  },
+  "children": [
+    {
+      "type": "ComboBox",
+      "name": "QCmb",
+      "properties": {
+        "Index": 1,
+        "Items": [
+          "a",
+          "b"
+        ],
+        "Height": 30,
+        "Width": 120,
+        "X": 8,
+        "Y": 8
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "QTxt",
+      "properties": {
+        "Text": "x",
+        "Height": 30,
+        "Width": 120,
+        "X": 8,
+        "Y": 46
+      }
+    },
+    {
+      "type": "Stepper",
+      "name": "QStep",
+      "properties": {
+        "Value": 3,
+        "Height": 34,
+        "Width": 180,
+        "X": 8,
+        "Y": 84
+      }
+    }
+  ]
+}

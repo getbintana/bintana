@@ -163,13 +163,12 @@ export class GitForm extends Form {
     /*
      * Whether this window is built yet.
      *
-     * **A `Switcher` raises `Switch` while the `.form` is still loading** --
-     * when its first page makes `Current` go from nothing to zero -- and the
-     * `.form` is read inside `Form`'s own constructor, so the handler runs
-     * before `open()` has had a chance to say which IDE this belongs to, and
-     * before the loader has finished naming the controls. `AGENTS.md` has the
-     * entry; this is the second window to walk into it, which is why the guard
-     * is one question asked in one place rather than a check per handler.
+     * **Built is two things**: the controls named, and `open()` having said
+     * which IDE this belongs to. The first used to fail inside the load -- a
+     * `Switcher` raised `Switch` as its first page arrived -- and no longer
+     * can, since a `.form` raises no handler by name while it loads; the
+     * second is still this window's own, which is why the guard is one
+     * question asked in one place rather than a check per handler.
      */
     get ready() { return this.ide !== undefined && this.Which !== undefined; }
 

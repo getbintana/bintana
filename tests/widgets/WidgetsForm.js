@@ -307,6 +307,17 @@ class PushedForm extends Form {}
  * the `Resize` the test does to it. */
 class NarrowForm extends Form {}
 
+/* A form whose `.form` declares values that GTK answers with a signal, for
+ * testLoadQuiet. What its handlers hear goes in a list outside the class: a
+ * field is not there yet while the `.form` loads, which is the moment asked
+ * about. The combo is declared before the field it would read. */
+const loadHeard = [];
+class LoadQuiet extends Form {
+    QCmb_Select()      { loadHeard.push(`Select ${typeof this.QTxt}`); }
+    QTxt_Change()      { loadHeard.push("Change"); }
+    QStep_Change(v)    { loadHeard.push(`Step ${v}`); }
+}
+
 /* --- records ------------------------------------------------------------
  * A shape with one of every kind, and one field whose name in the file is not
  * its name here. */
@@ -648,7 +659,7 @@ const TESTS = [
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
-    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeForced", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "Action", "Groups",
+    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeForced", "LoadQuiet", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Pdf", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
@@ -7469,6 +7480,36 @@ class Form1 extends Form {
                 this.On("ThemeChange", null);
             });
         });
+    }
+
+    /*
+     * **What a `.form` declares is not an event of the program's.** A combo
+     * given `Items` and `Index` raised `Select` twice while the form was being
+     * built -- with the text box declared after it still `undefined` on the
+     * form -- a text box given `Text` raised `Change`, and a component given
+     * `Value` raised its own `Change` by name. None of them is raised now, and
+     * the same assignments made from code afterwards raise each one as before.
+     * The component's setter still ran: its label says the value.
+     */
+    testLoadQuiet() {
+        loadHeard.length = 0;
+        const f = new LoadQuiet();
+
+        eq("loading the .form raised no handler by name", loadHeard.join(", "), "");
+        eq("and the values it declared are there", f.QCmb.Index, 1);
+        eq("the text too", f.QTxt.Text, "x");
+        eq("and a component's setter still ran", f.QStep.Shown.Text, "3");
+
+        f.QCmb.Index = 0;
+        f.QTxt.Text  = "y";
+        f.QStep.Value = 4;
+        /* Each one once at least, in order: `TextBox.Text` from code is a
+         * delete and an insert to GTK, and raises `Change` for both. */
+        eq("after the load, the same assignments from code raise their events",
+           loadHeard.filter((said, i) => said !== loadHeard[i - 1]).join(", "),
+           "Select object, Change, Step 4");
+
+        f.Close();
     }
 
     /*

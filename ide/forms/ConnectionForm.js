@@ -72,9 +72,6 @@ export class ConnectionForm extends Form {
      * typing a path cannot see for themselves.
      */
     showState() {
-        /* The `.form` assigns while it is still being built. */
-        if (!this.LblConnState || !this.BtnConnOk || !this.TxtConnName) return;
-
         const problem = this.refusal();
         this.BtnConnOk.Enabled = problem === "";
         if (problem) {

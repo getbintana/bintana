@@ -126,9 +126,6 @@ class VideoForm extends Form {
     }
 
     SldVol_Change() {
-        /* The .form's own Value fires this while the form is still loading,
-         * and this.SldVol does not exist yet -- every control does it. */
-        if (!this.SldVol) return;
         this.Vid.Volume = this.SldVol.Value / 100;
     }
 

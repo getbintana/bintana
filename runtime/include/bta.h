@@ -209,6 +209,14 @@ struct BtaWidget {
     int        drawn_w, drawn_h;
 
     /*
+     * Nonzero while this form's (or component's) `.form` is being applied, so
+     * an event a declared property raises reaches no handler by name -- see
+     * `emit_on`. A count and not a flag: a component built inside a form loads
+     * its own `.form` while the form's is still loading.
+     */
+    int        loading;
+
+    /*
      * Buttons: what Enter and Escape do on the form this one is on.
      *
      * Plain flags on the button, and **nothing is told to GTK here**. A window

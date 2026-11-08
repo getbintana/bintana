@@ -215,12 +215,11 @@ class QuoteForm extends Form {
         /*
          * Two guards, and they answer two different questions.
          *
-         * `quote` is the **loader's**: a `.form` applies each property by
-         * assignment and a control joins the form under its name only after its
-         * own properties are set, so `"Value": 1` on the spin raises `Change`
-         * before `Form_Open` has read anything -- and this ran against a record
-         * that was still null, twice, and opened the window behind two error
-         * dialogs about it.
+         * `quote` is **the record's**: it is null until `Form_Open` has read
+         * one, and a `Change` before that -- the `.form`'s own `"Value": 1`
+         * raised two, until the runtime stopped raising handlers while a
+         * `.form` loads -- ran against nothing and opened the window behind two
+         * error dialogs about it.
          *
          * `showing` is **ours**: `show()` writes these same controls, and every
          * assignment raises a real `Change`, so without it every display of the

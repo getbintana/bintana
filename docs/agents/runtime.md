@@ -260,30 +260,26 @@ icon when the theme has one by that name (`gtkapplication.c`).
 
 ## Events and dispatch
 
-- **A field initialiser does not beat the `.form` load.** A form's controls are
-  built inside `Form`'s own constructor, i.e. inside `super()`, and a subclass's
-  field initialisers run only after `super()` returns. So a handler for an event
-  the **load itself** raises finds every helper on the class still `undefined` —
-  a `Switcher` raises `Switch` when its first page makes `Current` go from nothing
-  to zero, and a `Notebook` does the same when a page is added. `MainForm.js` said
-  the opposite in a comment for as long as nobody added a handler for one of those:
-  being a field rather than `Form_Open` fixes every event raised *after* the window
-  exists, and nothing about the ones raised while it is being built. The traceback
-  when it happens names `at Form (native)`. Such a handler guards
-  (`if (this.events) …`) and says why.
-
-  **It happened twice**, months of comments apart. `GitForm` shipped with its
-  `Which` switcher raising `Switch` during its own `.form` load, and the handler
-  read `this.Which.Current` on a window whose controls were not named yet. So a
-  window whose `.form` holds a `Switcher` or a `Notebook` gets one `ready`
-  question -- *do I have my IDE and my controls* -- that every handler the load
-  can reach asks, rather than a check per handler that the next one forgets.
-- **A property declared in a `.form` fires its event while the form is still
-  loading**, and `this.<Name>` does not exist yet -- the loader applies properties
-  before the control is a property of the form. `Txt_Change` with `this.Txt`
-  undefined is not a bug in the control; every control does it (verified with
-  `TextBox.Text` and `CheckBox.Value`). A handler that touches its own control has
-  to guard.
+- **The `.form` load raises no handler by name** (since 2026-11-08). The loader
+  assigns through the real setters and GTK answers some with its own signal --
+  a `ComboBox` given `Items` and `Index` raised `Select` twice, a `TextBox` given
+  `Text` raised `Change`, a `Switcher` or `Notebook` raised `Switch` as its first
+  page arrived -- inside `Form`'s constructor, so before `super()` returned: the
+  subclass's field initialisers had not run and the controls declared later were
+  not on the form. **Measured before closing it**: over the whole suite and every
+  example, 19 handlers in the IDE, the libraries and the examples heard such an
+  event and every one was a guard against it (`if (!this.CmbZoom) return`,
+  `GitForm.ready`, `quote`'s two guards); none wanted it. So `form_build` counts
+  `BtaWidget.loading` on the form while its `.form` is applied and `emit_on`
+  returns before the by-name lookup while it is nonzero -- what VB6 and Qt's
+  `connectSlotsByName` do by connecting afterwards. **Only the named road**: a
+  handler put on with `On` is wiring, typically a component listening to the
+  controls inside it, and its setter applied by the host's `.form` still needs
+  it; a component's own `.form` counts on the component, so its inner controls
+  are quiet while it loads and its host's are quiet while the host does. After
+  the load an assignment from code raises the event exactly as before (VB6, Qt
+  and WinForms all do; Delphi's `ItemIndex` does not, and that is a different
+  question). `tests/widgets`' `LoadQuiet` holds both halves.
 - **A component added from code keeps itself as its event target, and
   `On(event, fn)` is what makes that harmless.** Only the `.form` loader rebinds
   one to its host (`bta_widget_bind` in `build_one`); `Container.Add` adopts it

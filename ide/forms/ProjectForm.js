@@ -121,12 +121,7 @@ export class ProjectForm extends Form {
      * name. A `ComboBox` raises `Select`; a handler named for an event its
      * control does not raise is loaded, never called, and says nothing.
      */
-    CmbPrKind_Select() {
-        /* Guarded for the reason `NewProjectForm`'s twin is: the `.form` fills
-         * this combo, filling a list moves its selection, and the event arrives
-         * while the form is still being built. */
-        if (this.TxtPrMain && this.CmbPrStartup) this.showKind(this.startsAt());
-    }
+    CmbPrKind_Select() { this.showKind(this.startsAt()); }
 
     startsAt() {
         return (this.TxtPrMain.Visible ? this.TxtPrMain.Text

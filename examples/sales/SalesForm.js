@@ -61,7 +61,6 @@ class SalesForm extends Form {
     /* --- groups ------------------------------------------------------------- */
 
     CmbGroup_Select() {
-        if (!this.Grid || !this.CmbGroup) return;    /* the .form is still loading */
         this.Grid.GroupBy = [-1, CLIENT, REGION][this.CmbGroup.Index] ?? -1;
     }
 
