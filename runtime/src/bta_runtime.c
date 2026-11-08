@@ -2233,6 +2233,119 @@ static JSValue js_protect_prototype(JSContext *ctx, JSValueConst this_val,
     return JS_TRUE;
 }
 
+/*
+ * The variant in force: `"dark"`, `"light"`, or NULL for *as the desktop says*.
+ *
+ * Both of GTK's settings are written, and **what they said before the first
+ * override is kept**, so going back to the desktop's (`Application.Theme = ""`)
+ * restores the desktop's own values rather than guessing them: a desktop that
+ * prefers dark through `gtk-application-prefer-dark-theme` is put back as it
+ * was. `gtk-interface-color-scheme` is 4.20's and looked up by name, since the
+ * floor is 4.10. Both are what a `Form`'s `ThemeChange` listens to, so every
+ * open window hears one change and re-derives `Dark` from the new ink.
+ */
+static char    *theme_forced;
+static bool     theme_saved;
+static gboolean theme_saved_dark;
+static int      theme_saved_scheme = -1;
+
+static GParamSpec *theme_scheme_spec(GtkSettings *settings)
+{
+    GParamSpec *scheme = g_object_class_find_property(G_OBJECT_GET_CLASS(settings),
+                                                      "gtk-interface-color-scheme");
+    if (scheme && (scheme->flags & G_PARAM_WRITABLE) && G_IS_PARAM_SPEC_ENUM(scheme))
+        return scheme;
+    return NULL;
+}
+
+static void set_theme(const char *theme)
+{
+    GtkSettings *settings = gtk_settings_get_default();
+
+    if (theme && !*theme)
+        theme = NULL;
+    g_free(theme_forced);
+    theme_forced = g_strdup(theme);
+
+    /* A console project has no settings: the word is kept and read back, and
+     * nothing is drawn for it to change. */
+    if (!settings)
+        return;
+
+    GParamSpec *scheme = theme_scheme_spec(settings);
+
+    if (!theme_saved) {
+        if (!theme)
+            return;            /* nothing was overridden, nothing to restore */
+        theme_saved = true;
+        g_object_get(settings, "gtk-application-prefer-dark-theme", &theme_saved_dark, NULL);
+        if (scheme)
+            g_object_get(settings, "gtk-interface-color-scheme", &theme_saved_scheme, NULL);
+    }
+
+    if (!theme) {
+        g_object_set(settings, "gtk-application-prefer-dark-theme", theme_saved_dark, NULL);
+        if (scheme && theme_saved_scheme >= 0)
+            g_object_set(settings, "gtk-interface-color-scheme", theme_saved_scheme, NULL);
+        return;
+    }
+
+    bool dark = g_str_equal(theme, "dark");
+    g_object_set(settings, "gtk-application-prefer-dark-theme", dark, NULL);
+    if (scheme) {
+        GEnumValue *v = g_enum_get_value_by_nick(G_PARAM_SPEC_ENUM(scheme)->enum_class,
+                                                 dark ? "dark" : "light");
+        if (v)
+            g_object_set(settings, "gtk-interface-color-scheme", v->value, NULL);
+    }
+}
+
+static JSValue js_app_get_theme(JSContext *ctx, JSValueConst this_val)
+{
+    return JS_NewString(ctx, theme_forced ? theme_forced : "");
+}
+
+static JSValue js_app_set_theme(JSContext *ctx, JSValueConst this_val, JSValueConst val)
+{
+    /* A word and only one of three: `Theme = true` or `"Dark mode"` doing
+     * nothing would be the silent half-answer, so anything else is refused
+     * and the theme stays as it was. */
+    if (!JS_IsString(val))
+        return JS_ThrowTypeError(ctx, "Application.Theme is \"\", \"light\" or \"dark\"");
+
+    const char *word = JS_ToCString(ctx, val);
+    if (!word)
+        return JS_EXCEPTION;
+
+    const char *theme = NULL;
+    if (!g_ascii_strcasecmp(word, "dark"))
+        theme = "dark";
+    else if (!g_ascii_strcasecmp(word, "light"))
+        theme = "light";
+    else if (*word) {
+        JS_FreeCString(ctx, word);
+        return JS_ThrowRangeError(ctx, "Application.Theme is \"\", \"light\" or \"dark\"");
+    }
+    JS_FreeCString(ctx, word);
+
+    set_theme(theme);
+    return JS_UNDEFINED;
+}
+
+static const JSCFunctionListEntry app_props[] = {
+    /* Theme
+     *   `"dark"` or `"light"` to draw the whole application in that variant of
+     *   the theme whatever the desktop prefers, `""` (the default) to follow
+     *   it. Assignable at any time: open windows follow, a `Form` raises
+     *   `ThemeChange` and `Dark` answers the new ground. `""` puts back what
+     *   the desktop said. **The program outranks `--theme`**, which sets the
+     *   starting value; a word that is not one of the three is refused. A
+     *   theme forced with the `GTK_THEME` variable (`Adwaita:dark`) is
+     *   beyond it
+     */
+    JS_CGETSET_DEF("Theme", js_app_get_theme, js_app_set_theme),
+};
+
 /* Answers false when a library carried a native plugin that cannot be used, in
  * which case the caller stops the program. See bta_plugins_load. */
 static bool install_globals(BtaApp *app)
@@ -2619,6 +2732,7 @@ static bool install_globals(BtaApp *app)
      *   terminal. `null` until assigned
      */
     JS_SetPropertyStr(ctx, application, "OnError", JS_NULL);
+    JS_SetPropertyFunctionList(ctx, application, app_props, G_N_ELEMENTS(app_props));
 
     JS_SetPropertyStr(ctx, global, "Application", application);
 
@@ -3658,6 +3772,7 @@ void bta_app_free(BtaApp *app)
     g_free(app->id);
     g_free(app->startup);
     g_free(app->theme);
+    g_clear_pointer(&theme_forced, g_free);
     g_free(app->test_filter);
     g_free(app->entry);
     /* Owns its paths (collect_libs builds it with g_free as the element free
@@ -4020,14 +4135,13 @@ wait:
  * - The text scale multiplies `gtk-xft-dpi`, which is what the desktop's own
  *   *Large Text* does -- so a form is seen exactly as a person with that
  *   setting sees it, labels and all, rather than zoomed as a picture.
- * - The theme asks for the dark or light variant both ways GTK offers:
- *   `gtk-application-prefer-dark-theme` (every GTK 4), and
- *   `gtk-interface-color-scheme` where this GTK has it (4.20), looked up by
- *   name because the floor is 4.10. `Widget.Dark` reads the ink that results,
- *   so it answers the variant asked for.
+ * - The theme is `set_theme`, the same road `Application.Theme` takes, so
+ *   `--theme` is only the starting value and a program that assigns one
+ *   outranks it. `Widget.Dark` reads the ink that results, so it answers the
+ *   variant asked for.
  * - The direction is GTK's default, set before the first widget exists:
- *   boxes mirror; a `Fixed` form does not (see docs/issues/ISSUE-right-to-left.md),
- *   which is exactly what looking at it this way is for.
+ *   boxes mirror and a `Fixed` mirrors its anchors, which is exactly what
+ *   looking at it this way is for.
  */
 static void apply_look(BtaApp *app)
 {
@@ -4041,19 +4155,8 @@ static void apply_look(BtaApp *app)
         g_object_set(settings, "gtk-xft-dpi", (int)(dpi * app->text_scale), NULL);
     }
 
-    if (settings && app->theme) {
-        bool dark = g_str_equal(app->theme, "dark");
-        g_object_set(settings, "gtk-application-prefer-dark-theme", dark, NULL);
-
-        GParamSpec *scheme = g_object_class_find_property(G_OBJECT_GET_CLASS(settings),
-                                                          "gtk-interface-color-scheme");
-        if (scheme && (scheme->flags & G_PARAM_WRITABLE) && G_IS_PARAM_SPEC_ENUM(scheme)) {
-            GEnumValue *v = g_enum_get_value_by_nick(G_PARAM_SPEC_ENUM(scheme)->enum_class,
-                                                     dark ? "dark" : "light");
-            if (v)
-                g_object_set(settings, "gtk-interface-color-scheme", v->value, NULL);
-        }
-    }
+    if (app->theme)
+        set_theme(app->theme);
 
     if (app->rtl)
         gtk_widget_set_default_direction(GTK_TEXT_DIR_RTL);

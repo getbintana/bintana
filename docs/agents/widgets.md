@@ -743,8 +743,15 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   Two traps around it: **an unrooted widget has no resolved style** and answers
   white in every theme, so the fallback is the application's first window; and
   the `GtkSettings` the `ThemeChange` handlers hang off outlives every window,
-  so they go through `bta_widget_watch` or they fire on a freed form. Inside the
-  handler the colours are already the new ones, measured -- no idle hop needed.
+  so they go through `bta_widget_watch` or they fire on a freed form. **Inside
+  the settings' `notify` the colours are still the old ones** -- measured on
+  GTK 4.22 once `Application.Theme` made the round trip testable: `Dark` read
+  there answered the ground being left, mapped window or not. GTK re-resolves
+  the CSS in the frame's layout phase, so `ThemeChange` is raised from the
+  second tick after the change (`theme_tick`), once per change however many
+  settings moved. And from 4.20 **`gtk-interface-color-scheme` is what
+  decides** and what a desktop moves through the portal; the form listened to
+  `prefer-dark` and the theme name only, and heard nothing.
   **The fallback is `bta_style_root()` and every reader of the ink goes through
   it**, which is the whole of what it is for: `Widget.Dark` had it and
   `Painter.Foreground` did not, so a `Chart` built for a document and saved with

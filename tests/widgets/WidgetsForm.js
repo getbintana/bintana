@@ -648,7 +648,7 @@ const TESTS = [
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
-    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "Action", "Groups",
+    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeForced", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Pdf", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
@@ -7393,11 +7393,10 @@ class Form1 extends Form {
      * shape of the answer rather than its value, because the value is the
      * desktop's and a test that pinned it would fail on half of them.
      *
-     * **That the event fires is not here and cannot be**: nothing in JS can
-     * change the desktop's theme, so raising `ThemeChange` is C on both sides.
-     * Measured with a probe that flipped the setting from `build_form` and is
-     * gone again: the event arrives, and `Dark` read inside the handler is
-     * already the new answer rather than the one that was true a moment ago.
+     * **That the event fires is `testThemeForced`'s**: `Application.Theme`
+     * writes the same settings a desktop moves, which is what made the round
+     * trip possible -- and what found that `Dark`, read inside a handler
+     * raised straight from the notification, was the ground being left.
      */
     testTheme() {
         const b = new Button();
@@ -7428,6 +7427,48 @@ class Form1 extends Form {
               b.EventNames().join(","));
 
         b.Delete();
+    }
+
+    /*
+     * `Application.Theme`: the application forcing the variant, which used to
+     * be `--theme` and nothing a program could say.
+     *
+     * And it is what lets the round trip `testTheme` could not make be made:
+     * the assignment writes GTK's settings, GTK notifies, the form raises
+     * `ThemeChange` and `Dark` answers the other ground. Asserted as *the
+     * other one* rather than as dark or light, because where it starts is the
+     * desktop's. `""` must put back exactly what the desktop said.
+     */
+    testThemeForced() {
+        const was = this.Dark;
+        let heard = 0;
+        let darkInside = null;
+        const handler = () => { heard++; darkInside = this.Dark; };
+
+        eq("a run with no --theme follows the desktop", Application.Theme, "");
+
+        throws("a word that is not a variant is refused", () => { Application.Theme = "blue"; });
+        throws("and so is a value that is not a word", () => { Application.Theme = true; });
+        eq("and a refusal changes nothing", Application.Theme, "");
+
+        this.On("ThemeChange", handler);
+        Application.Theme = was ? "Light" : "Dark";
+        eq("the variant reads back in lower case", Application.Theme, was ? "light" : "dark");
+
+        /* Waited for by the event and not by `Dark`: the claim is that the
+         * handler is where the new answer can be read. */
+        until("the form raised ThemeChange", () => heard > 0, () => {
+            eq("Dark inside the handler is the new ground", darkInside, !was);
+            eq("and the form is drawn on it", this.Dark, !was);
+
+            Application.Theme = "";
+            eq("going back reads as the desktop's", Application.Theme, "");
+            until("the form heard the way back", () => heard > 1, () => {
+                eq("on the ground it started on", darkInside, was);
+                eq("once per change, though GTK notified twice for each", heard, 2);
+                this.On("ThemeChange", null);
+            });
+        });
     }
 
     /*

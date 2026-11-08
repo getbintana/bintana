@@ -251,20 +251,56 @@ static void on_form_realized(GtkWidget *win, gpointer user_data);
  * event delivered to forty of them. `Form_Resize` is the same shape for the
  * same reason.
  *
- * **The colours are already the new ones inside the handler** (measured: the
- * ink goes 0.20 to 0.93 between the two sides of this call), so `Dark` read
- * from here is the answer to the change that caused it, and no idle hop is
- * needed to wait for GTK to catch up.
+ * **Raised once GTK has drawn a frame in the new colours, not from the
+ * notification.** Inside the settings' `notify` the styles are still the old
+ * ones -- measured on GTK 4.22 through `Application.Theme`: `Dark` read in the
+ * handler answered the ground being left, every time, and the right one a
+ * frame later. GTK re-resolves the CSS in the frame's layout phase, so the
+ * event waits for the second tick after the change: the first is that frame's
+ * update phase, still before the styles; the second comes after it.
  *
- * Two properties, because a desktop can move either one, so **one change may
- * raise it twice**. That is deliberate rather than debounced: the event carries
- * nothing, a handler re-reads state and restyles, and doing that twice is the
- * same picture. A handler that is not idempotent is a handler that was already
- * wrong.
+ * **And once per change.** A desktop -- or `Application.Theme` -- moves
+ * several settings for one change (`prefer-dark` and, from 4.20, the colour
+ * scheme), and each notifies; a tick already pending takes the rest in.
+ *
+ * **A form that is not on screen hears it when it is shown**, after its
+ * first frame there: a tick runs only while the window is mapped, and an
+ * unmapped window's styles were measured stale too -- raising it at once
+ * handed the handler the old answer. A form that is never shown never hears
+ * it, and has drawn nothing that needed restyling.
+ *
+ * The tick holds no pointer to the wrapper: it finds it again through the
+ * widget's quark, which the finaliser clears, and GTK drops the tick with the
+ * window.
  */
+#define THEME_TICK_KEY "bta-theme-tick"
+
+static gboolean theme_tick(GtkWidget *win, GdkFrameClock *clock, gpointer data)
+{
+    int *frames = data;
+
+    if (++*frames < 2)
+        return G_SOURCE_CONTINUE;
+
+    g_object_set_data(G_OBJECT(win), THEME_TICK_KEY, NULL);
+    BtaWidget *w = g_object_get_data(G_OBJECT(win), BTA_WIDGET_QUARK);
+    if (w)
+        bta_emit(w, "ThemeChange", 0, NULL);
+    return G_SOURCE_REMOVE;
+}
+
 static void on_theme_change(GObject *settings, GParamSpec *spec, gpointer data)
 {
-    bta_emit(data, "ThemeChange", 0, NULL);
+    BtaWidget *w   = data;
+    GtkWidget *win = w->gtk;
+
+    if (!win)
+        return;
+    if (g_object_get_data(G_OBJECT(win), THEME_TICK_KEY))
+        return;
+
+    g_object_set_data(G_OBJECT(win), THEME_TICK_KEY, GINT_TO_POINTER(1));
+    gtk_widget_add_tick_callback(win, theme_tick, g_new0(int, 1), g_free);
 }
 
 /*
@@ -323,6 +359,15 @@ static void build_form(BtaWidget *w)
                          G_CALLBACK(on_theme_change), w);
         g_signal_connect(settings, "notify::gtk-theme-name",
                          G_CALLBACK(on_theme_change), w);
+        /* 4.20's word for it, and the one that decides there: a desktop that
+         * goes dark through the portal moves this and not `prefer-dark`, and
+         * a form that did not listen never heard it. Looked up by name, since
+         * the floor is 4.10 and connecting to a property that is not there is
+         * a warning. */
+        if (g_object_class_find_property(G_OBJECT_GET_CLASS(settings),
+                                         "gtk-interface-color-scheme"))
+            g_signal_connect(settings, "notify::gtk-interface-color-scheme",
+                             G_CALLBACK(on_theme_change), w);
         bta_widget_watch(w, settings);
     }
 
@@ -8925,11 +8970,11 @@ void bta_core_register(void)
          *   Fires when the window is first given a size too
          */
         /* ThemeChange()
-         *   the desktop changed the theme.
-         *   [`Dark`](docs/reference/widgets/Widget.md#how-it-looks) read
-         *   inside the handler is already the new answer; **it may fire twice
-         *   for one change**, so a handler re-reads and restyles rather than
-         *   counting
+         *   the desktop or `Application.Theme` changed the theme. Raised
+         *   **once per change, after the window's first frame in the new
+         *   colours**, so [`Dark`](docs/reference/widgets/Widget.md#how-it-looks)
+         *   read inside the handler is the new answer; a form that is not on
+         *   screen hears it when it is shown
          */
         /* Activate()
          *   the window became the one the user is working in: a click on
