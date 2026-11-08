@@ -290,10 +290,14 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   **the desktop portal** -- outside Flatpak -- which is a service of the user's
   real session: under `tests/try.sh` the dialog appeared on the user's screen
   and the program sat waiting (see *A private display is not a private
-  session* in testing.md). When the portal draws the dialog, its *Preview*
-  button is the portal's and this signal is probably never emitted; the hook
-  answers only GTK's own `GtkPrintUnixDialog`. Nothing in the suite presses
-  *Print…* or opens `Send`'s dialog, for the same reason.
+  session* in testing.md). **The GNOME portal's print dialog has no *Preview*
+  button at all** -- seen on the user's desktop, 2026-11-07, GTK 4.22 -- so
+  there the crash cannot happen and this signal is never emitted; the hook
+  answers only GTK's own `GtkPrintUnixDialog` (no portal, another desktop). A
+  program that wants a preview offers its own button and calls
+  `Printer.Preview` -- tried on that same desktop: the window opened, paged,
+  and its *Print…* reached the portal's dialog and printed. Nothing in the suite presses *Print…* or opens `Send`'s
+  dialog, for the portal's reason.
 - **A verb with a key that decides whether there is a dialog is two verbs.**
   `Print(area, { ToFile })` opened the print dialog, or did not, depending on a
   key in its options -- and the give-away was measurable rather than stylistic:
