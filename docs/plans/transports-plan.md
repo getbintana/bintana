@@ -1,6 +1,6 @@
 # Transports: sockets, serial and IPC beside HTTP
 
-**Status: stages 1 and 3 built (2026-11-08); the rest is staged.** This is the
+**Status: stages 1, 2 and 3 built (2026-11-08); the rest is staged.** This is the
 answer to **R3** of
 [the October audit](../audit-2026-10.md): what a program can talk to that is
 not an HTTP request and not a child process. The first stage is `Socket` and
@@ -321,6 +321,9 @@ service is the case to design `Ipc.DBus` from.
    foundation.
 2. **TLS on both** -- `Socket.Tls = true`/`{ Ca, Cert }` and
    `ServerSocket.Tls = { Cert, Key }`, reusing `Http`'s trust type.
+   **Built** (2026-11-08, the same file; `tests/widgets`' `testSocketTls`):
+   a CA file, a pinned certificate and a self-signed server, each handshaken
+   against a real listener. The client's connect timeout covers the handshake.
 3. **`UdpSocket`** -- unicast and broadcast first; multicast after.
    **Built** (2026-11-08, the same file; `tests/widgets`' `testUdp`). IPv4 in
    this stage; multicast and IPv6 follow.

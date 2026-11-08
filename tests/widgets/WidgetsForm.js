@@ -596,6 +596,8 @@ const TESTS = [
     /* Blocking too: openssl makes the keys, softhsm2-util and p11tool the
      * token, and a child process signs on it. */
     "Key",
+    /* Blocking too: openssl makes the certificate, and both ends speak TLS. */
+    "SocketTls",
     "EditorMap",
     "EditorFold",
     "EditorFoldClick",
@@ -29602,6 +29604,101 @@ class Form1 extends Form {
                 eq("the server released its port", server.Bound, false);
             }, 6000);
         }, 6000);
+    }
+
+    testSocketTls() {
+        if (!Application.HasCommand("openssl")) {
+            print("  (skipping the socket TLS step: it needs openssl)");
+            return;
+        }
+
+        const dir   = File.Join(Environment.TempDirectory,
+                                `bintana-sock-tls-${Environment.ProcessId}`);
+        const cert  = File.Join(dir, "server.pem");
+        const key   = File.Join(dir, "server.key");
+        const other = File.Join(dir, "other.pem");
+
+        Directory.Make(dir);
+        const made = Exec.Wait(["openssl", "req", "-x509", "-newkey", "rsa:2048",
+                                "-nodes", "-days", "1",
+                                "-keyout", key, "-out", cert,
+                                "-subj", "/CN=127.0.0.1",
+                                "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"],
+                               { Timeout: 30000 });
+        const madeOther = Exec.Wait(["openssl", "req", "-x509", "-newkey", "rsa:2048",
+                                     "-nodes", "-days", "1",
+                                     "-keyout", File.Join(dir, "other.key"),
+                                     "-out", other,
+                                     "-subj", "/CN=127.0.0.1",
+                                     "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"],
+                                    { Timeout: 30000 });
+        if (made.ExitCode !== 0 || madeOther.ExitCode !== 0) {
+            print(`  (skipping the socket TLS step: openssl exited ${made.ExitCode}/${madeOther.ExitCode})`);
+            return;
+        }
+
+        throws("a Socket Tls that is not an object is refused",
+               () => new Socket({ Tls: "x" }));
+        throws("a CA that is not there is refused",
+               () => new Socket({ Tls: { Ca: File.Join(dir, "no.pem") } }));
+        throws("a server certificate that is not there is refused",
+               () => new ServerSocket({ Tls: { Cert: File.Join(dir, "no.pem"), Key: key } }));
+
+        const probe = new Socket({ Tls: { Ca: cert } });
+        eq("a client Tls reads back its CA", probe.Tls.Ca, cert);
+        probe.Tls = null;
+        eq("and null is a plain socket", probe.Tls, null);
+        eq("and assigning it back reads back", (probe.Tls = { Cert: cert }, probe.Tls.Cert), cert);
+
+        const server = new ServerSocket({ Host: "local", Port: 0,
+                                          Tls: { Cert: cert, Key: key } });
+        eq("a server Tls reads back", server.Tls.Cert, cert);
+        server.OnConnection = (c) => {
+            c.Line = true;
+            c.OnLine = (line) => c.Write("tls: " + line + "\n");
+        };
+        server.Listen();
+
+        const pin = {};
+        let client = new Socket({ Host: "127.0.0.1", Port: server.Port,
+                                  Tls: { Cert: cert }, Line: true, Timeout: 300000 });
+        client.OnConnected = () => client.Write("pin\n");
+        client.OnLine = (line) => { pin.reply = line; };
+        client.OnError = (e) => { pin.error = e; };
+        client.Connect();
+
+        until("the pinned TLS connection answered", () => pin.reply || pin.error, () => {
+            eq("the pinned certificate is accepted", pin.reply, "tls: pin");
+            client.Close();
+
+            const ca = {};
+            client = new Socket({ Host: "127.0.0.1", Port: server.Port,
+                                  Tls: { Ca: cert }, Line: true, Timeout: 300000 });
+            client.OnConnected = () => client.Write("ca\n");
+            client.OnLine = (line) => { ca.reply = line; };
+            client.OnError = (e) => { ca.error = e; };
+            client.Connect();
+
+            until("the CA TLS connection answered", () => ca.reply || ca.error, () => {
+                eq("the CA is accepted", ca.reply, "tls: ca");
+                client.Close();
+
+                const bad = {};
+                client = new Socket({ Host: "127.0.0.1", Port: server.Port,
+                                      Tls: { Ca: other }, Line: true, Timeout: 300000 });
+                client.OnConnected = () => { bad.connected = true; };
+                client.OnError = (e) => { bad.error = e.Kind; };
+                client.OnClosed = () => { bad.closed = true; };
+                client.Connect();
+
+                until("the untrusted certificate is refused",
+                      () => bad.closed, () => {
+                    eq("it did not connect", bad.connected, undefined);
+                    eq("it was a TLS failure", bad.error, "Tls");
+                    server.Stop();
+                }, 24000);
+            }, 24000);
+        }, 24000);
     }
 
     testHttpServer() {

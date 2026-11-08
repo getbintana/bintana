@@ -1095,9 +1095,9 @@ class SocketPart extends FormPart {
     static get Events() {
         return ["Connected", "Data", "Line", "Closed", "Error", "Writable"];
     }
-    /** what a `.form` may set: where it connects, and how it reads */
+    /** what a `.form` may set: where it connects, how it reads, and the trust */
     static get Properties() {
-        return ["Host", "Port", "Path", "Timeout", "Line", "EndOfLine"];
+        return ["Host", "Port", "Path", "Timeout", "Line", "EndOfLine", "Tls"];
     }
 
     constructor() {
@@ -1108,6 +1108,7 @@ class SocketPart extends FormPart {
         this._timeout = 10000;
         this._line    = false;
         this._eol     = "\n";
+        this._tls     = null;
         this._socket  = null;
     }
 
@@ -1116,7 +1117,8 @@ class SocketPart extends FormPart {
         if (!this._socket) {
             const socket = new Socket({ Host: this._host, Port: this._port,
                                         Path: this._path, Timeout: this._timeout,
-                                        Line: this._line, EndOfLine: this._eol });
+                                        Line: this._line, EndOfLine: this._eol,
+                                        Tls: this._tls });
 
             socket.OnConnected = () => this.Emit("Connected");
             socket.OnData      = (bytes) => this.Emit("Data", bytes);
@@ -1195,6 +1197,10 @@ class SocketPart extends FormPart {
         if (this._socket) this._socket.EndOfLine = this._eol;
     }
 
+    /** `true` for the system's store, `{ Ca, Cert }` for a named one, `null` for plain */
+    get Tls() { return this._tls; }
+    set Tls(value) { this._tls = value; this._drop(); }
+
     /** whether the connection is up */
     get Connected() { return this._socket ? this._socket.Connected : false; }
     /** the local address once connected */
@@ -1235,14 +1241,15 @@ class ServerSocketPart extends FormPart {
 
     /** the events a listener raises */
     static get Events() { return ["Connection", "Error"]; }
-    /** what a `.form` may set: where it listens */
-    static get Properties() { return ["Host", "Port", "Path"]; }
+    /** what a `.form` may set: where it listens, and its certificate */
+    static get Properties() { return ["Host", "Port", "Path", "Tls"]; }
 
     constructor() {
         super();
         this._host   = "local";
         this._port   = 0;
         this._path   = "";
+        this._tls    = null;
         this._server = null;
     }
 
@@ -1250,7 +1257,7 @@ class ServerSocketPart extends FormPart {
     get ServerSocket() {
         if (!this._server) {
             const server = new ServerSocket({ Host: this._host, Port: this._port,
-                                              Path: this._path });
+                                              Path: this._path, Tls: this._tls });
 
             server.OnConnection = (client) => this.Emit("Connection", client);
             server.OnError      = (err) => this.Emit("Error", err);
@@ -1296,6 +1303,10 @@ class ServerSocketPart extends FormPart {
         this._path = value;
         this._drop();
     }
+
+    /** `{ Cert, Key }`, or `null` for a plain listener */
+    get Tls() { return this._tls; }
+    set Tls(value) { this._tls = value; this._drop(); }
 
     /** whether it is accepting now */
     get Listening() { return this._server ? this._server.Listening : false; }

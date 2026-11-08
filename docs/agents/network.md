@@ -367,3 +367,33 @@ each rule below; read it before changing a level.
   its sender as `{ Host, Port }`; `Send(data, from)` is the reply. The local
   port is the one `Bind` read back, which is also what the peer sees as the
   source.
+- **`GSocketClient`'s TLS is the system's store and nothing else.** It has
+  `set_tls` and deprecated validation flags, but no database and no pinned
+  certificate. The client therefore connects plain, wraps the
+  `GSocketConnection` with `g_tls_client_connection_new`, sets the CA database
+  there, and handshakes before `OnConnected` -- the same shape the server uses.
+  A pinned certificate is accepted by setting validation flags to zero and
+  comparing `g_tls_connection_get_peer_certificate` with
+  `g_tls_certificate_is_same` after the handshake; the CA road leaves the
+  library's own chain check on.
+- **The connect timeout has to outlive the TCP connection.** It used to be
+  removed in `on_connect`, before a TLS handshake could start, so a peer that
+  accepted the socket and then said nothing left `Connect` waiting forever. It
+  stays armed through the handshake and is removed when that finishes.
+- **A TLS connection is two objects.** `SocketData` keeps the raw
+  `GSocketConnection` for `LocalHost`/`RemoteHost` and a `GIOStream` for
+  reading and writing; a plain socket has both pointing at the same connection
+  (two references), a TLS one has the `GTlsClientConnection` or
+  `GTlsServerConnection` on top. Closing closes and drops the stream, then the
+  raw connection; the read and write jobs compare `src` against the streams,
+  so a reconnect cannot accept an old completion.
+- **`ServerSocket.Tls` wraps every accepted connection, not the listener.** The
+  listener has no TLS of its own: `g_tls_server_connection_new` takes the
+  accepted connection and a `GTlsCertificate`, the handshake is asynchronous,
+  and the accept loop is re-armed before it finishes so one slow handshake does
+  not stop the next client. `Stop` cancels the handshakes through the server's
+  cancellable; their completions see `listening` false and drop the connection.
+- **`g_tls_file_database_new` takes two arguments**, the file and the error --
+  not the `(path, NULL, &err)` shape the other constructors have. And the
+  deprecated validation setter is reached with `g_object_set(tls,
+  "validation-flags", 0, NULL)` so the build does not warn.

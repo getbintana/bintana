@@ -93,10 +93,19 @@ struct SocketData {
 
     GSocketClient     *client;
     GSocketConnection *conn;
-    GInputStream      *in;    /* borrowed from conn */
-    GOutputStream     *out;   /* borrowed from conn */
+    GIOStream         *stream;  /* conn itself, or a TLS wrapper; owned */
+    GInputStream      *in;      /* borrowed from stream */
+    GOutputStream     *out;     /* borrowed from stream */
     GCancellable      *cancel;
     guint              timeout_id;
+
+    /* `Tls`: the trust the client was configured with, kept across connects
+     * and freed by the finalizer, not by Close. */
+    bool             tls;
+    GTlsDatabase    *tls_db;
+    GTlsCertificate *tls_cert;
+    char            *tls_ca_path;
+    char            *tls_cert_path;
 
     char      *local_host;
     int        local_port;
@@ -127,6 +136,11 @@ struct ServerData {
     GSocketListener *listener;
     GCancellable    *cancel;
     GPtrArray       *clients; /* SocketData *, BORROWED; removed by the client */
+
+    /* `Tls`: the certificate every accepted connection is wrapped with. */
+    GTlsCertificate *tls_cert;
+    char            *tls_cert_path;
+    char            *tls_key_path;
 };
 
 /* A datagram socket.  It has no connection and no close event: it is a local
@@ -156,6 +170,8 @@ typedef enum {
     JOB_READ,
     JOB_WRITE,
     JOB_ACCEPT,
+    JOB_TLS_CLIENT,
+    JOB_TLS_SERVER,
 } JobKind;
 
 /* One async operation.  Every one is on `socket_jobs` so teardown can free
@@ -168,6 +184,8 @@ typedef struct {
     void      *owner;
     guint8    *buf;           /* read */
     GBytes    *bytes;         /* write */
+    GSocketConnection *conn;  /* TLS server: the raw connection */
+    GIOStream *stream;        /* TLS: the wrapper, owned */
     bool       is_unix;       /* connect */
 } SocketJob;
 
@@ -189,6 +207,9 @@ static void on_read(GObject *src, GAsyncResult *res, gpointer data);
 static void on_write(GObject *src, GAsyncResult *res, gpointer data);
 static void on_accept(GObject *src, GAsyncResult *res, gpointer data);
 static gboolean on_udp_ready(GSocket *sock, GIOCondition cond, gpointer data);
+static void on_tls_handshake(GObject *src, GAsyncResult *res, gpointer data);
+static JSValue socket_from_connection(JSContext *ctx, GSocketConnection *conn,
+                                      GIOStream *stream, ServerData *server);
 
 /* --------------------------------------------------------------- utilities */
 
@@ -264,6 +285,10 @@ static void job_free(SocketJob *j)
     g_free(j->buf);
     if (j->bytes)
         g_bytes_unref(j->bytes);
+    if (j->conn)
+        g_object_unref(j->conn);
+    if (j->stream)
+        g_object_unref(j->stream);
     /* Last: freeing this may finalize the owner, and nothing here reads it
      * after. */
     JS_FreeValue(j->ctx, j->ref);
@@ -446,10 +471,11 @@ static void socket_close_full(SocketData *s, bool emit, bool finalizing)
     if (s->cancel)
         g_cancellable_cancel(s->cancel);
     g_clear_object(&s->client);
-    if (s->conn) {
-        g_io_stream_close(G_IO_STREAM(s->conn), NULL, NULL);
-        g_clear_object(&s->conn);
+    if (s->stream) {
+        g_io_stream_close(s->stream, NULL, NULL);
+        g_clear_object(&s->stream);
     }
+    g_clear_object(&s->conn);
     s->in = NULL;
     s->out = NULL;
     g_clear_object(&s->cancel);
@@ -741,7 +767,7 @@ static void on_connect(GObject *src, GAsyncResult *res, gpointer data)
     GSocketConnection *conn;
     bool stale = (G_SOCKET_CLIENT(src) != s->client);
 
-    if (s->timeout_id) {
+    if (!s->tls && s->timeout_id) {
         g_source_remove(s->timeout_id);
         s->timeout_id = 0;
     }
@@ -778,9 +804,43 @@ static void on_connect(GObject *src, GAsyncResult *res, gpointer data)
     }
     g_clear_error(&err);
 
+    if (s->tls) {
+        GSocketConnectable *identity = NULL;
+        GIOStream         *tls;
+        SocketJob         *tj;
+
+        if (!s->path || !*s->path)
+            identity = G_SOCKET_CONNECTABLE(g_network_address_new(s->host,
+                                                                  (guint16)s->port));
+        tls = g_tls_client_connection_new(G_IO_STREAM(conn), identity, &err);
+        if (identity)
+            g_object_unref(identity);
+        if (!tls) {
+            socket_fail(s, err, false);
+            g_clear_error(&err);
+            g_object_unref(conn);
+            job_free(j);
+            return;
+        }
+        if (s->tls_db)
+            g_tls_connection_set_database(G_TLS_CONNECTION(tls), s->tls_db);
+        if (s->tls_cert)
+            g_object_set(G_OBJECT(tls), "validation-flags",
+                         (GTlsCertificateFlags)0, NULL);
+
+        s->conn = conn;              /* the raw connection owns the address */
+        tj = job_new(JOB_TLS_CLIENT, s->ctx, s->self, s);
+        tj->stream = tls;
+        g_tls_connection_handshake_async(G_TLS_CONNECTION(tls), G_PRIORITY_DEFAULT,
+                                         s->cancel, on_tls_handshake, tj);
+        job_free(j);
+        return;
+    }
+
     s->conn   = conn;
-    s->in     = g_io_stream_get_input_stream(G_IO_STREAM(conn));
-    s->out    = g_io_stream_get_output_stream(G_IO_STREAM(conn));
+    s->stream = g_object_ref(G_IO_STREAM(conn));
+    s->in     = g_io_stream_get_input_stream(s->stream);
+    s->out    = g_io_stream_get_output_stream(s->stream);
     s->state  = SOCKET_CONNECTED;
     s->timed_out = false;
     socket_read_addresses(s);
@@ -827,8 +887,82 @@ static void server_fail(ServerData *s, const GError *err)
     JS_FreeValue(s->ctx, e);
 }
 
+static void on_tls_handshake(GObject *src, GAsyncResult *res, gpointer data)
+{
+    SocketJob *j = data;
+    GError    *err = NULL;
+    gboolean   ok = g_tls_connection_handshake_finish(G_TLS_CONNECTION(src), res, &err);
+
+    if (j->kind == JOB_TLS_CLIENT) {
+        SocketData *s = j->owner;
+
+        if (!ok || s->state != SOCKET_CONNECTING) {
+            if (s->state == SOCKET_CONNECTING)
+                socket_fail(s, err, s->timed_out);
+            g_clear_error(&err);
+            job_free(j);
+            return;
+        }
+        if (s->timeout_id) {
+            g_source_remove(s->timeout_id);
+            s->timeout_id = 0;
+        }
+        if (s->tls_cert) {
+            GTlsCertificate *peer = g_tls_connection_get_peer_certificate(G_TLS_CONNECTION(src));
+
+            if (!peer || !g_tls_certificate_is_same(s->tls_cert, peer)) {
+                socket_fail_text(s, "Tls", "the peer's certificate is not the pinned one");
+                g_clear_error(&err);
+                job_free(j);
+                return;
+            }
+        }
+
+        s->stream = j->stream;
+        j->stream = NULL;
+        s->in     = g_io_stream_get_input_stream(s->stream);
+        s->out    = g_io_stream_get_output_stream(s->stream);
+        s->state  = SOCKET_CONNECTED;
+        s->timed_out = false;
+        socket_read_addresses(s);
+
+        socket_emit(s, s->on_connected, 0, NULL);
+        if (s->state == SOCKET_CONNECTED)
+            socket_start_read(s);
+        job_free(j);
+        return;
+    }
+
+    {
+        ServerData *s = j->owner;
+
+        if (!ok) {
+            if (s->listening)
+                server_fail(s, err);
+            g_clear_error(&err);
+            job_free(j);
+            return;
+        }
+        if (!s->listening) {
+            job_free(j);
+            return;
+        }
+
+        JSValue client = socket_from_connection(s->ctx, j->conn, j->stream, s);
+        if (JS_IsException(client)) {
+            job_free(j);
+            return;
+        }
+        j->conn   = NULL;
+        j->stream = NULL;
+        server_emit(s, s->on_connection, 1, &client);
+        JS_FreeValue(s->ctx, client);
+        job_free(j);
+    }
+}
+
 static JSValue socket_from_connection(JSContext *ctx, GSocketConnection *conn,
-                                      ServerData *server)
+                                      GIOStream *stream, ServerData *server)
 {
     JSValue obj = JS_NewObjectClass(ctx, socket_class_id);
     SocketData *s;
@@ -852,8 +986,11 @@ static JSValue socket_from_connection(JSContext *ctx, GSocketConnection *conn,
     s->writes       = g_queue_new();
     s->linebuf      = g_byte_array_new();
     s->conn         = conn;          /* takes the reference */
-    s->in           = g_io_stream_get_input_stream(G_IO_STREAM(conn));
-    s->out          = g_io_stream_get_output_stream(G_IO_STREAM(conn));
+    /* The plain road has one object; the TLS road has the raw connection for
+     * addresses and the wrapper for I/O, and this takes the wrapper. */
+    s->stream       = stream ? stream : g_object_ref(G_IO_STREAM(conn));
+    s->in           = g_io_stream_get_input_stream(s->stream);
+    s->out          = g_io_stream_get_output_stream(s->stream);
     s->cancel       = g_cancellable_new();
     s->state        = SOCKET_CONNECTED;
     s->server       = server;
@@ -883,6 +1020,7 @@ static void on_accept(GObject *src, GAsyncResult *res, gpointer data)
     GError *err = NULL;
     GSocketConnection *conn;
     JSValue client;
+    SocketJob *tj;
     bool stale = (G_SOCKET_LISTENER(src) != s->listener);
 
     conn = g_socket_listener_accept_finish(G_SOCKET_LISTENER(src), res, NULL, &err);
@@ -906,7 +1044,31 @@ static void on_accept(GObject *src, GAsyncResult *res, gpointer data)
     }
     g_clear_error(&err);
 
-    client = socket_from_connection(s->ctx, conn, s);
+    if (s->tls_cert) {
+        GError   *terr = NULL;
+        GIOStream *tls = g_tls_server_connection_new(G_IO_STREAM(conn), s->tls_cert, &terr);
+
+        if (!tls) {
+            server_fail(s, terr);
+            g_clear_error(&terr);
+            g_object_unref(conn);
+            if (s->listening)
+                server_accept(s);
+            job_free(j);
+            return;
+        }
+        tj = job_new(JOB_TLS_SERVER, s->ctx, s->self, s);
+        tj->conn   = conn;
+        tj->stream = tls;
+        g_tls_connection_handshake_async(G_TLS_CONNECTION(tls), G_PRIORITY_DEFAULT,
+                                         s->cancel, on_tls_handshake, tj);
+        if (s->listening)
+            server_accept(s);
+        job_free(j);
+        return;
+    }
+
+    client = socket_from_connection(s->ctx, conn, NULL, s);
     if (JS_IsException(client)) {
         g_object_unref(conn);
         if (s->listening)
@@ -1410,6 +1572,114 @@ static ServerData *server_data(JSValueConst v)
     return JS_GetOpaque(v, server_class_id);
 }
 
+static bool socket_set_tls(JSContext *ctx, SocketData *s, JSValueConst value)
+{
+    bool on = false;
+    GTlsDatabase *db = NULL;
+    GTlsCertificate *cert = NULL;
+    char *ca_path = NULL, *cert_path = NULL;
+    GError *err = NULL;
+
+    if (JS_IsNull(value) || JS_IsUndefined(value) || JS_IsBool(value)) {
+        on = JS_ToBool(ctx, value);
+    } else if (JS_IsObject(value)) {
+        JSPropertyEnum *props = NULL;
+        uint32_t        n = 0;
+
+        if (JS_GetOwnPropertyNames(ctx, &props, &n, value,
+                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0)
+            return false;
+        on = true;
+        for (uint32_t i = 0; i < n; i++) {
+            const char *key = JS_AtomToCString(ctx, props[i].atom);
+            JSValue     v;
+            const char *path;
+
+            if (!key) {
+                JS_FreePropertyEnum(ctx, props, n);
+                goto failed;
+            }
+            if (strcmp(key, "Ca") && strcmp(key, "Cert")) {
+                JS_ThrowTypeError(ctx, "Socket.Tls: no option called '%s'; the options "
+                                       "are Ca and Cert", key);
+                JS_FreeCString(ctx, key);
+                JS_FreePropertyEnum(ctx, props, n);
+                goto failed;
+            }
+            v = JS_GetPropertyStr(ctx, value, key);
+            if (JS_IsException(v)) {
+                JS_FreeCString(ctx, key);
+                JS_FreePropertyEnum(ctx, props, n);
+                goto failed;
+            }
+            if (!JS_IsString(v)) {
+                JS_ThrowTypeError(ctx, "Socket.Tls: %s is a file path", key);
+                JS_FreeValue(ctx, v);
+                JS_FreeCString(ctx, key);
+                JS_FreePropertyEnum(ctx, props, n);
+                goto failed;
+            }
+            path = JS_ToCString(ctx, v);
+            JS_FreeValue(ctx, v);
+            if (!path) {
+                JS_FreeCString(ctx, key);
+                JS_FreePropertyEnum(ctx, props, n);
+                goto failed;
+            }
+            if (!strcmp(key, "Ca")) {
+                db = g_tls_file_database_new(path, &err);
+                if (!db) {
+                    JS_ThrowTypeError(ctx, "Socket.Tls: cannot read the certificate '%s': %s",
+                                      path, bta_gerror_text(err));
+                    g_clear_error(&err);
+                    JS_FreeCString(ctx, path);
+                    JS_FreeCString(ctx, key);
+                    JS_FreePropertyEnum(ctx, props, n);
+                    goto failed;
+                }
+                g_free(ca_path);
+                ca_path = g_strdup(path);
+            } else {
+                cert = g_tls_certificate_new_from_file(path, &err);
+                if (!cert) {
+                    JS_ThrowTypeError(ctx, "Socket.Tls: cannot read the certificate '%s': %s",
+                                      path, bta_gerror_text(err));
+                    g_clear_error(&err);
+                    JS_FreeCString(ctx, path);
+                    JS_FreeCString(ctx, key);
+                    JS_FreePropertyEnum(ctx, props, n);
+                    goto failed;
+                }
+                g_free(cert_path);
+                cert_path = g_strdup(path);
+            }
+            JS_FreeCString(ctx, path);
+            JS_FreeCString(ctx, key);
+        }
+        JS_FreePropertyEnum(ctx, props, n);
+    } else {
+        return JS_ThrowTypeError(ctx, "Socket.Tls: true, { Ca, Cert }, or null"), false;
+    }
+
+    g_clear_object(&s->tls_db);
+    g_clear_object(&s->tls_cert);
+    g_free(s->tls_ca_path);
+    g_free(s->tls_cert_path);
+    s->tls           = on;
+    s->tls_db        = db;
+    s->tls_cert      = cert;
+    s->tls_ca_path   = ca_path;
+    s->tls_cert_path = cert_path;
+    return true;
+
+failed:
+    g_clear_object(&db);
+    g_clear_object(&cert);
+    g_free(ca_path);
+    g_free(cert_path);
+    return false;
+}
+
 static bool socket_set_option(JSContext *ctx, SocketData *s,
                               const char *key, JSValueConst value)
 {
@@ -1478,8 +1748,14 @@ static bool socket_set_option(JSContext *ctx, SocketData *s,
         return true;
     }
 
+    if (!strcmp(key, "Tls")) {
+        if (s->state != SOCKET_CLOSED)
+            return JS_ThrowTypeError(ctx, "Socket.Tls: cannot change while connected"), false;
+        return socket_set_tls(ctx, s, value);
+    }
+
     return JS_ThrowTypeError(ctx, "Socket: no option called '%s'; the options are "
-                             "Host, Port, Path, Timeout, Line and EndOfLine", key), false;
+                             "Host, Port, Path, Timeout, Line, EndOfLine and Tls", key), false;
 }
 
 static bool socket_apply_options(JSContext *ctx, SocketData *s, JSValueConst opts)
@@ -1590,6 +1866,31 @@ static JSValue socket_set_path(JSContext *ctx, JSValueConst this_val, JSValueCon
     if (!s)
         return JS_ThrowTypeError(ctx, "Path: not a Socket");
     return socket_set_option(ctx, s, "Path", v) ? JS_UNDEFINED : JS_EXCEPTION;
+}
+
+static JSValue socket_get_tls(JSContext *ctx, JSValueConst this_val)
+{
+    SocketData *s = socket_data(this_val);
+    JSValue     o;
+
+    if (!s || !s->tls)
+        return JS_NULL;
+    if (!s->tls_ca_path && !s->tls_cert_path)
+        return JS_TRUE;
+    o = JS_NewObject(ctx);
+    if (s->tls_ca_path)
+        JS_SetPropertyStr(ctx, o, "Ca", JS_NewString(ctx, s->tls_ca_path));
+    if (s->tls_cert_path)
+        JS_SetPropertyStr(ctx, o, "Cert", JS_NewString(ctx, s->tls_cert_path));
+    return o;
+}
+
+static JSValue socket_set_tls_property(JSContext *ctx, JSValueConst this_val, JSValueConst v)
+{
+    SocketData *s = socket_data(this_val);
+    if (!s)
+        return JS_ThrowTypeError(ctx, "Tls: not a Socket");
+    return socket_set_option(ctx, s, "Tls", v) ? JS_UNDEFINED : JS_EXCEPTION;
 }
 
 static JSValue socket_get_timeout(JSContext *ctx, JSValueConst this_val)
@@ -1847,6 +2148,12 @@ static const JSCFunctionListEntry socket_props[] = {
      *   `Connect` refuse; the portable local road is `Ipc.Pipe`
      */
     JS_CGETSET_DEF("Path", socket_get_path, socket_set_path),
+    /* Tls
+     *   `true` trusts the system's store; `{ Ca, Cert }` names a CA file
+     *   and/or a certificate to pin; `null` (the default) is a plain socket.
+     *   Read back as what was set
+     */
+    JS_CGETSET_DEF("Tls", socket_get_tls, socket_set_tls_property),
     /* Timeout
      *   how long `Connect` may take, in milliseconds; `0` is none. The
      *   read side waits as long as the peer takes, which is what a scale or a
@@ -1989,8 +2296,88 @@ static bool server_set_option(JSContext *ctx, ServerData *s,
         JS_FreeCString(ctx, text);
         return true;
     }
+    if (!strcmp(key, "Tls")) {
+        GTlsCertificate *cert;
+        char *c = NULL, *k = NULL;
+        GError *err = NULL;
+
+        if (s->listening)
+            return JS_ThrowTypeError(ctx, "ServerSocket.Tls: cannot change while listening"), false;
+        if (JS_IsNull(value) || JS_IsUndefined(value) || JS_IsBool(value)) {
+            if (JS_ToBool(ctx, value)) {
+                return JS_ThrowTypeError(ctx, "ServerSocket.Tls: expects { Cert, Key }"), false;
+            }
+            g_clear_object(&s->tls_cert);
+            g_clear_pointer(&s->tls_cert_path, g_free);
+            g_clear_pointer(&s->tls_key_path, g_free);
+            return true;
+        }
+        if (!JS_IsObject(value))
+            return JS_ThrowTypeError(ctx, "ServerSocket.Tls: expects { Cert, Key }"), false;
+
+        JSPropertyEnum *props = NULL;
+        uint32_t        n = 0;
+
+        if (JS_GetOwnPropertyNames(ctx, &props, &n, value,
+                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0)
+            return false;
+        for (uint32_t i = 0; i < n; i++) {
+            const char *name = JS_AtomToCString(ctx, props[i].atom);
+            bool        bad = !name || (strcmp(name, "Cert") && strcmp(name, "Key"));
+
+            if (bad && name)
+                JS_ThrowTypeError(ctx, "ServerSocket.Tls: no option called '%s'; "
+                                       "the options are Cert and Key", name);
+            JS_FreeCString(ctx, name);
+            if (bad) {
+                JS_FreePropertyEnum(ctx, props, n);
+                return false;
+            }
+        }
+        JS_FreePropertyEnum(ctx, props, n);
+
+        JSValue cv = JS_GetPropertyStr(ctx, value, "Cert");
+        JSValue kv = JS_GetPropertyStr(ctx, value, "Key");
+        if (JS_IsException(cv) || JS_IsException(kv)) {
+            JS_FreeValue(ctx, cv);
+            JS_FreeValue(ctx, kv);
+            return false;
+        }
+        if (!JS_IsString(cv) || !JS_IsString(kv)) {
+            JS_FreeValue(ctx, cv);
+            JS_FreeValue(ctx, kv);
+            return JS_ThrowTypeError(ctx, "ServerSocket.Tls: Cert and Key are file paths"), false;
+        }
+        c = (char *)JS_ToCString(ctx, cv);
+        k = (char *)JS_ToCString(ctx, kv);
+        JS_FreeValue(ctx, cv);
+        JS_FreeValue(ctx, kv);
+        if (!c || !k) {
+            JS_FreeCString(ctx, c);
+            JS_FreeCString(ctx, k);
+            return false;
+        }
+        cert = g_tls_certificate_new_from_files(c, k, &err);
+        if (!cert) {
+            JS_ThrowTypeError(ctx, "ServerSocket.Tls: cannot read the certificate '%s': %s",
+                              c, bta_gerror_text(err));
+            g_clear_error(&err);
+            JS_FreeCString(ctx, c);
+            JS_FreeCString(ctx, k);
+            return false;
+        }
+        g_clear_object(&s->tls_cert);
+        g_clear_pointer(&s->tls_cert_path, g_free);
+        g_clear_pointer(&s->tls_key_path, g_free);
+        s->tls_cert = cert;
+        s->tls_cert_path = g_strdup(c);
+        s->tls_key_path = g_strdup(k);
+        JS_FreeCString(ctx, c);
+        JS_FreeCString(ctx, k);
+        return true;
+    }
     return JS_ThrowTypeError(ctx, "ServerSocket: no option called '%s'; the options "
-                             "are Host, Port and Path", key), false;
+                             "are Host, Port, Path and Tls", key), false;
 }
 
 static bool server_apply_options(JSContext *ctx, ServerData *s, JSValueConst opts)
@@ -2093,6 +2480,27 @@ static JSValue server_set_path(JSContext *ctx, JSValueConst this_val, JSValueCon
     if (!s)
         return JS_ThrowTypeError(ctx, "Path: not a ServerSocket");
     return server_set_option(ctx, s, "Path", v) ? JS_UNDEFINED : JS_EXCEPTION;
+}
+
+static JSValue server_get_tls(JSContext *ctx, JSValueConst this_val)
+{
+    ServerData *s = server_data(this_val);
+    JSValue     o;
+
+    if (!s || !s->tls_cert)
+        return JS_NULL;
+    o = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, o, "Cert", JS_NewString(ctx, s->tls_cert_path ? s->tls_cert_path : ""));
+    JS_SetPropertyStr(ctx, o, "Key", JS_NewString(ctx, s->tls_key_path ? s->tls_key_path : ""));
+    return o;
+}
+
+static JSValue server_set_tls(JSContext *ctx, JSValueConst this_val, JSValueConst v)
+{
+    ServerData *s = server_data(this_val);
+    if (!s)
+        return JS_ThrowTypeError(ctx, "Tls: not a ServerSocket");
+    return server_set_option(ctx, s, "Tls", v) ? JS_UNDEFINED : JS_EXCEPTION;
 }
 
 static JSValue server_get_listening(JSContext *ctx, JSValueConst this_val)
@@ -2258,6 +2666,12 @@ static const JSCFunctionListEntry server_props[] = {
      *   a Unix domain socket path, instead of Host/Port
      */
     JS_CGETSET_DEF("Path", server_get_path, server_set_path),
+    /* Tls
+     *   `{ Cert, Key }`: the PEM files every accepted connection is wrapped
+     *   with, or nothing for a plain listener. A file that cannot be read is
+     *   refused where it is written
+     */
+    JS_CGETSET_DEF("Tls", server_get_tls, server_set_tls),
     /* Listening
      *   whether it is accepting now
      */
@@ -2469,6 +2883,10 @@ static void socket_finalizer(JSRuntime *rt, JSValue v)
     JS_FreeValueRT(rt, s->on_error);
     JS_FreeValueRT(rt, s->on_writable);
     JS_FreeValueRT(rt, s->server_val);
+    g_clear_object(&s->tls_db);
+    g_clear_object(&s->tls_cert);
+    g_free(s->tls_ca_path);
+    g_free(s->tls_cert_path);
     g_free(s->host);
     g_free(s->path);
     g_free(s->eol);
@@ -2507,6 +2925,9 @@ static void server_finalizer(JSRuntime *rt, JSValue v)
     server_stop_full(s, false, true);
     JS_FreeValueRT(rt, s->on_connection);
     JS_FreeValueRT(rt, s->on_error);
+    g_clear_object(&s->tls_cert);
+    g_free(s->tls_cert_path);
+    g_free(s->tls_key_path);
     g_free(s->path);
     if (s->clients)
         g_ptr_array_free(s->clients, TRUE);

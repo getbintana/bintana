@@ -17106,6 +17106,15 @@
           "Returns": "",
           "Doc": "stop accepting and close every connection the server still holds. Answers the server",
           "Native": true
+        },
+        {
+          "Name": "Tls",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`{ Cert, Key }`: the PEM files every accepted connection is wrapped with, or nothing for a plain listener. A file that cannot be read is refused where it is written",
+          "Native": true
         }
       ]
     },
@@ -17358,6 +17367,15 @@
           "Signature": "",
           "Returns": "",
           "Doc": "how long `Connect` may take, in milliseconds; `0` is none. The read side waits as long as the peer takes, which is what a scale or a printer does",
+          "Native": true
+        },
+        {
+          "Name": "Tls",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`true` trusts the system's store; `{ Ca, Cert }` names a CA file and/or a certificate to pin; `null` (the default) is a plain socket. Read back as what was set",
           "Native": true
         },
         {
@@ -19644,6 +19662,15 @@
           "Returns": "",
           "Doc": "stop accepting and close every connection the server still holds. Answers the server",
           "Native": true
+        },
+        {
+          "Name": "Tls",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`{ Cert, Key }`: the PEM files every accepted connection is wrapped with, or nothing for a plain listener. A file that cannot be read is refused where it is written",
+          "Native": true
         }
       ]
     },
@@ -19828,6 +19855,15 @@
           "Signature": "",
           "Returns": "",
           "Doc": "how long `Connect` may take, in milliseconds; `0` is none. The read side waits as long as the peer takes, which is what a scale or a printer does",
+          "Native": true
+        },
+        {
+          "Name": "Tls",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`true` trusts the system's store; `{ Ca, Cert }` names a CA file and/or a certificate to pin; `null` (the default) is a plain socket. Read back as what was set",
           "Native": true
         },
         {
