@@ -284,6 +284,7 @@ add_executable(bintana
     runtime/src/bta_cipher.c
     runtime/src/bta_key.c
     runtime/src/bta_network.c
+    runtime/src/bta_socket.c
     runtime/src/bta_locale.c
     runtime/src/bta_bytes.c
     runtime/src/bta_bitmap.c

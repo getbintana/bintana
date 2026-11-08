@@ -650,7 +650,7 @@ const TESTS = [
     /* Children too: a file with `export` is a module. */
     "Modules", "FreeNames", "Imports", "Records", "DataBinding", "SettableCache",
     "Time",
-    "Stopwatch", "UndoStack", "TestEq", "Network", "Inhibit",
+    "Stopwatch", "UndoStack", "TestEq", "Network", "Sockets", "Udp", "Inhibit",
     "Shortcut", "Decimal", "FieldDecimal",
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
@@ -29385,6 +29385,221 @@ class Form1 extends Form {
             }, { Url: `${base}/204`, Timeout: LONG });
             until("a probe with nobody listening answers", () => got.down, () => {
                 eq("...None, with the Http kind", `${got.down.Connectivity} ${got.down.Why}`, "None Refused");
+            }, 6000);
+        }, 6000);
+    }
+
+    testSockets() {
+        /* The synchronous half: what a `.form` and a call get wrong before
+         * any connection exists. */
+        throws("a Socket refuses an option it does not have",
+               () => new Socket({ Nope: 1 }));
+        throws("and a port that is not one",
+               () => new Socket({ Port: 70000 }));
+        throws("a ServerSocket refuses an option it does not have",
+               () => new ServerSocket({ Nope: 1 }));
+        throws("writing before connecting is a mistake, not a late answer",
+               () => new Socket({ Host: "127.0.0.1", Port: 1 }).Write("x"));
+
+        const part = FormPart.New("Socket");
+        part.Host = "example.com";
+        part.Port = 7000;
+        part.Line = true;
+        part.EndOfLine = "\r\n";
+        eq("a Socket part keeps its host", part.Host, "example.com");
+        eq("and its port", part.Port, 7000);
+        eq("and its line mode", part.Line, true);
+        eq("and its separator", part.EndOfLine, "\r\n");
+        eq("its serialised type", part.Serialize().type, "Socket");
+        eq("its serialised host", part.Serialize().properties.Host, "example.com");
+        check("Socket and ServerSocket are part types",
+              FormPart.Types().includes("Socket") &&
+              FormPart.Types().includes("ServerSocket"));
+
+        const listenerPart = FormPart.New("ServerSocket");
+        listenerPart.Host = "any";
+        eq("a ServerSocket part keeps its host", listenerPart.Host, "any");
+        eq("and starts not listening", listenerPart.Listening, false);
+
+        /* The line half: one line split across two writes, and the reply. */
+        const got = {};
+        let server = new ServerSocket({ Host: "local", Port: 0 });
+        let client = null;
+
+        server.OnConnection = (c) => {
+            got.count = server.Count;
+            c.Line = true;
+            c.OnLine = (line) => {
+                got.line = line;
+                c.Write("echo: " + line + "\n");
+            };
+            c.OnError = (e) => { got.serverError = e; };
+        };
+        server.OnError = (e) => { got.listenError = e; };
+        server.Listen();
+        eq("a local server listens", server.Listening, true);
+        check("and the system chose a port", server.Port > 0, server.Port);
+
+        client = new Socket({ Host: "127.0.0.1", Port: server.Port,
+                              Line: true, Timeout: 60000 });
+        client.OnConnected = () => {
+            got.connected = true;
+            client.Write("he");
+            client.Write("llo\n");
+        };
+        client.OnWritable = () => { got.writable = true; };
+        client.OnLine = (line) => { got.reply = line; };
+        client.OnError = (e) => { got.clientError = e; };
+        client.Connect();
+
+        until("the line crossed in two writes", () => got.reply, () => {
+            if (!got.reply) {
+                check("the line test answered", false, JSON.stringify(got));
+                client.Close();
+                server.Stop();
+                return;
+            }
+            eq("the client connected", got.connected, true);
+            eq("the server reassembled the line", got.line, "hello");
+            eq("and the reply came back", got.reply, "echo: hello");
+            eq("the server counted the connection", got.count, 1);
+            eq("the write queue drained", got.writable, true);
+            eq("the server raised no error",
+               got.listenError ? got.listenError.Message : "", "");
+            eq("nor did the client",
+               got.clientError ? got.clientError.Message : "", "");
+            client.Close();
+
+            until("the close reaches the server", () => server.Count === 0, () => {
+                eq("and the count goes back to zero", server.Count, 0);
+                server.Stop();
+                eq("the listener stopped", server.Listening, false);
+
+                /* The binary half: a NUL and 0xFF are bytes, not text. */
+                const bin = {};
+                server = new ServerSocket({ Host: "local", Port: 0 });
+                server.OnConnection = (c) => { c.OnData = (b) => c.Write(b); };
+                server.Listen();
+                client = new Socket({ Host: "127.0.0.1", Port: server.Port,
+                                      Timeout: 60000 });
+                client.OnConnected = () => client.Write(new Bytes([0, 1, 2, 255]));
+                client.OnData = (b) => { bin.data = b; };
+                client.OnError = (e) => { bin.error = e; };
+                client.Connect();
+
+                until("the binary came back", () => bin.data, () => {
+                    if (!bin.data) {
+                        check("the binary test answered", false, JSON.stringify(bin));
+                        client.Close();
+                        server.Stop();
+                        return;
+                    }
+                    eq("all four bytes", bin.data.Length, 4);
+                    eq("the NUL survived", bin.data.At(0), 0);
+                    eq("and the last byte", bin.data.At(3), 255);
+                    eq("the binary client raised no error",
+                       bin.error ? bin.error.Message : "", "");
+                    client.Close();
+                    server.Stop();
+
+                    /* The Unix half, where this platform has it. */
+                    const path = "/tmp/bintana-sock-" + Random.Uuid() + ".sock";
+                    try {
+                        server = new ServerSocket({ Path: path });
+                        server.OnConnection = (c) => {
+                            c.Line = true;
+                            c.OnLine = (line) => c.Write("unix: " + line + "\n");
+                        };
+                        server.Listen();
+                    } catch (e) {
+                        check("Unix sockets are refused on this platform",
+                              /Unix sockets/.test(e.message), e.message);
+                        return;
+                    }
+                    const unix = {};
+                    client = new Socket({ Path: path, Line: true, Timeout: 60000 });
+                    client.OnConnected = () => client.Write("hola\n");
+                    client.OnLine = (line) => { unix.line = line; };
+                    client.OnError = (e) => { unix.error = e; };
+                    client.Connect();
+
+                    until("the Unix socket answered", () => unix.line || unix.error, () => {
+                        eq("the Unix client raised no error",
+                           unix.error ? unix.error.Message : "", "");
+                        eq("a Unix socket carries a line", unix.line, "unix: hola");
+                        client.Close();
+                        server.Stop();
+                        check("and Stop removes its file", !File.Exists(path));
+                    }, 6000);
+                }, 6000);
+            }, 6000);
+        }, 6000);
+    }
+
+    testUdp() {
+        throws("a UdpSocket refuses an option it does not have",
+               () => new UdpSocket({ Nope: 1 }));
+        throws("and a port that is not one",
+               () => new UdpSocket({ Port: 70000 }));
+        throws("Send takes an IP address, not a name",
+               () => new UdpSocket({ Host: "local", Port: 0 })
+                         .Send("x", "localhost", 1));
+
+        const part = FormPart.New("UdpSocket");
+        part.Host = "any";
+        part.Port = 0;
+        part.Broadcast = true;
+        eq("a UdpSocket part keeps its host", part.Host, "any");
+        eq("and its broadcast", part.Broadcast, true);
+        eq("its serialised type", part.Serialize().type, "UdpSocket");
+        check("UdpSocket is a part type", FormPart.Types().includes("UdpSocket"));
+
+        const got = {};
+        let server = new UdpSocket({ Host: "local", Port: 0 });
+        let client = new UdpSocket({ Host: "local", Port: 0 });
+
+        server.OnData = (bytes, from) => {
+            got.ping = bytes.ToText();
+            got.from = from;
+            server.Send("pong", from);
+        };
+        client.OnData = (bytes) => { got.pong = bytes.ToText(); };
+        server.Bind();
+        client.Bind();
+        eq("the server is bound", server.Bound, true);
+        eq("the client is bound", client.Bound, true);
+        check("the server holds a port", server.Port > 0, server.Port);
+        check("the client holds a port", client.Port > 0, client.Port);
+        client.Send("ping", "127.0.0.1", server.Port);
+
+        until("the datagram crossed", () => got.pong, () => {
+            if (!got.pong) {
+                check("the UDP test answered", false, JSON.stringify(got));
+                client.Close();
+                server.Close();
+                return;
+            }
+            eq("the server got the ping", got.ping, "ping");
+            eq("the client got the pong", got.pong, "pong");
+            eq("the sender's host", got.from.Host, "127.0.0.1");
+            eq("the sender's port", got.from.Port, client.Port);
+
+            /* Two sends are two datagrams, not one read. */
+            got.one = got.two = null;
+            server.OnData = (bytes) => {
+                if (bytes.ToText() === "one") got.one = true;
+                else if (bytes.ToText() === "two") got.two = true;
+            };
+            client.Send("one", "127.0.0.1", server.Port);
+            client.Send("two", "127.0.0.1", server.Port);
+
+            until("two datagrams stay two", () => got.one && got.two, () => {
+                eq("the first datagram", got.one, true);
+                eq("the second datagram", got.two, true);
+                client.Close();
+                server.Close();
+                eq("the client released its port", client.Bound, false);
+                eq("the server released its port", server.Bound, false);
             }, 6000);
         }, 6000);
     }

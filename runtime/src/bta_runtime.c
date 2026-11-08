@@ -2778,6 +2778,7 @@ static bool install_globals(BtaApp *app)
     bta_database_init(ctx, global);
     bta_sqlite_init(ctx, global);
     bta_http_init(ctx, global);
+    bta_socket_init(ctx, global);
     bta_media_init(ctx, global);
 
     /*
@@ -3779,6 +3780,7 @@ void bta_app_free(BtaApp *app)
     bta_printer_cleanup();
     bta_keyring_cleanup();
     bta_network_cleanup();
+    bta_socket_cleanup();
     /* Forms still shown hold a reference the collector cannot see; drop it
      * before the context goes, or JS_FreeRuntime asserts. */
     bta_popover_cleanup();
@@ -3958,8 +3960,9 @@ static gboolean console_idle(gpointer user_data)
 {
     BtaApp *app = user_data;
 
-    if (bta_sys_pending() + bta_http_pending() + bta_media_pending() +
-        bta_task_pending() + bta_keyring_pending() + bta_network_pending() > 0)
+    if (bta_sys_pending() + bta_http_pending() + bta_socket_pending() +
+        bta_media_pending() + bta_task_pending() + bta_keyring_pending() +
+        bta_network_pending() > 0)
         return G_SOURCE_CONTINUE;
 
     g_main_loop_quit(app->loop);
@@ -4127,7 +4130,8 @@ wait:
      * early -- while a callback runs, the loop is not dispatching this.
      */
     if (!app->quitting && bta_sys_pending() + bta_http_pending() +
-        bta_media_pending() + bta_task_pending() + bta_keyring_pending() + bta_network_pending() > 0) {
+        bta_socket_pending() + bta_media_pending() + bta_task_pending() +
+        bta_keyring_pending() + bta_network_pending() > 0) {
         app->loop  = g_main_loop_new(NULL, FALSE);
         guint tick = g_timeout_add(20, console_idle, app);
 

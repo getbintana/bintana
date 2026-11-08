@@ -1070,6 +1070,350 @@ class HttpClientPart extends FormPart {
 formPartTypes.HttpClient = HttpClientPart;
 
 /* ------------------------------------------------------------------------
+ * Socket -- a TCP or Unix connection a form owns.
+ *
+ *   "components": [
+ *       { "type": "Socket", "name": "Scale",
+ *         "properties": { "Host": "192.168.1.50", "Port": 9100, "Line": true } }
+ *   ]
+ *
+ *   Scale_Connected() { this.Scale.Write("P\n"); }
+ *   Scale_Line(line)  { this.Lbl.Text = line; }
+ *
+ * The part is a form's half of the C `Socket`: the form owns it, the
+ * designer's tray lists it, and the allowed close calls `Stop`, which is
+ * `Close`.  A part created in code without a form is the same class.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * a TCP or Unix connection declared on a form, reached by its name, with the
+ * events of the C `Socket`
+ */
+class SocketPart extends FormPart {
+
+    /** the events a socket raises, and the handlers a `.form` may write */
+    static get Events() {
+        return ["Connected", "Data", "Line", "Closed", "Error", "Writable"];
+    }
+    /** what a `.form` may set: where it connects, and how it reads */
+    static get Properties() {
+        return ["Host", "Port", "Path", "Timeout", "Line", "EndOfLine"];
+    }
+
+    constructor() {
+        super();
+        this._host    = "";
+        this._port    = 0;
+        this._path    = "";
+        this._timeout = 10000;
+        this._line    = false;
+        this._eol     = "\n";
+        this._socket  = null;
+    }
+
+    /** the C socket, made on first use with the properties below */
+    get Socket() {
+        if (!this._socket) {
+            const socket = new Socket({ Host: this._host, Port: this._port,
+                                        Path: this._path, Timeout: this._timeout,
+                                        Line: this._line, EndOfLine: this._eol });
+
+            socket.OnConnected = () => this.Emit("Connected");
+            socket.OnData      = (bytes) => this.Emit("Data", bytes);
+            socket.OnLine      = (line) => this.Emit("Line", line);
+            socket.OnClosed    = () => this.Emit("Closed");
+            socket.OnError     = (err) => this.Emit("Error", err);
+            socket.OnWritable  = () => this.Emit("Writable");
+            this._socket = socket;
+        }
+        return this._socket;
+    }
+
+    /* Changing where or how it connects drops the live one: the next
+     * `Connect` starts from the new settings, which is what a property grid
+     * edit means. */
+    _drop() {
+        if (this._socket) {
+            const socket = this._socket;
+            this._socket = null;
+            socket.Close();
+        }
+        return this;
+    }
+
+    /** the name or address to connect to */
+    get Host() { return this._host; }
+    set Host(value) {
+        if (typeof value !== "string")
+            throw new TypeError("Socket.Host: expected text");
+        this._host = value;
+        this._drop();
+    }
+
+    /** the TCP port to connect to */
+    get Port() { return this._port; }
+    set Port(value) {
+        if (typeof value !== "number" || !isFinite(value) || Math.floor(value) !== value)
+            throw new TypeError("Socket.Port: expected a whole number");
+        if (value < 0 || value > 65535)
+            throw new RangeError("Socket.Port: 0 to 65535");
+        this._port = value;
+        this._drop();
+    }
+
+    /** a Unix socket path, instead of Host/Port */
+    get Path() { return this._path; }
+    set Path(value) {
+        if (typeof value !== "string")
+            throw new TypeError("Socket.Path: expected text");
+        this._path = value;
+        this._drop();
+    }
+
+    /** how long `Connect` may take, in milliseconds; 0 is none */
+    get Timeout() { return this._timeout; }
+    set Timeout(value) {
+        if (typeof value !== "number" || !isFinite(value) || value < 0)
+            throw new TypeError("Socket.Timeout: expected milliseconds");
+        this._timeout = value;
+        this._drop();
+    }
+
+    /** `true` reads complete lines through `Line` instead of raw `Data` */
+    get Line() { return this._line; }
+    set Line(value) {
+        this._line = !!value;
+        if (this._socket) this._socket.Line = this._line;
+    }
+
+    /** the line separator `Line` splits on */
+    get EndOfLine() { return this._eol; }
+    set EndOfLine(value) {
+        if (typeof value !== "string" || !value)
+            throw new TypeError("Socket.EndOfLine: expected non-empty text");
+        this._eol = value;
+        if (this._socket) this._socket.EndOfLine = this._eol;
+    }
+
+    /** whether the connection is up */
+    get Connected() { return this._socket ? this._socket.Connected : false; }
+    /** the local address once connected */
+    get LocalHost() { return this._socket ? this._socket.LocalHost : ""; }
+    /** the local port once connected */
+    get LocalPort() { return this._socket ? this._socket.LocalPort : 0; }
+    /** the peer's address once connected */
+    get RemoteHost() { return this._socket ? this._socket.RemoteHost : ""; }
+    /** the peer's port once connected */
+    get RemotePort() { return this._socket ? this._socket.RemotePort : 0; }
+
+    /** start connecting; answers the part */
+    Connect() { this.Socket.Connect(); return this; }
+    /** queue text or `Bytes`; answers the part */
+    Write(data) { this.Socket.Write(data); return this; }
+    /** close now; answers the part */
+    Close() {
+        const socket = this._socket;
+        this._socket = null;
+        if (socket) socket.Close();
+        return this;
+    }
+    /** the form's close, and `RemovePart`, come through here */
+    Stop() { return this.Close(); }
+}
+
+formPartTypes.Socket = SocketPart;
+
+/* ------------------------------------------------------------------------
+ * ServerSocket -- a listener a form owns.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * a TCP or Unix listener declared on a form: `OnConnection` hands a
+ * connected `Socket`, and the form's close stops it and closes what it holds
+ */
+class ServerSocketPart extends FormPart {
+
+    /** the events a listener raises */
+    static get Events() { return ["Connection", "Error"]; }
+    /** what a `.form` may set: where it listens */
+    static get Properties() { return ["Host", "Port", "Path"]; }
+
+    constructor() {
+        super();
+        this._host   = "local";
+        this._port   = 0;
+        this._path   = "";
+        this._server = null;
+    }
+
+    /** the C listener, made on first use with the properties below */
+    get ServerSocket() {
+        if (!this._server) {
+            const server = new ServerSocket({ Host: this._host, Port: this._port,
+                                              Path: this._path });
+
+            server.OnConnection = (client) => this.Emit("Connection", client);
+            server.OnError      = (err) => this.Emit("Error", err);
+            this._server = server;
+        }
+        return this._server;
+    }
+
+    _drop() {
+        if (this._server) {
+            const server = this._server;
+            this._server = null;
+            server.Stop();
+        }
+        return this;
+    }
+
+    /** `"local"` (loopback) or `"any"` */
+    get Host() { return this._host; }
+    set Host(value) {
+        if (value !== "local" && value !== "any")
+            throw new TypeError("ServerSocket.Host: expected \"local\" or \"any\"");
+        this._host = value;
+        this._drop();
+    }
+
+    /** the port it listens on; 0 asks the system, and the value after `Listen` is the real one */
+    get Port() { return this._server ? this._server.Port : this._port; }
+    set Port(value) {
+        if (typeof value !== "number" || !isFinite(value) || Math.floor(value) !== value)
+            throw new TypeError("ServerSocket.Port: expected a whole number");
+        if (value < 0 || value > 65535)
+            throw new RangeError("ServerSocket.Port: 0 to 65535");
+        this._port = value;
+        this._drop();
+    }
+
+    /** a Unix socket path, instead of Host/Port */
+    get Path() { return this._path; }
+    set Path(value) {
+        if (typeof value !== "string")
+            throw new TypeError("ServerSocket.Path: expected text");
+        this._path = value;
+        this._drop();
+    }
+
+    /** whether it is accepting now */
+    get Listening() { return this._server ? this._server.Listening : false; }
+    /** the connections alive now */
+    get Count() { return this._server ? this._server.Count : 0; }
+
+    /** start accepting; answers the part */
+    Listen(port) {
+        if (port !== undefined) this.Port = port;
+        this.ServerSocket.Listen();
+        return this;
+    }
+    /** stop accepting and close every connection it holds; answers the part */
+    Stop() { this._drop(); return this; }
+}
+
+formPartTypes.ServerSocket = ServerSocketPart;
+
+/* ------------------------------------------------------------------------
+ * UdpSocket -- a datagram port a form owns.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * a UDP socket declared on a form: `OnData` hands one datagram and its
+ * sender, and `Send` writes one; the form's close releases the port
+ */
+class UdpSocketPart extends FormPart {
+
+    /** the events a datagram socket raises */
+    static get Events() { return ["Data", "Error"]; }
+    /** what a `.form` may set: where it binds, and whether it may broadcast */
+    static get Properties() { return ["Host", "Port", "Broadcast"]; }
+
+    constructor() {
+        super();
+        this._host      = "local";
+        this._port      = 0;
+        this._broadcast = false;
+        this._socket    = null;
+    }
+
+    /** the C socket, made on first use with the properties below */
+    get UdpSocket() {
+        if (!this._socket) {
+            const socket = new UdpSocket({ Host: this._host, Port: this._port,
+                                           Broadcast: this._broadcast });
+
+            socket.OnData  = (bytes, from) => this.Emit("Data", bytes, from);
+            socket.OnError = (err) => this.Emit("Error", err);
+            this._socket = socket;
+        }
+        return this._socket;
+    }
+
+    _drop() {
+        if (this._socket) {
+            const socket = this._socket;
+            this._socket = null;
+            socket.Close();
+        }
+        return this;
+    }
+
+    /** `"local"` (loopback) or `"any"` */
+    get Host() { return this._host; }
+    set Host(value) {
+        if (value !== "local" && value !== "any")
+            throw new TypeError("UdpSocket.Host: expected \"local\" or \"any\"");
+        this._host = value;
+        this._drop();
+    }
+
+    /** the local port; 0 asks the system, and the value after `Bind` is the real one */
+    get Port() { return this._socket ? this._socket.Port : this._port; }
+    set Port(value) {
+        if (typeof value !== "number" || !isFinite(value) || Math.floor(value) !== value)
+            throw new TypeError("UdpSocket.Port: expected a whole number");
+        if (value < 0 || value > 65535)
+            throw new RangeError("UdpSocket.Port: 0 to 65535");
+        this._port = value;
+        this._drop();
+    }
+
+    /** whether `Send` may reach a broadcast address */
+    get Broadcast() { return this._broadcast; }
+    set Broadcast(value) {
+        this._broadcast = !!value;
+        if (this._socket) this._socket.Broadcast = this._broadcast;
+    }
+
+    /** whether it holds a local port now */
+    get Bound() { return this._socket ? this._socket.Bound : false; }
+
+    /** hold a local port and start receiving; answers the part */
+    Bind(port) {
+        if (port !== undefined) this.Port = port;
+        this.UdpSocket.Bind();
+        return this;
+    }
+    /** send one datagram, to `(host, port)` or to a `from` record; answers the part */
+    Send(data, host, port) {
+        this.UdpSocket.Send(data, host, port);
+        return this;
+    }
+    /** release the port; answers the part */
+    Close() {
+        const socket = this._socket;
+        this._socket = null;
+        if (socket) socket.Close();
+        return this;
+    }
+    /** the form's close, and `RemovePart`, come through here */
+    Stop() { return this.Close(); }
+}
+
+formPartTypes.UdpSocket = UdpSocketPart;
+
+/* ------------------------------------------------------------------------
  * Stopwatch -- how long something took.
  *
  * `Timer` says *when*; this says *how long*, and they are not the same question

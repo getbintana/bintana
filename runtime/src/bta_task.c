@@ -1423,6 +1423,8 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     task_exec_wait_only(ctx, global);
     /* The blocking HTTP verbs, each on this thread's own session. */
     bta_http_init_worker(ctx, global);
+    /* The two names exist and refuse: a socket needs the main loop's events. */
+    bta_socket_init_worker(ctx, global);
     /* A worker computing on a thread is what a capture wants attributed most:
      * `Profile.Begin` here marks the same collector the main thread does (per
      * thread, so it is safe) and the same capture file (under its own lock). */

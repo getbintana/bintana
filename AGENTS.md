@@ -392,7 +392,7 @@ Traps and their evidence, by area, in `docs/agents/`:
 - [`data.md`](docs/agents/data.md) — you touch `Record`, `Xml`, `Database`/`Table`, `Csv`, `Decimal` or JSON.
 - [`drawing.md`](docs/agents/drawing.md) — you touch `Painter`, `DrawingArea`, `Drawing`, printing, a drawing library, `PdfDocument` or signing with a `Key`.
 - [`media-desktop.md`](docs/agents/media-desktop.md) — you touch `Video`/`AudioPlayer`, the `Media` elements (`Media.Element` and the graph it builds), `Keyring`, `Notification` or desktop entries.
-- [`network.md`](docs/agents/network.md) — you touch `Http` or TLS.
+- [`network.md`](docs/agents/network.md) — you touch `Http`, TLS or sockets.
 - [`i18n.md`](docs/agents/i18n.md) — you touch translation, the extractor or `.po` files.
 - [`packaging.md`](docs/agents/packaging.md) — you touch `lib/package`, Flatpak or the CI registry of applications.
 

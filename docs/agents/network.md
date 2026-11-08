@@ -1,4 +1,4 @@
-# Http and Tls
+# Http, TLS and sockets
 
 The traps and decisions of this area, each with what it cost and the rule it left. [`AGENTS.md`](../../AGENTS.md) states the rules that apply to every change; this file is the evidence behind them and the detail that only matters here.
 
@@ -285,3 +285,85 @@ each rule below; read it before changing a level.
   timeout that expired during the block are both ready afterwards, and the
   timeout was dispatched first. `testNetwork` passed alone and read `Timeout`
   on every row in the full run until its timeouts became a minute.
+
+## Sockets and ServerSocket
+
+- **A TCP read is not a message.** `OnData` hands the bytes one `read`
+  returned: two writes can arrive as one chunk and one write as two. The
+  reference says so, and `Line: true` is the only framing the runtime does --
+  it buffers and raises `OnLine` per `EndOfLine`. `socket_start_read` chooses
+  the handler from `Line`: with line mode on, `OnData` alone never starts a
+  read.
+- **Every async operation owns a `JS_DupValue` of the wrapper.** The job is on
+  `socket_jobs`, the reference is invisible to the collector, and it is freed
+  on every exit -- the answer, the cancellation, the teardown. That is what
+  makes the C struct safe under a completion; the finalizer runs only when
+  nothing is in flight. A connected socket therefore keeps itself alive, and
+  dropping the last JS reference is not what closes it -- `Close` is.
+- **Closing from inside `OnLine` clears the line buffer.** The first version
+  removed the measured range *after* the handler, and a handler that closed
+  the socket made `socket_close_full` clear the `GByteArray` first, so
+  `g_byte_array_remove_range` asserted (`index_ + length <= array->len`).
+  Remove the range only while `state == SOCKET_CONNECTED`, re-checked after
+  the call.
+- **The server owns its connections, but not as JS references.** `clients` is
+  a `GPtrArray` of `SocketData *`; a client that the program drops is
+  collected and its finalizer removes it, and `Stop` closes the copy of the
+  list. The client's `Server` property is the only JS reference, held by the
+  client, so the server cannot be finalized while one of its connections is
+  alive.
+- **A Unix `Socket` connects through `g_socket_client_connect_async` and
+  answers with `g_socket_client_connect_finish`.** There is no
+  `connect_to_socket_address_async` in `GSocketClient` (the compiler said so);
+  `connect_to_host_async`/`_finish` is the TCP road. `g_socket_listener_accept_finish`
+  takes `(listener, result, source_object, error)`, not the other way round.
+- **`Host: "local"` binds IPv4 loopback only**, through a
+  `GInetSocketAddress` for `127.0.0.1`; `"any"` uses
+  `g_socket_listener_add_inet_port`, or `add_any_inet_port` when the port is
+  `0`. The chosen port is read back into `Port`.
+- **A Unix socket file is ours to unlink.** `Stop` and the finalizer remove
+  the path a `ServerSocket` created; a path that already exists is refused,
+  not removed, because a live server's socket looks exactly like a stale one.
+- **A timeout in `tests/widgets` is measured against the whole suite's
+  blocking calls.** The socket test passed alone with `Timeout: 3000` and
+  connected into its own timeout in the full run: the test loop runs every
+  synchronous test inside one `Form_Open` before the loop is back, so the
+  completion and the guard were both ready and the guard was dispatched
+  first. `testSockets` uses a minute, exactly as `testNetwork` does.
+- **An accepted client needs a reference of its own, not only the server's
+  list.** The list is `SocketData *` and `OnConnection` frees the local
+  `JSValue` when it returns; the first version therefore finalized the client,
+  which removed it from `Count`, and the program was left with a connection the
+  server had already closed. Each accepted socket holds `keep`, a strong
+  reference to its own wrapper, and the server's `gc_mark` marks it; `Close`
+  and `Stop` drop it last. Freeing that reference can be what finalizes the
+  wrapper, so `socket_close_full` clears `keep` **before** `JS_FreeValue` and
+  touches nothing after it.
+- **`g_socket_listener_close` before dropping the listener.** The accept in
+  flight holds its own reference to the listener, so `g_clear_object` alone
+  leaves the port bound until the cancellation is dispatched -- a `Listen`
+  right after a `Stop` answered `address already in use`. Closing the listener
+  releases the port at once; the completion then sees `s->listener` changed and
+  ignores its connection.
+- **`Stop` is re-entrant.** Closing a connection raises `OnClosed`, and that
+  handler may call `Stop` or `Listen` again. `stopping` makes the nested `Stop`
+  a no-op and refuses `Listen` with a sentence until the close sweep is done;
+  without it the nested `Listen` started a new listener that the outer sweep
+  then cleared, leaving `Listening` true with no socket behind it.
+- **A bound `UdpSocket` holds itself alive, for the same reason a server does.**
+  The `GSource` that watches the socket is C data and holds no `JSValue`; the
+  first version let the wrapper be finalized while the port was still open, and
+  the source then fired into freed memory. `keep` is a reference to the wrapper
+  while `bound`, the source callback takes another for the length of the
+  delivery (a handler may `Close`), and the close drops `keep` **after** the
+  source and the socket are gone.
+- **`Send` takes an IP address, not a name.** A resolver call on the loop is
+  the freeze this file exists to avoid; `Socket` resolves because
+  `GSocketClient` does it asynchronously. `UdpSocket.Send("x", "localhost", 1)`
+  refuses with that sentence. A caller with a name resolves it where it can
+  wait, or uses `Socket` for a stream.
+- **A datagram is one `OnData`.** Unlike `Socket`, there is no line mode and no
+  chunk arithmetic: `g_socket_receive_from` answers one datagram and `from` is
+  its sender as `{ Host, Port }`; `Send(data, from)` is the reply. The local
+  port is the one `Bind` read back, which is also what the peer sees as the
+  source.

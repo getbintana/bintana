@@ -1120,6 +1120,17 @@ bool       bta_fixed_get_anchored(GtkWidget *fixed);
 bool bta_plugins_load(BtaApp *app, JSContext *ctx, JSValue global);
 void bta_plugins_cleanup(BtaApp *app);
 
+/* --- sockets -----------------------------------------------------------
+ *
+ * `Socket` and `ServerSocket`, TCP and Unix domain, asynchronously on the
+ * main loop.  A worker has no loop: `bta_socket_init_worker` installs the two
+ * names and refuses, the same mould as `Http`'s blocking half.
+ */
+void  bta_socket_init(JSContext *ctx, JSValue global);
+void  bta_socket_init_worker(JSContext *ctx, JSValue global);
+void  bta_socket_cleanup(void);   /* closes listeners and connections */
+guint bta_socket_pending(void);   /* sockets and listeners still live */
+
 /* --- Http ------------------------------------------------------------- */
 void  bta_http_init(JSContext *ctx, JSValue global);
 /* A worker's `Http`: the blocking verbs only, on a session of this thread. */

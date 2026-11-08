@@ -17024,6 +17024,92 @@
       ]
     },
     {
+      "Name": "ServerSocket",
+      "Members": [
+        {
+          "Name": "Count",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the connections that are alive now",
+          "Native": true
+        },
+        {
+          "Name": "Host",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"local\"` (loopback, the default) or `\"any\"`, the same two words `Http.Server` uses",
+          "Native": true
+        },
+        {
+          "Name": "Listen",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "([port])",
+          "Returns": "",
+          "Doc": "start accepting; the optional port is shorthand for the property. Answers the server",
+          "Native": true
+        },
+        {
+          "Name": "Listening",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether it is accepting now",
+          "Native": true
+        },
+        {
+          "Name": "OnConnection",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(client) => …`: a `Socket` already connected. Set its handlers here; `client.Server` is this listener",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(err) => …` with `{ Message, Kind }`; an accept error does not stop the listener",
+          "Native": true
+        },
+        {
+          "Name": "Path",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a Unix domain socket path, instead of Host/Port",
+          "Native": true
+        },
+        {
+          "Name": "Port",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the TCP port to listen on, 0 to 65535. `0` asks the system for one; read it back after `Listen`",
+          "Native": true
+        },
+        {
+          "Name": "Stop",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "stop accepting and close every connection the server still holds. Answers the server",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Settings",
       "Members": [
         {
@@ -17088,6 +17174,200 @@
           "Returns": "",
           "Doc": "stores `value` under `key`, anything JSON carries, and writes the file at once",
           "Native": false
+        }
+      ]
+    },
+    {
+      "Name": "Socket",
+      "Members": [
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "close now; `OnClosed` is raised once. Answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "Connect",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "([host], [port])",
+          "Returns": "",
+          "Doc": "start connecting; the optional arguments are a TCP shorthand for the properties. Answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "Connected",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the connection is up now",
+          "Native": true
+        },
+        {
+          "Name": "EndOfLine",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the line separator `Line` uses, `\"\\n\"` by default: `\"\\r\\n\"` for many devices",
+          "Native": true
+        },
+        {
+          "Name": "Host",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the name or address to connect to. Set before `Connect`; a Unix socket uses `Path` instead",
+          "Native": true
+        },
+        {
+          "Name": "Line",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`true`: buffer and raise `OnLine` for each complete `EndOfLine`; `false` (the default): `OnData` with the bytes one read returned. **TCP has no messages**, so a chunk is not a frame",
+          "Native": true
+        },
+        {
+          "Name": "LocalHost",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the local address once connected, `\"\"` before",
+          "Native": true
+        },
+        {
+          "Name": "LocalPort",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the local port once connected, `0` before",
+          "Native": true
+        },
+        {
+          "Name": "OnClosed",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: the connection ended, by the peer, by `Close`, or after `OnError`. It is raised once per connection",
+          "Native": true
+        },
+        {
+          "Name": "OnConnected",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: the connection is ready, and the first `Write` belongs here. `null` takes it off",
+          "Native": true
+        },
+        {
+          "Name": "OnData",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(bytes) => …`: bytes arrived, **not** a message. `Line: true` uses `OnLine` instead",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(err) => …` with `{ Message, Kind }`, `Kind` one of `\"Dns\"`, `\"Refused\"`, `\"Unreachable\"`, `\"Timeout\"`, `\"Tls\"`, `\"NotAllowed\"`, `\"Cancelled\"` or `\"Error\"`. `OnClosed` follows",
+          "Native": true
+        },
+        {
+          "Name": "OnLine",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(line) => …`: one complete line, without the separator, in `Line: true` mode",
+          "Native": true
+        },
+        {
+          "Name": "OnWritable",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: the write queue is empty and the socket can take more. `Write` never blocks, so this is the flow-control answer",
+          "Native": true
+        },
+        {
+          "Name": "Path",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a Unix domain socket path, instead of Host/Port. On Windows it makes `Connect` refuse; the portable local road is `Ipc.Pipe`",
+          "Native": true
+        },
+        {
+          "Name": "Port",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the TCP port to connect to, 1 to 65535. `0` is refused by `Connect`",
+          "Native": true
+        },
+        {
+          "Name": "RemoteHost",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the peer's numeric address (or Unix path) once connected",
+          "Native": true
+        },
+        {
+          "Name": "RemotePort",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the peer's port once connected, `0` for a Unix socket",
+          "Native": true
+        },
+        {
+          "Name": "Server",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the `ServerSocket` that accepted this socket, or `null` for one the program connected itself",
+          "Native": true
+        },
+        {
+          "Name": "Timeout",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how long `Connect` may take, in milliseconds; `0` is none. The read side waits as long as the peer takes, which is what a scale or a printer does",
+          "Native": true
+        },
+        {
+          "Name": "Write",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(data)",
+          "Returns": "",
+          "Doc": "queue text (UTF-8) or `Bytes`; answers the socket. It throws when the socket is not connected, which is a mistake and not a late answer",
+          "Native": true
         }
       ]
     },
@@ -17679,6 +17959,92 @@
           "Name": "Tick",
           "Signature": "()",
           "Doc": "the timer fired: `Timer.<Name>_Tick` on the form, and then its own `On(\"Tick\")` handler. A timer declared in a `.form` with `Enabled: true` starts when the form loads; a drawing of the form does not start it"
+        }
+      ]
+    },
+    {
+      "Name": "UdpSocket",
+      "Members": [
+        {
+          "Name": "Bind",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "([port])",
+          "Returns": "",
+          "Doc": "hold a local port and start receiving; the optional port is shorthand for the property. Answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "Bound",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether it holds a local port now",
+          "Native": true
+        },
+        {
+          "Name": "Broadcast",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether `Send` may reach a broadcast address. Set it before `Bind` (or later; the socket takes it while it is open)",
+          "Native": true
+        },
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "release the port; answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "Host",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"local\"` (loopback, the default) or `\"any\"`, the interface the socket binds to. This stage binds IPv4",
+          "Native": true
+        },
+        {
+          "Name": "OnData",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(bytes, from) => …`: one datagram and its sender as `{ Host, Port }`. Datagram boundaries are the kernel's, not this file's: one `Send` is one `OnData`",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(err) => …` with `{ Message, Kind }`; a receive error does not close the socket",
+          "Native": true
+        },
+        {
+          "Name": "Port",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the local port, 0 to 65535. `0` asks the system for one; after `Bind` this is the port really held",
+          "Native": true
+        },
+        {
+          "Name": "Send",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(data, host, port)",
+          "Returns": "",
+          "Doc": "send one datagram of text (UTF-8) or `Bytes`. `host` is an IP address, not a name; `from` is a record an `OnData` was handed, and `Send(data, from)` is the same call with its two fields. Sending before `Bind` binds an ephemeral port first",
+          "Native": true
         }
       ]
     },
@@ -19191,6 +19557,372 @@
           "Signature": "",
           "Returns": "string",
           "Doc": "what the file says it is called; `\"\"` when it says nothing",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "ServerSocket",
+      "Members": [
+        {
+          "Name": "Count",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the connections that are alive now",
+          "Native": true
+        },
+        {
+          "Name": "Host",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"local\"` (loopback, the default) or `\"any\"`, the same two words `Http.Server` uses",
+          "Native": true
+        },
+        {
+          "Name": "Listen",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "([port])",
+          "Returns": "",
+          "Doc": "start accepting; the optional port is shorthand for the property. Answers the server",
+          "Native": true
+        },
+        {
+          "Name": "Listening",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether it is accepting now",
+          "Native": true
+        },
+        {
+          "Name": "OnConnection",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(client) => …`: a `Socket` already connected. Set its handlers here; `client.Server` is this listener",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(err) => …` with `{ Message, Kind }`; an accept error does not stop the listener",
+          "Native": true
+        },
+        {
+          "Name": "Path",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a Unix domain socket path, instead of Host/Port",
+          "Native": true
+        },
+        {
+          "Name": "Port",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the TCP port to listen on, 0 to 65535. `0` asks the system for one; read it back after `Listen`",
+          "Native": true
+        },
+        {
+          "Name": "Stop",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "stop accepting and close every connection the server still holds. Answers the server",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "Socket",
+      "Members": [
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "close now; `OnClosed` is raised once. Answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "Connect",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "([host], [port])",
+          "Returns": "",
+          "Doc": "start connecting; the optional arguments are a TCP shorthand for the properties. Answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "Connected",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the connection is up now",
+          "Native": true
+        },
+        {
+          "Name": "EndOfLine",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the line separator `Line` uses, `\"\\n\"` by default: `\"\\r\\n\"` for many devices",
+          "Native": true
+        },
+        {
+          "Name": "Host",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the name or address to connect to. Set before `Connect`; a Unix socket uses `Path` instead",
+          "Native": true
+        },
+        {
+          "Name": "Line",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`true`: buffer and raise `OnLine` for each complete `EndOfLine`; `false` (the default): `OnData` with the bytes one read returned. **TCP has no messages**, so a chunk is not a frame",
+          "Native": true
+        },
+        {
+          "Name": "LocalHost",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the local address once connected, `\"\"` before",
+          "Native": true
+        },
+        {
+          "Name": "LocalPort",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the local port once connected, `0` before",
+          "Native": true
+        },
+        {
+          "Name": "OnClosed",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: the connection ended, by the peer, by `Close`, or after `OnError`. It is raised once per connection",
+          "Native": true
+        },
+        {
+          "Name": "OnConnected",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: the connection is ready, and the first `Write` belongs here. `null` takes it off",
+          "Native": true
+        },
+        {
+          "Name": "OnData",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(bytes) => …`: bytes arrived, **not** a message. `Line: true` uses `OnLine` instead",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(err) => …` with `{ Message, Kind }`, `Kind` one of `\"Dns\"`, `\"Refused\"`, `\"Unreachable\"`, `\"Timeout\"`, `\"Tls\"`, `\"NotAllowed\"`, `\"Cancelled\"` or `\"Error\"`. `OnClosed` follows",
+          "Native": true
+        },
+        {
+          "Name": "OnLine",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(line) => …`: one complete line, without the separator, in `Line: true` mode",
+          "Native": true
+        },
+        {
+          "Name": "OnWritable",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: the write queue is empty and the socket can take more. `Write` never blocks, so this is the flow-control answer",
+          "Native": true
+        },
+        {
+          "Name": "Path",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a Unix domain socket path, instead of Host/Port. On Windows it makes `Connect` refuse; the portable local road is `Ipc.Pipe`",
+          "Native": true
+        },
+        {
+          "Name": "Port",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the TCP port to connect to, 1 to 65535. `0` is refused by `Connect`",
+          "Native": true
+        },
+        {
+          "Name": "RemoteHost",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the peer's numeric address (or Unix path) once connected",
+          "Native": true
+        },
+        {
+          "Name": "RemotePort",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the peer's port once connected, `0` for a Unix socket",
+          "Native": true
+        },
+        {
+          "Name": "Server",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the `ServerSocket` that accepted this socket, or `null` for one the program connected itself",
+          "Native": true
+        },
+        {
+          "Name": "Timeout",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how long `Connect` may take, in milliseconds; `0` is none. The read side waits as long as the peer takes, which is what a scale or a printer does",
+          "Native": true
+        },
+        {
+          "Name": "Write",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(data)",
+          "Returns": "",
+          "Doc": "queue text (UTF-8) or `Bytes`; answers the socket. It throws when the socket is not connected, which is a mistake and not a late answer",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "UdpSocket",
+      "Members": [
+        {
+          "Name": "Bind",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "([port])",
+          "Returns": "",
+          "Doc": "hold a local port and start receiving; the optional port is shorthand for the property. Answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "Bound",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether it holds a local port now",
+          "Native": true
+        },
+        {
+          "Name": "Broadcast",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether `Send` may reach a broadcast address. Set it before `Bind` (or later; the socket takes it while it is open)",
+          "Native": true
+        },
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "release the port; answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "Host",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"local\"` (loopback, the default) or `\"any\"`, the interface the socket binds to. This stage binds IPv4",
+          "Native": true
+        },
+        {
+          "Name": "OnData",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(bytes, from) => …`: one datagram and its sender as `{ Host, Port }`. Datagram boundaries are the kernel's, not this file's: one `Send` is one `OnData`",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(err) => …` with `{ Message, Kind }`; a receive error does not close the socket",
+          "Native": true
+        },
+        {
+          "Name": "Port",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the local port, 0 to 65535. `0` asks the system for one; after `Bind` this is the port really held",
+          "Native": true
+        },
+        {
+          "Name": "Send",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(data, host, port)",
+          "Returns": "",
+          "Doc": "send one datagram of text (UTF-8) or `Bytes`. `host` is an IP address, not a name; `from` is a record an `OnData` was handed, and `Send(data, from)` is the same call with its two fields. Sending before `Bind` binds an ephemeral port first",
           "Native": true
         }
       ]
