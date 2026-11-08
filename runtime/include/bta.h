@@ -640,6 +640,10 @@ bool bta_paint_busy(JSContext *ctx, BtaWidget *w);
 bool bta_paint_draws(BtaWidget *w);
 void bta_printer_init(JSContext *ctx, JSValue global);
 void bta_pdf_init(JSContext *ctx, JSValue global);
+/* Lets go of the documents kept for NSS's sake; at exit, after the runtime. */
+void bta_pdf_cleanup(void);
+/* Key: a private key from a file or a token, through GnuTLS (bta_key.c). */
+void bta_key_init(JSContext *ctx, JSValue global);
 /* The Painter class, which is not a widget: registered with the runtime's
  * other non-widget classes rather than in the widget table. */
 void bta_painter_init(JSContext *ctx, JSValue global);
@@ -886,6 +890,13 @@ void       bta_widget_styles_release(void);
  * created and `Database.Sqlite` opened. Every verb that touches the disk with a
  * path the program passed goes through this (bta_sys.c). */
 const char *bta_file_path(JSContext *ctx, JSValueConst v, const char *who);
+
+/* Throws an Error whose message is a sentence of any length. QuickJS's
+ * `JS_Throw*Error` formats into 256 bytes and cuts the rest without a word:
+ * a refusal listing two `pkcs11:` URIs lost the second one, and a message
+ * quoting a long path loses its end. Use this where the text can grow --
+ * paths, URIs, lists -- (bta_sys.c). */
+JSValue     bta_throw_text(JSContext *ctx, const char *fmt, ...) G_GNUC_PRINTF(2, 3);
 
 /* A number from a property setter, or false with a TypeError naming the value.
  * Every numeric setter goes through these: JS_ToInt32 turns a string that is not

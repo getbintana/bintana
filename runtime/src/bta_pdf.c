@@ -362,6 +362,16 @@ static void keep_verifier(PopplerDocument *doc, PopplerSignatureInfo *info)
     G_UNLOCK(certificate_keepers);
 }
 
+/* At exit, after the last PdfDocument: the kept documents go, so NSS shuts
+ * down with nothing of ours in use. Nothing verifies after this, which is the
+ * one thing that made freeing them unsafe. */
+void bta_pdf_cleanup(void)
+{
+    G_LOCK(certificate_keepers);
+    g_clear_pointer(&certificate_keepers, g_hash_table_destroy);
+    G_UNLOCK(certificate_keepers);
+}
+
 static const char *certificate_word(PopplerCertificateStatus s)
 {
     switch (s) {
@@ -374,6 +384,8 @@ static const char *certificate_word(PopplerCertificateStatus s)
     default:                                   return "Error";
     }
 }
+#else
+void bta_pdf_cleanup(void) {}
 #endif
 
 /*
@@ -986,6 +998,7 @@ static JSValue pdfdoc_encrypt(JSContext *ctx, JSValueConst this_val,
 typedef struct {
     JSContext *ctx;
     JSValue    fn;
+    JSValue    self;           /* the Key whose Sign it is, or undefined */
     bool       threw;          /* the Signer's own exception is pending */
 } SignCall;
 
@@ -995,7 +1008,7 @@ static int sign_with_program(void *data, const unsigned char *digest, size_t len
     SignCall  *c   = data;
     JSContext *ctx = c->ctx;
     JSValue    argv[2] = { bta_bytes_new(ctx, digest, len), JS_NewString(ctx, "SHA256") };
-    JSValue    r   = JS_Call(ctx, c->fn, JS_UNDEFINED, 2, argv);
+    JSValue    r   = JS_Call(ctx, c->fn, c->self, 2, argv);
 
     JS_FreeValue(ctx, argv[0]);
     JS_FreeValue(ctx, argv[1]);
@@ -1085,7 +1098,8 @@ static bool sign_text(JSContext *ctx, JSValueConst opts, const char *key, char *
 #endif
 
 /*
- * `Sign(path, { ... })` -- see its description in the table below. The
+ * `Sign(path, { ... })` -- see its description in the table below. `Key`
+ * stands for `Signer` (its `Sign`, called on it) and `Certificate`. The
  * Signer is called once, from inside PoDoFo's writing, and its throw is kept
  * as the answer (`SignCall.threw`) rather than PoDoFo's word for it.
  */
@@ -1103,23 +1117,53 @@ static JSValue pdfdoc_sign(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Sign(path, { Certificate, Signer, ... }) takes "
                                       "where to write and how to sign");
 
+    /* A `Key` -- or anything with `Sign(digest, algorithm)` and a
+     * `Certificate` -- stands for both, unless they are given beside it. */
+    JSValue key    = JS_GetPropertyStr(ctx, argv[1], "Key");
     JSValue signer = JS_GetPropertyStr(ctx, argv[1], "Signer");
+    JSValue self   = JS_UNDEFINED;
+    if (JS_IsUndefined(key) || JS_IsNull(key)) {
+        JS_FreeValue(ctx, key);
+        key = JS_UNDEFINED;
+    } else if (!JS_IsObject(key)) {
+        JS_FreeValue(ctx, key);
+        JS_FreeValue(ctx, signer);
+        return JS_ThrowTypeError(ctx, "Sign: Key is a Key -- Key.Load(source, pin)");
+    } else if (JS_IsUndefined(signer)) {
+        signer = JS_GetPropertyStr(ctx, key, "Sign");
+        if (JS_IsException(signer)) {
+            JS_FreeValue(ctx, key);
+            return JS_EXCEPTION;
+        }
+        self = key;
+    }
     if (!JS_IsFunction(ctx, signer)) {
         JS_FreeValue(ctx, signer);
+        JS_FreeValue(ctx, key);
         return JS_ThrowTypeError(ctx, "Sign: Signer is a function -- Signer(digest, "
-                                      "algorithm) answers the signature as Bytes");
+                                      "algorithm) answers the signature as Bytes -- "
+                                      "or Key is a Key");
     }
 
     JSValue        certv = JS_GetPropertyStr(ctx, argv[1], "Certificate");
+    if (JS_IsUndefined(certv) && JS_IsObject(key))
+        certv = JS_GetPropertyStr(ctx, key, "Certificate");
+    if (JS_IsException(certv)) {
+        JS_FreeValue(ctx, signer);
+        JS_FreeValue(ctx, key);
+        return JS_EXCEPTION;
+    }
     size_t         cert_len = 0;
     unsigned char *cert = certificate_der(ctx, certv, &cert_len);
     JS_FreeValue(ctx, certv);
     if (!cert) {
         JS_FreeValue(ctx, signer);
+        JS_FreeValue(ctx, key);
         if (JS_HasException(ctx))
             return JS_EXCEPTION;
         return JS_ThrowTypeError(ctx, "Sign: Certificate is the signer's certificate, "
-                                      "DER Bytes or PEM text");
+                                      "DER Bytes or PEM text -- a Key whose file or "
+                                      "token had none needs it given beside it");
     }
 
     BtaPdfSignSpec spec = { 0 };
@@ -1156,7 +1200,7 @@ static JSValue pdfdoc_sign(JSContext *ctx, JSValueConst this_val,
     if (ok && !out)
         ok = false;
 
-    SignCall call = { ctx, signer, false };
+    SignCall call = { ctx, signer, self, false };
     char    *error = NULL;
 
     if (ok) {
@@ -1193,6 +1237,7 @@ static JSValue pdfdoc_sign(JSContext *ctx, JSValueConst this_val,
     if (out)
         JS_FreeCString(ctx, out);
     JS_FreeValue(ctx, signer);
+    JS_FreeValue(ctx, key);
     return ok ? JS_UNDEFINED : JS_EXCEPTION;
 #endif
 }
@@ -1314,12 +1359,13 @@ static const JSCFunctionListEntry pdfdoc_props[] = {
      *   (`CanWrite`)
      */
     JS_CFUNC_DEF("Encrypt",  2, pdfdoc_encrypt),
-    /* Sign(path, { Certificate, Signer, Field, Rect, Reason, Location, Name })
+    /* Sign(path, { Key, Certificate, Signer, Field, Rect, Reason, Location, Name })
      *   this document **signed** into `path`, as an incremental update, so an
      *   earlier signature stays valid: PAdES-B, SHA-256, an RSA key.
-     *   **Where the key is is the program's**: `Signer(digest, algorithm)`
-     *   answers the signature over the digest as `Bytes` -- a token, a smart
-     *   card, a remote service -- and the runtime never holds it.
+     *   `Key` is a `Key` -- a token's, a card's, a `.p12`'s -- and brings its
+     *   certificate. Or **where the key is is the program's**:
+     *   `Signer(digest, algorithm)` answers the signature over the digest as
+     *   `Bytes` -- a remote service, anything -- and the runtime never holds it.
      *   `Certificate` is the signer's, DER `Bytes` or PEM text. `Field` names
      *   an empty signature field (a report's) or a new one, invisible on
      *   page 1 unless `Rect` is `{ Page, X, Y, Width, Height }` in PDF

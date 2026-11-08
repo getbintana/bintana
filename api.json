@@ -15538,6 +15538,110 @@
       ]
     },
     {
+      "Name": "Key",
+      "Members": [
+        {
+          "Name": "Algorithm",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "`RSA`, `ECDSA`, `Ed25519` or `Ed448`",
+          "Native": true
+        },
+        {
+          "Name": "Available",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this build reads keys and talks to tokens, which is GnuTLS; when false every verb refuses naming the package",
+          "Native": true
+        },
+        {
+          "Name": "Bits",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "number",
+          "Doc": "the key's size: 2048 for a common RSA key, 256 for a P-256 one",
+          "Native": true
+        },
+        {
+          "Name": "Certificate",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "Bytes",
+          "Doc": "the signer's certificate, DER, when the place it came from had one -- a PKCS#12 does, a token usually does (the certificate with the key's id), a PEM with a `CERTIFICATE` block beside the key does; `null` otherwise, and the caller gives it",
+          "Native": true
+        },
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "let it go: the token's session, the key in memory and the PIN, wiped. Closing twice is not an error",
+          "Native": true
+        },
+        {
+          "Name": "Load",
+          "Kind": "Static",
+          "Params": 2,
+          "Signature": "(source, [pin])",
+          "Returns": "Key",
+          "Doc": "a private key, from a `pkcs11:` URI -- a smart card, a USB token, a software token, as `Tokens()` or `p11tool --list-all` names it -- or from a file: PKCS#12 (`.p12`, `.pfx`), or a PEM or DER key, encrypted PKCS#8 included. `pin` is the token's PIN or the file's password. A URI that names only a token takes its one key, and refuses listing them when there are more. Throws, saying which: no such file, not a key, protected and no password, the wrong one, the PIN wanted or refused",
+          "Native": true
+        },
+        {
+          "Name": "Open",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "boolean",
+          "Doc": "whether it still is",
+          "Native": true
+        },
+        {
+          "Name": "Sign",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(digest, [algorithm])",
+          "Returns": "Bytes",
+          "Doc": "the signature over a **digest** already computed, `Bytes` of the algorithm's length -- `\"SHA256\"` (the default), `\"SHA384\"`, `\"SHA512\"`: PKCS#1 v1.5 for RSA, DER for ECDSA. On a token the token signs, and asks for the PIN again. Exactly what `PdfDocument.Sign`'s `Signer` is asked, so `{ Key: key }` signs a PDF",
+          "Native": true
+        },
+        {
+          "Name": "Source",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "where it was loaded from: the file's absolute path, or the key's full `pkcs11:` URI on its token",
+          "Native": true
+        },
+        {
+          "Name": "Subject",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the common name on its certificate -- who signs; `\"\"` with none",
+          "Native": true
+        },
+        {
+          "Name": "Tokens",
+          "Kind": "Static",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "object[]",
+          "Doc": "the tokens plugged in, as p11-kit's modules see them: `{ Uri, Label, Manufacturer, Model, Serial, Signers }`, and `Signers` who can sign on each -- `{ Key, Label, Subject, Issuer, Expires }`, `Key` the URI to `Load`. No PIN: certificates are public. The system's store of CA certificates is not a signer's and is left out",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Keyring",
       "Members": [
         {
@@ -16413,9 +16517,9 @@
           "Name": "Sign",
           "Kind": "Method",
           "Params": 2,
-          "Signature": "(path, { Certificate, Signer, Field, Rect, Reason, Location, Name })",
+          "Signature": "(path, { Key, Certificate, Signer, Field, Rect, Reason, Location, Name })",
           "Returns": "",
-          "Doc": "this document **signed** into `path`, as an incremental update, so an earlier signature stays valid: PAdES-B, SHA-256, an RSA key. **Where the key is is the program's**: `Signer(digest, algorithm)` answers the signature over the digest as `Bytes` -- a token, a smart card, a remote service -- and the runtime never holds it. `Certificate` is the signer's, DER `Bytes` or PEM text. `Field` names an empty signature field (a report's) or a new one, invisible on page 1 unless `Rect` is `{ Page, X, Y, Width, Height }` in PDF points, bottom-left; with none, the first free of `Signature`, `Signature2` ... A field signed already is refused, never signed over. A throw in `Signer` is what `Sign` throws, and the copy it was writing is removed. Needs PoDoFo (`CanWrite`)",
+          "Doc": "this document **signed** into `path`, as an incremental update, so an earlier signature stays valid: PAdES-B, SHA-256, an RSA key. `Key` is a `Key` -- a token's, a card's, a `.p12`'s -- and brings its certificate. Or **where the key is is the program's**: `Signer(digest, algorithm)` answers the signature over the digest as `Bytes` -- a remote service, anything -- and the runtime never holds it. `Certificate` is the signer's, DER `Bytes` or PEM text. `Field` names an empty signature field (a report's) or a new one, invisible on page 1 unless `Rect` is `{ Page, X, Y, Width, Height }` in PDF points, bottom-left; with none, the first free of `Signature`, `Signature2` ... A field signed already is refused, never signed over. A throw in `Signer` is what `Sign` throws, and the copy it was writing is removed. Needs PoDoFo (`CanWrite`)",
           "Native": true
         },
         {
@@ -18669,6 +18773,110 @@
       ]
     },
     {
+      "Name": "Key",
+      "Members": [
+        {
+          "Name": "Algorithm",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "`RSA`, `ECDSA`, `Ed25519` or `Ed448`",
+          "Native": true
+        },
+        {
+          "Name": "Available",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this build reads keys and talks to tokens, which is GnuTLS; when false every verb refuses naming the package",
+          "Native": true
+        },
+        {
+          "Name": "Bits",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "number",
+          "Doc": "the key's size: 2048 for a common RSA key, 256 for a P-256 one",
+          "Native": true
+        },
+        {
+          "Name": "Certificate",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "Bytes",
+          "Doc": "the signer's certificate, DER, when the place it came from had one -- a PKCS#12 does, a token usually does (the certificate with the key's id), a PEM with a `CERTIFICATE` block beside the key does; `null` otherwise, and the caller gives it",
+          "Native": true
+        },
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "let it go: the token's session, the key in memory and the PIN, wiped. Closing twice is not an error",
+          "Native": true
+        },
+        {
+          "Name": "Load",
+          "Kind": "Static",
+          "Params": 2,
+          "Signature": "(source, [pin])",
+          "Returns": "Key",
+          "Doc": "a private key, from a `pkcs11:` URI -- a smart card, a USB token, a software token, as `Tokens()` or `p11tool --list-all` names it -- or from a file: PKCS#12 (`.p12`, `.pfx`), or a PEM or DER key, encrypted PKCS#8 included. `pin` is the token's PIN or the file's password. A URI that names only a token takes its one key, and refuses listing them when there are more. Throws, saying which: no such file, not a key, protected and no password, the wrong one, the PIN wanted or refused",
+          "Native": true
+        },
+        {
+          "Name": "Open",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "boolean",
+          "Doc": "whether it still is",
+          "Native": true
+        },
+        {
+          "Name": "Sign",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(digest, [algorithm])",
+          "Returns": "Bytes",
+          "Doc": "the signature over a **digest** already computed, `Bytes` of the algorithm's length -- `\"SHA256\"` (the default), `\"SHA384\"`, `\"SHA512\"`: PKCS#1 v1.5 for RSA, DER for ECDSA. On a token the token signs, and asks for the PIN again. Exactly what `PdfDocument.Sign`'s `Signer` is asked, so `{ Key: key }` signs a PDF",
+          "Native": true
+        },
+        {
+          "Name": "Source",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "where it was loaded from: the file's absolute path, or the key's full `pkcs11:` URI on its token",
+          "Native": true
+        },
+        {
+          "Name": "Subject",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the common name on its certificate -- who signs; `\"\"` with none",
+          "Native": true
+        },
+        {
+          "Name": "Tokens",
+          "Kind": "Static",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "object[]",
+          "Doc": "the tokens plugged in, as p11-kit's modules see them: `{ Uri, Label, Manufacturer, Model, Serial, Signers }`, and `Signers` who can sign on each -- `{ Key, Label, Subject, Issuer, Expires }`, `Key` the URI to `Load`. No PIN: certificates are public. The system's store of CA certificates is not a signer's and is left out",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "MenuItem",
       "Members": [
         {
@@ -18935,9 +19143,9 @@
           "Name": "Sign",
           "Kind": "Method",
           "Params": 2,
-          "Signature": "(path, { Certificate, Signer, Field, Rect, Reason, Location, Name })",
+          "Signature": "(path, { Key, Certificate, Signer, Field, Rect, Reason, Location, Name })",
           "Returns": "",
-          "Doc": "this document **signed** into `path`, as an incremental update, so an earlier signature stays valid: PAdES-B, SHA-256, an RSA key. **Where the key is is the program's**: `Signer(digest, algorithm)` answers the signature over the digest as `Bytes` -- a token, a smart card, a remote service -- and the runtime never holds it. `Certificate` is the signer's, DER `Bytes` or PEM text. `Field` names an empty signature field (a report's) or a new one, invisible on page 1 unless `Rect` is `{ Page, X, Y, Width, Height }` in PDF points, bottom-left; with none, the first free of `Signature`, `Signature2` ... A field signed already is refused, never signed over. A throw in `Signer` is what `Sign` throws, and the copy it was writing is removed. Needs PoDoFo (`CanWrite`)",
+          "Doc": "this document **signed** into `path`, as an incremental update, so an earlier signature stays valid: PAdES-B, SHA-256, an RSA key. `Key` is a `Key` -- a token's, a card's, a `.p12`'s -- and brings its certificate. Or **where the key is is the program's**: `Signer(digest, algorithm)` answers the signature over the digest as `Bytes` -- a remote service, anything -- and the runtime never holds it. `Certificate` is the signer's, DER `Bytes` or PEM text. `Field` names an empty signature field (a report's) or a new one, invisible on page 1 unless `Rect` is `{ Page, X, Y, Width, Height }` in PDF points, bottom-left; with none, the first free of `Signature`, `Signature2` ... A field signed already is refused, never signed over. A throw in `Signer` is what `Sign` throws, and the copy it was writing is removed. Needs PoDoFo (`CanWrite`)",
           "Native": true
         },
         {

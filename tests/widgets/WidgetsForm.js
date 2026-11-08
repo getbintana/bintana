@@ -582,6 +582,9 @@ const TESTS = [
     /* Blocking too: the key that signs a PDF is openssl's, a child awaited
      * from inside Sign, which calls the Signer while it writes. */
     "PdfSign",
+    /* Blocking too: openssl makes the keys, softhsm2-util and p11tool the
+     * token, and a child process signs on it. */
+    "Key",
     "EditorMap",
     "EditorFold",
     "EditorFoldClick",
@@ -9710,6 +9713,196 @@ function Main() {
         check("a Signer that answers something else is refused, saying what it wants",
               said.includes("Bytes"), said);
         f.Close();
+    }
+
+    /*
+     * **Key: a private key from a file or a token.** Every RSA signature is
+     * held to openssl's over the same digest -- PKCS#1 v1.5 is deterministic,
+     * so equal bytes are the proof, not "a signature came back".
+     *
+     * **The token is a SoftHSM of the test's own, in a child process.** The
+     * child gets `SOFTHSM2_CONF` pointing at a token directory under SCRATCH
+     * and an `XDG_CONFIG_HOME` whose p11-kit configuration turns off every
+     * other module -- gnome-keyring's above all, which would otherwise be the
+     * desktop's own keyring, reached from a test.
+     */
+    testKey() {
+        if (!Key.Available) {
+            throws("without GnuTLS, Key.Load refuses naming the package",
+                   () => Key.Load(File.Join(SCRATCH, "none.pem")));
+            return;
+        }
+        if (!Application.HasCommand("openssl")) {
+            print("  (skipping Key: it needs openssl)");
+            return;
+        }
+        const dir = File.Join(SCRATCH, "key");
+        Directory.Make(dir);
+        const at = (n) => File.Join(dir, n);
+        const run = (argv, env) => Exec.Wait(argv, { Timeout: 30000, Environment: env || {} });
+        const made = [
+            run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                 "-keyout", at("key.pem"), "-out", at("cert.pem"), "-subj", "/CN=File Signer/O=Bintana",
+                 "-addext", "basicConstraints=critical,CA:FALSE"]),
+            run(["openssl", "pkcs12", "-export", "-inkey", at("key.pem"), "-in", at("cert.pem"),
+                 "-out", at("id.p12"), "-passout", "pass:abc"]),
+            run(["openssl", "pkcs8", "-topk8", "-in", at("key.pem"), "-out", at("enc.pem"),
+                 "-passout", "pass:xyz", "-v2", "aes-256-cbc"]),
+            run(["openssl", "pkey", "-in", at("key.pem"), "-outform", "DER", "-out", at("key.der")]),
+            run(["openssl", "ecparam", "-name", "prime256v1", "-genkey", "-noout", "-out", at("ec.pem")]),
+        ].map((r) => r.ExitCode);
+        File.Save(at("both.pem"), File.Load(at("key.pem")) + File.Load(at("cert.pem")));
+        const digest = Bytes.FromHex(Hash.Sha256("firmame"));
+        File.SaveBytes(at("digest.bin"), digest);
+        made.push(run(["openssl", "pkeyutl", "-sign", "-inkey", at("key.pem"), "-pkeyopt", "digest:sha256",
+                       "-in", at("digest.bin"), "-out", at("openssl.sig")]).ExitCode);
+        if (made.join() !== "0,0,0,0,0,0") {
+            print(`  (skipping Key: openssl exited ${made.join("/")})`);
+            return;
+        }
+        const theirs = File.LoadBytes(at("openssl.sig"));
+
+        const pem = Key.Load(at("key.pem"));
+        eq("Key.Load reads a PEM key and says what it is",
+           `${pem.Algorithm} ${pem.Bits} ${pem.Certificate} "${pem.Subject}" ${pem instanceof Key}`,
+           'RSA 2048 null "" true');
+        eq("...and its signature over a digest is the one openssl makes, byte for byte",
+           pem.Sign(digest).Equals(theirs), true);
+        eq("...SHA-256 being the default, said or not", pem.Sign(digest, "SHA256").Equals(theirs), true);
+        eq("a DER key signs the same", Key.Load(at("key.der")).Sign(digest).Equals(theirs), true);
+        const both = Key.Load(at("both.pem"));
+        eq("a PEM with a certificate beside the key brings it, and who it names",
+           `${both.Subject} ${both.Certificate instanceof Bytes}`, "File Signer true");
+
+        let said = "";
+        try { Key.Load(at("id.p12")); } catch (e) { said = e.message; }
+        check("a PKCS#12 with no password says to give one", said.includes("Key.Load(path, password)"), said);
+        said = "";
+        try { Key.Load(at("id.p12"), "wrong"); } catch (e) { said = e.message; }
+        check("...and a wrong one says so", said.includes("that password does not open"), said);
+        const p12 = Key.Load(at("id.p12"), "abc");
+        eq("...and the right one opens it, certificate and all, signing the same",
+           `${p12.Subject} ${p12.Sign(digest).Equals(theirs)}`, "File Signer true");
+        said = "";
+        try { Key.Load(at("enc.pem")); } catch (e) { said = e.message; }
+        check("an encrypted PKCS#8 key says it is encrypted", said.includes("is encrypted"), said);
+        throws("...refuses a wrong password", () => Key.Load(at("enc.pem"), "no"));
+        eq("...and opens with its own", Key.Load(at("enc.pem"), "xyz").Sign(digest).Equals(theirs), true);
+        const ec = Key.Load(at("ec.pem"));
+        eq("an ECDSA key signs a digest too", `${ec.Algorithm} ${ec.Bits} ${ec.Sign(digest).Length > 60}`,
+           "ECDSA 256 true");
+
+        throws("a file that is not there is refused", () => Key.Load(at("none.pem")));
+        throws("...and one that is not a key", () => Key.Load(File.Join(Application.Directory, "project.json")));
+        throws("a digest of the wrong length is refused, never signed",
+               () => pem.Sign(digest.Slice(0, 20)));
+        throws("...and a digest it does not sign", () => pem.Sign(digest, "MD5"));
+        throws("...and something that is not Bytes", () => pem.Sign("abc"));
+        throws("a Key is loaded, not constructed", () => new Key());
+        pem.Close();
+        pem.Close();
+        throws("a closed Key refuses to sign, and closing twice is no error", () => pem.Sign(digest));
+
+        /* A PDF signed with a Key: its certificate comes with it. */
+        if (PdfDocument.CanWrite && PdfDocument.CanRead) {
+            const src = at("doc.pdf");
+            Drawing.SavePdf(src, 595, 842, 1, (p) => p.Text("Hola", 40, 40));
+            const d = PdfDocument.Load(src);
+            d.Sign(at("by-key.pdf"), { Key: p12, Reason: "Key" });
+            const s = PdfDocument.Load(at("by-key.pdf"));
+            eq("PdfDocument.Sign with a Key signs with it and its certificate",
+               s.Signatures.map((x) => `${x.Signer}:${x.Signature}`).join(), "File Signer:Valid");
+            s.Close();
+            said = "";
+            try { d.Sign(at("x.pdf"), { Key: Key.Load(at("key.pem")) }); } catch (e) { said = e.message; }
+            check("...and a Key with no certificate asks for one beside it", said.includes("needs it given"), said);
+            d.Sign(at("by-key2.pdf"), { Key: Key.Load(at("key.pem")), Certificate: File.Load(at("cert.pem")) });
+            const s2 = PdfDocument.Load(at("by-key2.pdf"));
+            eq("...which then signs", s2.Signatures.map((x) => x.Signature).join(), "Valid");
+            s2.Close();
+            d.Close();
+        }
+        p12.Close();
+
+        if (!Application.HasCommand("softhsm2-util") || !Application.HasCommand("p11tool")) {
+            print("  (skipping Key's token: it needs softhsm2-util and p11tool)");
+            return;
+        }
+        const hsm = at("hsm");
+        if (File.IsDir(hsm)) Directory.DeleteTree(hsm);
+        Directory.Make(File.Join(hsm, "tokens"));
+        Directory.Make(File.Join(hsm, "config", "pkcs11", "modules"));
+        File.Save(File.Join(hsm, "softhsm2.conf"),
+                  `directories.tokendir = ${File.Join(hsm, "tokens")}\nobjectstore.backend = file\nlog.level = ERROR\n`);
+        for (const m of ["gnome-keyring", "opensc", "p11-kit-trust"])
+            File.Save(File.Join(hsm, "config", "pkcs11", "modules", `${m}.module`), "enable-in: bintana-test-nothing\n");
+        const env = { SOFTHSM2_CONF: File.Join(hsm, "softhsm2.conf"),
+                      XDG_CONFIG_HOME: File.Join(hsm, "config"), GNUTLS_PIN: "1234" };
+        const token = "pkcs11:token=BintanaTest";
+        const steps = [
+            run(["softhsm2-util", "--init-token", "--free", "--label", "BintanaTest",
+                 "--pin", "1234", "--so-pin", "5678"], env),
+            run(["p11tool", "--login", "--write", token, "--load-privkey", at("key.pem"),
+                 "--label", "signer", "--id", "01"], env),
+            run(["p11tool", "--login", "--write", token, "--load-certificate", at("cert.pem"),
+                 "--label", "signer", "--id", "01"], env),
+        ];
+        if (steps.some((r) => r.ExitCode !== 0)) {
+            print(`  (skipping Key's token: ${steps.map((r) => r.ExitCode).join("/")} -- ${steps.map((r) => r.Output).join(" ")})`);
+            return;
+        }
+        /* p11tool sees what GnuTLS sees: a token it cannot find is the
+         * machine's p11-kit not loading SoftHSM, not a bug here. */
+        if (!run(["p11tool", "--list-tokens"], env).Output.includes("BintanaTest")) {
+            print("  (skipping Key's token: p11-kit does not load SoftHSM on this machine)");
+            return;
+        }
+
+        const child = at("child");
+        Directory.Make(child);
+        File.Save(File.Join(child, "project.json"),
+                  JSON.stringify({ name: "keychild", main: "Main", sources: ["Main.js"] }));
+        File.Save(File.Join(child, "Main.js"), `"use strict";
+function Main() {
+    const out = {};
+    const t = (name, f) => { try { out[name] = f(); } catch (e) { out[name] = "THROWS " + e.message; } };
+    const digest = File.LoadBytes(${JSON.stringify(at("digest.bin"))});
+    t("tokens", () => Key.Tokens().map((x) => ({ Label: x.Label, Model: x.Model,
+        Signers: x.Signers.map((s) => s.Subject + "/" + s.Label + "/" + (s.Expires instanceof Date)) })));
+    t("nopin", () => Key.Load("${token}"));
+    t("wrong", () => Key.Load("${token}", "0000"));
+    t("load", () => {
+        const k = Key.Load(Key.Tokens()[0].Signers[0].Key, "1234");
+        return [k.Algorithm, k.Subject, k.Certificate instanceof Bytes, k.Source.includes("type=private"),
+                k.Sign(digest).ToHex()];
+    });
+    t("bytoken", () => Key.Load("${token}", "1234").Subject);
+    print(JSON.stringify(out));
+}
+`);
+        const first = run([Application.Executable, child], env);
+        let got = {};
+        try { got = JSON.parse(first.Output.trim().split("\n").pop()); } catch (e) { got = { raw: first.Output }; }
+        eq("Key.Tokens lists the token and who can sign on it, with no PIN",
+           JSON.stringify(got.tokens), '[{"Label":"BintanaTest","Model":"SoftHSM v2","Signers":["File Signer/signer/true"]}]');
+        check("a token's key with no PIN says the token wants one",
+              String(got.nopin).includes("wants its PIN"), String(got.nopin));
+        check("...a wrong PIN is refused", String(got.wrong).includes("refused that PIN"), String(got.wrong));
+        eq("...and with its PIN it loads, with the certificate beside it on the token",
+           JSON.stringify((got.load || []).slice(0, 4)), '["RSA","File Signer",true,true]');
+        eq("...and the token signs what openssl signs with the same key",
+           (got.load || [])[4], theirs.ToHex());
+        eq("a URI naming only the token takes its one key", got.bytoken, "File Signer");
+
+        /* A second key on the token: naming only the token is now ambiguous. */
+        run(["p11tool", "--login", "--write", token, "--load-privkey", at("ec.pem"),
+             "--label", "other", "--id", "02"], env);
+        const second = run([Application.Executable, child], env);
+        try { got = JSON.parse(second.Output.trim().split("\n").pop()); } catch (e) { got = { raw: second.Output }; }
+        check("with two keys, naming only the token is refused, listing both",
+              String(got.bytoken).includes("names 2 keys") && String(got.bytoken).includes("object=other"),
+              String(got.bytoken).split("\n").join(" | "));
+        eq("...while the key named by its own URI still loads", (got.load || [])[1], "File Signer");
     }
 
     testDrawing() {

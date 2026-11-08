@@ -25,11 +25,17 @@ jobs:
             build-essential cmake pkg-config \
             libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
             libsqlite3-dev libsoup-3.0-dev libxml2-dev libpoppler-glib-dev \
-            libsysprof-capture-4-dev \
+            libsysprof-capture-4-dev libgnutls28-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
             xvfb xdotool desktop-file-utils \
+            softhsm2 gnutls-bin openssl \
             librsvg2-common fonts-cantarell
+
+          # `softhsm2` and `gnutls-bin` (p11tool) are the token `testKey` signs
+          # on -- a SoftHSM of its own, in a child -- and GnuTLS's headers are
+          # what `Cipher` and `Key` are built with; without them both take
+          # their refusing branch and the token half is skipped.
 
           # The last two are named for a reason `--no-install-recommends`
           # hides: they are recommends of GTK rather than dependencies, and the

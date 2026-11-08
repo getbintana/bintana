@@ -306,6 +306,8 @@ Each of these was paid for; the evidence is in the linked file.
 - Format numbers for CSS, JSON or a test with `g_ascii_formatd`/`g_ascii_dtostr`:
   `printf("%g")` writes the locale's decimal comma. Never quote a GLib
   `err->message` in an error: it is translated.
+- `JS_Throw*Error` formats into **256 bytes and cuts the rest silently**; a
+  message that quotes a path, a URI or a list goes through `bta_throw_text`.
 - A subclass member must not shadow a base member's name (`Widget.Expand`,
   `Widget.Remove`, `Widget.Resize`); check the base table before naming.
 - A property setter does not raise an event; a `.form` applies properties in
@@ -388,7 +390,7 @@ Traps and their evidence, by area, in `docs/agents/`:
 - [`tables.md`](docs/agents/tables.md) — you touch `TableView`: sorting, cell editors, links, geometry.
 - [`ide.md`](docs/agents/ide.md) — you change the IDE: designer, tabs, git panel, commands, recovery.
 - [`data.md`](docs/agents/data.md) — you touch `Record`, `Xml`, `Database`/`Table`, `Csv`, `Decimal` or JSON.
-- [`drawing.md`](docs/agents/drawing.md) — you touch `Painter`, `DrawingArea`, `Drawing`, printing or a drawing library.
+- [`drawing.md`](docs/agents/drawing.md) — you touch `Painter`, `DrawingArea`, `Drawing`, printing, a drawing library, `PdfDocument` or signing with a `Key`.
 - [`media-desktop.md`](docs/agents/media-desktop.md) — you touch `Video`/`AudioPlayer`, the `Media` elements (`Media.Element` and the graph it builds), `Keyring`, `Notification` or desktop entries.
 - [`network.md`](docs/agents/network.md) — you touch `Http` or TLS.
 - [`i18n.md`](docs/agents/i18n.md) — you touch translation, the extractor or `.po` files.

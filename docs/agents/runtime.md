@@ -502,6 +502,15 @@ icon when the theme has one by that name (`gtkapplication.c`).
 
 ## Conversions and refusals
 
+- **A refusal longer than 255 bytes is cut, without a word.** `JS_MakeError`
+  in QuickJS formats into `char buf[256]`, so every `JS_Throw*Error` loses the
+  end of a long message. Found by `testKey`: refusing a token URI that names
+  two keys listed the first key's `pkcs11:` URI (about 140 bytes) and half of
+  the second, and the assertion looking for the second passed or failed with
+  the length of the scratch directory's name. `bta_throw_text` (bta_sys.c)
+  builds the `Error` with `JS_NewError` and sets `message` from a
+  `g_strdup_vprintf`; use it wherever the text can grow -- a path, a URI, a
+  list of names.
 - **A geometry is the display's range, not `int32`'s.** `bta_to_int` accepts
   anything an integer holds, and two failures were a long way from the
   assignment: `Width = 2147483000` grew the window past what X can allocate and

@@ -430,3 +430,40 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   called with `Exec.Wait` from inside `Sign`, so `PdfSign` is in the blocking
   head of `TESTS`. The tamper is one byte of the `Reason`, which the signature
   covers, at the same length so the byte ranges still hold.
+
+## Keys (`Key`, in `bta_key.c`)
+
+- **GnuTLS for both halves**: a file through `gnutls_pkcs12_simple_parse` or
+  `gnutls_privkey_import_x509_raw` (PEM/DER, encrypted PKCS#8 with the
+  password), a token through `gnutls_privkey_import_url`. `Sign` is
+  `gnutls_privkey_sign_hash2` with `gnutls_pk_to_sign`, which for RSA writes
+  PKCS#1 v1.5 with the DigestInfo -- **byte for byte what `openssl pkeyutl
+  -sign -pkeyopt digest:sha256` writes**, which is what `testKey` asserts for
+  PEM, DER, PKCS#12, encrypted PKCS#8 and the token: deterministic, so equal
+  bytes are the proof.
+- **The PIN is answered once per ask**: GnuTLS calls the pin function again
+  after a refusal (`GNUTLS_PIN_WRONG`, `attempt > 0`), and a real card locks
+  after three. `load_token` lists the private keys with
+  `GNUTLS_PKCS11_OBJ_FLAG_LOGIN`, which uses the *global* pin function: it is
+  set around that call and cleared after, which is why `Key` is main-thread
+  only and not in a `Task`.
+- **`Tokens()` lists certificates, not keys**: a key is a private object, not
+  visible before login, and a certificate is public. A signer's key URI is the
+  certificate's with `type=private`. CA certificates are left out
+  (`gnutls_x509_crt_get_ca_status`), and so is p11-kit's trust module
+  (`GNUTLS_PKCS11_TOKEN_TRUSTED`) -- it is a token of hundreds of CAs.
+  **`openssl req -x509` makes a CA certificate by default** (`CA:TRUE`), so
+  the test's signer is made with `basicConstraints=critical,CA:FALSE`; the
+  first try listed no signers at all.
+- **The token test cannot touch the desktop's keyring.** p11-kit loads every
+  module in `/usr/share/p11-kit/modules`, gnome-keyring's included, which is
+  the user's session. The child gets an `XDG_CONFIG_HOME` whose
+  `pkcs11/modules/<name>.module` says `enable-in: bintana-test-nothing` for
+  each of the others, and `SOFTHSM2_CONF` pointing at a token directory under
+  SCRATCH; `p11tool --list-tokens` under the same environment is asked first,
+  and a SoftHSM p11-kit does not load is a skip, not a red line.
+- **At exit, the documents kept for NSS are let go** (`bta_pdf_cleanup`, after
+  `JS_FreeRuntime`): with them held, NSS printed `NSS_Shutdown failed: ...
+  Objects are still in use` at the end of every program that had verified a
+  signature. Freeing them is safe there because nothing verifies after it --
+  the use-after-free was a *later* verification -- and ASan agrees.

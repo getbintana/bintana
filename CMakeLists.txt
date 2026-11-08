@@ -84,7 +84,8 @@ pkg_check_modules(SYSTEMD IMPORTED_TARGET libsystemd)
 # and Http exists, saying which package is missing when called.
 pkg_check_modules(SOUP IMPORTED_TARGET libsoup-3.0)
 
-# Optional: GnuTLS is the AES-256-GCM behind `Cipher`.  It is already the TLS
+# Optional: GnuTLS is the AES-256-GCM behind `Cipher`, and `Key` -- a private
+# key from a file or a PKCS#11 token, through p11-kit's modules.  It is already the TLS
 # library under libsoup on a Linux desktop, but the headers are a separate
 # `-devel` package and a program that never encrypts needs none of it -- so the
 # mould is sqlite's: without it `Cipher` exists, `Available` is false and the
@@ -281,6 +282,7 @@ add_executable(bintana
     runtime/src/bta_xml.c
     runtime/src/bta_keyring.c
     runtime/src/bta_cipher.c
+    runtime/src/bta_key.c
     runtime/src/bta_network.c
     runtime/src/bta_locale.c
     runtime/src/bta_bytes.c
@@ -355,9 +357,9 @@ endif()
 if(GNUTLS_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::GNUTLS)
     target_compile_definitions(bintana PRIVATE BTA_HAVE_GNUTLS=1)
-    message(STATUS "gnutls ${GNUTLS_VERSION}: Cipher is available")
+    message(STATUS "gnutls ${GNUTLS_VERSION}: Cipher and Key are available")
 else()
-    message(STATUS "no gnutls: Cipher exists and refuses to encrypt")
+    message(STATUS "no gnutls: Cipher and Key exist and refuse")
 endif()
 
 if(GSTREAMER_FOUND)

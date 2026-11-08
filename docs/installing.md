@@ -342,7 +342,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
 | `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
 | `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | `Keyring` exists, `Available` is `false`, and every verb refuses with a sentence naming the package. It has no Windows port; the library itself is on every GNOME desktop already |
-| `Cipher` (AES-256-GCM) | `gnutls-devel` | `libgnutls28-dev` | `Cipher` exists, `Available` is `false`, and `Encrypt`/`Decrypt` refuse with a sentence naming the package. GnuTLS is already the TLS library under libsoup on a Linux desktop, but the headers are a separate package |
+| `Cipher` (AES-256-GCM) and `Key` (a private key from a smart card, a token or a file) | `gnutls-devel` | `libgnutls28-dev` | `Cipher` and `Key` exist, `Available` is `false`, and their verbs refuse with a sentence naming the package. GnuTLS is already the TLS library under libsoup on a Linux desktop, but the headers are a separate package |
 | `--profile` and the runtime's marks in a Sysprof capture | `sysprof-capture-devel` | `libsysprof-capture-4-dev` | `--profile` refuses naming the package, and a capture carries no marks of ours — the samples and GTK's frame marks are Sysprof's and unaffected |
 | `PdfDocument.AddFields` and `Encrypt` (fillable PDF forms, signature fields, encryption) | `podofo-devel` | `libpodofo-dev` | `PdfDocument.CanWrite` is `false`, and `AddFields`/`Encrypt` refuse with a sentence naming the package. PoDoFo is C++17 and needs OpenSSL; a report without `Input`/`Signature` needs none of it |
 
@@ -404,6 +404,9 @@ sudo apt install xvfb xdotool python3 openssl
 # the media test generates its clips with gst-launch-1.0:
 #   Fedora         gstreamer1
 #   Debian/Ubuntu  gstreamer1.0-tools
+# the Key test signs on a SoftHSM token of its own, made with p11tool:
+#   Fedora         softhsm gnutls-utils
+#   Debian/Ubuntu  softhsm2 gnutls-bin
 ```
 
 ```sh
@@ -430,7 +433,10 @@ rather than borrowing whatever display is around.
 
 The HTTP tests start local servers with `python3`, and one of them makes a
 throwaway TLS certificate with `openssl`; where either tool is missing that step
-is skipped rather than failed.
+is skipped rather than failed. The `Key` and PDF signing tests make their keys
+with `openssl` too, and the token half of `testKey` needs `softhsm2-util` and
+`p11tool`; it runs in a child whose p11-kit loads that SoftHSM alone, so the
+desktop's keyring module is never reached.
 
 ## Writing a native plugin
 

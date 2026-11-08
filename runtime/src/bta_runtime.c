@@ -2695,6 +2695,7 @@ static bool install_globals(BtaApp *app)
     bta_desktop_init(ctx, global);
     bta_printer_init(ctx, global);
     bta_pdf_init(ctx, global);
+    bta_key_init(ctx, global);
     bta_xml_init(ctx, global);
     bta_keyring_init(ctx, global);
     bta_network_init(ctx, global);
@@ -3645,6 +3646,7 @@ void bta_app_free(BtaApp *app)
     bta_widgets_cleanup(app->ctx);
     JS_FreeContext(app->ctx);
     JS_FreeRuntime(app->rt);
+    bta_pdf_cleanup();
     bta_modules_forget(app->ctx);   /* C strings only, keyed by the pointer */
     /* After the context: a plugin's cleanup is C-only, and this is where the
      * shared objects are let go. See the note on bta_plugins_cleanup. */

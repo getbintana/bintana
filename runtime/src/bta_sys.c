@@ -75,6 +75,24 @@ char *bta_exe_path(void)
  * atomically, and all silent. A number or an object in a position whose value
  * is a file name is a mistake being made, so it is named here instead.
  */
+JSValue bta_throw_text(JSContext *ctx, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    char *text = g_strdup_vprintf(fmt, ap);
+    va_end(ap);
+
+    JSValue err = JS_NewError(ctx);
+    if (JS_IsException(err)) {
+        g_free(text);
+        return JS_EXCEPTION;
+    }
+    JS_DefinePropertyValueStr(ctx, err, "message", JS_NewString(ctx, text),
+                              JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
+    g_free(text);
+    return JS_Throw(ctx, err);
+}
+
 const char *bta_file_path(JSContext *ctx, JSValueConst v, const char *who)
 {
     if (!JS_IsString(v)) {
