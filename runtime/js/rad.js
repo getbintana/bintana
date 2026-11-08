@@ -585,7 +585,8 @@ GLOBAL.FormPart = class FormPart {
     }
 
     /**
-     * a new part of `type` -- `Timer`, `Connection`, `Model` or `HttpClient`; a
+     * a new part of `type` -- `Timer`, `Connection`, `Model`, `HttpClient`,
+     * `Socket`, `ServerSocket`, `UdpSocket`, `WebSocket` or `SmtpClient`; a
      * name that is not a part is refused by name
      */
     static New(type) {
@@ -1498,6 +1499,579 @@ class WebSocketPart extends FormPart {
 }
 
 formPartTypes.WebSocket = WebSocketPart;
+
+/* ------------------------------------------------------------------------
+ * SmtpClient -- one message, over the Socket and its TLS.
+ *
+ * The session is SMTP's own state machine over a line socket: greeting,
+ * EHLO, optional AUTH LOGIN, MAIL FROM, RCPT TO for each recipient, DATA,
+ * then QUIT. The message is built as MIME here; an attachment is read as
+ * bytes and base64 is wrapped at 76 columns.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * an SMTP client: one `Send` speaks the protocol on a fresh `Socket`, with
+ * `Tls` implicit (port 465) or plain (25). Messages are plain values; the
+ * connection is opened and closed by `Send`
+ */
+class SmtpClient {
+
+    constructor(options) {
+        if (options !== undefined && (options === null || typeof options !== "object" ||
+                                      Array.isArray(options)))
+            throw new TypeError("SmtpClient: the options are an object");
+        const o = options || {};
+
+        this._host = "";
+        this._port = 25;
+        this._user = "";
+        this._password = "";
+        this._from = "";
+        this._tls = "None";
+        this._timeout = 30000;
+
+        for (const key in o) {
+            switch (key) {
+            case "Host":     this.Host = o.Host; break;
+            case "Port":     this.Port = o.Port; break;
+            case "User":     this.User = o.User; break;
+            case "Password": this.Password = o.Password; break;
+            case "From":     this.From = o.From; break;
+            case "Tls":      this.Tls = o.Tls; break;
+            case "Timeout":  this.Timeout = o.Timeout; break;
+            default:
+                throw new TypeError(`SmtpClient: no option called '${key}'; the options are ` +
+                                    "Host, Port, User, Password, From, Tls and Timeout");
+            }
+        }
+
+        this._busy = false;
+        this._finished = false;
+        this._state = "closed";
+        this._sock = null;
+        this._timer = null;
+        this._onDone = null;
+        this._onError = null;
+        this._multi = null;
+        this._reply = [];
+        this._recipients = [];
+        this._at = 0;
+        this._data = "";
+        this._envelopeFrom = "";
+    }
+
+    /** the SMTP server's name or address */
+    get Host() { return this._host; }
+    set Host(value) {
+        if (typeof value !== "string")
+            throw new TypeError("SmtpClient.Host: expected text");
+        this._host = value;
+    }
+
+    /** the port; 25 plain, 465 for implicit TLS */
+    get Port() { return this._port; }
+    set Port(value) {
+        if (typeof value !== "number" || !isFinite(value) || Math.floor(value) !== value)
+            throw new TypeError("SmtpClient.Port: expected a whole number");
+        if (value < 1 || value > 65535)
+            throw new RangeError("SmtpClient.Port: 1 to 65535");
+        this._port = value;
+    }
+
+    /** the AUTH LOGIN user, or "" for a server that needs none */
+    get User() { return this._user; }
+    set User(value) {
+        if (typeof value !== "string")
+            throw new TypeError("SmtpClient.User: expected text");
+        this._user = value;
+    }
+
+    /** the AUTH LOGIN password; keep it out of the `.form` */
+    get Password() { return this._password; }
+    set Password(value) {
+        if (typeof value !== "string")
+            throw new TypeError("SmtpClient.Password: expected text");
+        this._password = value;
+    }
+
+    /** the envelope sender, used when the message does not name one */
+    get From() { return this._from; }
+    set From(value) {
+        if (typeof value !== "string" || /[\r\n]/.test(value))
+            throw new TypeError("SmtpClient.From: expected one address");
+        this._from = value;
+    }
+
+    /** `"None"`, `"Tls"` (implicit), `true`, or a `Socket.Tls` trust object */
+    get Tls() { return this._tls; }
+    set Tls(value) {
+        if (value === undefined || value === null || value === "None") this._tls = "None";
+        else if (value === true || value === "Tls") this._tls = "Tls";
+        else if (value === "StartTls")
+            throw new RangeError("SmtpClient.Tls: STARTTLS needs the connection to upgrade " +
+                                 "mid-stream, which is not built; use implicit TLS on 465");
+        else if (typeof value === "object") this._tls = value;
+        else throw new TypeError("SmtpClient.Tls: \"None\", \"Tls\", true or { Ca, Cert }");
+    }
+
+    /** how long one reply may take, in milliseconds; 0 waits for ever */
+    get Timeout() { return this._timeout; }
+    set Timeout(value) {
+        if (typeof value !== "number" || !isFinite(value) || value < 0)
+            throw new TypeError("SmtpClient.Timeout: expected milliseconds");
+        this._timeout = value;
+    }
+
+    _socketTls() {
+        if (this._tls === "None") return null;
+        if (this._tls === "Tls") return true;
+        return this._tls;
+    }
+
+    _address(value, who) {
+        if (typeof value !== "string" || !value || /[\r\n]/.test(value))
+            throw new TypeError(`SmtpClient.Send: ${who} is one address`);
+        return value;
+    }
+
+    _addresses(value, who) {
+        if (value === undefined || value === null) return [];
+        const list = typeof value === "string" ? [value] : value;
+        if (!Array.isArray(list))
+            throw new TypeError(`SmtpClient.Send: ${who} is an address or a list`);
+        return list.map((a) => this._address(a, who));
+    }
+
+    _body(text) { return String(text).replace(/\r\n|\r|\n/g, "\r\n"); }
+
+    /* RFC 2047: an encoded word is at most 75 characters, so the text is cut
+     * into UTF-8 chunks of 45 bytes -- 60 base64 characters and the wrapper --
+     * and one character is never split across two words. */
+    _subject(text) {
+        if (/^[\x20-\x7E]*$/.test(text)) return text;
+        const words = [];
+        let chunk = "", size = 0;
+        for (const ch of text) {
+            const cp = ch.codePointAt(0);
+            const n = cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+            if (size + n > 45) {
+                words.push("=?UTF-8?B?" + new Bytes(chunk).ToBase64() + "?=");
+                chunk = "";
+                size = 0;
+            }
+            chunk += ch;
+            size += n;
+        }
+        if (chunk) words.push("=?UTF-8?B?" + new Bytes(chunk).ToBase64() + "?=");
+        return words.join(" ");
+    }
+
+    _base64(bytes) {
+        const s = bytes.ToBase64();
+        let out = "";
+        for (let i = 0; i < s.length; i += 76)
+            out += s.slice(i, i + 76) + "\r\n";
+        return out;
+    }
+
+    _attachment(a) {
+        if (typeof a === "string") a = { Path: a };
+        if (!a || typeof a !== "object")
+            throw new TypeError("SmtpClient.Send: an attachment is a path or { Name, Path|Bytes, Type }");
+        const name = a.Name !== undefined ? String(a.Name) : (a.Path ? File.BaseName(a.Path) : "");
+        if (!name || /[\r\n"]/.test(name))
+            throw new TypeError("SmtpClient.Send: an attachment needs a name without quotes or newlines");
+        let bytes;
+        let type = a.Type;
+        if (type !== undefined && (typeof type !== "string" || /[\r\n"]/.test(type)))
+            throw new TypeError("SmtpClient.Send: an attachment Type is a MIME type without quotes or newlines");
+        if (a.Bytes !== undefined) {
+            if (!(a.Bytes instanceof Bytes))
+                throw new TypeError("SmtpClient.Send: attachment Bytes is a Bytes");
+            bytes = a.Bytes;
+        } else if (a.Path) {
+            bytes = File.LoadBytes(a.Path);
+            if (!type) type = File.Info(a.Path).Type;
+        } else {
+            throw new TypeError("SmtpClient.Send: an attachment needs Path or Bytes");
+        }
+        return { Name: name, Bytes: bytes, Type: type || "application/octet-stream" };
+    }
+
+    /* The message as MIME. `top` is the overall Content-Type, `body` its
+     * body; both are already CRLF. */
+    _message(message) {
+        if (!message || typeof message !== "object" || Array.isArray(message))
+            throw new TypeError("SmtpClient.Send: the message is an object");
+
+        const from = this._address(message.From !== undefined ? message.From : this._from, "From");
+        this._envelopeFrom = from;
+        const to   = this._addresses(message.To, "To");
+        const cc   = this._addresses(message.Cc, "Cc");
+        const bcc  = this._addresses(message.Bcc, "Bcc");
+        const rcpt = [...to, ...cc, ...bcc];
+        if (!rcpt.length)
+            throw new TypeError("SmtpClient.Send: a message needs at least one recipient");
+        if (message.Subject !== undefined && typeof message.Subject !== "string")
+            throw new TypeError("SmtpClient.Send: Subject is text");
+        if (message.Body !== undefined && typeof message.Body !== "string")
+            throw new TypeError("SmtpClient.Send: Body is text");
+        if (message.Html !== undefined && typeof message.Html !== "string")
+            throw new TypeError("SmtpClient.Send: Html is text");
+
+        const subject = message.Subject === undefined ? "" : message.Subject;
+        if (/[\r\n]/.test(subject))
+            throw new TypeError("SmtpClient.Send: Subject cannot hold a newline");
+        const encoded = this._subject(subject);
+        const text = this._body(message.Body === undefined ? "" : message.Body);
+        const html = message.Html === undefined ? "" : this._body(message.Html);
+        const attachments = (message.Attachments || []).map((a) => this._attachment(a));
+
+        let top, body;
+        if (html) {
+            const b = "alt-" + Random.Uuid();
+            top  = `multipart/alternative; boundary="${b}"`;
+            body = `--${b}\r\nContent-Type: text/plain; charset=UTF-8\r\n` +
+                   `Content-Transfer-Encoding: 8bit\r\n\r\n${text}\r\n` +
+                   `--${b}\r\nContent-Type: text/html; charset=UTF-8\r\n` +
+                   `Content-Transfer-Encoding: 8bit\r\n\r\n${html}\r\n` +
+                   `--${b}--\r\n`;
+        } else {
+            top  = "text/plain; charset=UTF-8";
+            body = text + "\r\n";
+        }
+
+        if (attachments.length) {
+            const b = "mix-" + Random.Uuid();
+            let mixed = `--${b}\r\nContent-Type: ${top}\r\n\r\n${body}`;
+
+            for (const a of attachments) {
+                mixed += `--${b}\r\nContent-Type: ${a.Type}; name="${a.Name}"\r\n` +
+                         `Content-Transfer-Encoding: base64\r\n` +
+                         `Content-Disposition: attachment; filename="${a.Name}"\r\n\r\n` +
+                         this._base64(a.Bytes) + "\r\n";
+            }
+            mixed += `--${b}--\r\n`;
+            top  = `multipart/mixed; boundary="${b}"`;
+            body = mixed;
+        }
+
+        const headers = [`From: ${from}`];
+        if (to.length) headers.push(`To: ${to.join(", ")}`);
+        if (cc.length) headers.push(`Cc: ${cc.join(", ")}`);
+        headers.push(`Subject: ${encoded}`);
+        headers.push(`Date: ${new Date().toUTCString()}`);
+        headers.push("MIME-Version: 1.0");
+        headers.push(`Content-Type: ${top}`);
+        if (!top.startsWith("multipart/"))
+            headers.push("Content-Transfer-Encoding: 8bit");
+        if (message.Headers !== undefined) {
+            if (!message.Headers || typeof message.Headers !== "object")
+                throw new TypeError("SmtpClient.Send: Headers is an object");
+            for (const name in message.Headers) {
+                if (!hasOwn.call(message.Headers, name)) continue;
+                const value = message.Headers[name];
+                if (!name || /[\r\n:]/.test(name))
+                    throw new TypeError("SmtpClient.Send: a header name has no colon or newline");
+                if (typeof value !== "string" || /[\r\n]/.test(value))
+                    throw new TypeError("SmtpClient.Send: a header is text without newlines");
+                headers.push(`${name}: ${value}`);
+            }
+        }
+
+        const raw = headers.join("\r\n") + "\r\n\r\n" + body;
+        if (!raw.endsWith("\r\n"))
+            return raw + "\r\n";
+        return raw;
+    }
+
+    _touch() {
+        if (this._timer) { this._timer.Stop(); this._timer = null; }
+        if (this._timeout > 0)
+            this._timer = Timer.After(this._timeout,
+                                      () => this._fail("Timeout", "the SMTP server did not answer"));
+    }
+
+    _write(line) { this._sock.Write(line + "\r\n"); }
+
+    _command(line, state) { this._state = state; this._write(line); }
+
+    _finish(err) {
+        if (this._finished) return;
+        this._finished = true;
+        this._busy = false;
+        if (this._timer) { this._timer.Stop(); this._timer = null; }
+        const sock = this._sock;
+        const done = this._onDone;
+        const fail = this._onError;
+        this._sock = null;
+        this._onDone = null;
+        this._onError = null;
+        this._state = "closed";
+        if (sock) {
+            sock.OnLine = null;
+            sock.OnError = null;
+            sock.OnClosed = null;
+            sock.Close();
+        }
+        if (err) { if (fail) fail(err); }
+        else if (done) done();
+    }
+
+    _fail(kind, message) {
+        this._finish({ Message: message, Kind: kind });
+    }
+
+    _dispatch() {
+        const code = Number(this._reply[0].slice(0, 3));
+        const text = this._reply.map((l) => l.slice(4)).join("\n");
+
+        if (code >= 400)
+            return this._fail("Smtp", `${code} ${text}`);
+        if (this._state === "greeting") {
+            if (code !== 220) return this._fail("Smtp", `${code} ${text}`);
+            return this._command("EHLO localhost", "ehlo");
+        }
+        if (this._state === "ehlo") {
+            if (code !== 250) return this._fail("Smtp", `${code} ${text}`);
+            if (this._user) return this._command("AUTH LOGIN", "auth-user");
+            return this._command(`MAIL FROM:<${this._envelopeFrom}>`, "mail");
+        }
+        if (this._state === "auth-user") {
+            if (code !== 334) return this._fail("Smtp", `${code} ${text}`);
+            return this._command(new Bytes(this._user).ToBase64(), "auth-pass");
+        }
+        if (this._state === "auth-pass") {
+            if (code !== 334) return this._fail("Smtp", `${code} ${text}`);
+            return this._command(new Bytes(this._password).ToBase64(), "auth-done");
+        }
+        if (this._state === "auth-done") {
+            if (code !== 235) return this._fail("Smtp", `${code} ${text}`);
+            return this._command(`MAIL FROM:<${this._envelopeFrom}>`, "mail");
+        }
+        if (this._state === "mail") {
+            if (code !== 250) return this._fail("Smtp", `${code} ${text}`);
+            this._at = 0;
+            return this._command(`RCPT TO:<${this._recipients[this._at++]}>`, "rcpt");
+        }
+        if (this._state === "rcpt") {
+            if (code !== 250 && code !== 251) return this._fail("Smtp", `${code} ${text}`);
+            if (this._at < this._recipients.length)
+                return this._command(`RCPT TO:<${this._recipients[this._at++]}>`, "rcpt");
+            return this._command("DATA", "data");
+        }
+        if (this._state === "data") {
+            if (code !== 354) return this._fail("Smtp", `${code} ${text}`);
+            this._sock.Write(this._data + ".\r\n");
+            this._state = "body";
+            return;
+        }
+        if (this._state === "body") {
+            if (code !== 250) return this._fail("Smtp", `${code} ${text}`);
+            return this._command("QUIT", "quit");
+        }
+        if (this._state === "quit") {
+            this._finish(null);
+            return;
+        }
+        this._fail("Smtp", `unexpected reply: ${text}`);
+    }
+
+    _line(line) {
+        this._touch();
+        if (this._multi) {
+            this._multi.push(line);
+            if (/^\d{3} /.test(line)) {
+                this._reply = this._multi;
+                this._multi  = null;
+                this._dispatch();
+            }
+            return;
+        }
+        if (/^\d{3}-/.test(line)) { this._multi = [line]; return; }
+        if (!/^\d{3} /.test(line)) return this._fail("Smtp", `unexpected reply: ${line}`);
+        this._reply = [line];
+        this._dispatch();
+    }
+
+    /**
+     * send one message. `message` is `{ From, To, Cc, Bcc, Subject, Body,
+     * Html, Attachments, Headers }`; `onDone()` or `onError(err)` answers
+     * on a later turn. Answers the client
+     */
+    Send(message, onDone, onError) {
+        if (this._busy)
+            throw new Error("SmtpClient.Send: a message is already being sent");
+        if (!this._host)
+            throw new Error("SmtpClient.Send: Host is empty");
+
+        const data = this._message(message);
+        this._data = data.replace(/(^|\r\n)\./g, "$1..");
+        this._recipients = [
+            ...this._addresses(message.To, "To"),
+            ...this._addresses(message.Cc, "Cc"),
+            ...this._addresses(message.Bcc, "Bcc"),
+        ];
+        this._at = 0;
+        this._finished = false;
+        this._busy = true;
+        this._state = "greeting";
+        this._multi = null;
+        this._reply = [];
+        this._onDone = typeof onDone === "function" ? onDone : null;
+        this._onError = typeof onError === "function" ? onError : null;
+
+        const sock = new Socket({ Host: this._host, Port: this._port, Line: true,
+                                  EndOfLine: "\r\n", Timeout: this._timeout,
+                                  Tls: this._socketTls() });
+        this._sock = sock;
+        sock.OnLine = (line) => this._line(line);
+        sock.OnError = (e) => this._fail(e.Kind || "Error", e.Message || "the connection failed");
+        sock.OnClosed = () => this._fail("Closed", "the SMTP server closed the connection");
+        this._touch();
+        sock.Connect();
+        return this;
+    }
+
+    /** stop the message in flight, answering `onError` with `"Cancelled"` */
+    Stop() {
+        if (this._busy) this._fail("Cancelled", "the send was stopped");
+        else if (this._sock) { this._sock.Close(); this._sock = null; }
+        return this;
+    }
+}
+
+GLOBAL.SmtpClient = SmtpClient;
+
+/* ------------------------------------------------------------------------
+ * SmtpClient -- a mail client a form owns.  Host, Port, Tls and From are
+ * serialised; User and Password are not, because secrets do not belong in a
+ * `.form` in version control.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * an SMTP client declared on a form: `Host`, `Port`, `Tls` and `From` are
+ * properties, `User` and `Password` are set in `Form_Open`, and the form's
+ * close stops a send in flight
+ */
+class SmtpClientPart extends FormPart {
+
+    /** an SMTP client raises no events; `Send` answers its callbacks */
+    static get Events() { return []; }
+    /** what a `.form` may set: no credentials */
+    static get Properties() { return ["Host", "Port", "Tls", "From", "Timeout"]; }
+
+    constructor() {
+        super();
+        this._host = "";
+        this._port = 25;
+        this._tls = "None";
+        this._from = "";
+        this._timeout = 30000;
+        this._user = "";
+        this._password = "";
+        this._client = null;
+    }
+
+    /** the `SmtpClient` itself, made on first use, credentials and all */
+    get Client() {
+        if (!this._client) {
+            this._client = new SmtpClient({ Host: this._host, Port: this._port,
+                                            Tls: this._tls, From: this._from,
+                                            Timeout: this._timeout });
+            this._client.User = this._user;
+            this._client.Password = this._password;
+        }
+        return this._client;
+    }
+
+    _drop() {
+        if (this._client) {
+            const client = this._client;
+            this._client = null;
+            client.Stop();
+        }
+        return this;
+    }
+
+    /** the SMTP server's name or address */
+    get Host() { return this._host; }
+    set Host(value) {
+        if (typeof value !== "string")
+            throw new TypeError("SmtpClient.Host: expected text");
+        this._host = value;
+        this._drop();
+    }
+
+    /** the port; 25 plain, 465 for implicit TLS */
+    get Port() { return this._port; }
+    set Port(value) {
+        if (typeof value !== "number" || !isFinite(value) || Math.floor(value) !== value)
+            throw new TypeError("SmtpClient.Port: expected a whole number");
+        if (value < 1 || value > 65535)
+            throw new RangeError("SmtpClient.Port: 1 to 65535");
+        this._port = value;
+        this._drop();
+    }
+
+    /** `"None"` or `"Tls"` (implicit), or a `Socket.Tls` trust object */
+    get Tls() { return this._tls; }
+    set Tls(value) {
+        if (value === undefined || value === null || value === "None") this._tls = "None";
+        else if (value === true || value === "Tls") this._tls = "Tls";
+        else if (typeof value === "object") this._tls = value;
+        else throw new TypeError("SmtpClient.Tls: \"None\", \"Tls\", true or { Ca, Cert }");
+        this._drop();
+    }
+
+    /** the envelope sender used when the message does not name one */
+    get From() { return this._from; }
+    set From(value) {
+        if (typeof value !== "string" || /[\r\n]/.test(value))
+            throw new TypeError("SmtpClient.From: expected one address");
+        this._from = value;
+        this._drop();
+    }
+
+    /** how long one reply may take, in milliseconds */
+    get Timeout() { return this._timeout; }
+    set Timeout(value) {
+        if (typeof value !== "number" || !isFinite(value) || value < 0)
+            throw new TypeError("SmtpClient.Timeout: expected milliseconds");
+        this._timeout = value;
+        this._drop();
+    }
+
+    /* Credentials are not `Properties`: the serialiser never writes them, and
+     * the property grid does not offer them.  They are kept here, so changing
+     * `Host` (which drops the client) does not forget them. */
+    /** the AUTH LOGIN user */
+    get User() { return this._user; }
+    set User(value) {
+        if (typeof value !== "string")
+            throw new TypeError("SmtpClient.User: expected text");
+        this._user = value;
+        if (this._client) this._client.User = value;
+    }
+    /** the AUTH LOGIN password; from `Settings` or `Keyring`, never the form */
+    get Password() { return this._password; }
+    set Password(value) {
+        if (typeof value !== "string")
+            throw new TypeError("SmtpClient.Password: expected text");
+        this._password = value;
+        if (this._client) this._client.Password = value;
+    }
+
+    /** send one message; answers the part */
+    Send(message, onDone, onError) {
+        this.Client.Send(message, onDone, onError);
+        return this;
+    }
+    /** stop the send in flight; answers the part */
+    Stop() { this._drop(); return this; }
+}
+
+formPartTypes.SmtpClient = SmtpClientPart;
 
 /* ------------------------------------------------------------------------
  * Stopwatch -- how long something took.

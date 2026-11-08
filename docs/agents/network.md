@@ -423,3 +423,21 @@ each rule below; read it before changing a level.
 - **`Close` starts the close handshake and does not free the connection.** The
   `"closed"` signal is what releases `keep`, the connection and the server's
   array slot; freeing at `Close` would cut the frame that is still queued.
+- **SMTP is a line protocol, so the client is JavaScript over `Socket`.**
+  `SmtpClient` sets `Line: true`, `EndOfLine: "\r\n"`, walks greeting/EHLO/
+  AUTH LOGIN/MAIL/RCPT/DATA/QUIT, and builds the MIME body itself. The DATA
+  body is dot-stuffed (`.line` -> `..line`) and ends with `\r\n.\r\n`; a
+  message with attachments is `multipart/mixed`, base64 wrapped at 76
+  columns. A subject that is not printable ASCII is RFC 2047 encoded, in
+  UTF-8 chunks of 45 bytes so no word passes 75 characters and no character
+  is split. A reply timeout is armed on every line, so a server that accepts
+  the socket and then says nothing is an error rather than a hang.
+- **STARTTLS is refused, not half-done.** `Socket` is TLS from the first byte
+  or plain; upgrading a live connection mid-stream is a different mechanism.
+  `SmtpClient.Tls` accepts `"None"` and `"Tls"` (implicit, port 465) and
+  refuses `"StartTls"` with a sentence until that road exists.
+- **Credentials are not a `.form` property.** The `SmtpClient` part serialises
+  `Host`, `Port`, `Tls`, `From` and `Timeout`; `User` and `Password` are
+  getters/setters outside `static Properties`, set in `Form_Open` from
+  `Settings` or `Keyring`. The fake server in `testSmtp` is a `ServerSocket`
+  with the same line mode, plain and wrapped in `ServerSocket.Tls`.

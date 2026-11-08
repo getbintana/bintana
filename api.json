@@ -15211,7 +15211,7 @@
           "Params": 1,
           "Signature": "(type)",
           "Returns": "",
-          "Doc": "a new part of `type` -- `Timer`, `Connection`, `Model` or `HttpClient`; a name that is not a part is refused by name",
+          "Doc": "a new part of `type` -- `Timer`, `Connection`, `Model`, `HttpClient`, `Socket`, `ServerSocket`, `UdpSocket`, `WebSocket` or `SmtpClient`; a name that is not a part is refused by name",
           "Native": false
         },
         {
@@ -17182,6 +17182,92 @@
           "Signature": "(key, value)",
           "Returns": "",
           "Doc": "stores `value` under `key`, anything JSON carries, and writes the file at once",
+          "Native": false
+        }
+      ]
+    },
+    {
+      "Name": "SmtpClient",
+      "Members": [
+        {
+          "Name": "From",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the envelope sender, used when the message does not name one",
+          "Native": false
+        },
+        {
+          "Name": "Host",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the SMTP server's name or address",
+          "Native": false
+        },
+        {
+          "Name": "Password",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the AUTH LOGIN password; keep it out of the `.form`",
+          "Native": false
+        },
+        {
+          "Name": "Port",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the port; 25 plain, 465 for implicit TLS",
+          "Native": false
+        },
+        {
+          "Name": "Send",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(message, onDone, onError)",
+          "Returns": "",
+          "Doc": "send one message. `message` is `{ From, To, Cc, Bcc, Subject, Body, Html, Attachments, Headers }`; `onDone()` or `onError(err)` answers on a later turn. Answers the client",
+          "Native": false
+        },
+        {
+          "Name": "Stop",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "stop the message in flight, answering `onError` with `\"Cancelled\"`",
+          "Native": false
+        },
+        {
+          "Name": "Timeout",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how long one reply may take, in milliseconds; 0 waits for ever",
+          "Native": false
+        },
+        {
+          "Name": "Tls",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"None\"`, `\"Tls\"` (implicit), `true`, or a `Socket.Tls` trust object",
+          "Native": false
+        },
+        {
+          "Name": "User",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the AUTH LOGIN user, or \"\" for a server that needs none",
           "Native": false
         }
       ]

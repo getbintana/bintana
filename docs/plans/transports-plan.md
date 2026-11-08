@@ -1,6 +1,6 @@
 # Transports: sockets, serial and IPC beside HTTP
 
-**Status: stages 1 to 4 built (2026-11-08); the rest is staged.** This is the
+**Status: stages 1 to 5 built (2026-11-08); the rest is staged.** This is the
 answer to **R3** of
 [the October audit](../audit-2026-10.md): what a program can talk to that is
 not an HTTP request and not a child process. The first stage is `Socket` and
@@ -333,6 +333,10 @@ service is the case to design `Ipc.DBus` from.
    frames, `Protocols` and `Headers`; `Http.Server.WebSocket` is the upgrade
    handler, and a server with no `Request` is a WebSocket-only listener.
 5. **`SmtpClient`** -- over `Socket` + TLS, with `MailMessage`-shaped input.
+   **Built** (2026-11-08, `runtime/js/rad.js`): plain or
+   implicit TLS, `AUTH LOGIN`, MIME with text/HTML and base64 attachments. A
+   `StartTls` is refused until `Socket` can upgrade mid-stream; the part keeps
+   `User`/`Password` out of the `.form`.
 6. **`SerialPort`** -- Linux over `GSerialPort`; Windows later.
 7. **`Ipc`** -- the base `Channel`, `Ipc.Pipe` on Unix (reusing stage 1),
    then the Windows named-pipe backend.

@@ -598,6 +598,9 @@ const TESTS = [
     "Key",
     /* Blocking too: openssl makes the certificate, and both ends speak TLS. */
     "SocketTls",
+    /* Blocking too: openssl makes the certificate, and the fake SMTP server
+     * speaks both plain and implicit TLS. */
+    "Smtp",
     "EditorMap",
     "EditorFold",
     "EditorFoldClick",
@@ -29780,6 +29783,134 @@ class Form1 extends Form {
                 eq("with no error", live.error ? live.error.Message : "", "");
             }, 6000);
         }, 6000);
+    }
+
+    testSmtp() {
+        if (!Application.HasCommand("openssl")) {
+            print("  (skipping the SMTP step: it needs openssl for the TLS half)");
+            return;
+        }
+
+        const dir  = File.Join(Environment.TempDirectory,
+                               `bintana-smtp-${Environment.ProcessId}`);
+        const cert = File.Join(dir, "server.pem");
+        const key  = File.Join(dir, "server.key");
+        Directory.Make(dir);
+        const made = Exec.Wait(["openssl", "req", "-x509", "-newkey", "rsa:2048",
+                                "-nodes", "-days", "1", "-keyout", key, "-out", cert,
+                                "-subj", "/CN=127.0.0.1",
+                                "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"],
+                               { Timeout: 30000 });
+        if (made.ExitCode !== 0) {
+            print(`  (skipping the SMTP step: openssl exited ${made.ExitCode})`);
+            return;
+        }
+
+        throws("an SmtpClient refuses an option it does not have",
+               () => new SmtpClient({ Nope: 1 }));
+        throws("a starttls this build cannot upgrade is refused",
+               () => new SmtpClient({ Tls: "StartTls" }));
+        throws("a message needs a recipient",
+               () => new SmtpClient({ Host: "localhost", From: "app@example.com" })
+                         .Send({ To: [], Body: "x" }));
+        throws("a header name with a newline is refused",
+               () => new SmtpClient({ Host: "localhost", From: "app@example.com" })
+                         .Send({ To: "a@example.com", Headers: { "X\r\nBcc": "x" } }));
+
+        const part = FormPart.New("SmtpClient");
+        part.Host = "smtp.example.com";
+        part.Port = 465;
+        part.Tls = "Tls";
+        part.From = "app@example.com";
+        part.User = "user";
+        part.Password = "secret";
+        eq("an SmtpClient part keeps its host", part.Host, "smtp.example.com");
+        eq("and its port", part.Port, 465);
+        eq("and its user", part.User, "user");
+        part.Host = "smtp2.example.com";
+        eq("credentials survive a changed host", part.User, "user");
+        eq("the client is made with them", part.Client.Password, "secret");
+        eq("its serialised type", part.Serialize().type, "SmtpClient");
+        check("credentials are not serialised", !("Password" in part.Serialize().properties),
+              JSON.stringify(part.Serialize().properties));
+        check("SmtpClient is a part type", FormPart.Types().includes("SmtpClient"));
+
+        const start = (secure, store) => {
+            const opts = { Host: "local", Port: 0 };
+            if (secure) opts.Tls = { Cert: cert, Key: key };
+            const server = new ServerSocket(opts);
+
+            server.OnConnection = (c) => {
+                c.Line = true;
+                c.EndOfLine = "\r\n";
+                c.Write("220 test ESMTP\r\n");
+                let data = false;
+                c.OnLine = (line) => {
+                    if (data) {
+                        if (line === ".") {
+                            data = false;
+                            c.Write("250 queued\r\n");
+                        } else {
+                            store.data.push(line);
+                        }
+                        return;
+                    }
+                    if (/^EHLO /.test(line)) { store.ehlo = line; c.Write("250-test\r\n250 OK\r\n"); }
+                    else if (/^MAIL FROM:/.test(line)) { store.mail = line; c.Write("250 OK\r\n"); }
+                    else if (/^RCPT TO:/.test(line)) { store.rcpt.push(line); c.Write("250 OK\r\n"); }
+                    else if (line === "DATA") { data = true; c.Write("354 go\r\n"); }
+                    else if (line === "QUIT") { store.quit = true; c.Write("221 bye\r\n"); c.Close(); }
+                    else c.Write("500 what\r\n");
+                };
+            };
+            server.OnError = (e) => { store.serverError = e; };
+            server.Listen();
+            return server;
+        };
+
+        const got = { rcpt: [], data: [] };
+        const subject = "Hola, señor " + "ñ".repeat(30);
+        let server = start(false, got);
+        let client = new SmtpClient({ Host: "127.0.0.1", Port: server.Port,
+                                      From: "app@example.com", Timeout: 300000 });
+        client.Send({ To: ["a@example.com", "b@example.com"], Subject: subject,
+                      Body: "line one\n.line two",
+                      Attachments: [{ Name: "x.txt", Bytes: new Bytes("hello") }] },
+                    () => { got.done = true; },
+                    (e) => { got.error = e; });
+
+        until("the plain SMTP message was sent", () => got.done || got.error, () => {
+            eq("it connected", got.done, true);
+            eq("EHLO", /^EHLO /.test(got.ehlo || ""), true);
+            eq("MAIL FROM", got.mail, "MAIL FROM:<app@example.com>");
+            eq("two recipients", got.rcpt.length, 2);
+            const line = got.data.find((l) => l.startsWith("Subject: "));
+            check("the subject is two encoded words",
+                  /^Subject: =\?UTF-8\?B\?[^?]+\?= =\?UTF-8\?B\?[^?]+\?=$/.test(line || ""),
+                  line);
+            check("the body is there", got.data.includes("line one"));
+            check("the leading dot is stuffed", got.data.includes("..line two"));
+            check("the attachment is base64",
+                  got.data.some((l) => l.includes("aGVsbG8=")));
+            eq("QUIT", got.quit, true);
+            server.Stop();
+
+            const tls = { rcpt: [], data: [] };
+            const tlsServer = start(true, tls);
+            const tlsClient = new SmtpClient({ Host: "127.0.0.1", Port: tlsServer.Port,
+                                               From: "app@example.com",
+                                               Tls: { Cert: cert }, Timeout: 300000 });
+            tlsClient.Send({ To: "tls@example.com", Subject: "TLS", Body: "over tls" },
+                           () => { tls.done = true; },
+                           (e) => { tls.error = e; });
+
+            until("the implicit-TLS SMTP message was sent", () => tls.done || tls.error, () => {
+                eq("TLS connected and sent", tls.done, true);
+                eq("one recipient", tls.rcpt.length, 1);
+                check("the TLS body is there", tls.data.includes("over tls"));
+                tlsServer.Stop();
+            }, 24000);
+        }, 24000);
     }
 
     testHttpServer() {
