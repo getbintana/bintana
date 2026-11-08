@@ -1404,7 +1404,7 @@ every other IDE form.
 the two elements beside `Text` and `Box`, and the property grid edits the field
 name, `Input` (`Text`/`Check`), value, checked state, read-only, required,
 multiline and max length. The static page is still Cairo's; `Report.SavePdf`
-writes it, then `PdfForm.AddFields` (PoDoFo) adds the widgets. A signature field
+writes it, then `PdfDocument.AddFields` (PoDoFo) adds the widgets. A signature field
 is left empty: the signer's own application fills it. A form is one page and
 ignores `Data`; a field in a page header or footer repeats with the band, so a
 name declared twice is refused. See

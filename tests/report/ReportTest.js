@@ -885,7 +885,7 @@ class ReportTest extends Form {
     /* --------------------------------------------------------------- form
      *
      * `Input` and `Signature` turn a report into one page with no rows: the
-     * fields are the document. The static page is still Cairo's; `PdfForm`
+     * fields are the document. The static page is still Cairo's; `PdfDocument.AddFields`
      * adds the widgets PoDoFo knows how to write.
      */
     testForm() {
@@ -949,7 +949,7 @@ class ReportTest extends Form {
         };
 
         const pdf = at("form.pdf");
-        if (!PdfForm.Available) {
+        if (!PdfDocument.CanWrite) {
             throws("a form refuses without PoDoFo", () => d.SavePdf(pdf));
             check("...and leaves no file", !File.Exists(pdf));
             return;

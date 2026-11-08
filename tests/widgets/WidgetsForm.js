@@ -9403,12 +9403,20 @@ function Main() {
             p.Text(`Hola página ${page}`, 40, 40);
             p.Text("Ñandú y café", 40, 70);
         });
-        let d = null;
-        try { d = PdfDocument.Open(path); } catch (e) {
-            check("built without poppler, PdfDocument.Open says which package",
-                  e.message.includes("poppler"), e.message);
+        /* Without poppler a PDF still opens -- a report's form needs no
+         * reader -- and what reads says which package is missing. */
+        if (!PdfDocument.CanRead) {
+            const w = PdfDocument.Load(path);
+            let said = "";
+            try { w.Pages; } catch (e) { said = e.message; }
+            check("built without poppler, reading says which package", said.includes("poppler"), said);
+            said = "";
+            try { Probe.Pdf(path); } catch (e) { said = e.message; }
+            check("...and so does Probe.Pdf", said.includes("poppler"), said);
+            w.Close();
             return;
         }
+        const d = PdfDocument.Load(path);
 
         eq("Probe.Pdf says the pages and the first one's size in points",
            JSON.stringify(Probe.Pdf(path)), '{"Pages":3,"Width":595,"Height":842,"Title":"","Author":"","Encrypted":false}');
@@ -9425,8 +9433,8 @@ function Main() {
         throws("a page past the end is refused", () => d.Text(4));
         throws("...and page 0, since pages count from 1", () => d.PageSize(0));
         throws("a file that is not a PDF is refused, saying so",
-               () => PdfDocument.Open(File.Join(Application.Directory, "project.json")));
-        throws("...and one that is not there", () => PdfDocument.Open(File.Join(SCRATCH, "none.pdf")));
+               () => PdfDocument.Load(File.Join(Application.Directory, "project.json")));
+        throws("...and one that is not there", () => PdfDocument.Load(File.Join(SCRATCH, "none.pdf")));
         throws("a PdfDocument is opened, not constructed", () => new PdfDocument());
 
         const area = new DrawingArea();
@@ -9446,6 +9454,56 @@ function Main() {
         eq("Close lets it go", d.Open, false);
         throws("...and a closed one says so", () => d.Pages);
         area.Delete();
+
+        /* Writing, which needs PoDoFo -- and makes the encrypted PDF the
+         * reading half is tested with, so no other tool is needed. */
+        eq("CanRead and CanWrite say which halves this build has",
+           `${PdfDocument.CanRead} ${typeof PdfDocument.CanWrite}`, "true boolean");
+        if (!PdfDocument.CanWrite) {
+            const w = PdfDocument.Load(path);
+            throws("without PoDoFo, Encrypt refuses naming the package",
+                   () => w.Encrypt(File.Join(SCRATCH, "x.pdf"), { Password: "a" }));
+            w.Close();
+        } else {
+            const secret = File.Join(SCRATCH, "secret.pdf");
+            const src = PdfDocument.Load(path);
+            throws("Encrypt wants a password of some kind", () => src.Encrypt(secret, {}));
+            throws("...and permissions it knows", () => src.Encrypt(secret, { Password: "a", Permissions: ["Fly"] }));
+            src.Encrypt(secret, { Password: "abc", OwnerPassword: "owner", Permissions: ["Print"] });
+            src.Close();
+            eq("an encrypted PDF probes as one", JSON.stringify(Probe.Pdf(secret)), '{"Encrypted":true}');
+            let said = "";
+            try { PdfDocument.Load(secret); } catch (e) { said = e.message; }
+            check("...opening it without a password says to give one", said.includes("give its password"), said);
+            said = "";
+            try { PdfDocument.Load(secret, "wrong"); } catch (e) { said = e.message; }
+            check("...and a wrong one says so", said.includes("that password does not open it"), said);
+            const opened = PdfDocument.Load(secret, "abc");
+            eq("...and the right one reads it", `${opened.Pages} ${opened.Text(1).split("\n")[0]}`, "3 Hola página 1");
+            const again = PdfDocument.Load(secret, "owner");
+            eq("...as the owner's does", again.Pages, 3);
+            again.Close();
+
+            /* Encrypted over its own file: the object reads the new one. */
+            const plain = File.Join(SCRATCH, "plain.pdf");
+            File.Copy(path, plain);
+            const own = PdfDocument.Load(plain);
+            own.Encrypt(plain, { Password: "x" });
+            eq("Encrypt over its own file keeps the object reading it, with the new password",
+               `${own.Pages} ${JSON.stringify(Probe.Pdf(plain))}`, '3 {"Encrypted":true}');
+            own.Close();
+
+            /* Fields, into an encrypted document too, in place. */
+            eq("AddFields writes fields into the document's own file and says how many",
+               opened.AddFields([{ Page: 1, Name: "who", Type: "Text", Rect: { X: 40, Y: 600, Width: 200, Height: 20 } },
+                                 { Page: 1, Name: "ok", Type: "Check", Checked: true,
+                                   Rect: { X: 40, Y: 560, Width: 14, Height: 14 } }]), 2);
+            eq("...and the document still reads, with its password", opened.Text(1).split("\n")[0], "Hola página 1");
+            throws("a field declared twice refuses the whole list",
+                   () => opened.AddFields([{ Page: 1, Name: "a", Type: "Text", Rect: { X: 1, Y: 1, Width: 5, Height: 5 } },
+                                           { Page: 1, Name: "a", Type: "Text", Rect: { X: 1, Y: 1, Width: 5, Height: 5 } }]));
+            opened.Close();
+        }
 
         const v = new PdfView();
         this.Fixed1.Add(v);

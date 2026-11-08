@@ -180,9 +180,9 @@ no Windows port -- `libxml2`, which is what `Xml` parses with,
 `libsecret-1`, the system's vault behind `Keyring`, which has no Windows port
 either, `sysprof-capture-4` (Fedora `sysprof-capture-devel`), which is what
 `--profile` and the runtime's marks in a Sysprof capture are built on, and
-`libpodofo` (Fedora `podofo-devel`), which is the AcroForm layer behind
-`PdfForm` and needs C++17 and OpenSSL. `-DBTA_WITH_PODOFO=OFF` builds the
-runtime without it, and `PdfForm.Available` then says so. The libxml2 one is
+`libpodofo` (Fedora `podofo-devel`), which is `PdfDocument`'s writing half --
+fields and encryption -- and needs C++17 and OpenSSL. `-DBTA_WITH_PODOFO=OFF`
+builds the runtime without it, and `PdfDocument.CanWrite` then says so. The libxml2 one is
 optional in the build only: on most desktops GTK4 already loads libxml2 at
 runtime, so what the package buys is the headers. **Package names per distribution and what each
 one turns on are in [`docs/installing.md`](../installing.md)**, which is also

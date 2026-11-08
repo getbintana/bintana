@@ -125,12 +125,13 @@ pkg_check_modules(SECRET IMPORTED_TARGET libsecret-1)
 # are simply not raised. See runtime/src/bta_profile.c.
 pkg_check_modules(SYSPROF IMPORTED_TARGET sysprof-capture-4)
 
-# Optional: PoDoFo is the form layer. Cairo writes the visual PDF; PoDoFo opens
-# it and adds the AcroForm widgets a signer can fill. Optional like sqlite: a
-# program that only draws reports needs none of it, and without it `PdfForm`
-# exists, `Available` is false and `AddFields` refuses naming the package.
+# Optional: PoDoFo is `PdfDocument`'s writing half. Cairo writes the visual PDF;
+# PoDoFo opens it and adds the AcroForm widgets a signer can fill, or encrypts
+# it. Optional like sqlite: a program that only draws reports needs none of it,
+# and without it `PdfDocument.CanWrite` is false and `AddFields`/`Encrypt`
+# refuse naming the package.
 # PoDoFo is C++17, which is why the language is enabled only when it is found.
-option(BTA_WITH_PODOFO "Build PdfForm with PoDoFo" ON)
+option(BTA_WITH_PODOFO "Build PdfDocument's writing half with PoDoFo" ON)
 if(BTA_WITH_PODOFO)
     pkg_check_modules(PODOFO IMPORTED_TARGET libpodofo)
 else()
@@ -271,7 +272,6 @@ add_executable(bintana
     runtime/src/bta_notification.c
     runtime/src/bta_zip.c
     runtime/src/bta_probe.c
-    runtime/src/bta_poppler.c
     runtime/src/bta_popover.c
     runtime/src/bta_desktop.c
     runtime/src/bta_printer.c
@@ -320,7 +320,7 @@ if(POPPLER_FOUND)
     target_compile_definitions(bintana PRIVATE BTA_HAVE_POPPLER=1)
     message(STATUS "poppler-glib ${POPPLER_VERSION}: PdfDocument and Probe.Pdf read a PDF")
 else()
-    message(STATUS "no poppler-glib: PdfDocument and Probe.Pdf will say so when called")
+    message(STATUS "no poppler-glib: PdfDocument's reading half and Probe.Pdf will say so when called")
 endif()
 
 if(SQLITE3_FOUND)
@@ -397,9 +397,9 @@ endif()
 if(PODOFO_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::PODOFO)
     target_compile_definitions(bintana PRIVATE BTA_HAVE_PODOFO=1)
-    message(STATUS "podofo ${PODOFO_VERSION}: PdfForm can add form fields")
+    message(STATUS "podofo ${PODOFO_VERSION}: PdfDocument can add form fields and encrypt")
 else()
-    message(STATUS "no podofo: PdfForm exists and refuses to add fields")
+    message(STATUS "no podofo: PdfDocument refuses to write, naming the package")
 endif()
 target_compile_definitions(bintana PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION}")
 # -Wshadow, -Wnull-dereference and -Wformat=2 are clean across runtime/src

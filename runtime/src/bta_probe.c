@@ -212,7 +212,7 @@ static const JSCFunctionListEntry probe_props[] = {
      *   size in **points**, and what it says it is called and by whom. `null`
      *   when `path` is not there or not a PDF; `{ Encrypted: true }` when it
      *   wants a password. Reading it -- its text, its pages drawn -- is
-     *   `PdfDocument.Open`. A build without poppler says so
+     *   `PdfDocument.Load`. A build without poppler says so
      */
     JS_CFUNC_DEF("Pdf",   1, probe_pdf),
 };

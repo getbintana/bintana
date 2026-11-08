@@ -16257,12 +16257,39 @@
       "Name": "PdfDocument",
       "Members": [
         {
+          "Name": "AddFields",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(fields)",
+          "Returns": "number",
+          "Doc": "form fields written into this document's file, **in place**, and how many. Each is `{ Page, Name, Type, Rect, Value, Checked, ReadOnly, Required, Multiline, MaxLength, Reason }`; `Type` is `\"Text\"`, `\"Check\"` or `\"Signature\"`, `Page` is 1-based, and `Rect` is `{ X, Y, Width, Height }` in **PDF points with the origin at the bottom-left**. A signature field is left empty for the signer's own application. Every field is checked first, and a failure leaves the file as it was. Needs PoDoFo (`CanWrite`)",
+          "Native": true
+        },
+        {
           "Name": "Author",
           "Kind": "ReadOnly",
           "Params": -1,
           "Signature": "",
           "Returns": "string",
           "Doc": "who the file says wrote it; `\"\"` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "CanRead",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this build reads a PDF -- pages, text, a page drawn -- which is poppler; when false those members refuse naming the package",
+          "Native": true
+        },
+        {
+          "Name": "CanWrite",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this build writes into a PDF -- `AddFields`, `Encrypt` -- which is PoDoFo; when false those refuse naming the package",
           "Native": true
         },
         {
@@ -16302,12 +16329,30 @@
           "Native": true
         },
         {
+          "Name": "Encrypt",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(path, { Password, OwnerPassword, Permissions })",
+          "Returns": "",
+          "Doc": "this document written to `path` **encrypted**, AES-256: `Password` opens it, `OwnerPassword` lifts the restrictions, and `Permissions` lists what is allowed without it -- `Print`, `HighPrint`, `Copy`, `Edit`, `EditNotes`, `FillAndSign`, `Accessible`, `Assemble`; every one when absent. `path` may be this document's own, which is replaced whole and read from then on with the new password. Needs PoDoFo (`CanWrite`)",
+          "Native": true
+        },
+        {
           "Name": "Keywords",
           "Kind": "ReadOnly",
           "Params": -1,
           "Signature": "",
           "Returns": "string",
           "Doc": "the file's keywords, as it wrote them; `\"\"` when it has none",
+          "Native": true
+        },
+        {
+          "Name": "Load",
+          "Kind": "Static",
+          "Params": 2,
+          "Signature": "(path, [password])",
+          "Returns": "PdfDocument",
+          "Doc": "a PDF, opened -- `Load` as `Bitmap.Load`, since `Open` is what an opened one answers (whether it still is). Throws, saying which: there is no such file, it is encrypted and wants a password, the password is wrong, or it is not a PDF this machine reads (the last three where this build reads PDFs)",
           "Native": true
         },
         {
@@ -16389,29 +16434,6 @@
           "Signature": "",
           "Returns": "string",
           "Doc": "what the file says it is called; `\"\"` when it says nothing",
-          "Native": true
-        }
-      ]
-    },
-    {
-      "Name": "PdfForm",
-      "Members": [
-        {
-          "Name": "AddFields",
-          "Kind": "Method",
-          "Params": 2,
-          "Signature": "(path, fields)",
-          "Returns": "number",
-          "Doc": "adds the fields to the PDF at `path`, **in place**, and answers how many. Each field is `{ Page, Name, Type, Rect, Value, Checked, ReadOnly, Required, Multiline, MaxLength, Reason }`; `Type` is `\"Text\"`, `\"Check\"` or `\"Signature\"`, `Page` is 1-based, and `Rect` is `{ X, Y, Width, Height }` in **PDF points with the origin at the bottom-left**. A signature field is left empty for the signer's own application. The PDF must exist and be one this build's PoDoFo can parse; a failure leaves the file as it was",
-          "Native": true
-        },
-        {
-          "Name": "Available",
-          "Kind": "Property",
-          "Params": -1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "whether this build has PoDoFo, which is what `AddFields` needs; when false the verb refuses with a sentence naming the package",
           "Native": true
         }
       ]
@@ -16525,7 +16547,7 @@
           "Params": 1,
           "Signature": "(path)",
           "Returns": "{ Pages, Width, Height, Title, Author, Encrypted }",
-          "Doc": "what a PDF is, without keeping it: how many pages, the first one's size in **points**, and what it says it is called and by whom. `null` when `path` is not there or not a PDF; `{ Encrypted: true }` when it wants a password. Reading it -- its text, its pages drawn -- is `PdfDocument.Open`. A build without poppler says so",
+          "Doc": "what a PDF is, without keeping it: how many pages, the first one's size in **points**, and what it says it is called and by whom. `null` when `path` is not there or not a PDF; `{ Encrypted: true }` when it wants a password. Reading it -- its text, its pages drawn -- is `PdfDocument.Load`. A build without poppler says so",
           "Native": true
         }
       ]
@@ -18739,12 +18761,39 @@
       "Name": "PdfDocument",
       "Members": [
         {
+          "Name": "AddFields",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(fields)",
+          "Returns": "number",
+          "Doc": "form fields written into this document's file, **in place**, and how many. Each is `{ Page, Name, Type, Rect, Value, Checked, ReadOnly, Required, Multiline, MaxLength, Reason }`; `Type` is `\"Text\"`, `\"Check\"` or `\"Signature\"`, `Page` is 1-based, and `Rect` is `{ X, Y, Width, Height }` in **PDF points with the origin at the bottom-left**. A signature field is left empty for the signer's own application. Every field is checked first, and a failure leaves the file as it was. Needs PoDoFo (`CanWrite`)",
+          "Native": true
+        },
+        {
           "Name": "Author",
           "Kind": "ReadOnly",
           "Params": -1,
           "Signature": "",
           "Returns": "string",
           "Doc": "who the file says wrote it; `\"\"` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "CanRead",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this build reads a PDF -- pages, text, a page drawn -- which is poppler; when false those members refuse naming the package",
+          "Native": true
+        },
+        {
+          "Name": "CanWrite",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this build writes into a PDF -- `AddFields`, `Encrypt` -- which is PoDoFo; when false those refuse naming the package",
           "Native": true
         },
         {
@@ -18784,12 +18833,30 @@
           "Native": true
         },
         {
+          "Name": "Encrypt",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(path, { Password, OwnerPassword, Permissions })",
+          "Returns": "",
+          "Doc": "this document written to `path` **encrypted**, AES-256: `Password` opens it, `OwnerPassword` lifts the restrictions, and `Permissions` lists what is allowed without it -- `Print`, `HighPrint`, `Copy`, `Edit`, `EditNotes`, `FillAndSign`, `Accessible`, `Assemble`; every one when absent. `path` may be this document's own, which is replaced whole and read from then on with the new password. Needs PoDoFo (`CanWrite`)",
+          "Native": true
+        },
+        {
           "Name": "Keywords",
           "Kind": "ReadOnly",
           "Params": -1,
           "Signature": "",
           "Returns": "string",
           "Doc": "the file's keywords, as it wrote them; `\"\"` when it has none",
+          "Native": true
+        },
+        {
+          "Name": "Load",
+          "Kind": "Static",
+          "Params": 2,
+          "Signature": "(path, [password])",
+          "Returns": "PdfDocument",
+          "Doc": "a PDF, opened -- `Load` as `Bitmap.Load`, since `Open` is what an opened one answers (whether it still is). Throws, saying which: there is no such file, it is encrypted and wants a password, the password is wrong, or it is not a PDF this machine reads (the last three where this build reads PDFs)",
           "Native": true
         },
         {
@@ -20909,7 +20976,7 @@
               "Params": 1,
               "Signature": "(path)",
               "Returns": "",
-              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text; the pages are the ones the last measure worked out. A report with `Input`/`Signature` elements is a form, and the fields are added by `PdfForm` after the page is drawn. This is what a report is for — `Save` is for when one page is going into something else. With no display, `Document.SavePdf` is the same file",
+              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text; the pages are the ones the last measure worked out. A report with `Input`/`Signature` elements is a form, and the fields are added by `PdfDocument.AddFields` after the page is drawn. This is what a report is for — `Save` is for when one page is going into something else. With no display, `Document.SavePdf` is the same file",
               "Native": false
             },
             {
@@ -21044,7 +21111,7 @@
               "Params": 1,
               "Signature": "(path)",
               "Returns": "",
-              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text. A report with `Input`/`Signature` elements is a form: the page is drawn first and the fields are added by `PdfForm`. **No widget and no display**: it draws through `Drawing`, which is what lets a `main` project — a report run from a timer — write one. A page that throws leaves no file",
+              "Doc": "**every page, one file**. Vector, at the paper's exact size, so the text in it is text. A report with `Input`/`Signature` elements is a form: the page is drawn first and the fields are added by `PdfDocument.AddFields`. **No widget and no display**: it draws through `Drawing`, which is what lets a `main` project — a report run from a timer — write one. A page that throws leaves no file",
               "Native": false
             },
             {

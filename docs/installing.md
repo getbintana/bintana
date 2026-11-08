@@ -334,7 +334,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | what it turns on | Fedora | Debian / Ubuntu | without it |
 |---|---|---|---|
 | `Database.Sqlite(path)` | `sqlite-devel` | `libsqlite3-dev` | the class is there and says which package is missing when called |
-| `PdfDocument`, `Probe.Pdf`, `lib/pdfview` (reading a PDF) | `poppler-glib-devel` | `libpoppler-glib-dev` | `PdfDocument.Open` and `Probe.Pdf` exist and refuse with a sentence naming the package; a `PdfView` shows nothing and throws where a file is assigned. 22.02 or newer |
+| `PdfDocument`, `Probe.Pdf`, `lib/pdfview` (reading a PDF) | `poppler-glib-devel` | `libpoppler-glib-dev` | `PdfDocument.Load` and `Probe.Pdf` exist and refuse with a sentence naming the package; a `PdfView` shows nothing and throws where a file is assigned. 22.02 or newer |
 | `Logger.Target = "Journal"` | `systemd-devel` | `libsystemd-dev` | logging goes to the terminal |
 | `Http`, `Http.Server`, `Http.Stream` | `libsoup3-devel` | `libsoup-3.0-dev` | `Http` exists and refuses by name |
 | `Video`, `AudioPlayer` | `gstreamer1-devel gstreamer1-plugins-base-devel` | `libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev` | both exist and say nothing can be played |
@@ -344,7 +344,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | `Keyring` exists, `Available` is `false`, and every verb refuses with a sentence naming the package. It has no Windows port; the library itself is on every GNOME desktop already |
 | `Cipher` (AES-256-GCM) | `gnutls-devel` | `libgnutls28-dev` | `Cipher` exists, `Available` is `false`, and `Encrypt`/`Decrypt` refuse with a sentence naming the package. GnuTLS is already the TLS library under libsoup on a Linux desktop, but the headers are a separate package |
 | `--profile` and the runtime's marks in a Sysprof capture | `sysprof-capture-devel` | `libsysprof-capture-4-dev` | `--profile` refuses naming the package, and a capture carries no marks of ours — the samples and GTK's frame marks are Sysprof's and unaffected |
-| `PdfForm` (fillable PDF forms and signature fields) | `podofo-devel` | `libpodofo-dev` | `PdfForm` exists, `Available` is `false`, and `AddFields` refuses with a sentence naming the package. PoDoFo is C++17 and needs OpenSSL; a report without `Input`/`Signature` needs none of it |
+| `PdfDocument.AddFields` and `Encrypt` (fillable PDF forms, signature fields, encryption) | `podofo-devel` | `libpodofo-dev` | `PdfDocument.CanWrite` is `false`, and `AddFields`/`Encrypt` refuse with a sentence naming the package. PoDoFo is C++17 and needs OpenSSL; a report without `Input`/`Signature` needs none of it |
 
 `Widget.Available(type)` is how a program asks what the build it is running on
 can actually do — a palette filters on it, and so should anything that offers a

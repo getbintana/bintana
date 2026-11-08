@@ -379,7 +379,15 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   answers `Draw`, `DrawPage` and `Paginate`, so printing, `Printer.Preview` and
   `Painter.Render` work on it with nothing added. Its password is an argument
   of `Open`, never a property: a `.form` keeps every get/set property.
-- **Not tested: an encrypted PDF.** Nothing on this machine or CI's makes one
-  (no `qpdf`); the `POPPLER_ERROR_ENCRYPTED` branches are read, not run.
 - **Generic reading only**: `Text(page)` is poppler's reading order. Parsing a
   supplier's invoice is parsing the supplier, and was refused as a feature.
+- **`PdfDocument` is one object, read and written** (`bta_pdf.c`): poppler
+  reads, PoDoFo writes (`AddFields`, `Encrypt`, through `bta_pdf_podofo.cpp`).
+  `PdfForm` was the writing half under another name and is gone. `Open` needs
+  neither library -- a report's form is written by a build with no poppler --
+  and each member refuses naming its own; `CanRead`/`CanWrite` say which. A
+  write to the document's own file re-opens the reading half on it, with the
+  new password after `Encrypt`. The encrypted PDF the reading half is tested
+  with is made by `Encrypt`: no other tool. Built three ways -- both, without
+  poppler, without PoDoFo (`-DBTA_WITH_PODOFO=OFF`) -- and `tests/report` and
+  `testPdf` pass in each.
