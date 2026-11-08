@@ -59,6 +59,13 @@ pkg_check_modules(VTE IMPORTED_TARGET vte-2.91-gtk4)
 # an old distribution -- the same reason GTK declares its floor above.
 pkg_check_modules(SQLITE3 IMPORTED_TARGET sqlite3>=3.25)
 
+# Optional: `PdfDocument` and `Probe.Pdf` -- reading a PDF: its pages, its
+# text, its metadata, and a page drawn on a Painter, which is what a viewer is
+# made of.  poppler-glib, the sqlite mould: without it both names exist and say
+# which package is missing.  The floor is the date getters
+# (`poppler_document_get_creation_date_time`); Ubuntu 24.04 has 24.02.
+pkg_check_modules(POPPLER IMPORTED_TARGET poppler-glib>=22.02)
+
 # Optional: `Printer.Names` and `Printer.Default` -- the list of printers and
 # which one is the default.  It is GTK's **Unix** print backend and ships as a
 # pkg-config module of its own; on Windows GTK opens the system's dialog and
@@ -264,6 +271,7 @@ add_executable(bintana
     runtime/src/bta_notification.c
     runtime/src/bta_zip.c
     runtime/src/bta_probe.c
+    runtime/src/bta_poppler.c
     runtime/src/bta_popover.c
     runtime/src/bta_desktop.c
     runtime/src/bta_printer.c
@@ -305,6 +313,14 @@ if(VTE_FOUND)
     message(STATUS "vte ${VTE_VERSION}: Terminal can run a child")
 else()
     message(STATUS "no vte: Terminal exists and refuses to run one")
+endif()
+
+if(POPPLER_FOUND)
+    target_link_libraries(bintana PRIVATE PkgConfig::POPPLER)
+    target_compile_definitions(bintana PRIVATE BTA_HAVE_POPPLER=1)
+    message(STATUS "poppler-glib ${POPPLER_VERSION}: PdfDocument and Probe.Pdf read a PDF")
+else()
+    message(STATUS "no poppler-glib: PdfDocument and Probe.Pdf will say so when called")
 endif()
 
 if(SQLITE3_FOUND)

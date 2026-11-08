@@ -1446,6 +1446,7 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     /* A header read and a dictionary: a report sizing a logo on a thread, which
      * is the caller a widget could not have served anyway. */
     bta_probe_init(ctx, global);
+    bta_poppler_init(ctx, global);
     /* The whole catalogue, built on this thread from the language the
      * application had at `Start`.  A worker that sorts ten thousand names and
      * one that writes a translated report both get what they asked for, and

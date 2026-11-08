@@ -16254,6 +16254,146 @@
       ]
     },
     {
+      "Name": "PdfDocument",
+      "Members": [
+        {
+          "Name": "Author",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "who the file says wrote it; `\"\"` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "let it go; closing twice is not an error",
+          "Native": true
+        },
+        {
+          "Name": "Created",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "Date",
+          "Doc": "when the file says it was made, a `Date`; `null` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Creator",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the program that made the document; `\"\"` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Draw",
+          "Kind": "Method",
+          "Params": 4,
+          "Signature": "(painter, page, [width], [height])",
+          "Returns": "",
+          "Doc": "draws that page on a `Draw`'s painter, at its origin and under its transform: at its own size in points, or scaled to fit `width` by `height`, keeping its proportions. No white of its own: the paper is the caller's. What a `DrawPage` hands on, which is how a viewer, a print and a preview are the same code",
+          "Native": true
+        },
+        {
+          "Name": "Keywords",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the file's keywords, as it wrote them; `\"\"` when it has none",
+          "Native": true
+        },
+        {
+          "Name": "Modified",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "Date",
+          "Doc": "when the file says it was last changed, a `Date`; `null` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Open",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "boolean",
+          "Doc": "whether it still is",
+          "Native": true
+        },
+        {
+          "Name": "PageSize",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(page)",
+          "Returns": "{ Width, Height }",
+          "Doc": "that page's size in **points**, 72 to the inch; pages need not all be one size",
+          "Native": true
+        },
+        {
+          "Name": "Pages",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "number",
+          "Doc": "how many pages, numbered from 1 as `DrawPage` numbers them",
+          "Native": true
+        },
+        {
+          "Name": "Path",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the file it was opened from",
+          "Native": true
+        },
+        {
+          "Name": "Producer",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the program that wrote the PDF; `\"\"` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Subject",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the file's own subject line; `\"\"` when it has none",
+          "Native": true
+        },
+        {
+          "Name": "Text",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(page)",
+          "Returns": "string",
+          "Doc": "the text on that page, in reading order, as the library reads it -- what a search or an index is built from. Generic: what a particular layout *means* is the program's",
+          "Native": true
+        },
+        {
+          "Name": "Title",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "what the file says it is called; `\"\"` when it says nothing",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "PdfForm",
       "Members": [
         {
@@ -16377,6 +16517,15 @@
           "Signature": "(path)",
           "Returns": "{ Width, Height }",
           "Doc": "the picture's pixels, from its header. `null` when `path` is not a picture this machine's loaders read -- exactly the files a `Picture` would not show, an `.svg` included where no SVG loader is installed, and its declared size where one is -- or is not there. **A file's header and nothing else**: the size of a picture already in memory is the handle's to answer, off the decode it already did. **No widget and no display**, which is what makes it answerable in a `main` project and before anything has been drawn",
+          "Native": true
+        },
+        {
+          "Name": "Pdf",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(path)",
+          "Returns": "{ Pages, Width, Height, Title, Author, Encrypted }",
+          "Doc": "what a PDF is, without keeping it: how many pages, the first one's size in **points**, and what it says it is called and by whom. `null` when `path` is not there or not a PDF; `{ Encrypted: true }` when it wants a password. Reading it -- its text, its pages drawn -- is `PdfDocument.Open`. A build without poppler says so",
           "Native": true
         }
       ]
@@ -18587,6 +18736,146 @@
       ]
     },
     {
+      "Name": "PdfDocument",
+      "Members": [
+        {
+          "Name": "Author",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "who the file says wrote it; `\"\"` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "let it go; closing twice is not an error",
+          "Native": true
+        },
+        {
+          "Name": "Created",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "Date",
+          "Doc": "when the file says it was made, a `Date`; `null` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Creator",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the program that made the document; `\"\"` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Draw",
+          "Kind": "Method",
+          "Params": 4,
+          "Signature": "(painter, page, [width], [height])",
+          "Returns": "",
+          "Doc": "draws that page on a `Draw`'s painter, at its origin and under its transform: at its own size in points, or scaled to fit `width` by `height`, keeping its proportions. No white of its own: the paper is the caller's. What a `DrawPage` hands on, which is how a viewer, a print and a preview are the same code",
+          "Native": true
+        },
+        {
+          "Name": "Keywords",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the file's keywords, as it wrote them; `\"\"` when it has none",
+          "Native": true
+        },
+        {
+          "Name": "Modified",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "Date",
+          "Doc": "when the file says it was last changed, a `Date`; `null` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Open",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "boolean",
+          "Doc": "whether it still is",
+          "Native": true
+        },
+        {
+          "Name": "PageSize",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(page)",
+          "Returns": "{ Width, Height }",
+          "Doc": "that page's size in **points**, 72 to the inch; pages need not all be one size",
+          "Native": true
+        },
+        {
+          "Name": "Pages",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "number",
+          "Doc": "how many pages, numbered from 1 as `DrawPage` numbers them",
+          "Native": true
+        },
+        {
+          "Name": "Path",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the file it was opened from",
+          "Native": true
+        },
+        {
+          "Name": "Producer",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the program that wrote the PDF; `\"\"` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Subject",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the file's own subject line; `\"\"` when it has none",
+          "Native": true
+        },
+        {
+          "Name": "Text",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(page)",
+          "Returns": "string",
+          "Doc": "the text on that page, in reading order, as the library reads it -- what a search or an index is built from. Generic: what a particular layout *means* is the program's",
+          "Native": true
+        },
+        {
+          "Name": "Title",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "what the file says it is called; `\"\"` when it says nothing",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "XmlDocument",
       "Members": [
         {
@@ -20117,6 +20406,123 @@
             }
           ],
           "Events": []
+        }
+      ]
+    },
+    {
+      "Name": "pdfview",
+      "Classes": [
+        {
+          "Name": "PdfView",
+          "Parent": "Component",
+          "Members": [
+            {
+              "Name": "Document",
+              "Kind": "ReadOnly",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the open document, a `PdfDocument` -- its text, its metadata -- or `null`",
+              "Native": false
+            },
+            {
+              "Name": "File",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the PDF shown, a path; `\"\"` shows nothing. Assigning opens it, so a file that is not there or not a PDF throws here. One that wants a password is `Open(path, password)`'s -- never a property, which a `.form` would keep. Defaults to `\"\"`",
+              "Native": false
+            },
+            {
+              "Name": "Next",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "the next page, if there is one",
+              "Native": false
+            },
+            {
+              "Name": "Open",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(path, password)",
+              "Returns": "",
+              "Doc": "opens a PDF, with its password when it has one, and shows its first page",
+              "Native": false
+            },
+            {
+              "Name": "Page",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the page shown, from 1. Assigning one past either end goes to that end. Defaults to `1`",
+              "Native": false
+            },
+            {
+              "Name": "Pages",
+              "Kind": "ReadOnly",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "how many pages; `0` with no document",
+              "Native": false
+            },
+            {
+              "Name": "Preview",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(setup, cb)",
+              "Returns": "",
+              "Doc": "the runtime's print preview of every page -- `Printer.Preview` over the canvas; answers its window",
+              "Native": false
+            },
+            {
+              "Name": "Previous",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "the page before, if there is one",
+              "Native": false
+            },
+            {
+              "Name": "Print",
+              "Kind": "Method",
+              "Params": 2,
+              "Signature": "(setup, cb)",
+              "Returns": "",
+              "Doc": "the print dialog, then a printer -- `Printer.Send` over the canvas, every page of the document. `cb` as `Send` calls it",
+              "Native": false
+            },
+            {
+              "Name": "Toolbar",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "whether the row of buttons above the page shows. Defaults to `true`",
+              "Native": false
+            },
+            {
+              "Name": "Zoom",
+              "Kind": "Property",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "`Fit page` `Fit width` `50%` `75%` `100%` `150%` `200%` -- the whole page in the room, its width in the room, or that much of its real size. Defaults to `\"Fit page\"`",
+              "Native": false
+            }
+          ],
+          "Events": [
+            {
+              "Name": "PageChange",
+              "Signature": "(page)",
+              "Doc": "the page shown moved -- the buttons, `Next`, `Previous` or `Open`. Assigning `Page` raises nothing, as a setter does not"
+            }
+          ]
         }
       ]
     },

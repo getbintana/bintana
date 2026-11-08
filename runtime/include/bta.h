@@ -1418,6 +1418,12 @@ void bta_zip_init(JSContext *ctx, JSValue global);
  * too. See runtime/src/bta_probe.c.
  */
 void bta_probe_init(JSContext *ctx, JSValue global);
+/* `PdfDocument` (bta_poppler.c): a PDF read -- pages, text, metadata, a page
+ * drawn on a Painter. Optional, poppler-glib. */
+void bta_poppler_init(JSContext *ctx, JSValue global);
+/* The cairo context of a Painter that is drawing a frame now, or NULL with an
+ * exception pending: what a page of another kind of document is drawn onto. */
+cairo_t *bta_painter_cairo(JSContext *ctx, JSValueConst painter);
 
 /*
  * `Popover.Show(content, anchor, [options])` -- a control floating over another,

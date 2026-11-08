@@ -364,3 +364,22 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   the spot when the run has a callback. Found by reading, since no headless
   run can answer the dialog; `on_draw` had the same shape answered years
   before.
+
+## Reading a PDF (`PdfDocument`, `Probe.Pdf`, `lib/pdfview`)
+
+- **poppler-glib, optional**, in `bta_poppler.c`; `Probe.Pdf` is in
+  `bta_probe.c` beside `Probe.Image`. Built both ways (a `pkg-config` that
+  answers no for `poppler-glib`), and CI's `no-poppler` job keeps the other
+  branch compiling; without it `testPdf` is one assertion naming the package.
+- **`PdfDocument.Draw` goes through `bta_painter_cairo`**, the one accessor
+  `bta_paint.c` exports for another file to draw on a live painter, with the
+  painter's own refusals ("the frame is over"). `poppler_page_render`, under a
+  `cairo_save`/`restore`, at the painter's transform.
+- **The viewer is a `DrawingArea` and no control**: `lib/pdfview`'s canvas
+  answers `Draw`, `DrawPage` and `Paginate`, so printing, `Printer.Preview` and
+  `Painter.Render` work on it with nothing added. Its password is an argument
+  of `Open`, never a property: a `.form` keeps every get/set property.
+- **Not tested: an encrypted PDF.** Nothing on this machine or CI's makes one
+  (no `qpdf`); the `POPPLER_ERROR_ENCRYPTED` branches are read, not run.
+- **Generic reading only**: `Text(page)` is poppler's reading order. Parsing a
+  supplier's invoice is parsing the supplier, and was refused as a feature.

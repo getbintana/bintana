@@ -93,6 +93,14 @@ static BtaPainter *painter_of(JSContext *ctx, JSValueConst this_val)
     return p;
 }
 
+/* A live painter's cairo context, for another file that draws onto it
+ * (`PdfDocument.Draw`). The same refusals as every painter method. */
+cairo_t *bta_painter_cairo(JSContext *ctx, JSValueConst painter)
+{
+    BtaPainter *p = painter_of(ctx, painter);
+    return p ? p->cr : NULL;
+}
+
 /* One line of `Dump()`.  Recorded always: it is some tens of nanoseconds a call
  * against a frame budget of tens of thousands, and a Dump that only answers when
  * something was turned on is a Dump nobody reaches for. */

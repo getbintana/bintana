@@ -24,7 +24,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config \
             libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
-            libsqlite3-dev libsoup-3.0-dev libxml2-dev \
+            libsqlite3-dev libsoup-3.0-dev libxml2-dev libpoppler-glib-dev \
             libsysprof-capture-4-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
@@ -135,7 +135,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config clang \
             libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
-            libsqlite3-dev libsoup-3.0-dev libxml2-dev \
+            libsqlite3-dev libsoup-3.0-dev libxml2-dev libpoppler-glib-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
             xvfb \
@@ -182,7 +182,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config \
             libgtk-4-dev libgtksourceview-5-dev \
-            libsqlite3-dev libsoup-3.0-dev libxml2-dev \
+            libsqlite3-dev libsoup-3.0-dev libxml2-dev libpoppler-glib-dev \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
             xvfb \
@@ -244,7 +244,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential cmake pkg-config \
             libgtk-4-dev libgtksourceview-5-dev \
-            libsqlite3-dev libsoup-3.0-dev libxml2-dev \
+            libsqlite3-dev libsoup-3.0-dev libxml2-dev libpoppler-glib-dev \
             xvfb \
             librsvg2-common fonts-cantarell
 
@@ -412,6 +412,48 @@ jobs:
       - name: Test
         env:
           BINTANA: ./build-nosecret/bintana
+          BINTANA_LIB_PATH: ${{ github.workspace }}/lib
+        run: ./tests/run.sh widgets
+
+  # Hiding poppler-glib, the `no-libsecret` mould: `PdfDocument` is still
+  # installed and `Open` refuses with a sentence naming the package, as
+  # `Probe.Pdf` does, and `testPdf` takes its one-assertion branch -- the only
+  # build that proves that branch compiles.
+  no-poppler:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config \
+            libgtk-4-dev libgtksourceview-5-dev \
+            libsqlite3-dev libsoup-3.0-dev libpoppler-glib-dev \
+            xvfb \
+            librsvg2-common fonts-cantarell
+
+      - name: Build with poppler-glib hidden
+        run: |
+          set -euo pipefail
+          mkdir -p fake
+          printf '#!/bin/sh\ncase " $* " in *" poppler-glib"*) exit 1;; esac\nexec /usr/bin/pkg-config "$@"\n' \
+            > fake/pkg-config
+          chmod +x fake/pkg-config
+
+          cmake -S . -B build-nopoppler \
+                -DPKG_CONFIG_EXECUTABLE="$PWD/fake/pkg-config" 2>&1 | tee cmake.log
+          grep -q 'no poppler-glib:' cmake.log \
+            || { echo "poppler-glib was found: the job would prove nothing"; exit 1; }
+          cmake --build build-nopoppler -j"$(nproc)"
+
+      - name: Test
+        env:
+          BINTANA: ./build-nopoppler/bintana
           BINTANA_LIB_PATH: ${{ github.workspace }}/lib
         run: ./tests/run.sh widgets
 

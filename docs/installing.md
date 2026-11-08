@@ -210,7 +210,7 @@ Three things it deliberately does not do: it does not bundle GTK (the machine
 needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
 a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
 built **without** the optional dependencies (`sqlite3`, `libsoup`, GStreamer,
-VTE, `libxml2`, `libsecret`, GnuTLS, PoDoFo) so that none of them becomes a shared library the
+VTE, `libxml2`, `libsecret`, GnuTLS, PoDoFo, poppler) so that none of them becomes a shared library the
 downloader has to have.
 
 ### The compiler inside the Windows build
@@ -334,6 +334,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | what it turns on | Fedora | Debian / Ubuntu | without it |
 |---|---|---|---|
 | `Database.Sqlite(path)` | `sqlite-devel` | `libsqlite3-dev` | the class is there and says which package is missing when called |
+| `PdfDocument`, `Probe.Pdf`, `lib/pdfview` (reading a PDF) | `poppler-glib-devel` | `libpoppler-glib-dev` | `PdfDocument.Open` and `Probe.Pdf` exist and refuse with a sentence naming the package; a `PdfView` shows nothing and throws where a file is assigned. 22.02 or newer |
 | `Logger.Target = "Journal"` | `systemd-devel` | `libsystemd-dev` | logging goes to the terminal |
 | `Http`, `Http.Server`, `Http.Stream` | `libsoup3-devel` | `libsoup-3.0-dev` | `Http` exists and refuses by name |
 | `Video`, `AudioPlayer` | `gstreamer1-devel gstreamer1-plugins-base-devel` | `libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev` | both exist and say nothing can be played |
@@ -460,5 +461,5 @@ and a TagLib wrapper worked through.
 | `Package 'gtksourceview-5' not found` | `gtksourceview5-devel` / `libgtksourceview-5-dev` |
 | compile errors about `gtk_alert_dialog` or `gtk_file_dialog` | the GTK is older than 4.10 — Debian 13 / Ubuntu 24.04 or newer |
 | `no vte: Terminal exists and refuses to run one` | not an error: the optional table above |
-| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret`, `no gnutls` | likewise — a build line, not a failure |
+| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret`, `no gnutls`, `no poppler-glib` | likewise — a build line, not a failure |
 | `no sysprof-capture: --profile says so when asked` | likewise; a Sysprof run still shows the samples and GTK's frames |

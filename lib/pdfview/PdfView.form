@@ -1,0 +1,30 @@
+{
+  "format": "bintana-form/1",
+  "class": "PdfView",
+  "properties": { "Width": 420, "Height": 520, "Arrangement": "Vertical" },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": { "Arrangement": "Horizontal", "Spacing": 6, "Margin": 4, "HAlign": "Fill" },
+      "children": [
+        { "type": "Button", "name": "BtnPrevious",
+          "properties": { "Icon": "go-previous-symbolic", "Tooltip": "Previous page", "AccessibleName": "Previous page" } },
+        { "type": "Label", "name": "LblPage", "properties": { "Text": "" } },
+        { "type": "Button", "name": "BtnNext",
+          "properties": { "Icon": "go-next-symbolic", "Tooltip": "Next page", "AccessibleName": "Next page" } },
+        { "type": "ComboBox", "name": "CmbZoom",
+          "properties": { "Items": ["Fit page", "Fit width", "50%", "75%", "100%", "150%", "200%"],
+                          "Index": 0, "AccessibleName": "Zoom" } }
+      ]
+    },
+    {
+      "type": "Scroller",
+      "name": "View",
+      "properties": { "Expand": true, "HAlign": "Fill", "VAlign": "Fill" },
+      "children": [
+        { "type": "DrawingArea", "name": "Canvas", "properties": {} }
+      ]
+    }
+  ]
+}

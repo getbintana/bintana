@@ -52,7 +52,7 @@ cmake -S . -B build && cmake --build build -j    # needed after any C change
 Required: `gtk4` **4.10 or newer**, `gtksourceview-5` (with headers),
 `gmodule-2.0`, pkg-config. Optional, each reported by CMake either way:
 `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`, `vte-2.91-gtk4`,
-`libxml2`, `libsecret-1`, `gnutls`, `sysprof-capture-4`, and `libpodofo`
+`libxml2`, `libsecret-1`, `gnutls`, `sysprof-capture-4`, `poppler-glib`, and `libpodofo`
 (C++17 and OpenSSL, behind `PdfForm` and `-DBTA_WITH_PODOFO`). Package names per
 distribution are in [`docs/installing.md`](docs/installing.md), with the
 `Xvfb`/`xdotool`/`openssl` the suites need.

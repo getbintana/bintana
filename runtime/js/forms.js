@@ -1833,7 +1833,6 @@ function showError(message, stack) {
     const form = new Form();
     form.Text      = "Error";
     form.Modal     = true;
-    form.Center    = true;
     form.Width     = 560;
     form.Height    = detail ? 380 : 140;
     form.Arrangement = "Vertical";
@@ -1910,6 +1909,11 @@ function showError(message, stack) {
     form.On("Close", () => { errorWindowOpen = false; });
 
     errorWindowOpen = true;
+    /* `Center` is a method, and this said `form.Center = true` -- which
+     * replaced the method with `true` on this one window and centred nothing.
+     * A control's methods are not writable now, so the line threw, inside the
+     * window that shows an error. */
+    form.Center();
     form.Show();
 }
 

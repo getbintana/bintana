@@ -92,6 +92,79 @@
 
 #include <string.h>
 
+#ifdef BTA_HAVE_POPPLER
+#include <poppler.h>
+#endif
+
+/*
+ * `Probe.Pdf(path)`: what a PDF is, without keeping it -- how many pages, the
+ * first one's size in points, and what it says it is called and by whom.
+ * `null` for a file that is not there or not a PDF, as `Probe.Image` answers
+ * for a picture; `{ Encrypted: true }` for one that wants a password, since
+ * that is all that can be read without it. The document itself, its text and
+ * its pages drawn, is `PdfDocument` (bta_poppler.c).
+ */
+static JSValue probe_pdf(JSContext *ctx, JSValueConst this_val,
+                         int argc, JSValueConst *argv)
+{
+    (void)this_val;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Probe.Pdf(path) needs a path");
+
+    const char *path = bta_file_path(ctx, argv[0], "Probe.Pdf");
+    if (!path)
+        return JS_EXCEPTION;
+
+#ifdef BTA_HAVE_POPPLER
+    JSValue out = JS_NULL;
+
+    if (g_file_test(path, G_FILE_TEST_IS_REGULAR)) {
+        char            *abs = g_canonicalize_filename(path, NULL);
+        char            *uri = g_filename_to_uri(abs, NULL, NULL);
+        GError          *err = NULL;
+        PopplerDocument *doc = uri ? poppler_document_new_from_file(uri, NULL, &err)
+                                   : NULL;
+
+        if (doc) {
+            PopplerPage *first = poppler_document_get_n_pages(doc) > 0
+                               ? poppler_document_get_page(doc, 0) : NULL;
+            double       w = 0, h = 0;
+            char        *title  = poppler_document_get_title(doc);
+            char        *author = poppler_document_get_author(doc);
+
+            if (first)
+                poppler_page_get_size(first, &w, &h);
+            out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "Pages",
+                              JS_NewInt32(ctx, poppler_document_get_n_pages(doc)));
+            JS_SetPropertyStr(ctx, out, "Width",  JS_NewFloat64(ctx, w));
+            JS_SetPropertyStr(ctx, out, "Height", JS_NewFloat64(ctx, h));
+            JS_SetPropertyStr(ctx, out, "Title",  JS_NewString(ctx, title ? title : ""));
+            JS_SetPropertyStr(ctx, out, "Author", JS_NewString(ctx, author ? author : ""));
+            JS_SetPropertyStr(ctx, out, "Encrypted", JS_FALSE);
+            g_free(title);
+            g_free(author);
+            g_clear_object(&first);
+            g_object_unref(doc);
+        } else if (err && err->domain == POPPLER_ERROR &&
+                   err->code == POPPLER_ERROR_ENCRYPTED) {
+            out = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, out, "Encrypted", JS_TRUE);
+        }
+        g_clear_error(&err);
+        g_free(uri);
+        g_free(abs);
+    }
+    JS_FreeCString(ctx, path);
+    return out;
+#else
+    JS_FreeCString(ctx, path);
+    return JS_ThrowPlainError(ctx,
+        "Probe.Pdf: this runtime was built without poppler -- install "
+        "poppler-glib's development package and build again");
+#endif
+}
+
 static JSValue probe_image(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
@@ -134,6 +207,14 @@ static const JSCFunctionListEntry probe_props[] = {
      *   and before anything has been drawn
      */
     JS_CFUNC_DEF("Image", 1, probe_image),
+    /* Pdf(path) -> { Pages, Width, Height, Title, Author, Encrypted }
+     *   what a PDF is, without keeping it: how many pages, the first one's
+     *   size in **points**, and what it says it is called and by whom. `null`
+     *   when `path` is not there or not a PDF; `{ Encrypted: true }` when it
+     *   wants a password. Reading it -- its text, its pages drawn -- is
+     *   `PdfDocument.Open`. A build without poppler says so
+     */
+    JS_CFUNC_DEF("Pdf",   1, probe_pdf),
 };
 
 void bta_probe_init(JSContext *ctx, JSValue global)

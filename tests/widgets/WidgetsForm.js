@@ -643,7 +643,7 @@ const TESTS = [
     "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "Action", "Groups",
-    "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
+    "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Pdf", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
@@ -682,6 +682,8 @@ const TESTS = [
     "ExampleSales",
     /* Async: `bintana check` on a project whose classes hide a control's members. */
     "CheckShadowing",
+    /* Async: the runtime's own error window, opened by a throw nothing catches. */
+    "ErrorWindow",
     "DebuggerOrders",
     /* Async: the debugger in a module, plain and brought in by an import. */
     "ModulesDebugger",
@@ -6849,6 +6851,39 @@ class Form1 extends Form {
      * `Remove`), across a file (a class extending one declared in another),
      * and the shapes that are an override and not a shadow.
      */
+    /*
+     * The window an uncaught error is shown in (`showError`, forms.js) has to
+     * open: it is what a person sees when the program failed. It said
+     * `form.Center = true` -- a method assigned over, centring nothing -- and
+     * when a control's methods stopped being writable that line threw inside
+     * it: "the error window failed", and the person got GTK's alert instead.
+     * A child with no `OnError` throws from a timer and quits a second later.
+     */
+    testErrorWindow() {
+        const proj = File.Join(SCRATCH, "error-window");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.json"),
+                      { name: "errorwindow", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1", properties: { Width: 200, Height: 100 } });
+        File.Save(File.Join(proj, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        Timer.After(200, () => { throw new Error('on purpose'); });\n" +
+                  "        Timer.After(1500, () => Application.Quit(0));\n" +
+                  "    }\n" +
+                  "}\n");
+        waiting++;
+        const lines = [];
+        Exec([Application.Executable, proj], { Timeout: 20000 }, (line) => lines.push(line), () => {
+            waiting--;
+            const said = lines.join("\n");
+            check("an uncaught error is reported", said.includes("on purpose"), said);
+            check("...and the runtime's own window shows it, rather than failing in turn",
+                  !said.includes("the error window failed"), said);
+        });
+    }
+
     testCheckShadowing() {
         const proj = File.Join(SCRATCH, "check-shadowing");
         Directory.Make(proj);
@@ -9351,6 +9386,94 @@ function Main() {
                 });
             } catch (e) { check("the preview's first page", false, String(e)); waiting--; pv.Close(); }
         });
+    }
+
+    /*
+     * A PDF read: `Probe.Pdf` (what it is, without keeping it), `PdfDocument`
+     * (its pages, their text and size, its metadata, a page drawn on a
+     * Painter) and `lib/pdfview`'s `PdfView`, which is a `DrawingArea` and
+     * `PdfDocument.Draw` -- so `Printer.Preview` over its canvas sees the
+     * document's pages. The PDF is made here, by `Drawing.SavePdf`. An
+     * encrypted one is not: nothing on the machines this runs on makes one.
+     */
+    testPdf() {
+        Directory.Make(SCRATCH);
+        const path = File.Join(SCRATCH, "three.pdf");
+        Drawing.SavePdf(path, 595, 842, 3, (p, page) => {
+            p.Text(`Hola página ${page}`, 40, 40);
+            p.Text("Ñandú y café", 40, 70);
+        });
+        let d = null;
+        try { d = PdfDocument.Open(path); } catch (e) {
+            check("built without poppler, PdfDocument.Open says which package",
+                  e.message.includes("poppler"), e.message);
+            return;
+        }
+
+        eq("Probe.Pdf says the pages and the first one's size in points",
+           JSON.stringify(Probe.Pdf(path)), '{"Pages":3,"Width":595,"Height":842,"Title":"","Author":"","Encrypted":false}');
+        eq("...null for a file that is not there", Probe.Pdf(File.Join(SCRATCH, "none.pdf")), null);
+        eq("...and for one that is not a PDF", Probe.Pdf(File.Join(Application.Directory, "project.json")), null);
+        throws("...and refuses a path that is not text", () => Probe.Pdf(undefined));
+
+        eq("PdfDocument reads the pages", `${d.Pages} ${d.Open} ${d instanceof PdfDocument}`, "3 true true");
+        eq("...each page's size in points", JSON.stringify(d.PageSize(2)), '{"Width":595,"Height":842}');
+        eq("...its text, in reading order, accents and all", d.Text(2), "Hola página 2\nÑandú y café");
+        eq("...what is not in the file is \"\"", d.Title, "");
+        check("...the producer is the file's", d.Producer.includes("cairo"), d.Producer);
+        check("...and a date is a Date", d.Created instanceof Date, String(d.Created));
+        throws("a page past the end is refused", () => d.Text(4));
+        throws("...and page 0, since pages count from 1", () => d.PageSize(0));
+        throws("a file that is not a PDF is refused, saying so",
+               () => PdfDocument.Open(File.Join(Application.Directory, "project.json")));
+        throws("...and one that is not there", () => PdfDocument.Open(File.Join(SCRATCH, "none.pdf")));
+        throws("a PdfDocument is opened, not constructed", () => new PdfDocument());
+
+        const area = new DrawingArea();
+        this.Fixed1.Add(area);
+        let drew = "", kept = null;
+        area.On("Draw", (p) => {
+            kept = p;
+            try { d.Draw(p, 1, 120, 170); drew = "drawn"; } catch (e) { drew = e.message; }
+        });
+        area.Save(File.Join(SCRATCH, "pdfpage.png"), 120, 170);
+        eq("Draw puts a page on a Draw's painter, fitted to a size", drew, "drawn");
+        let over = "";
+        try { d.Draw(kept, 1); } catch (e) { over = e.message; }
+        check("...and refuses a painter whose frame is over", over.includes("frame is over"), over);
+        throws("...or something that is not a painter", () => d.Draw({}, 1));
+        d.Close();
+        eq("Close lets it go", d.Open, false);
+        throws("...and a closed one says so", () => d.Pages);
+        area.Delete();
+
+        const v = new PdfView();
+        this.Fixed1.Add(v);
+        v.Resize(300, 400);
+        const changes = [];
+        v.On("PageChange", (n) => changes.push(n));
+        eq("a PdfView shows nothing to begin with", `${v.Pages} ${v.Document}`, "0 null");
+        v.File = path;
+        eq("File opens it at its first page", `${v.Pages} ${v.Page} ${v.Document instanceof PdfDocument}`, "3 1 true");
+        v.Next(); v.Next(); v.Next();
+        eq("Next walks the pages and stops at the last, saying each", `${v.Page} ${changes.join()}`, "3 1,2,3");
+        v.Page = 0;
+        eq("Page assigned past an end goes to that end", v.Page, 1);
+        v.Zoom = "Fit width";
+        throws("Zoom is one of the zooms", () => { v.Zoom = "300%"; });
+        eq("...and offers them", Widget.PropertyOptions("PdfView", "Zoom").join(), "Fit page,Fit width,50%,75%,100%,150%,200%");
+        throws("a file that is not a PDF throws where it is assigned",
+               () => { v.File = File.Join(Application.Directory, "project.json"); });
+        const pv = v.Preview();
+        const label = (() => {
+            const walk = (c) => { if (c.Name === "PageLabel") return c; for (const k of c.Children || []) { const f = walk(k); if (f) return f; } return null; };
+            return walk(pv);
+        })();
+        eq("Preview over the viewer sees the document's pages", label && label.Text, "Page 1 of 3");
+        pv.Close();
+        v.File = "";
+        eq("File \"\" shows nothing again", `${v.Pages} ${v.Document}`, "0 null");
+        v.Delete();
     }
 
     testDrawing() {
