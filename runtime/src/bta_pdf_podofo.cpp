@@ -12,6 +12,8 @@
 
 #include <cerrno>
 #include <cstring>
+#include <filesystem>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -101,6 +103,114 @@ int bta_pdf_add_fields_native(const char *path, const char *password,
     } catch (const std::exception &e) {
         if (!tmp.empty())
             g_remove(tmp.c_str());
+        set_error(error, e.what());
+        return 0;
+    }
+}
+
+/*
+ * A PDF signed: copied to `out` (unless it is the file read), loaded from a
+ * device open for reading and writing, and signed with `SignDocument`, which
+ * appends an incremental update -- so an earlier signature keeps the bytes it
+ * signed. The signature itself is the program's `Signer`, through PoDoFo's
+ * signing service: PoDoFo builds the CMS (PAdES-B, SHA-256) and hands over the
+ * bare digest; the private key never has to be here.
+ */
+int bta_pdf_sign_native(const char *src, const char *src_password,
+                        const char *out, const BtaPdfSignSpec *spec,
+                        char **error)
+{
+    if (error)
+        *error = nullptr;
+
+    bool copied = false;
+
+    try {
+        namespace fs = std::filesystem;
+        std::error_code same_err;
+        const bool same = fs::equivalent(src, out, same_err);
+        if (!same) {
+            fs::copy_file(src, out, fs::copy_options::overwrite_existing);
+            copied = true;
+        }
+
+        auto device = std::make_shared<FileStreamDevice>(out, FileMode::Open,
+                                                         DeviceAccess::ReadWrite);
+        PdfMemDocument doc;
+        doc.Load(device, src_password ? src_password : "");
+
+        /* **A signature already there is never written over**: PoDoFo would
+         * replace the field's value, and the earlier signer would vanish from
+         * the document. A field named is refused when signed; with none named,
+         * the first free name of Signature, Signature2, ... is taken. */
+        PdfSignature *sig = nullptr;
+        std::string   want(spec->field ? spec->field : "Signature");
+        auto signed_already = [](PdfField *f) {
+            return f->GetDictionary().HasKey("V");
+        };
+
+        for (int n = 1;; n++) {
+            PdfField *found = nullptr;
+            for (auto field : doc.GetFieldsIterator())
+                if (field->GetFullName() == want) {
+                    found = field;
+                    break;
+                }
+            if (!found)
+                break;
+            if (found->GetType() != PdfFieldType::Signature) {
+                if (spec->field)
+                    throw std::runtime_error("the field '" + want + "' is not a signature field");
+            } else if (!signed_already(found)) {
+                sig = static_cast<PdfSignature *>(found);
+                break;
+            } else if (spec->field) {
+                throw std::runtime_error("the field '" + want + "' is signed already; "
+                                         "a second signature goes in a field of its own");
+            }
+            want = "Signature" + std::to_string(n + 1);
+        }
+        if (!sig) {
+            const unsigned pages = doc.GetPages().GetCount();
+            if (spec->page < 1 || (unsigned)spec->page > pages)
+                throw std::runtime_error("there is no page " + std::to_string(spec->page));
+            PdfPage &page = doc.GetPages().GetPageAt((unsigned)spec->page - 1);
+            sig = &page.CreateField<PdfSignature>(want,
+                    Rect(spec->x, spec->y, spec->width, spec->height));
+        }
+
+        if (spec->reason && *spec->reason)
+            sig->SetSignatureReason(PdfString(spec->reason));
+        if (spec->location && *spec->location)
+            sig->SetSignatureLocation(PdfString(spec->location));
+        if (spec->name && *spec->name)
+            sig->SetSignerName(PdfString(spec->name));
+        sig->SetSignatureDate(PdfDate::LocalNow());
+
+        std::string failed;
+        PdfSignerCmsParams params;
+        params.SigningService = [&](bufferview hash, bool dryrun, charbuff &signed_hash) {
+            (void)dryrun;
+            unsigned char *bytes = nullptr;
+            size_t         len   = 0;
+            char          *why   = nullptr;
+
+            if (!spec->sign(spec->data, (const unsigned char *)hash.data(), hash.size(),
+                            &bytes, &len, &why)) {
+                failed = why ? why : "the Signer gave no signature";
+                g_free(why);
+                throw std::runtime_error(failed);
+            }
+            signed_hash.assign((const char *)bytes, len);
+            g_free(bytes);
+        };
+
+        PdfSignerCms signer(bufferview((const char *)spec->cert, spec->cert_len), params);
+        SignDocument(doc, *device, signer, *sig);
+        return 1;
+    } catch (const std::exception &e) {
+        if (copied)
+            g_remove(out);
         set_error(error, e.what());
         return 0;
     }

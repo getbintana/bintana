@@ -16262,7 +16262,7 @@
           "Params": 1,
           "Signature": "(fields)",
           "Returns": "number",
-          "Doc": "form fields written into this document's file, **in place**, and how many. Each is `{ Page, Name, Type, Rect, Value, Checked, ReadOnly, Required, Multiline, MaxLength, Reason }`; `Type` is `\"Text\"`, `\"Check\"` or `\"Signature\"`, `Page` is 1-based, and `Rect` is `{ X, Y, Width, Height }` in **PDF points with the origin at the bottom-left**. A signature field is left empty for the signer's own application. Every field is checked first, and a failure leaves the file as it was. Needs PoDoFo (`CanWrite`)",
+          "Doc": "form fields written into this document's file, **in place**, and how many. Each is `{ Page, Name, Type, Rect, Value, Checked, ReadOnly, Required, Multiline, MaxLength, Reason }`; `Type` is `\"Text\"`, `\"Check\"` or `\"Signature\"`, `Page` is 1-based, and `Rect` is `{ X, Y, Width, Height }` in **PDF points with the origin at the bottom-left**. A signature field is left empty, for `Sign` naming it or the signer's own application. Every field is checked first, and a failure leaves the file as it was. Needs PoDoFo (`CanWrite`)",
           "Native": true
         },
         {
@@ -16280,7 +16280,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "whether this build reads a PDF -- pages, text, a page drawn -- which is poppler; when false those members refuse naming the package",
+          "Doc": "whether this build reads a PDF -- pages, text, a page drawn, its signatures -- which is poppler; when false those members refuse naming the package",
           "Native": true
         },
         {
@@ -16289,7 +16289,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "whether this build writes into a PDF -- `AddFields`, `Encrypt` -- which is PoDoFo; when false those refuse naming the package",
+          "Doc": "whether this build writes into a PDF -- `AddFields`, `Encrypt`, `Sign` -- which is PoDoFo; when false those refuse naming the package",
           "Native": true
         },
         {
@@ -16407,6 +16407,24 @@
           "Signature": "",
           "Returns": "string",
           "Doc": "the program that wrote the PDF; `\"\"` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Sign",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(path, { Certificate, Signer, Field, Rect, Reason, Location, Name })",
+          "Returns": "",
+          "Doc": "this document **signed** into `path`, as an incremental update, so an earlier signature stays valid: PAdES-B, SHA-256, an RSA key. **Where the key is is the program's**: `Signer(digest, algorithm)` answers the signature over the digest as `Bytes` -- a token, a smart card, a remote service -- and the runtime never holds it. `Certificate` is the signer's, DER `Bytes` or PEM text. `Field` names an empty signature field (a report's) or a new one, invisible on page 1 unless `Rect` is `{ Page, X, Y, Width, Height }` in PDF points, bottom-left; with none, the first free of `Signature`, `Signature2` ... A field signed already is refused, never signed over. A throw in `Signer` is what `Sign` throws, and the copy it was writing is removed. Needs PoDoFo (`CanWrite`)",
+          "Native": true
+        },
+        {
+          "Name": "Signatures",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "object[]",
+          "Doc": "the signatures in it, **verified**: `{ Field, Signer, Issuer, Time, Signature, Certificate }` each -- the signer's and the issuer's common names, and when it was signed. `Signature` is whether the signed bytes are intact -- `Valid`, `Altered` (changed after signing), `Invalid`, `Unreadable`, `Missing` (an empty field, with `Time` null), `NotVerified`, `Error`; `Certificate` is whether this machine trusts the signer -- `Trusted`, `UntrustedIssuer` (self-signed, or a CA the system store lacks), `UnknownIssuer`, `Revoked`, `Expired`, `NotVerified` (an altered signature's is not looked at), `Error`. No OCSP: nothing goes over the network unasked. Needs poppler 23.07 (`CanRead`); an older one says so",
           "Native": true
         },
         {
@@ -18766,7 +18784,7 @@
           "Params": 1,
           "Signature": "(fields)",
           "Returns": "number",
-          "Doc": "form fields written into this document's file, **in place**, and how many. Each is `{ Page, Name, Type, Rect, Value, Checked, ReadOnly, Required, Multiline, MaxLength, Reason }`; `Type` is `\"Text\"`, `\"Check\"` or `\"Signature\"`, `Page` is 1-based, and `Rect` is `{ X, Y, Width, Height }` in **PDF points with the origin at the bottom-left**. A signature field is left empty for the signer's own application. Every field is checked first, and a failure leaves the file as it was. Needs PoDoFo (`CanWrite`)",
+          "Doc": "form fields written into this document's file, **in place**, and how many. Each is `{ Page, Name, Type, Rect, Value, Checked, ReadOnly, Required, Multiline, MaxLength, Reason }`; `Type` is `\"Text\"`, `\"Check\"` or `\"Signature\"`, `Page` is 1-based, and `Rect` is `{ X, Y, Width, Height }` in **PDF points with the origin at the bottom-left**. A signature field is left empty, for `Sign` naming it or the signer's own application. Every field is checked first, and a failure leaves the file as it was. Needs PoDoFo (`CanWrite`)",
           "Native": true
         },
         {
@@ -18784,7 +18802,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "whether this build reads a PDF -- pages, text, a page drawn -- which is poppler; when false those members refuse naming the package",
+          "Doc": "whether this build reads a PDF -- pages, text, a page drawn, its signatures -- which is poppler; when false those members refuse naming the package",
           "Native": true
         },
         {
@@ -18793,7 +18811,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "whether this build writes into a PDF -- `AddFields`, `Encrypt` -- which is PoDoFo; when false those refuse naming the package",
+          "Doc": "whether this build writes into a PDF -- `AddFields`, `Encrypt`, `Sign` -- which is PoDoFo; when false those refuse naming the package",
           "Native": true
         },
         {
@@ -18911,6 +18929,24 @@
           "Signature": "",
           "Returns": "string",
           "Doc": "the program that wrote the PDF; `\"\"` when it says nothing",
+          "Native": true
+        },
+        {
+          "Name": "Sign",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(path, { Certificate, Signer, Field, Rect, Reason, Location, Name })",
+          "Returns": "",
+          "Doc": "this document **signed** into `path`, as an incremental update, so an earlier signature stays valid: PAdES-B, SHA-256, an RSA key. **Where the key is is the program's**: `Signer(digest, algorithm)` answers the signature over the digest as `Bytes` -- a token, a smart card, a remote service -- and the runtime never holds it. `Certificate` is the signer's, DER `Bytes` or PEM text. `Field` names an empty signature field (a report's) or a new one, invisible on page 1 unless `Rect` is `{ Page, X, Y, Width, Height }` in PDF points, bottom-left; with none, the first free of `Signature`, `Signature2` ... A field signed already is refused, never signed over. A throw in `Signer` is what `Sign` throws, and the copy it was writing is removed. Needs PoDoFo (`CanWrite`)",
+          "Native": true
+        },
+        {
+          "Name": "Signatures",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "object[]",
+          "Doc": "the signatures in it, **verified**: `{ Field, Signer, Issuer, Time, Signature, Certificate }` each -- the signer's and the issuer's common names, and when it was signed. `Signature` is whether the signed bytes are intact -- `Valid`, `Altered` (changed after signing), `Invalid`, `Unreadable`, `Missing` (an empty field, with `Time` null), `NotVerified`, `Error`; `Certificate` is whether this machine trusts the signer -- `Trusted`, `UntrustedIssuer` (self-signed, or a CA the system store lacks), `UnknownIssuer`, `Revoked`, `Expired`, `NotVerified` (an altered signature's is not looked at), `Error`. No OCSP: nothing goes over the network unasked. Needs poppler 23.07 (`CanRead`); an older one says so",
           "Native": true
         },
         {

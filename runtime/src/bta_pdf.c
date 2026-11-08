@@ -4,6 +4,8 @@
  *     const doc = PdfDocument.Load("invoice.pdf");
  *     doc.Pages; doc.Text(1); doc.Draw(painter, 1, w, h);      // reading
  *     doc.AddFields([...]); doc.Encrypt("out.pdf", { ... });     // writing
+ *     doc.Sign("signed.pdf", { Certificate, Signer });           // signing
+ *     doc.Signatures;                                            // verifying
  *
  * **Reading, generically, and nothing that pretends to understand a
  * document.** What a page *says* is its text in reading order, which is
@@ -16,9 +18,16 @@
  * and makes a thumbnail with `Painter.Render` -- no control of its own here.
  *
  * **Writing is what a PDF gets after it is drawn**: form fields Cairo cannot
- * write (`AddFields`, which was `PdfForm.AddFields`) and encryption
- * (`Encrypt`). Through the C++ bridge in bta_pdf_podofo.cpp. `PdfForm` was a
- * second name for the same file, and a PDF is one thing: one object.
+ * write (`AddFields`, which was `PdfForm.AddFields`), encryption (`Encrypt`)
+ * and a signature (`Sign`). Through the C++ bridge in bta_pdf_podofo.cpp.
+ * `PdfForm` was a second name for the same file, and a PDF is one thing: one
+ * object.
+ *
+ * **A signature's key is never the runtime's.** `Sign` hands the program the
+ * digest and takes the signature back as `Bytes`, so a token, a smart card, a
+ * remote service or `openssl` signs, and a `.p12` is one case among them, not
+ * the shape of the API. Reading signatures back (`Signatures`) is poppler's
+ * verification -- the other library, which is what makes the round trip a test.
  *
  * **Each half needs its own library, and neither is required to load one.**
  * `Load` checks the file is there -- and, with poppler, that it is a PDF and
@@ -38,6 +47,10 @@
 
 #ifdef BTA_HAVE_POPPLER
 #include <poppler.h>
+/* Listing and verifying signatures arrived in poppler 23.07. */
+#define BTA_PDF_SIGNATURES POPPLER_CHECK_VERSION(23, 7, 0)
+#else
+#define BTA_PDF_SIGNATURES 0
 #endif
 
 static JSClassID pdfdoc_class_id;
@@ -85,7 +98,7 @@ static PdfDoc *doc_of(JSContext *ctx, JSValueConst this_val)
     return d;
 }
 
-static JSValue no_reader(JSContext *ctx, const char *who)
+G_GNUC_UNUSED static JSValue no_reader(JSContext *ctx, const char *who)
 {
     return JS_ThrowPlainError(ctx,
         "PdfDocument.%s: this runtime was built without poppler, which is what "
@@ -93,7 +106,7 @@ static JSValue no_reader(JSContext *ctx, const char *who)
         "again", who);
 }
 
-static JSValue no_writer(JSContext *ctx, const char *who)
+G_GNUC_UNUSED static JSValue no_writer(JSContext *ctx, const char *who)
 {
     return JS_ThrowPlainError(ctx,
         "PdfDocument.%s: this runtime was built without PoDoFo, which is what "
@@ -136,7 +149,7 @@ static PopplerDocument *read_document(JSContext *ctx, const char *path,
 }
 
 /* After a write to its own file, the reading half reads the new one. */
-static bool reread(JSContext *ctx, PdfDoc *d, const char *who)
+G_GNUC_UNUSED static bool reread(JSContext *ctx, PdfDoc *d, const char *who)
 {
     PopplerDocument *fresh = read_document(ctx, d->path, d->password, who);
 
@@ -287,6 +300,163 @@ static JSValue pdfdoc_get_when(JSContext *ctx, JSValueConst this_val, int magic)
 #else
     (void)magic;
     return no_reader(ctx, "Created");
+#endif
+}
+
+/* ------------------------------------------------------- the signatures */
+
+#if BTA_PDF_SIGNATURES
+static const char *signature_word(PopplerSignatureStatus s)
+{
+    switch (s) {
+    case POPPLER_SIGNATURE_VALID:           return "Valid";
+    case POPPLER_SIGNATURE_INVALID:         return "Invalid";
+    case POPPLER_SIGNATURE_DIGEST_MISMATCH: return "Altered";
+    case POPPLER_SIGNATURE_DECODING_ERROR:  return "Unreadable";
+    case POPPLER_SIGNATURE_NOT_FOUND:       return "Missing";
+    case POPPLER_SIGNATURE_NOT_VERIFIED:    return "NotVerified";
+    default:                                return "Error";
+    }
+}
+
+/*
+ * **A document that verified a certificate is kept for the life of the
+ * process** -- the first one per certificate. poppler's NSS backend creates the
+ * signer's certificate as an NSS temporary certificate whose DER lives in the
+ * verification's arena, and frees that arena with the document while NSS keeps
+ * the certificate in its cache. The next verification of the same certificate
+ * finds it there and compares against freed memory: under ASan a
+ * heap-use-after-free in `CERT_NewTempCertificate` (poppler 26.01, NSS 3.x);
+ * without it, a generic error -- the first verification by a certificate said
+ * `UntrustedIssuer`, a later one in another document, read after the first
+ * was closed, said `Error`, while `pdfsig` (a process each) agreed with the
+ * first every time. Keeping one document per certificate keeps its arena, so
+ * the cache never points at freed memory; what it costs is one open document
+ * per distinct signer the program ever verifies.
+ */
+static GHashTable *certificate_keepers;          /* id -> PopplerDocument */
+G_LOCK_DEFINE_STATIC(certificate_keepers);
+
+static void keep_verifier(PopplerDocument *doc, PopplerSignatureInfo *info)
+{
+    PopplerCertificateInfo *cert = poppler_signature_info_get_certificate_info(info);
+    if (!cert)
+        return;
+
+    GDateTime *issued = poppler_certificate_info_get_issuance_time(cert);
+    char      *key    = g_strdup_printf("%s|%s|%s|%s|%" G_GINT64_FORMAT,
+        poppler_certificate_info_get_id(cert) ?: "",
+        poppler_certificate_info_get_subject_common_name(cert) ?: "",
+        poppler_certificate_info_get_subject_organization(cert) ?: "",
+        poppler_certificate_info_get_issuer_common_name(cert) ?: "",
+        issued ? g_date_time_to_unix(issued) : (gint64)0);
+
+    G_LOCK(certificate_keepers);
+    if (!certificate_keepers)
+        certificate_keepers = g_hash_table_new_full(g_str_hash, g_str_equal,
+                                                    g_free, g_object_unref);
+    if (!g_hash_table_contains(certificate_keepers, key))
+        g_hash_table_insert(certificate_keepers, key, g_object_ref(doc));
+    else
+        g_free(key);
+    G_UNLOCK(certificate_keepers);
+}
+
+static const char *certificate_word(PopplerCertificateStatus s)
+{
+    switch (s) {
+    case POPPLER_CERTIFICATE_TRUSTED:          return "Trusted";
+    case POPPLER_CERTIFICATE_UNTRUSTED_ISSUER: return "UntrustedIssuer";
+    case POPPLER_CERTIFICATE_UNKNOWN_ISSUER:   return "UnknownIssuer";
+    case POPPLER_CERTIFICATE_REVOKED:          return "Revoked";
+    case POPPLER_CERTIFICATE_EXPIRED:          return "Expired";
+    case POPPLER_CERTIFICATE_NOT_VERIFIED:     return "NotVerified";
+    default:                                   return "Error";
+    }
+}
+#endif
+
+/*
+ * The signatures in it, verified: one `{ Field, Signer, Issuer, Time,
+ * Signature, Certificate }` per signature field. `Signature` is whether the bytes are
+ * the ones signed -- `Valid`, `Altered` (the document changed after it),
+ * `Invalid`, `Unreadable`, `Missing` (an empty field, waiting for a signer),
+ * `NotVerified`, `Error`. `Certificate` is whether the signer is one this
+ * machine trusts -- `Trusted`, `UntrustedIssuer` (a self-signed one, or a CA
+ * the system store lacks), `UnknownIssuer`, `Revoked`, `Expired`,
+ * `NotVerified`, `Error`. **No OCSP**: asking a certificate authority whether
+ * a certificate was revoked goes over the network, and a program reading
+ * signatures does not do that unasked. poppler verifies; nothing here does.
+ */
+static JSValue pdfdoc_get_signatures(JSContext *ctx, JSValueConst this_val)
+{
+    PdfDoc *d = doc_of(ctx, this_val);
+    if (!d)
+        return JS_EXCEPTION;
+#if !defined(BTA_HAVE_POPPLER)
+    return no_reader(ctx, "Signatures");
+#elif !BTA_PDF_SIGNATURES
+    return JS_ThrowPlainError(ctx, "PdfDocument.Signatures: this runtime's poppler "
+                                   "is older than 23.07, which is what lists signatures");
+#else
+    JSValue  out = JS_NewArray(ctx);
+    GList   *fields = poppler_document_get_signature_fields(d->doc);
+    uint32_t at = 0;
+
+    for (GList *l = fields; l; l = l->next) {
+        PopplerFormField     *field = l->data;
+        GError               *err   = NULL;
+        PopplerSignatureInfo *info  = poppler_form_field_signature_validate_sync(
+            field,
+            POPPLER_SIGNATURE_VALIDATION_FLAG_VALIDATE_CERTIFICATE |
+            POPPLER_SIGNATURE_VALIDATION_FLAG_WITHOUT_OCSP_REVOCATION_CHECK,
+            NULL, &err);
+        char    *name = poppler_form_field_get_name(field);
+        JSValue  one  = JS_NewObject(ctx);
+
+        JS_SetPropertyStr(ctx, one, "Field", JS_NewString(ctx, name ? name : ""));
+        const char *signer = info ? poppler_signature_info_get_signer_name(info) : NULL;
+
+        /* **An empty field is a place for a signature, not a bad one**: poppler
+         * answers "not verified" and a time of 1970 for it. */
+        if (info && (!signer || !*signer) &&
+            poppler_signature_info_get_signature_status(info) == POPPLER_SIGNATURE_NOT_VERIFIED) {
+            JS_SetPropertyStr(ctx, one, "Signer", JS_NewString(ctx, ""));
+            JS_SetPropertyStr(ctx, one, "Issuer", JS_NewString(ctx, ""));
+            JS_SetPropertyStr(ctx, one, "Time", JS_NULL);
+            JS_SetPropertyStr(ctx, one, "Signature", JS_NewString(ctx, "Missing"));
+            JS_SetPropertyStr(ctx, one, "Certificate", JS_NewString(ctx, "NotVerified"));
+            poppler_signature_info_free(info);
+        } else if (info) {
+            GDateTime              *when = poppler_signature_info_get_local_signing_time(info);
+            PopplerCertificateInfo *cert = poppler_signature_info_get_certificate_info(info);
+            const char             *by   = cert ? poppler_certificate_info_get_issuer_common_name(cert)
+                                                : NULL;
+
+            JS_SetPropertyStr(ctx, one, "Signer", JS_NewString(ctx, signer ? signer : ""));
+            JS_SetPropertyStr(ctx, one, "Issuer", JS_NewString(ctx, by ? by : ""));
+            JS_SetPropertyStr(ctx, one, "Time", when
+                ? JS_NewDate(ctx, (double)g_date_time_to_unix(when) * 1000.0)
+                : JS_NULL);
+            JS_SetPropertyStr(ctx, one, "Signature", JS_NewString(ctx,
+                signature_word(poppler_signature_info_get_signature_status(info))));
+            JS_SetPropertyStr(ctx, one, "Certificate", JS_NewString(ctx,
+                certificate_word(poppler_signature_info_get_certificate_status(info))));
+            keep_verifier(d->doc, info);
+            poppler_signature_info_free(info);
+        } else {
+            JS_SetPropertyStr(ctx, one, "Signer", JS_NewString(ctx, ""));
+            JS_SetPropertyStr(ctx, one, "Issuer", JS_NewString(ctx, ""));
+            JS_SetPropertyStr(ctx, one, "Time", JS_NULL);
+            JS_SetPropertyStr(ctx, one, "Signature", JS_NewString(ctx, "Error"));
+            JS_SetPropertyStr(ctx, one, "Certificate", JS_NewString(ctx, "NotVerified"));
+        }
+        g_clear_error(&err);
+        g_free(name);
+        JS_SetPropertyUint32(ctx, out, at++, one);
+    }
+    g_list_free_full(fields, g_object_unref);
+    return out;
 #endif
 }
 
@@ -809,6 +979,224 @@ static JSValue pdfdoc_encrypt(JSContext *ctx, JSValueConst this_val,
 #endif
 }
 
+/* ---------------------------------------------------------- writing: sign */
+
+#ifdef BTA_HAVE_PODOFO
+/* The program's `Signer`, as PoDoFo's signing service calls it. */
+typedef struct {
+    JSContext *ctx;
+    JSValue    fn;
+    bool       threw;          /* the Signer's own exception is pending */
+} SignCall;
+
+static int sign_with_program(void *data, const unsigned char *digest, size_t len,
+                             unsigned char **sig, size_t *sig_len, char **error)
+{
+    SignCall  *c   = data;
+    JSContext *ctx = c->ctx;
+    JSValue    argv[2] = { bta_bytes_new(ctx, digest, len), JS_NewString(ctx, "SHA256") };
+    JSValue    r   = JS_Call(ctx, c->fn, JS_UNDEFINED, 2, argv);
+
+    JS_FreeValue(ctx, argv[0]);
+    JS_FreeValue(ctx, argv[1]);
+    if (JS_IsException(r)) {
+        c->threw = true;
+        *error   = g_strdup("the Signer threw");
+        return 0;
+    }
+
+    size_t         n = 0;
+    const uint8_t *b = bta_bytes_get(r, &n);
+
+    if (!b || !n) {
+        JS_FreeValue(ctx, r);
+        *error = g_strdup("the Signer answered no Bytes -- it is called with the "
+                          "digest and answers the signature over it");
+        return 0;
+    }
+    *sig     = g_memdup2(b, n);
+    *sig_len = n;
+    JS_FreeValue(ctx, r);
+    return 1;
+}
+
+/* A certificate as DER: `Bytes` as given, or the first PEM block of a text. */
+static unsigned char *certificate_der(JSContext *ctx, JSValueConst v, size_t *len)
+{
+    size_t         n = 0;
+    const uint8_t *b = bta_bytes_get(v, &n);
+
+    if (b && n) {
+        *len = n;
+        return g_memdup2(b, n);
+    }
+    if (!JS_IsString(v))
+        return NULL;
+
+    const char *pem = JS_ToCString(ctx, v);
+    if (!pem)
+        return NULL;
+
+    const char    *begin = strstr(pem, "-----BEGIN CERTIFICATE-----");
+    const char    *end   = begin ? strstr(begin, "-----END CERTIFICATE-----") : NULL;
+    unsigned char *der   = NULL;
+
+    if (begin && end) {
+        begin += strlen("-----BEGIN CERTIFICATE-----");
+        GString *b64 = g_string_new(NULL);
+        for (const char *p = begin; p < end; p++)
+            if (!g_ascii_isspace(*p))
+                g_string_append_c(b64, *p);
+        gsize got = 0;
+        der  = g_base64_decode(b64->str, &got);
+        *len = got;
+        g_string_free(b64, TRUE);
+        if (!got) {
+            g_free(der);
+            der = NULL;
+        }
+    }
+    JS_FreeCString(ctx, pem);
+    return der;
+}
+
+static bool sign_text(JSContext *ctx, JSValueConst opts, const char *key, char **out)
+{
+    JSValue v = JS_GetPropertyStr(ctx, opts, key);
+
+    *out = NULL;
+    if (JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return true;
+    }
+    if (!JS_IsString(v)) {
+        JS_FreeValue(ctx, v);
+        JS_ThrowTypeError(ctx, "Sign: %s is text", key);
+        return false;
+    }
+    const char *s = JS_ToCString(ctx, v);
+    JS_FreeValue(ctx, v);
+    if (!s)
+        return false;
+    *out = g_strdup(s);
+    JS_FreeCString(ctx, s);
+    return true;
+}
+#endif
+
+/*
+ * `Sign(path, { ... })` -- see its description in the table below. The
+ * Signer is called once, from inside PoDoFo's writing, and its throw is kept
+ * as the answer (`SignCall.threw`) rather than PoDoFo's word for it.
+ */
+static JSValue pdfdoc_sign(JSContext *ctx, JSValueConst this_val,
+                           int argc, JSValueConst *argv)
+{
+    PdfDoc *d = doc_of(ctx, this_val);
+    if (!d)
+        return JS_EXCEPTION;
+#ifndef BTA_HAVE_PODOFO
+    (void)argc; (void)argv;
+    return no_writer(ctx, "Sign");
+#else
+    if (argc < 2 || !JS_IsObject(argv[1]))
+        return JS_ThrowTypeError(ctx, "Sign(path, { Certificate, Signer, ... }) takes "
+                                      "where to write and how to sign");
+
+    JSValue signer = JS_GetPropertyStr(ctx, argv[1], "Signer");
+    if (!JS_IsFunction(ctx, signer)) {
+        JS_FreeValue(ctx, signer);
+        return JS_ThrowTypeError(ctx, "Sign: Signer is a function -- Signer(digest, "
+                                      "algorithm) answers the signature as Bytes");
+    }
+
+    JSValue        certv = JS_GetPropertyStr(ctx, argv[1], "Certificate");
+    size_t         cert_len = 0;
+    unsigned char *cert = certificate_der(ctx, certv, &cert_len);
+    JS_FreeValue(ctx, certv);
+    if (!cert) {
+        JS_FreeValue(ctx, signer);
+        if (JS_HasException(ctx))
+            return JS_EXCEPTION;
+        return JS_ThrowTypeError(ctx, "Sign: Certificate is the signer's certificate, "
+                                      "DER Bytes or PEM text");
+    }
+
+    BtaPdfSignSpec spec = { 0 };
+    char *field = NULL, *reason = NULL, *location = NULL, *name = NULL;
+    bool  ok = sign_text(ctx, argv[1], "Field", &field) &&
+               sign_text(ctx, argv[1], "Reason", &reason) &&
+               sign_text(ctx, argv[1], "Location", &location) &&
+               sign_text(ctx, argv[1], "Name", &name);
+
+    spec.page = 1;
+    if (ok) {
+        JSValue rect = JS_GetPropertyStr(ctx, argv[1], "Rect");
+        if (JS_IsObject(rect)) {
+            JSValue pv = JS_GetPropertyStr(ctx, rect, "Page");
+            JSValue xv = JS_GetPropertyStr(ctx, rect, "X");
+            JSValue yv = JS_GetPropertyStr(ctx, rect, "Y");
+            JSValue wv = JS_GetPropertyStr(ctx, rect, "Width");
+            JSValue hv = JS_GetPropertyStr(ctx, rect, "Height");
+            ok = (JS_IsUndefined(pv) || bta_to_int(ctx, pv, "Sign", &spec.page)) &&
+                 bta_to_number(ctx, xv, "Sign", &spec.x) &&
+                 bta_to_number(ctx, yv, "Sign", &spec.y) &&
+                 bta_to_number(ctx, wv, "Sign", &spec.width) &&
+                 bta_to_number(ctx, hv, "Sign", &spec.height);
+            JS_FreeValue(ctx, pv); JS_FreeValue(ctx, xv); JS_FreeValue(ctx, yv);
+            JS_FreeValue(ctx, wv); JS_FreeValue(ctx, hv);
+        } else if (!JS_IsUndefined(rect) && !JS_IsNull(rect)) {
+            JS_ThrowTypeError(ctx, "Sign: Rect is { Page, X, Y, Width, Height }");
+            ok = false;
+        }
+        JS_FreeValue(ctx, rect);
+    }
+
+    const char *out = ok ? bta_file_path(ctx, argv[0], "Sign") : NULL;
+    if (ok && !out)
+        ok = false;
+
+    SignCall call = { ctx, signer, false };
+    char    *error = NULL;
+
+    if (ok) {
+        spec.field    = field;
+        spec.reason   = reason;
+        spec.location = location;
+        spec.name     = name;
+        spec.cert     = cert;
+        spec.cert_len = cert_len;
+        spec.sign     = sign_with_program;
+        spec.data     = &call;
+        if (!bta_pdf_sign_native(d->path, d->password, out, &spec, &error)) {
+            /* The Signer's own throw is the answer when there is one. */
+            if (!call.threw)
+                JS_ThrowPlainError(ctx, "Sign: %s", error ? error : "PoDoFo refused");
+            ok = false;
+        }
+    }
+
+#ifdef BTA_HAVE_POPPLER
+    if (ok) {
+        char *a = g_canonicalize_filename(out, NULL);
+        char *b = g_canonicalize_filename(d->path, NULL);
+        if (!strcmp(a, b))
+            ok = reread(ctx, d, "Sign");
+        g_free(a);
+        g_free(b);
+    }
+#endif
+
+    g_free(error);
+    g_free(field); g_free(reason); g_free(location); g_free(name);
+    g_free(cert);
+    if (out)
+        JS_FreeCString(ctx, out);
+    JS_FreeValue(ctx, signer);
+    return ok ? JS_UNDEFINED : JS_EXCEPTION;
+#endif
+}
+
 static JSValue pdfdoc_close(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
@@ -872,6 +1260,20 @@ static const JSCFunctionListEntry pdfdoc_props[] = {
      *   nothing
      */
     JS_CGETSET_MAGIC_DEF("Modified", pdfdoc_get_when, NULL, WHEN_MODIFIED),
+    /* Signatures -> object[]
+     *   the signatures in it, **verified**: `{ Field, Signer, Issuer, Time,
+     *   Signature, Certificate }` each -- the signer's and the issuer's
+     *   common names, and when it was signed. `Signature` is whether the
+     *   signed bytes are intact -- `Valid`, `Altered` (changed after
+     *   signing), `Invalid`, `Unreadable`, `Missing` (an empty field, with
+     *   `Time` null), `NotVerified`, `Error`; `Certificate` is whether this
+     *   machine trusts the signer -- `Trusted`, `UntrustedIssuer`
+     *   (self-signed, or a CA the system store lacks), `UnknownIssuer`,
+     *   `Revoked`, `Expired`, `NotVerified` (an altered signature's is not
+     *   looked at), `Error`. No OCSP: nothing goes over the network unasked.
+     *   Needs poppler 23.07 (`CanRead`); an older one says so
+     */
+    JS_CGETSET_DEF("Signatures", pdfdoc_get_signatures, NULL),
     /* PageSize(page) -> { Width, Height }
      *   that page's size in **points**, 72 to the inch; pages need not all be
      *   one size
@@ -897,9 +1299,9 @@ static const JSCFunctionListEntry pdfdoc_props[] = {
      *   Required, Multiline, MaxLength, Reason }`; `Type` is `"Text"`,
      *   `"Check"` or `"Signature"`, `Page` is 1-based, and `Rect` is `{ X, Y,
      *   Width, Height }` in **PDF points with the origin at the
-     *   bottom-left**. A signature field is left empty for the signer's own
-     *   application. Every field is checked first, and a failure leaves the
-     *   file as it was. Needs PoDoFo (`CanWrite`)
+     *   bottom-left**. A signature field is left empty, for `Sign` naming
+     *   it or the signer's own application. Every field is checked first,
+     *   and a failure leaves the file as it was. Needs PoDoFo (`CanWrite`)
      */
     JS_CFUNC_DEF("AddFields", 1, pdfdoc_add_fields),
     /* Encrypt(path, { Password, OwnerPassword, Permissions })
@@ -912,6 +1314,21 @@ static const JSCFunctionListEntry pdfdoc_props[] = {
      *   (`CanWrite`)
      */
     JS_CFUNC_DEF("Encrypt",  2, pdfdoc_encrypt),
+    /* Sign(path, { Certificate, Signer, Field, Rect, Reason, Location, Name })
+     *   this document **signed** into `path`, as an incremental update, so an
+     *   earlier signature stays valid: PAdES-B, SHA-256, an RSA key.
+     *   **Where the key is is the program's**: `Signer(digest, algorithm)`
+     *   answers the signature over the digest as `Bytes` -- a token, a smart
+     *   card, a remote service -- and the runtime never holds it.
+     *   `Certificate` is the signer's, DER `Bytes` or PEM text. `Field` names
+     *   an empty signature field (a report's) or a new one, invisible on
+     *   page 1 unless `Rect` is `{ Page, X, Y, Width, Height }` in PDF
+     *   points, bottom-left; with none, the first free of `Signature`,
+     *   `Signature2` ... A field signed already is refused, never signed
+     *   over. A throw in `Signer` is what `Sign` throws, and the copy it was
+     *   writing is removed. Needs PoDoFo (`CanWrite`)
+     */
+    JS_CFUNC_DEF("Sign",     2, pdfdoc_sign),
     /* Close()
      *   let it go; closing twice is not an error
      */
@@ -963,13 +1380,14 @@ void bta_pdf_init(JSContext *ctx, JSValue global)
     const bool writes = false;
 #endif
     /* CanRead
-     *   whether this build reads a PDF -- pages, text, a page drawn -- which
-     *   is poppler; when false those members refuse naming the package
+     *   whether this build reads a PDF -- pages, text, a page drawn, its
+     *   signatures -- which is poppler; when false those members refuse
+     *   naming the package
      */
     JS_SetPropertyStr(ctx, ctor, "CanRead", JS_NewBool(ctx, reads));
     /* CanWrite
-     *   whether this build writes into a PDF -- `AddFields`, `Encrypt` --
-     *   which is PoDoFo; when false those refuse naming the package
+     *   whether this build writes into a PDF -- `AddFields`, `Encrypt`,
+     *   `Sign` -- which is PoDoFo; when false those refuse naming the package
      */
     JS_SetPropertyStr(ctx, ctor, "CanWrite", JS_NewBool(ctx, writes));
     JS_SetPropertyStr(ctx, global, "PdfDocument", ctor);

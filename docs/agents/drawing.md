@@ -367,7 +367,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 ## Reading a PDF (`PdfDocument`, `Probe.Pdf`, `lib/pdfview`)
 
-- **poppler-glib, optional**, in `bta_poppler.c`; `Probe.Pdf` is in
+- **poppler-glib, optional**, in `bta_pdf.c`; `Probe.Pdf` is in
   `bta_probe.c` beside `Probe.Image`. Built both ways (a `pkg-config` that
   answers no for `poppler-glib`), and CI's `no-poppler` job keeps the other
   branch compiling; without it `testPdf` is one assertion naming the package.
@@ -383,11 +383,50 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   supplier's invoice is parsing the supplier, and was refused as a feature.
 - **`PdfDocument` is one object, read and written** (`bta_pdf.c`): poppler
   reads, PoDoFo writes (`AddFields`, `Encrypt`, through `bta_pdf_podofo.cpp`).
-  `PdfForm` was the writing half under another name and is gone. `Open` needs
+  `PdfForm` was the writing half under another name and is gone. `Load` needs
   neither library -- a report's form is written by a build with no poppler --
   and each member refuses naming its own; `CanRead`/`CanWrite` say which. A
   write to the document's own file re-opens the reading half on it, with the
   new password after `Encrypt`. The encrypted PDF the reading half is tested
   with is made by `Encrypt`: no other tool. Built three ways -- both, without
-  poppler, without PoDoFo (`-DBTA_WITH_PODOFO=OFF`) -- and `tests/report` and
-  `testPdf` pass in each.
+  poppler, without PoDoFo (`-DBTA_WITH_PODOFO=OFF`) -- and `tests/report`,
+  `testPdf` and `testPdfSign` pass in each.
+
+## Signing a PDF (`PdfDocument.Sign`, `Signatures`)
+
+- **The key is the program's, through a callback**: `Sign` builds a
+  `PdfSignerCms` whose `SigningService` calls the JS `Signer(digest,
+  "SHA256")` and takes `Bytes`. A `.p12` would have been the shape of the API
+  and was refused as such; a token, a card or a service is the same call. The
+  Signer is called **once** -- PoDoFo 1.0.4 does no dry run with a signing
+  service -- and from *inside* `SignDocument`, so a throw is recorded
+  (`SignCall.threw`) and left pending as the answer, and the half-written copy
+  removed.
+- **PoDoFo 1.0.4 signs PAdES-B, SHA-256, RSA only.** No ECDSA key; Ubuntu
+  24.04 ships PoDoFo 0.9 with another API, so CI builds without it and the
+  signing test is local. `pdfsig` agrees with what `Signatures` says.
+- **PoDoFo signs over a signed field without a word**: the field's `/V` is
+  replaced and the earlier signer vanishes from the document. The bridge
+  refuses a named field that has a `/V`, and with no `Field` takes the first
+  free of `Signature`, `Signature2` ... -- three signatures in one file, each
+  still `Valid`, is asserted.
+- **poppler frees a certificate NSS still caches** (26.01, NSS): the signer's
+  certificate becomes an NSS temporary certificate whose DER lives in the
+  verification's arena, freed with the document, while NSS keeps the
+  certificate in its cache. Signed by A, then B, then A again in a later
+  document -- the first one closed -- and A came back
+  `POPPLER_CERTIFICATE_GENERIC_ERROR`, while `pdfsig` (a process each) said
+  `UntrustedIssuer` every time; reading one document twice does not show it.
+  The first diagnosis was "poppler verifies once per process" and the first
+  fix kept each certificate's first verdict -- it passed the suite and hid a
+  **heap-use-after-free in `CERT_NewTempCertificate`** that only
+  `tests/asan.sh` showed. The fix is `keep_verifier` in `bta_pdf.c`: the first
+  document that verified each certificate is kept for the process, so its
+  arena is never freed under the cache. One open document per distinct signer.
+- **An empty signature field is not a bad signature**: poppler answers
+  `NOT_VERIFIED`, an empty signer and a time of 1970; it is answered as
+  `Missing` with `Time` null.
+- **The test's key is openssl's** (`openssl pkeyutl -sign` over the digest),
+  called with `Exec.Wait` from inside `Sign`, so `PdfSign` is in the blocking
+  head of `TESTS`. The tamper is one byte of the `Reason`, which the signature
+  covers, at the same length so the byte ranges still hold.

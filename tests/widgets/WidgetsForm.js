@@ -579,6 +579,9 @@ const TESTS = [
     "ApplicationId",
     /* Blocking too: a child that closes Object.prototype and tries to add. */
     "ProtectPrototype",
+    /* Blocking too: the key that signs a PDF is openssl's, a child awaited
+     * from inside Sign, which calls the Signer while it writes. */
+    "PdfSign",
     "EditorMap",
     "EditorFold",
     "EditorFoldClick",
@@ -9532,6 +9535,181 @@ function Main() {
         v.File = "";
         eq("File \"\" shows nothing again", `${v.Pages} ${v.Document}`, "0 null");
         v.Delete();
+    }
+
+    /*
+     * **Signing, and reading signatures back.** The key is never the
+     * runtime's: Sign hands the program a digest and takes the signature, and
+     * here openssl makes it -- the stand-in for a token, a card or a service.
+     * What is read back is poppler's verification, so the round trip is
+     * PoDoFo's writing against another library's reading.
+     */
+    testPdfSign() {
+        if (!PdfDocument.CanWrite) {
+            Directory.Make(SCRATCH);
+            const path = File.Join(SCRATCH, "unsigned.pdf");
+            Drawing.SavePdf(path, 595, 842, 1, (p) => p.Text("x", 40, 40));
+            const w = PdfDocument.Load(path);
+            throws("without PoDoFo, Sign refuses naming the package",
+                   () => w.Sign(File.Join(SCRATCH, "x.pdf"), { Certificate: "", Signer: () => null }));
+            w.Close();
+            return;
+        }
+        if (!Application.HasCommand("openssl")) {
+            print("  (skipping the signing step: it needs openssl)");
+            return;
+        }
+        const dir = File.Join(SCRATCH, "sign");
+        Directory.Make(dir);
+        /* Two signers: poppler's trouble below needs a second certificate. */
+        const made = ["", "2"].map((n) => Exec.Wait(["openssl", "req", "-x509", "-newkey", "rsa:2048",
+            "-nodes", "-days", "1", "-keyout", File.Join(dir, `key${n}.pem`),
+            "-out", File.Join(dir, `cert${n}.pem`),
+            "-subj", `/CN=Bintana Test${n}/O=Bintana`], { Timeout: 30000 }).ExitCode);
+        if (made.join() !== "0,0") {
+            print(`  (skipping the signing step: openssl exited ${made.join("/")})`);
+            return;
+        }
+        const calls = [];
+        const keyed = (key) => (digest, algorithm) => {
+            calls.push(`${digest instanceof Bytes ? digest.Length : typeof digest} ${algorithm}`);
+            File.SaveBytes(File.Join(dir, "digest.bin"), digest);
+            const r = Exec.Wait(["openssl", "pkeyutl", "-sign", "-inkey", key,
+                                 "-pkeyopt", "digest:sha256",
+                                 "-in", File.Join(dir, "digest.bin"),
+                                 "-out", File.Join(dir, "sig.bin")], { Timeout: 30000 });
+            if (r.ExitCode !== 0) throw new Error("openssl: " + r.Output);
+            return File.LoadBytes(File.Join(dir, "sig.bin"));
+        };
+        const signer = keyed(File.Join(dir, "key.pem"));
+        const pem = File.Load(File.Join(dir, "cert.pem"));
+        const src = File.Join(dir, "doc.pdf"), out = File.Join(dir, "signed.pdf");
+        Drawing.SavePdf(src, 595, 842, 2, (p, page) => p.Text(`Página ${page}`, 40, 40));
+        /* Without poppler a PDF is still signed -- writing is PoDoFo's -- and
+         * what reads the signatures says which package is missing. */
+        if (!PdfDocument.CanRead) {
+            const w = PdfDocument.Load(src);
+            w.Sign(out, { Certificate: pem, Signer: signer });
+            eq("built without poppler, Sign still signs, calling the Signer once",
+               `${calls.join()} ${File.LoadBytes(out).Length > File.LoadBytes(src).Length}`, "32 SHA256 true");
+            let said = "";
+            try { w.Signatures; } catch (e) { said = e.message; }
+            check("...and reading signatures says which package", said.includes("poppler"), said);
+            w.Close();
+            return;
+        }
+        const d = PdfDocument.Load(src);
+        eq("a PDF nobody signed has no signatures", JSON.stringify(d.Signatures), "[]");
+
+        throws("Sign wants a Signer that is a function",
+               () => d.Sign(out, { Certificate: pem }));
+        throws("...and a Certificate it can read",
+               () => d.Sign(out, { Certificate: "not a certificate", Signer: signer }));
+        throws("...and a Rect that is one",
+               () => d.Sign(out, { Certificate: pem, Signer: signer, Rect: 3 }));
+        eq("...and refusing calls nobody", calls.length, 0);
+
+        d.Sign(out, { Certificate: pem, Signer: signer, Reason: "Conformidad",
+                      Location: "Mendoza" });
+        eq("Sign calls the Signer once, with a SHA-256 digest as Bytes",
+           calls.join(), "32 SHA256");
+        eq("...and leaves the document it was opened from as it was",
+           JSON.stringify(d.Signatures), "[]");
+        d.Close();
+
+        const s = PdfDocument.Load(out);
+        const one = s.Signatures[0] || {};
+        eq("the signed copy has one signature, verified by poppler",
+           `${s.Signatures.length} ${one.Field} ${one.Signature}`, "1 Signature Valid");
+        eq("...whose signer and issuer are the certificate's",
+           `${one.Signer}/${one.Issuer}`, "Bintana Test/Bintana Test");
+        eq("...and whose certificate nobody vouches for: it signed itself",
+           one.Certificate, "UntrustedIssuer");
+        check("...signed now", one.Time instanceof Date && Math.abs(one.Time - Date.now()) < 120000,
+              String(one.Time));
+        eq("...and the pages are the same pages", s.Text(2), "Página 2");
+
+        /* A second signer, into a field of its own: the first signature still
+         * holds, since an incremental update leaves the signed bytes alone. */
+        s.Sign(out, { Certificate: pem, Signer: signer, Field: "Second",
+                      Rect: { Page: 2, X: 300, Y: 80, Width: 200, Height: 50 } });
+        eq("a second signature into its own file keeps the object reading it, and both hold",
+           s.Signatures.map((x) => `${x.Field}:${x.Signature}`).join(), "Signature:Valid,Second:Valid");
+        let said = "";
+        try { s.Sign(out, { Certificate: pem, Signer: signer, Field: "Signature" }); }
+        catch (e) { said = e.message; }
+        check("a field signed already is never signed over", said.includes("signed already"), said);
+        s.Sign(out, { Certificate: pem, Signer: signer });
+        eq("...and with no Field named, a third signature takes the next free name, all holding",
+           s.Signatures.map((x) => `${x.Field}:${x.Signature}`).join(),
+           "Signature:Valid,Second:Valid,Signature2:Valid");
+        throws("a Rect on a page that is not there is refused",
+               () => s.Sign(out, { Certificate: pem, Signer: signer, Field: "Second2", Rect: { Page: 9, X: 1, Y: 1, Width: 1, Height: 1 } }));
+        s.Close();
+
+        /* One byte changed inside what was signed -- the reason, which the
+         * signature covers -- and the signature says so. */
+        const bytes = File.LoadBytes(out);
+        const at = bytes.ToHex().indexOf(Bytes.FromHex("436f6e666f726d69646164").ToHex()) / 2;   /* "Conformidad" */
+        check("the reason is in the file, to be tampered with", at > 0, String(at));
+        const tampered = File.Join(dir, "tampered.pdf");
+        File.SaveBytes(tampered, bytes.Slice(0, at).Concat(Bytes.FromHex("63"))
+                                      .Concat(bytes.Slice(at + 1, bytes.Length)));
+        const t = PdfDocument.Load(tampered);
+        eq("a byte changed under a signature reads as Altered", t.Signatures[0].Signature, "Altered");
+        t.Close();
+
+        /* poppler frees, with a closed document, a certificate NSS still
+         * caches: read after a document by another certificate, the first
+         * came back as a generic error (and, under ASan, a use-after-free).
+         * The runtime keeps the first document per certificate. */
+        const by2 = File.Join(dir, "by2.pdf");
+        const o = PdfDocument.Load(src);
+        o.Sign(by2, { Certificate: File.Load(File.Join(dir, "cert2.pem")),
+                      Signer: keyed(File.Join(dir, "key2.pem")) });
+        o.Close();
+        const second = PdfDocument.Load(by2);
+        eq("another signer's document reads as its own",
+           second.Signatures.map((x) => `${x.Signer}:${x.Certificate}`).join(), "Bintana Test2:UntrustedIssuer");
+        second.Close();
+        const later = PdfDocument.Load(out);
+        eq("a certificate read again in a later document answers as it did the first time",
+           later.Signatures.map((x) => x.Certificate).join(), "UntrustedIssuer,UntrustedIssuer,UntrustedIssuer");
+        later.Close();
+
+        /* A report's flow: the field is made empty, then signed by name. */
+        const form = File.Join(dir, "form.pdf");
+        if (File.Exists(form)) File.Delete(form);
+        File.Copy(src, form);
+        const f = PdfDocument.Load(form);
+        f.AddFields([{ Page: 1, Name: "firma", Type: "Signature",
+                       Rect: { X: 300, Y: 80, Width: 200, Height: 50 } }]);
+        eq("an empty signature field is Missing, with no time and no signer",
+           JSON.stringify(f.Signatures[0]),
+           '{"Field":"firma","Signer":"","Issuer":"","Time":null,"Signature":"Missing","Certificate":"NotVerified"}');
+        throws("a field that is not a signature's is refused by name",
+               () => { f.AddFields([{ Page: 1, Name: "who", Type: "Text", Rect: { X: 40, Y: 600, Width: 200, Height: 20 } }]);
+                       f.Sign(form, { Certificate: pem, Signer: signer, Field: "who" }); });
+        f.Sign(form, { Certificate: pem, Signer: signer, Field: "firma" });
+        eq("...and signing it by name fills that field, in place",
+           f.Signatures.map((x) => `${x.Field}:${x.Signature}`).join(), "firma:Valid");
+
+        /* The Signer's own failure is the answer, and nothing is left. */
+        const refused = File.Join(dir, "refused.pdf");
+        if (File.Exists(refused)) File.Delete(refused);
+        said = "";
+        try {
+            f.Sign(refused, { Certificate: pem, Field: "other",
+                              Signer: () => { throw new Error("the card is not in the reader"); } });
+        } catch (e) { said = e.message; }
+        eq("a Signer that throws is what Sign throws", said, "the card is not in the reader");
+        eq("...and the copy it was writing is gone", File.Exists(refused), false);
+        said = "";
+        try { f.Sign(refused, { Certificate: pem, Field: "other", Signer: () => "text" }); }
+        catch (e) { said = e.message; }
+        check("a Signer that answers something else is refused, saying what it wants",
+              said.includes("Bytes"), said);
+        f.Close();
     }
 
     testDrawing() {

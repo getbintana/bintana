@@ -9,6 +9,8 @@
 #ifndef BTA_PDF_H
 #define BTA_PDF_H
 
+#include <stddef.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -55,6 +57,31 @@ int bta_pdf_encrypt_native(const char *src, const char *src_password,
                            const char *out, const char *user_password,
                            const char *owner_password, unsigned permissions,
                            char **error);
+
+/* What signs a digest: the program's `Signer`, called from inside PoDoFo's
+ * signing. Answers 1 with `*sig` (g_malloc'd) and `*sig_len` filled, or 0
+ * with `*error` set (g_malloc'd) -- an exception already pending in JS. */
+typedef int (*BtaPdfSignFn)(void *data, const unsigned char *digest, size_t len,
+                            unsigned char **sig, size_t *sig_len, char **error);
+
+typedef struct {
+    const char          *field;        /* an existing signature field, or a new one's name */
+    int                  page;         /* a new field's page, 1-based */
+    double               x, y, width, height;  /* PDF points, bottom-left; 0 0 0 0 = invisible */
+    const char          *reason, *location, *name;
+    const unsigned char *cert;         /* DER */
+    size_t               cert_len;
+    BtaPdfSignFn         sign;
+    void                *data;
+} BtaPdfSignSpec;
+
+/* The PDF at `src` (opened with `src_password`) signed into `out`: `src`
+ * copied there first unless it is the same file, and the signature appended
+ * as an incremental update -- earlier signatures stay valid. PAdES-B,
+ * SHA-256, RSA. Answers 1, or 0 with `*error` set. */
+int bta_pdf_sign_native(const char *src, const char *src_password,
+                        const char *out, const BtaPdfSignSpec *spec,
+                        char **error);
 
 #ifdef __cplusplus
 }
