@@ -19210,7 +19210,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "assign `(req) => …`. **Required before `Start`**, and replaceable while running — even from inside the handler: the running one finishes its request and the next goes to the new one",
+          "Doc": "assign `(req) => …`. **Required before `Start` unless `WebSocket` is set**, and replaceable while running — even from inside the handler: the running one finishes its request and the next goes to the new one",
           "Native": true
         },
         {

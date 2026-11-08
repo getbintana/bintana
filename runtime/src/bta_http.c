@@ -5938,9 +5938,9 @@ static JSValue http_server_set_websocket(JSContext *ctx, JSValueConst this_val, 
 /* type HttpServer */
 static const JSCFunctionListEntry http_server_props[] = {
     /* Request
-     *   assign `(req) => …`. **Required before `Start`**, and replaceable
-     *   while running — even from inside the handler: the running one
-     *   finishes its request and the next goes to the new one
+     *   assign `(req) => …`. **Required before `Start` unless `WebSocket` is
+     *   set**, and replaceable while running — even from inside the handler:
+     *   the running one finishes its request and the next goes to the new one
      */
     JS_CGETSET_DEF("Request",    http_server_get_request, http_server_set_request),
     /* WebSocket
