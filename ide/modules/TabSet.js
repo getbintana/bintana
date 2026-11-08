@@ -37,6 +37,7 @@
 const EDITABLE = {
     js:   "js",
     form: "json",
+    btp:  "json",    /* the project's manifest: JSON with its own name */
     json: "json",
     css:  "css",    /* app.css: the classes a control wears through Style */
     /* A README is the one file a project writes for a person to *read*, and the

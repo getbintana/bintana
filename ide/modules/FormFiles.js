@@ -5,7 +5,7 @@
  * A form is two files that travel together, so nothing here touches one alone:
  * renaming a form moves the `.form` and the `.js`, rewrites the class in the
  * code, follows the namespace its folder implies, retypes every other `.form`
- * that places the class, and tells `project.json`.  Doing four of those five and
+ * that places the class, and tells `project.btp`.  Doing four of those five and
  * forgetting the fifth is a project that no longer runs, and the failure would
  * turn up in a running program rather than here.
  *
@@ -403,7 +403,7 @@ export class FormFiles {
         }
         /* Everything below works on the short name -- what the class is called
          * in its own file -- and on the qualified one, which is what a .form
-         * and project.json use for it. */
+         * and project.btp use for it. */
         const oldName = File.BaseName(oldFormFile);
 
         /* A bare name renames in place; one with a folder moves the pair as
@@ -637,7 +637,7 @@ export class FormFiles {
      * programmer put it, and moving it would be the IDE overruling that -- and
      * worse, `widgets/Stepper` is possibly `Widgets.Stepper`, so moving it would
      * rename the class. Everything else at the root stays too: `app.css`,
-     * `project.json`, an image; the convention names three kinds of *class*
+     * `project.btp`, an image; the convention names three kinds of *class*
      * file, not a place for everything.
      *
      * It is a series of renames and not a new mechanism, which is what makes it

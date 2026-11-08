@@ -221,7 +221,7 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   connection...*, both through `ConnectionForm`: the double click stays the
   Data view's, since looking is what a connection is opened for. A new `.conn`
   is written at the project's top because that is the only place `rowsFrom`
-  looks (`<name>.conn` beside `project.json`), and its name refuses a dot
+  looks (`<name>.conn` beside `project.btp`), and its name refuses a dot
   because a `Source` splits at the first one. The dialog opens the database
   only once `File.Exists` says it is there: `Database.Sqlite` creates what it
   does not find, and a dialog that created the program's database by looking
@@ -486,7 +486,7 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   arrives already through `Locale.Text`, since the literal has to be at the call
   site for the extractor.
 - **The IDE has a sheet of its own, and it is for the class a theme cannot
-  name.** `ide/app.css` is found by name beside `project.json` -- the source
+  name.** `ide/app.css` is found by name beside `project.btp` -- the source
   tree and the installed tree alike, `ide/` being copied whole -- and
   `tests/ide` has it symlinked beside the forms, so the suite runs the IDE
   dressed as it ships. Today it dresses one thing: the property grid's group
@@ -611,7 +611,7 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   could have failed, because the test drove `quit()`.
 - **Write the thing that cannot fail first, and let the fallible follow-up
   report.** Project settings renamed the metainfo *before* writing
-  `project.json`: a metainfo that would not parse threw out of the accept
+  `project.btp`: a metainfo that would not parse threw out of the accept
   callback with the dialog already closed, losing every edit, and a refused
   field left the file renamed to an id the manifest never got. `apply()`
   answers whether it wrote, and the metainfo follows only a written one
@@ -1283,7 +1283,7 @@ The file is removed when the child ends or is stopped.
 
 **A child reads the disk while the person types.** `CheckJob` takes the same
 content fingerprint `Check.run` uses -- `Hash.Sha256` over every `.js`, `.form`
-and `project.json`, in process -- before it starts and again when the child
+and `project.btp`, in process -- before it starts and again when the child
 ends. If it moved, the answer is about two versions and is dropped, not shown.
 That is the case the old in-process pass could not have: it held the loop, so
 nobody could type during it.
@@ -1410,8 +1410,8 @@ shares `Bytes` and `Decimal` and copies plain data. The property grid hides
 `Sections` and `Data` for a report (`Designer.reportHidden`): they are not a
 text field, and the page is where they are edited.
 
-**The IDE uses the library it designs for.** `ide/project.json` and
-`tests/ide/project.json` both declare `uses: ["report"]`; the IDE's own runtime
+**The IDE uses the library it designs for.** `ide/project.btp` and
+`tests/ide/project.btp` both declare `uses: ["report"]`; the IDE's own runtime
 loads `ReportDocument`, and the test project does the same so the dialog is not
 a class only the real IDE has. `tests/ide` also symlinks `ReportForm.form` like
 every other IDE form.

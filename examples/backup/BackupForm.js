@@ -21,7 +21,7 @@
  * tells you what you are staring at is noise, and the status line already says it.
  * That is `this.Focused` on a form, which turns `false` the moment another window is
  * activated -- there is no separate "active" property, and none is needed. And it
- * needs the project's `id` in `project.json`, because a notification is sent in the
+ * needs the project's `id` in `project.btp`, because a notification is sent in the
  * name of an application (the runtime refuses, saying so, when there is none).
  *
  * ## The rule the Stop button is about

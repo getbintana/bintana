@@ -61,7 +61,7 @@ what a package installs under.
 
 | | |
 |---|---|
-| `id` | the application id, which the project's `project.json` and its `<id>.metainfo.xml` also declare |
+| `id` | the application id, which the project's `project.btp` and its `<id>.metainfo.xml` also declare |
 | `repo` | where the source lives. It has to be reachable by the runner, so a private one needs a token and this file is not where that goes |
 | `ref` | the branch or tag to build. Absent means the default branch. A commit id is not a ref: put a tag on what you want |
 | `project` | the Bintana project inside that repository, packaged by `tools/pack.sh` |
@@ -101,7 +101,7 @@ own is rebuilt when the commit it was built at and its HEAD differ, whatever the
 paths.
 
 **What the project needs** is what the packaging step asks for: an `id`, an
-`<id>.metainfo.xml` that agrees with `project.json`, and a drawing in `icons/`.
+`<id>.metainfo.xml` that agrees with `project.btp`, and a drawing in `icons/`.
 A project without them is refused with a sentence -- add them, push, and run the
 workflow again.
 

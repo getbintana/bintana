@@ -1,7 +1,7 @@
 /*
  * The IDE's own sheet: the classes the theme has no word for.
  *
- * Loaded by name, beside `project.json` -- the source tree and the installed
+ * Loaded by name, beside `project.btp` -- the source tree and the installed
  * tree alike, `ide/` being copied whole and the runtime finding `app.css` as
  * it finds `icons/` and `po/`.  `tests/ide` has it symlinked beside the forms,
  * so the suite runs the IDE dressed as it ships.

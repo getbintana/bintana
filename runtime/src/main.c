@@ -17,15 +17,16 @@
 
 static void usage(void)
 {
-    fputs("usage: bintana [run] <project-dir> [args...]\n"
-          "       bintana test [--json] <project-dir> [filter]\n"
-          "       bintana check [--json] [--strict] [--components <file>] [--fix] <project-dir>\n"
+    fputs("usage: bintana [run] <project-dir|project.btp> [args...]\n"
+          "       bintana test [--json] <project-dir|project.btp> [filter]\n"
+          "       bintana check [--json] [--strict] [--components <file>] [--fix] <project-dir|project.btp>\n"
           "\n"
           "Runs the Bintana project in <project-dir>: evaluates its .js\n"
           "sources, then instantiates and shows the startup form named in\n"
-          "project.json.  A project that declares \"main\" instead calls that\n"
-          "function and opens no display at all.  Anything after the directory\n"
-          "is handed to the project as Application.Arguments.\n"
+          "project.btp.  A project that declares \"main\" instead calls that\n"
+          "function and opens no display at all.  A project.btp file may be\n"
+          "given instead of the directory it sits in.  Anything after the\n"
+          "project is handed to the project as Application.Arguments.\n"
           "\n"
           "  --version print the runtime's own release and exit.  An\n"
           "            application's version is Application.Version, and the\n"
@@ -41,7 +42,7 @@ static void usage(void)
           "            marks to <file>, with no Sysprof installed.  Running\n"
           "            under `sysprof-cli` or the Sysprof application instead\n"
           "            needs no flag and carries the samples too.\n"
-          "  --form <Class>  open that form instead of project.json's\n"
+          "  --form <Class>  open that form instead of project.btp's\n"
           "            \"startup\", and as an instance of its own even if the\n"
           "            project is single-instance.  How one dialog is looked\n"
           "            at without walking the program to it.\n"
@@ -147,8 +148,18 @@ static int run_check(int argc, char **argv)
         usage();
         return 2;
     }
-    if (!g_file_test(target, G_FILE_TEST_IS_DIR)) {
-        fprintf(stderr, "bintana check: '%s' is not a directory\n", target);
+    char *root = NULL;
+    if (g_file_test(target, G_FILE_TEST_IS_DIR)) {
+        root = g_canonicalize_filename(target, NULL);
+    } else if (g_file_test(target, G_FILE_TEST_IS_REGULAR) &&
+               (g_str_has_suffix(target, ".btp") || g_str_has_suffix(target, ".json"))) {
+        char *file = g_canonicalize_filename(target, NULL);
+
+        root = g_path_get_dirname(file);
+        g_free(file);
+    } else {
+        fprintf(stderr, "bintana check: '%s' is not a project directory or a .btp file\n",
+                target);
         return 2;
     }
 
@@ -156,10 +167,10 @@ static int run_check(int argc, char **argv)
     if (!tool) {
         fprintf(stderr, "bintana check: cannot find tools/check beside the "
                         "runtime -- is this an installed build?\n");
+        g_free(root);
         return 2;
     }
 
-    char *root = g_canonicalize_filename(target, NULL);
     GPtrArray *args = g_ptr_array_new_with_free_func(g_free);
 
     g_ptr_array_add(args, root);
@@ -286,7 +297,7 @@ int main(int argc, char **argv)
         }
         /*
          * A property of the **run** and not of the project, which is why it is
-         * here and not in project.json: the same project is run under it and
+         * here and not in project.btp: the same project is run under it and
          * not under it, and what decides is whoever pressed the button.
          */
         if (!dir && !strcmp(argv[i], "--strict")) {
@@ -364,8 +375,21 @@ int main(int argc, char **argv)
         g_ptr_array_unref(rest);
         return 2;
     }
-    if (!g_file_test(dir, G_FILE_TEST_IS_DIR)) {
-        fprintf(stderr, "bintana: '%s' is not a directory\n", dir);
+    /*
+     * A project is a directory, and `project.btp` is a project written down as
+     * one file: the desktop hands the file over, and the runtime resolves its
+     * directory the same way the IDE does. Anything else is still refused --
+     * a `.bta` bundle will be a file of its own, not a directory of sources.
+     */
+    if (g_file_test(dir, G_FILE_TEST_IS_REGULAR) &&
+        !g_str_has_suffix(dir, ".btp") && !g_str_has_suffix(dir, ".json")) {
+        fprintf(stderr, "bintana: '%s' is not a project directory or a .btp file\n", dir);
+        g_ptr_array_unref(rest);
+        return 2;
+    }
+    if (!g_file_test(dir, G_FILE_TEST_IS_DIR) &&
+        !g_file_test(dir, G_FILE_TEST_IS_REGULAR)) {
+        fprintf(stderr, "bintana: '%s' does not exist\n", dir);
         g_ptr_array_unref(rest);
         return 2;
     }

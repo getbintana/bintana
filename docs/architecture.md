@@ -131,7 +131,7 @@ alone.
 ```
 main()                       first bare argument is the project directory
   bta_app_new(dir)           build_context(): chosen intrinsics only
-                             reads project.json: name, startup, sources
+                             reads project.btp: name, startup, sources
   bta_app_run()
     gtk_application_new(NON_UNIQUE)
     g_application_run()

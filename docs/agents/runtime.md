@@ -745,7 +745,7 @@ icon when the theme has one by that name (`gtkapplication.c`).
   a refusal now (`bta_ctor`): *a project with a `main` has no display, so it
   cannot make widgets*.
 - **A library is a directory, and the runtime finds it one hop from its own
-  binary.** `"uses": ["charts"]` in project.json resolves over the project's
+  binary.** `"uses": ["charts"]` in project.btp resolves over the project's
   `lib/`, `$BINTANA_LIB_PATH`, `~/.local/share/bintana/lib`, `<bin>/../lib` (the
   source tree), `<bin>/../share/bintana/lib` (installed) and `/usr/share`. The
   two binary-relative ones are the same hop because `bin/` and `share/bintana/`
@@ -769,7 +769,7 @@ icon when the theme has one by that name (`gtkapplication.c`).
   shape that works is `tests/runner`'s — start the child, return, and let a
   `Timer` (or the exit callback) carry the rest.
 - `.js` load order matters when one project class extends another. `sources` in
-  `project.json` fixes it; creating a form from the IDE registers it there,
+  `project.btp` fixes it; creating a form from the IDE registers it there,
   and without that entry the class silently never loads.
 - Callers legitimately pass `w->name` back into `bta_widget_bind`; copy before
   freeing.

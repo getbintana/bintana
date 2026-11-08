@@ -420,7 +420,7 @@ old version into `api.json` and `tests/api.sh` then fails; the order is
 **`cmake --build`, then the generators**.
 
 - **`CMakeLists.txt`** -- `project(bintana VERSION x.y.z)`.
-- **`ide/project.json`** -- the IDE's own version, which `AboutBox` shows. It is
+- **`ide/project.btp`** -- the IDE's own version, which `AboutBox` shows. It is
   not `BTA_VERSION`.
 - **`flatpak/io.github.getbintana.BaseApp.yml`** -- `branch` is the major.minor
   of `BTA_VERSION`, and the comment above it names the tag. `Package.defaults`

@@ -122,7 +122,7 @@ accepted at all rather than refused:
   it needs.
 - **Load order follows from the code.** `examples/quote` depends on `Line`
   being evaluated before `Quote` (`Field.List(Line)` runs while `Quote` is
-  declared), and the only fix today is the order of `sources` in `project.json`,
+  declared), and the only fix today is the order of `sources` in `project.btp`,
   with an error that does not mention it. An imported name is evaluated first by
   the engine's own module linking.
 - **Two owners of one name can both be used**, through `as`.
@@ -365,7 +365,7 @@ stage 2, the first time the runtime compiles a module.
   binding from C. `bta_lookup_global` must find an export either way, since
   `.form` types and `startup` are names.
 - **Is `export` the default?** This plan says no: rule 1 keeps every existing
-  file a script. A later `project.json` key could make every file a module,
+  file a script. A later `project.btp` key could make every file a module,
   once the IDE and the libraries have moved.
 - **Should the runtime's own code move?** Done for the IDE, 2026-10-12: every
   file of `ide/` is a module, `Namespace("Ide")` is gone from it, and of 326

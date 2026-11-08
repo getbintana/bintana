@@ -48,7 +48,7 @@ const FILES = [
     ["Form1.form",  "2.6 kB", "Form"],
     ["Form1.js",    "7.0 kB", "JavaScript"],
     ["app.css",     "312 B",  "Stylesheet"],
-    ["project.json", "148 B", "Manifest"],
+    ["project.btp", "148 B", "Manifest"],
 ];
 
 /*

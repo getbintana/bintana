@@ -1,7 +1,7 @@
 /*
  * Integration test for the IDE.
  *
- * Loads the real ide/MainForm.js (see project.json) and drives it the way a
+ * Loads the real ide/MainForm.js (see project.btp) and drives it the way a
  * user would: selecting in the file list, typing in the editor, pressing the
  * toolbar buttons.  MainForm.form is a symlink to the IDE's own, so the two
  * cannot drift apart.
@@ -250,7 +250,7 @@ function makeChildProject() {
     Directory.Make(TMP);
     wipe(TMP);
 
-    File.Save(File.Join(TMP, "project.json"),
+    File.Save(File.Join(TMP, "project.btp"),
               JSON.stringify({ name: "child", startup: "Child", sources: ["Child.js"],
                                uses: ["gadgets"] }));
 
@@ -499,8 +499,8 @@ function* p_files(ide) {
     check("with a node per form", ide.FileTree.Exists("form:Child"));
     check("holding the design", ide.FileTree.Exists("Child.form"));
     check("and the code", ide.FileTree.Exists("Child.js"));
-    check("project.json is not filed under forms",
-          ide.FileTree.Exists("cat:other") && ide.FileTree.Exists("project.json"));
+    check("project.btp is not filed under forms",
+          ide.FileTree.Exists("cat:other") && ide.FileTree.Exists("project.btp"));
     /* The stylesheet is the application's look and is edited here, not outside:
      * a project whose app.css could only be reached from a terminal would have
      * classes nobody writes, and Style would go back to being decoration. */
@@ -550,10 +550,10 @@ function* p_files(ide) {
     ide.Editor.Text += "\n// dirty\n";
     eq("the dirty mark shows in the status", ide.isDirty(), true);
 
-    ide.FileTree.Key = "project.json";
+    ide.FileTree.Key = "project.btp";
     eq("switching does not lose the unsaved Child.js",
        ide.openTabs.get("Child.js").dirty, true);
-    eq("the new file becomes active", ide.activeFile, "project.json");
+    eq("the new file becomes active", ide.activeFile, "project.btp");
     eq("and the new tab is now dirty too", ide.isDirty(), false);
     eq("Child.js is still in the tab strip", ide.openTabs.has("Child.js"), true);
 
@@ -565,8 +565,8 @@ function* p_files(ide) {
 
     ide.ActSave.Execute();
     eq("saving clears the dirty flag", ide.Editor.Modified, false);
-    ide.FileTree.Key = "project.json";
-    eq("switches once saved", ide.activeFile, "project.json");
+    ide.FileTree.Key = "project.btp";
+    eq("switches once saved", ide.activeFile, "project.btp");
     eq("json gets json highlighting", ide.Editor.Language, "json");
 
     /* --- find and replace --------------------------------------------------
@@ -644,7 +644,7 @@ function* p_files(ide) {
     ide.ActFind.Execute();
     ide.FindText.Text = "uno";
     eq("one match in this file", ide.LblFindCount.Text, "1");
-    ide.FileTree.Key = "project.json";
+    ide.FileTree.Key = "project.btp";
     eq("switching tabs re-counts in the new one", ide.LblFindCount.Text, "none");
 
     /* Put the file back the way the previous section left it: the scratch text
@@ -689,9 +689,9 @@ function* p_files(ide) {
     check("and the way down to them", ide.FileTree.Exists("form:Child") &&
           ide.FileTree.Exists("cat:forms"));
     check("and takes out what does not match",
-          !ide.FileTree.Exists("project.json") && !ide.FileTree.Exists("app.css"));
+          !ide.FileTree.Exists("project.btp") && !ide.FileTree.Exists("app.css"));
     check("what is gone is not a file the tree stands for",
-          ide.projectTree.byKey["project.json"] === undefined);
+          ide.projectTree.byKey["project.btp"] === undefined);
     ide.FileTree.Key = "Child.js";
     eq("a filtered row still selects its file", ide.projectTree.byKey[ide.FileTree.Key],
        "Child.js");
@@ -718,7 +718,7 @@ function* p_files(ide) {
 
     ide.TxtFilter.Text = "";
     check("clearing it brings the whole tree back",
-          ide.FileTree.Exists("project.json") && ide.FileTree.Exists("app.css") &&
+          ide.FileTree.Exists("project.btp") && ide.FileTree.Exists("app.css") &&
           ide.FileTree.Exists("Child.js"));
 }
 
@@ -1374,13 +1374,13 @@ function* p_designer(ide) {
     /*
      * **And every file of the IDE is in its own `sources`.** `tests/ide` lists
      * the IDE's files by hand -- a symlink per form, a name per module -- so a
-     * file added there and forgotten in `ide/project.json` loads in the suite
+     * file added there and forgotten in `ide/project.btp` loads in the suite
      * and is a `ReferenceError` in the real IDE: `RecordForm` was green here
      * and answered *RecordForm is not defined* when a person double-clicked a
      * `.record`. The two lists can be compared, so they are.
      */
     const ideRoot = File.Join(Application.Directory, "..", "..", "ide");
-    const listed  = new Set(File.LoadJson(File.Join(ideRoot, "project.json")).sources);
+    const listed  = new Set(File.LoadJson(File.Join(ideRoot, "project.btp")).sources);
     const missing = [];
 
     for (const sub of ["forms", "modules"])
@@ -2126,7 +2126,7 @@ function* p_subclass(ide) {
     if (File.IsDir(dir)) Directory.DeleteTree(dir);
     Directory.Make(dir);
 
-    File.SaveJson(File.Join(dir, "project.json"),
+    File.SaveJson(File.Join(dir, "project.btp"),
                   { name: "subclass", startup: "MySub",
                     sources: ["MySub.js", "MyList.js"] });
     File.Save(File.Join(dir, "MyList.js"),
@@ -2288,8 +2288,8 @@ function* p_palette(ide) {
        ide.designer.selected.__node ? ide.designer.selected.__node.type : "",
        "Dial");
     check("and leaves sources alone, since `uses` is what loads a library",
-          !File.Load(File.Join(TMP, "project.json")).includes("Dial.js"),
-          File.Load(File.Join(TMP, "project.json")));
+          !File.Load(File.Join(TMP, "project.btp")).includes("Dial.js"),
+          File.Load(File.Join(TMP, "project.btp")));
     ide.designer.deleteSelected();
     yield;
 
@@ -6135,7 +6135,7 @@ function* p_tooldirs(ide) {
  * do answer.
  */
 function* p_namespaces(ide) {
-    /* `una/` and not `lib/`: a folder called `lib` is where `project.json`'s
+    /* `una/` and not `lib/`: a folder called `lib` is where `project.btp`'s
      * `uses` looks first, so it is a vendored library and never a namespace --
      * asserted at the end of this phase. Which folder these sit in is arbitrary
      * here, and that is the point of the phase. */
@@ -6770,7 +6770,7 @@ function* p_forms(ide) {
      * **With nothing open, a new form goes to `forms/`.** The root is where
      * everything used to land, and it is how a root becomes unmanageable: a
      * project of twenty forms is forty files in one directory with
-     * `project.json` somewhere among them. The folder is named after the
+     * `project.btp` somewhere among them. The folder is named after the
      * category the project view groups by, so the directory ends up shaped like
      * the view -- and a folder is not a namespace by itself, so this moves the
      * file and not the class's name.
@@ -6786,7 +6786,7 @@ function* p_forms(ide) {
           File.Load(File.Join(TMP, "Pantalla.js")).includes("class Pantalla extends Form"));
 
     /* Without registering it in sources the class never loads at run time. */
-    const cfg = JSON.parse(File.Load(File.Join(TMP, "project.json")));
+    const cfg = JSON.parse(File.Load(File.Join(TMP, "project.btp")));
     check("the new source is registered", cfg.sources.includes("Pantalla.js"),
           JSON.stringify(cfg.sources));
 
@@ -6837,7 +6837,7 @@ function* p_forms(ide) {
     check("and no trace of the old name",
           !File.Load(File.Join(TMP, "Ventana.js")).includes("Pantalla"));
 
-    const srcAfter = JSON.parse(File.Load(File.Join(TMP, "project.json"))).sources;
+    const srcAfter = JSON.parse(File.Load(File.Join(TMP, "project.btp"))).sources;
     check("sources points at the new file",
           srcAfter.includes("Ventana.js") && !srcAfter.includes("Pantalla.js"),
           JSON.stringify(srcAfter));
@@ -6856,26 +6856,26 @@ function* p_forms(ide) {
 
     /* Renaming the startup form has to move "startup" as well, or the project
      * stops starting. */
-    const startupWas = JSON.parse(File.Load(File.Join(TMP, "project.json"))).startup;
+    const startupWas = JSON.parse(File.Load(File.Join(TMP, "project.btp"))).startup;
     eq("the startup form is the child", startupWas, "Child");
     ide.openNamed("Child.form");
     yield;                 // let GTK allocate the design area
     eq("renaming the startup form works", ide.renameForm("Child", "Main"), true);
     eq("startup follows the rename",
-       JSON.parse(File.Load(File.Join(TMP, "project.json"))).startup, "Main");
+       JSON.parse(File.Load(File.Join(TMP, "project.btp"))).startup, "Main");
 
     /* --- deleting ----------------------------------------------------------- */
     ide.openNamed("Ventana.form");
     yield;                 // let GTK allocate the design area
     eq("a form counts as its pair", ide.pairOf("Ventana.form").length, 2);
-    eq("a lone file counts as itself", ide.pairOf("project.json").length, 1);
+    eq("a lone file counts as itself", ide.pairOf("project.btp").length, 1);
 
     eq("deleting the pair succeeds", deleteAnswering(ide, ide.pairOf("Ventana.form")), true);
     check("both files are gone",
           !File.Exists(File.Join(TMP, "Ventana.form")) &&
           !File.Exists(File.Join(TMP, "Ventana.js")));
     check("its source is unregistered",
-          !JSON.parse(File.Load(File.Join(TMP, "project.json"))).sources.includes("Ventana.js"));
+          !JSON.parse(File.Load(File.Join(TMP, "project.btp"))).sources.includes("Ventana.js"));
     check("and it left the tree", !ide.FileTree.Exists("form:Ventana"));
     /* Closing the tab lands on the next one, like a browser.  The previous IDE's
      * convention (back to `file = null`) does not apply with tabs: there is
@@ -7231,7 +7231,7 @@ function* p_forms(ide) {
           File.Load(File.Join(TMP, "Marcador.js")).includes("class Marcador extends Component"),
           File.Load(File.Join(TMP, "Marcador.js")));
     check("its source is registered like any other",
-          JSON.parse(File.Load(File.Join(TMP, "project.json"))).sources.includes("Marcador.js"));
+          JSON.parse(File.Load(File.Join(TMP, "project.btp"))).sources.includes("Marcador.js"));
 
     const compForm = JSON.parse(File.Load(File.Join(TMP, "Marcador.form")));
     check("a component has no title: it is not a window",
@@ -7512,7 +7512,7 @@ function* p_nested(ide) {
     /* --- tabs: multiple files open -------------------------------------- */
     /* The tests above renamed and deleted files of the project.  A fresh one is
      * built so the tab tests do not depend on the state they left behind. */
-    File.Save(File.Join(TMP, "project.json"),
+    File.Save(File.Join(TMP, "project.btp"),
               JSON.stringify({ name: "tabs", startup: "Tabs", sources: ["Tabs.js"] }));
     File.Save(File.Join(TMP, "Tabs.form"), JSON.stringify({
         format: "bintana-form/1",
@@ -7540,9 +7540,9 @@ function* p_nested(ide) {
     eq("and the file is the active one", ide.activeFile, "Tabs.js");
 
     /* Open several files and check they show up in the strip. */
-    ide.FileTree.Key = "project.json";
+    ide.FileTree.Key = "project.btp";
     eq("the second file becomes a new tab", ide.Tabs.Count, 2);
-    eq("and is the active one", ide.activeFile, "project.json");
+    eq("and is the active one", ide.activeFile, "project.btp");
 
     ide.openNamed("Tabs.form");
     yield;                 // let GTK allocate the design area
@@ -7555,7 +7555,7 @@ function* p_nested(ide) {
     ide.Editor.GotoLine(3);
     neq("the cursor moved in Tabs.js", ide.Editor.Line, savedLine);
 
-    ide.FileTree.Key = "project.json";
+    ide.FileTree.Key = "project.btp";
     ide.FileTree.Key = "Tabs.js";
     eq("the cursor is back where it was in Tabs.js",
        ide.Editor.Line, 3);
@@ -7563,10 +7563,10 @@ function* p_nested(ide) {
     /* An edit in one tab does not contaminate another. */
     ide.Editor.Text += "// solo en Tabs.js\n";
     eq("Tabs.js is dirty", ide.openTabs.get("Tabs.js").dirty, true);
-    eq("project.json is still clean",
-       ide.openTabs.get("project.json").dirty, false);
+    eq("project.btp is still clean",
+       ide.openTabs.get("project.btp").dirty, false);
 
-    ide.FileTree.Key = "project.json";
+    ide.FileTree.Key = "project.btp";
     check("switching files does not lose the dirty flag",
           !ide.Editor.Text.includes("// solo en Tabs.js"),
           ide.Editor.Text.slice(-40));
@@ -7579,8 +7579,8 @@ function* p_nested(ide) {
     /* The active tab's label carries the file.  Tabs.js was left dirty by the
      * edit above, so the label carries the asterisk. */
     const activeLabel = ide.openTabs.get("Tabs.js").label.Text;
-    ide.FileTree.Key = "project.json";
-    const otherLabel  = ide.openTabs.get("project.json").label.Text;
+    ide.FileTree.Key = "project.btp";
+    const otherLabel  = ide.openTabs.get("project.btp").label.Text;
     check("the active tab label carries the file name",
           activeLabel.startsWith("Tabs.js"),
           activeLabel);
@@ -7590,10 +7590,10 @@ function* p_nested(ide) {
     /* Closing tabs: the order and which one becomes active both matter. */
     ide.FileTree.Key = "Tabs.form";          // tab 2
     yield;                 // showing the designer needs a frame before it can be clicked
-    ide.closeTabByName("project.json", true);
+    ide.closeTabByName("project.btp", true);
     eq("closing a tab removes it from the strip", ide.Tabs.Count, 2);
     check("and the file is gone from the map",
-          !ide.openTabs.has("project.json"), [...ide.openTabs.keys()]);
+          !ide.openTabs.has("project.btp"), [...ide.openTabs.keys()]);
     check("but the close of an inactive tab keeps the active one",
           ide.activeFile === "Tabs.form", ide.activeFile);
 
@@ -8661,7 +8661,7 @@ function* p_projects(ide) {
 
     eq("creating a project succeeds", ide.createProject(NEWPROJ), true);
     yield;
-    check("it has a project.json", File.Exists(File.Join(NEWPROJ, "project.json")));
+    check("it has a project.btp", File.Exists(File.Join(NEWPROJ, "project.btp")));
     /* In `forms/` from the start: the shape a project would be tidied into
       * later anyway, and starting there is what keeps it from being a special
       * case that only later files follow. */
@@ -8670,7 +8670,7 @@ function* p_projects(ide) {
     check("with its code beside it",
           File.Exists(File.Join(NEWPROJ, "forms", "Form1.js")));
 
-    const newCfg = JSON.parse(File.Load(File.Join(NEWPROJ, "project.json")));
+    const newCfg = JSON.parse(File.Load(File.Join(NEWPROJ, "project.btp")));
     eq("the startup class matches the form", newCfg.startup, "Form1");
     eq("the class is still the bare name, since a folder is not a namespace",
        newCfg.startup, "Form1");
@@ -8689,9 +8689,9 @@ function* p_projects(ide) {
     eq("creating a project makes the folder",
        ide.startProject(FRESH, "", false, "io.github.getbintana.Fresh"), true);
     check("the folder is there now", File.IsDir(FRESH));
-    check("with a project inside", File.Exists(File.Join(FRESH, "project.json")));
+    check("with a project inside", File.Exists(File.Join(FRESH, "project.btp")));
     eq("and the application id it was created with",
-       File.LoadJson(File.Join(FRESH, "project.json")).id,
+       File.LoadJson(File.Join(FRESH, "project.btp")).id,
        "io.github.getbintana.Fresh");
 
     /*
@@ -8708,7 +8708,7 @@ function* p_projects(ide) {
     eq("creating a console project succeeds",
        ide.startProject(CONSOLE, "", true), true);
 
-    const consoleCfg = File.LoadJson(File.Join(CONSOLE, "project.json"));
+    const consoleCfg = File.LoadJson(File.Join(CONSOLE, "project.btp"));
     eq("it declares the function the runtime calls", consoleCfg.main, "Main");
     check("and no startup form to open", !consoleCfg.startup,
           JSON.stringify(consoleCfg.startup));
@@ -8750,7 +8750,7 @@ function* p_projects(ide) {
      * fields around. */
     check("a project without a description has no such key",
           !("description" in
-            JSON.parse(File.Load(File.Join(FRESH, "project.json")))));
+            JSON.parse(File.Load(File.Join(FRESH, "project.btp")))));
     removeTree(FRESH);
 
     /*
@@ -8866,13 +8866,13 @@ function* p_projects(ide) {
     check("asking for a console project answers so", asked !== null);
     eq("and says which kind", asked.console, true);
 
-    /* The description goes into project.json, and with no description the key is
+    /* The description goes into project.btp, and with no description the key is
      * not written: a project has no reason to carry empty fields. */
     const DESCED = "/tmp/bta-test-ide-desc";
     eq("creating with a description works",
        ide.startProject(DESCED, "a test project"), true);
-    eq("and it lands in project.json",
-       JSON.parse(File.Load(File.Join(DESCED, "project.json"))).description,
+    eq("and it lands in project.btp",
+       JSON.parse(File.Load(File.Join(DESCED, "project.btp"))).description,
        "a test project");
     removeTree(DESCED);
 
@@ -8881,7 +8881,7 @@ function* p_projects(ide) {
 
     /* Back to the project the rest of the test uses. */
     openFresh(ide, TMP);
-    ide.openNamed("project.json");
+    ide.openNamed("project.btp");
 
     /* --- elastic containers -------------------------------------------------
      *
@@ -9576,7 +9576,7 @@ function* p_projects(ide) {
           JSON.stringify(blank.Children.map((c) => c.Icon)));
 
     /* Placing a component registers its source, so taking it away is three
-     * steps and not one: the control, the files, and the line in project.json
+     * steps and not one: the control, the files, and the line in project.btp
      * that would otherwise make the project fail to load a class that is gone.
      * `p_running` runs this project for real, which is what catches it. */
     blank.Delete();
@@ -10292,7 +10292,7 @@ function* p_folders(ide) {
     check("the scan lists it by path", ide.files.includes("Widgets/Marco.form"),
           JSON.stringify(ide.files));
     check("sources carries the folder too",
-          JSON.parse(File.Load(File.Join(TMP, "project.json")))
+          JSON.parse(File.Load(File.Join(TMP, "project.btp")))
               .sources.includes("Widgets/Marco.js"));
 
     /*
@@ -10420,7 +10420,7 @@ function* p_folders(ide) {
           File.Exists(File.Join(TMP, "Widgets", "Cuadro.js")) &&
           !File.Exists(File.Join(TMP, "Widgets", "Marco.form")));
     check("and sources followed",
-          JSON.parse(File.Load(File.Join(TMP, "project.json")))
+          JSON.parse(File.Load(File.Join(TMP, "project.btp")))
               .sources.includes("Widgets/Cuadro.js"));
     eq("the class kept its namespace",
        JSON.parse(File.Load(File.Join(TMP, "Widgets", "Cuadro.form"))).class,
@@ -10448,7 +10448,7 @@ function* p_folders(ide) {
     check("leaving the old one behind",
           !File.Exists(File.Join(TMP, "Widgets", "Cuadro.form")));
     check("with sources pointing at the move",
-          JSON.parse(File.Load(File.Join(TMP, "project.json")))
+          JSON.parse(File.Load(File.Join(TMP, "project.btp")))
               .sources.includes("Paneles/Cuadro.js"));
 
     const movedJs = File.Load(File.Join(TMP, "Paneles", "Cuadro.js"));
@@ -10500,7 +10500,7 @@ function* p_folders(ide) {
      * edited "sources" by hand did not know a form was about to name it. */
     ide.dropSource("Partes/Chip.js");
     check("the source was dropped for the test",
-          !JSON.parse(File.Load(File.Join(TMP, "project.json")))
+          !JSON.parse(File.Load(File.Join(TMP, "project.btp")))
                .sources.includes("Partes/Chip.js"));
 
     ide.openNamed("Refactor.form");
@@ -10509,7 +10509,7 @@ function* p_folders(ide) {
     yield;                 // a just-created control has no layout until the next frame
 
     check("placing a component registers its class again",
-          JSON.parse(File.Load(File.Join(TMP, "project.json")))
+          JSON.parse(File.Load(File.Join(TMP, "project.btp")))
               .sources.includes("Partes/Chip.js"));
 
     const chip = ide.designer.selected;
@@ -10549,7 +10549,7 @@ function* p_folders(ide) {
     removeTree(FLAT);
     Directory.Make(FLAT);
 
-    File.SaveJson(File.Join(FLAT, "project.json"), {
+    File.SaveJson(File.Join(FLAT, "project.btp"), {
         name: "flat", startup: "Main",
         sources: ["Util.js", "Chip.js", "Main.js"],
     });
@@ -10613,7 +10613,7 @@ function* p_folders(ide) {
     check("and what was in a folder of its own did not move",
           File.Exists(File.Join(FLAT, "arte", "Suelto.js")));
 
-    const loads = JSON.parse(File.Load(File.Join(FLAT, "project.json"))).sources;
+    const loads = JSON.parse(File.Load(File.Join(FLAT, "project.btp"))).sources;
     check("sources followed: nothing it loads is at the root any more",
           !loads.some((f) => !f.includes("/")), JSON.stringify(loads));
 
@@ -10622,7 +10622,7 @@ function* p_folders(ide) {
     eq("the class is the name it always had",
        JSON.parse(File.Load(File.Join(FLAT, "forms", "Main.form"))).class, "Main");
     eq("so the startup form still names something",
-       JSON.parse(File.Load(File.Join(FLAT, "project.json"))).startup, "Main");
+       JSON.parse(File.Load(File.Join(FLAT, "project.btp"))).startup, "Main");
     check("and the form placing the component still names it right",
           JSON.parse(File.Load(File.Join(FLAT, "forms", "Main.form")))
               .children[0].type === "Chip");
@@ -10668,7 +10668,7 @@ function* p_folders(ide) {
     check("it is valid JavaScript", parses(modSource), modSource);
 
     check("the project loads it, which is the half nobody remembers",
-          JSON.parse(File.Load(File.Join(TMP, "project.json")))
+          JSON.parse(File.Load(File.Join(TMP, "project.btp")))
               .sources.includes(modFile));
     eq("and it opens in a tab", ide.activeFile, modFile);
     check("with no .form beside it", !File.Exists(File.Join(TMP, "modules/Herramienta.form")));
@@ -10733,7 +10733,7 @@ function* p_folders(ide) {
           !File.Exists(File.Join(TMP, "Paneles", "Cuadro.form")) &&
           !File.Exists(File.Join(TMP, "Paneles", "Cuadro.js")));
     check("and so is its source entry",
-          !JSON.parse(File.Load(File.Join(TMP, "project.json")))
+          !JSON.parse(File.Load(File.Join(TMP, "project.btp")))
                .sources.includes("Paneles/Cuadro.js"));
     /* --- what the IDE writes has to run --------------------------------------
      *
@@ -10763,7 +10763,7 @@ function* p_folders(ide) {
           runnable.children.some((c) => c.type === "parts.Badge"),
           JSON.stringify(runnable.children.map((c) => c.type)));
     check("with its class registered to load, folder and all",
-          JSON.parse(File.Load(File.Join(TMP, "project.json")))
+          JSON.parse(File.Load(File.Join(TMP, "project.btp")))
               .sources.includes("parts/Badge.js"));
 
 }
@@ -11578,7 +11578,7 @@ function* p_strings(ide) {
 }
 
 function* p_settings(ide) {
-    /* --- project.json as a record ------------------------------------------
+    /* --- project.btp as a record ------------------------------------------
      *
      * The manifest is a `ProjectFile`, so what it may say is declared in one
      * place instead of checked by whoever trips over it.  What is asserted here
@@ -11586,7 +11586,7 @@ function* p_settings(ide) {
      * record does not describe survives being written back, and what is wrong
      * with a manifest is said once instead of found later.
      */
-    const manifestPath = File.Join(TMP, "project.json");
+    const manifestPath = File.Join(TMP, "project.btp");
 
     /* A key from a version this IDE does not know about.  Saving the file must
      * not be how a project loses it. */
@@ -11718,7 +11718,7 @@ function* p_settings(ide) {
      * that row would act on a different one. With something open that is not a
      * form, there is nothing to start at.
      */
-    ide.FileTree.Key = "project.json";
+    ide.FileTree.Key = "project.btp";
     yield;
     eq("the manifest is not a form to start at", ide.MnuFtStartup.Enabled, false);
     check("...while renaming it still is", ide.MnuFtRename.Enabled);
@@ -11736,7 +11736,7 @@ function* p_settings(ide) {
     const asked = ide.renamePrompt;
     check("F2 asks about the file", !!asked);
     eq("...and says which kind it is", asked.Text, "Rename file");
-    eq("starting from the name it has", asked.TxtValue.Text, "project.json");
+    eq("starting from the name it has", asked.TxtValue.Text, "project.btp");
     check("Escape leaves it alone", asked.CancelButton === asked.BtnCancel);
     asked.CancelButton.Click();
 
@@ -11748,7 +11748,7 @@ function* p_settings(ide) {
      * --- the version, which is two answers and not one -----------------------
      *
      * `Application.Version` is what *this* project declares, read out of its
-     * project.json by the runtime; `BTA_VERSION` is the runtime's own, out of the
+     * project.btp by the runtime; `BTA_VERSION` is the runtime's own, out of the
      * one place CMakeLists declares it. Confusing them is what the About dialog
      * did until there was a field to read.
      */
@@ -11899,7 +11899,7 @@ function* p_settings(ide) {
               mpath !== null &&
               File.Name(mpath) === "io.github.getbintana.IdeChild.metainfo.xml",
               mpath);
-        eq("showing the id project.json declares", mf.TxtId.Text,
+        eq("showing the id project.btp declares", mf.TxtId.Text,
            "io.github.getbintana.IdeChild");
         eq("and its name", mf.TxtName.Text, named);
         eq("with nothing to complain about yet", mf.LblProblem.Text, "");
@@ -11939,9 +11939,9 @@ function* p_settings(ide) {
          * writer. */
         const drifted = File.LoadXml(mpath);
         drifted.Root.Find("name").Text = "Something Else";
-        check("a name that disagrees with project.json is reported",
+        check("a name that disagrees with project.btp is reported",
               Metainfo.problems(drifted, mpath, ide.manifest.read())
-                  .some((p) => p.includes("project.json")));
+                  .some((p) => p.includes("project.btp")));
 
         /* And the raw road: the file is in the tree and opens as XML, which is
          * where translations (`xml:lang`) and everything else live. */
@@ -12002,7 +12002,7 @@ function* p_settings(ide) {
               Directory.List(ide.project).join(", "));
 
         /* **A new name keeps `<name>` in step**, which `Package.Write` compares
-         * with project.json and refused on. */
+         * with project.btp and refused on. */
         ide.MnuProjectSettings.Click();
         const pdName = ide.projectEditor;
         pdName.TxtPrId.Text   = "io.github.getbintana.IdeChild";
@@ -12807,7 +12807,7 @@ function* p_export(ide) {
           members.length > 0 && members.every((m) => m.startsWith(`${top}/`)),
           JSON.stringify(members.slice(0, 4)));
     check("and the manifest is in there",
-          members.includes(`${top}/project.json`),
+          members.includes(`${top}/project.btp`),
           JSON.stringify(members.slice(0, 8)));
 
     /* --- the extension it supplies ----------------------------------------
@@ -12890,7 +12890,7 @@ function* p_installer(ide) {
     const scratch = File.Join(dir, "ScratchSetup");
     const sid     = "io.github.getbintana.ScratchSetup";
     Directory.Make(File.Join(scratch, "icons"));
-    File.SaveJson(File.Join(scratch, "project.json"),
+    File.SaveJson(File.Join(scratch, "project.btp"),
                   { name: "ScratchSetup", id: sid, version: "0.4", main: "Main" });
     File.Save(File.Join(scratch, "Main.js"), "\"use strict\";\nfunction Main() {}\n");
     const be = (n) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
@@ -13269,7 +13269,7 @@ function* p_errors(ide) {
 
     /* Two of them: the one worth going to is the one that just happened. */
     eq("the last traceback is the one read",
-       ide.errorLocation(`Bintana error: first\n    at A (${TMP}/project.json:1:1)\n` +
+       ide.errorLocation(`Bintana error: first\n    at A (${TMP}/project.btp:1:1)\n` +
                          traceback).line, 2);
 
     /*
@@ -13294,7 +13294,7 @@ function* p_errors(ide) {
      *
      * `--strict` makes a control refuse a property its class does not have, so
      * `this.Lbl.Txt = "x"` throws where it is written rather than doing nothing
-     * forever. It is one argument to `bintana` and nothing in `project.json`,
+     * forever. It is one argument to `bintana` and nothing in `project.btp`,
      * because the same project is run both ways and what decides is whoever
      * pressed the button -- so what is asserted is that the tick and the
      * argument are the same fact.
@@ -14622,7 +14622,7 @@ function* p_check(ide) {
     const imports = `/tmp/bta-test-imports${TAG}`;
     if (File.IsDir(imports)) Directory.DeleteTree(imports);
     Directory.Make(imports);
-    File.Save(File.Join(imports, "project.json"), JSON.stringify({
+    File.Save(File.Join(imports, "project.btp"), JSON.stringify({
         name: "imports", startup: "A", version: "1.0", sources: ["A.js"],
     }, null, 2));
     File.Save(File.Join(imports, "A.js"),
@@ -14756,7 +14756,7 @@ function* p_check(ide) {
 
     /* --- the manifest ------------------------------------------------------- */
 
-    const manifestPath = File.Join(TMP, "project.json");
+    const manifestPath = File.Join(TMP, "project.btp");
     const kept = File.Load(manifestPath);
     const cfg  = JSON.parse(kept);
     cfg.format = "bintana-project/1";              /* a key nothing reads */
@@ -14764,7 +14764,7 @@ function* p_check(ide) {
     File.SaveJson(manifestPath, cfg);
 
     pass.run();
-    const about = rows().filter((r) => r.file === "project.json");
+    const about = rows().filter((r) => r.file === "project.btp");
     check("a key nothing reads is reported",
           about.some((r) => r.text.includes('"format"')), JSON.stringify(about));
     check("a source that is not there is reported",
@@ -14909,7 +14909,7 @@ function* p_access(ide) {
            .Validate().filter((m) => m.includes("accessibility")).length, 0);
 
     /* --- through the pass: every row follows the word ------------------------ */
-    const manifest = File.LoadJson(File.Join(TMP, "project.json"));
+    const manifest = File.LoadJson(File.Join(TMP, "project.btp"));
     File.Save(File.Join(TMP, "Mute.form"), JSON.stringify({
         format: "bintana-form/1", class: "Mute",
         properties: { Width: 300, Height: 200 },
@@ -14923,7 +14923,7 @@ function* p_access(ide) {
     const say  = (word) => {
         const m = { ...manifest };
         if (word === null) delete m.accessibility; else m.accessibility = word;
-        File.SaveJson(File.Join(TMP, "project.json"), m);
+        File.SaveJson(File.Join(TMP, "project.btp"), m);
         ide.check.run();
         return mine();
     };
@@ -14940,7 +14940,7 @@ function* p_access(ide) {
     rows = say("warning");
     eq("warning, said out loud, is the default", rows.length, 3);
 
-    File.SaveJson(File.Join(TMP, "project.json"), manifest);
+    File.SaveJson(File.Join(TMP, "project.btp"), manifest);
     File.Delete(File.Join(TMP, "Mute.form"));
     ide.listFiles();
     ide.check.run();
@@ -15515,7 +15515,7 @@ function* p_git(ide) {
     run("config", "user.email", "suite@bintana");
     run("config", "user.name", "Suite");
 
-    File.Save(File.Join(repo, "project.json"),
+    File.Save(File.Join(repo, "project.btp"),
               JSON.stringify({ name: "gitrepo", startup: "Uno", sources: ["Uno.js"] }));
     File.Save(File.Join(repo, "Uno.js"), "class Uno extends Form {\n}\n");
     /* The name the whole `-z` decision exists for. */
@@ -16343,7 +16343,7 @@ function* p_git(ide) {
     const sub = File.Join(repo, "sub");
 
     Directory.Make(sub);
-    File.Save(File.Join(sub, "project.json"),
+    File.Save(File.Join(sub, "project.btp"),
               JSON.stringify({ name: "sub", startup: "Dos", sources: ["Dos.js"] }));
     File.Save(File.Join(sub, "Dos.js"), "class Dos extends Form {\n}\n");
     run("add", "-A");
@@ -17055,7 +17055,7 @@ function* p_debug(ide) {
      */
     const twin = `${TMP}-twin`;
     Directory.Make(File.Join(twin, File.Directory(js) || "."));
-    File.Save(File.Join(twin, "project.json"),
+    File.Save(File.Join(twin, "project.btp"),
               JSON.stringify({ name: "twin", startup: startup, sources: [js] }));
     File.Save(File.Join(twin, js), ide.Editor.Text);
     ide.openProject(twin);
@@ -18640,7 +18640,7 @@ function* p_report(ide) {
     Directory.Make(DIR);
     wipe(DIR);
 
-    File.Save(File.Join(DIR, "project.json"),
+    File.Save(File.Join(DIR, "project.btp"),
               JSON.stringify({ name: "reportprobe", startup: "Main",
                                sources: ["Main.js"], uses: ["report"] }));
     File.Save(File.Join(DIR, "Main.js"),

@@ -15,7 +15,7 @@
 # package there is nothing to resolve -- the IDE is at `/app/share/bintana/ide`
 # and the runtime is at `/app/bin/bintana`, which is what this script says. The
 # window's class is the project's id, which the runtime sets from
-# `ide/project.json`, so no `exec -a` is needed.
+# `ide/project.btp`, so no `exec -a` is needed.
 id: io.github.getbintana.Ide
 branch: stable
 runtime: org.gnome.Platform
@@ -53,6 +53,8 @@ modules:
       - install -Dm755 bintana-ide /app/bin/bintana-ide
       - install -Dm644 io.github.getbintana.Ide.desktop /app/share/applications/io.github.getbintana.Ide.desktop
       - install -Dm644 bintana-ide.svg /app/share/icons/hicolor/scalable/apps/io.github.getbintana.Ide.svg
+      - install -Dm644 bintana.xml /app/share/mime/packages/io.github.getbintana.Ide.xml
+      - install -Dm644 bintana-ide.svg /app/share/icons/hicolor/scalable/mimetypes/application-x-bintana-project.svg
     sources:
       - type: script
         dest-filename: bintana-ide
@@ -62,3 +64,5 @@ modules:
         path: io.github.getbintana.Ide.desktop
       - type: file
         path: ../tools/bintana-ide.svg
+      - type: file
+        path: ../tools/bintana.xml

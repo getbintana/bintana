@@ -52,7 +52,7 @@ function Main() {
               "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\"></svg>\n");
 
     const config = { id: "io.github.getbintana.Notes", name: "Notes", version: "2.1" };
-    File.SaveJson(File.Join(project, "project.json"), config);
+    File.SaveJson(File.Join(project, "project.btp"), config);
 
     /* The shape the library speaks, out of the file's spelling -- the same call
      * the packaging step makes. */
@@ -148,14 +148,14 @@ function Main() {
     /* No id: there is nothing to install under and no name for the metainfo. */
     const noid = File.Join(root, "noid");
     Directory.Make(noid);
-    File.SaveJson(File.Join(noid, "project.json"), { name: "NoId", main: "Main" });
+    File.SaveJson(File.Join(noid, "project.btp"), { name: "NoId", main: "Main" });
     throws("a project with no id is refused",
            () => Package.Write(noid, File.Join(root, "out-noid")), "no id");
 
     /* No metainfo: a package without one is a package nothing can describe. */
     const nometa = File.Join(root, "nometa");
     Directory.Make(nometa);
-    File.SaveJson(File.Join(nometa, "project.json"),
+    File.SaveJson(File.Join(nometa, "project.btp"),
                   { name: "NoMeta", id: "io.github.getbintana.NoMeta", main: "Main" });
     throws("a project with no metainfo is refused",
            () => Package.Write(nometa, File.Join(root, "out-nometa")),
@@ -166,7 +166,7 @@ function Main() {
      * nobody wrote. */
     const noicon = File.Join(root, "noicon");
     Directory.Make(noicon);
-    File.SaveJson(File.Join(noicon, "project.json"),
+    File.SaveJson(File.Join(noicon, "project.btp"),
                   { name: "NoIcon", id: "io.github.getbintana.NoIcon", main: "Main" });
     Metainfo.create(noicon, { Id: "io.github.getbintana.NoIcon", Name: "NoIcon" });
     throws("a project with no icon is refused",
@@ -177,13 +177,13 @@ function Main() {
      * another. */
     const drifted = File.Join(root, "drifted");
     Directory.Make(drifted);
-    File.SaveJson(File.Join(drifted, "project.json"),
+    File.SaveJson(File.Join(drifted, "project.btp"),
                   { name: "Drifted", id: "io.github.getbintana.Drifted", main: "Main" });
     Metainfo.create(drifted, { Id: "io.github.getbintana.Drifted", Name: "Drifted" });
     const ddoc = File.LoadXml(Metainfo.find(drifted));
     ddoc.Root.Find("name").Text = "Something Else";
     File.SaveXml(Metainfo.find(drifted), ddoc);
-    throws("a metainfo that disagrees with project.json is refused",
+    throws("a metainfo that disagrees with project.btp is refused",
            () => Package.Write(drifted, File.Join(root, "out-drifted")),
            "does not agree");
 
@@ -207,7 +207,7 @@ function scratch(root, name, drawings) {
     const dir = File.Join(root, name);
     const id  = `io.github.getbintana.${name}`;
     Directory.Make(File.Join(dir, "icons"));
-    File.SaveJson(File.Join(dir, "project.json"), { name, id, main: "Main" });
+    File.SaveJson(File.Join(dir, "project.btp"), { name, id, main: "Main" });
     File.Save(File.Join(dir, "Main.js"), "\"use strict\";\nfunction Main() {}\n");
     for (const d of drawings || []) {
         if (typeof d === "string")
@@ -405,7 +405,7 @@ function checkNsis(root) {
     const dir = File.Join(root, "Setup");
     const id  = "io.github.getbintana.Setup";
     Directory.Make(File.Join(dir, "icons"));
-    File.SaveJson(File.Join(dir, "project.json"),
+    File.SaveJson(File.Join(dir, "project.btp"),
                   { name: "Setup", id, version: "2.1", main: "Main" });
     File.Save(File.Join(dir, "Main.js"), "\"use strict\";\nfunction Main() {}\n");
     File.SaveBytes(File.Join(dir, "icons", `${id}.png`), png(256, 256));
@@ -502,7 +502,7 @@ function checkNsis(root) {
     /* --- what it refuses -------------------------------------------------- */
     const nometa = File.Join(root, "nsis-nometa");
     Directory.Make(nometa);
-    File.SaveJson(File.Join(nometa, "project.json"),
+    File.SaveJson(File.Join(nometa, "project.btp"),
                   { name: "NoMeta", id: "io.github.getbintana.NoMeta", main: "Main" });
     throws("a project with no metainfo is refused",
            () => Nsis.Script(nometa, File.Join(root, "out-nsis-nometa")),
@@ -510,14 +510,14 @@ function checkNsis(root) {
 
     const drifted = File.Join(root, "nsis-drifted");
     Directory.Make(drifted);
-    File.SaveJson(File.Join(drifted, "project.json"),
+    File.SaveJson(File.Join(drifted, "project.btp"),
                   { name: "Drifted", id: "io.github.getbintana.Drifted", main: "Main" });
     Metainfo.create(drifted, { Id: "io.github.getbintana.Drifted", Name: "Drifted",
                                Description: "Drifted." });
     const ddoc = File.LoadXml(Metainfo.find(drifted));
     ddoc.Root.Find("name").Text = "Something Else";
     File.SaveXml(Metainfo.find(drifted), ddoc);
-    throws("a metainfo that disagrees with project.json is refused",
+    throws("a metainfo that disagrees with project.btp is refused",
            () => Nsis.Script(drifted, File.Join(root, "out-nsis-drifted")),
            "does not agree");
 
@@ -544,7 +544,7 @@ function checkNsis(root) {
     put(File.Join("share", "bintana", "lib", "x.js"), "a shipped library");
     put(File.Join("share", "bintana", "ide", "Main.js"), "the IDE");
     put(File.Join("etc", "gtk-4.0", "settings.ini"), "font");
-    put(File.Join("share", "bintana", "examples", "hello", "project.json"), "{}");
+    put(File.Join("share", "bintana", "examples", "hello", "project.btp"), "{}");
     put(File.Join("share", "bintana", "tools", "nsis", "Bin", "makensis.exe"), "MZ");
     put(File.Join("share", "doc", "bintana", "README.md"), "# Bintana");
 
@@ -594,7 +594,7 @@ function checkNsis(root) {
                  File.Join("share", "doc", "bintana", "README.md")],
     });
     check("With carries a folder of the tree where the tree has it",
-          File.Exists(File.Join(withed, "share", "bintana", "examples", "hello", "project.json")) &&
+          File.Exists(File.Join(withed, "share", "bintana", "examples", "hello", "project.btp")) &&
           File.Exists(File.Join(withed, "share", "bintana", "tools", "nsis", "Bin", "makensis.exe")));
     check("and a single file",
           File.Exists(File.Join(withed, "share", "doc", "bintana", "README.md")));

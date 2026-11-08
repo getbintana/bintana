@@ -409,7 +409,7 @@ export class Classes {
      * with it. What is new is the answer when there is nothing to be beside --
      * the project root, which is where everything landed and how a root becomes
      * unmanageable: a project of twenty forms is forty files in one directory,
-     * with `project.json` and `app.css` somewhere among them.
+     * with `project.btp` and `app.css` somewhere among them.
      *
      * So the root sends it to a folder named after what it is: `forms/`,
      * `components/`. The same words the project view groups by, which is the

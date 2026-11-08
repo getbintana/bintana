@@ -125,7 +125,7 @@ defineProperty(String.prototype, "localeCompare", {
 /* ------------------------------------------------------------------------
  * JSON files, which is what JSON is for here.
  *
- * A .form is JSON, project.json is JSON, settings are JSON: reading one was
+ * A .form is JSON, project.btp is JSON, settings are JSON: reading one was
  * always `JSON.parse(File.Load(path))` and writing one always the same
  * stringify with the same indent and the same trailing newline.  Two names for
  * the pair, so neither the ceremony nor the choice comes up again.
@@ -169,7 +169,7 @@ function jsonRefusal(path, where, what) {
 
 /**
  * one canonical shape: indented by two, one trailing newline. Every `.form` and
- * every `project.json` in this tree is written by it, which is why a file saved
+ * every `project.btp` in this tree is written by it, which is why a file saved
  * by the IDE and one written by hand look the same. **What JSON cannot hold is
  * refused**, naming where it is: `NaN`, `Infinity` and `-Infinity`, and
  * `undefined` inside a list -- all of which `JSON.stringify` writes as `null`
@@ -197,7 +197,7 @@ File.SaveJson = function (path, value) {
 /* ------------------------------------------------------------------------
  * XML files, the same pair one medium over.
  *
- * A `.form` and `project.json` are JSON; the formats other programs write are
+ * A `.form` and `project.btp` are JSON; the formats other programs write are
  * XML -- MSPDI, SOAP, SVG -- and reading one was
  * `Xml.ParseBytes(File.LoadBytes(path))` with the path lost from the message.
  * The two names carry the two decisions: the error names the file, and what is
@@ -3773,7 +3773,7 @@ GLOBAL.Record = class Record {
     /*
      * A file, read.  Lenient on purpose: a value it cannot accept leaves the
      * field at what it starts from and goes on the record's Problems, so one bad
-     * key does not cost the other twenty -- and a project.json with a broken
+     * key does not cost the other twenty -- and a project.btp with a broken
      * `startup` can still be opened and fixed.
      *
      * This is the only door past the setters, and it is in here: an application

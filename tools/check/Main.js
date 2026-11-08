@@ -101,7 +101,10 @@ function main() {
      * installed is skipped: the runtime says so, with every path it tried. */
     const program = sources.slice();
     let   manifest = {};
-    try { manifest = File.LoadJson(File.Join(root, "project.json")) || {}; }
+    const manifestPath = File.Exists(File.Join(root, "project.btp"))
+                             ? File.Join(root, "project.btp")
+                             : File.Join(root, "project.json");
+    try { manifest = File.LoadJson(manifestPath) || {}; }
     catch (e) { manifest = {}; }
     const readAll = (paths) => {
         for (const path of paths) {

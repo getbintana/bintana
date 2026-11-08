@@ -364,7 +364,7 @@ export class ProjectTree {
             if (rest) names.add(rest.split("/")[0]);
         }
         /* A folder a tool named is not a node: see TOOL_DIRS. At the root only,
-         * because `forms/` next to `project.json` is the IDE's doing and
+         * because `forms/` next to `project.btp` is the IDE's doing and
          * `src/forms/` is somebody's. */
         if (!folder)
             for (const name of [...names])

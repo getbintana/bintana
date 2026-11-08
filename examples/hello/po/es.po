@@ -1,6 +1,6 @@
 # Spanish for the hello example.
 #
-# Nothing in project.json points at this directory: po/ is found by name, the way
+# Nothing in project.btp points at this directory: po/ is found by name, the way
 # icons/ and app.css are. The runtime reads the .po itself rather than a compiled
 # .mo, because nothing in a project directory is generated.
 #

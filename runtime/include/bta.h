@@ -356,11 +356,11 @@ struct BtaApp {
 
     char           *dir;      /* project directory */
     char           *name;
-    /* What the project calls its own release, verbatim out of project.json;
+    /* What the project calls its own release, verbatim out of project.btp;
      * "" when it declares none, which is an ordinary state and not a fault. */
     char           *version;
     /*
-     * project.json's "id": the application's reverse-DNS identity, and the one
+     * project.btp's "id": the application's reverse-DNS identity, and the one
      * name its window class, its metainfo and its package all share.  "" when
      * the project declares none -- an ordinary project, whose window is classed
      * by the program's name as it always was.  `bta_app_new` refuses one that
@@ -370,7 +370,7 @@ struct BtaApp {
     char           *id;
     char           *startup;  /* class name of the form to open first */
     /*
-     * project.json's "main": the function to call instead of opening a form.
+     * project.btp's "main": the function to call instead of opening a form.
      * NULL for an ordinary application, and the whole of what makes a project a
      * console one -- there is no second switch, because a project either shows
      * a window or it does not.
@@ -378,7 +378,7 @@ struct BtaApp {
     char           *entry;
     GPtrArray      *sources;  /* absolute paths of .js files, in load order */
     /*
-     * The libraries `project.json`'s "uses" named, resolved to absolute
+     * The libraries `project.btp`'s "uses" named, resolved to absolute
      * directories in the order they were declared.  A library is a directory of
      * `.js` and `.form` files and nothing else: its sources load before the
      * project's own and its forms are indexed with them, which is the whole of
@@ -412,7 +412,7 @@ struct BtaApp {
 
     JSValue         startup_form;
     int             exit_code;
-    /* project.json's "singleInstance": a second run of this project hands its
+    /* project.btp's "singleInstance": a second run of this project hands its
      * arguments to the first and exits.  Needs an "id" -- it is the name the
      * instances find each other by. */
     bool            single;
@@ -862,7 +862,7 @@ bool    bta_module_done(JSContext *ctx, const char *path);
 void    bta_modules_checking(JSContext *ctx, bool on);
 /* A library's `.js` files in the order it loads them (bta_runtime.c). */
 GPtrArray *bta_library_sources(JSContext *ctx, const char *dir);
-/* The files its `project.json` names for a `Task` worker, or NULL when it
+/* The files its `project.btp` names for a `Task` worker, or NULL when it
  * declares none.  An empty array is "no safe worker files", not "no key". */
 GPtrArray *bta_library_worker_sources(JSContext *ctx, const char *dir);
 /* A JSDoc comment's description and its `@returns {T}` type, each NULL when
@@ -1598,7 +1598,7 @@ void bta_grid_reflow(GtkWidget *slot);
  * a project directory holds sources, nothing in it is generated or compiled,
  * and .po is the interchange format every translation tool already speaks.
  */
-/* `libs` are the library directories from project.json's `uses`: their `po/`
+/* `libs` are the library directories from project.btp's `uses`: their `po/`
  * is read before the project's, so the project's wording wins. */
 void bta_locale_init(JSContext *ctx, JSValue global, const char *project_dir,
                     GPtrArray *libs);

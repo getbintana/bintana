@@ -24,7 +24,7 @@
  * they are asked about together. Its class is the IDE's application id, which
  * is what the installed `bintana-ide.desktop` says it matches; that is the
  * other end of the same question, and both ends read it from the installed
- * `project.json` rather than naming it here.
+ * `project.btp` rather than naming it here.
  *
  * **This is a console project, and it runs the IDE on an X server it starts
  * itself.** Not `xvfb-run`, which owns the display it makes and hands it to one
@@ -146,15 +146,17 @@ function staged(prefix) {
 function contents(prefix) {
     for (const rel of ["bin/bintana",
                        "bin/bintana-ide",
-                       "share/bintana/ide/project.json",
+                       "share/bintana/ide/project.btp",
                        "share/bintana/ide/po/es.po",
-                       "share/bintana/examples/hello/project.json",
+                       "share/bintana/examples/hello/project.btp",
                        /* A shipped library, which the runtime finds one hop from
                         * its own binary -- so this path *is* the mechanism. */
                        "share/bintana/lib/charts/Chart.js",
                        "share/bintana/lib/charts/Chart.form",
                        "share/applications/bintana-ide.desktop",
                        "share/icons/hicolor/scalable/apps/bintana-ide.svg",
+                       "share/mime/packages/bintana.xml",
+                       "share/icons/hicolor/scalable/mimetypes/application-x-bintana-project.svg",
                        "share/doc/bintana/README.md",
                        /* The runtime's own documentation, which is what the
                         * install carries; the reference pages are the
@@ -166,15 +168,15 @@ function contents(prefix) {
         whole(tree, File.Join(ROOT, tree), File.Join(prefix, "share", "bintana", tree));
 
     /* The sources the manifest names, resolved against the installed directory
-     * rather than the source one. A project.json that lists a file the install
+     * rather than the source one. A project.btp that lists a file the install
      * did not carry is exactly the failure this exists for, and the runtime
      * would report it as a missing class three screens later. */
     const ide      = File.Join(prefix, "share", "bintana", "ide");
-    const manifest = File.Join(ide, "project.json");
+    const manifest = File.Join(ide, "project.btp");
     if (File.Exists(manifest)) {
         const gone = File.LoadJson(manifest).sources
                          .filter((src) => !File.Exists(File.Join(ide, src)));
-        check("every source in the installed project.json is there", gone.length === 0,
+        check("every source in the installed project.btp is there", gone.length === 0,
               gone.join(", "));
     }
 }
@@ -195,7 +197,7 @@ function contents(prefix) {
 function checkTool(prefix, work) {
     const runtime = File.Join(prefix, "bin", "bintana");
 
-    for (const rel of ["share/bintana/tools/check/project.json",
+    for (const rel of ["share/bintana/tools/check/project.btp",
                        "share/bintana/tools/check/Main.js",
                        "share/bintana/lib/check/Check.js",
                        "share/bintana/lib/check/ProjectFiles.js"])
@@ -203,7 +205,7 @@ function checkTool(prefix, work) {
 
     const bad = File.Join(work, "check-bad");
     Directory.Make(bad);
-    File.SaveJson(File.Join(bad, "project.json"),
+    File.SaveJson(File.Join(bad, "project.btp"),
                   { name: "check-bad", startup: "Main",
                     sources: ["Main.js", "Missing.js"] });
     File.Save(File.Join(bad, "Main.js"), "class Main extends Form {}\n");
@@ -229,7 +231,7 @@ function checkTool(prefix, work) {
 
     const good = File.Join(work, "check-good");
     Directory.Make(good);
-    File.SaveJson(File.Join(good, "project.json"),
+    File.SaveJson(File.Join(good, "project.btp"),
                   { name: "check-good", main: "Go", sources: ["Go.js"] });
     File.Save(File.Join(good, "Go.js"), "function Go() {}\n");
 
@@ -300,7 +302,7 @@ function pluginDev(prefix, work) {
 
     const proj = File.Join(work, "plugproj");
     Directory.Make(proj);
-    File.SaveJson(File.Join(proj, "project.json"),
+    File.SaveJson(File.Join(proj, "project.btp"),
                   { name: "stageplug", main: "Main", uses: ["testplug"] });
     File.Save(File.Join(proj, "Main.js"), `
 "use strict";
@@ -364,6 +366,12 @@ function entry(prefix) {
     } else {
         print("no desktop-file-validate: the entry is installed but unvalidated");
     }
+
+    /* The one line that ties the file type to this entry. Without it `%f`
+     * never receives a `.btp`, and the install is complete and useless. */
+    check("the entry opens .btp files",
+          entryValue(prefix, "MimeType").includes("application/x-bintana-project;"),
+          entryValue(prefix, "MimeType"));
 }
 
 /* Whatever `key=` says in the installed entry, or "" -- the localised
@@ -423,7 +431,10 @@ function opens(prefix, work, done) {
      * the whole reason the wait below is a timer. */
     const output = [];
     let ended = null;
-    const ide = Exec([File.Join(prefix, "bin", "bintana-ide"), project],
+    /* **The manifest file and not the directory**, which is what the desktop
+     * hands over (`%f`): the install is also the test of that road. */
+    const ide = Exec([File.Join(prefix, "bin", "bintana-ide"),
+                      File.Join(project, "project.btp")],
         {
             Environment: {
                 DISPLAY: server.name,
@@ -458,11 +469,11 @@ function opens(prefix, work, done) {
     const want = translated(prefix, "Bintana IDE -- {0}").replace("{0}", File.Name(project));
 
     /* The class the window is expected to have, read out of the installed
-     * `project.json` for the same reason the title is read out of the installed
+     * `project.btp` for the same reason the title is read out of the installed
      * catalogue: the question is whether the two installed halves agree, not
      * whether anybody remembers the string. */
     const ideId = (File.LoadJson(File.Join(prefix, "share", "bintana", "ide",
-                                           "project.json")) || {}).id || "";
+                                           "project.btp")) || {}).id || "";
     check("the installed IDE declares an application id", ideId !== "");
 
     let ticks = 0;

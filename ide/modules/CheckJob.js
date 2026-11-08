@@ -228,8 +228,12 @@ export class CheckJob {
     }
 
     fail(message) {
+        const file = !File.Exists(File.Join(this.ide.project, "project.btp")) &&
+                     File.Exists(File.Join(this.ide.project, "project.json"))
+                         ? "project.json" : "project.btp";
+
         this.ide.problems.report("project", [{
-            kind: "Error", file: "project.json", line: 0, text: message,
+            kind: "Error", file, line: 0, text: message,
         }]);
         this.ide.log(`${message}\n`);
         this.cleanup();

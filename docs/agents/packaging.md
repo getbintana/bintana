@@ -4,7 +4,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 ## Flatpak, and the packaging step
 
-**One identity runs through the whole chain.** `project.json`'s `id` becomes
+**One identity runs through the whole chain.** `project.btp`'s `id` becomes
 `Application.Id`; the runtime hands it to `GtkApplication` (Wayland's app id) and
 to the program name (X11's `WM_CLASS`), so it is the window's class; the
 project's `<id>.metainfo.xml` declares the same string; and a package installs

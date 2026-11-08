@@ -153,7 +153,7 @@ static JSValue notification_send(JSContext *ctx, JSValueConst this_val,
      * notifications of one program under, so it is asked for by name. */
     if (!g_application_get_application_id(G_APPLICATION(app->gapp)))
         return JS_ThrowPlainError(ctx, "%s: this project declares no `id` in "
-                                       "project.json, and a desktop notification "
+                                       "project.btp, and a desktop notification "
                                        "is sent in the name of one (for example "
                                        "\"org.example.MyApp\")", who);
 

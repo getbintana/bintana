@@ -47,7 +47,7 @@ A directory in `apps/` whose name is the application's, with one `app.json` --
 
 | | |
 |---|---|
-| `id` | the application id, which the project's `project.json` and its `<id>.metainfo.xml` also declare |
+| `id` | the application id, which the project's `project.btp` and its `<id>.metainfo.xml` also declare |
 | `repo` | where the source lives, reachable by the runner |
 | `ref` | the branch or tag to build. Absent means the default branch. A commit id is not a ref: put a tag on what you want |
 | `project` | the Bintana project inside that repository, packaged by `tools/pack.sh --nsis` |
@@ -63,7 +63,7 @@ F1 reference is in neither: it is `bintana-docs`, and without it F1 builds the
 topic from the runtime.
 
 **What the project needs** is what the packaging step asks for: an `id`, an
-`<id>.metainfo.xml` that agrees with `project.json`, and -- for the
+`<id>.metainfo.xml` that agrees with `project.btp`, and -- for the
 installer's own icon, the shortcuts' and the one in *Installed apps* --
 `icons/<id>.png`. An svg cannot be worn by NSIS: a project with only one
 builds, with the generic icon and a note in the log.
@@ -84,7 +84,7 @@ application. On every run:
 ## What it publishes
 
 A release named `<app>-<version>` (`project-0.3.1rc1`), the version being the
-project's own `project.json`, with
+project's own `project.btp`, with
 `<command>-<version>-windows-x86_64.exe` attached. A version with a letter in
 it is a **prerelease**, so the repository's *latest* stays on the last final
 one. A rebuild under the same version -- the runtime moved, the application did
@@ -100,7 +100,7 @@ Before anything is published, every setup this run built is **installed**,
 silently (`/S`, into a directory of the run's own), and the installed tree is
 run: `bin/bintana.exe --version`, which is the DLL closure, and one console
 project, which is the runtime working out of a tree that is not the build one.
-The launcher the shortcut points at and the application's `project.json` have
+The launcher the shortcut points at and the application's `project.btp` have
 to be where the script put them. A setup that installs a program that does not
 start is not released.
 

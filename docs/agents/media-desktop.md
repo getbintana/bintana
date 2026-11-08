@@ -309,7 +309,7 @@ Three more, measured with it:
 - **A project with no `id` sends nothing and is told nothing.** `gtk_application_new
   (NULL, …)` is what an id-less project gets, and `g_application_send_notification`
   answers with a `GLib-GIO-CRITICAL` assertion: five calls, zero on the bus. The
-  verb refuses, naming `project.json`'s `id`.
+  verb refuses, naming `project.btp`'s `id`.
 - **`High` and `Normal` are the same urgency on a freedesktop daemon** (hint byte
   1 for both; `Low` is 0 and `Urgent` is 2), because the protocol has three levels.
   The four stay, since a portal tells them apart, and the page says so. The test

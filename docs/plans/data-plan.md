@@ -18,7 +18,7 @@ it stands, is [at the end](#where-it-stands).
 
 What exists today is the bottom half: [`Record` and
 `Field`](https://github.com/getbintana/bintana-docs/blob/main/docs/runtime-api.md#record-and-field), and three consumers of them —
-[`project.json`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#projectjson-as-a-record) and **two forms over data
+[`project.btp`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#projectbtp-as-a-record) and **two forms over data
 written by hand**, on purpose, to find out what that costs.
 [`examples/quote`](../../examples/quote) is one over a JSON file and
 [`examples/clients`](../../examples/clients) is one over a sqlite table. What they
@@ -326,7 +326,7 @@ there — an error that today would wait until the program ran.
 
 `sales.conn`, a file in the tree with its own category, icon and dialog — declared
 the way `app.css` is, found by name, referenced by name. Not a section of
-`project.json`: that file says *what to run*, and a connection is a resource with
+`project.btp`: that file says *what to run*, and a connection is a resource with
 an editor of its own, of which there can be several.
 
 **`Record` and `Source` are orthogonal on purpose.** The shape says what a customer
@@ -478,7 +478,7 @@ list:
 
 | | |
 |---|---|
-| `sales.conn` | the connection as a project resource, with a category, an icon and a dialog. Not a section of `project.json` |
+| `sales.conn` | the connection as a project resource, with a category, an icon and a dialog. Not a section of `project.btp` |
 | `Form.Record` / `Form.Source` / `Control.DataField` | three ordinary properties, so all three are designable and serialisable with no other change — the invariant the runtime rests on. **all three are built** |
 | the drop-downs | `DataField` from the record's fields, `Source` from the declared connections' tables and the project's `.json` files, computed the way the grid's `Style` row already is |
 | the write-back | on `Activate` and `LostFocus`, with the error marked beside the field. It asks **`Validate()`** and never `Problems`, which is the report of a load and never clears |

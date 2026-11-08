@@ -3,7 +3,7 @@
  * where it starts, which libraries it uses, and in which order its code is
  * loaded.
  *
- * All of them are `project.json`, which the IDE already reads as a `ProjectFile`
+ * All of them are `project.btp`, which the IDE already reads as a `ProjectFile`
  * record -- so this dialog does not check anything itself.  It assigns to the
  * record and lets the setters refuse what they refuse, which is how the field
  * that is wrong gets named without this file knowing what the rules are.  Add a
@@ -293,7 +293,7 @@ export class ProjectForm extends Form {
             try {
                 this.record[name] = value;
             } catch (e) {
-                Message.Error("project.json was left alone:\n{0}", e.message);
+                Message.Error("project.btp was left alone:\n{0}", e.message);
                 return false;
             }
         }

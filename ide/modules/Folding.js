@@ -29,7 +29,7 @@
  * marker; two lines (`{` over `}`) fold to `{ … }`. Two blocks that open on
  * one line -- `[{` -- are one marker, for the outer.
  *
- * Only for `js`: a `.form` and a `project.json` are JSON that this editor shows
+ * Only for `js`: a `.form` and a `project.btp` are JSON that this editor shows
  * as a tab too, and folding them would be an answer to a question nobody asked
  * of a file the designer owns.
  */

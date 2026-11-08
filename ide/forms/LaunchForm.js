@@ -94,7 +94,7 @@ export class LaunchForm extends Form {
      * What is on screen, back into the record.
      *
      * Through the setters, so a refused value says what was wrong with it here
-     * rather than becoming a `project.json` that will not open. An empty line is
+     * rather than becoming a `project.btp` that will not open. An empty line is
      * not an argument and not a variable: a text box people type into ends up
      * with them.
      */

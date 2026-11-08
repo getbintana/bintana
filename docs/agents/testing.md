@@ -8,7 +8,7 @@ Seven Bintana projects are run by the suite — `ide`, `markdown`, `qr`, `report
 `smoke`, `widgets` and `xlsx` — each printing `N passed, M failed` and quitting with a
 non-zero status on failure. They are applications, not a harness — write
 assertions the way the suite already does. A project is any directory under
-`tests/` with a `project.json` that does not declare `main`, so adding one is
+`tests/` with a `project.btp` that does not declare `main`, so adding one is
 adding a directory: nothing lists them. (The console projects — `api`, `bench`, `formfuzz`, `icons`,
 `install`, `pack`, `runner`, `styles` — are tools and are driven by their own
 `.sh`.)
@@ -18,7 +18,7 @@ plugins the suite loads (`testplug.c` — the reference implementation
 `docs/plugins.md` points at — plus a no-entry-point one and `abi1/`, a frozen
 copy of the version-1 header). CMake builds them into
 `<build>/testlibs/<name>/<name>.so`, and `tests/widgets` copies one from beside
-the running binary into a scratch library. No `project.json`, so the runner
+the running binary into a scratch library. No `project.btp`, so the runner
 walks past it.
 
 **`tests/runner` is the suite's own runner, and it is a Bintana project too** —
@@ -29,13 +29,13 @@ runner reports as `Application.Executable`, so `BINTANA=<path>` needs nothing pa
 Do not grow the shell script back — the display, the hang guard, the filtering and
 the reporting all live in `tests/runner/Main.js`.
 
-`tests/ide` loads the **real** `ide/**/*.js` (see its `project.json`) and drives
+`tests/ide` loads the **real** `ide/**/*.js` (see its `project.btp`) and drives
 the IDE the way a user would. Its `.form` files are symlinks to the IDE's own,
 so the two cannot drift — and **a form added to the IDE is a symlink added
 here**, or the test project builds that dialog with no controls at all and the
 first assignment to one of them throws `cannot set property 'Text' of
-undefined`. The new `.js` has to go in `tests/ide/project.json`'s `sources` too
-**and in the IDE's own `ide/project.json`**: a file listed only in the test
+undefined`. The new `.js` has to go in `tests/ide/project.btp`'s `sources` too
+**and in the IDE's own `ide/project.btp`**: a file listed only in the test
 project's loads in the suite and is a `ReferenceError` in the real IDE —
 `RecordForm` answered *RecordForm is not defined* on the first double click —
 so `tests/ide` compares the two lists and names what is missing from either.

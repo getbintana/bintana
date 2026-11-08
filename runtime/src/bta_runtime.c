@@ -1439,7 +1439,7 @@ static bool is_class_path(const char *s)
 }
 
 /*
- * A class by name, which is how a .form names a type and how project.json names
+ * A class by name, which is how a .form names a type and how project.btp names
  * the startup form.
  *
  * Two ways a class can be reachable, and both have to work:
@@ -2387,11 +2387,11 @@ static bool install_globals(BtaApp *app)
     /* Application: the Gambas-ish ambient singleton. */
     JSValue application = JS_NewObject(ctx);
     /* Name
-     *   from `project.json`
+     *   from `project.btp`
      */
     JS_SetPropertyStr(ctx, application, "Name", JS_NewString(ctx, app->name));
     /*
-     * What the *application* calls its release, out of its own project.json --
+     * What the *application* calls its release, out of its own project.btp --
      * not the runtime's, which is `BTA_VERSION`. Every program that shows a
      * version had nowhere to read one from and had to write it down a second
      * time in its own source, which is the copy that goes stale. "" when the
@@ -2410,7 +2410,7 @@ static bool install_globals(BtaApp *app)
      * fault: the window then keeps the program's name, as it always did.
      */
     /* Id
-     *   from `project.json`: the application's identity in reverse DNS —
+     *   from `project.btp`: the application's identity in reverse DNS —
      *   `io.github.you.App`. It is **one name in three places**: the window's
      *   own class (the runtime hands it to `GtkApplication` for Wayland and
      *   to the program name for X11's `WM_CLASS`), the `<id>` of the
@@ -2642,7 +2642,7 @@ static bool install_globals(BtaApp *app)
      * name can be *resolved* one at a time, which is what a program that already
      * knows what it uses needs; **a tool that offers a choice needs the list**,
      * and the IDE had nowhere to get one -- so `uses` was the one thing in
-     * `project.json` that could only be written by hand.
+     * `project.btp` that could only be written by hand.
      *
      * Walking the six places is the runtime's business either way: the IDE
      * doing it would be the second copy of the search path that `LibraryPath`
@@ -3135,7 +3135,7 @@ static void collect_js(GPtrArray *out, const char *dir, bool root)
 /*
  * ------------------------------------------------------------------ libraries
  *
- * `"uses": ["charts"]` in project.json, and where a library by that name lives.
+ * `"uses": ["charts"]` in project.btp, and where a library by that name lives.
  *
  * **A library is a directory of `.js` and `.form` files.** No manifest, no
  * version, no dependency of its own: the thing a project is short of is a place
@@ -3255,7 +3255,7 @@ static GPtrArray *collect_libs(BtaApp *app, JSValueConst cfg)
             if (dir) {
                 g_ptr_array_add(out, dir);
             } else {
-                fprintf(stderr, "bintana: project.json uses \"%s\", which is not "
+                fprintf(stderr, "bintana: project.btp uses \"%s\", which is not "
                                 "in any of:%s\n", name, tried->str);
                 g_string_free(tried, TRUE);
                 JS_FreeCString(ctx, name);
@@ -3370,10 +3370,27 @@ static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * The manifest's path: `project.btp`, the project's one name, and the old
+ * `project.json` still read when it is the only one. The fallback is what lets
+ * a tree written before the rename run without being touched; the IDE is where
+ * one is migrated, and nothing new writes the old name.
+ */
+static char *project_manifest(const char *dir)
+{
+    char *path = g_build_filename(dir, "project.btp", NULL);
+
+    if (g_file_test(path, G_FILE_TEST_IS_REGULAR))
+        return path;
+
+    g_free(path);
+    return g_build_filename(dir, "project.json", NULL);
+}
+
+/*
  * A library's own `.js`: the order it loads them on the main thread, and the
  * subset a `Task` worker may import.
  *
- * **A library may carry a `project.json`, and two of its keys are read.**
+ * **A library may carry a `project.btp`, and two of its keys are read.**
  * `sources` orders the library's own files; one class needs no order and most
  * libraries will not have the file, but one whose classes extend each other
  * does -- `BarChart extends Chart` sorts the wrong way round by path, which is
@@ -3396,7 +3413,7 @@ static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
 static GPtrArray *library_list(JSContext *ctx, const char *dir, const char *key)
 {
     GPtrArray *out  = NULL;
-    char      *path = g_build_filename(dir, "project.json", NULL);
+    char      *path = project_manifest(dir);
     char      *text = NULL;
 
     if (g_file_test(path, G_FILE_TEST_IS_REGULAR))
@@ -3409,7 +3426,7 @@ static GPtrArray *library_list(JSContext *ctx, const char *dir, const char *key)
 
     if (JS_IsException(cfg)) {
         JS_FreeValue(ctx, JS_GetException(ctx));
-        fprintf(stderr, "bintana: %s/project.json is not JSON; loading its "
+        fprintf(stderr, "bintana: %s's project file is not JSON; loading its "
                         "files by path\n", dir);
     } else {
         JSValue arr = JS_GetPropertyStr(ctx, cfg, key);
@@ -3575,6 +3592,16 @@ BtaApp *bta_app_new(const char *project_dir)
 
     app->startup_form = JS_UNDEFINED;   /* not all-zero: g_new0 is not enough */
     app->dir = g_canonicalize_filename(project_dir, NULL);
+
+    /* A manifest handed over as a file (`bintana project.btp`) names the
+     * project by the directory it sits in; the file itself is read below. */
+    if (g_file_test(app->dir, G_FILE_TEST_IS_REGULAR)) {
+        char *parent = g_path_get_dirname(app->dir);
+
+        g_free(app->dir);
+        app->dir = parent;
+    }
+
     app->rt  = JS_NewRuntime();
     if (!app->rt) {
         fprintf(stderr, "bintana: out of memory: the runtime would not start\n");
@@ -3639,13 +3666,13 @@ BtaApp *bta_app_new(const char *project_dir)
     JS_SetRuntimeOpaque(app->rt, app);
     JS_SetContextOpaque(app->ctx, app);
 
-    /* Defaults, overridden by project.json below. */
+    /* Defaults, overridden by project.btp below. */
     app->name    = g_path_get_basename(app->dir);
     app->version = g_strdup("");
     app->id      = g_strdup("");
     app->startup = g_strdup("Form1");
 
-    char *cfg_path = g_build_filename(app->dir, "project.json", NULL);
+    char *cfg_path = project_manifest(app->dir);
     size_t len;
     char  *cfg_src = bta_read_file(cfg_path, &len);
 
@@ -3669,7 +3696,7 @@ BtaApp *bta_app_new(const char *project_dir)
             bool    bad = !JS_IsUndefined(idv) && !JS_IsString(idv);
             JS_FreeValue(app->ctx, idv);
             if (bad) {
-                fprintf(stderr, "bintana: project.json id is not a string: it "
+                fprintf(stderr, "bintana: project.btp id is not a string: it "
                                 "has to be a reverse-DNS name like "
                                 "org.example.App\n");
                 exit(2);
@@ -3678,7 +3705,7 @@ BtaApp *bta_app_new(const char *project_dir)
              * false would be two windows where one was asked for, in silence. */
             JSValue sv = JS_GetPropertyStr(app->ctx, cfg, "singleInstance");
             if (!JS_IsUndefined(sv) && !JS_IsBool(sv)) {
-                fprintf(stderr, "bintana: project.json singleInstance is not "
+                fprintf(stderr, "bintana: project.btp singleInstance is not "
                                 "true or false\n");
                 exit(2);
             }
@@ -3694,7 +3721,7 @@ BtaApp *bta_app_new(const char *project_dir)
         JS_FreeValue(app->ctx, cfg);
         g_free(cfg_src);
     } else {
-        fprintf(stderr, "bintana: no project.json in %s, using defaults\n", app->dir);
+        fprintf(stderr, "bintana: no project.btp in %s, using defaults\n", app->dir);
     }
     g_free(cfg_path);
 
@@ -3711,7 +3738,7 @@ BtaApp *bta_app_new(const char *project_dir)
      */
     if (app->id[0] && !g_application_id_is_valid(app->id)) {
         fprintf(stderr,
-                "bintana: project.json id \"%s\" is not an application id "
+                "bintana: project.btp id \"%s\" is not an application id "
                 "(a reverse-DNS name like org.example.App)\n", app->id);
         exit(2);
     }
@@ -3719,7 +3746,7 @@ BtaApp *bta_app_new(const char *project_dir)
     /* The id is what instances find each other by, so a project without one
      * cannot be single: refused, as a typo in the id is, and not ignored. */
     if (app->single && !app->id[0]) {
-        fprintf(stderr, "bintana: project.json singleInstance needs an id (a "
+        fprintf(stderr, "bintana: project.btp singleInstance needs an id (a "
                         "reverse-DNS name like org.example.App): it is the "
                         "name the instances find each other by\n");
         exit(2);
@@ -3828,7 +3855,7 @@ static void register_app_icons(BtaApp *app)
  * <project>/app.css is the application's own stylesheet: the classes a control
  * wears through `Style`, written once and worn by every control that needs
  * them.  It is the normal way an application says what it looks like, which is
- * why it is found by name and needs nothing in project.json -- the same bargain
+ * why it is found by name and needs nothing in project.btp -- the same bargain
  * <project>/icons makes.
  *
  * It loads at PRIORITY_APPLICATION: above the desktop's theme, so the sheet has
@@ -4129,7 +4156,7 @@ wait:
  * `--text-scale`, `--theme`, `--rtl`: the run made to look another way.
  *
  * All three are **settings of the toolkit, not of the project**, which is why
- * they are command-line options and not project.json keys: the same form is
+ * they are command-line options and not project.btp keys: the same form is
  * looked at under each, and what decides is whoever asked.
  *
  * - The text scale multiplies `gtk-xft-dpi`, which is what the desktop's own

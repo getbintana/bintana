@@ -601,7 +601,7 @@ export class Refactor {
         if (decl.Decl === "Field")
             return this.renameField(word, to, decl, rows);
         if (decl.Decl === "Class" && this.ide.classes.formOf(decl.File))
-            return { Refused: `${word} is a form -- F2 renames it, and moves its .form, its tab and project.json with it.` };
+            return { Refused: `${word} is a form -- F2 renames it, and moves its .form, its tab and project.btp with it.` };
 
         /*
          * Modules (docs/plans/modules-plan.md): a file with `export` keeps what

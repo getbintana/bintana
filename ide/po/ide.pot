@@ -1567,11 +1567,11 @@ msgid "Application id:"
 msgstr ""
 
 #: forms/MetainfoForm.form: TxtId.Tooltip
-msgid "From project.json, and the same string everywhere: edit it in Project settings"
+msgid "From project.btp, and the same string everywhere: edit it in Project settings"
 msgstr ""
 
 #: forms/MetainfoForm.form: TxtName.Tooltip
-msgid "From project.json: the name a software centre shows is the project's own"
+msgid "From project.btp: the name a software centre shows is the project's own"
 msgstr ""
 
 #: forms/MetainfoForm.form: LblSummary.Text
@@ -2520,7 +2520,7 @@ msgstr ""
 
 #: forms/MainForm.js:484
 msgid ""
-"{0} has no project.json.\n"
+"{0} has no project.btp.\n"
 "It can still be edited, but it will not be able to run."
 msgstr ""
 
@@ -2717,7 +2717,7 @@ msgstr ""
 #: forms/ProjectForm.js:301
 #: modules/Manifest.js:47
 msgid ""
-"project.json was left alone:\n"
+"project.btp was left alone:\n"
 "{0}"
 msgstr ""
 
@@ -3496,7 +3496,7 @@ msgstr ""
 
 #: modules/Manifest.js:38
 msgid ""
-"project.json could not be read:\n"
+"project.btp could not be read:\n"
 "{0}"
 msgstr ""
 
@@ -3505,12 +3505,12 @@ msgid "The project starts at {0}, which no longer exists. It will not be able to
 msgstr ""
 
 #: modules/Manifest.js:147
-msgid "{0} has no project.json to edit."
+msgid "{0} has no project.btp to edit."
 msgstr ""
 
 #: modules/Manifest.js:194
 msgid ""
-"project.json was saved, but {0} could not follow it:\n"
+"project.btp was saved, but {0} could not follow it:\n"
 "{1}"
 msgstr ""
 

@@ -11,7 +11,7 @@
  * is the part that has to work when the runtime does not -- a runner written in
  * Bintana cannot be what tells you that Bintana will not build.
  *
- * **This is a console project** (`"main"` in project.json): it opens no window
+ * **This is a console project** (`"main"` in project.btp): it opens no window
  * and needs no display, which is what lets it be the one that *decides* whether
  * the suite needs a virtual one.  The projects it runs are ordinary Bintana
  * applications and do need a display; finding them one is the job.
@@ -281,7 +281,7 @@ function chosen(only) {
  * anyway.
  */
 function isTestProject(name) {
-    const manifest = File.Join(TESTS, name, "project.json");
+    const manifest = File.Join(TESTS, name, "project.btp");
     if (!File.Exists(manifest)) return false;
 
     try {
@@ -289,7 +289,7 @@ function isTestProject(name) {
     } catch (e) {
         /* A manifest that cannot be read is a project that cannot run, and
          * saying so beats skipping it quietly. */
-        Logger.Warning(`${name}/project.json could not be read: ${e.message}`);
+        Logger.Warning(`${name}/project.btp could not be read: ${e.message}`);
         return false;
     }
 }

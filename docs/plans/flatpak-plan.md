@@ -57,14 +57,14 @@ Todo esto está medido en esta máquina (GNOME 50, GTK 4.22.4, flatpak 1.18.2):
 
 ## Decisiones
 
-- **`project.json` declara `id`** (reverse-DNS). El runtime lo valida con
+- **`project.btp` declara `id`** (reverse-DNS). El runtime lo valida con
   `g_application_id_is_valid` y rechaza el proyecto con una frase si no lo es.
 - **`Application.Id` se publica** y se usa como `application_id` de
   `GtkApplication`; además `g_set_prgname(id)`, porque X11 arma `WM_CLASS` con
   el nombre del programa y no mira el application_id (Wayland sí:
   `gdktoplevel-wayland.c`). Con eso `StartupWMClass` es el id en los dos.
 - **`<id>.metainfo.xml` es editable**, con `<id>` y `<name>` validados contra
-  `project.json`.
+  `project.btp`.
 - **El generador es `lib/package` + `tools/pack`**, no un verbo del runtime.
 - **Los ids son `io.github.getbintana.*`** hasta la publicación oficial; el
   repo comunitario (`flatpak.getbintana.org`) puede cambiarlos antes.
@@ -74,13 +74,13 @@ Todo esto está medido en esta máquina (GNOME 50, GTK 4.22.4, flatpak 1.18.2):
 
 ## Fase 1 — Identidad
 
-`project.json` gana `id`. El runtime lo lee en `bta_app_new`, lo valida y lo
+`project.btp` gana `id`. El runtime lo lee en `bta_app_new`, lo valida y lo
 publica como `Application.Id`; en `bta_app_run` crea la `GtkApplication` con ese
 id (y sin id, como hoy). El IDE lo pide al crear un proyecto, lo edita en
 `ProjectForm` y lo usa para la entrada de menú de `Apps.js`. Los `.desktop` del
 IDE pasan a `StartupWMClass=io.github.getbintana.Ide` y el comentario del
 `exec -a` de `tools/bintana-ide.in` se actualiza: con id, la clase la fija el
-runtime. `ide/project.json` y `examples/hello/project.json` declaran el suyo.
+runtime. `ide/project.btp` y `examples/hello/project.btp` declaran el suyo.
 
 ## Fase 2 — Atributos con namespace en `Xml`
 
@@ -97,7 +97,7 @@ patrón `PoForm`): lee con `File.LoadXml`, edita los campos comunes —id, nombr
 resumen, descripción con idiomas, developer, licencias, URLs, categorías,
 releases, launchable— y guarda con `File.SaveXml`, **preservando lo que no
 edita** (el DOM conserva elementos y atributos desconocidos). Valida que el
-`<id>` y el `<name>` sin idioma coincidan con `project.json`.
+`<id>` y el `<name>` sin idioma coincidan con `project.btp`.
 
 ## Fase 4 — El generador
 

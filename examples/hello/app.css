@@ -1,6 +1,6 @@
 /*
  * <project>/app.css -- what this application looks like, in the one place that
- * answers for it.  The runtime finds it by name: nothing in project.json points
+ * answers for it.  The runtime finds it by name: nothing in project.btp points
  * at it, the same bargain <project>/icons makes.
  *
  * A control wears a class from here by setting Style ("field-label", or

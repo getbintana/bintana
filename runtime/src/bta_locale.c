@@ -2,7 +2,7 @@
  * Locale -- the project's own translations, read from <project>/po/<lang>.po.
  *
  * Found by name, the way <project>/icons and <project>/app.css are: nothing in
- * project.json points at it, so nothing has to be configured for a project to
+ * project.btp points at it, so nothing has to be configured for a project to
  * become translatable.
  *
  * **The .po and not the .mo, on purpose.**  A project directory holds sources;

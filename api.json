@@ -13386,7 +13386,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "from `project.json`: the application's identity in reverse DNS — `io.github.you.App`. It is **one name in three places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, and the Flatpak app id. `\"\"` when the project declares none, which is an ordinary project classed by the program's name; a value that is not an application id **stops the program when the project loads**, because every one of those three is something nobody looks at until a dock shows the wrong icon",
+          "Doc": "from `project.btp`: the application's identity in reverse DNS — `io.github.you.App`. It is **one name in three places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, and the Flatpak app id. `\"\"` when the project declares none, which is an ordinary project classed by the program's name; a value that is not an application id **stops the program when the project loads**, because every one of those three is something nobody looks at until a dock shows the wrong icon",
           "Native": true
         },
         {
@@ -13422,7 +13422,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "from `project.json`",
+          "Doc": "from `project.btp`",
           "Native": true
         },
         {
@@ -15107,7 +15107,7 @@
           "Params": 2,
           "Signature": "(path, value)",
           "Returns": "",
-          "Doc": "one canonical shape: indented by two, one trailing newline. Every `.form` and every `project.json` in this tree is written by it, which is why a file saved by the IDE and one written by hand look the same. **What JSON cannot hold is refused**, naming where it is: `NaN`, `Infinity` and `-Infinity`, and `undefined` inside a list -- all of which `JSON.stringify` writes as `null` without a word. To write those nulls on purpose, `File.Save(path, JSON.stringify(value, null, 2))`",
+          "Doc": "one canonical shape: indented by two, one trailing newline. Every `.form` and every `project.btp` in this tree is written by it, which is why a file saved by the IDE and one written by hand look the same. **What JSON cannot hold is refused**, naming where it is: `NaN`, `Infinity` and `-Infinity`, and `undefined` inside a list -- all of which `JSON.stringify` writes as `null` without a word. To write those nulls on purpose, `File.Save(path, JSON.stringify(value, null, 2))`",
           "Native": false
         },
         {
@@ -20384,7 +20384,7 @@
               "Params": 1,
               "Signature": "(options)",
               "Returns": "",
-              "Doc": "builds the about box, shows it modal, and answers the shown window. The name, version and icon come out of `project.json` unless given; the summary, copyright and website are shown only when given, and the path of the runtime binary only when `Executable` is true. There is no callback: nothing is asked",
+              "Doc": "builds the about box, shows it modal, and answers the shown window. The name, version and icon come out of `project.btp` unless given; the summary, copyright and website are shown only when given, and the path of the runtime binary only when `Executable` is true. There is no callback: nothing is asked",
               "Native": false
             }
           ],

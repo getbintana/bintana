@@ -1346,7 +1346,7 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      * the lookups that walk the library path are the main thread's to answer. */
     JSValue application = JS_NewObject(ctx);
     /* Name
-     *   from `project.json`
+     *   from `project.btp`
      */
     JS_SetPropertyStr(ctx, application, "Name", JS_NewString(ctx, job->app_name));
     /* Version

@@ -21,7 +21,7 @@ class Form1 extends Form {
         /*
          * What the component shows, out of the two places that answer for it --
          * and they are two different questions. `Application.Name` and
-         * `Application.Version` are *this project's*, read out of project.json
+         * `Application.Version` are *this project's*, read out of project.btp
          * by the runtime, so neither is written down a second time here where it
          * would go stale. (`BTA_VERSION` is the runtime's own, which is what an
          * About box gets wrong until it knows the difference.)

@@ -119,6 +119,8 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/include/bintana/bta_plugin.h` | the only header a native plugin compiles against |
 | `<prefix>/lib*/pkgconfig/bintana.pc` | what points a compiler at that header |
 | `<prefix>/share/applications/` + `share/icons/` | the menu entry and its icon |
+| `<prefix>/share/mime/packages/bintana.xml` | `application/x-bintana-project`, the type of a `project.btp` |
+| `<prefix>/share/icons/hicolor/scalable/mimetypes/` | the type's icon, under the same drawing as the IDE |
 
 A packager who installs somewhere else stages it first, which needs no second
 configure — the two paths that resolve from the binary are relative hops:
@@ -133,11 +135,22 @@ somewhere writable before opening it in the IDE to edit.
 ```sh
 bintana-ide                              # the IDE, from the menu or a shell
 bintana-ide ~/my-project                 # ...opening a project
+bintana-ide ~/my-project/project.btp     # ...the way a double click hands it over
 bintana /usr/local/share/bintana/examples/hello
 bintana check ~/my-project                # what the IDE's Project -> Check finds
 bintana check --strict ~/my-project       # ...with warnings failing the run too
 bintana check --fix ~/my-project          # apply the unambiguous Label.For fixes
 bintana --version                        # the runtime's own release
+```
+
+A `project.btp` has its own type, declared by `share/mime/packages/bintana.xml`
+and claimed by the IDE's menu entry. A package's post-install has to refresh
+the databases (`update-mime-database` and `update-desktop-database`); the
+default handler is still the desktop's choice, and this makes the IDE this
+user's:
+
+```sh
+xdg-mime default bintana-ide.desktop application/x-bintana-project
 ```
 
 `bintana check` is the same project pass the IDE runs, from a shell: it reads
@@ -151,7 +164,7 @@ installed binary, so a staged or relocated prefix needs nothing.
 
 `bintana --version` is the runtime's release, which is also `BTA_VERSION` in a
 program and the `Version` of `bintana.pc`; an *application's* version is
-`Application.Version`, out of its own `project.json`.
+`Application.Version`, out of its own `project.btp`.
 
 **Per-user is the other half**, and it is not this install at all: a project can
 put *itself* in the user's menu from the IDE — *Project → Install as user

@@ -1400,7 +1400,7 @@ export class PropertyGrid {
     /*
      * What the Style drop-down offers: the classes the project's own stylesheet
      * declares, then the theme's.  app.css is found by name, exactly as the
-     * runtime finds it -- nothing in project.json points at it, so nothing here
+     * runtime finds it -- nothing in project.btp points at it, so nothing here
      * has to be configured either.
      *
      * Read fresh rather than cached: a class written into app.css in the editor

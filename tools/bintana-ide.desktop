@@ -5,7 +5,7 @@
 # wherever the install actually landed.
 #
 # `StartupWMClass` is what ties a window back to this file, and it is the IDE's
-# application id -- the string `ide/project.json` declares, which the runtime
+# application id -- the string `ide/project.btp` declares, which the runtime
 # hands to `GtkApplication` (Wayland's app id) and to the program name (X11's
 # `WM_CLASS`).  It used to be `bintana-ide`, the name the launcher started the
 # runtime under; the id is the same mechanism with the name the entry is
@@ -20,6 +20,7 @@ GenericName[es]=Diseñador de formularios
 Comment=Design forms and write the code behind them
 Comment[es]=Diseñá formularios y escribí el código detrás de ellos
 Exec=bintana-ide %f
+MimeType=application/x-bintana-project;
 Icon=bintana-ide
 Terminal=false
 Categories=Development;IDE;GUIDesigner;

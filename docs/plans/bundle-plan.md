@@ -65,11 +65,11 @@ archive** (extension `.bta`), project root at the archive root:
 | Source | In the bundle | How |
 |---|---|---|
 | every `.js` in `sources`, libraries `uses` vendored under `lib/<name>/` | `.jsc`, same path | compiled with the same flags loading uses (`GLOBAL \| STRICT`), `JS_WriteObject(BYTECODE \| STRIP_SOURCE)` with debug kept, so stacks still give file and line |
-| every `.form`; **every** `project.json` — the project's and each vendored library's — rewritten so `sources` names the `.jsc` | same name, `BINTANA-FORM64\n` + base64 / `BINTANA-JSON64\n` + base64 | same filenames on purpose (below) |
+| every `.form`; **every** `project.btp` — the project's and each vendored library's — rewritten so `sources` names the `.jsc` | same name, `BINTANA-FORM64\n` + base64 / `BINTANA-JSON64\n` + base64 | same filenames on purpose (below) |
 | `po/`, `icons/`, `app.css` | as they are, in clear | not logic; `bta_locale.c` reads `.po` as text, and clear text allows a translation fix without recompiling |
 | everything else in the tree: a `.db`, a `.png` outside `icons/`, a `.csv`, the `.so` a library carries (`docs/plugins.md`) | as it is, byte for byte, mode kept | **the table is not an allowlist.** A file nobody thought of is copied, never dropped, or a project loses data by being bundled — and a plugin's `.so` has to keep its bits, which is the one reason the ustar writer stores a mode at all |
 
-**Every `project.json` in a bundle carries an explicit `sources` list**, the
+**Every `project.btp` in a bundle carries an explicit `sources` list**, the
 project's and each vendored library's alike, because the fallback underneath is
 a trap: with no list — or an empty one, or one that would not parse —
 `collect_sources` and `lib_sources` fall through to `collect_js`
@@ -81,7 +81,7 @@ order it compiled it, and `collect_js` learns `.jsc` as well, so the two halves
 cannot drift apart. A project that ends up with no sources at all stops with a
 sentence rather than running empty.
 
-Keeping the `.form` and `project.json` names unchanged means `index_forms`
+Keeping the `.form` and `project.btp` names unchanged means `index_forms`
 (`bta_form.c`, suffix match on `.form`) and the whole `form_path` /
 namespace / ambiguity logic need no changes: the loader sniffs the magic
 first line and decodes before parsing. No compression in v1 (`.jsc` and forms
@@ -103,7 +103,7 @@ Two consequences of that temp dir, written down because a program can depend on
 either. **`Application.Directory` is the temp dir**, not where the `.bta` sits:
 whatever a project writes beside itself is written into something that is
 removed on the way out. The place that survives is `Application.ConfigDirectory`
-— named after `name` in project.json, created up front, and already the answer
+— named after `name` in project.btp, created up front, and already the answer
 for settings — so a bundled application keeps its state exactly where a source
 one does. And **a `SIGKILL` leaves the directory behind**: the name carries a
 fixed prefix so a later run can sweep what is more than a day old, because
@@ -122,7 +122,7 @@ nothing else is going to.
 - **`bta_runtime.c`**:
   - one helper, `bta_decode_if_b64()`, **declared in `bta.h`** because the
     three sites that parse JSON are not in one file: `bta_app_new`
-    (project.json) and `lib_sources` are here, `bta_form_build` is in
+    (project.btp) and `lib_sources` are here, `bta_form_build` is in
     `bta_form.c`;
   - `bta_eval_file`: a `.jsc` path goes through `JS_ReadObject(BYTECODE)` +
     `JS_EvalFunction`, everything else as today (a source project runs

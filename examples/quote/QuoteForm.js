@@ -83,7 +83,7 @@
  *
  * ## What else is worth reading for
  *
- *   - the shape is in `Quote.js` and `project.json` names it in `sources`
+ *   - the shape is in `Quote.js` and `project.btp` names it in `sources`
  *     **before** this file. `Quote`'s `static Fields` mentions `Line` while
  *     `Quote` is being declared, so the order is a real dependency and not a
  *     preference — the same one `extends` creates, from a static field.

@@ -571,6 +571,14 @@ install(FILES tools/bintana-ide.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES tools/bintana-ide.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
+# The project file's type, so a desktop hands `project.btp` to the IDE; the
+# IDE's own drawing is reused under the MIME name, because a file manager looks
+# for it in the mimetypes context and not in apps.
+install(FILES tools/bintana.xml
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages)
+install(FILES tools/bintana-ide.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/mimetypes
+        RENAME application-x-bintana-project.svg)
 
 install(FILES README.md LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
 install(DIRECTORY docs/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs)

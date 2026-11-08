@@ -228,7 +228,7 @@ TypeError: no 'Txt' to assign: the object is not extensible
 
 ## Where the switch lives
 
-Not `project.json`: it is a property of the **run**, not of the project. A flag
+Not `project.btp`: it is a property of the **run**, not of the project. A flag
 on the command line, off unless asked for -- `bintana` is what the IDE spawns, so
 it is one argument.
 

@@ -22,7 +22,7 @@
  *   Designer      the form designer (and the three panels beside it)
  *   Finder        the find bar
  *   Runner        running the project, and reading what it printed
- *   Manifest      project.json, and everything that writes to it
+ *   Manifest      project.btp, and everything that writes to it
  *
  * The one-line delegations below are that surface: they are what the helpers call
  * each other through, and what `tests/ide` drives by name.
@@ -38,7 +38,7 @@
  * the text clickable; the pane is an ordinary `TextEditor` now, so it is only
  * ever a JavaScript regex -- see `Runner.linkAt`.
  */
-export const SOURCE_LINK = "[\\w./+-]+\\.(?:js|form|json):\\d+";
+export const SOURCE_LINK = "[\\w./+-]+\\.(?:js|form|btp|json):\\d+";
 
 /* What the output pane keeps, in characters. Long enough for a traceback and
  * the output that led to it; short enough that a runaway `print` is a bounded
@@ -248,7 +248,7 @@ export class MainForm extends Form {
      */
     finder    = new Finder(this);        // the find bar
     runner    = new Runner(this);        // running the project, and its output
-    manifest  = new Manifest(this);      // project.json
+    manifest  = new Manifest(this);      // project.btp
     launch    = new Launch(this);        // how this project is run, in three places
     classes   = new Classes(this);       // what the project holds, and its names
     binding   = new Binding(this);       // the record shapes a form can edit
@@ -430,7 +430,14 @@ export class MainForm extends Form {
 
         const arg = Application.Arguments[0];
         if (arg) {
-            this.openProject(arg);
+            /*
+             * A `.btp` is what the desktop hands over -- `%f` in the menu
+             * entry, which is how a double click opens the project. The file's
+             * directory is the project; a directory stays what it always was.
+             */
+            const path = File.Absolute(arg);
+            if (File.IsDir(path) || !File.Exists(path)) this.openProject(path);
+            else this.openProject(File.Join(path, ".."));
         } else {
             /* The welcome page says the rest; the log keeps the version,
              * which is the one thing it says that a button cannot. */
@@ -475,8 +482,9 @@ export class MainForm extends Form {
          * project directory as its cwd, and a relative path would stop
          * resolving from there. */
         dir = File.Absolute(dir);
-        if (!File.Exists(File.Join(dir, "project.json"))) {
-            Message.Warning("{0} has no project.json.\nIt can still be edited, but it will not be able to run.", File.Name(dir));
+        if (!File.Exists(File.Join(dir, "project.btp")) &&
+            !File.Exists(File.Join(dir, "project.json"))) {
+            Message.Warning("{0} has no project.btp.\nIt can still be edited, but it will not be able to run.", File.Name(dir));
         }
 
         /* Before the tabs go: what was open in the project being left is that
@@ -777,7 +785,8 @@ export class MainForm extends Form {
     }
 
     createProject(dir, description, console, id) {
-        if (File.Exists(File.Join(dir, "project.json"))) {
+        if (File.Exists(File.Join(dir, "project.btp")) ||
+            File.Exists(File.Join(dir, "project.json"))) {
             Message.Error("{0} is already a project.", File.Name(dir));
             return false;
         }
@@ -805,7 +814,7 @@ export class MainForm extends Form {
             Description: description || "",
         });
 
-        File.SaveJson(File.Join(dir, "project.json"), config);
+        File.SaveJson(File.Join(dir, "project.btp"), config);
 
         /* A project that declares an id gets its metainfo from the start: it is
          * part of what the project *is*, and creating it later is a step nobody
@@ -855,7 +864,7 @@ export class MainForm extends Form {
             Description: description || "",
         });
 
-        File.SaveJson(File.Join(dir, "project.json"), config);
+        File.SaveJson(File.Join(dir, "project.btp"), config);
         if (id) Metainfo.create(dir, config);
         File.Save(File.Join(dir, "Main.js"), MAIN_JS);
 
@@ -878,7 +887,7 @@ export class MainForm extends Form {
 
 
 
-    /* --------------------------------------------------------- project.json */
+    /* --------------------------------------------------------- project.btp */
 
     /*
      * The manifest is `Manifest`, and every write to it goes through its one
@@ -902,11 +911,11 @@ export class MainForm extends Form {
      *
      * `Apps` owns the entry and the runtime owns the format; what this does
      * is hand the dialog the manifest it starts on -- a project whose
-     * `project.json` declares a name has it filled in already -- and keep the
+     * `project.btp` declares a name has it filled in already -- and keep the
      * dialog so `tests/ide` can drive it, the way `editSettings` keeps the
      * project editor.
      *
-     * A project.json that cannot be read is not a reason to refuse: the dialog
+     * A project.btp that cannot be read is not a reason to refuse: the dialog
      * is where a name is typed, and the entry does not need the manifest at all.
      * It starts empty instead of quoting a file that is broken.
      */
@@ -1655,7 +1664,7 @@ export class MainForm extends Form {
      * The metainfo: the AppStream file a package, an installer and a software
      * centre read.  The dialog writes a minimal one when the project has none,
      * so this is also how a project gets its first -- and the file is in the
-     * tree beside `project.json` from then on, where the raw tab edits it.
+     * tree beside `project.btp` from then on, where the raw tab edits it.
      */
     MnuMetainfo_Click() { this.editMetainfo(); }
 
@@ -3365,7 +3374,7 @@ export class MainForm extends Form {
      * -- and the folder is asked with the desktop's own chooser rather than a
      * path typed into a box. What lands is opened as a project, which is what
      * somebody cloning one wanted; a clone of something that is not a Bintana
-     * project opens anyway and says it has no `project.json`, which is the
+     * project opens anyway and says it has no `project.btp`, which is the
      * sentence `openProject` already has.
      */
     MnuGitClone_Click() {

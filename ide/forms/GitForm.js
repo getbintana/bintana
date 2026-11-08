@@ -267,7 +267,7 @@ export class GitForm extends Form {
     }
 
     languageOf(path) {
-        const by = { js: "js", json: "json", form: "json", css: "css",
+        const by = { js: "js", json: "json", btp: "json", form: "json", css: "css",
                      md: "markdown", c: "c", h: "c", sh: "sh", po: "", pot: "" };
         return by[File.Extension(path).toLowerCase()] || "";
     }

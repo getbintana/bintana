@@ -4,7 +4,7 @@
  *
  *     Settings, global          a *suggestion*: what a new configuration
  *                               should start with. Read when one is made.
- *     project.json              the configurations themselves, named and
+ *     project.btp              the configurations themselves, named and
  *                               versioned: arguments, directory, environment.
  *     Settings, per project     which one is chosen right now.
  *
@@ -50,7 +50,7 @@ export class Launch {
     /*
      * Every configuration this project declares, as records.
      *
-     * Read through the manifest rather than kept, because `project.json` is
+     * Read through the manifest rather than kept, because `project.btp` is
      * edited by this window, by the project dialog, and by whoever opens it in
      * an editor -- a copy here would be a fourth opinion about a file three
      * things already write.

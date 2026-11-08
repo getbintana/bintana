@@ -7,7 +7,7 @@
  * anything else live. Neither loses what the other wrote -- the DOM keeps what
  * it is not asked about, and this form only touches the primary elements.
  *
- * **The id and the name are shown and not edited.** They are `project.json`'s
+ * **The id and the name are shown and not edited.** They are `project.btp`'s
  * -- the window's class, the package's name and what a software centre shows
  * are one identity -- and `Metainfo.write` takes them from the record on
  * every save, so the two files cannot drift while this is the writer. Editing

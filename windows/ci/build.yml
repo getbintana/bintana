@@ -285,7 +285,7 @@ jobs:
         run: |
           set -euo pipefail
           smoke=$(mktemp -d)
-          cat > "$smoke/project.json" <<'EOF'
+          cat > "$smoke/project.btp" <<'EOF'
           {
               "name": "smoke",
               "main": "Main",
@@ -315,7 +315,7 @@ jobs:
               echo "-- $name: $(basename "$setup")"
               MSYS2_ARG_CONV_EXCL='*' "$setup" /S "/D=$(cygpath -w "$into")"
               test -f "$into/bin/$cmd.cmd"
-              test -f "$into/share/bintana/apps/$cmd/project.json"
+              test -f "$into/share/bintana/apps/$cmd/project.btp"
               test -f "$into/Uninstall.exe"
               objdump -p "$into/bin/bintanaw.exe" | grep -q 'Windows GUI'
               # Adwaita inherits AdwaitaLegacy, where its full-colour icons are.
@@ -372,8 +372,8 @@ jobs:
           print(f"{src}/{app['project']} {commit}")
           EOF
               )
-              title=$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["name"])' "$src/project.json")
-              version=$(python -c 'import json,sys;print(json.load(open(sys.argv[1])).get("version","0.0"))' "$src/project.json")
+              title=$(python -c 'import json,sys;print(json.load(open(sys.argv[1]))["name"])' "$src/project.btp")
+              version=$(python -c 'import json,sys;print(json.load(open(sys.argv[1])).get("version","0.0"))' "$src/project.btp")
               tag="$name-$version"
               runtime=$(git -C sources/bintana rev-parse HEAD)
               repo=$(python -c 'import json,sys;print(json.load(open(sys.argv[1])).get("repo","https://github.com/getbintana/bintana"))' "$entry")

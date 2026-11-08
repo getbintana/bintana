@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  `project.btp`: a Bintana project as one file the desktop can hand to the IDE.
+
+  The type is a subclass of JSON because that is what the file is, so an editor
+  that opens JSON still opens it. The glob is what keeps the association from
+  claiming every `.json` on the machine. The icon is the IDE's, installed under
+  this name by CMake; a file manager that has no drawing for the type shows a
+  generic page instead.
+
+  The default handler is not decided here: the MIME database says what the file
+  is, and `bintana-ide.desktop` says it opens it. `xdg-mime default` (or the
+  desktop's own chooser) is what makes it the one a double click runs.
+-->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-bintana-project">
+    <comment>Bintana project</comment>
+    <comment xml:lang="es">Proyecto Bintana</comment>
+    <icon name="application-x-bintana-project"/>
+    <glob pattern="*.btp"/>
+    <sub-class-of type="application/json"/>
+  </mime-type>
+</mime-info>

@@ -1,5 +1,5 @@
 /*
- * `project.json`, and everything that writes to it.
+ * `project.btp`, and everything that writes to it.
  *
  * One funnel -- `update` -- reads the file as a [`ProjectFile`](../../lib/check/ProjectFile.js),
  * hands it to a mutator and writes it back.  So what the file may say is the
@@ -18,7 +18,18 @@ export class Manifest {
         this.ide = ide;
     }
 
-    get path() { return File.Join(this.ide.project, "project.json"); }
+    /*
+     * `project.btp`, or the `project.json` a project written before the rename
+     * still has. Resolving it here and not at every caller is what keeps a
+     * save from writing a second manifest beside the old one.
+     */
+    get path() {
+        const path = File.Join(this.ide.project, "project.btp");
+        if (File.Exists(path)) return path;
+
+        const old = File.Join(this.ide.project, "project.json");
+        return File.Exists(old) ? old : path;
+    }
 
     /*
      * The mutator returning false means nothing changed, so nothing is written: an
@@ -35,7 +46,7 @@ export class Manifest {
         try {
             config = ProjectFile.Load(File.LoadJson(this.path));
         } catch (e) {
-            Message.Warning("project.json could not be read:\n{0}", e.message);
+            Message.Warning("project.btp could not be read:\n{0}", e.message);
             return null;
         }
 
@@ -44,7 +55,7 @@ export class Manifest {
         } catch (e) {
             /* A refused assignment says what was wrong with the value; saying it
              * beats writing a manifest that would not open. */
-            Message.Error("project.json was left alone:\n{0}", e.message);
+            Message.Error("project.btp was left alone:\n{0}", e.message);
             return config;
         }
 
@@ -128,7 +139,7 @@ export class Manifest {
          * that.
          */
         for (const problem of config.Problems.concat(config.Validate())) {
-            this.ide.log(`project.json: ${problem}\n`);
+            this.ide.log(`project.btp: ${problem}\n`);
         }
     }
 
@@ -144,7 +155,7 @@ export class Manifest {
 
         const config = this.read();
         if (!config) {
-            Message.Warning("{0} has no project.json to edit.", File.Name(ide.project));
+            Message.Warning("{0} has no project.btp to edit.", File.Name(ide.project));
             return;
         }
 
@@ -191,7 +202,7 @@ export class Manifest {
         try {
             to = Metainfo.rename(ide.project, edited.Id || Metainfo.read(File.LoadXml(from)).Id, edited.Name);
         } catch (e) {
-            Message.Error("project.json was saved, but {0} could not follow it:\n{1}",
+            Message.Error("project.btp was saved, but {0} could not follow it:\n{1}",
                           File.Name(from), e.message);
             return;
         }
@@ -248,7 +259,7 @@ export class Manifest {
                    .filter((f) => File.IsExtension(f, "js")).sort();
     }
 
-    /* Answers whether `project.json` was written: a refused field, or a file
+    /* Answers whether `project.btp` was written: a refused field, or a file
      * that could not be read, is `false`, and was already said. */
     apply(edited) {
         let written = false;
@@ -282,7 +293,7 @@ export class Manifest {
 
         /* The tree marks the startup form, and the name may have moved. */
         this.ide.listFiles();
-        this.ide.log("project.json saved\n");
+        this.ide.log("project.btp saved\n");
         return true;
     }
 

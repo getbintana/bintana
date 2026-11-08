@@ -1203,7 +1203,7 @@ class ReportTest extends Form {
         /* A `main` project: no GTK, no display, no widget -- and a PDF. */
         const dir = at("console");
         Directory.Make(dir);
-        File.Save(File.Join(dir, "project.json"), JSON.stringify({
+        File.Save(File.Join(dir, "project.btp"), JSON.stringify({
             id: "ar.test.ReportConsole", main: "Main", uses: ["report", "charts"], sources: ["Main.js"],
         }));
         File.Save(File.Join(dir, "Main.js"), `

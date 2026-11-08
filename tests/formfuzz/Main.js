@@ -2,7 +2,7 @@
  * Mutation fuzzing for the `.form` loader.
  *
  * A console project, so it needs no display and can be driven by
- * `tests/formfuzz.sh`. Every case writes a complete project -- `project.json`,
+ * `tests/formfuzz.sh`. Every case writes a complete project -- `project.btp`,
  * a form class that prints `OPEN` and quits, and the mutated `.form` -- and
  * runs the runtime on it as a child, because the loader runs at startup and a
  * crash there is what the fuzzing is for.
@@ -232,7 +232,7 @@ function main() {
         Directory.DeleteTree(dir);
     Directory.Make(dir);
 
-    File.SaveJson(File.Join(dir, "project.json"),
+    File.SaveJson(File.Join(dir, "project.btp"),
                   { name: "formfuzz", startup: "F", sources: ["F.js"] });
     write("class F extends Form {\n" +
           "    Form_Open() { print('OPEN ' + this.Controls.length); Application.Quit(0); }\n" +

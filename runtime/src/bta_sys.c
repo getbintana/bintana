@@ -3754,7 +3754,7 @@ static bool dialog_set_filters(JSContext *ctx, GtkFileDialog *dlg,
     JS_FreeValue(ctx, lenv);
 
     /* An empty list is not a complaint: it means the same as no `Filters` at
-     * all, which is the rule `sources` in a project.json already follows. */
+     * all, which is the rule `sources` in a project.btp already follows. */
     if (n == 0)
         return true;
 

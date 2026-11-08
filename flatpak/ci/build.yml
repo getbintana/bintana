@@ -174,7 +174,7 @@ jobs:
           set -euo pipefail
 
           smoke=$(mktemp -d)
-          cat > "$smoke/project.json" <<'EOF'
+          cat > "$smoke/project.btp" <<'EOF'
           {
               "name": "smoke",
               "main": "Main",

@@ -7,7 +7,7 @@
  * the file of the task class and what that file imports, and nothing else, so
  * a helper the reader needs is reached through an `import` and not by being in
  * the project (docs/plans/modules-plan.md, stage 3).  It is not in
- * `project.json`'s `sources` either: the import is what loads it.
+ * `project.btp`'s `sources` either: the import is what loads it.
  */
 
 export const RELS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";

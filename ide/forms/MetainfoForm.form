@@ -55,7 +55,7 @@
                 "HAlign": "Fill",
                 "HExpand": true,
                 "ReadOnly": true,
-                "Tooltip": "From project.json, and the same string everywhere: edit it in Project settings"
+                "Tooltip": "From project.btp, and the same string everywhere: edit it in Project settings"
               }
             },
             {
@@ -74,7 +74,7 @@
                 "HAlign": "Fill",
                 "HExpand": true,
                 "ReadOnly": true,
-                "Tooltip": "From project.json: the name a software centre shows is the project's own"
+                "Tooltip": "From project.btp: the name a software centre shows is the project's own"
               }
             },
             {

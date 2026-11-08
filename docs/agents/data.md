@@ -66,7 +66,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   to do, since `ProjectFile.Validate()` is where "declare a startup or a main"
   lives and no single field is wrong when neither is there.
 - **A static field that names a class is a load-order dependency, and it does not
-  look like one.** `sources` in `project.json` was documented as mattering "only
+  look like one.** `sources` in `project.btp` was documented as mattering "only
   when one class extends another of the same project", and that was one case of
   two: `Lines: Field.List(Line)` in a `Record` runs while `Quote` is being
   declared, so a `Quote.js` listed before `Line`'s file fails with

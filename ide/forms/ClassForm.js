@@ -30,7 +30,7 @@ const SHEET_HEADER =
     " * <project>/app.css -- what this application looks like.\n" +
     " *\n" +
     " * A control wears a class from here by setting Style. The runtime finds this\n" +
-    " * file by name: nothing in project.json points at it.\n" +
+    " * file by name: nothing in project.btp points at it.\n" +
     " */\n";
 
 export class ClassForm extends Form {

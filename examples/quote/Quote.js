@@ -13,7 +13,7 @@
  *
  * It used to be one file with the fields in it, and the order of the two
  * classes **mattered**: `static Fields = { … Field.List(Line) }` ran while
- * `Quote` was being declared, so `Line` had to exist by then, and `project.json`
+ * `Quote` was being declared, so `Line` had to exist by then, and `project.btp`
  * listed the file ahead of the form for that reason. The file's `of` names a
  * class and resolves it **the first time the field is used**, so the order is
  * no longer something anybody can get wrong -- neither in this file nor between

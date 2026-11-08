@@ -325,7 +325,7 @@ class TestForm extends Form {
         const dir = File.Join(Environment.TempDirectory,
                               `bta-smoke-tests-${Environment.ProcessId}`);
         Directory.Make(File.Join(dir, "tests"));
-        const write = (shape) => File.Save(File.Join(dir, "project.json"),
+        const write = (shape) => File.Save(File.Join(dir, "project.btp"),
             JSON.stringify(shape === "main"
                 ? { name: "smoke-tests", main: "Go" }
                 : { name: "smoke-tests", startup: "Main" }));
@@ -417,7 +417,7 @@ class TestForm extends Form {
         try {
             /* An error, a warning that is not one, and a file the manifest
              * forgot: the three shapes the pass exists for. */
-            write("project.json", JSON.stringify({
+            write("project.btp", JSON.stringify({
                 name: "smoke-check", startup: "Main",
                 sources: ["Main.js", "Missing.js"], nonsense: true,
             }));
@@ -454,7 +454,7 @@ class TestForm extends Form {
                   JSON.stringify(rows.slice(0, 3)));
             check("each names kind, file, line and text",
                   rows.some((r) => r.Event === "Finding" && r.Kind === "Error" &&
-                                   r.File === "project.json" && r.Line === 0 &&
+                                   r.File === "project.btp" && r.Line === 0 &&
                                    r.Text.includes("Missing.js")),
                   JSON.stringify(rows.slice(0, 3)));
             const done = rows.find((r) => r.Event === "Done");
@@ -464,7 +464,7 @@ class TestForm extends Form {
 
             /* Warnings alone are a green run unless the caller asked for the
              * other answer. */
-            write("project.json", JSON.stringify({
+            write("project.btp", JSON.stringify({
                 name: "smoke-check", startup: "Main", sources: ["Main.js"],
             }));
             write("Main.js", "class Main extends Form { Form_Open() {} }\n");
@@ -544,7 +544,7 @@ class TestForm extends Form {
              * check threw on it, reported one false error for the file and
              * lost its real finding -- the `Clik` below.
              */
-            write("project.json", JSON.stringify({
+            write("project.btp", JSON.stringify({
                 name: "smoke-check", startup: "Main", sources: ["Main.js"],
             }));
             write("Main.js",
@@ -575,7 +575,7 @@ class TestForm extends Form {
             File.Delete(comps);
 
             /* A clean project says nothing at all. */
-            write("project.json", JSON.stringify({
+            write("project.btp", JSON.stringify({
                 name: "smoke-check", main: "Go", sources: ["Go.js"],
             }));
             write("Go.js", "function Go() {}\n");
@@ -604,7 +604,7 @@ class TestForm extends Form {
         const dir = File.Join(Environment.TempDirectory,
                               `bta-smoke-look-${Environment.ProcessId}`);
         Directory.Make(dir);
-        File.Save(File.Join(dir, "project.json"),
+        File.Save(File.Join(dir, "project.btp"),
                   JSON.stringify({ name: "smoke-look", startup: "First",
                                    singleInstance: true, id: "org.bintana.SmokeLook",
                                    sources: ["Look.js"] }));
@@ -671,7 +671,7 @@ class TestForm extends Form {
                               `bta-smoke-exit-${Environment.ProcessId}`);
 
         Directory.Make(dir);
-        File.Save(File.Join(dir, "project.json"),
+        File.Save(File.Join(dir, "project.btp"),
                   JSON.stringify({ name: "smoke-exit", main: "Main", version: "1.0",
                                    sources: ["Main.js"] }));
 
@@ -711,7 +711,7 @@ class TestForm extends Form {
         const mark = `29.${Environment.ProcessId % 1000}`;
 
         Directory.Make(dir);
-        File.Save(File.Join(dir, "project.json"),
+        File.Save(File.Join(dir, "project.btp"),
                   JSON.stringify({ name: "smoke-teardown", main: "Main", version: "1.0",
                                    sources: ["Sleeper.js", "Main.js"] }));
         File.Save(File.Join(dir, "Sleeper.js"),

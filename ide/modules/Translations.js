@@ -81,7 +81,7 @@ const PLURAL_DEFAULT = "nplurals=2; plural=(n != 1);";
  * nothing will ever load, and saying so when it is typed beats never. */
 const LOCALE_NAME = /^[a-z]{2,3}(_[A-Za-z]{2,4})?$/;
 
-/* Where the chosen one is remembered.  `Settings` and not `project.json`: a path
+/* Where the chosen one is remembered.  `Settings` and not `project.btp`: a path
  * to a program on this machine is not a property of the project, and putting it
  * in the manifest would commit one person's setup to everybody's checkout. */
 const PO_EDITOR_KEY = "translationEditor";

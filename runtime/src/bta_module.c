@@ -1077,7 +1077,7 @@ static char *module_normalize(JSContext *ctx, const char *base,
             return js_strdup_c(ctx, spec);
         char *from = g_path_get_basename(base);
         JS_ThrowReferenceError(ctx, "%s imports '%s', and no library of that "
-                               "name is in project.json's \"uses\" -- add it "
+                               "name is in project.btp's \"uses\" -- add it "
                                "there, or write a file as a path (\"./%s.js\")",
                                from, spec, spec);
         g_free(from);
@@ -1263,7 +1263,7 @@ static JSModuleDef *load_library1(JSContext *ctx, ModState *st,
     if (!text->len) {
         g_string_free(text, TRUE);
         if (declared)
-            JS_ThrowReferenceError(ctx, "import from '%s': its project.json "
+            JS_ThrowReferenceError(ctx, "import from '%s': its project.btp "
                                    "declares no \"worker\" files -- a Task can "
                                    "only import what the library lists there",
                                    name);

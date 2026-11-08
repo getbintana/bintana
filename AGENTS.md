@@ -40,7 +40,7 @@ previous prelude and every assertion that should fail passes.
 `tests/run.sh` warns when a source is newer than the binary.
 
 There is no Python in the repository. A desk tool is a Bintana console
-project (`"main"` in `project.json`) with a short `.sh` in front of it.
+project (`"main"` in `project.btp`) with a short `.sh` in front of it.
 
 ## Build
 
@@ -143,7 +143,7 @@ Three repositories, and a change crosses them in one direction:
 | a widget's property, method or event | **its description in the comment above its C entry**, then `./tools/apijson.sh`; the row in `bintana-docs` is generated from it |
 | a library in `lib/` | a JSDoc comment on the declaration, `./tools/apijson.sh`, and its page `docs/llm/<library>.md` in `bintana-docs` |
 | a global (`File`, `Exec`, `Locale` …) | `api.json`, plus `runtime-api.md`/`llm/library.md` in `bintana-docs` and its section in that repo's `check/Check.js` |
-| the `.form`, `project.json` or the serialiser | `formats.md` and `llm/forms.md` in `bintana-docs` |
+| the `.form`, `project.btp` or the serialiser | `formats.md` and `llm/forms.md` in `bintana-docs` |
 | what `cmake --install` lays down | [`docs/installing.md`](docs/installing.md), and `tests/install.sh` must pass |
 | the plugin ABI or loader | [`docs/plugins.md`](docs/plugins.md); `tests/plugins/testplug.c` is the reference |
 | how a widget, property or event is added | [`docs/extending.md`](docs/extending.md) |
@@ -193,8 +193,8 @@ C, check whether the thing is expressible as a Bintana form (`AskForm` and
   No folder name is a namespace.
 - **`tests/ide` loads the real `ide/**/*.js`.** Its `.form` files are symlinks
   to the IDE's own: a form added to the IDE is a symlink added there, and its
-  `.js` goes in **both** `tests/ide/project.json`'s `sources` and the IDE's own
-  `ide/project.json`'s -- a file listed only in the test project's loads in the
+  `.js` goes in **both** `tests/ide/project.btp`'s `sources` and the IDE's own
+  `ide/project.btp`'s -- a file listed only in the test project's loads in the
   suite and is a `ReferenceError` in the real IDE (`RecordForm` was exactly
   that), and `tests/ide` compares the two lists now.
 - **The workspace (palette, tree, canvas or editor, property grid) is built per
@@ -327,7 +327,7 @@ Each of these was paid for; the evidence is in the linked file.
 ## Tests
 
 Seven Bintana projects under `tests/` are the suite (`ide`, `markdown`, `qr`,
-`report`, `smoke`, `widgets`, `xlsx`); a directory with a `project.json` that
+`report`, `smoke`, `widgets`, `xlsx`); a directory with a `project.btp` that
 does not declare `main` is a test project, and nothing lists them. Write
 assertions the way the suite already does. Details and traps:
 [`docs/agents/testing.md`](docs/agents/testing.md).

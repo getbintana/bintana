@@ -1491,17 +1491,17 @@ msgstr "Id de la aplicación:"
 
 #: forms/MetainfoForm.form: TxtId.Tooltip
 msgid ""
-"From project.json, and the same string everywhere: edit it in Project "
+"From project.btp, and the same string everywhere: edit it in Project "
 "settings"
 msgstr ""
-"Sale de project.json, y es el mismo texto en todos lados: se edita en "
+"Sale de project.btp, y es el mismo texto en todos lados: se edita en "
 "Propiedades del proyecto"
 
 #: forms/MetainfoForm.form: TxtName.Tooltip
 msgid ""
-"From project.json: the name a software centre shows is the project's own"
+"From project.btp: the name a software centre shows is the project's own"
 msgstr ""
-"Sale de project.json: el nombre que muestra un centro de software es el del "
+"Sale de project.btp: el nombre que muestra un centro de software es el del "
 "proyecto"
 
 #: forms/MetainfoForm.form: LblSummary.Text
@@ -2513,10 +2513,10 @@ msgstr ""
 
 #: forms/MainForm.js:484
 msgid ""
-"{0} has no project.json.\n"
+"{0} has no project.btp.\n"
 "It can still be edited, but it will not be able to run."
 msgstr ""
-"{0} no tiene project.json.\n"
+"{0} no tiene project.btp.\n"
 "Se puede editar igual, pero no va a poder ejecutarse."
 
 #: forms/MainForm.js:1526
@@ -2741,10 +2741,10 @@ msgstr ""
 
 #: forms/ProjectForm.js:301 modules/Manifest.js:47
 msgid ""
-"project.json was left alone:\n"
+"project.btp was left alone:\n"
 "{0}"
 msgstr ""
-"project.json quedó sin tocar:\n"
+"project.btp quedó sin tocar:\n"
 "{0}"
 
 #: forms/QuickForm.js:280
@@ -3555,10 +3555,10 @@ msgstr "(ninguna declarada)"
 
 #: modules/Manifest.js:38
 msgid ""
-"project.json could not be read:\n"
+"project.btp could not be read:\n"
 "{0}"
 msgstr ""
-"No se pudo leer project.json:\n"
+"No se pudo leer project.btp:\n"
 "{0}"
 
 #: modules/Manifest.js:104
@@ -3569,15 +3569,15 @@ msgstr ""
 "El proyecto empieza en {0}, que ya no existe. No va a poder ejecutarse."
 
 #: modules/Manifest.js:147
-msgid "{0} has no project.json to edit."
-msgstr "{0} no tiene un project.json para editar."
+msgid "{0} has no project.btp to edit."
+msgstr "{0} no tiene un project.btp para editar."
 
 #: modules/Manifest.js:194
 msgid ""
-"project.json was saved, but {0} could not follow it:\n"
+"project.btp was saved, but {0} could not follow it:\n"
 "{1}"
 msgstr ""
-"project.json se guardó, pero {0} no pudo seguirlo:\n"
+"project.btp se guardó, pero {0} no pudo seguirlo:\n"
 "{1}"
 
 #: modules/Navigator.js:71
