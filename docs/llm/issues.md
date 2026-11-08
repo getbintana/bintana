@@ -159,6 +159,7 @@ and in [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/l
 | `ToolButton` | A `Button` with `Icon` and `Style: "flat"` |
 | `MenuButton` | A `Button` with a `Menu` and one `PopupMenu` call |
 | a mnemonic on a control | The marker lives inside translated prose and collisions are silent. Controls have `Shortcut`; menus have mnemonics |
+| reading a supplier's invoice out of its PDF (the number, the date, the lines) | Its layout is the supplier's, not PDF's: every supplier is a parser. `PdfDocument.Text(page)` is the text in reading order, which is what a search, an index or a program's own parser starts from |
 | a blocking `MsgBox` | GTK4's dialogs are asynchronous. A question is a form |
 | `Promise` / `async` | This is a language of events. Sequences are callbacks |
 | `setTimeout` | `Timer.After` |
@@ -179,7 +180,6 @@ needed and what it did instead.
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
-| The runtime writes PDFs and cannot read one | [ISSUE-pdf-reading](../issues/ISSUE-pdf-reading.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 

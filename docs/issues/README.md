@@ -13,7 +13,6 @@ in the same form.
 | Issue | The missing capability |
 |---|---|
 | [ISSUE-postgres-driver.md](ISSUE-postgres-driver.md) | `Database` publishes `Sqlite` alone |
-| [ISSUE-pdf-reading.md](ISSUE-pdf-reading.md) | The runtime writes PDFs and cannot read one |
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
 
 Seventeen of them came out of the October audit
