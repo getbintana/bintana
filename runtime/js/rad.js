@@ -1425,6 +1425,81 @@ class UdpSocketPart extends FormPart {
 formPartTypes.UdpSocket = UdpSocketPart;
 
 /* ------------------------------------------------------------------------
+ * WebSocket -- a client connection a form owns.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * a WebSocket client declared on a form: `OnOpen` starts the conversation,
+ * `OnMessage` receives one message, and the form's close closes it
+ */
+class WebSocketPart extends FormPart {
+
+    /** the events a WebSocket raises */
+    static get Events() { return ["Open", "Message", "Closed", "Error"]; }
+    /** what a `.form` may set: the address to open */
+    static get Properties() { return ["Url"]; }
+
+    constructor() {
+        super();
+        this._url    = "";
+        this._socket = null;
+    }
+
+    /** the C socket, made on first use */
+    get WebSocket() {
+        if (!this._socket) {
+            const socket = new WebSocket({ Url: this._url });
+
+            socket.OnOpen    = () => this.Emit("Open");
+            socket.OnMessage = (bytes, isText) => this.Emit("Message", bytes, isText);
+            socket.OnClosed  = (code, reason) => this.Emit("Closed", code, reason);
+            socket.OnError   = (err) => this.Emit("Error", err);
+            this._socket = socket;
+        }
+        return this._socket;
+    }
+
+    _drop() {
+        if (this._socket) {
+            const socket = this._socket;
+            this._socket = null;
+            socket.Close();
+        }
+        return this;
+    }
+
+    /** the `ws://` or `wss://` address */
+    get Url() { return this._url; }
+    set Url(value) {
+        if (typeof value !== "string")
+            throw new TypeError("WebSocket.Url: expected text");
+        this._url = value;
+        this._drop();
+    }
+
+    /** whether it is open now */
+    get Opened() { return this._socket ? this._socket.Opened : false; }
+    /** `"Connecting"`, `"Open"`, `"Closing"` or `"Closed"` */
+    get State() { return this._socket ? this._socket.State : "Closed"; }
+
+    /** connect; answers the part */
+    Open() { this.WebSocket.Open(); return this; }
+    /** one message of text or `Bytes`; answers the part */
+    Send(data, text) { this.WebSocket.Send(data, text); return this; }
+    /** start the close handshake; answers the part */
+    Close() {
+        const socket = this._socket;
+        this._socket = null;
+        if (socket) socket.Close();
+        return this;
+    }
+    /** the form's close, and `RemovePart`, come through here */
+    Stop() { return this.Close(); }
+}
+
+formPartTypes.WebSocket = WebSocketPart;
+
+/* ------------------------------------------------------------------------
  * Stopwatch -- how long something took.
  *
  * `Timer` says *when*; this says *how long*, and they are not the same question

@@ -652,7 +652,7 @@ const TESTS = [
     /* Children too: a file with `export` is a module. */
     "Modules", "FreeNames", "Imports", "Records", "DataBinding", "SettableCache",
     "Time",
-    "Stopwatch", "UndoStack", "TestEq", "Network", "Sockets", "Udp", "Inhibit",
+    "Stopwatch", "UndoStack", "TestEq", "Network", "Sockets", "Udp", "WebSocket", "Inhibit",
     "Shortcut", "Decimal", "FieldDecimal",
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
@@ -29701,6 +29701,87 @@ class Form1 extends Form {
         }, 24000);
     }
 
+    testWebSocket() {
+        let server;
+        try {
+            server = Http.Server({ Host: "local", Port: 0 });
+        } catch (e) {
+            if (/without libsoup/.test(e.message)) {
+                print("  (skipping the WebSocket step: it needs libsoup)");
+                return;
+            }
+            throw e;
+        }
+
+        const part = FormPart.New("WebSocket");
+        part.Url = "ws://127.0.0.1:1/";
+        eq("a WebSocket part keeps its URL", part.Url, "ws://127.0.0.1:1/");
+        eq("and starts closed", part.State, "Closed");
+        eq("its serialised type", part.Serialize().type, "WebSocket");
+        check("WebSocket is a part type", FormPart.Types().includes("WebSocket"));
+
+        throws("a WebSocket refuses an option it does not have",
+               () => new WebSocket({ Nope: 1 }));
+        throws("Send before Open is a mistake",
+               () => new WebSocket({ Url: "ws://127.0.0.1:1/" }).Send("x"));
+        throws("an address that is not ws is refused",
+               () => new WebSocket({ Url: "http://127.0.0.1/" }).Open());
+
+        server.WebSocket = (ws) => {
+            ws.OnMessage = (bytes, isText) => {
+                if (isText) ws.Send("echo: " + bytes.ToText());
+                else        ws.Send(bytes);
+            };
+        };
+        server.Start();
+
+        const got = {};
+        const client = new WebSocket({ Url: `ws://127.0.0.1:${server.Port}/ws` });
+        client.OnOpen = () => {
+            got.opened = true;
+            client.Send("hola");
+        };
+        client.OnMessage = (bytes, isText) => {
+            if (isText) {
+                got.text = bytes.ToText();
+                client.Send(new Bytes([0, 1, 2, 255]));
+            } else {
+                got.bin = bytes;
+                client.Close();
+            }
+        };
+        client.OnClosed = () => { got.closed = true; };
+        client.OnError = (e) => { got.error = e; };
+        client.Open();
+
+        until("the WebSocket connection closed", () => got.closed, () => {
+            eq("the client opened", got.opened, true);
+            eq("the text came back", got.text, "echo: hola");
+            check("the binary came back", got.bin && got.bin.Length === 4,
+                  got.bin && got.bin.Length);
+            eq("and its last byte", got.bin && got.bin.At(3), 255);
+            eq("no error was raised", got.error ? got.error.Message : "", "");
+
+            /* A server Stop closes a connection that is still live, and the
+             * client hears it. */
+            const live = {};
+            const second = new WebSocket({ Url: `ws://127.0.0.1:${server.Port}/live` });
+            second.OnOpen = () => {
+                live.opened = true;
+                server.Stop();
+            };
+            second.OnClosed = () => { live.closed = true; };
+            second.OnError = (e) => { live.error = e; };
+            second.Open();
+
+            until("Stop closed the live WebSocket", () => live.closed, () => {
+                eq("the second client opened", live.opened, true);
+                eq("and Stop closed it", live.closed, true);
+                eq("with no error", live.error ? live.error.Message : "", "");
+            }, 6000);
+        }, 6000);
+    }
+
     testHttpServer() {
         let noSoup = false;
         try {
@@ -29919,8 +30000,8 @@ class Form1 extends Form {
         } catch (e) {
             complaint = e.message;
         }
-        check("Start without Request is refused", complaint.includes("Request is required"),
-              complaint);
+        check("Start with neither Request nor WebSocket is refused",
+              complaint.includes("Request or WebSocket is required"), complaint);
 
         complaint = "";
         try {

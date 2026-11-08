@@ -397,3 +397,29 @@ each rule below; read it before changing a level.
   not the `(path, NULL, &err)` shape the other constructors have. And the
   deprecated validation setter is reached with `g_object_set(tls,
   "validation-flags", 0, NULL)` so the build does not warn.
+- **`Http.Server` can be a WebSocket-only listener.** `Start` requires
+  `Request` **or** `WebSocket`; the early body guard and the HTTP handler are
+  added only when `Request` is a function, so a WebSocket server has no HTTP
+  route at all. `WebSocket` is the upgrade handler at `/`; the handler itself
+  is the open event, and the socket it is handed already has `State: "Open"`.
+- **The server holds its WebSocket wrappers in a `GPtrArray` of `JSValue *`,
+  not `JSValue`.** A `JSValue` is a struct, which `g_ptr_array_add` cannot
+  take; the slot is allocated, duplicated, marked in `gc_mark`, and freed when
+  the wrapper closes or the server stops. `http_server_free` and
+  `http_server_finish_stop` both call `websocket_server_close_all`; without it
+  a `Stop` left the connections open and the wrappers' references behind.
+- **libsoup's WebSocket signals are not uniform.** `"message"` is
+  `(gint type, GBytes *message)`, `"error"` is `(GError *)`, and `"closed"`
+  has **no parameters** -- the close code and reason are read with
+  `soup_websocket_connection_get_close_code/data` inside it. A handler that
+  assumed a `code, data` signature would take the user data as the code.
+- **A client connection keeps itself alive while it is connecting or open, and
+  is counted in `bta_http_pending`.** `websocket_live` is what
+  `bta_http_cleanup` closes at teardown, since a self-reference is invisible to
+  the collector; a console `main` with an open WebSocket does not exit before
+  the messages arrive. `Send` queues through
+  `soup_websocket_connection_send_message`, whose `GBytes` is transfer none:
+  the caller unrefs its own.
+- **`Close` starts the close handshake and does not free the connection.** The
+  `"closed"` signal is what releases `keep`, the connection and the server's
+  array slot; freeing at `Close` would cut the frame that is still queued.

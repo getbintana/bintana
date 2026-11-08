@@ -1,6 +1,6 @@
 # Transports: sockets, serial and IPC beside HTTP
 
-**Status: stages 1, 2 and 3 built (2026-11-08); the rest is staged.** This is the
+**Status: stages 1 to 4 built (2026-11-08); the rest is staged.** This is the
 answer to **R3** of
 [the October audit](../audit-2026-10.md): what a program can talk to that is
 not an HTTP request and not a child process. The first stage is `Socket` and
@@ -328,6 +328,10 @@ service is the case to design `Ipc.DBus` from.
    **Built** (2026-11-08, the same file; `tests/widgets`' `testUdp`). IPv4 in
    this stage; multicast and IPv6 follow.
 4. **`WebSocket` client**, then the server half on `Http.Server`.
+   **Built** (2026-11-08, `runtime/src/bta_http.c`; `tests/widgets`'
+   `testWebSocket`): the client speaks `ws://`/`wss://`, text and binary
+   frames, `Protocols` and `Headers`; `Http.Server.WebSocket` is the upgrade
+   handler, and a server with no `Request` is a WebSocket-only listener.
 5. **`SmtpClient`** -- over `Socket` + TLS, with `MailMessage`-shaped input.
 6. **`SerialPort`** -- Linux over `GSerialPort`; Windows later.
 7. **`Ipc`** -- the base `Channel`, `Ipc.Pipe` on Unix (reusing stage 1),

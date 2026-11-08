@@ -3573,6 +3573,9 @@ static const JSCFunctionListEntry http_worker_props[] = {
     JS_CFUNC_DEF("HeadWait",    3, js_http_headwait),
 };
 
+static JSValue websocket_worker_construct(JSContext *ctx, JSValueConst new_target,
+                                          int argc, JSValueConst *argv);
+
 void bta_http_init_worker(JSContext *ctx, JSValue global)
 {
     http_multipart_init(ctx, global);
@@ -3582,6 +3585,9 @@ void bta_http_init_worker(JSContext *ctx, JSValue global)
     JS_SetPropertyFunctionList(ctx, http, http_worker_props,
                                G_N_ELEMENTS(http_worker_props));
     JS_SetPropertyStr(ctx, global, "Http", http);
+    JS_SetPropertyStr(ctx, global, "WebSocket",
+                      JS_NewCFunction2(ctx, websocket_worker_construct, "WebSocket", 0,
+                                       JS_CFUNC_constructor, 0));
 }
 
 static JSValue js_http_server(JSContext *ctx, JSValueConst this_val,
@@ -3688,10 +3694,14 @@ static const JSCFunctionListEntry http_props[] = {
  * counted in pending (a console server that returned from main with nothing
  * owed would exit before its first request) and disconnected on the way out,
  * or the port stays held past the program. */
-typedef struct {
+typedef struct HttpServerData HttpServerData;
+
+struct HttpServerData {
     JSContext   *ctx;       /* the loop's, for building a request object */
     SoupServer  *server;    /* NULL until Start, and after Stop */
     JSValue      handler;   /* Request fn, duplicated -- reported via gc_mark */
+    JSValue      ws_handler;/* WebSocket fn, duplicated -- reported via gc_mark */
+    GPtrArray   *ws_clients;/* JSValue *: the live server-side WebSockets */
     bool         running;
     int          port;       /* declared until Start, actual after */
     char        *url;        /* actual base URL after Start */
@@ -3714,7 +3724,804 @@ typedef struct {
      */
     bool         stopping;
     guint        stop_idle;
-} HttpServerData;
+} ;
+
+/* ------------------------------------------------------------ WebSocket */
+
+/* One connection, client or server side.  The client owns its `SoupSession`
+ * until the handshake finishes and a self-reference (`keep`) while it is
+ * connecting or open; a server-side wrapper is held by its server's
+ * `ws_clients` array, because the callback that hands it to JavaScript drops
+ * the local reference when it returns. */
+typedef struct {
+    JSContext   *ctx;
+    JSValue      self;          /* BORROWED */
+    JSValue      keep;          /* client, connecting/open: a reference to self */
+    JSValue      on_open;
+    JSValue      on_message;
+    JSValue      on_closed;
+    JSValue      on_error;
+    JSValue      headers;       /* constructor Headers, duplicated */
+    char       **protocols;     /* constructor Protocols, NULL-terminated */
+    char        *url;
+    char        *origin;
+
+    SoupWebsocketConnection *conn;  /* owned once the handshake answers */
+    SoupSession *session;           /* client, until the handshake answers */
+    SoupMessage *msg;               /* client, until the handshake answers */
+    GCancellable *cancel;
+    HttpServerData *server;         /* server side: whose array holds us */
+
+    bool client;
+    bool connecting;
+    bool open;
+    bool closing;
+    bool closed;
+    bool in_pending;    /* client: the console loop waits for us */
+
+    gulong sig_message;
+    gulong sig_error;
+    gulong sig_closed;
+} WebSocketData;
+
+static JSClassID websocket_class_id;
+static GList *websocket_live;   /* client wrappers connecting or open */
+static GList *websocket_jobs;   /* client handshakes in flight */
+
+typedef struct {
+    WebSocketData *w;
+    JSValue        ref;
+} WebSocketJob;
+
+static void websocket_job_free(WebSocketJob *j)
+{
+    websocket_jobs = g_list_remove(websocket_jobs, j);
+    JS_FreeValue(j->w->ctx, j->ref);
+    g_free(j);
+}
+
+static WebSocketData *websocket_data(JSValueConst v)
+{
+    return JS_GetOpaque(v, websocket_class_id);
+}
+
+static const char *websocket_kind_for(const GError *err)
+{
+    if (!err)
+        return "Error";
+    if (err->domain == G_TLS_ERROR)
+        return "Tls";
+    if (err->domain == G_RESOLVER_ERROR)
+        return "Dns";
+    if (err->domain == G_IO_ERROR) {
+        switch (err->code) {
+        case G_IO_ERROR_HOST_NOT_FOUND:      return "Dns";
+        case G_IO_ERROR_CONNECTION_REFUSED:  return "Refused";
+        case G_IO_ERROR_TIMED_OUT:           return "Timeout";
+        case G_IO_ERROR_PERMISSION_DENIED:   return "NotAllowed";
+        default: break;
+        }
+    }
+    return "Error";
+}
+
+static JSValue websocket_error_object(JSContext *ctx, const char *kind,
+                                      const char *detail)
+{
+    JSValue e = JS_NewObject(ctx);
+
+    JS_SetPropertyStr(ctx, e, "Message", JS_NewString(ctx, detail ? detail : ""));
+    JS_SetPropertyStr(ctx, e, "Kind", JS_NewString(ctx, kind));
+    return e;
+}
+
+static void websocket_emit(WebSocketData *w, JSValueConst fn, int argc,
+                           JSValueConst *argv)
+{
+    if (!JS_IsFunction(w->ctx, fn))
+        return;
+
+    JSValue self = JS_DupValue(w->ctx, w->self);
+    JSValue call = JS_DupValue(w->ctx, fn);
+    JSValue r    = JS_Call(w->ctx, call, self, argc, argv);
+
+    if (JS_IsException(r))
+        bta_dump_error(w->ctx);
+    JS_FreeValue(w->ctx, r);
+    JS_FreeValue(w->ctx, call);
+    JS_FreeValue(w->ctx, self);
+    bta_drain_jobs(JS_GetRuntime(w->ctx));
+}
+
+static void websocket_server_remove(WebSocketData *w)
+{
+    HttpServerData *s = w->server;
+
+    if (!s || !s->ws_clients) {
+        w->server = NULL;
+        return;
+    }
+    for (guint i = 0; i < s->ws_clients->len; i++) {
+        JSValue *slot = g_ptr_array_index(s->ws_clients, i);
+
+        if (JS_GetOpaque(*slot, websocket_class_id) == w) {
+            w->server = NULL;
+            g_ptr_array_remove_index(s->ws_clients, i);
+            JS_FreeValue(w->ctx, *slot);
+            g_free(slot);
+            return;
+        }
+    }
+    w->server = NULL;
+}
+
+/* The C half: no JavaScript, safe from a finalizer and from Stop. */
+static void websocket_close_conn(WebSocketData *w)
+{
+    if (w->conn) {
+        if (w->sig_message)
+            g_signal_handler_disconnect(w->conn, w->sig_message);
+        if (w->sig_error)
+            g_signal_handler_disconnect(w->conn, w->sig_error);
+        if (w->sig_closed)
+            g_signal_handler_disconnect(w->conn, w->sig_closed);
+        w->sig_message = w->sig_error = w->sig_closed = 0;
+        if (soup_websocket_connection_get_state(w->conn) == SOUP_WEBSOCKET_STATE_OPEN)
+            soup_websocket_connection_close(w->conn, 1000, "");
+        g_clear_object(&w->conn);
+    }
+    g_clear_object(&w->session);
+    g_clear_object(&w->msg);
+    g_clear_object(&w->cancel);
+    w->connecting = false;
+    w->open       = false;
+    w->closing    = true;
+}
+
+static void websocket_close_full(WebSocketData *w, bool finalizing)
+{
+    if (w->connecting) {
+        /* The handshake owns the session and this wrapper until it answers;
+         * cancel it and let `on_ws_connect` do the cleanup. */
+        if (w->cancel)
+            g_cancellable_cancel(w->cancel);
+        w->closing = true;
+        w->closed  = true;
+        return;
+    }
+
+    websocket_close_conn(w);
+    websocket_server_remove(w);
+    if (w->in_pending) {
+        w->in_pending = false;
+        websocket_live = g_list_remove(websocket_live, w);
+    }
+    w->closed = true;
+
+    if (!finalizing && !JS_IsUndefined(w->keep)) {
+        JSValue keep = w->keep;
+
+        w->keep = JS_UNDEFINED;
+        /* Last: this may be the reference that finalizes the wrapper. */
+        JS_FreeValue(w->ctx, keep);
+    }
+}
+
+static void websocket_force_close(WebSocketData *w)
+{
+    if (w->cancel)
+        g_cancellable_cancel(w->cancel);
+    w->connecting = false;
+    websocket_close_full(w, false);
+}
+
+static void on_ws_message(SoupWebsocketConnection *conn, gint type,
+                          GBytes *message, gpointer data)
+{
+    WebSocketData *w = data;
+    gsize          len = 0;
+    const void    *bytes = g_bytes_get_data(message, &len);
+    JSValue        b = bta_bytes_new(w->ctx, bytes, len);
+    JSValue        argv[2];
+
+    if (JS_IsException(b))
+        return;
+    argv[0] = b;
+    argv[1] = JS_NewBool(w->ctx, type == SOUP_WEBSOCKET_DATA_TEXT);
+    websocket_emit(w, w->on_message, 2, argv);
+    JS_FreeValue(w->ctx, b);
+}
+
+static void on_ws_error(SoupWebsocketConnection *conn, GError *err, gpointer data)
+{
+    WebSocketData *w = data;
+
+    JSValue e = websocket_error_object(w->ctx, websocket_kind_for(err),
+                                       err ? err->message : "the WebSocket failed");
+
+    websocket_emit(w, w->on_error, 1, &e);
+    JS_FreeValue(w->ctx, e);
+}
+
+static void on_ws_closed(SoupWebsocketConnection *conn, gpointer data)
+{
+    WebSocketData *w = data;
+    JSValue hold;
+
+    if (w->closed)
+        return;
+    w->closed = true;
+    hold = JS_DupValue(w->ctx, w->self);
+
+    JSValue argv[2] = {
+        JS_NewInt32(w->ctx, soup_websocket_connection_get_close_code(conn)),
+        JS_NewString(w->ctx, soup_websocket_connection_get_close_data(conn) ?
+                            soup_websocket_connection_get_close_data(conn) : ""),
+    };
+    websocket_emit(w, w->on_closed, 2, argv);
+    JS_FreeValue(w->ctx, argv[0]);
+    JS_FreeValue(w->ctx, argv[1]);
+
+    websocket_close_full(w, false);
+    JS_FreeValue(w->ctx, hold);
+}
+
+static void websocket_connect_signals(WebSocketData *w)
+{
+    w->sig_message = g_signal_connect(w->conn, "message",
+                                      G_CALLBACK(on_ws_message), w);
+    w->sig_error   = g_signal_connect(w->conn, "error",
+                                      G_CALLBACK(on_ws_error), w);
+    w->sig_closed  = g_signal_connect(w->conn, "closed",
+                                      G_CALLBACK(on_ws_closed), w);
+}
+
+static void on_ws_connect(GObject *src, GAsyncResult *res, gpointer data)
+{
+    WebSocketJob *job = data;
+    WebSocketData *w = job->w;
+    GError *err = NULL;
+    SoupWebsocketConnection *conn;
+
+    conn = soup_session_websocket_connect_finish(SOUP_SESSION(src), res, &err);
+    g_clear_object(&w->msg);
+    g_clear_object(&w->session);
+
+    if (w->closing || w->closed) {
+        if (conn)
+            g_object_unref(conn);
+        g_clear_error(&err);
+        w->connecting = false;
+        websocket_close_full(w, false);
+        websocket_job_free(job);
+        return;
+    }
+
+    if (!conn) {
+        JSValue e = websocket_error_object(w->ctx, websocket_kind_for(err),
+                                           err ? err->message : "the WebSocket did not connect");
+
+        websocket_emit(w, w->on_error, 1, &e);
+        JS_FreeValue(w->ctx, e);
+        g_clear_error(&err);
+        w->connecting = false;
+        websocket_close_full(w, false);
+        websocket_job_free(job);
+        return;
+    }
+    g_clear_error(&err);
+
+    w->conn       = conn;
+    w->connecting = false;
+    w->open       = true;
+    websocket_connect_signals(w);
+
+    websocket_emit(w, w->on_open, 0, NULL);
+    websocket_job_free(job);
+}
+
+static JSValue websocket_open(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    WebSocketData *w = websocket_data(this_val);
+
+    if (!w)
+        return JS_ThrowTypeError(ctx, "Open: not a WebSocket");
+    if (!w->client)
+        return JS_ThrowPlainError(ctx, "WebSocket.Open: a server-side connection is already open");
+    if (w->connecting || w->open)
+        return JS_ThrowPlainError(ctx, "WebSocket.Open: it is already open");
+    if (!w->url || !*w->url)
+        return JS_ThrowPlainError(ctx, "WebSocket.Open: Url is empty");
+    if (!g_str_has_prefix(w->url, "ws://") && !g_str_has_prefix(w->url, "wss://"))
+        return JS_ThrowTypeError(ctx, "WebSocket.Open: Url must start with ws:// or wss://");
+
+    w->session = soup_session_new();
+    w->msg     = soup_message_new("GET", w->url);
+    if (!w->session || !w->msg) {
+        g_clear_object(&w->session);
+        g_clear_object(&w->msg);
+        return JS_ThrowPlainError(ctx, "WebSocket.Open: cannot make a session");
+    }
+    if (JS_IsObject(w->headers)) {
+        JSPropertyEnum *props = NULL;
+        uint32_t        n = 0;
+        SoupMessageHeaders *h = soup_message_get_request_headers(w->msg);
+
+        if (JS_GetOwnPropertyNames(ctx, &props, &n, w->headers,
+                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) >= 0) {
+            for (uint32_t i = 0; i < n; i++) {
+                const char *key = JS_AtomToCString(ctx, props[i].atom);
+                JSValue v = JS_GetPropertyStr(ctx, w->headers, key ? key : "");
+                const char *value = JS_IsException(v) ? NULL : JS_ToCString(ctx, v);
+
+                if (key && value)
+                    soup_message_headers_append(h, key, value);
+                JS_FreeValue(ctx, v);
+                JS_FreeCString(ctx, value);
+                JS_FreeCString(ctx, key);
+            }
+            JS_FreePropertyEnum(ctx, props, n);
+        }
+    }
+
+    w->cancel     = g_cancellable_new();
+    w->connecting = true;
+    w->keep       = JS_DupValue(ctx, w->self);
+    w->in_pending = true;
+    websocket_live = g_list_prepend(websocket_live, w);
+
+    WebSocketJob *job = g_new0(WebSocketJob, 1);
+    job->w   = w;
+    job->ref = JS_DupValue(ctx, w->self);
+    websocket_jobs = g_list_prepend(websocket_jobs, job);
+
+    soup_session_websocket_connect_async(w->session, w->msg, w->origin,
+                                         w->protocols, G_PRIORITY_DEFAULT,
+                                         w->cancel, on_ws_connect, job);
+    return JS_DupValue(ctx, this_val);
+}
+
+static JSValue websocket_send(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    WebSocketData *w = websocket_data(this_val);
+    GBytes  *bytes;
+    gboolean text = FALSE;
+
+    if (!w)
+        return JS_ThrowTypeError(ctx, "Send: not a WebSocket");
+    if (!w->open || w->closing || !w->conn)
+        return JS_ThrowPlainError(ctx, "WebSocket.Send: it is not open");
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "WebSocket.Send(data, [text]): needs the data");
+
+    if (JS_IsString(argv[0])) {
+        size_t      len = 0;
+        const char *str = JS_ToCStringLen(ctx, &len, argv[0]);
+        if (!str)
+            return JS_EXCEPTION;
+        bytes = g_bytes_new(str, len);
+        JS_FreeCString(ctx, str);
+        text = TRUE;
+    } else {
+        size_t         len = 0;
+        const uint8_t *data = bta_bytes_get(argv[0], &len);
+        if (!data)
+            return JS_ThrowTypeError(ctx, "WebSocket.Send: expected text or Bytes");
+        bytes = g_bytes_new(data, len);
+    }
+    if (argc > 1 && !JS_IsUndefined(argv[1]))
+        text = JS_ToBool(ctx, argv[1]);
+
+    soup_websocket_connection_send_message(w->conn,
+        text ? SOUP_WEBSOCKET_DATA_TEXT : SOUP_WEBSOCKET_DATA_BINARY, bytes);
+    g_bytes_unref(bytes);
+    return JS_DupValue(ctx, this_val);
+}
+
+static JSValue websocket_close_method(JSContext *ctx, JSValueConst this_val,
+                                      int argc, JSValueConst *argv)
+{
+    WebSocketData *w = websocket_data(this_val);
+    int32_t        code = 1000;
+    const char    *reason = "";
+
+    if (!w)
+        return JS_ThrowTypeError(ctx, "Close: not a WebSocket");
+    if (argc > 0 && !JS_IsUndefined(argv[0])) {
+        if (!bta_to_int(ctx, argv[0], "WebSocket.Close", &code))
+            return JS_EXCEPTION;
+        if (code < 1000 || code > 4999)
+            return JS_ThrowRangeError(ctx, "WebSocket.Close: code is 1000 to 4999");
+    }
+    if (argc > 1 && !JS_IsUndefined(argv[1])) {
+        if (!JS_IsString(argv[1]))
+            return JS_ThrowTypeError(ctx, "WebSocket.Close: reason is text");
+        reason = JS_ToCString(ctx, argv[1]);
+        if (!reason)
+            return JS_EXCEPTION;
+    }
+    if (w->conn && w->open && !w->closing)
+        soup_websocket_connection_close(w->conn, (gushort)code, reason);
+    w->closing = true;
+    if (argc > 1 && !JS_IsUndefined(argv[1]))
+        JS_FreeCString(ctx, reason);
+    return JS_DupValue(ctx, this_val);
+}
+
+static JSValue websocket_get_url(JSContext *ctx, JSValueConst this_val)
+{
+    WebSocketData *w = websocket_data(this_val);
+    return JS_NewString(ctx, w && w->url ? w->url : "");
+}
+
+static JSValue websocket_get_protocol(JSContext *ctx, JSValueConst this_val)
+{
+    WebSocketData *w = websocket_data(this_val);
+    const char *p = w && w->conn ? soup_websocket_connection_get_protocol(w->conn) : NULL;
+    return JS_NewString(ctx, p ? p : "");
+}
+
+static JSValue websocket_get_state(JSContext *ctx, JSValueConst this_val)
+{
+    WebSocketData *w = websocket_data(this_val);
+    const char *state = "Closed";
+
+    if (w) {
+        if (w->connecting) state = "Connecting";
+        else if (w->open && !w->closing) state = "Open";
+        else if (w->closing && !w->closed) state = "Closing";
+    }
+    return JS_NewString(ctx, state);
+}
+
+static JSValue websocket_get_opened(JSContext *ctx, JSValueConst this_val)
+{
+    WebSocketData *w = websocket_data(this_val);
+    return JS_NewBool(ctx, w && w->open && !w->closing);
+}
+
+static JSValue websocket_get_handler(JSContext *ctx, JSValueConst this_val,
+                                     JSValueConst *slot)
+{
+    (void)this_val;
+    return JS_DupValue(ctx, *slot);
+}
+
+static JSValue websocket_set_handler(JSContext *ctx, JSValueConst this_val,
+                                     JSValueConst v, JSValue *slot, const char *who)
+{
+    (void)this_val;
+    if (!JS_IsNull(v) && !JS_IsUndefined(v) && !JS_IsFunction(ctx, v))
+        return JS_ThrowTypeError(ctx, "%s: expected a function, or null", who);
+    JS_FreeValue(ctx, *slot);
+    *slot = JS_IsFunction(ctx, v) ? JS_DupValue(ctx, v) : JS_UNDEFINED;
+    return JS_UNDEFINED;
+}
+
+#define WS_HANDLER(name, field, who)                                          \
+    static JSValue websocket_get_##name(JSContext *ctx, JSValueConst this_val) \
+    {                                                                         \
+        WebSocketData *w = websocket_data(this_val);                          \
+        return w ? websocket_get_handler(ctx, this_val, &w->field) : JS_NULL; \
+    }                                                                         \
+    static JSValue websocket_set_##name(JSContext *ctx, JSValueConst this_val, \
+                                        JSValueConst v)                       \
+    {                                                                         \
+        WebSocketData *w = websocket_data(this_val);                          \
+        if (!w)                                                               \
+            return JS_ThrowTypeError(ctx, "%s: not a WebSocket", who);        \
+        return websocket_set_handler(ctx, this_val, v, &w->field, who);       \
+    }
+
+WS_HANDLER(on_open,    on_open,    "WebSocket.OnOpen")
+WS_HANDLER(on_message, on_message, "WebSocket.OnMessage")
+WS_HANDLER(on_closed,  on_closed,  "WebSocket.OnClosed")
+WS_HANDLER(on_error,   on_error,   "WebSocket.OnError")
+
+static JSValue websocket_construct(JSContext *ctx, JSValueConst new_target,
+                                   int argc, JSValueConst *argv)
+{
+    JSValue obj = JS_NewObjectClass(ctx, websocket_class_id);
+    WebSocketData *w;
+
+    if (JS_IsException(obj))
+        return obj;
+    w = g_new0(WebSocketData, 1);
+    w->ctx       = ctx;
+    w->self      = obj;
+    w->keep      = JS_UNDEFINED;
+    w->on_open   = JS_UNDEFINED;
+    w->on_message = JS_UNDEFINED;
+    w->on_closed = JS_UNDEFINED;
+    w->on_error  = JS_UNDEFINED;
+    w->headers   = JS_UNDEFINED;
+    w->client    = true;
+    JS_SetOpaque(obj, w);
+
+    if (argc > 0 && !JS_IsUndefined(argv[0])) {
+        if (!JS_IsObject(argv[0])) {
+            JS_FreeValue(ctx, obj);
+            return JS_ThrowTypeError(ctx, "WebSocket: the options are an object");
+        }
+        JSPropertyEnum *props = NULL;
+        uint32_t        n = 0;
+
+        if (JS_GetOwnPropertyNames(ctx, &props, &n, argv[0],
+                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0) {
+            JS_FreeValue(ctx, obj);
+            return JS_EXCEPTION;
+        }
+        for (uint32_t i = 0; i < n; i++) {
+            const char *key = JS_AtomToCString(ctx, props[i].atom);
+            JSValue     v = JS_GetPropertyStr(ctx, argv[0], key ? key : "");
+
+            if (!key || JS_IsException(v)) {
+                JS_FreeCString(ctx, key);
+                JS_FreeValue(ctx, v);
+                JS_FreePropertyEnum(ctx, props, n);
+                JS_FreeValue(ctx, obj);
+                return JS_EXCEPTION;
+            }
+            if (!strcmp(key, "Url") || !strcmp(key, "Origin")) {
+                if (!JS_IsString(v)) {
+                    JS_ThrowTypeError(ctx, "WebSocket.%s: expected text", key);
+                    goto bad;
+                }
+                const char *s = JS_ToCString(ctx, v);
+                if (!s) goto bad;
+                if (!strcmp(key, "Url")) { g_free(w->url); w->url = g_strdup(s); }
+                else                     { g_free(w->origin); w->origin = g_strdup(s); }
+                JS_FreeCString(ctx, s);
+            } else if (!strcmp(key, "Headers")) {
+                if (!JS_IsObject(v)) {
+                    JS_ThrowTypeError(ctx, "WebSocket.Headers: expected an object");
+                    goto bad;
+                }
+                JS_FreeValue(ctx, w->headers);
+                w->headers = JS_DupValue(ctx, v);
+            } else if (!strcmp(key, "Protocols")) {
+                if (!JS_IsArray(v)) {
+                    JS_ThrowTypeError(ctx, "WebSocket.Protocols: expected a list");
+                    goto bad;
+                }
+                JSValue lenv = JS_GetPropertyStr(ctx, v, "length");
+                int32_t len = 0;
+                if (!bta_to_int(ctx, lenv, "WebSocket.Protocols", &len)) {
+                    JS_FreeValue(ctx, lenv);
+                    goto bad;
+                }
+                JS_FreeValue(ctx, lenv);
+                if (len < 0) { JS_ThrowRangeError(ctx, "WebSocket.Protocols: bad length"); goto bad; }
+                g_strfreev(w->protocols);
+                w->protocols = g_new0(char *, (gsize)len + 1);
+                for (int32_t p = 0; p < len; p++) {
+                    JSValue item = JS_GetPropertyUint32(ctx, v, (uint32_t)p);
+                    if (!JS_IsString(item)) {
+                        JS_FreeValue(ctx, item);
+                        JS_ThrowTypeError(ctx, "WebSocket.Protocols: every entry is text");
+                        goto bad;
+                    }
+                    const char *s = JS_ToCString(ctx, item);
+                    JS_FreeValue(ctx, item);
+                    if (!s) goto bad;
+                    w->protocols[p] = g_strdup(s);
+                    JS_FreeCString(ctx, s);
+                }
+            } else {
+                JS_ThrowTypeError(ctx, "WebSocket: no option called '%s'; the options "
+                                       "are Url, Origin, Headers and Protocols", key);
+                goto bad;
+            }
+            JS_FreeValue(ctx, v);
+            JS_FreeCString(ctx, key);
+            continue;
+bad:
+            JS_FreeValue(ctx, v);
+            JS_FreeCString(ctx, key);
+            JS_FreePropertyEnum(ctx, props, n);
+            JS_FreeValue(ctx, obj);
+            return JS_EXCEPTION;
+        }
+        JS_FreePropertyEnum(ctx, props, n);
+    }
+    return obj;
+}
+
+static void websocket_finalizer(JSRuntime *rt, JSValue v)
+{
+    WebSocketData *w = JS_GetOpaque(v, websocket_class_id);
+
+    if (!w)
+        return;
+    websocket_close_conn(w);
+    websocket_server_remove(w);
+    JS_FreeValueRT(rt, w->keep);
+    JS_FreeValueRT(rt, w->on_open);
+    JS_FreeValueRT(rt, w->on_message);
+    JS_FreeValueRT(rt, w->on_closed);
+    JS_FreeValueRT(rt, w->on_error);
+    JS_FreeValueRT(rt, w->headers);
+    g_strfreev(w->protocols);
+    g_free(w->url);
+    g_free(w->origin);
+    g_free(w);
+}
+
+static void websocket_gc_mark(JSRuntime *rt, JSValueConst v, JS_MarkFunc *mark)
+{
+    WebSocketData *w = JS_GetOpaque(v, websocket_class_id);
+
+    if (!w)
+        return;
+    JS_MarkValue(rt, w->keep, mark);
+    JS_MarkValue(rt, w->on_open, mark);
+    JS_MarkValue(rt, w->on_message, mark);
+    JS_MarkValue(rt, w->on_closed, mark);
+    JS_MarkValue(rt, w->on_error, mark);
+    JS_MarkValue(rt, w->headers, mark);
+}
+
+static JSValue websocket_server_new(JSContext *ctx, HttpServerData *s,
+                                    SoupWebsocketConnection *conn, const char *path)
+{
+    JSValue obj = JS_NewObjectClass(ctx, websocket_class_id);
+    WebSocketData *w;
+
+    if (JS_IsException(obj))
+        return obj;
+    w = g_new0(WebSocketData, 1);
+    w->ctx       = ctx;
+    w->self      = obj;
+    w->keep      = JS_UNDEFINED;
+    w->on_open   = JS_UNDEFINED;
+    w->on_message = JS_UNDEFINED;
+    w->on_closed = JS_UNDEFINED;
+    w->on_error  = JS_UNDEFINED;
+    w->headers   = JS_UNDEFINED;
+    w->url       = g_strdup(path ? path : "");
+    w->client    = false;
+    w->open      = true;
+    w->conn      = g_object_ref(conn);
+    w->server    = s;
+    JS_SetOpaque(obj, w);
+
+    if (!s->ws_clients)
+        s->ws_clients = g_ptr_array_new();
+    JSValue *slot = g_new(JSValue, 1);
+    *slot = JS_DupValue(ctx, obj);
+    g_ptr_array_add(s->ws_clients, slot);
+    websocket_connect_signals(w);
+    return obj;
+}
+
+static void websocket_server_close_all(HttpServerData *s)
+{
+    if (!s->ws_clients)
+        return;
+    while (s->ws_clients->len) {
+        JSValue *slot = g_ptr_array_index(s->ws_clients, 0);
+        WebSocketData *w = JS_GetOpaque(*slot, websocket_class_id);
+
+        g_ptr_array_remove_index(s->ws_clients, 0);
+        if (w) {
+            w->server = NULL;
+            websocket_close_conn(w);
+        }
+        JS_FreeValue(s->ctx, *slot);
+        g_free(slot);
+    }
+}
+
+static const JSClassDef websocket_def = {
+    "WebSocket",
+    .finalizer = websocket_finalizer,
+    .gc_mark   = websocket_gc_mark,
+};
+
+/* type WebSocket */
+static const JSCFunctionListEntry websocket_props[] = {
+    /* Url
+     *   the `ws://` or `wss://` address the client opens; a server-side
+     *   connection answers the path it arrived on
+     */
+    JS_CGETSET_DEF("Url", websocket_get_url, NULL),
+    /* Protocol
+     *   the subprotocol the handshake agreed on, `""` when there is none
+     */
+    JS_CGETSET_DEF("Protocol", websocket_get_protocol, NULL),
+    /* State
+     *   `"Connecting"`, `"Open"`, `"Closing"` or `"Closed"`
+     */
+    JS_CGETSET_DEF("State", websocket_get_state, NULL),
+    /* Opened
+     *   whether it can `Send` now
+     */
+    JS_CGETSET_DEF("Opened", websocket_get_opened, NULL),
+    /* OnOpen
+     *   assign `() => …`: the handshake finished and `Send` is allowed. On a
+     *   server-side connection the handler itself is the open event
+     */
+    JS_CGETSET_DEF("OnOpen", websocket_get_on_open, websocket_set_on_open),
+    /* OnMessage
+     *   assign `(bytes, isText) => …`: one message; `isText` is the frame's
+     *   type, not a guess from the bytes
+     */
+    JS_CGETSET_DEF("OnMessage", websocket_get_on_message, websocket_set_on_message),
+    /* OnClosed
+     *   assign `(code, reason) => …`: the close handshake finished, from
+     *   either side
+     */
+    JS_CGETSET_DEF("OnClosed", websocket_get_on_closed, websocket_set_on_closed),
+    /* OnError
+     *   assign `(err) => …` with `{ Message, Kind }`; a fatal error is
+     *   followed by `OnClosed`
+     */
+    JS_CGETSET_DEF("OnError", websocket_get_on_error, websocket_set_on_error),
+    /* Open()
+     *   connect a client; answers the socket
+     */
+    JS_CFUNC_DEF("Open", 0, websocket_open),
+    /* Send(data, [text])
+     *   one message: text or `Bytes`; `text` overrides the type the value
+     *   implies. Answers the socket
+     */
+    JS_CFUNC_DEF("Send", 2, websocket_send),
+    /* Close([code], [reason])
+     *   start the close handshake, code `1000` by default; answers the socket
+     */
+    JS_CFUNC_DEF("Close", 2, websocket_close_method),
+};
+
+static void websocket_init(JSContext *ctx, JSValue global)
+{
+    JSRuntime *rt = JS_GetRuntime(ctx);
+    JSValue proto, ctor;
+
+    JS_NewClassID(rt, &websocket_class_id);
+    JS_NewClass(rt, websocket_class_id, &websocket_def);
+    proto = JS_NewObject(ctx);
+    JS_SetPropertyFunctionList(ctx, proto, websocket_props, G_N_ELEMENTS(websocket_props));
+    JS_SetClassProto(ctx, websocket_class_id, proto);
+    ctor = JS_NewCFunction2(ctx, websocket_construct, "WebSocket", 0,
+                            JS_CFUNC_constructor, 0);
+    JS_SetConstructor(ctx, ctor, proto);
+    JS_SetPropertyStr(ctx, global, "WebSocket", ctor);
+}
+
+static JSValue websocket_worker_construct(JSContext *ctx, JSValueConst new_target,
+                                          int argc, JSValueConst *argv)
+{
+    return JS_ThrowPlainError(ctx, "WebSocket: a Task worker has no main loop, "
+                                   "so there is nothing to deliver the messages to");
+}
+
+/* --------------------------------------------------------- WebSocket server */
+
+static void on_server_websocket(SoupServer *server, SoupServerMessage *msg,
+                                const char *path, SoupWebsocketConnection *conn,
+                                gpointer data)
+{
+    HttpServerData *s = data;
+    JSValue ws, fn, r;
+
+    if (!JS_IsFunction(s->ctx, s->ws_handler)) {
+        soup_websocket_connection_close(conn, 1000, "");
+        return;
+    }
+    ws = websocket_server_new(s->ctx, s, conn, path);
+    if (JS_IsException(ws))
+        return;
+    fn = JS_DupValue(s->ctx, s->ws_handler);
+    r = JS_Call(s->ctx, fn, JS_UNDEFINED, 1, &ws);
+    if (JS_IsException(r))
+        bta_dump_error(s->ctx);
+    JS_FreeValue(s->ctx, r);
+    JS_FreeValue(s->ctx, fn);
+    JS_FreeValue(s->ctx, ws);
+    bta_drain_jobs(JS_GetRuntime(s->ctx));
+}
 
 /* Handlers on the stack, nested loops included -- global because the counter
  * is decremented after a call that may have freed the server it belongs to,
@@ -3808,6 +4615,7 @@ static void http_server_free(JSRuntime *rt, HttpServerData *s)
         s->stop_idle = 0;
     }
     http_servers = g_list_remove(http_servers, s);
+    websocket_server_close_all(s);
 
     /*
      * **Finalised inside a handler, it disconnects the way `Stop` does: after
@@ -3841,6 +4649,10 @@ static void http_server_free(JSRuntime *rt, HttpServerData *s)
     }
     if (rt)
         JS_FreeValueRT(rt, s->handler);
+    if (rt)
+        JS_FreeValueRT(rt, s->ws_handler);
+    if (s->ws_clients)
+        g_ptr_array_free(s->ws_clients, TRUE);
     g_free(s->url);
     g_free(s->server_name);
     g_free(s->tls_cert);
@@ -3911,8 +4723,15 @@ static void http_server_gc_mark(JSRuntime *rt, JSValueConst v, JS_MarkFunc *mark
 {
     HttpServerData *s = JS_GetOpaque(v, http_server_class_id);
 
-    if (s)
-        JS_MarkValue(rt, s->handler, mark);
+    if (!s)
+        return;
+    JS_MarkValue(rt, s->handler, mark);
+    JS_MarkValue(rt, s->ws_handler, mark);
+    for (guint i = 0; s->ws_clients && i < s->ws_clients->len; i++) {
+        JSValue *slot = g_ptr_array_index(s->ws_clients, i);
+
+        JS_MarkValue(rt, *slot, mark);
+    }
 }
 
 /* The answer of a held request has been handed to soup, and is in flight
@@ -4948,9 +5767,10 @@ static JSValue http_server_start(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Start: not an Http server");
     if (s->running)
         return JS_ThrowTypeError(ctx, "Http.Server.Start: already running");
-    if (!JS_IsFunction(ctx, s->handler))
+    if (!JS_IsFunction(ctx, s->handler) && !JS_IsFunction(ctx, s->ws_handler))
         return JS_ThrowTypeError(ctx,
-            "Http.Server.Start: Request is required: a server with nothing to answer with");
+            "Http.Server.Start: Request or WebSocket is required: a server with "
+            "nothing to answer with");
     if (s->server_name && s->server_name[0])
         s->server = soup_server_new("server-header", s->server_name, NULL);
     else
@@ -4994,8 +5814,13 @@ static JSValue http_server_start(JSContext *ctx, JSValueConst this_val,
         g_free(detail);
         return e;
     }
-    soup_server_add_early_handler(s->server, "/", on_server_early, s, NULL);
-    soup_server_add_handler(s->server, "/", on_server_request, s, NULL);
+    if (JS_IsFunction(ctx, s->handler)) {
+        soup_server_add_early_handler(s->server, "/", on_server_early, s, NULL);
+        soup_server_add_handler(s->server, "/", on_server_request, s, NULL);
+    }
+    if (JS_IsFunction(ctx, s->ws_handler))
+        soup_server_add_websocket_handler(s->server, "/", NULL, NULL,
+                                          on_server_websocket, s, NULL);
     s->running = true;
     http_server_apply_auth(s);
 
@@ -5019,6 +5844,7 @@ static void http_server_finish_stop(HttpServerData *s)
 {
     s->running  = false;
     s->stopping = false;
+    websocket_server_close_all(s);
     http_server_apply_auth(s);
     if (s->server) {
         soup_server_disconnect(s->server);
@@ -5080,6 +5906,35 @@ static JSValue http_server_stop(JSContext *ctx, JSValueConst this_val,
     return JS_TRUE;
 }
 
+static JSValue http_server_get_websocket(JSContext *ctx, JSValueConst this_val)
+{
+    HttpServerData *s = http_server_data(this_val);
+
+    if (!s)
+        return JS_ThrowTypeError(ctx, "WebSocket: not an Http server");
+    if (JS_IsUndefined(s->ws_handler))
+        return JS_UNDEFINED;
+    return JS_DupValue(ctx, s->ws_handler);
+}
+
+static JSValue http_server_set_websocket(JSContext *ctx, JSValueConst this_val, JSValueConst v)
+{
+    HttpServerData *s = http_server_data(this_val);
+
+    if (!s)
+        return JS_ThrowTypeError(ctx, "WebSocket: not an Http server");
+    if (JS_IsNull(v) || JS_IsUndefined(v)) {
+        JS_FreeValue(ctx, s->ws_handler);
+        s->ws_handler = JS_UNDEFINED;
+        return JS_UNDEFINED;
+    }
+    if (!JS_IsFunction(ctx, v))
+        return JS_ThrowTypeError(ctx, "Http.Server.WebSocket must be a function");
+    JS_FreeValue(ctx, s->ws_handler);
+    s->ws_handler = JS_DupValue(ctx, v);
+    return JS_UNDEFINED;
+}
+
 /* type HttpServer */
 static const JSCFunctionListEntry http_server_props[] = {
     /* Request
@@ -5088,6 +5943,12 @@ static const JSCFunctionListEntry http_server_props[] = {
      *   finishes its request and the next goes to the new one
      */
     JS_CGETSET_DEF("Request",    http_server_get_request, http_server_set_request),
+    /* WebSocket
+     *   assign `(socket) => …`: a `WebSocket` already open, for the upgrade
+     *   path `/`. Set its `OnMessage`/`OnClosed` handlers here; **the handler
+     *   itself is the open event**. `Request` is not required when this is set
+     */
+    JS_CGETSET_DEF("WebSocket",  http_server_get_websocket, http_server_set_websocket),
     /* Port
      *   `8080` unless told; **`0` is ephemeral** — read it back after `Start`
      *   to learn which one it got, which is how a test or a one-off tool
@@ -5179,6 +6040,7 @@ static JSValue js_http_server(JSContext *ctx, JSValueConst this_val,
     s = g_new0(HttpServerData, 1);
     s->ctx = ctx;
     s->handler = JS_UNDEFINED;
+    s->ws_handler = JS_UNDEFINED;
     s->port = 8080;
     s->local = true;
     s->max_body = HTTP_SERVER_MAX_BODY;
@@ -5314,6 +6176,7 @@ void bta_http_init(JSContext *ctx, JSValue global)
         http_default_sync_session = soup_session_new();
 
     http_multipart_init(ctx, global);
+    websocket_init(ctx, global);
 
     JSValue http = JS_NewObject(ctx);
 
@@ -5323,7 +6186,7 @@ void bta_http_init(JSContext *ctx, JSValue global)
 
 guint bta_http_pending(void)
 {
-    guint n = g_list_length(http_jobs);
+    guint n = g_list_length(http_jobs) + g_list_length(websocket_live);
 
     for (GList *l = http_servers; l; l = l->next) {
         if (((HttpServerData *)l->data)->running)
@@ -5334,6 +6197,16 @@ guint bta_http_pending(void)
 
 void bta_http_cleanup(void)
 {
+    while (websocket_live) {
+        WebSocketData *w = websocket_live->data;
+
+        websocket_force_close(w);
+    }
+    while (websocket_jobs) {
+        WebSocketJob *job = websocket_jobs->data;
+
+        websocket_job_free(job);
+    }
     while (http_jobs) {
         HttpJob *job = http_jobs->data;
 
@@ -5348,6 +6221,7 @@ void bta_http_cleanup(void)
         HttpServerData *s = l->data;
 
         if (s->running && s->server) {
+            websocket_server_close_all(s);
             if (s->auth_domain) {
                 soup_server_remove_auth_domain(s->server, s->auth_domain);
                 /* Ours is a reference of its own (`http_server_apply_auth`),
@@ -5416,6 +6290,9 @@ void bta_http_init(JSContext *ctx, JSValue global)
 
     JS_SetPropertyStr(ctx, global, "Multipart",
                       JS_NewCFunction2(ctx, http_missing_construct, "Multipart", 0,
+                                       JS_CFUNC_constructor, 0));
+    JS_SetPropertyStr(ctx, global, "WebSocket",
+                      JS_NewCFunction2(ctx, http_missing_construct, "WebSocket", 0,
                                        JS_CFUNC_constructor, 0));
 }
 

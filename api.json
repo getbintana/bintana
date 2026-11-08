@@ -18198,6 +18198,110 @@
       ]
     },
     {
+      "Name": "WebSocket",
+      "Members": [
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "([code], [reason])",
+          "Returns": "",
+          "Doc": "start the close handshake, code `1000` by default; answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "OnClosed",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(code, reason) => …`: the close handshake finished, from either side",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(err) => …` with `{ Message, Kind }`; a fatal error is followed by `OnClosed`",
+          "Native": true
+        },
+        {
+          "Name": "OnMessage",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(bytes, isText) => …`: one message; `isText` is the frame's type, not a guess from the bytes",
+          "Native": true
+        },
+        {
+          "Name": "OnOpen",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: the handshake finished and `Send` is allowed. On a server-side connection the handler itself is the open event",
+          "Native": true
+        },
+        {
+          "Name": "Open",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "connect a client; answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "Opened",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether it can `Send` now",
+          "Native": true
+        },
+        {
+          "Name": "Protocol",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the subprotocol the handshake agreed on, `\"\"` when there is none",
+          "Native": true
+        },
+        {
+          "Name": "Send",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(data, [text])",
+          "Returns": "",
+          "Doc": "one message: text or `Bytes`; `text` overrides the type the value implies. Answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "State",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"Connecting\"`, `\"Open\"`, `\"Closing\"` or `\"Closed\"`",
+          "Native": true
+        },
+        {
+          "Name": "Url",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the `ws://` or `wss://` address the client opens; a server-side connection answers the path it arrived on",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Xml",
       "Members": [
         {
@@ -19162,6 +19266,15 @@
           "Returns": "string",
           "Doc": "`\"\"` until `Start`, the real one after, and empty again after `Stop`",
           "Native": true
+        },
+        {
+          "Name": "WebSocket",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(socket) => …`: a `WebSocket` already open, for the upgrade path `/`. Set its `OnMessage`/`OnClosed` handlers here; **the handler itself is the open event**. `Request` is not required when this is set",
+          "Native": true
         }
       ]
     },
@@ -19959,6 +20072,110 @@
           "Signature": "(data, host, port)",
           "Returns": "",
           "Doc": "send one datagram of text (UTF-8) or `Bytes`. `host` is an IP address, not a name; `from` is a record an `OnData` was handed, and `Send(data, from)` is the same call with its two fields. Sending before `Bind` binds an ephemeral port first",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "WebSocket",
+      "Members": [
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "([code], [reason])",
+          "Returns": "",
+          "Doc": "start the close handshake, code `1000` by default; answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "OnClosed",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(code, reason) => …`: the close handshake finished, from either side",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(err) => …` with `{ Message, Kind }`; a fatal error is followed by `OnClosed`",
+          "Native": true
+        },
+        {
+          "Name": "OnMessage",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(bytes, isText) => …`: one message; `isText` is the frame's type, not a guess from the bytes",
+          "Native": true
+        },
+        {
+          "Name": "OnOpen",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: the handshake finished and `Send` is allowed. On a server-side connection the handler itself is the open event",
+          "Native": true
+        },
+        {
+          "Name": "Open",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "connect a client; answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "Opened",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether it can `Send` now",
+          "Native": true
+        },
+        {
+          "Name": "Protocol",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the subprotocol the handshake agreed on, `\"\"` when there is none",
+          "Native": true
+        },
+        {
+          "Name": "Send",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(data, [text])",
+          "Returns": "",
+          "Doc": "one message: text or `Bytes`; `text` overrides the type the value implies. Answers the socket",
+          "Native": true
+        },
+        {
+          "Name": "State",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"Connecting\"`, `\"Open\"`, `\"Closing\"` or `\"Closed\"`",
+          "Native": true
+        },
+        {
+          "Name": "Url",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the `ws://` or `wss://` address the client opens; a server-side connection answers the path it arrived on",
           "Native": true
         }
       ]
