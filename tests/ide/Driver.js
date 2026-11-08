@@ -11856,6 +11856,29 @@ function* p_settings(ide) {
     eq("and the application id with it",   onDisk.id, "io.github.getbintana.IdeChild");
     eq("and the startup with it",          onDisk.startup, startedAt);
     eq("the tree follows",                 ide.startupClass, startedAt);
+    check("an untouched accessibility box writes no word",
+          onDisk.accessibility === undefined, JSON.stringify(onDisk.accessibility));
+
+    /*
+     * `"accessibility"`, which used to be a line in the file only: the box
+     * shows the level the check will use, choosing one writes it, and the
+     * default -- `warning`, what no word means -- writes none.
+     */
+    ide.MnuProjectSettings.Click();
+    const pdA = ide.projectEditor;
+    eq("a manifest that says nothing shows the default level", pdA.CmbPrA11y.Index, 0);
+    pdA.CmbPrA11y.Index = 2;
+    pdA.BtnPrOk_Click();
+    eq("choosing nothing writes off", File.LoadJson(manifestPath).accessibility, "off");
+    eq("and the check reads it", Accessibility.level(File.LoadJson(manifestPath)), "off");
+
+    ide.MnuProjectSettings.Click();
+    const pdB = ide.projectEditor;
+    eq("reopening shows the level written", pdB.CmbPrA11y.Index, 2);
+    pdB.CmbPrA11y.Index = 0;
+    pdB.BtnPrOk_Click();
+    check("going back to the default takes the word out",
+          File.LoadJson(manifestPath).accessibility === undefined);
 
     /*
      * --- the application info ------------------------------------------------
@@ -12600,6 +12623,79 @@ function* p_data(ide) {
     ide.data.run();
     yield* until(() => ide.data.Rows.Count === 2 && ide.data.Rows.Cell(1, 0) === "Carla");
     eq("and the update is visible", ide.data.Rows.Cell(1, 0), "Carla");
+
+    /*
+     * --- the connection dialog -----------------------------------------------
+     *
+     * A `.conn` was a JSON file written by hand. The tree's menu edits it now,
+     * File > New connection writes one, and the dialog says what the path leads
+     * to -- asked of SQLite, the way the Data view asks -- without creating a
+     * file by looking at it.
+     */
+    const connPath = File.Join(TMP, "shop.conn");
+    File.SaveJson(connPath, { kind: "sqlite", path: dbRel, note: "kept" });
+
+    ide.FileTree.Key = "shop.conn";
+    ide.refresh();
+    check("the tree's menu offers to edit a selected .conn", ide.MnuFtConnection.Enabled);
+    ide.MnuFtConnection.Click();
+    const cdlg = ide.connectionEditor;
+    check("the connection dialog opens", !!cdlg && cdlg.Visible);
+    eq("named by its file", cdlg.TxtConnName.Text, "shop");
+    check("and the name is the tree's to change, not this dialog's", !cdlg.TxtConnName.Enabled);
+    eq("showing where the database is", cdlg.TxtConnPath.Text, dbRel);
+    check("and what is there, asked of SQLite",
+          cdlg.LblConnState.Text.includes("1 table"), cdlg.LblConnState.Text);
+
+    cdlg.TxtConnPath.Text = "later.db";
+    check("a file that is not there yet is said to be so",
+          cdlg.LblConnState.Text.includes("Not created yet"), cdlg.LblConnState.Text);
+    check("and looking at it did not create it", !File.Exists(File.Join(TMP, "later.db")));
+    check("which is still a connection that can be written", cdlg.BtnConnOk.Enabled);
+
+    cdlg.TxtConnPath.Text = "";
+    check("no path, no OK", !cdlg.BtnConnOk.Enabled);
+    cdlg.BtnConnCancel.Click();
+    eq("cancelling writes nothing", File.LoadJson(connPath).path, dbRel);
+
+    ide.MnuFtConnection.Click();
+    const cdlg2 = ide.connectionEditor;
+    cdlg2.TxtConnPath.Text = `./${dbRel}`;
+    cdlg2.BtnConnOk.Click();
+    const savedConn = File.LoadJson(connPath);
+    eq("OK writes the path", savedConn.path, `./${dbRel}`);
+    eq("and the kind", savedConn.kind, "sqlite");
+    eq("and keeps what the dialog does not show", savedConn.note, "kept");
+
+    /* A new one, from the File menu. */
+    ide.MnuNewConnection.Click();
+    const cdlg3 = ide.connectionEditor;
+    check("a new connection asks for its name", cdlg3.TxtConnName.Enabled);
+    check("and cannot be accepted empty", !cdlg3.BtnConnOk.Enabled);
+    cdlg3.TxtConnName.Text = "stock.main";
+    cdlg3.TxtConnPath.Text = "stock.db";
+    check("a name with a dot is refused: a source is <name>.<table>",
+          !cdlg3.BtnConnOk.Enabled, cdlg3.LblConnState.Text);
+    cdlg3.TxtConnName.Text = "shop";
+    check("so is a name a .conn already has",
+          !cdlg3.BtnConnOk.Enabled && cdlg3.LblConnState.Text.includes("already exists"),
+          cdlg3.LblConnState.Text);
+    cdlg3.TxtConnName.Text = "stock";
+    check("a free name with a path can be written", cdlg3.BtnConnOk.Enabled,
+          cdlg3.LblConnState.Text);
+    cdlg3.BtnConnOk.Click();
+    yield* settled(ide);
+
+    const stockPath = File.Join(TMP, "stock.conn");
+    check("it is written at the top of the project", File.Exists(stockPath));
+    eq("saying where its database is", File.Exists(stockPath) && File.LoadJson(stockPath).path,
+       "stock.db");
+    check("the tree lists it", ide.FileTree.Exists("stock.conn"));
+    check("and the Data view offers it, as not created",
+          ide.data.DbList.Items.some((item) => item.startsWith("stock")),
+          JSON.stringify(ide.data.DbList.Items));
+    check("still without a database file", !File.Exists(File.Join(TMP, "stock.db")));
+    File.Delete(stockPath);
 
     /* The other road: a form's `Connection` part, with no `.conn` file at all.
      * The model is the same one, so the table and its record stay. */

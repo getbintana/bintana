@@ -1328,6 +1328,8 @@ export class MainForm extends Form {
         this.MnuFtStartup.Enabled = this.formOf(this.activeFile) !== null;
         this.MnuPreview.Enabled   = this.formOf(this.activeFile) !== null;
         this.MnuNewTest.Enabled   = !!this.project;
+        this.MnuNewConnection.Enabled = !!this.project;
+        this.MnuFtConnection.Enabled  = this.selectedConnection !== null;
         this.MnuRunTests.Enabled  = !!this.project;
         this.MnuDebugTests.Enabled = !!this.project && !this.debugger_.running;
         this.MnuFtRename.Enabled  = this.activeFile !== null;
@@ -1654,6 +1656,9 @@ export class MainForm extends Form {
     MnuFtRename_Click()  { this.renameSelectedFile(); }
     MnuFtDelete_Click()  { this.deleteSelectedFile(); }
     MnuFtProject_Click() { this.editProject(); }
+    MnuFtConnection_Click() {
+        if (this.selectedConnection) this.editConnection(this.selectedConnection);
+    }
 
     MnuProjectSettings_Click() { this.editProject(); }
 
@@ -1875,6 +1880,57 @@ export class MainForm extends Form {
         } catch (e) {
             Message.Error("Cannot edit {0}:\n{1}", file, e.message);
         }
+    }
+
+    /*
+     * A `.conn`, opened in the dialog that edits it -- the tree's menu, since
+     * the double click is the Data view's: looking at a database is what a
+     * connection is opened for far more often than moving it.
+     *
+     * Read as the file on disk, and written back whole: the dialog keeps the
+     * keys it does not show, and refuses a kind it does not know before
+     * touching anything.
+     */
+    editConnection(file) {
+        const path = File.Join(this.project, file);
+        let doc;
+
+        try {
+            doc = File.LoadJson(path);
+        } catch (e) {
+            Message.Error("Cannot read {0}:\n{1}", file, e.message);
+            return;
+        }
+        if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+            Message.Error("Cannot edit {0}:\n{1}", file, "a connection is a JSON object");
+            return;
+        }
+
+        try {
+            this.connectionEditor = ConnectionForm.edit(this.project, file, doc,
+                (name, edited) => this.saveConnection(name, edited));
+        } catch (e) {
+            Message.Error("Cannot edit {0}:\n{1}", file, e.message);
+        }
+    }
+
+    /* A new one, at the top of the project: that is where a form's `Source`
+     * looks for `<name>.conn`, so anywhere else would be a file nobody finds. */
+    newConnection() {
+        if (!this.project) return;
+        this.connectionEditor = ConnectionForm.edit(this.project, "", null,
+            (name, edited) => this.saveConnection(name, edited));
+    }
+
+    saveConnection(file, doc) {
+        try {
+            File.SaveJson(File.Join(this.project, file), doc);
+        } catch (e) {
+            Message.Error("Cannot write {0}:\n{1}", file, e.message);
+            return;
+        }
+        this.log(`Wrote ${file}\n`);
+        this.listFiles();
     }
 
     /*
@@ -2849,6 +2905,7 @@ export class MainForm extends Form {
     ActNewForm_Execute()    { this.newForm(); }
     MnuNewComponent_Click() { this.newComponent(); }
     MnuNewModule_Click()    { this.newModule(); }
+    MnuNewConnection_Click() { this.newConnection(); }
     MnuCloseTab_Click()   { this.closeActiveTab(); }
     MnuRename_Click()     { this.renameSelectedFile(); }
     MnuDelete_Click()     { this.deleteSelectedFile(); }

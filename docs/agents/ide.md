@@ -216,12 +216,24 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   *Connections*, `MainForm` keeps `selectedConnection` beside the record and
   image cases, and a double click calls `Data.openFile` -- the same
   `selected*`/`Activate` shape the other two use, so the status bar and the
-  menu cannot disagree.
+  menu cannot disagree. **Editing one is the tree's menu** (*Edit
+  connection...*, `MainForm.editConnection`) and a new one *File > New
+  connection...*, both through `ConnectionForm`: the double click stays the
+  Data view's, since looking is what a connection is opened for. A new `.conn`
+  is written at the project's top because that is the only place `rowsFrom`
+  looks (`<name>.conn` beside `project.json`), and its name refuses a dot
+  because a `Source` splits at the first one. The dialog opens the database
+  only once `File.Exists` says it is there: `Database.Sqlite` creates what it
+  does not find, and a dialog that created the program's database by looking
+  at its path would be writing data the program had not.
 - **`tests/ide`'s `data` phase is the guard.** It builds a real SQLite file and
   a `.conn`, adds a `Shop.form` with a `Connection` and a `Model`, presses the
   `.conn` row, previews a table, runs a query and an update, then removes the
-  `.conn` and asserts the form's own Connection still names the database. A
-  build without sqlite skips it and says so.
+  `.conn` and asserts the form's own Connection still names the database --
+  and between the two drives `ConnectionForm` through both menu items: the
+  state line, a missing file left uncreated, Cancel, a key it does not show
+  kept on OK, and the three refusals of a new name. A build without sqlite
+  skips it and says so.
 
 ## The stack buttons
 
@@ -1234,8 +1246,12 @@ is `accessibility`) and not a bare key, or `Check`'s own *a key nothing reads*
 pass would flag it; it is validated in `Validate` because a `Field` speaks about
 one value and the three words are the IDE's. **`AccessibleHidden: true` is the
 way to quiet a row that is also true**: GTK's hidden state, which a screen reader
-needs in order to skip a logo. Not done: a box for the word in `ProjectForm`,
-whose `.form` is positioned by hand. A row's `line` is `0` as every `.form`
+needs in order to skip a logo. **`ProjectForm` has the box** (`CmbPrA11y`,
+under the description): it shows `Accessibility.level` of what the file says,
+by index like `Kind` since its entries are translated, and an untouched box
+writes nothing -- a manifest with no word keeps none, one with a word that is
+not a level keeps it for `Validate` to report -- while choosing *warnings*
+takes the word out, since that is what no word means. A row's `line` is `0` as every `.form`
 row's is; the control is named in the text.
 
 **The pass runs as a child process, started after the window is visible.**

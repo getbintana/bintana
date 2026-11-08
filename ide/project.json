@@ -28,6 +28,7 @@
     "forms/ColumnForm.js",
     "forms/ReportForm.js",
     "forms/RecordForm.js",
+    "forms/ConnectionForm.js",
     "modules/Launch.js",
     "forms/LaunchForm.js",
     "forms/ProjectForm.js",

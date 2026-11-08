@@ -27,6 +27,7 @@
     "../../ide/forms/ColumnForm.js",
     "../../ide/forms/ReportForm.js",
     "../../ide/forms/RecordForm.js",
+    "../../ide/forms/ConnectionForm.js",
     "../../ide/modules/Launch.js",
     "../../ide/forms/LaunchForm.js",
     "../../ide/forms/ProjectForm.js",

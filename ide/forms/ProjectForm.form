@@ -4,7 +4,7 @@
   "properties": {
     "Text": "Project",
     "Width": 552,
-    "Height": 690
+    "Height": 736
   },
   "children": [
     {
@@ -158,13 +158,43 @@
     },
     {
       "type": "Label",
+      "name": "LblPrA11y",
+      "properties": {
+        "Height": 24,
+        "Text": "Accessibility:",
+        "Width": 110,
+        "X": 12,
+        "Y": 248,
+        "For": "CmbPrA11y"
+      }
+    },
+    {
+      "type": "ComboBox",
+      "name": "CmbPrA11y",
+      "properties": {
+        "Height": 34,
+        "Index": 0,
+        "Items": [
+          "warnings",
+          "notes",
+          "nothing"
+        ],
+        "Text": "warnings",
+        "Tooltip": "How the project check reports a control a screen reader cannot name: as a warning, as a note, or not at all.",
+        "Width": 200,
+        "X": 130,
+        "Y": 242
+      }
+    },
+    {
+      "type": "Label",
       "name": "LblPrUses",
       "properties": {
         "Height": 24,
         "Text": "Libraries:",
         "Width": 200,
         "X": 12,
-        "Y": 246
+        "Y": 292
       }
     },
     {
@@ -176,7 +206,7 @@
         "Style": "frame",
         "Width": 528,
         "X": 12,
-        "Y": 274
+        "Y": 320
       }
     },
     {
@@ -189,7 +219,7 @@
         "Width": 528,
         "Wrap": true,
         "X": 12,
-        "Y": 392
+        "Y": 438
       }
     },
     {
@@ -200,7 +230,7 @@
         "Text": "Load order:",
         "Width": 200,
         "X": 12,
-        "Y": 438
+        "Y": 484
       }
     },
     {
@@ -213,7 +243,7 @@
         "VAlign": "Fill",
         "Width": 424,
         "X": 12,
-        "Y": 466
+        "Y": 512
       }
     },
     {
@@ -225,7 +255,7 @@
         "Text": "Up",
         "Width": 92,
         "X": 448,
-        "Y": 466
+        "Y": 512
       }
     },
     {
@@ -237,7 +267,7 @@
         "Text": "Down",
         "Width": 92,
         "X": 448,
-        "Y": 504
+        "Y": 550
       }
     },
     {
@@ -250,7 +280,7 @@
         "Tooltip": "Write the order this project already loads in, so it can be changed",
         "Width": 92,
         "X": 448,
-        "Y": 552
+        "Y": 598
       }
     },
     {
@@ -264,7 +294,7 @@
         "Width": 528,
         "Wrap": true,
         "X": 12,
-        "Y": 598
+        "Y": 644
       }
     },
     {
@@ -278,7 +308,7 @@
         "VAlign": "End",
         "Width": 90,
         "X": 350,
-        "Y": 646
+        "Y": 692
       }
     },
     {
@@ -293,7 +323,7 @@
         "VAlign": "End",
         "Width": 90,
         "X": 450,
-        "Y": 646
+        "Y": 692
       }
     }
   ]

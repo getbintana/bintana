@@ -15,6 +15,9 @@
  */
 "use strict";
 
+/* `CmbPrA11y`'s entries, in its order: the level each one writes. */
+const A11Y_CHOICES = ["warning", "info", "off"];
+
 export class ProjectForm extends Form {
 
     /*
@@ -62,6 +65,18 @@ export class ProjectForm extends Form {
         dlg.CmbPrStartup.Items = dlg.classNames;
         dlg.CmbPrKind.Index = record.Main ? Kind.Function : Kind.Form;
         dlg.showKind(record.Main || record.Startup);
+
+        /*
+         * How loudly the check speaks about a control a screen reader cannot
+         * name -- `"accessibility"`, the one key of the manifest that could
+         * only be written by hand. Read the way the check reads it
+         * (`Accessibility.level`), so the box shows what the IDE will do, and
+         * remembered so an untouched box writes nothing: a manifest that says
+         * no word keeps saying none, and one whose word is not a level keeps
+         * it for `Validate` to report.
+         */
+        dlg.a11yShown = A11Y_CHOICES.indexOf(Accessibility.level({ accessibility: record.Accessibility }));
+        dlg.CmbPrA11y.Index = dlg.a11yShown;
 
         dlg.showUses();
         dlg.showSources();
@@ -271,6 +286,13 @@ export class ProjectForm extends Form {
             ["Main",        console ? starts : ""],
             ["Description", this.TxtPrDesc.Text.trim()],
         ];
+
+        /* By position, for the reason `Kind` is: the entries are prose and
+         * translated. `warning` is what no word means, so choosing it writes
+         * none. */
+        const a11y = this.CmbPrA11y.Index;
+        if (a11y >= 0 && a11y !== this.a11yShown)
+            fields.push(["Accessibility", a11y === 0 ? "" : A11Y_CHOICES[a11y]]);
 
         for (const [name, value] of fields) {
             try {

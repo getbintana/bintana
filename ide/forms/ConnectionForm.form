@@ -1,0 +1,134 @@
+{
+  "format": "bintana-form/1",
+  "class": "ConnectionForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 250,
+    "Text": "Connection",
+    "Width": 540
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "PnlContent",
+      "properties": {
+        "Arrangement": "Vertical",
+        "Expand": true,
+        "Margin": 12,
+        "Spacing": 12
+      },
+      "children": [
+        {
+          "type": "Grid",
+          "name": "Fields",
+          "properties": {
+            "Columns": 2,
+            "Spacing": 8
+          },
+          "children": [
+            {
+              "type": "Label",
+              "name": "LblConnName",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Name:",
+                "For": "TxtConnName"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtConnName",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Placeholder": "sales",
+                "Tooltip": "What a form names it by: a source of sales.clients is the table clients of the database sales.conn says"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblConnKind",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Kind:",
+                "For": "CmbConnKind"
+              }
+            },
+            {
+              "type": "ComboBox",
+              "name": "CmbConnKind",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Index": 0,
+                "Items": [
+                  "an SQLite file"
+                ]
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblConnPath",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Database:",
+                "For": "TxtConnPath"
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtConnPath",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Icon": "document-open-symbolic",
+                "Placeholder": "data/sales.db",
+                "Tooltip": "The file, relative to the project so it travels with it. It need not exist yet: the program creates it the first time it opens it"
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblConnState",
+              "properties": {
+                "ColumnSpan": 2,
+                "HAlign": "Fill",
+                "Style": "dim-label",
+                "Wrap": true
+              }
+            }
+          ]
+        },
+        {
+          "type": "Panel",
+          "name": "PnlButtons",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "End",
+            "Spacing": 8,
+            "VAlign": "End",
+            "VExpand": true
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnConnCancel",
+              "properties": {
+                "Cancel": true,
+                "Text": "Cancel"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnConnOk",
+              "properties": {
+                "Default": true,
+                "Style": "suggested-action",
+                "Text": "OK"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

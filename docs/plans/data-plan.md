@@ -503,15 +503,18 @@ properties alone are a declaration and not a binding:
 **`Form.Source` is built, and the resolution is the plan's**: `sales.clients`
 names a connection and a table in it, and a connection is a `.conn` file beside
 the project's other resources -- `{ "kind": "sqlite", "path": "data/clients.db" }`
--- which is the resource this document describes without its dialog and its
-icon. Anything else names a file of the project, read as JSON. The rows are
+-- which is the resource this document describes, with its category, its icon
+and its dialog (`ConnectionForm`). Anything else names a file of the project, read as JSON. The rows are
 read once and kept, and `Reload()` reads them again.
 
 **The drop-down offers both** -- the project's `.json` and the tables of every
 connection, `shop.clients` beside `customers.json`, read out of the database and
-kept until that database changes. What is **not** built of that row: the `.conn`
-has a category and an icon in the project tree, and its double click opens the
-Data view, but no dialog edits it. `Rows()` takes the record class because a project's class
+kept until that database changes. The `.conn` has a category and an icon in
+the project tree, its double click opens the Data view, and **`ConnectionForm`
+edits it** -- *Edit connection...* on the tree's menu, *File > New
+connection...* for a new one at the project's top, where `Source` looks --
+saying what the path leads to (its tables, *not created yet*, or SQLite's
+refusal) without creating the file by looking. `Rows()` takes the record class because a project's class
 is a lexical binding and the prelude cannot resolve a name to one.
 
 **And the designer offers both properties now**, from the project: `Record` is

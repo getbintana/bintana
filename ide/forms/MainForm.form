@@ -325,6 +325,10 @@
           "text": "New test..."
         },
         {
+          "name": "MnuNewConnection",
+          "text": "New connection..."
+        },
+        {
           "separator": true
         },
         {
@@ -1564,6 +1568,10 @@
                                       {
                                         "name": "MnuFtTranslateWith",
                                         "text": "Open in external editor"
+                                      },
+                                      {
+                                        "name": "MnuFtConnection",
+                                        "text": "Edit connection..."
                                       },
                                       {
                                         "separator": true
