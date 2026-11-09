@@ -2824,6 +2824,7 @@ static bool install_globals(BtaApp *app)
      */
     bta_record_init(ctx, global, app->dir, app->libs);
     bta_class_of_name_init(ctx, global);
+    bta_strict_init(ctx, global);
 
     JS_FreeValue(ctx, global);
 
@@ -3079,6 +3080,7 @@ void bta_close_hatches(JSContext *ctx)
      */
     delete_named(ctx, global, "recordFile");
     delete_named(ctx, global, "classOfName");
+    delete_named(ctx, global, "strictSeal");
 
     JS_FreeValue(ctx, global);
 }

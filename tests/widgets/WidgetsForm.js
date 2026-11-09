@@ -9262,6 +9262,9 @@ function Main() {
         });
         File.Save(File.Join(proj, "Strict.js"),
                   `const PNG = ${JSON.stringify(File.Join(proj, "frame.png"))};\n` +
+                  "class Row extends Record {\n" +
+                  "    static Fields = { Name: Field.Text(), Age: Field.Int() };\n" +
+                  "}\n" +
                   "class Strict extends Form {\n" +
                   "    Art_Draw(p) { p.Rectangle(0, 0, 10, 10); p.Fill(); }\n" +
                   "    Form_Open() {\n" +
@@ -9283,6 +9286,11 @@ function Main() {
                   "        print('component: ' + this.Cmp.Lazy);\n" +
                   "        try { this.Cmp.Nope = 1; print('accepted Nope'); }\n" +
                   "        catch (e) { print('component refused: ' + e.message); }\n" +
+                  "        const row = new Row({ Name: 'a', Age: 3 });\n" +
+                  "        row.Age = 4;                        /* a field its shape declares */\n" +
+                  "        print('record: ' + row.Age);\n" +
+                  "        try { row.Agee = 5; print('accepted Agee'); }\n" +
+                  "        catch (e) { print('record refused: ' + e.message); }\n" +
                   "        print('saved: ' + JSON.stringify(this.Serialize()).length);\n" +
                   "        Application.Quit(0);\n" +
                   "    }\n" +
@@ -9321,6 +9329,12 @@ function Main() {
                        all.includes("component: set"), all);
                  check("...and refuses one it does not have",
                        all.includes("no 'Nope' to assign"), all);
+
+                 /* A record is a shape, so the mode reaches it too. */
+                 check("a record takes the fields its shape declares",
+                       all.includes("record: 4"), all);
+                 check("...and refuses one it does not have",
+                       all.includes("no 'Agee' to assign"), all);
                  check("...with nothing quietly accepted",
                        !all.includes("accepted"), all);
                  check("and the form still serialises",
@@ -30596,6 +30610,12 @@ class Form1 extends Form {
             t.Done = () => {}; t.Error = () => {};
             t.Start({ f: () => {} });
         });
+        throws("an invalid Date has no instant to cross", () => {
+            const t = new TaskWork();
+
+            t.Done = () => {}; t.Error = () => {};
+            t.Start({ at: new Date(NaN) });
+        });
         /* And Report is the worker's voice: on a proxy it is at the wrong end. */
         throws("Report is refused on the handle", () => new TaskWork().Report(1));
 
@@ -31188,6 +31208,22 @@ class Form1 extends Form {
                 next();
             };
             t.Start({ mode: "bytes", data });
+        });
+
+        steps.push(() => {
+            const at = new Date("2024-01-02T03:04:05Z");
+            const t  = new TaskWork();
+
+            t.Error = (m) => fail(`date errored: ${m}`);
+            t.Done  = (r) => {
+                check("a worker receives a Date", r.at instanceof Date);
+                eq("...at the same instant", r.at.getTime(), at.getTime());
+                eq("...and can read its epoch", r.epoch, at.getTime());
+                check("...and answers a Date", r.later instanceof Date);
+                eq("...at the instant it built", r.later.getTime(), 86400000);
+                next();
+            };
+            t.Start({ mode: "date", at });
         });
 
         /*

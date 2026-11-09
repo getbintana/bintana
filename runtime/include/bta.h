@@ -1264,6 +1264,9 @@ void bta_strict_want(void);
 bool bta_strict(void);
 /* Seal one object, if the mode is on. Silent and cheap when it is not. */
 void bta_strict_seal(JSContext *ctx, JSValueConst obj);
+/* The hook `rad.js` seals a Record with -- same mode, same silence. Not a
+ * language name: it is captured by the prelude and deleted with the hatches. */
+void bta_strict_init(JSContext *ctx, JSValueConst global);
 void bta_debug_start(JSContext *ctx);
 void bta_debug_stopping(JSContext *ctx, int code);
 /* A Task worker's context gets the debugger's hook; its stops name `name`. */

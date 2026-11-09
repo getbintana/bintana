@@ -52,6 +52,7 @@ const monotonicNow = monotonic;
  */
 const findRecordFile = recordFile;
 const resolveName    = classOfName;
+const sealObject     = strictSeal;
 
 /*
  * The reflection this file is built out of, held on the same terms.
@@ -4410,6 +4411,16 @@ GLOBAL.Record = class Record {
     constructor(values) {
         const fields = this.#fields();
         for (const name in fields) this.#d[name] = freshDefault(fields[name]);
+
+        /*
+         * `--strict`: a record is its shape, so a name the shape does not have
+         * is a typo and not a new field. The fields are accessors on the
+         * prototype, so `row.Name = "x"` still goes through its setter after
+         * this; what it refuses is `row.Nmae = "x"` -- the own property that
+         * would be written once and read never. Sealed before `Apply`, so a
+         * constructor's own bag is checked too. Off unless the mode is on.
+         */
+        sealObject(this);
         if (values) this.Apply(values);
     }
 

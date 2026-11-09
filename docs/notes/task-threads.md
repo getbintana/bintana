@@ -138,3 +138,13 @@
   `JS_SetPropertyStr(ctx, out, JS_ToCString(ctx, key), copy)`. Walk properties
   by **atom** (`JS_GetOwnPropertyNames` + `JS_GetProperty`/`JS_SetProperty` +
   `JS_FreePropertyEnum`) and there is no string to forget.
+- **A message carries what has a spelling, and refuses the rest.** `Decimal`
+  crosses as `{$decimal: "19.90"}`, `Bytes` as base64 under `{$bytes: …}`, and
+  `Date` as its epoch milliseconds under `{$date: …}`; `task_check` accepts
+  them, `task_shadow` rewrites them and `task_revive` rebuilds them through the
+  same classes on the far side. Everything else a `JSON.stringify` would
+  subset silently -- a function, a class instance, a cycle, `undefined`, a
+  non-finite number, an invalid `Date` -- is refused by name. A `Record`
+  crosses as what `Serialize` writes and comes back through `Load`; the
+  worker's missing `Exec`, `Timer`, `Dialog` and `Settings` are the callback
+  frontier above, not a gap in the message.

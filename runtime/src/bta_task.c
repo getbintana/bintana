@@ -96,13 +96,14 @@
  * joinable rather than hopeful.
  *
  * A message is a tree of plain data -- objects, arrays, strings, numbers,
- * booleans, null -- plus `Decimal`, which travels as `{$decimal: "19.90"}` and
- * is rebuilt through the same class on the far side.  Both directions run the
- * same two functions, because both sides have the same classes.  Anything else
- * (functions, class instances, cycles, `undefined`, non-finite numbers,
- * `Bytes`) is **refused out loud**, because `JSON.stringify` would drop or
- * null half of that list in silence, and a silent subset is how a total goes
- * wrong on exactly one machine.
+ * booleans, null -- plus the value types that have a spelling: `Decimal`
+ * (`{$decimal: "19.90"}`), `Bytes` (`{$bytes: "<base64>"}`) and `Date`
+ * (`{$date: <epoch ms>}`), each rebuilt through the same class on the far
+ * side.  Both directions run the same two functions, because both sides have
+ * the same classes.  Anything else (functions, class instances, cycles,
+ * `undefined`, non-finite numbers, an invalid `Date`) is **refused out loud**,
+ * because `JSON.stringify` would drop or null half of that list in silence,
+ * and a silent subset is how a total goes wrong on exactly one machine.
  */
 #include "bta.h"
 #include "bta_prelude.h"
@@ -115,6 +116,7 @@
  * by accident. */
 #define TASK_DEC_TAG "$decimal"
 #define TASK_BYTES_TAG "$bytes"
+#define TASK_DATE_TAG "$date"
 
 /* ------------------------------------------------------------------ mode */
 
@@ -807,6 +809,18 @@ static bool task_check(JSContext *ctx, TaskWalk *w, JSValueConst v)
     if (!JS_IsObject(v))
         return false;
 
+    /* A Date is terminal, and an invalid one has nothing to carry: its
+     * `getTime` is NaN, which JSON would write as null in silence. */
+    if (JS_IsDate(v)) {
+        double d = 0;
+
+        if (JS_ToFloat64(ctx, &d, v) < 0) {
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            return false;
+        }
+        return isfinite(d);
+    }
+
     /* A decimal is terminal: it crosses as its own digits. */
     if (task_is_dec(ctx, w->dec_proto, v))
         return true;
@@ -944,6 +958,19 @@ static JSValue task_shadow(JSContext *ctx, JSValueConst dec_proto,
     if (!JS_IsObject(v))
         return JS_DupValue(ctx, v);
 
+    if (JS_IsDate(v)) {
+        double  ms = 0;
+        JSValue tag;
+
+        if (JS_ToFloat64(ctx, &ms, v) < 0)
+            return JS_EXCEPTION;
+        tag = JS_NewObject(ctx);
+        if (JS_IsException(tag))
+            return tag;
+        JS_SetPropertyStr(ctx, tag, TASK_DATE_TAG, JS_NewFloat64(ctx, ms));
+        return tag;
+    }
+
     if (task_is_dec(ctx, dec_proto, v)) {
         /* Written down the way a file writes one: its own digits, exactly. */
         JSValue str = JS_ToString(ctx, v);
@@ -1000,7 +1027,7 @@ static char *task_pack(JSContext *ctx, JSValueConst v)
     if (!task_check(ctx, &w, v)) {
         JS_ThrowTypeError(ctx, "Task: messages carry plain data -- objects, "
                                "arrays, strings, numbers, booleans, null, "
-                               "decimals and Bytes.  Functions, class "
+                               "dates, decimals and Bytes.  Functions, class "
                                "instances, cycles and `undefined` do not "
                                "cross; a Record crosses as what Serialize "
                                "writes");
@@ -1079,6 +1106,23 @@ static JSValue task_revive(JSContext *ctx, JSValueConst dec_ctor, JSValue v)
             JS_FreeValue(ctx, tagged);
             JS_FreeValue(ctx, v);
             return dec;
+        }
+        JS_FreeValue(ctx, tagged);
+
+        tagged = JS_GetPropertyStr(ctx, v, TASK_DATE_TAG);
+        if (JS_IsNumber(tagged)) {
+            double  ms = 0;
+            JSValue date;
+
+            if (JS_ToFloat64(ctx, &ms, tagged) < 0) {
+                JS_FreeValue(ctx, tagged);
+                JS_FreeValue(ctx, v);
+                return JS_EXCEPTION;
+            }
+            JS_FreeValue(ctx, tagged);
+            JS_FreeValue(ctx, v);
+            date = JS_NewDate(ctx, ms);
+            return date;
         }
         JS_FreeValue(ctx, tagged);
 
@@ -1461,6 +1505,7 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      * own tree, and the index is this context's (bta_form.c). */
     bta_record_init(ctx, global, job->app_dir, job->app_libs);
     bta_class_of_name_init(ctx, global);
+    bta_strict_init(ctx, global);
 
     /* rad.js, the same text the main thread runs: Dictionary, Regex,
      * Stopwatch, Record, Field, Table and Namespace come from here, and

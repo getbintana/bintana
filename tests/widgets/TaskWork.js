@@ -286,6 +286,11 @@ class TaskWork extends Task {
         if (msg.mode === "bytes")
             return { n: msg.data.Length, back: msg.data, b64: msg.data.ToBase64() };
 
+        /* A Date crosses as its epoch milliseconds, and comes back a Date. */
+        if (msg.mode === "date")
+            return { at: msg.at, epoch: msg.at.getTime(),
+                     later: new Date(86400000) };
+
         /* A stream that never ends, so only the token can end the verb: the
          * proof that it is asked part-way, not only before the first block. */
         if (msg.mode === "endless") {

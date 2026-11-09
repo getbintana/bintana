@@ -1,6 +1,7 @@
 # Strict checks: what had to move first was the runtime's own bookkeeping
 
-**Built, all five stages.** `bintana --strict` makes a control refuse a property
+**Built, all five stages, and a `Record` since 2026-11-08.** `bintana --strict`
+makes a control refuse a property
 its class does not have, so a misspelt name throws where it is written instead of
 doing nothing forever; the IDE offers it as *Project → Strict checks while
 running*. The idea was one line, and measuring it turned a one-line feature into
@@ -240,6 +241,23 @@ only ever adds. [`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/
 why the switches are **copied** into a new configuration rather than inherited
 from anywhere.
 
+## Records, which are a shape
+
+A `Record` is its declared fields and nothing else, so the mode reaches it too:
+a name the shape does not have is a typo rather than a new field. `rad.js`
+seals the instance in `Record`'s constructor -- after the fields have their
+starting values, and **before** `Apply`, so a constructor's own bag is checked
+too. A declared field is an accessor on the prototype, so `row.Name = "x"` still
+goes through its setter; `row.Nmae = "x"` is the own property that used to be
+written once and read never. The seal is the same `JS_PreventExtensions`,
+reached from JavaScript through `strictSeal`, a hook `bta_close_hatches` deletes
+like `recordFile` and `classOfName`.
+
+**A plain object is not sealed**, and that is not the same gap: it has no shape
+to misspell against, and a bag that could not take a name would not be a bag.
+The record is the object whose names are declared; the bag's are its data. The
+audit's L3 asked for the first and named the second, and this is the answer.
+
 ## What it catches, and what it does not
 
 The two halves are complementary, and the table is the argument for having built
@@ -251,6 +269,7 @@ both:
 | a control reached by name (`this[which].Txt`) | no | yes |
 | a control, a menu item or a command named `Actions` | yes, as an **error** | **done, and by neither of them**: all three loaders look at the answer now and refuse the form. Only the read-only members land there -- a *method* like `Close` is shadowed rather than refused, the form still runs, and that one is the static check's alone |
 | a property of a component of the project | no -- the IDE never loads its code | yes |
+| a field of a `Record` (`row.Nmae`) | no | yes, in the act; a declared field still sets |
 | a `.form` the IDE has never opened | no | yes |
 | `Btn_Clik()`, the handler nobody calls | **yes** | no: nothing is assigned |
 | `this.state = …` on a **form** | no | no, and on purpose: a form is the application's own object |

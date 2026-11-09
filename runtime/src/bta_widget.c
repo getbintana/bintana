@@ -8167,6 +8167,28 @@ void bta_strict_seal(JSContext *ctx, JSValueConst obj)
         JS_PreventExtensions(ctx, obj);
 }
 
+/* What rad.js calls after a Record has its fields in place: the same mode, for
+ * an object JavaScript builds. The answer is consumed rather than left pending
+ * -- a refusal here is the app's to catch, and a dangling exception would
+ * surface at whatever the program evaluated next. */
+static JSValue js_strict_seal(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    (void)this_val;
+
+    if (argc < 1 || !JS_IsObject(argv[0]))
+        return JS_ThrowTypeError(ctx, "strictSeal(object) needs an object");
+    if (strict_checks && JS_PreventExtensions(ctx, argv[0]) < 0)
+        return JS_EXCEPTION;
+    return JS_UNDEFINED;
+}
+
+void bta_strict_init(JSContext *ctx, JSValueConst global)
+{
+    JS_SetPropertyStr(ctx, global, "strictSeal",
+                      JS_NewCFunction(ctx, js_strict_seal, "strictSeal", 1));
+}
+
 static const JSCFunctionListEntry widget_props[] = {
     /* Name
      *   how the form reaches it — `this.BtnSave` — and the prefix its
