@@ -583,8 +583,9 @@ key and its position moves when a parent folds.
   -- measured with a real pointer -- and `DataGrid` maps them with
   `HeaderHeight`, `RowHeight`, `ScrollY`, `ScrollX` and `ColumnWidths`. A press
   marks one cell, Shift extends from the anchor, a drag follows the pointer, and
-  `Copy` answers the rectangle instead of the rows. A grouped grid has no
-  rectangle: its rows are keys in a tree.
+  `Copy` answers the rectangle instead of the rows. **Ctrl+click is still
+  the table's row selection**, and lets the rectangle go, so whole rows remain
+  reachable; a grouped grid has no rectangle: its rows are keys in a tree.
 
 ## Tab, and where the focus comes back to
 

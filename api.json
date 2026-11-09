@@ -21287,7 +21287,7 @@
               "Params": 0,
               "Signature": "()",
               "Returns": "",
-              "Doc": "take the mark off every cell; answers the grid",
+              "Doc": "take the mark off every cell, leaving no rows selected; answers the grid",
               "Native": false
             },
             {
@@ -21359,7 +21359,7 @@
               "Params": -1,
               "Signature": "",
               "Returns": "",
-              "Doc": "the selected row, `-1` for none. Assigning selects it in both halves",
+              "Doc": "the selected row, or the anchor row of a cell rectangle, `-1` for none. Assigning selects a row in both halves and lets the rectangle go",
               "Native": false
             },
             {
@@ -21422,7 +21422,7 @@
               "Params": 4,
               "Signature": "(row, column, toRow, toColumn)",
               "Returns": "",
-              "Doc": "mark a rectangle of cells, in any order, and answer the grid. A grouped grid refuses: its rows are keys in a tree, not positions",
+              "Doc": "mark a rectangle of cells, in any order, and answer the grid. The row selection lets go, as a press does. A grouped grid refuses: its rows are keys in a tree, not positions",
               "Native": false
             },
             {
@@ -21431,7 +21431,7 @@
               "Params": -1,
               "Signature": "",
               "Returns": "",
-              "Doc": "every selected row, as an array of indices in order",
+              "Doc": "every selected row, as an array of indices in order -- or, with a cell rectangle marked, the rows it covers",
               "Native": false
             },
             {

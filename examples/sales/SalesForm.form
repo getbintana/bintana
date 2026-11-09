@@ -50,8 +50,8 @@
           "type": "Button",
           "name": "BtnCopy",
           "properties": {
-            "Text": "Copy rows",
-            "Tooltip": "The selected rows, for a spreadsheet (Ctrl+C)"
+            "Text": "Copy",
+            "Tooltip": "The marked cells, or the selected rows (Ctrl+C)"
           }
         },
         {
