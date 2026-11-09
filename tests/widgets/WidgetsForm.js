@@ -464,7 +464,8 @@ class Coded extends Record {
     static Fields = { Code: Field.Text({ key: true }), What: Field.Text() };
 }
 
-/* Three shapes that do not fit that table, each in its own way. */
+/* Shapes that do not fit that table, each in its own way, and one that spells
+ * its columns in another case -- the same identifier to SQL. */
 class NoKeyed extends Record {
     static Naming = "snake";
     static Fields = { Name: Field.Text() };
@@ -4363,21 +4364,30 @@ class Form1 extends Form {
                () => db.Table("clients", Date));
 
         /*
-         * **The four ways a shape can fail to fit a table**, checked once on the
-         * first statement. The third is the one this check exists for: SQL
-         * identifiers are case-insensitive, so `Code` against a column `code`
-         * writes perfectly and reads *empty* -- the values land in the bag of
-         * keys the shape does not describe, nothing throws, and the first thing
-         * anybody notices is a form full of blanks.
+         * **The ways a shape can fail to fit a table**, checked once on the
+         * first statement. A difference of case is not one of them: SQL treats
+         * `Code` and `code` as the same identifier, so the table reads the row
+         * as the shape spells it -- which is why the common `Id`/`id` needs no
+         * `Naming` line. A spelling that differs by more than case is still a
+         * sentence, because guessing it would bring back the silent empty read.
          */
         throws("a shape with a nested field, which is a table of its own",
                () => db.Table("clients", Detailed).All());
         throws("a field with no column at all",
                () => db.Table("coded", MissingColumn).All());
-        throws("a column spelled with another case",
-               () => db.Table("coded", MisCased).All());
         throws("a table that is not there",
                () => db.Table("nadie", Coded).All());
+
+        /* SQL's own rule: `Code` against `code` is the same column. */
+        db.Execute("INSERT INTO coded VALUES (?, ?)", ["CASE", "spelled"]);
+        const cased = db.Table("coded", MisCased);
+        eq("a column spelled with another case reads",
+           cased.Find("CASE").What, "spelled");
+        const casedRow = cased.Find("CASE");
+        casedRow.What = "otra";
+        cased.Save(casedRow);
+        eq("...and writes back through the column",
+           db.Query("SELECT what FROM coded WHERE code = 'CASE'")[0].what, "otra");
 
         /* A shape with no key can be *read* and not written: identity is what an
          * UPDATE needs, and an UPDATE with no WHERE is not a fallback. */

@@ -515,17 +515,26 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
 ## Database.Sqlite and Table
 
 - **SQL identifiers are case-insensitive, and that makes a `Naming` rule that is
-  nearly right the worst kind of bug.** A record whose column comes out `Code`
-  against a table column `code` *writes perfectly* -- sqlite accepts `"Code"` as
-  naming the same column -- and *reads empty*: `Record.Load` matches a file's
-  keys exactly, so `code` is a key the shape does not describe, goes into the
-  unknown-keys bag, is faithfully kept and handed back on the next save. The
-  record comes out at every default with the real values hidden inside it,
-  nothing throws, and the first thing anybody notices is a form full of blanks.
-  Found within minutes of writing the first `Table`, in a test class that had no
-  `Naming` line. `Table.#fit` compares the shape against `Columns()` on the first
-  statement and refuses; it catches a missing column and an absent table on the
-  way.
+  nearly right the worst kind of bug.** A record whose column comes out
+  `CustomerName` against a table column `customer_name` *writes perfectly* --
+  sqlite accepts `"CustomerName"` as naming the same column -- and *reads
+  empty*: `Record.Load` matches a file's keys exactly, so `customer_name` is a
+  key the shape does not describe, goes into the unknown-keys bag, is
+  faithfully kept and handed back on the next save. The record comes out at
+  every default with the real values hidden inside it, nothing throws, and the
+  first thing anybody notices is a form full of blanks. Found within minutes of
+  writing the first `Table`, in a test class that had no `Naming` line.
+  `Table.#fit` compares the shape against `Columns()` on the first statement and
+  refuses a spelling that differs by more than case; it catches a missing column
+  and an absent table on the way.
+- **A difference of case alone is the same identifier to SQL, and the table
+  translates rather than refusing.** `Code` against `code` is accepted:
+  `#spell` renames the row's keys to the shape's spelling before `Load`, so the
+  round trip works and `Naming` is not a line every SQL record needs for
+  `Id`/`id`. The refusal is kept for anything more than case, because guessing
+  `customer_name` for `CustomerName` is exactly the silent empty read above.
+  `testDatabase` holds both halves: the case-only shape reads and saves, the
+  other spelling still refuses.
 - **`#fit` runs before the structural check, so the order of the two matters.**
   A shape with a `Field.List` pointed at its master's table reported *"wants a
   column 'lines'"* -- true, and a red herring: the real answer is that a detail

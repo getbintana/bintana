@@ -5845,6 +5845,10 @@ GLOBAL.Table = class Table {
     /* Whether the shape has been checked against the table. Once, lazily: see
      * #fit. */
     #fitted = false;
+    /* The columns SQL treats as the same name in another case, as
+     * `[what the table says, what the shape says]`: a row is translated
+     * through this on the way into `Load`. */
+    #spellings = null;
 
     constructor(conn, name, of) {
         if (!conn || typeof conn.Query !== "function")
@@ -5898,10 +5902,17 @@ GLOBAL.Table = class Table {
      * real values hidden inside it, nothing throws, and the first thing anybody
      * notices is a form full of blanks.
      *
-     * So the shape is compared with the table and the answer is a sentence. It
-     * catches two more things on the way, for nothing: a field with no column at
-     * all, and a table that is not there -- which is a better message than
-     * sqlite's `no such table` arriving from the middle of a generated
+     * **A difference of case alone is the same column to SQL, so the table
+     * translates instead of refusing.** `Code` against `code` is accepted and
+     * the row is spelled the shape's way on the way into `Load`; the record
+     * needs no `Naming` line for the common `Id`/`id`. A spelling that differs
+     * by more than case is a sentence: `customer_name` against
+     * `CustomerName` is a `Naming = "snake"` or an `as`, and guessing it would
+     * bring the silent empty read back.
+     *
+     * It catches two more things on the way, for nothing: a field with no
+     * column at all, and a table that is not there -- which is a better message
+     * than sqlite's `no such table` arriving from the middle of a generated
      * statement.
      *
      * A column the *shape* says nothing about is not a complaint: that is the
@@ -5917,6 +5928,7 @@ GLOBAL.Table = class Table {
          * asking the database again each time would add a PRAGMA to each of
          * them. */
         this.#fitted = true;
+        this.#spellings = [];
 
         const blank = this.#blank();
 
@@ -5957,13 +5969,20 @@ GLOBAL.Table = class Table {
                     `${this.#of.name}.${name} wants a column '${want}' and ` +
                     `${this.#name} has ${columns.map((c) => c.Name).join(", ")}`);
 
-            if (found !== want)
-                throw new Error(
-                    `${this.#of.name}.${name} spells its column '${want}' and ` +
-                    `${this.#name} spells it '${found}'. SQL would accept ` +
-                    `either and reading would silently find neither -- fix the ` +
-                    `record's Naming rule, or give the field ` +
-                    `as: "${found}"`);
+            if (found !== want) {
+                if (found.toLowerCase() === want.toLowerCase()) {
+                    /* SQL's own rule: the same identifier. The row is spelled
+                     * the shape's way in #load. */
+                    this.#spellings.push([found, want]);
+                } else {
+                    throw new Error(
+                        `${this.#of.name}.${name} spells its column '${want}' and ` +
+                        `${this.#name} spells it '${found}'. SQL would accept ` +
+                        `either and reading would silently find neither -- fix ` +
+                        `the record's Naming rule, or give the field ` +
+                        `as: "${found}"`);
+                }
+            }
 
             /*
              * **A decimal needs a column that keeps text, and getting this
@@ -6070,9 +6089,25 @@ GLOBAL.Table = class Table {
             { [CURSOR_LOAD]: (row) => this.#load(row) });
     }
 
+    /* The row's keys as the shape spells them, for a column SQL treats as the
+     * same name in another case. */
+    #spell(row) {
+        if (!this.#spellings.length)
+            return row;
+
+        const out = {};
+        for (const key in row)
+            if (hasOwn.call(row, key)) out[key] = row[key];
+        for (const [from, to] of this.#spellings) {
+            out[to] = row[from];
+            delete out[from];
+        }
+        return out;
+    }
+
     /* A row into a record of this shape, noting what it was. */
     #load(row) {
-        const rec = this.#of.Load(row);
+        const rec = this.#of.Load(this.#spell(row));
 
         tableRowSeen.set(rec, { table: this.#name, conn: this.#conn, row: rec.Serialize(true) });
         return rec;
