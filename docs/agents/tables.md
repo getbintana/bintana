@@ -586,6 +586,18 @@ key and its position moves when a parent folds.
   `Copy` answers the rectangle instead of the rows. **Ctrl+click is still
   the table's row selection**, and lets the rectangle go, so whole rows remain
   reachable; a grouped grid has no rectangle: its rows are keys in a tree.
+- **The arrows are the cell's before they are the row's.** GTK's list view
+  takes Left/Right/Up/Down for its row selection in the bubble phase, so
+  `on_table_key` -- the table's own capture-phase controller -- raises
+  `KeyPress` for them first. A handler that answers true consumes the key and
+  the row does not move; one that answers false falls through to GTK as before.
+  **An open editor keeps its arrows**: the capture controller checks
+  `table_find_cell(..., -1, -1)` and skips them while one exists, because the
+  field is focused and its caret is what the key is for. `DataGrid` gives the
+  key to the current cell: a plain arrow moves the anchor and collapses the
+  rectangle, Shift extends it, and the key is consumed even at the first or
+  last row or column -- an arrow with nowhere to go must not fall through and
+  select a row.
 
 ## Tab, and where the focus comes back to
 

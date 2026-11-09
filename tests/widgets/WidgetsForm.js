@@ -7202,6 +7202,18 @@ class Form1 extends Form {
                     eq("...to the one under the release", g.Range.ToRow, top + 1);
                     eq("...and Copy answers two rows", g.Copy().split("\n").length, 2);
                 }
+
+                /* An arrow moves the cell, not the row. */
+                g.SelectRange(0, 0, 0, 0);
+                g.MainView.Emit("KeyPress", "Down", false, false, false);
+                eq("Down moves the cell", g.Range.Row, 1);
+                eq("...and not the row selection", g.MainView.Selection.length, 0);
+                g.MainView.Emit("KeyPress", "Right", false, true, false);
+                eq("Shift+Right extends the rectangle", g.Range.ToColumn, 1);
+                eq("...with the anchor where it was", g.Range.Column, 0);
+                g.MainView.Emit("KeyPress", "Down", false, false, false);
+                eq("a plain arrow collapses to one cell",
+                   `${g.Range.Row},${g.Range.ToRow}`, "2,2");
                 g.ClearRange();
               } catch (e) {
                 failures.push(`DataGrid: ${e.message}`);
@@ -11671,16 +11683,16 @@ class Form1 extends Form {
         eq("Shift+Tab into the table before it chooses nothing there (it chose the last row)",
            log[1], "-1 1 -1 -1 -1:-1 L");
         eq("...and Tab back finds the row as it was", log[2], "-1 1 -1 -1 -1:-1 R");
-        eq("a cell clicked in the grid's scrolling half", log[3], "-1 1 2 2 2:2 main");
-        eq("Tab is the next cell", log[4], "-1 1 2 2 2:3 main");
-        eq("...and past the row's end, the next row's first, in the frozen half", log[5], "-1 1 3 3 3:0 frozen");
-        eq("Shift+Tab is the cell before, back across the halves", log[6], "-1 1 2 2 2:3 main");
-        eq("...along the row", log[7], "-1 1 2 2 2:2 main");
-        eq("...and into the frozen half on the same row", log[8], "-1 1 2 2 2:1 frozen");
-        eq("the grid's first row", log[9], "-1 1 0 0 0:2 main");
-        eq("...Shift+Tab walks back to its first cell", log[11], "-1 1 0 0 0:0 frozen");
+        eq("a cell clicked in the grid's scrolling half", log[3], "-1 1 2 -1 2:2 main");
+        eq("Tab is the next cell", log[4], "-1 1 2 -1 2:3 main");
+        eq("...and past the row's end, the next row's first, in the frozen half", log[5], "-1 1 3 -1 3:0 frozen");
+        eq("Shift+Tab is the cell before, back across the halves", log[6], "-1 1 2 -1 2:3 main");
+        eq("...along the row", log[7], "-1 1 2 -1 2:2 main");
+        eq("...and into the frozen half on the same row", log[8], "-1 1 2 -1 2:1 frozen");
+        eq("the grid's first row", log[9], "-1 1 0 -1 0:2 main");
+        eq("...Shift+Tab walks back to its first cell", log[11], "-1 1 0 -1 0:0 frozen");
         eq("...and past it the focus leaves the grid, the rows as they were",
-           log[12], "-1 1 0 0 0:0 R");
+           log[12], "-1 1 0 -1 0:0 R");
         eq("a press on an editing cell whose CellEditor refuses still takes the focus to its table",
            log[13].split(" ").pop(), "E");
     }

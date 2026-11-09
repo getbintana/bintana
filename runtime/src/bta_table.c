@@ -3055,31 +3055,56 @@ static gboolean table_fold_key(BtaWidget *w, guint keyval, GdkModifierType state
     return taken;
 }
 
+/* One key, named as `KeyPress` names it, answered with whether a handler ate
+ * it. The table's own controller is in the capture phase, before GTK's list
+ * view takes an arrow for its row selection. */
+static bool table_emit_key(BtaWidget *w, guint keyval, GdkModifierType state)
+{
+    JSContext  *ctx  = w->ctx;
+    const char *name = gdk_keyval_name(keyval);
+    JSValue     argv[4] = {
+        JS_NewString(ctx, name ? name : ""),
+        JS_NewBool(ctx, (state & GDK_CONTROL_MASK) != 0),
+        JS_NewBool(ctx, (state & GDK_SHIFT_MASK) != 0),
+        JS_NewBool(ctx, (state & GDK_ALT_MASK) != 0),
+    };
+    JSValue r       = bta_emit_answer(w, "KeyPress", 4, argv, NULL);
+    bool    handled = JS_ToBool(ctx, r) > 0;
+
+    JS_FreeValue(ctx, r);
+    for (int i = 0; i < 4; i++)
+        JS_FreeValue(ctx, argv[i]);
+    return handled;
+}
+
 static gboolean on_table_key(GtkEventControllerKey *k, guint keyval, guint keycode,
                              GdkModifierType state, gpointer data)
 {
     BtaWidget *w = data;
+
+    /*
+     * **The arrows are a cell's before they are a row's.** GTK's list view
+     * takes Left/Right/Up/Down for the row selection in the bubble phase; a
+     * grid with a current cell (`lib/datagrid`) hears them here, in the
+     * capture phase, and returns true. A table with no handler falls through
+     * to GTK as it always did. An open editor keeps its own arrows: the field
+     * is focused and is the one that means to move a caret.
+     */
+    if ((keyval == GDK_KEY_Left  || keyval == GDK_KEY_Right ||
+         keyval == GDK_KEY_Up    || keyval == GDK_KEY_Down  ||
+         keyval == GDK_KEY_KP_Left || keyval == GDK_KEY_KP_Right ||
+         keyval == GDK_KEY_KP_Up   || keyval == GDK_KEY_KP_Down) &&
+        !table_find_cell(w->inner, NULL, -1, -1)) {
+        if (table_emit_key(w, keyval, state))
+            return TRUE;
+    }
 
     if (keyval == GDK_KEY_Return || keyval == GDK_KEY_KP_Enter ||
         keyval == GDK_KEY_ISO_Enter) {
         if (table_find_cell(w->inner, NULL, -1, -1))
             return FALSE;
 
-        JSContext  *ctx  = w->ctx;
-        const char *name = gdk_keyval_name(keyval);
-        JSValue     argv[4] = {
-            JS_NewString(ctx, name ? name : "Return"),
-            JS_NewBool(ctx, (state & GDK_CONTROL_MASK) != 0),
-            JS_NewBool(ctx, (state & GDK_SHIFT_MASK) != 0),
-            JS_NewBool(ctx, (state & GDK_ALT_MASK) != 0),
-        };
-        JSValue r = bta_emit_answer(w, "KeyPress", 4, argv, NULL);
-        bool    handled = JS_ToBool(ctx, r) > 0;
-
-        JS_FreeValue(ctx, r);
-        for (int i = 0; i < 4; i++)
-            JS_FreeValue(ctx, argv[i]);
-        return handled;
+        return table_emit_key(w, keyval, state);
     }
 
     /* Shift+Up/Down grows the range on a `MultiSelect` table, in the capture
