@@ -136,3 +136,12 @@ columnview > listview > row.bta-row-hover:selected,
 .shared-selection:focus-within columnview > listview > row:selected:hover {
     background-color: mix(@theme_selected_bg_color, @theme_fg_color, 0.1);
 }
+
+/* **A rectangle of cells** (`TableView.SetRange`, class `bta-cell-range`):
+ * the selection colour at a fifth, on the cell's own box so it spans the
+ * cell rather than the text. It is a class and not a drawn frame, so an
+ * application's `app.css` can paint it its own way -- `bta-cell-current`
+ * makes the same bargain. */
+columnview .bta-cell-range {
+    background-color: alpha(@theme_selected_bg_color, 0.22);
+}

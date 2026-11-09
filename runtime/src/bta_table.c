@@ -303,6 +303,15 @@ typedef struct {
     BtaTableRow   *cell;
     guint          cell_col;
 
+    /* **The cell range marked on screen**: two visible positions and two
+     * columns, inclusive, and whether there is one. Positions and not row
+     * pointers, because a range may open on a row that is not drawn; `cell_fill`
+     * already has the position the model bound. `SetRange` refuses a tree:
+     * a node is addressed by key and its position moves when a parent folds. */
+    int            range_from, range_to;
+    int            range_cfrom, range_cto;
+    bool           range_on;
+
     /* **How many times the table was remade**: `Clear`, `Count`, `Columns`,
      * a model of another shape (on demand, a tree, multiple selection). A verb
      * that raises an event and goes on working reads it before the emit and
@@ -3147,6 +3156,10 @@ static BtaCell *table_find_cell(GtkWidget *x, BtaTableRow *row, int index, int c
  * its cells changed; the verbs that empty a table drop it first.
  */
 #define CELL_CURRENT_CLASS "bta-cell-current"
+/* A cell inside a `SetRange` rectangle. The class is the whole of the mark:
+ * the runtime's sheet paints it, and an application's `app.css` may paint it
+ * its own way, the same bargain `bta-cell-current` makes. */
+#define CELL_RANGE_CLASS "bta-cell-range"
 
 /* Whether this drawn cell is the current one. **An on-demand row is compared
  * by the index it stands for**: every bind makes a fresh row object, so the
@@ -3160,6 +3173,24 @@ static bool table_cell_is_current(BtaWidget *w, BtaTableRow *row, guint col)
     if (!row->cells || !st->cell->cells)
         return !row->cells && !st->cell->cells && row->index == st->cell->index;
     return st->cell == row;
+}
+
+/* Whether this drawn cell is inside the range, in the same visible positions
+ * `SetRange` was given. */
+static bool table_cell_in_range(BtaWidget *w, int pos, guint col)
+{
+    TableState *st = table_state(w);
+    int         r0, r1, c0, c1;
+
+    if (!st->range_on || pos < 0)
+        return false;
+
+    r0 = MIN(st->range_from, st->range_to);
+    r1 = MAX(st->range_from, st->range_to);
+    c0 = MIN(st->range_cfrom, st->range_cto);
+    c1 = MAX(st->range_cfrom, st->range_cto);
+
+    return pos >= r0 && pos <= r1 && (int)col >= c0 && (int)col <= c1;
 }
 
 /* The drawn cell of the current one, or NULL when it is not on screen. */
@@ -3237,6 +3268,9 @@ static void table_current_set(BtaWidget *w, BtaTableRow *row, guint col)
 /* The current cell cleared, for the verbs that take rows away. */
 static void table_current_clear(BtaWidget *w)
 {
+    /* A row that is being taken away cannot anchor a rectangle either. The
+     * rows' fills are what take the class off, and they are about to go. */
+    table_state(w)->range_on = false;
     table_current_set(w, NULL, 0);
 }
 
@@ -3271,6 +3305,48 @@ static int table_row_position(GtkWidget *row)
         }
     }
     return -1;
+}
+
+/* The row object a drawn row widget stands for, and its visible position.
+ * Answers a reference, or NULL above the rows. */
+static BtaTableRow *table_row_of_widget(GtkWidget *row, int *pos)
+{
+    for (GtkWidget *x = row ? gtk_widget_get_first_child(row) : NULL; x;
+         x = gtk_widget_get_first_child(x)) {
+        GtkListItem *item = g_object_get_data(G_OBJECT(x), ITEM_KEY);
+        gpointer     what;
+
+        if (!item)
+            continue;
+        if (pos) {
+            guint at = gtk_list_item_get_position(item);
+
+            *pos = at == GTK_INVALID_LIST_POSITION ? -1 : (int)at;
+        }
+        what = gtk_list_item_get_item(item);
+        if (GTK_IS_TREE_LIST_ROW(what))
+            return gtk_tree_list_row_get_item(GTK_TREE_LIST_ROW(what));
+        return what ? g_object_ref(what) : NULL;
+    }
+    return NULL;
+}
+
+/* Every drawn row told its cells may have changed, which is what re-runs
+ * `cell_fill` and therefore puts the range class on or takes it off. Only the
+ * rows on screen are touched: the model says where when they come back. */
+static void table_range_paint(BtaWidget *w)
+{
+    GtkWidget *list = table_list_view(w);
+
+    for (GtkWidget *row = list ? gtk_widget_get_first_child(list) : NULL; row;
+         row = gtk_widget_get_next_sibling(row)) {
+        BtaTableRow *r = table_row_of_widget(row, NULL);
+
+        if (r) {
+            g_signal_emit(r, row_changed_signal, 0);
+            g_object_unref(r);
+        }
+    }
 }
 
 /* The row widget around any widget inside one -- the child of the internal
@@ -3800,7 +3876,7 @@ static void cell_style_apply(GtkWidget *lbl, const char *style)
  * changed.
  */
 static void cell_fill(BtaWidget *w, GtkWidget *box, BtaTableRow *row, guint col,
-                      bool link)
+                      bool link, int pos)
 {
     GtkWidget *img = gtk_widget_get_first_child(box);
     BtaCell   *c   = cell_get(box);
@@ -3876,6 +3952,14 @@ static void cell_fill(BtaWidget *w, GtkWidget *box, BtaTableRow *row, guint col,
     else
         gtk_widget_remove_css_class(box, CELL_CURRENT_CLASS);
 
+    /* The range is the same kind of fact: applied at the bind, so a row
+     * scrolled back wears it, and taken off the widget recycled for a cell
+     * outside it. */
+    if (table_cell_in_range(w, pos, col))
+        gtk_widget_add_css_class(box, CELL_RANGE_CLASS);
+    else
+        gtk_widget_remove_css_class(box, CELL_RANGE_CLASS);
+
     g_free(text);
     g_free(icon);
     g_free(uri);
@@ -3893,10 +3977,15 @@ static void on_row_changed(BtaTableRow *row, gpointer item)
 
     if (GTK_IS_TREE_EXPANDER(box))
         box = gtk_tree_expander_get_child(GTK_TREE_EXPANDER(box));
-    if (w && box)
+    if (w && box) {
+        guint at  = gtk_list_item_get_position(item);
+        int   pos = at == GTK_INVALID_LIST_POSITION ? -1 : (int)at;
+
         cell_fill(w, box, row,
                   GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(item), "bta-fill-col")),
-                  GPOINTER_TO_INT(g_object_get_data(G_OBJECT(item), "bta-fill-link")));
+                  GPOINTER_TO_INT(g_object_get_data(G_OBJECT(item), "bta-fill-link")),
+                  pos);
+    }
 }
 
 /* Lets go of the row a list item listened to -- the half of the recycling
@@ -3969,13 +4058,18 @@ static void on_bind_cell(GtkSignalListItemFactory *f, GtkListItem *item,
     }
 
     bool link = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(f), "bta-link"));
+    guint at  = gtk_list_item_get_position(item);
+    int   pos = at == GTK_INVALID_LIST_POSITION ? -1 : (int)at;
 
-    cell_fill(w, box, row, col, link);
+    cell_fill(w, box, row, col, link, pos);
 
     /* A held row says when it changes; one asked of `Data` is asked again by
-     * the rebind a `Count` brings. */
+     * the rebind a `Count` brings, and by `SetRange`'s walk. **Both are
+     * watched**: the range is a fact of the drawn cell and has to reach an
+     * on-demand row too, which has no `changed` of its own until the walk
+     * emits one. */
     cell_unwatch_row(item);
-    if (row && row->cells) {
+    if (row) {
         gulong id = g_signal_connect(row, "changed", G_CALLBACK(on_row_changed), item);
 
         g_object_set_data(G_OBJECT(item), "bta-fill-widget", w);
@@ -6862,6 +6956,79 @@ static guint table_index_count(BtaWidget *w)
         : g_list_model_get_n_items(table_live_model(w));
 }
 
+/* SetRange(fromRow, fromColumn, toRow, toColumn) -> TableView
+ *   mark a rectangle of cells: two visible positions and two columns,
+ *   inclusive, in either order. `bta-cell-range` is the class the cells wear;
+ *   the runtime's sheet paints it and an application's `app.css` may repaint
+ *   it. A tree refuses it -- a node is addressed by key and its position moves
+ *   when a parent folds. `SetStyle` is the per-cell class and is separate
+ */
+static JSValue table_set_range(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int r0 = 0, c0 = 0, r1 = 0, c1 = 0;
+
+    if (argc < 4 ||
+        !bta_to_int(ctx, argv[0], "SetRange", &r0) ||
+        !bta_to_int(ctx, argv[1], "SetRange", &c0) ||
+        !bta_to_int(ctx, argv[2], "SetRange", &r1) ||
+        !bta_to_int(ctx, argv[3], "SetRange", &c1))
+        return JS_ThrowTypeError(ctx, "SetRange(fromRow, fromColumn, toRow, "
+                                      "toColumn) expects four whole numbers");
+
+    TableState *st = table_state(w);
+
+    if (st->tree)
+        return JS_ThrowTypeError(ctx, "SetRange: a tree is addressed by key, "
+                                      "and a range of positions would move "
+                                      "when a node folds");
+
+    int rows = (int)table_index_count(w);
+    if (r0 < 0 || r1 < 0 || r0 >= rows || r1 >= rows)
+        return JS_ThrowRangeError(ctx, "SetRange: rows %d..%d are not in a "
+                                       "table of %d", r0, r1, rows);
+
+    GListModel *cols = gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner));
+    int         n    = cols ? (int)g_list_model_get_n_items(cols) : 0;
+
+    if (c0 < 0 || c1 < 0 || c0 >= n || c1 >= n)
+        return JS_ThrowRangeError(ctx, "SetRange: columns %d..%d are not in a "
+                                       "table of %d", c0, c1, n);
+
+    st->range_from  = r0;
+    st->range_to    = r1;
+    st->range_cfrom = c0;
+    st->range_cto   = c1;
+    st->range_on    = true;
+    table_range_paint(w);
+    return JS_UNDEFINED;
+}
+
+/* ClearRange() -> TableView
+ *   take the mark off every cell; `SetRange` puts one back
+ */
+static JSValue table_clear_range(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    TableState *st = table_state(w);
+    (void)argc;
+    (void)argv;
+
+    if (st->range_on) {
+        st->range_on = false;
+        table_range_paint(w);
+    }
+    return JS_UNDEFINED;
+}
+
 static JSValue table_get_count(JSContext *ctx, JSValueConst this_val)
 {
     BtaWidget *w = bta_this(ctx, this_val);
@@ -8229,6 +8396,17 @@ static const JSCFunctionListEntry table_props[] = {
      *   table, whose `Data` answers `{ Text, Editable: false }`
      */
     JS_CFUNC_DEF("SetEditable", 3, table_set_editable),
+    /* SetRange(fromRow, fromColumn, toRow, toColumn) -> TableView
+     *   mark a rectangle of cells with `bta-cell-range`: two visible
+     *   positions and two columns, inclusive, in either order. Flat and
+     *   on-demand tables; **a tree is refused** because a node is addressed
+     *   by key and its position moves when a parent folds
+     */
+    JS_CFUNC_DEF("SetRange", 4, table_set_range),
+    /* ClearRange() -> TableView
+     *   take the mark off every cell; `SetRange` puts one back
+     */
+    JS_CFUNC_DEF("ClearRange", 0, table_clear_range),
     /* EditCell(row, column)
      *   the click, from code: opens that cell's editor, turns a `Check`, or
      *   raises a `Custom` cell's `CellEditor`. Answers whether it did -- `false`

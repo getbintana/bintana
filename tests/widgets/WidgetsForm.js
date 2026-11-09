@@ -7173,6 +7173,36 @@ class Form1 extends Form {
                 eq("a heading sorts the grid's rows, numbers as numbers", g.Cell(0, 2), "10");
                 eq("...and both halves are filled in that order",
                    g.FrozenView.Cell(0, 0), g.Cell(0, 0));
+
+                /* **A rectangle of cells**, in the grid's own words: marked in
+                 * either half, copied instead of the rows. */
+                const first = g.Row(0);
+                g.SelectRange(0, 0, 1, 1);
+                eq("a rectangle copies its cells",
+                   g.Copy(), `${first[0]}\t${first[1]}\n${g.Row(1)[0]}\t${g.Row(1)[1]}`);
+                check("...and is the grid's", g.Range !== null && g.Range.ToRow === 1,
+                      JSON.stringify(g.Range));
+                g.ClearRange();
+                g.Index = 3;
+                check("with no rectangle, Copy is the rows again",
+                      g.Copy().startsWith(`${g.Row(3)[0]}\t`), g.Copy());
+
+                /* The pointer path: a press and a drag in the scrolling half. */
+                const top = Math.floor((g.MainView.ScrollY + g.MainView.RowHeight * 0.5) /
+                                       g.MainView.RowHeight);
+                const x   = g.MainView.ColumnWidths[0] * 0.5;
+                const y   = g.MainView.HeaderHeight + g.MainView.RowHeight * 0.5;
+                g.MainView.Emit("MouseDown", x, y, 1, false, false);
+                g.MainView.Emit("MouseMove", x, y + g.MainView.RowHeight, 0, false, false);
+                g.MainView.Emit("MouseUp", x, y, 1, false, false);
+                check("a press and a drag mark a rectangle", g.Range !== null,
+                      JSON.stringify(g.Range));
+                if (g.Range) {
+                    eq("...from the row under the press", g.Range.Row, top);
+                    eq("...to the one under the release", g.Range.ToRow, top + 1);
+                    eq("...and Copy answers two rows", g.Copy().split("\n").length, 2);
+                }
+                g.ClearRange();
               } catch (e) {
                 failures.push(`DataGrid: ${e.message}`);
               }

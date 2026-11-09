@@ -556,6 +556,36 @@ does too: limited to a focused table, a row chosen above and then the totals
 chosen below left the row above blue in the half under the pointer and grey in
 the other -- `srgb(52,124,211)` against `srgb(197,197,197)`, now both the first.
 
+## A rectangle of cells
+
+**`SetRange(fromRow, fromColumn, toRow, toColumn)`** marks a rectangle with the
+class `bta-cell-range`; `ClearRange` takes it off. The endpoints are **visible
+positions and columns**, inclusive and in either order, not row pointers: a
+range may open on a row that is not drawn, and `cell_fill` already receives the
+position the model bound. A **tree refuses it**, because a node is addressed by
+key and its position moves when a parent folds.
+
+- **The class is applied at the bind, like the current cell's**, and the rows
+  on screen are told their cells changed -- `table_range_paint` walks the row
+  widgets, gets the row object and emits `changed`, so `cell_fill` runs again.
+  Only the drawn rows are touched; the model paints the rest when they come
+  back.
+- **An on-demand row has no `changed` of its own.** The bind used to connect
+  the signal only when `row->cells` existed; `SetRange`'s walk emits `changed`
+  on a virtual row too now, so the class reaches it. The row is held by the list
+  item (`FILL_ROW_KEY`) exactly as a held one is.
+- **The mark is a class and not a frame.** `runtime/css/base.css` paints it with
+  the selection colour at a fifth, on the cell's box so it spans the cell;
+  `bta-cell-current` makes the same bargain, and an application's `app.css` can
+  paint either its own way.
+- **`lib/datagrid` gets the gesture from the table's own events.** `MouseDown`,
+  `MouseMove` and `MouseUp` already arrive in JavaScript with local coordinates
+  -- measured with a real pointer -- and `DataGrid` maps them with
+  `HeaderHeight`, `RowHeight`, `ScrollY`, `ScrollX` and `ColumnWidths`. A press
+  marks one cell, Shift extends from the anchor, a drag follows the pointer, and
+  `Copy` answers the rectangle instead of the rows. A grouped grid has no
+  rectangle: its rows are keys in a tree.
+
 ## Tab, and where the focus comes back to
 
 **GTK's default walked every row with Tab and, coming in backwards, chose the

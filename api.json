@@ -9794,6 +9794,15 @@
           "Native": true
         },
         {
+          "Name": "ClearRange",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "TableView",
+          "Doc": "take the mark off every cell; `SetRange` puts one back",
+          "Native": true
+        },
+        {
           "Name": "CollapseAll",
           "Kind": "Method",
           "Params": 0,
@@ -10187,6 +10196,15 @@
           "Signature": "(row, column, name)",
           "Returns": "",
           "Doc": "an icon from the theme beside a cell's text. `\"\"` takes it off. Refused on an on-demand table",
+          "Native": true
+        },
+        {
+          "Name": "SetRange",
+          "Kind": "Method",
+          "Params": 4,
+          "Signature": "(fromRow, fromColumn, toRow, toColumn)",
+          "Returns": "TableView",
+          "Doc": "mark a rectangle of cells with `bta-cell-range`: two visible positions and two columns, inclusive, in either order. Flat and on-demand tables; **a tree is refused** because a node is addressed by key and its position moves when a parent folds",
           "Native": true
         },
         {
@@ -21264,6 +21282,15 @@
               "Native": false
             },
             {
+              "Name": "ClearRange",
+              "Kind": "Method",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "take the mark off every cell; answers the grid",
+              "Native": false
+            },
+            {
               "Name": "CollapseAll",
               "Kind": "Method",
               "Params": 0,
@@ -21287,7 +21314,7 @@
               "Params": 0,
               "Signature": "()",
               "Returns": "",
-              "Doc": "the selected rows as tab-separated text, every column in declared order -- what a spreadsheet pastes -- put on the clipboard and answered",
+              "Doc": "the selected rows as tab-separated text, every column in declared order -- what a spreadsheet pastes -- put on the clipboard and answered. With a rectangle marked, that rectangle instead",
               "Native": false
             },
             {
@@ -21354,6 +21381,15 @@
               "Native": false
             },
             {
+              "Name": "Range",
+              "Kind": "ReadOnly",
+              "Params": -1,
+              "Signature": "",
+              "Returns": "",
+              "Doc": "the rectangle of cells marked on screen, `{ Row, Column, ToRow, ToColumn }` with rows as data indices, or `null`",
+              "Native": false
+            },
+            {
               "Name": "Refilter",
               "Kind": "Method",
               "Params": 0,
@@ -21378,6 +21414,15 @@
               "Signature": "(index)",
               "Returns": "",
               "Doc": "that row's values, in declared column order",
+              "Native": false
+            },
+            {
+              "Name": "SelectRange",
+              "Kind": "Method",
+              "Params": 4,
+              "Signature": "(row, column, toRow, toColumn)",
+              "Returns": "",
+              "Doc": "mark a rectangle of cells, in any order, and answer the grid. A grouped grid refuses: its rows are keys in a tree, not positions",
               "Native": false
             },
             {
