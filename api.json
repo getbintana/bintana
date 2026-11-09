@@ -10204,7 +10204,7 @@
           "Params": 4,
           "Signature": "(fromRow, fromColumn, toRow, toColumn)",
           "Returns": "TableView",
-          "Doc": "mark a rectangle of cells with `bta-cell-range`: two visible positions and two columns, inclusive, in either order. Flat and on-demand tables; **a tree is refused** because a node is addressed by key and its position moves when a parent folds",
+          "Doc": "mark a rectangle of cells with `bta-cell-range`: two visible positions and two columns, inclusive, in either order. A tree counts its rows as shown, so a fold moves them",
           "Native": true
         },
         {
@@ -21422,7 +21422,7 @@
               "Params": 4,
               "Signature": "(row, column, toRow, toColumn)",
               "Returns": "",
-              "Doc": "mark a rectangle of cells, in any order, and answer the grid. The row selection lets go, as a press does. A grouped grid refuses: its rows are keys in a tree, not positions",
+              "Doc": "mark a rectangle of cells, in any order, and answer the grid. The row selection lets go, as a press does. A grouped grid speaks of data rows; its group rows are not cells",
               "Native": false
             },
             {

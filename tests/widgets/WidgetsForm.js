@@ -7075,6 +7075,18 @@ class Form1 extends Form {
         g.Refilter();
         eq("the filter is asked as the trees are built", g.groups.map((x) => `${x.value}:${x.rows.length}`).join(), "Rivas:2,Molino:3");
 
+        /* **A rectangle works in a grouped grid too.** Its positions are the
+         * tree's drawn rows -- a group's heading between the data ones -- and
+         * the rectangle speaks of data rows. */
+        const row = g.groups[0].rows[0];
+        g.SelectRange(row, 0, row, 1);
+        check("a grouped grid takes a rectangle", g.Range !== null,
+              JSON.stringify(g.Range));
+        eq("...and Copy answers its data row",
+           g.Copy(), `${g.Cell(row, 0)}\t${g.Cell(row, 1)}`);
+        eq("...and Index is its row", g.Index, row);
+        g.ClearRange();
+
         g.GroupBy = -1;
         eq("GroupBy -1 is a flat grid again", `${F.Cell(0, 0)} ${M.Count}`, `${g.Cell(0, 0)} 6`);
         g.Delete();

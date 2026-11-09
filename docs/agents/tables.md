@@ -578,6 +578,10 @@ key and its position moves when a parent folds.
   the selection colour at a fifth, on the cell's box so it spans the cell;
   `bta-cell-current` makes the same bargain, and an application's `app.css` can
   paint either its own way.
+- **A tree's positions are its rows as shown**, so `SetRange` takes a tree too:
+  a fold moves every position under it, and the rectangle is a picture of where
+  the rows were. `lib/datagrid`'s `drawnRows` is the same list with a `null` for
+  each group heading, which is what keeps a heading from being a cell.
 - **`lib/datagrid` gets the gesture from the table's own events.** `MouseDown`,
   `MouseMove` and `MouseUp` already arrive in JavaScript with local coordinates
   -- measured with a real pointer -- and `DataGrid` maps them with
@@ -585,7 +589,9 @@ key and its position moves when a parent folds.
   marks one cell, Shift extends from the anchor, a drag follows the pointer, and
   `Copy` answers the rectangle instead of the rows. **Ctrl+click is still
   the table's row selection**, and lets the rectangle go, so whole rows remain
-  reachable; a grouped grid has no rectangle: its rows are keys in a tree.
+  reachable. In a grouped grid the positions include the group headings: a
+  rectangle speaks of data rows, a heading is not a cell, and the fold moves
+  every position under it -- `drawnRows` puts a `null` where a heading is.
 - **The arrows are the cell's before they are the row's.** GTK's list view
   takes Left/Right/Up/Down for its row selection in the bubble phase, so
   `on_table_key` -- the table's own capture-phase controller -- raises

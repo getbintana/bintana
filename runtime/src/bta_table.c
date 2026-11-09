@@ -306,8 +306,8 @@ typedef struct {
     /* **The cell range marked on screen**: two visible positions and two
      * columns, inclusive, and whether there is one. Positions and not row
      * pointers, because a range may open on a row that is not drawn; `cell_fill`
-     * already has the position the model bound. `SetRange` refuses a tree:
-     * a node is addressed by key and its position moves when a parent folds. */
+     * already has the position the model bound. A tree's positions are the
+     * rows shown -- a fold moves them, as it moves every row under it. */
     int            range_from, range_to;
     int            range_cfrom, range_cto;
     bool           range_on;
@@ -6985,8 +6985,8 @@ static guint table_index_count(BtaWidget *w)
  *   mark a rectangle of cells: two visible positions and two columns,
  *   inclusive, in either order. `bta-cell-range` is the class the cells wear;
  *   the runtime's sheet paints it and an application's `app.css` may repaint
- *   it. A tree refuses it -- a node is addressed by key and its position moves
- *   when a parent folds. `SetStyle` is the per-cell class and is separate
+ *   it. A tree counts its rows as shown, so a fold moves them. `SetStyle` is
+ *   the per-cell class and is separate
  */
 static JSValue table_set_range(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
@@ -7006,11 +7006,6 @@ static JSValue table_set_range(JSContext *ctx, JSValueConst this_val,
                                       "toColumn) expects four whole numbers");
 
     TableState *st = table_state(w);
-
-    if (st->tree)
-        return JS_ThrowTypeError(ctx, "SetRange: a tree is addressed by key, "
-                                      "and a range of positions would move "
-                                      "when a node folds");
 
     int rows = (int)table_index_count(w);
     if (r0 < 0 || r1 < 0 || r0 >= rows || r1 >= rows)
@@ -8423,9 +8418,8 @@ static const JSCFunctionListEntry table_props[] = {
     JS_CFUNC_DEF("SetEditable", 3, table_set_editable),
     /* SetRange(fromRow, fromColumn, toRow, toColumn) -> TableView
      *   mark a rectangle of cells with `bta-cell-range`: two visible
-     *   positions and two columns, inclusive, in either order. Flat and
-     *   on-demand tables; **a tree is refused** because a node is addressed
-     *   by key and its position moves when a parent folds
+     *   positions and two columns, inclusive, in either order. A tree counts
+     *   its rows as shown, so a fold moves them
      */
     JS_CFUNC_DEF("SetRange", 4, table_set_range),
     /* ClearRange() -> TableView
