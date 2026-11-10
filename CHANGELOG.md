@@ -20,8 +20,9 @@ one-page answer to *what is new since the release I have*.
 - **A notification can be clicked and can carry buttons**:
   `Notification.OnActivate = (id, action) => …`, `Buttons: [{ Label, Action }]`,
   and `CanActivate`/`MaxButtons` say what the platform delivers. Linux and macOS
-  deliver the click; Windows shows the text but has no notification actions, so
-  `CanActivate` is `false` and buttons/`Withdraw` are ignored there.
+  deliver the click; Windows does too, through a WinRT toast with up to three
+  buttons and `Withdraw` -- the first `Send` writes the Start Menu shortcut that
+  registers the project's AppUserModelID, which an unpackaged toast needs.
 - **`SerialPort`**, a serial device on the main loop: `PortName`, `Speed`,
   `DataBits`, `Parity`, `StopBits`, `FlowControl`, `Line`/`EndOfLine`,
   `Data`/`Line`/`Error`, queued `Write`/`WriteLine`, and the `FormPart`.

@@ -13,26 +13,30 @@
  *
  * ## Through the application, and not the bus
  *
- * It is `g_application_send_notification`, which goes by whatever route the
- * platform has: the freedesktop daemon on a desktop, **the notification portal
- * inside a Flatpak** -- which is how this project's packages run -- and the
- * native service elsewhere. A direct call to `org.freedesktop.Notifications`
- * would be the shorter code and would need a hole in every package's sandbox.
- * The price is that it needs the application to exist: **a project with a `main`
- * has none** (no display, no `GtkApplication`), so it refuses with a sentence
- * rather than shelling out to `notify-send`, and a tool that wants to say it is
- * done says it on stdout.
+ * On Linux and macOS it is `g_application_send_notification`, which goes by
+ * whatever route the platform has: the freedesktop daemon on a desktop, **the
+ * notification portal inside a Flatpak** -- which is how this project's
+ * packages run. A direct call to `org.freedesktop.Notifications` would be the
+ * shorter code and would need a hole in every package's sandbox. The price is
+ * that it needs the application to exist: **a project with a `main` has none**
+ * (no display, no `GtkApplication`), so it refuses with a sentence rather than
+ * shelling out to `notify-send`, and a tool that wants to say it is done says it
+ * on stdout.
+ *
+ * On Windows it is a WinRT `ToastNotification`: `GNotification`'s Win32
+ * backend is `Shell_NotifyIcon` and has no actions. A WinRT toast belongs to an
+ * AppUserModelID, and an unpackaged application's AUMID is registered by a
+ * Start Menu shortcut; the first `Send` writes one under the user's Start Menu
+ * with the project's `id`, pointing at the runtime and the project directory.
+ * A click while the program runs arrives at `OnActivate`; a click while it is
+ * not running launches it through the shortcut but carries no action (the COM
+ * activator is not implemented yet).
  *
  * ## What is not here, with the trigger
  *
- * **A click that calls back.** A notification's action is an action of the
- * application, and a callback held by a notification the desktop owns is a tenth
- * hand-rolled async job shape with the usual question of which exit forgets to
- * release (see *the nine* in AGENTS.md) -- and the daemon may keep the
- * notification for days, past the window that sent it. Nothing in the tree needs
- * it; the first application that does is the case to design it from.
- * **Buttons, sound, a progress bar and an image** are the same: the freedesktop
- * spec has them, and the portal supports fewer.
+ * **Sound, a progress bar and an image** are the freedesktop spec's and the
+ * portal supports fewer; the Windows toast's own image and progress are not
+ * wired either. Text, buttons and the click are here.
  *
  * ## Prose
  *
@@ -44,29 +48,31 @@
 
 #include "bta.h"
 
+#ifdef G_OS_WIN32
+#include "bta_notification_win32.h"
+#endif
+
 #include <string.h>
 
 /*
  * What a notification can do beyond showing text.
  *
- * **Linux and macOS deliver a click**, through the application action
- * `app.notification`: the freedesktop backend turns the daemon's
- * `ActionInvoked` back into that action, and the Cocoa backend does the same
- * with `NSUserNotification`. **Windows shows the notification but cannot
- * deliver an action**: `gwin32notificationbackend.c` uses
- * `Shell_NotifyIcon(NIF_INFO)` and says so -- "Notification actions are
- * unsupported by this Windows backend". It also warns when an action is set, so
- * the runtime does not set one there.
+ * **All three platforms deliver a click and buttons.** Linux and macOS use the
+ * application action `app.notification`: the freedesktop backend turns the
+ * daemon's `ActionInvoked` back into that action, and the Cocoa backend does the
+ * same with `NSUserNotification`. Windows uses a WinRT `ToastNotification`; its
+ * `Activated` event is marshalled to the main loop and calls the same
+ * `Notification.OnActivate`.
  *
  * The numbers of buttons are the backend's, not a guess: the Cocoa backend
  * handles `button0` only, the freedesktop/portal road draws a short row, and
- * the Windows backend draws none. `MaxButtons` publishes that; a caller that
+ * the Windows toast shows three. `MaxButtons` publishes that; a caller that
  * sends more has the extra ones ignored, which is a documented limitation and
  * not a throw -- the notification itself still arrives.
  */
 #ifdef G_OS_WIN32
-#define BTA_NOTIFICATION_CAN_ACTIVATE false
-#define BTA_NOTIFICATION_MAX_BUTTONS  0
+#define BTA_NOTIFICATION_CAN_ACTIVATE true
+#define BTA_NOTIFICATION_MAX_BUTTONS  3
 #elif defined(__APPLE__)
 #define BTA_NOTIFICATION_CAN_ACTIVATE true
 #define BTA_NOTIFICATION_MAX_BUTTONS  1
@@ -307,15 +313,24 @@ static void on_notification_action(GSimpleAction *action, GVariant *parameter,
     (void)action;
     (void)user_data;
 
-    BtaApp *app = bta_current_app();
-    if (!app || !app->ctx || !parameter)
+    if (!parameter)
         return;
 
     const char *id  = NULL;
     const char *key = NULL;
 
     g_variant_get(parameter, "(&s&s)", &id, &key);
-    if (!id)
+    bta_notification_activate(id, key);
+}
+
+/* The click, from either backend: the GAction above (Linux/macOS) or the
+ * WinRT toast's Activated event (Windows).  The handler is looked up now, on
+ * the main loop, and not held by the notification. */
+void bta_notification_activate(const char *id, const char *key)
+{
+    BtaApp *app = bta_current_app();
+
+    if (!app || !app->ctx || !id)
         return;
 
     JSContext *ctx    = app->ctx;
@@ -446,42 +461,79 @@ static JSValue notification_send(JSContext *ctx, JSValueConst this_val,
             /* The id is the caller's -- sending with the same one replaces what
              * is showing -- or ours, so that every `Send` has something to
              * `Withdraw`. GLib would make one and not say what it was. */
-            char          *made = id ? NULL : g_uuid_string_random();
-            GNotification *n    = g_notification_new(title);
+            char       *made = id ? NULL : g_uuid_string_random();
+            const char *nid  = id ? id : made;
+            bool        sent = false;
 
-            if (text && *text)
-                g_notification_set_body(n, text);
-            g_notification_set_priority(n, prio);
-            if (icn && *icn) {
-                GIcon *icon = g_themed_icon_new(icn);
-                g_notification_set_icon(n, icon);
-                g_object_unref(icon);
-            }
+#ifdef G_OS_WIN32
+            /* WinRT first: the toast is the only Windows backend that can carry
+             * a button and deliver its click.  A failure here (no COM, no
+             * Start Menu, an old Windows) falls through to the GNotification
+             * text-only road below. */
+            BtaNotificationButton *win_buttons = NULL;
+            guint                  win_count = MIN(buttons->len,
+                                                   (guint)BTA_NOTIFICATION_MAX_BUTTONS);
 
-            /* The click is the application's action, not a callback the
-             * notification owns: the daemon may keep it, and the callback
-             * waits on the `Notification` object. The action carries the id
-             * and, for a button, its key; a body click carries "". */
-            const char *nid = id ? id : made;
-
-            if (BTA_NOTIFICATION_CAN_ACTIVATE) {
-                notification_ensure_action(app);
-                g_notification_set_default_action_and_target_value(
-                    n, "app.notification", g_variant_new("(ss)", nid, ""));
-
-                for (guint i = 0; i < buttons->len &&
-                                 i < BTA_NOTIFICATION_MAX_BUTTONS; i++) {
+            if (win_count) {
+                win_buttons = g_new0(BtaNotificationButton, win_count);
+                for (guint i = 0; i < win_count; i++) {
                     NotificationButton *b = g_ptr_array_index(buttons, i);
 
-                    g_notification_add_button_with_target_value(
-                        n, b->label, "app.notification",
-                        g_variant_new("(ss)", nid, b->action));
+                    win_buttons[i].label  = b->label;
+                    win_buttons[i].action = b->action;
                 }
             }
+            if (bta_notification_win32_available() &&
+                bta_notification_win32_send(ctx, app->id, nid, title, text, urg,
+                                            win_buttons, (int)win_count,
+                                            app->dir)) {
+                ret = JS_NewString(ctx, nid);
+                sent = true;
+            }
+            g_free(win_buttons);
+#endif
 
-            g_application_send_notification(G_APPLICATION(app->gapp), nid, n);
-            ret = JS_NewString(ctx, nid);
-            g_object_unref(n);
+            if (!sent) {
+                GNotification *n = g_notification_new(title);
+                bool can_activate = BTA_NOTIFICATION_CAN_ACTIVATE;
+
+                if (text && *text)
+                    g_notification_set_body(n, text);
+                g_notification_set_priority(n, prio);
+                if (icn && *icn) {
+                    GIcon *icon = g_themed_icon_new(icn);
+                    g_notification_set_icon(n, icon);
+                    g_object_unref(icon);
+                }
+
+                /* The click is the application's action, not a callback the
+                 * notification owns: the daemon may keep it, and the callback
+                 * waits on the `Notification` object. The action carries the
+                 * id and, for a button, its key; a body click carries "". */
+#ifdef G_OS_WIN32
+                /* The fallback is GLib's Shell_NotifyIcon backend, which has
+                 * no actions and warns if one is set. */
+                can_activate = false;
+#endif
+                if (can_activate) {
+                    notification_ensure_action(app);
+                    g_notification_set_default_action_and_target_value(
+                        n, "app.notification", g_variant_new("(ss)", nid, ""));
+
+                    for (guint i = 0; i < buttons->len &&
+                                     i < BTA_NOTIFICATION_MAX_BUTTONS; i++) {
+                        NotificationButton *b = g_ptr_array_index(buttons, i);
+
+                        g_notification_add_button_with_target_value(
+                            n, b->label, "app.notification",
+                            g_variant_new("(ss)", nid, b->action));
+                    }
+                }
+
+                g_application_send_notification(G_APPLICATION(app->gapp), nid, n);
+                ret = JS_NewString(ctx, nid);
+                g_object_unref(n);
+            }
             g_free(made);
         }
         if (title)
@@ -519,6 +571,9 @@ static JSValue notification_withdraw(JSContext *ctx, JSValueConst this_val,
     const char *id = JS_ToCString(ctx, argv[0]);
     if (!id)
         return JS_EXCEPTION;
+#ifdef G_OS_WIN32
+    bta_notification_win32_withdraw(id);
+#endif
     g_application_withdraw_notification(G_APPLICATION(app->gapp), id);
     JS_FreeCString(ctx, id);
     return JS_UNDEFINED;
@@ -546,14 +601,22 @@ static JSValue notification_get_can_activate(JSContext *ctx,
                                              JSValueConst this_val)
 {
     (void)this_val;
+#ifdef G_OS_WIN32
+    return JS_NewBool(ctx, bta_notification_win32_available());
+#else
     return JS_NewBool(ctx, BTA_NOTIFICATION_CAN_ACTIVATE);
+#endif
 }
 
 static JSValue notification_get_max_buttons(JSContext *ctx,
                                             JSValueConst this_val)
 {
     (void)this_val;
+#ifdef G_OS_WIN32
+    return JS_NewInt32(ctx, bta_notification_win32_max_buttons());
+#else
     return JS_NewInt32(ctx, BTA_NOTIFICATION_MAX_BUTTONS);
+#endif
 }
 
 static const JSCFunctionListEntry notification_props[] = {
@@ -561,37 +624,41 @@ static const JSCFunctionListEntry notification_props[] = {
      *   shows a desktop notification and answers its id. With no body, the
      *   second argument may be the options: `{ Id, Urgency, Icon, Buttons }`.
      *   `Urgency` is `"Low"`, `"Normal"` (the default), `"High"` or `"Urgent"`;
-     *   `Icon` is a theme icon name; `Buttons` is `[{ Label, Action }]`, where
+     *   `Icon` is a theme icon name (the Windows toast uses the shortcut's
+     *   icon and ignores it); `Buttons` is `[{ Label, Action }]`, where
      *   `Label` is prose and `Action` is the key `OnActivate` is handed.
      *   Sending again with the same `Id` **replaces** what is showing. The
      *   title, body and labels are not looked up in a catalogue -- wrap them
      *   in `Locale.Text`. Refused in a project with a `main`, which has no
-     *   application to send from
+     *   application to send from. On Windows the first send also writes a
+     *   Start Menu shortcut with the project's `id`, which is what registers
+     *   the toast's AppUserModelID
      */
     JS_CFUNC_DEF("Send", 3, notification_send),
     /* Withdraw(id)
      *   takes a notification back, by the id `Send` answered or was given. An id
-     *   nothing is showing under is not an error. On Windows this is a no-op:
-     *   the GLib backend has no withdraw
+     *   nothing is showing under is not an error. On Windows this hides the
+     *   WinRT toast
      */
     JS_CFUNC_DEF("Withdraw", 1, notification_withdraw),
     /* OnActivate
      *   assign `(id, action) => …`: a notification was clicked. `id` is the one
      *   `Send` answered; `action` is `null` for the notification itself or the
      *   `Action` of the button. `null` takes it off. The handler is looked up
-     *   when the click arrives, and not called on Windows, where the backend
-     *   has no actions
+     *   when the click arrives. On Windows it is called while the program runs;
+     *   a click that launches a closed program carries no action yet
      */
     JS_CGETSET_DEF("OnActivate", notification_get_on_activate,
                    notification_set_on_activate),
     /* CanActivate
      *   whether this platform delivers a click: `true` on Linux (the daemon or
-     *   the portal) and macOS, `false` on Windows
+     *   the portal), macOS, and Windows 10+ where the first `Send` can register
+     *   the toast's shortcut
      */
     JS_CGETSET_DEF("CanActivate", notification_get_can_activate, NULL),
     /* MaxButtons
-     *   how many `Buttons` the platform shows: 3 on Linux, 1 on macOS and 0
-     *   on Windows. Extra buttons are ignored; the notification still arrives
+     *   how many `Buttons` the platform shows: 3 on Linux and Windows, 1 on
+     *   macOS. Extra buttons are ignored; the notification still arrives
      */
     JS_CGETSET_DEF("MaxButtons", notification_get_max_buttons, NULL),
 };
@@ -600,6 +667,9 @@ void bta_notification_cleanup(void)
 {
     BtaApp *app = bta_current_app();
 
+#ifdef G_OS_WIN32
+    bta_notification_win32_cleanup();
+#endif
     if (app && app->gapp)
         g_action_map_remove_action(G_ACTION_MAP(app->gapp), "notification");
 }

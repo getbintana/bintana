@@ -248,10 +248,13 @@ endif()
 # says false, so a project carrying a tray still builds and runs.
 if(WIN32)
     set(BTA_TRAY_SOURCE runtime/src/bta_tray_win32.c)
+    set(BTA_NOTIFICATION_SOURCE runtime/src/bta_notification_win32.c)
 elseif(APPLE)
     set(BTA_TRAY_SOURCE runtime/src/bta_tray_cocoa.c)
+    set(BTA_NOTIFICATION_SOURCE)
 else()
     set(BTA_TRAY_SOURCE runtime/src/bta_tray_linux.c)
+    set(BTA_NOTIFICATION_SOURCE)
 endif()
 
 add_executable(bintana
@@ -282,6 +285,7 @@ add_executable(bintana
     runtime/src/bta_random.c
     runtime/src/bta_gzip.c
     runtime/src/bta_notification.c
+    ${BTA_NOTIFICATION_SOURCE}
     runtime/src/bta_tray.c
     ${BTA_TRAY_SOURCE}
     runtime/src/bta_zip.c
@@ -322,10 +326,11 @@ target_link_libraries(bintana PRIVATE quickjs PkgConfig::GTK4 PkgConfig::GTKSOUR
                                        PkgConfig::GMODULE)
 if(WIN32)
     # `Shell_NotifyIconW` is shell32; the hidden window, the popup menu and the
-    # icon handles are user32; the DIB behind a theme icon is gdi32.  GTK links
-    # them already, and naming them here is what makes the tray's own half
-    # independent of GTK's link line.
-    target_link_libraries(bintana PRIVATE shell32 user32 gdi32)
+    # icon handles are user32; the DIB behind a theme icon is gdi32.  The WinRT
+    # toast needs `RoInitialize`/`RoGetActivationFactory` from runtimeobject and
+    # COM from ole32.  GTK links them already, and naming them here is what
+    # makes these halves independent of GTK's link line.
+    target_link_libraries(bintana PRIVATE shell32 user32 gdi32 runtimeobject ole32)
 endif()
 if(GIOUNIX_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)

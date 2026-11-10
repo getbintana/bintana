@@ -348,16 +348,24 @@ the daemon or Cocoa backend turns a click back into that action, and
 job shape and a callback the desktop could keep for days. The title, body and
 button labels are not translated by `Send`; the caller wraps them in `Locale.Text`.
 
-**Windows shows the text and not the interaction.** GLib's
-`gwin32notificationbackend.c` uses `Shell_NotifyIcon(NIF_INFO)` and says
-"Notification actions are unsupported by this Windows backend"; it warns if an
-action or a button is set. So the runtime does not set them there, `CanActivate`
-is `false`, `MaxButtons` is `0`, `Withdraw` is a no-op and `Urgency`/`Icon` are
-ignored. The notification still arrives. macOS supports the body click and one
-button (`button0`), which is what `MaxButtons` reports. The test observes the
-button labels and action names in the private bus's `Notify` call; the click
-itself is by hand on a real desktop, because a bus with no daemon has nothing to
-click.
+**Windows uses a WinRT toast, and it carries the interaction.** GLib's
+`gwin32notificationbackend.c` is `Shell_NotifyIcon(NIF_INFO)` and says
+"Notification actions are unsupported by this Windows backend"; it also warns
+when an action is set. The runtime therefore sends through
+`Windows.UI.Notifications` instead: a `ToastNotification` with up to three
+`<action>` buttons. A WinRT toast belongs to an AppUserModelID, and an
+unpackaged app's AUMID is registered by a Start Menu shortcut; the first `Send`
+writes `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Bintana\<id>.lnk`
+pointing at the runtime with the project directory. Measured on Windows 11
+(2026-11-10): without the shortcut `CreateToastNotifier` answers "element not
+found" (`0x80070490`); with it the toast arrived with Open/Dismiss, `OnActivate`
+received `action=open`, and `Withdraw` hid it. `CanActivate` is true and
+`MaxButtons` is 3. A click that launches a closed program carries no action yet
+(the COM activator half is not implemented).
+macOS supports the body click and one button (`button0`), which is what
+`MaxButtons` reports. The test observes the button labels and action names in
+the private bus's `Notify` call; the click itself is by hand on a real desktop,
+because a bus with no daemon has nothing to click.
 
 ## Tray: a D-Bus server, not a client
 

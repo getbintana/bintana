@@ -183,15 +183,16 @@ project that names a tray, or the application passes `FinishArgs`.
   with `GdkPixbuf` -> `CreateIconIndirect`; a `.ico` goes through `LoadImageW`.
 - No new library: `shell32`.
 - **Notifications are independent, and a WinRT toast adds no tray icon.**
-  `Notification` on Windows is planned as a WinRT `ToastNotification` backend;
-  the tray is `Shell_NotifyIcon`. They can be used alone or together, and with
-  WinRT there is no double icon by construction. GLib's `GNotification` Win32
-  backend is *not* used beside a visible tray: it creates its own
-  `Shell_NotifyIcon` and cannot reuse the tray's. If WinRT is not built, a
-  project with a tray must not call `GNotification`; the notification path is
-  the only icon. WinRT also gives the notification what `GNotification` cannot
-  on Windows: buttons, actions and `Withdraw`; the toast still shows while the
-  application runs, which is the only case this project needs.
+  `Notification` on Windows is built on a WinRT `ToastNotification` backend
+  (`runtime/src/bta_notification_win32.c`); the tray is `Shell_NotifyIcon`.
+  They can be used alone or together, and with WinRT there is no double icon by
+  construction. GLib's `GNotification` Win32 backend is *not* used beside a
+  visible tray: it creates its own `Shell_NotifyIcon` and cannot reuse the
+  tray's. When the WinRT toast cannot be used, `Notification` falls back to the
+  text-only `GNotification` road. WinRT gives the notification what
+  `GNotification` cannot on Windows: buttons, actions and `Withdraw`; the toast
+  still shows while the application runs, which is the only case this project
+  needs.
 
 ### macOS: `NSStatusBar`
 

@@ -1439,6 +1439,9 @@ void bta_cipher_init(JSContext *ctx, JSValue global);
  */
 void bta_notification_init(JSContext *ctx, JSValue global);
 void bta_notification_cleanup(void);   /* forget the click action */
+/* The click a backend delivered, on the main loop: calls
+ * `Notification.OnActivate(id, action)`. */
+void bta_notification_activate(const char *id, const char *action);
 
 /* Tray -- one status icon, one native backend per platform. */
 void  bta_tray_init(JSContext *ctx, JSValue global);

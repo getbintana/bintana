@@ -26,6 +26,9 @@ bta_locale.c      po/*.po, Locale, the plural-form expression evaluator, and how
                   the desktop spells a number, a date and an amount of money
 bta_decimal.c     Decimal: exact base-10 arithmetic, with the operators
 bta_form.c        the .form loader
+bta_notification.c Notification: the object and the GNotification road
+bta_notification_win32.c the WinRT toast: the Start Menu AUMID shortcut and
+                  the Activated event back to the main loop
 bta_tray.c        Tray: the object, the menu tree, the dispatcher
 bta_tray_linux.c  StatusNotifierItem + com.canonical.dbusmenu over GDBus
 bta_tray_win32.c  the Windows tray: Shell_NotifyIcon, a hidden window and an HMENU
