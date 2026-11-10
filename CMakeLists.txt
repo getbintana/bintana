@@ -109,12 +109,13 @@ pkg_check_modules(GSTREAMER IMPORTED_TARGET gstreamer-1.0)
 # to build against.
 pkg_check_modules(LIBXML IMPORTED_TARGET libxml-2.0)
 
-# Optional: libsecret is what `Keyring` stores a token in. Optional like
-# sqlite and libxml2 -- a program that keeps nothing secret needs none of it --
-# and without it `Keyring` exists, `Available` is false and the verbs refuse
-# naming the package. libsecret has no Windows port, so the `#else` half is
-# what that build compiles. The runtime dependency it brings is libsecret's
-# own shared object, which every GNOME desktop already has.
+# Optional: libsecret is what `Keyring` stores a token in on Linux. Optional
+# like sqlite and libxml2 -- a program that keeps nothing secret needs none of
+# it -- and without it Linux falls back to the File provider under the config
+# directory. Windows uses the Credential Manager and macOS the Keychain, so
+# libsecret has no Windows or macOS port to find. The runtime dependency it
+# brings is libsecret's own shared object, which every GNOME desktop already
+# has.
 pkg_check_modules(SECRET IMPORTED_TARGET libsecret-1)
 
 # Optional: sysprof-capture is what lets a Sysprof capture carry the runtime's
@@ -330,7 +331,17 @@ if(WIN32)
     # toast needs `RoInitialize`/`RoGetActivationFactory` from runtimeobject and
     # COM from ole32.  GTK links them already, and naming them here is what
     # makes these halves independent of GTK's link line.
-    target_link_libraries(bintana PRIVATE shell32 user32 gdi32 runtimeobject ole32)
+    target_link_libraries(bintana PRIVATE shell32 user32 gdi32 runtimeobject ole32 advapi32)
+endif()
+
+if(APPLE)
+    # Keychain, for `Keyring`'s macOS provider.
+    find_library(SECURITY_FRAMEWORK Security)
+    if(NOT SECURITY_FRAMEWORK)
+        message(FATAL_ERROR "no Security framework: Keyring's macOS provider "
+                            "needs it")
+    endif()
+    target_link_libraries(bintana PRIVATE ${SECURITY_FRAMEWORK})
 endif()
 if(GIOUNIX_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)
@@ -408,9 +419,13 @@ endif()
 if(SECRET_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::SECRET)
     target_compile_definitions(bintana PRIVATE BTA_HAVE_LIBSECRET=1)
-    message(STATUS "libsecret ${SECRET_VERSION}: Keyring is available")
+    message(STATUS "libsecret ${SECRET_VERSION}: Keyring uses the Secret Service")
+elseif(WIN32)
+    message(STATUS "no libsecret: Keyring uses the Credential Manager")
+elseif(APPLE)
+    message(STATUS "no libsecret: Keyring uses the Keychain")
 else()
-    message(STATUS "no libsecret: Keyring exists and refuses to store anything")
+    message(STATUS "no libsecret: Keyring falls back to the File provider")
 endif()
 
 if(SYSPROF_FOUND)

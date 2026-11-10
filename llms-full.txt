@@ -100,6 +100,7 @@ BINTANA_PROFILE=/tmp/caps ./tests/run.sh          # a Sysprof capture per projec
 tests/try.sh <project> [args...]                  # run any project on a virtual display
 ./tests/api.sh                                    # is the documented surface the real one, is api.json current, do links land
 ./tests/check.sh                                  # every project's `bintana check`, no window
+./tests/keyring.sh                                # the File provider: 0600 under 0700, no temporary
 ./tools/apijson.sh                                # rewrite api.json
 ./tools/llms.sh                                   # rewrite llms-full.txt from llm.txt's list
 ./tests/icons.sh                                  # which declared icons the desktop has, and which draw
@@ -809,8 +810,8 @@ nothing to install for it -- and a fresh clone wants `--recurse-submodules`, or
 reported by CMake either way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`,
 **`vte-2.91-gtk4`** -- the pty behind `Terminal`, and the only dependency with
 no Windows port -- `libxml2`, which is what `Xml` parses with,
-`libsecret-1`, the system's vault behind `Keyring`, which has no Windows port
-either, `sysprof-capture-4` (Fedora `sysprof-capture-devel`), which is what
+`libsecret-1`, the system's vault behind `Keyring` on Linux (Windows uses the
+Credential Manager and macOS the Keychain, so neither needs it), `sysprof-capture-4` (Fedora `sysprof-capture-devel`), which is what
 `--profile` and the runtime's marks in a Sysprof capture are built on, and
 `libpodofo` (Fedora `podofo-devel`), which is `PdfDocument`'s writing half --
 fields and encryption -- and needs C++17 and OpenSSL. `-DBTA_WITH_PODOFO=OFF`
@@ -1045,8 +1046,10 @@ second name is ignored and the line says `[only Hash]`.
 - **It is hidden in the `package` job and in its own CI job**, like libxml2:
   its headers can arrive as another package's dependency, so the tarball hides
   the module and reads CMake's own `no libsecret:` line back to prove it. The
-  Windows job needs no change -- libsecret has no Windows port and the `#else`
-  half is what that build compiles.
+  build's `Keyring` is then the `File` provider; `tests/run.sh widgets` does its
+  round trip and `tests/keyring.sh` checks the `0600`/`0700` half a test in
+  JavaScript cannot see. The Windows job needs no change -- libsecret is not
+  found there and the Credential Manager half is what that build compiles.
 
 ## Cutting a release
 
@@ -10135,20 +10138,35 @@ Each of these was measured while building it, and each one shaped a rule.
 
 ## Keyring: the vault, and what it does not promise
 
-`Keyring.Available`, `Store`, `Lookup` and `Delete`, in `bta_keyring.c`, over
-libsecret -- the system's secret store, so a token is not a plain file. What bit
-and what to know:
-- **`Available` is the build and not the machine, and the API says so by folding
-  the two failures into one answer.** A runtime linked against libsecret on a
-  headless server has `Available === true` and no service on the bus, so nothing
-  stored and no vault to ask are both `null`/`false`. A caller that keeps a
-  fallback does not have to tell them apart; a caller that cares asks
-  `Available` first and gets the build's answer, which is all it can know.
+`Keyring.Provider`, `Store`, `Lookup` and `Delete`, in `bta_keyring.c`, over
+**one provider per build** -- the same three verbs and one answer shape on every
+platform:
+
+| platform | `Provider` | where the secret goes |
+|---|---|---|
+| Linux with libsecret | `"SecretService"` | the freedesktop Secret Service |
+| Linux without it | `"File"` | `Application.ConfigDirectory/secrets/…`, `0600` under `0700` |
+| Windows | `"CredentialManager"` | `CredWriteW`/`CredReadW`/`CredDeleteW`, one generic credential per name |
+| macOS | `"Keychain"` | `SecItemAdd`/`SecItemCopyMatching`/`SecItemDelete` |
+
+What bit and what to know:
+
+- **`Provider` is the build and the platform, and there is no runtime
+  fallback.** A secret is seen only by the provider that stored it, so a call
+  never straddles two stores. `File` is the floor of a Linux build without
+  libsecret, not a choice; Windows and macOS have a vault that is always there.
+  A Secret Service that is not answering fails the call, and a caller treats
+  that like an empty vault.
+- **The names are percent-encoded once in every provider**, refuse at 255 bytes
+  encoded, and a value over 2560 bytes is refused uniformly (Windows'
+  `CRED_MAX_CREDENTIAL_BLOB_SIZE`) so one program stores the same secrets
+  everywhere. The `File` provider writes a temporary beside the destination and
+  renames over it; a failed store leaves nothing.
 - **The callbacks take one value, on purpose.** `Store`/`Delete` answer
-  `cb(ok)` and `Lookup` `cb(value)`, so there is no error protocol to document
-  and a libsecret `GError` is folded into the value. The alternative -- two
-  callbacks like `Http`, or `(value, error)` -- is more surface for an
-  application whose next move is the same either way: fall back.
+  `cb(ok)` and `Lookup` `cb(value)`, so there is no error protocol to document:
+  an error is folded into the value. The alternative -- two callbacks like
+  `Http`, or `(value, error)` -- is more surface for an application whose next
+  move is the same either way: fall back.
 - **The schema is made with `secret_schema_new`, not a static initializer.** A
   written-out `SecretSchema` warns on the library's private tail (`reserved` and
   seven `reservedN`) with `-Wmissing-field-initializers`, and initializing those
@@ -10158,14 +10176,14 @@ and what to know:
   is not a window, so `bta_keyring_pending` is summed into the console loop like
   `bta_http_pending`; a `Task` does not install the global at all, because the
   callback belongs to the main loop -- the `Http` bargain, not the sqlite one.
-- **The suite never writes to the real vault.** `testKeyring` forks on
-  `Available`: without libsecret the three verbs refuse naming the package (the
-  `no-libsecret` CI job is that build), and with it only the argument refusals
-  are asserted, which touch no bus. A test secret in the developer's keyring is
-  a side effect the suite has no business causing, and a locked collection would
-  make the answer depend on the machine. The real round trip is a by-hand check
-  (`secret-tool`'s collection here is locked, which is exactly the failure the
-  application's fallback exists for).
+- **The suite never writes to a real vault.** `testKeyring` forks on `Provider`:
+  with `"File"` it does the whole round trip and checks the file, and with a
+  vault it only asserts the argument and cap refusals. The `no-libsecret` job
+  is the File build, and `tests/keyring.sh` is the half JavaScript cannot see:
+  `0600` under `0700`, and no temporary left by a failed store. The real vault
+  round trip is a by-hand check -- measured on Windows 11 (2026-11-10):
+  `Provider=CredentialManager`, Store → Lookup `s3cr3t-✓` → Delete → `null` →
+  Delete `false`.
 
 ## Notification: the suite shares the user's session bus
 
@@ -12063,6 +12081,8 @@ bta_menu.c        menus, as GMenu models wired to actions
 bta_locale.c      po/*.po, Locale, the plural-form expression evaluator, and how
                   the desktop spells a number, a date and an amount of money
 bta_decimal.c     Decimal: exact base-10 arithmetic, with the operators
+bta_keyring.c     Keyring: one provider per platform -- Secret Service, File,
+                  Credential Manager or Keychain
 bta_form.c        the .form loader
 bta_notification.c Notification: the object and the GNotification road
 bta_notification_win32.c the WinRT toast: the Start Menu AUMID shortcut and
@@ -13858,7 +13878,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | ...and the picture, not just the sound | `gstreamer1-plugin-gtk4` | `gstreamer1.0-gtk4` | `Video`'s sink (`gtk4paintablesink`, from gst-plugins-rs) is missing and `AudioPlayer` still works |
 | `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
 | `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
-| `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | `Keyring` exists, `Available` is `false`, and every verb refuses with a sentence naming the package. It has no Windows port; the library itself is on every GNOME desktop already |
+| `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | on Linux without it `Keyring` uses the `File` provider (`0600` under `Application.ConfigDirectory/secrets/`), and `Keyring.Provider` says `"File"`. Windows uses the Credential Manager and macOS the Keychain, so neither needs libsecret; the library itself is on every GNOME desktop already |
 | `Cipher` (AES-256-GCM) and `Key` (a private key from a smart card, a token or a file) | `gnutls-devel` | `libgnutls28-dev` | `Cipher` and `Key` exist, `Available` is `false`, and their verbs refuse with a sentence naming the package. GnuTLS is already the TLS library under libsoup on a Linux desktop, but the headers are a separate package |
 | `--profile` and the runtime's marks in a Sysprof capture | `sysprof-capture-devel` | `libsysprof-capture-4-dev` | `--profile` refuses naming the package, and a capture carries no marks of ours — the samples and GTK's frame marks are Sysprof's and unaffected |
 | `PdfDocument.AddFields` and `Encrypt` (fillable PDF forms, signature fields, encryption) | `podofo-devel` | `libpodofo-dev` | `PdfDocument.CanWrite` is `false`, and `AddFields`/`Encrypt` refuse with a sentence naming the package. PoDoFo is C++17 and needs OpenSSL; a report without `Input`/`Signature` needs none of it |
@@ -13873,8 +13893,8 @@ On Windows the same switches come from MSYS2 UCRT64: `mingw-w64-ucrt-x86_64-popp
 `...-gstreamer` with `...-gst-plugins-base`, `...-gst-plugins-good`,
 `...-gst-plugins-bad`, `...-gst-libav` and `...-gst-plugins-rs` (the GTK4 sink),
 `...-sqlite3`, `...-libsoup3`, `...-libxml2` and `...-gnutls`. VTE, libsystemd,
-sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` is Linux-only today
-and the Windows Credential Manager is [a plan](plans/keyring-plan.md).
+sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` uses the Windows
+Credential Manager, so libsecret is not needed there.
 
 ## Profiling
 
@@ -14007,6 +14027,7 @@ and a TagLib wrapper worked through.
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
 ./tests/run.sh ide list                 # what it can be asked for
 ./tests/check.sh                        # every project's `bintana check`, no window
+./tests/keyring.sh                      # the File provider: 0600 under 0700, no temporary
 ./tests/pack.sh                         # lib/package, the packaging step's output: 107 assertions
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on

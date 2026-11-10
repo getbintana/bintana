@@ -177,8 +177,8 @@ nothing to install for it -- and a fresh clone wants `--recurse-submodules`, or
 reported by CMake either way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`,
 **`vte-2.91-gtk4`** -- the pty behind `Terminal`, and the only dependency with
 no Windows port -- `libxml2`, which is what `Xml` parses with,
-`libsecret-1`, the system's vault behind `Keyring`, which has no Windows port
-either, `sysprof-capture-4` (Fedora `sysprof-capture-devel`), which is what
+`libsecret-1`, the system's vault behind `Keyring` on Linux (Windows uses the
+Credential Manager and macOS the Keychain, so neither needs it), `sysprof-capture-4` (Fedora `sysprof-capture-devel`), which is what
 `--profile` and the runtime's marks in a Sysprof capture are built on, and
 `libpodofo` (Fedora `podofo-devel`), which is `PdfDocument`'s writing half --
 fields and encryption -- and needs C++17 and OpenSSL. `-DBTA_WITH_PODOFO=OFF`
@@ -413,8 +413,10 @@ second name is ignored and the line says `[only Hash]`.
 - **It is hidden in the `package` job and in its own CI job**, like libxml2:
   its headers can arrive as another package's dependency, so the tarball hides
   the module and reads CMake's own `no libsecret:` line back to prove it. The
-  Windows job needs no change -- libsecret has no Windows port and the `#else`
-  half is what that build compiles.
+  build's `Keyring` is then the `File` provider; `tests/run.sh widgets` does its
+  round trip and `tests/keyring.sh` checks the `0600`/`0700` half a test in
+  JavaScript cannot see. The Windows job needs no change -- libsecret is not
+  found there and the Credential Manager half is what that build compiles.
 
 ## Cutting a release
 

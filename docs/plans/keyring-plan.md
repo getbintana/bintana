@@ -1,11 +1,13 @@
 # Keyring on every platform, and a floor under it
 
-**Not started.** Nothing is built yet; what is left of this file when it is
-built is the platform table that belongs in the page and the by-hand lists for
-Windows and macOS. Asked for by the owner on 2026-10-14, after the question
-*what does an application use to keep a token?* turned up the one capability in
-the runtime a whole platform cannot run, and the one whose absence is decided
-at **build** time even on the platform it has.
+**Stages 1 and 2 built; stage 3 written blind.** The front, the `File` floor,
+the Windows Credential Manager and the macOS Keychain are in `bta_keyring.c`;
+Windows was measured on a real desktop (2026-11-10), macOS is not compiled or
+run yet. What is left of this file is the platform table that belongs in the
+page and the by-hand lists for macOS. Asked for by the owner on 2026-10-14,
+after the question *what does an application use to keep a token?* turned up the
+one capability in the runtime a whole platform cannot run, and the one whose
+absence is decided at **build** time even on the platform it has.
 
 ## What is there, counted
 
@@ -148,12 +150,16 @@ application remembers already belongs.
    provider dispatch, `Provider`, `Available` removed, the File provider, the
    uniform caps, `tests/widgets testKeyring` extended, `tests/keyring.sh` for
    what JavaScript cannot see, the `no-libsecret` job runs it, CMake messages,
-   and every document below.
+   and every document below. **Built** (2026-11-10).
 2. **Windows**: the Credential Manager section, the `advapi32` link, the
-   `windows` job compiling it, and the by-hand list above. R5 shrinks when the
-   round trip has been run on a real Windows desktop.
+   `windows` job compiling it, and the by-hand list above. **Built and
+   measured** (2026-11-10): `Provider=CredentialManager`, Store → Lookup
+   `s3cr3t-✓` → Delete → `null` → Delete `false`.
 3. **macOS**: the Keychain section, the framework, and its round trip on
-   macos-plan's list. Nothing to verify here.
+   macos-plan's list. **Written blind** (2026-11-10): `SecItemAdd`/`Update`,
+   `SecItemCopyMatching` and `SecItemDelete` are in `bta_keyring.c` behind
+   `__APPLE__`; the framework is linked and the port's by-hand list still owns
+   the round trip.
 
 ## Tests
 

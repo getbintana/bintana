@@ -17,6 +17,12 @@ one-page answer to *what is new since the release I have*.
   first audio-sink failure rebuilds the pipeline once with a `fakesink` and the
   audio branch off, so a virtualized Windows session with no audio device shows
   the clip silently instead of failing whole. A second failure is reported.
+- **`Keyring` on every platform.** `Available` is gone and `Provider` says
+  which store a build uses: `"SecretService"` on Linux with libsecret,
+  `"File"` (`0600` under `Application.ConfigDirectory/secrets/`) without it,
+  `"CredentialManager"` on Windows and `"Keychain"` on macOS. The same three
+  asynchronous verbs, names refused past 255 bytes encoded and a value past
+  2560 bytes uniformly.
 - **A notification can be clicked and can carry buttons**:
   `Notification.OnActivate = (id, action) => …`, `Buttons: [{ Label, Action }]`,
   and `CanActivate`/`MaxButtons` say what the platform delivers. Linux and macOS

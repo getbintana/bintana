@@ -25,6 +25,8 @@ bta_menu.c        menus, as GMenu models wired to actions
 bta_locale.c      po/*.po, Locale, the plural-form expression evaluator, and how
                   the desktop spells a number, a date and an amount of money
 bta_decimal.c     Decimal: exact base-10 arithmetic, with the operators
+bta_keyring.c     Keyring: one provider per platform -- Secret Service, File,
+                  Credential Manager or Keychain
 bta_form.c        the .form loader
 bta_notification.c Notification: the object and the GNotification road
 bta_notification_win32.c the WinRT toast: the Start Menu AUMID shortcut and

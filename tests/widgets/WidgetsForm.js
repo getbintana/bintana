@@ -16519,20 +16519,11 @@ class Form1 extends Form {
      * with it, the argument refusals, which touch no bus at all.
      */
     testKeyring() {
-        check("Keyring.Available is a boolean", typeof Keyring.Available === "boolean");
+        const providers = ["SecretService", "File", "CredentialManager", "Keychain"];
 
-        if (!Keyring.Available) {
-            const said = (fn) => { try { fn(); return ""; } catch (e) { return e.message; } };
-            const store = said(() => Keyring.Store("a", "b", "c", () => {}));
-            const lookup = said(() => Keyring.Lookup("a", "b", () => {}));
-            const del = said(() => Keyring.Delete("a", "b", () => {}));
-            check("no libsecret: Store refuses naming the package", store.includes("libsecret"), store);
-            check("...and Lookup too", lookup.includes("libsecret"), lookup);
-            check("...and Delete", del.includes("libsecret"), del);
-            return;
-        }
+        check("Keyring.Provider names the store",
+              providers.includes(Keyring.Provider), Keyring.Provider);
 
-        check("this build has a keyring", Keyring.Available === true);
         throws("a callback is required", () => Keyring.Lookup("a", "b"));
         throws("...and the service is text", () => Keyring.Lookup(5, "b", () => {}));
         throws("...and the key", () => Keyring.Delete("a", 5, () => {}));
@@ -16540,6 +16531,68 @@ class Form1 extends Form {
         check("with the refusal naming what it wants",
               (refusal(() => Keyring.Store("a", "b", 5, () => {})) || "").includes("value is text"),
               refusal(() => Keyring.Store("a", "b", 5, () => {})));
+        throws("an empty service is refused",
+               () => Keyring.Store("", "b", "c", () => {}));
+        throws("an empty key is refused",
+               () => Keyring.Lookup("a", "", () => {}));
+        throws("a service longer than 255 bytes once encoded is refused",
+               () => Keyring.Store("x".repeat(256), "b", "c", () => {}));
+        throws("a key longer than 255 bytes once encoded is refused",
+               () => Keyring.Delete("a", "x".repeat(256), () => {}));
+        throws("a value longer than 2560 bytes is refused",
+               () => Keyring.Store("a", "b", "x".repeat(2561), () => {}));
+
+        /*
+         * The File provider is the only one the suite can exercise without
+         * writing to a real vault: it is the `no-libsecret` build's floor.
+         * A vault (`SecretService`, `CredentialManager`, `Keychain`) is left
+         * to the by-hand list, because a test that stores a secret in the
+         * developer's keyring is a side effect the suite must not cause.
+         */
+        if (Keyring.Provider !== "File") {
+            print(`Keyring: Provider=${Keyring.Provider}; the vault round trip is by hand`);
+            return;
+        }
+
+        const service = `bta-keyring-${Environment.ProcessId}`;
+        const key = "token";
+        const value = "file-secret-✓";
+        const dir = File.Join(Application.ConfigDirectory, "secrets", service);
+        const path = File.Join(dir, key);
+        let answer;
+
+        Keyring.Store(service, key, value, (ok) => { answer = ok; });
+        until("the File provider stores the secret", () => answer !== undefined, () => {
+            eq("File: Store answers true", answer, true);
+            check("File: the secret is a file", File.Exists(path));
+
+            answer = undefined;
+            Keyring.Lookup(service, key, (found) => { answer = found; });
+            until("the File provider reads it back", () => answer !== undefined, () => {
+                eq("File: Lookup answers it", answer, value);
+
+                answer = undefined;
+                Keyring.Delete(service, key, (deleted) => { answer = deleted; });
+                until("the File provider deletes it", () => answer !== undefined, () => {
+                    eq("File: Delete answers true", answer, true);
+                    check("File: the file is gone", !File.Exists(path));
+
+                    answer = "unset";
+                    Keyring.Lookup(service, key, (after) => { answer = after; });
+                    until("the File provider answers null after Delete",
+                          () => answer !== "unset", () => {
+                        eq("File: Lookup after Delete answers null", answer, null);
+
+                        answer = "unset";
+                        Keyring.Delete(service, key, (again) => { answer = again; });
+                        until("the File provider deletes what is not there",
+                              () => answer !== "unset", () => {
+                            eq("File: Delete again answers false", answer, false);
+                        });
+                    });
+                });
+            });
+        });
     }
 
     /* --- XML files, which are a document and not a value --------------------

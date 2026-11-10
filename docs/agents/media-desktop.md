@@ -262,20 +262,35 @@ Each of these was measured while building it, and each one shaped a rule.
 
 ## Keyring: the vault, and what it does not promise
 
-`Keyring.Available`, `Store`, `Lookup` and `Delete`, in `bta_keyring.c`, over
-libsecret -- the system's secret store, so a token is not a plain file. What bit
-and what to know:
-- **`Available` is the build and not the machine, and the API says so by folding
-  the two failures into one answer.** A runtime linked against libsecret on a
-  headless server has `Available === true` and no service on the bus, so nothing
-  stored and no vault to ask are both `null`/`false`. A caller that keeps a
-  fallback does not have to tell them apart; a caller that cares asks
-  `Available` first and gets the build's answer, which is all it can know.
+`Keyring.Provider`, `Store`, `Lookup` and `Delete`, in `bta_keyring.c`, over
+**one provider per build** -- the same three verbs and one answer shape on every
+platform:
+
+| platform | `Provider` | where the secret goes |
+|---|---|---|
+| Linux with libsecret | `"SecretService"` | the freedesktop Secret Service |
+| Linux without it | `"File"` | `Application.ConfigDirectory/secrets/…`, `0600` under `0700` |
+| Windows | `"CredentialManager"` | `CredWriteW`/`CredReadW`/`CredDeleteW`, one generic credential per name |
+| macOS | `"Keychain"` | `SecItemAdd`/`SecItemCopyMatching`/`SecItemDelete` |
+
+What bit and what to know:
+
+- **`Provider` is the build and the platform, and there is no runtime
+  fallback.** A secret is seen only by the provider that stored it, so a call
+  never straddles two stores. `File` is the floor of a Linux build without
+  libsecret, not a choice; Windows and macOS have a vault that is always there.
+  A Secret Service that is not answering fails the call, and a caller treats
+  that like an empty vault.
+- **The names are percent-encoded once in every provider**, refuse at 255 bytes
+  encoded, and a value over 2560 bytes is refused uniformly (Windows'
+  `CRED_MAX_CREDENTIAL_BLOB_SIZE`) so one program stores the same secrets
+  everywhere. The `File` provider writes a temporary beside the destination and
+  renames over it; a failed store leaves nothing.
 - **The callbacks take one value, on purpose.** `Store`/`Delete` answer
-  `cb(ok)` and `Lookup` `cb(value)`, so there is no error protocol to document
-  and a libsecret `GError` is folded into the value. The alternative -- two
-  callbacks like `Http`, or `(value, error)` -- is more surface for an
-  application whose next move is the same either way: fall back.
+  `cb(ok)` and `Lookup` `cb(value)`, so there is no error protocol to document:
+  an error is folded into the value. The alternative -- two callbacks like
+  `Http`, or `(value, error)` -- is more surface for an application whose next
+  move is the same either way: fall back.
 - **The schema is made with `secret_schema_new`, not a static initializer.** A
   written-out `SecretSchema` warns on the library's private tail (`reserved` and
   seven `reservedN`) with `-Wmissing-field-initializers`, and initializing those
@@ -285,14 +300,14 @@ and what to know:
   is not a window, so `bta_keyring_pending` is summed into the console loop like
   `bta_http_pending`; a `Task` does not install the global at all, because the
   callback belongs to the main loop -- the `Http` bargain, not the sqlite one.
-- **The suite never writes to the real vault.** `testKeyring` forks on
-  `Available`: without libsecret the three verbs refuse naming the package (the
-  `no-libsecret` CI job is that build), and with it only the argument refusals
-  are asserted, which touch no bus. A test secret in the developer's keyring is
-  a side effect the suite has no business causing, and a locked collection would
-  make the answer depend on the machine. The real round trip is a by-hand check
-  (`secret-tool`'s collection here is locked, which is exactly the failure the
-  application's fallback exists for).
+- **The suite never writes to a real vault.** `testKeyring` forks on `Provider`:
+  with `"File"` it does the whole round trip and checks the file, and with a
+  vault it only asserts the argument and cap refusals. The `no-libsecret` job
+  is the File build, and `tests/keyring.sh` is the half JavaScript cannot see:
+  `0600` under `0700`, and no temporary left by a failed store. The real vault
+  round trip is a by-hand check -- measured on Windows 11 (2026-11-10):
+  `Provider=CredentialManager`, Store → Lookup `s3cr3t-✓` → Delete → `null` →
+  Delete `false`.
 
 ## Notification: the suite shares the user's session bus
 

@@ -90,6 +90,7 @@ BINTANA_PROFILE=/tmp/caps ./tests/run.sh          # a Sysprof capture per projec
 tests/try.sh <project> [args...]                  # run any project on a virtual display
 ./tests/api.sh                                    # is the documented surface the real one, is api.json current, do links land
 ./tests/check.sh                                  # every project's `bintana check`, no window
+./tests/keyring.sh                                # the File provider: 0600 under 0700, no temporary
 ./tools/apijson.sh                                # rewrite api.json
 ./tools/llms.sh                                   # rewrite llms-full.txt from llm.txt's list
 ./tests/icons.sh                                  # which declared icons the desktop has, and which draw

@@ -15681,21 +15681,12 @@
       "Name": "Keyring",
       "Members": [
         {
-          "Name": "Available",
-          "Kind": "Property",
-          "Params": -1,
-          "Signature": "",
-          "Returns": "",
-          "Doc": "whether this build has libsecret. It says nothing about whether the machine is running a secret service -- a headless session has none -- so a caller treats a failed `Lookup` like an empty vault",
-          "Native": true
-        },
-        {
           "Name": "Delete",
           "Kind": "Method",
           "Params": 3,
           "Signature": "(service, key, cb)",
           "Returns": "",
-          "Doc": "forgets it, and calls `cb(ok)`: `false` when there was nothing under those names or the vault could not be asked. Deleting what is not there is not an error",
+          "Doc": "forgets it, and calls `cb(ok)`: `false` when there was nothing under those names or the provider could not be asked. Deleting what is not there is not an error",
           "Native": true
         },
         {
@@ -15704,7 +15695,16 @@
           "Params": 3,
           "Signature": "(service, key, cb)",
           "Returns": "",
-          "Doc": "reads what `Store` saved, and calls `cb(value)` -- the text, or `null` when nothing is stored **or** the vault cannot be asked",
+          "Doc": "reads what `Store` saved, and calls `cb(value)` -- the text, or `null` when nothing is stored **or** the provider cannot be asked",
+          "Native": true
+        },
+        {
+          "Name": "Provider",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "which store this build uses: `\"SecretService\"` on a Linux build with libsecret, `\"File\"` on a Linux build without it, `\"CredentialManager\"` on Windows and `\"Keychain\"` on macOS. A secret is seen only by the provider that stored it, so a caller never mixes two stores in one program",
           "Native": true
         },
         {
@@ -15713,7 +15713,7 @@
           "Params": 4,
           "Signature": "(service, key, value, cb)",
           "Returns": "",
-          "Doc": "puts `value` in the system's keyring under `service` and `key`, and calls `cb(ok)` when the vault answers -- `false` when it could not store it, which is what a machine with no secret service says. The label a keyring browser shows is made of the two names",
+          "Doc": "puts `value` in the provider's vault under `service` and `key`, and calls `cb(ok)` when it answers -- `false` when it could not store it. The names are percent-encoded for the provider's own key; each is refused past 255 bytes encoded, and `value` past 2560 bytes",
           "Native": true
         }
       ]

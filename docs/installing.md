@@ -359,7 +359,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | ...and the picture, not just the sound | `gstreamer1-plugin-gtk4` | `gstreamer1.0-gtk4` | `Video`'s sink (`gtk4paintablesink`, from gst-plugins-rs) is missing and `AudioPlayer` still works |
 | `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
 | `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
-| `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | `Keyring` exists, `Available` is `false`, and every verb refuses with a sentence naming the package. It has no Windows port; the library itself is on every GNOME desktop already |
+| `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | on Linux without it `Keyring` uses the `File` provider (`0600` under `Application.ConfigDirectory/secrets/`), and `Keyring.Provider` says `"File"`. Windows uses the Credential Manager and macOS the Keychain, so neither needs libsecret; the library itself is on every GNOME desktop already |
 | `Cipher` (AES-256-GCM) and `Key` (a private key from a smart card, a token or a file) | `gnutls-devel` | `libgnutls28-dev` | `Cipher` and `Key` exist, `Available` is `false`, and their verbs refuse with a sentence naming the package. GnuTLS is already the TLS library under libsoup on a Linux desktop, but the headers are a separate package |
 | `--profile` and the runtime's marks in a Sysprof capture | `sysprof-capture-devel` | `libsysprof-capture-4-dev` | `--profile` refuses naming the package, and a capture carries no marks of ours — the samples and GTK's frame marks are Sysprof's and unaffected |
 | `PdfDocument.AddFields` and `Encrypt` (fillable PDF forms, signature fields, encryption) | `podofo-devel` | `libpodofo-dev` | `PdfDocument.CanWrite` is `false`, and `AddFields`/`Encrypt` refuse with a sentence naming the package. PoDoFo is C++17 and needs OpenSSL; a report without `Input`/`Signature` needs none of it |
@@ -374,8 +374,8 @@ On Windows the same switches come from MSYS2 UCRT64: `mingw-w64-ucrt-x86_64-popp
 `...-gstreamer` with `...-gst-plugins-base`, `...-gst-plugins-good`,
 `...-gst-plugins-bad`, `...-gst-libav` and `...-gst-plugins-rs` (the GTK4 sink),
 `...-sqlite3`, `...-libsoup3`, `...-libxml2` and `...-gnutls`. VTE, libsystemd,
-sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` is Linux-only today
-and the Windows Credential Manager is [a plan](plans/keyring-plan.md).
+sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` uses the Windows
+Credential Manager, so libsecret is not needed there.
 
 ## Profiling
 

@@ -427,6 +427,13 @@ jobs:
           BINTANA_LIB_PATH: ${{ github.workspace }}/lib
         run: ./tests/run.sh widgets
 
+      # The File provider is the floor this build is for: 0600 under 0700 and
+      # no temporary left by a failed store, which JavaScript cannot see.
+      - name: The Keyring File provider
+        env:
+          BINTANA: ./build-nosecret/bintana
+        run: ./tests/keyring.sh
+
   # Hiding poppler-glib, the `no-libsecret` mould: `PdfDocument` is still
   # installed and `Open` refuses with a sentence naming the package, as
   # `Probe.Pdf` does, and `testPdf` takes its one-assertion branch -- the only
