@@ -316,9 +316,10 @@ is not silently downgraded to something else.
 
 D-Bus is last because a general GVariant-to-JavaScript mapping is a design
 of its own, and because the audit's only desktop case -- a clicked
-notification reaching the program -- is better served by `Notification`'s
-own action than by a general bus. The first application that needs to call a
-service is the case to design `Ipc.DBus` from.
+notification reaching the program -- is served by `Notification`'s own
+`OnActivate` action, which is built, rather than by a general bus. The first
+application that needs to call a service is the case to design `Ipc.DBus`
+from.
 
 ## Stages
 

@@ -332,6 +332,20 @@ Three more, measured with it:
   and for `Random`/`Hmac`/`Verify`; the second is a test (`ExampleWebhook`), the first
   is by hand because a window does not end.
 
-No click that calls back, on purpose: it would be a tenth async job shape, held by
-something the desktop keeps past the window that sent it. The title and body are
-not translated by `Send`; the caller wraps them in `Locale.Text`.
+**The click is an application action, not a callback held by the notification.**
+`Notification.Send` installs `app.notification` with `(id, action)` as its target;
+the daemon or Cocoa backend turns a click back into that action, and
+`Notification.OnActivate` is looked up when it arrives. That avoids a tenth async
+job shape and a callback the desktop could keep for days. The title, body and
+button labels are not translated by `Send`; the caller wraps them in `Locale.Text`.
+
+**Windows shows the text and not the interaction.** GLib's
+`gwin32notificationbackend.c` uses `Shell_NotifyIcon(NIF_INFO)` and says
+"Notification actions are unsupported by this Windows backend"; it warns if an
+action or a button is set. So the runtime does not set them there, `CanActivate`
+is `false`, `MaxButtons` is `0`, `Withdraw` is a no-op and `Urgency`/`Icon` are
+ignored. The notification still arrives. macOS supports the body click and one
+button (`button0`), which is what `MaxButtons` reports. The test observes the
+button labels and action names in the private bus's `Notify` call; the click
+itself is by hand on a real desktop, because a bus with no daemon has nothing to
+click.

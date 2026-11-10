@@ -1438,6 +1438,7 @@ void bta_cipher_init(JSContext *ctx, JSValue global);
  * runtime/src/bta_notification.c.
  */
 void bta_notification_init(JSContext *ctx, JSValue global);
+void bta_notification_cleanup(void);   /* forget the click action */
 
 /* --- Zip ------------------------------------------------------------------
  *

@@ -3785,6 +3785,7 @@ void bta_app_free(BtaApp *app)
     bta_network_cleanup();
     bta_socket_cleanup();
     bta_serial_cleanup();
+    bta_notification_cleanup();
     /* Forms still shown hold a reference the collector cannot see; drop it
      * before the context goes, or JS_FreeRuntime asserts. */
     bta_popover_cleanup();

@@ -27659,6 +27659,24 @@ class Form1 extends Form {
         throws("a body that is not text is refused", () => Notification.Send("x", 5));
         throws("two sets of options are refused", () => Notification.Send("x", { Id: "a" }, { Id: "b" }));
         throws("Withdraw needs the id", () => Notification.Withdraw());
+        throws("Buttons is a list", () => Notification.Send("x", { Buttons: "Retry" }));
+        throws("a button needs a Label",
+               () => Notification.Send("x", { Buttons: [{ Action: "retry" }] }));
+        throws("a button needs an Action",
+               () => Notification.Send("x", { Buttons: [{ Label: "Retry" }] }));
+        throws("a button's Label is text",
+               () => Notification.Send("x", { Buttons: [{ Label: 5, Action: "retry" }] }));
+        throws("a button has no third key",
+               () => Notification.Send("x", { Buttons: [{ Label: "Retry", Aktion: "retry" }] }));
+        throws("two buttons sharing an action are refused",
+               () => Notification.Send("x", { Buttons: [
+                   { Label: "One", Action: "same" },
+                   { Label: "Two", Action: "same" },
+               ] }));
+        throws("OnActivate is a function or null",
+               () => { Notification.OnActivate = 5; });
+        check("CanActivate is a boolean", typeof Notification.CanActivate === "boolean");
+        check("MaxButtons is a count", typeof Notification.MaxButtons === "number");
 
         if (!Application.HasCommand("dbus-run-session") || !Application.HasCommand("dbus-monitor")) {
             print("Notification: dbus-run-session or dbus-monitor is not installed; "
@@ -27697,7 +27715,12 @@ class Form1 extends Form {
                 '        t("low", () => Notification.Send("Low one", "later", { Urgency: "low" }).length);\n' +
                 '        t("same id", () => Notification.Send("Replaced", "v2", { Id: "disk" }));\n' +
                 '        t("withdraw", () => Notification.Withdraw("disk"));\n' +
-                '        t("withdraw nothing", () => Notification.Withdraw("never-sent"));\n') });
+                '        t("withdraw nothing", () => Notification.Withdraw("never-sent"));\n' +
+                '        Notification.OnActivate = (id, action) => print("activate: " + id + "/" + action);\n' +
+                '        t("buttons", () => Notification.Send("With buttons", "two", { Id: "with-buttons", Buttons: [\n' +
+                '            { Label: "Retry", Action: "retry" },\n' +
+                '            { Label: "Open",  Action: "open" },\n' +
+                '        ] }));\n') });
 
         File.Save(File.Join(dir, "bus.conf"),
             '<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN" ' +
@@ -27730,7 +27753,10 @@ class Form1 extends Form {
 
         const calls = File.Load(seen).split(/(?=^method call )/m)
                           .filter((c) => c.includes("member=Notify"));
-        eq("five notifications were asked of the desktop", calls.length, 5);
+        eq("six notifications were asked of the desktop", calls.length, 6);
+        check("the buttons travelled in the actions",
+              calls[5].includes("Retry") && calls[5].includes("retry") &&
+              calls[5].includes("Open") && calls[5].includes("open"), calls[5]);
 
         /* A `Notify` call's strings, in order: the application's name, its icon
          * parameter, the summary and the body. (The hints are variants and are

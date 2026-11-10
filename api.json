@@ -16081,12 +16081,39 @@
       "Name": "Notification",
       "Members": [
         {
+          "Name": "CanActivate",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this platform delivers a click: `true` on Linux (the daemon or the portal) and macOS, `false` on Windows",
+          "Native": true
+        },
+        {
+          "Name": "MaxButtons",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "how many `Buttons` the platform shows: 3 on Linux, 1 on macOS and 0 on Windows. Extra buttons are ignored; the notification still arrives",
+          "Native": true
+        },
+        {
+          "Name": "OnActivate",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(id, action) => …`: a notification was clicked. `id` is the one `Send` answered; `action` is `null` for the notification itself or the `Action` of the button. `null` takes it off. The handler is looked up when the click arrives, and not called on Windows, where the backend has no actions",
+          "Native": true
+        },
+        {
           "Name": "Send",
           "Kind": "Method",
           "Params": 3,
           "Signature": "(title, [body], [options])",
           "Returns": "string",
-          "Doc": "shows a desktop notification and answers its id. With no body, the second argument may be the options: `{ Id, Urgency, Icon }`. `Urgency` is `\"Low\"`, `\"Normal\"` (the default), `\"High\"` or `\"Urgent\"`; `Icon` is a theme icon name; sending again with the same `Id` **replaces** what is showing. The title and body are not looked up in a catalogue -- wrap them in `Locale.Text`. Refused in a project with a `main`, which has no application to send from",
+          "Doc": "shows a desktop notification and answers its id. With no body, the second argument may be the options: `{ Id, Urgency, Icon, Buttons }`. `Urgency` is `\"Low\"`, `\"Normal\"` (the default), `\"High\"` or `\"Urgent\"`; `Icon` is a theme icon name; `Buttons` is `[{ Label, Action }]`, where `Label` is prose and `Action` is the key `OnActivate` is handed. Sending again with the same `Id` **replaces** what is showing. The title, body and labels are not looked up in a catalogue -- wrap them in `Locale.Text`. Refused in a project with a `main`, which has no application to send from",
           "Native": true
         },
         {
@@ -16095,7 +16122,7 @@
           "Params": 1,
           "Signature": "(id)",
           "Returns": "",
-          "Doc": "takes a notification back, by the id `Send` answered or was given. An id nothing is showing under is not an error",
+          "Doc": "takes a notification back, by the id `Send` answered or was given. An id nothing is showing under is not an error. On Windows this is a no-op: the GLib backend has no withdraw",
           "Native": true
         }
       ]
