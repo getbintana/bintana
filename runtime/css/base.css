@@ -138,8 +138,9 @@ columnview > listview > row.bta-row-hover:selected,
 }
 
 /* **A rectangle of cells** (`TableView.SetRange`, class `bta-cell-range`):
- * the selection colour at a fifth, on the cell's own box so it spans the
- * cell rather than the text. It is a class and not a drawn frame, so an
+ * the selection colour at a fifth, on the cell itself so its padding is
+ * painted too -- on the content box it stopped at the text and left a pale
+ * strip of padding. It is a class and not a drawn frame, so an
  * application's `app.css` can paint it its own way -- `bta-cell-current`
  * makes the same bargain. */
 columnview .bta-cell-range {

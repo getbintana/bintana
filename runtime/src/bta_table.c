@@ -3979,11 +3979,18 @@ static void cell_fill(BtaWidget *w, GtkWidget *box, BtaTableRow *row, guint col,
 
     /* The range is the same kind of fact: applied at the bind, so a row
      * scrolled back wears it, and taken off the widget recycled for a cell
-     * outside it. */
+     * outside it. **On the cell and not on its content box**: a cell's
+     * padding belongs to the cell, and a background on the box stopped at
+     * the text and left a pale strip of padding unpainted. The box's parent
+     * is the cell widget (`GtkColumnViewCell`, or the expander in a tree's
+     * first column); with none, the box itself is all there is. */
+    GtkWidget *painted = gtk_widget_get_parent(box);
+    if (!painted)
+        painted = box;
     if (table_cell_in_range(w, pos, col))
-        gtk_widget_add_css_class(box, CELL_RANGE_CLASS);
+        gtk_widget_add_css_class(painted, CELL_RANGE_CLASS);
     else
-        gtk_widget_remove_css_class(box, CELL_RANGE_CLASS);
+        gtk_widget_remove_css_class(painted, CELL_RANGE_CLASS);
 
     g_free(text);
     g_free(icon);

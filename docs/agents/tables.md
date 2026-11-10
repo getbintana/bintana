@@ -575,9 +575,12 @@ key and its position moves when a parent folds.
   on a virtual row too now, so the class reaches it. The row is held by the list
   item (`FILL_ROW_KEY`) exactly as a held one is.
 - **The mark is a class and not a frame.** `runtime/css/base.css` paints it with
-  the selection colour at a fifth, on the cell's box so it spans the cell;
-  `bta-cell-current` makes the same bargain, and an application's `app.css` can
-  paint either its own way.
+  the selection colour at a fifth, **on the cell widget and not its content
+  box**: a background on the box stopped at the text and left the cell's
+  padding as a pale strip. The box's parent is the cell (the expander in a
+  tree's first column), which is what `cell_fill` marks; `bta-cell-current`
+  makes the same bargain, and an application's `app.css` can paint either its
+  own way.
 - **A tree's positions are its rows as shown**, so `SetRange` takes a tree too:
   a fold moves every position under it, and the rectangle is a picture of where
   the rows were. `lib/datagrid`'s `drawnRows` is the same list with a `null` for
