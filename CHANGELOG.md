@@ -17,6 +17,12 @@ one-page answer to *what is new since the release I have*.
   first audio-sink failure rebuilds the pipeline once with a `fakesink` and the
   audio branch off, so a virtualized Windows session with no audio device shows
   the clip silently instead of failing whole. A second failure is reported.
+- **`Printer.Names` and `Printer.Default` work on Windows.** The Windows
+  implementation asks `EnumPrintersW`/`GetDefaultPrinterW` instead of GTK's
+  Unix-only `gtk_enumerate_printers`; `Printer.Send`/`ToFile` already used
+  `GtkPrintOperation`, whose Win32 backend is the native dialog and printer
+  driver. A machine with no printer still answers `[]`/`""`; `null` remains for
+  a session that cannot ask.
 - **`Keyring` on every platform.** `Available` is gone and `Provider` says
   which store a build uses: `"SecretService"` on Linux with libsecret,
   `"File"` (`0600` under `Application.ConfigDirectory/secrets/`) without it,

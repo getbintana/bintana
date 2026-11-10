@@ -331,7 +331,7 @@ if(WIN32)
     # toast needs `RoInitialize`/`RoGetActivationFactory` from runtimeobject and
     # COM from ole32.  GTK links them already, and naming them here is what
     # makes these halves independent of GTK's link line.
-    target_link_libraries(bintana PRIVATE shell32 user32 gdi32 runtimeobject ole32 advapi32)
+    target_link_libraries(bintana PRIVATE shell32 user32 gdi32 runtimeobject ole32 advapi32 winspool)
 endif()
 
 if(APPLE)

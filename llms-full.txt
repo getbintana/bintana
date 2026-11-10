@@ -934,9 +934,10 @@ disagree.
   `bta_locale.c`, `SetConsoleOutputCP` in `main.c`, and the `GIOUNIX`/`pthread`
   guards in `CMakeLists.txt` -- plus `runtime/src/bta_desktop.c`, which compiles
   there and means nothing there, and `BTA_HAVE_UNIX_PRINT` in
-  `runtime/src/bta_printer.c`, which is off there: printing works, and
-  `Printer.Names`/`Printer.Default` refuse with a sentence, because GTK
-  publishes no list on Windows. **There is no local way to compile any of
+  `runtime/src/bta_printer.c`, which is off there: printing itself works through
+  GTK's Win32 backend, and `Printer.Names`/`Printer.Default` ask Win32's
+  `EnumPrintersW`/`GetDefaultPrinterW`; the Unix module is the `GtkPrinter`
+  enumeration road only. **There is no local way to compile any of
   them**: the `windows` job in `.github/workflows/ci.yml` is the compiler, and
   its first runs are the toolchain spike `docs/plans/portability-plan.md` asked for.
   The same job stages the downloadable zip through

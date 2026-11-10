@@ -42,11 +42,12 @@
  *
  * ## Asking about the machine
  *
- * `Names` and `Default` are `gtk_enumerate_printers`, which is GTK's Unix print
- * backend and not portable: on Windows GTK opens the system's own dialog and
- * publishes no list, so there the two **refuse with a sentence** rather than
- * answering an empty array that cannot be told apart from a machine with no
- * printer.  That is the rule `Exec`'s `Control` stream already follows there.
+ * `Names` and `Default` use GTK's Unix print backend on Linux
+ * (`gtk_enumerate_printers`) and Win32's `EnumPrintersW`/`GetDefaultPrinterW`
+ * on Windows. GTK's Windows backend opens the system's own dialog and publishes
+ * no `GtkPrinter` list, which is why the Win32 calls are here and not in GTK.
+ * A platform with neither answers `null`, which is distinct from a machine that
+ * can be asked and has no printer (`[]`/`""`).
  *
  * Not cached.  Measured on this machine: 33.6 ms cold and 6.2 ms warm, because
  * GTK caches its backend underneath -- and unlike a plugin registry, the
@@ -59,6 +60,11 @@
 
 #ifdef BTA_HAVE_UNIX_PRINT
 #include <gtk/gtkunixprint.h>
+#endif
+
+#ifdef G_OS_WIN32
+#include <windows.h>
+#include <winspool.h>
 #endif
 
 /* --------------------------------------------------------------- the setup
@@ -985,6 +991,80 @@ static gboolean printer_seen(GtkPrinter *p, gpointer data)
 }
 #endif
 
+#ifdef G_OS_WIN32
+
+static char *printer_win32_utf8(const wchar_t *w)
+{
+    if (!w)
+        return NULL;
+    return g_utf16_to_utf8((const gunichar2 *)w, -1, NULL, NULL, NULL);
+}
+
+/* Level 4 is the one that lists local and connected printers without opening
+ * each one; the two-call size dance is Win32's. A machine with no printer is
+ * `[]`, and an API that refuses is `null` -- the same three answers as Unix. */
+static JSValue printer_win32_names(JSContext *ctx)
+{
+    DWORD needed = 0, returned = 0;
+    DWORD flags  = PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS;
+    BYTE *buffer;
+    PRINTER_INFO_4W *printers;
+    JSValue list;
+
+    if (!EnumPrintersW(flags, NULL, 4, NULL, 0, &needed, &returned) &&
+        GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+        return JS_NULL;
+    if (needed == 0)
+        return JS_NewArray(ctx);
+    buffer = g_malloc(needed);
+    if (!EnumPrintersW(flags, NULL, 4, buffer, needed, &needed, &returned)) {
+        g_free(buffer);
+        return JS_NULL;
+    }
+    printers = (PRINTER_INFO_4W *)buffer;
+    list = JS_NewArray(ctx);
+    for (DWORD i = 0; i < returned; i++) {
+        char *name = printer_win32_utf8(printers[i].pPrinterName);
+
+        JS_SetPropertyUint32(ctx, list, i,
+                             JS_NewString(ctx, name ? name : ""));
+        g_free(name);
+    }
+    g_free(buffer);
+    return list;
+}
+
+static JSValue printer_win32_default(JSContext *ctx)
+{
+    DWORD size = 0;
+    wchar_t *buffer;
+    char *name;
+    JSValue answer;
+
+    if (!GetDefaultPrinterW(NULL, &size)) {
+        DWORD error = GetLastError();
+
+        if (error == ERROR_FILE_NOT_FOUND)
+            return JS_NewString(ctx, "");
+        if (error != ERROR_INSUFFICIENT_BUFFER)
+            return JS_NULL;
+    }
+    if (size == 0)
+        return JS_NewString(ctx, "");
+    buffer = g_malloc(size * sizeof(wchar_t));
+    if (!GetDefaultPrinterW(buffer, &size)) {
+        g_free(buffer);
+        return JS_NewString(ctx, "");
+    }
+    name = printer_win32_utf8(buffer);
+    answer = JS_NewString(ctx, name ? name : "");
+    g_free(name);
+    g_free(buffer);
+    return answer;
+}
+
+#endif
+
 /*
  * **Three answers, because there are three states**, and `null` is what keeps
  * the third one from being mistaken for the second:
@@ -1002,14 +1082,16 @@ static gboolean printer_seen(GtkPrinter *p, gpointer data)
  */
 static JSValue printer_get_names(JSContext *ctx, JSValueConst this_val)
 {
-#ifndef BTA_HAVE_UNIX_PRINT
-    return JS_NULL;
-#else
+#if defined(BTA_HAVE_UNIX_PRINT)
     Enumeration e = { ctx, JS_NewArray(ctx), NULL, 0 };
 
     gtk_enumerate_printers(printer_seen, &e, NULL, TRUE);
     g_free(e.chosen);
     return e.list;
+#elif defined(G_OS_WIN32)
+    return printer_win32_names(ctx);
+#else
+    return JS_NULL;
 #endif
 }
 
@@ -1020,9 +1102,7 @@ static JSValue printer_get_names(JSContext *ctx, JSValueConst this_val)
  */
 static JSValue printer_get_default(JSContext *ctx, JSValueConst this_val)
 {
-#ifndef BTA_HAVE_UNIX_PRINT
-    return JS_NULL;
-#else
+#if defined(BTA_HAVE_UNIX_PRINT)
     Enumeration e = { ctx, JS_UNDEFINED, NULL, 0 };
 
     gtk_enumerate_printers(printer_seen, &e, NULL, TRUE);
@@ -1033,6 +1113,10 @@ static JSValue printer_get_default(JSContext *ctx, JSValueConst this_val)
     JSValue r = JS_NewString(ctx, e.chosen ? e.chosen : "");
     g_free(e.chosen);
     return r;
+#elif defined(G_OS_WIN32)
+    return printer_win32_default(ctx);
+#else
+    return JS_NULL;
 #endif
 }
 
