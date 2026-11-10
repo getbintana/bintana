@@ -60,7 +60,10 @@ typedef struct {
 static void wipe(char **s)
 {
     if (*s) {
-        explicit_bzero(*s, strlen(*s));
+        /* `gnutls_memset`, not `explicit_bzero`: the latter is a POSIX
+         * extension MinGW does not declare, and the promise is the same --
+         * a wipe the compiler may not elide. */
+        gnutls_memset(*s, 0, strlen(*s));
         g_free(*s);
         *s = NULL;
     }
@@ -315,7 +318,7 @@ static bool load_file(JSContext *ctx, Key *k, const char *path)
             gnutls_x509_crt_deinit(chain[i]);
         gnutls_free(chain);
         gnutls_pkcs12_deinit(p12);
-        explicit_bzero(bytes, len);
+        gnutls_memset(bytes, 0, len);
         g_free(bytes);
         return ok;
     }
@@ -342,7 +345,7 @@ static bool load_file(JSContext *ctx, Key *k, const char *path)
             gnutls_x509_crt_deinit(crt);
         }
     }
-    explicit_bzero(bytes, len);
+    gnutls_memset(bytes, 0, len);
     g_free(bytes);
     return ok;
 }
