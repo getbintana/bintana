@@ -708,8 +708,10 @@ jobs:
   #
   # The packages are MSYS2's UCRT64 ones, which is the toolchain the plan named:
   # MinGW-w64 with the UCRT C runtime, and GTK4 from the same ecosystem. **Never
-  # mix an MSVC GStreamer with a MinGW GTK4** -- two GTK4 copies in one process --
-  # which is why GStreamer is not in this list yet.
+  # mix an MSVC GStreamer with a MinGW GTK4** -- two GTK4 copies in one process.
+  # The GStreamer here is MSYS2's UCRT64 build, so it is the same ecosystem as
+  # the GTK4 beside it; `gst-plugins-rs` is what brings `gtk4paintablesink`, and
+  # poppler is the reading half of `PdfDocument`.
   windows:
     runs-on: windows-latest
 
@@ -741,6 +743,13 @@ jobs:
             mingw-w64-ucrt-x86_64-sqlite3
             mingw-w64-ucrt-x86_64-libsoup3
             mingw-w64-ucrt-x86_64-libxml2
+            mingw-w64-ucrt-x86_64-gstreamer
+            mingw-w64-ucrt-x86_64-gst-plugins-base
+            mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-gst-plugins-bad
+            mingw-w64-ucrt-x86_64-gst-libav
+            mingw-w64-ucrt-x86_64-gst-plugins-rs
+            mingw-w64-ucrt-x86_64-poppler
 
       - name: Build
         run: |
@@ -774,6 +783,14 @@ jobs:
           # finds it and why the closure alone would drop it.
           test -f "stage/$name/bin/vulkan-1.dll"
           test -f "stage/$name/bin/librsvg-2-2.dll"
+          # The optional halves the environment promises: `Video` asks the
+          # GStreamer registry for `gtk4paintablesink` (the plugin DLL, opened
+          # by name, never by the link closure), and poppler's data is what a
+          # PDF with a CMap needs beside the DLL `ldd` already copied.
+          test -f "stage/$name/lib/gstreamer-1.0/libgstgtk4.dll"
+          test -f "stage/$name/libexec/gstreamer-1.0/gst-plugin-scanner.exe"
+          test -n "$(ls stage/$name/bin/libpoppler-glib-*.dll 2>/dev/null)"
+          test -d "stage/$name/share/poppler"
           (cd "stage/$name" && cmake -E tar cf "$GITHUB_WORKSPACE/$name.zip" \
                                               --format=zip -- .)
           echo "$name.zip" > zip-name.txt
@@ -879,6 +896,25 @@ jobs:
           # without it the IDE's toolbar (`document-new`...) is blank.
           test -f "stage/$name/share/icons/AdwaitaLegacy/index.theme" \
               || { echo "the tree has no AdwaitaLegacy: the IDE's toolbar is blank" >&2; exit 1; }
+          # Ask the tree itself for the two optional halves, with the same clean
+          # PATH: `Video` goes through the GStreamer registry and
+          # `PdfDocument.CanRead` is the poppler build flag. The checks above
+          # prove the files were copied; this proves the runtime finds them.
+          probe="stage/probe"
+          rm -rf "$probe"; mkdir -p "$probe"
+          printf '%s\n' '{"name":"probe","main":"Main"}' > "$probe/project.btp"
+          printf '%s\n' \
+              'function Main() {' \
+              '    print(`Video=${Widget.Available("Video")}`);' \
+              '    print(`PdfRead=${PdfDocument.CanRead}`);' \
+              '}' > "$probe/Main.js"
+          out=$(PATH=/c/Windows/System32:/c/Windows "stage/$name/bin/bintana.exe" "$probe")
+          echo "$out"
+          grep -q '^Video=true$' <<<"$out" \
+              || { echo "the staged tree cannot build a Video pipeline" >&2; exit 1; }
+          grep -q '^PdfRead=true$' <<<"$out" \
+              || { echo "the staged tree cannot read a PDF" >&2; exit 1; }
+          rm -rf "$probe"
           BINTANA="$PWD/stage/$name/bin/bintana.exe" ./tests/api.sh
           # The one a shortcut starts: the same runtime with a GUI header, so a
           # menu entry opens no console (`bintanaw.exe` in CMakeLists.txt).

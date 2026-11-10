@@ -377,6 +377,17 @@ click.
   form does not end a program whose menu is the way back.
 - **`WindowId` is 0 and `IconName` is a theme name.** A path is split into an
   icon theme name and a directory for `IconThemePath`; the panel resolves it.
-- **Windows and macOS are stubs for now.** They compile, `Tray.Available` is
-  false and `Show` names the missing backend; the plan and the native shapes
-  are in `docs/plans/tray-plan.md`.
+- **macOS is a stub for now.** It compiles, `Tray.Available` is `false` and
+  `Show` names the missing backend; the plan and the native shape are in
+  `docs/plans/tray-plan.md`.
+- **Windows is `Shell_NotifyIcon`.** A hidden top-level window owns the icon and
+  hears `TaskbarCreated` after an Explorer restart. `Icon` is a theme name
+  (resolved through `GtkIconTheme`, including the project's own `icons/`, and
+  converted with `GdkPixbuf` -> `CreateIconIndirect`), a `.ico`/PNG/SVG path, or
+  the executable's own icon when empty. The menu is an `HMENU` rebuilt from the
+  validated tree, and a right click shows it with `TrackPopupMenu`.
+  `Tray.Available` and `CanMenu` are true when built.
+  Measured on a real Windows 11 desktop (2026-11-10): the icon appeared (a
+  project SVG, not the generic Windows icon), the left click raised the form,
+  the menu dispatched, and restarting Explorer brought the icon back. A DPI
+  change and a notification beside it are still unchecked.

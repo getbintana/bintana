@@ -28,6 +28,13 @@ the IDE's critical path needs VTE, which has no Windows port. See
 [`widgets.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/widgets.md#a-build-without-vte) and
 [`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#running).
 
+**The build environment and the `windows` job carry GStreamer with
+gst-plugins-rs and poppler now** (2026-11-10). `Video` answers
+`Widget.Available("Video") == true` and `PdfDocument.CanRead` is true on
+Windows, measured with a console project in the environment; the job installs
+the same packages, so the halves are compiled on every push instead of being
+found out by whoever unzips the tree.
+
 The target is **native Windows**, built with **MSYS2 / MinGW-w64 (UCRT64)**.
 The scope is deliberately narrow: **the runtime and the IDE compile and run,
 and the examples with them.** The test suite and CI, packaging/installer, and a
@@ -46,6 +53,7 @@ that match this tree:
 | libsoup3 | `mingw-w64-ucrt-x86_64-libsoup3` |
 | sqlite3 | `mingw-w64-ucrt-x86_64-sqlite3` |
 | GStreamer + GTK4 sink | `gstreamer` + `gst-plugins-rs`, whose `/mingw64/lib/gstreamer-1.0/libgstgtk4.dll` is `gtk4paintablesink` (the official GStreamer 1.28 Windows installers carry it too — but they are MSVC, and **must not be mixed** with a MinGW GTK4) |
+| poppler | `mingw-w64-ucrt-x86_64-poppler`, whose `poppler-glib.pc` turns on `PdfDocument`'s reading half and `lib/pdfview` |
 | VTE | **does not exist on Windows** — and nothing needs it: `BTA_HAVE_VTE` is already optional, and the class without it draws, loads and answers, refusing only the three verbs that need a child |
 | QuickJS | vendored, and already has native `_WIN32` paths; no pthread needed |
 

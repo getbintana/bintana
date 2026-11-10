@@ -1,7 +1,7 @@
 # Tray: a status icon on three native backends
 
-**Status: the common API and the Linux backend are built (2026-11-10);
-Windows and macOS are compiled stubs whose `Available` says false.** This is
+**Status: the common API, the Linux backend and the Windows backend are built
+(2026-11-10); macOS is a compiled stub whose `Available` says false.** This is
 the systray half of
 **R3** of [the October audit](../audit-2026-10.md), and the piece the PZEM
 monitor needs: a program that can be put away and still be one click from its
@@ -177,9 +177,10 @@ project that names a tray, or the application passes `FinishArgs`.
   requires.
 - `TaskbarCreated` re-adds the icon after an Explorer restart; `NIM_DELETE` at
   teardown.
-- Icon: a `.ico` path (the packaging already writes one); empty means the
-  executable's icon, then `IDI_APPLICATION`. A PNG may be converted, but `.ico`
-  is the documented road.
+- Icon: a theme name, or a `.ico`/PNG/SVG path; empty means the executable's
+  icon, then `IDI_APPLICATION`. A theme name is resolved through
+  `GtkIconTheme` (the project's own `icons/` is already in it) and converted
+  with `GdkPixbuf` -> `CreateIconIndirect`; a `.ico` goes through `LoadImageW`.
 - No new library: `shell32`.
 - **Notifications are independent, and a WinRT toast adds no tray icon.**
   `Notification` on Windows is planned as a WinRT `ToastNotification` backend;
@@ -255,8 +256,11 @@ context.
   `dbus-monitor` observe `RegisterStatusNotifierItem`; a mock host calls
   `Activate` and reads `GetLayout`. The real icon and menu are a by-hand check
   on XFCE, KDE and GNOME-with-extension.
-- **Windows:** the `windows` CI job compiles it; a real desktop checks the
-  icon, the menu, DPI, an Explorer restart and a notification beside it.
+- **Windows:** the `windows` CI job compiles it. By hand on a real Windows 11
+  desktop (2026-11-10): the icon appears, the left click raises the form, the
+  right-click menu dispatches its actions, and restarting Explorer brings the
+  icon back through `TaskbarCreated`. A DPI change and a notification beside it
+  are still to check.
 - **macOS:** compile when the macOS job exists; the external tester checks the
   menu bar, a template icon and a click.
 
@@ -278,13 +282,18 @@ on the developer's desktop is never opened by `tests/widgets`.
    registration, `Activate`/`SecondaryActivate`, and the `dbusmenu` layout.
    The by-hand icon is an XFCE check; no icon is opened by the suite.
 3. **Windows**, because `Shell_NotifyIcon` is the most deterministic backend and
-   the CI can at least compile it. **Not started**: a stub says the backend is
-   missing.
+   the CI can at least compile it. **Built** (2026-11-10,
+   `runtime/src/bta_tray_win32.c`): the hidden top-level window, `NIM_ADD` /
+   `NIM_SETVERSION` / `NIM_DELETE`, the `HMENU` rebuilt from the validated
+   tree, `TrackPopupMenu`, `TaskbarCreated`, and the `.ico`/executable icon
+   fallback.
 4. **macOS**, blind, with the external tester. **Not started**: a stub says the
    backend is missing.
 5. **The docs, `CHANGELOG`, audit R3 and the by-hand checks.** In progress:
-   the pages, the audit and `docs/agents` say what is built; the Windows/macOS
-   icons are still by hand when they land.
+   the pages, the audit and `docs/agents` say what is built; the Windows icon
+   has had its compile and its `Available` check, and the icon, menu, DPI,
+   Explorer restart and notification-beside-it are the by-hand list; the macOS
+   icon is still by hand when that stage lands.
 
 ## What is deliberately not here
 

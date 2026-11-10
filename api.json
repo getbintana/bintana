@@ -18314,7 +18314,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "a theme name, or a file path for the platforms that need one; set before or after `Show`",
+          "Doc": "a theme name on Linux, or a `.ico`/image path where the platform needs one; on Windows a value that is not an existing file falls back to the executable's icon, as does an empty one. Set before or after `Show`",
           "Native": true
         },
         {
@@ -20577,7 +20577,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "a theme name, or a file path for the platforms that need one; set before or after `Show`",
+          "Doc": "a theme name on Linux, or a `.ico`/image path where the platform needs one; on Windows a value that is not an existing file falls back to the executable's icon, as does an empty one. Set before or after `Show`",
           "Native": true
         },
         {

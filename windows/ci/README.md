@@ -100,9 +100,10 @@ of the runtime went into it.
 One release is not an application: `build-<version>` carries
 `bintana-build-<version>-windows-x86_64.zip`, an MSYS2 UCRT64 tree with GCC,
 binutils, gdb, cmake, ninja, pkgconf, git, gettext, GTK4, GtkSourceView 5,
-sqlite3, libsoup3, libxml2 and their headers -- the environment the setups
-above are built in, for developing Bintana itself on Windows. Unzip it
-anywhere, run `bintana-build.cmd` from the directory where you keep your source
+sqlite3, libsoup3, libxml2, GStreamer with gst-plugins-rs (the GTK4 sink),
+poppler, and their headers -- the environment the setups above are built in,
+for developing Bintana itself on Windows. Unzip it anywhere, run
+`bintana-build.cmd` from the directory where you keep your source
 (or `bintana-build.cmd -where C:\src`), and:
 
 ```sh
@@ -119,9 +120,9 @@ It is rebuilt when its recipe changes -- `tools/windows-build-tree.sh`,
 is hashed in `builds.json`, so a failed build is retried rather than recorded
 as done. The ZIP is Deflate so Explorer extracts it without 7-Zip.
 What is checked while it is made is that the copied tree has the compiler,
-CMake, Ninja, pkgconf, git, gettext and the two pkg-config files; the tree
-itself is unverified until somebody unzips it, the same caveat as the portable
-runtime.
+CMake, Ninja, pkgconf, git, gettext, the two required pkg-config files, and the
+GStreamer and poppler halves the environment promises; the tree itself is
+unverified until somebody unzips it, the same caveat as the portable runtime.
 
 ## What it runs
 

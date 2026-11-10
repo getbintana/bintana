@@ -104,8 +104,8 @@ cat > "$dest/README.md" <<'EOF'
 
 A portable MSYS2 UCRT64 tree with what Bintana is built with on Windows:
 GCC, binutils, gdb, cmake, ninja, pkgconf, git, gettext, GTK4, GtkSourceView 5,
-sqlite3, libsoup3, libxml2 and their headers. It is the same environment the
-Windows CI uses.
+sqlite3, libsoup3, libxml2, GStreamer with gst-plugins-rs (the GTK4 sink),
+poppler, and their headers. It is the same environment the Windows CI uses.
 
 Unzip anywhere and run `bintana-build.cmd` from the directory where you keep
 your source -- or `bintana-build.cmd -where C:\src`; it opens a UCRT64 shell
@@ -128,8 +128,9 @@ The source is not in this ZIP: it is a checkout of
 EOF
 
 # The checks that say the copy is a build environment and not a directory of
-# DLLs: the compiler, the CMake and Ninja that drive it, git, gettext, and the
-# two pkg-config files the runtime's configure step asks for.
+# DLLs: the compiler, the CMake and Ninja that drive it, git, gettext, the two
+# pkg-config files the runtime's configure step requires, and the optional
+# halves this environment promises -- Video's GTK4 sink and PDF reading.
 need ucrt64/bin/gcc.exe       "the UCRT64 C compiler"
 need ucrt64/bin/g++.exe       "the UCRT64 C++ compiler"
 need ucrt64/bin/cmake.exe     "CMake"
@@ -141,5 +142,9 @@ need usr/bin/msgmerge.exe     "gettext's msgmerge"
 need ucrt64/include/gtk-4.0/gtk/gtk.h "the GTK4 headers"
 need ucrt64/lib/pkgconfig/gtk4.pc     "GTK4's pkg-config file"
 need ucrt64/lib/pkgconfig/gtksourceview-5.pc "GtkSourceView 5's pkg-config file"
+need ucrt64/bin/gst-inspect-1.0.exe   "GStreamer's inspect tool"
+need ucrt64/lib/gstreamer-1.0/libgstgtk4.dll "GStreamer's GTK4 sink (gst-plugins-rs)"
+need ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe "GStreamer's plugin scanner"
+need ucrt64/lib/pkgconfig/poppler-glib.pc "poppler-glib's pkg-config file"
 
 echo "windows-build-tree: $root -> $dest"

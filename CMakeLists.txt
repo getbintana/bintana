@@ -243,8 +243,8 @@ else()
     set(BTA_PDF_SOURCES)
 endif()
 
-# The tray is one API and one native backend per platform.  The Windows and
-# macOS files are stubs until their own stages; they compile and `Available`
+# The tray is one API and one native backend per platform.  Windows and Linux
+# are built; macOS is a stub until its stage -- it compiles and `Available`
 # says false, so a project carrying a tray still builds and runs.
 if(WIN32)
     set(BTA_TRAY_SOURCE runtime/src/bta_tray_win32.c)
@@ -320,6 +320,13 @@ target_include_directories(bintana PRIVATE
 )
 target_link_libraries(bintana PRIVATE quickjs PkgConfig::GTK4 PkgConfig::GTKSOURCE
                                        PkgConfig::GMODULE)
+if(WIN32)
+    # `Shell_NotifyIconW` is shell32; the hidden window, the popup menu and the
+    # icon handles are user32; the DIB behind a theme icon is gdi32.  GTK links
+    # them already, and naming them here is what makes the tray's own half
+    # independent of GTK's link line.
+    target_link_libraries(bintana PRIVATE shell32 user32 gdi32)
+endif()
 if(GIOUNIX_FOUND)
     target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)
 endif()

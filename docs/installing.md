@@ -370,6 +370,13 @@ feature rather than using one. For the two globals that are not widgets the
 question is spelled `Xml.Available` (a value, read off the build) and a refusing
 call for `Database.Sqlite`.
 
+On Windows the same switches come from MSYS2 UCRT64: `mingw-w64-ucrt-x86_64-poppler`,
+`...-gstreamer` with `...-gst-plugins-base`, `...-gst-plugins-good`,
+`...-gst-plugins-bad`, `...-gst-libav` and `...-gst-plugins-rs` (the GTK4 sink),
+`...-sqlite3`, `...-libsoup3`, `...-libxml2` and `...-gnutls`. VTE, libsystemd,
+sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` is Linux-only today
+and the Windows Credential Manager is [a plan](plans/keyring-plan.md).
+
 ## Profiling
 
 Two ways in, neither of which needs the runtime built specially:

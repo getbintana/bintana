@@ -680,7 +680,9 @@ static JSValue tray_hide(JSContext *ctx, JSValueConst this_val,
 /* type Tray */
 static const JSCFunctionListEntry tray_props[] = {
     /* Icon
-     *   a theme name, or a file path for the platforms that need one; set
+     *   a theme name, or a `.ico`/image path. On Windows the theme name is
+     *   resolved through the icon theme and a `.ico`/PNG/SVG path is loaded
+     *   directly; an empty value falls back to the executable's icon. Set
      *   before or after `Show`
      */
     JS_CGETSET_DEF("Icon", tray_get_icon, tray_set_icon),

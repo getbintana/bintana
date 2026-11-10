@@ -150,6 +150,43 @@ if [ -d "$ucrt/lib/gio/modules" ]; then
     copy_deps "$ucrt"/lib/gio/modules/*.dll
 fi
 
+# GStreamer's plugins, and the scanner that reads them.
+#
+# `bintana.exe` links gstreamer-1.0, so `ldd` already brought the core; the
+# plugins are opened by name later, like the pixbuf loaders, and without them
+# `Video` builds a pipeline that has no sink. `libgstgtk4.dll` is
+# `gtk4paintablesink`, from gst-plugins-rs -- the difference between
+# `Video.Available` being true and a video that only has sound.
+if [ -d "$ucrt/lib/gstreamer-1.0" ]; then
+    mkdir -p "$dest/lib/gstreamer-1.0"
+    cp -f "$ucrt"/lib/gstreamer-1.0/*.dll "$dest/lib/gstreamer-1.0/" 2>/dev/null || true
+    copy_deps "$ucrt"/lib/gstreamer-1.0/*.dll
+fi
+
+# The scanner is what turns a plugin DLL into a registry entry. It lives in
+# `libexec` beside the plugins' prefix, and its own DLL closure is in `bin`
+# with everything else -- the copy_deps call is what puts it there.
+scanner="$ucrt/libexec/gstreamer-1.0/gst-plugin-scanner.exe"
+if [ -f "$scanner" ]; then
+    mkdir -p "$dest/libexec/gstreamer-1.0"
+    cp "$scanner" "$dest/libexec/gstreamer-1.0/"
+    copy_deps "$scanner"
+fi
+
+# GStreamer opens its data (presets, the encoding profiles) from the same
+# prefix rule; a tree without it still plays, and says less when it fails.
+if [ -d "$ucrt/share/gstreamer-1.0" ]; then
+    cp -R "$ucrt/share/gstreamer-1.0" "$dest/share/"
+fi
+
+# Poppler's data: the CMaps, the name-to-Unicode tables and the substitution
+# files. `libpoppler-glib` is in the executable's link closure and arrives
+# through ldd; the data it opens by name does not, and a PDF that needs a
+# CMap fails with no hint that the DLL is fine.
+if [ -d "$ucrt/share/poppler" ]; then
+    cp -R "$ucrt/share/poppler" "$dest/share/"
+fi
+
 # GTK's own input-method modules, where the package has them.
 for dir in "$ucrt"/lib/gtk-4.0/*/immodules; do
     [ -d "$dir" ] || continue
