@@ -8,6 +8,10 @@ one-page answer to *what is new since the release I have*.
 
 ### Runtime and IDE
 
+- **`Tray`**, the application's status icon, with a native menu: `Show`/`Hide`,
+  `Icon`, `Tooltip`, `Menu` (data with `Text`/`Action`/`Checked`/`Items`),
+  `OnClick` and `OnMenu`, plus `Tray.Available`/`CanMenu`. Linux is built on
+  `StatusNotifierItem` and `dbusmenu`; Windows and macOS are stubs that say so.
 - **A notification can be clicked and can carry buttons**:
   `Notification.OnActivate = (id, action) => …`, `Buttons: [{ Label, Action }]`,
   and `CanActivate`/`MaxButtons` say what the platform delivers. Linux and macOS

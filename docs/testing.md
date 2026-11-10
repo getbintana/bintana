@@ -516,6 +516,24 @@ whose message names it. A real adapter's modem lines are the by-hand half.
 `tests/widgets`' `SerialPort` holds the part: the properties, their
 serialisation, and `FormPart.Types()`.
 
+## A tray, which needs a status-notifier host
+
+`tests/widgets`' `Tray` checks the object without showing an icon: the
+one-tray rule, `Icon`/`Tooltip`, a menu that round-trips, the whole validation
+tree (a missing `Text`, a missing `Action`, a duplicate action, a separator
+with children, `Enabled` that is not a boolean), and `OnClick`/`OnMenu`
+refusals. `Show` is deliberately not called from the suite: with a watcher on
+the developer's desktop it would put an icon there, which the suite must never
+do.
+
+A child on `dbus-run-session` with no watcher is the other half: `Tray.Available`
+is false and `Show` answers with a sentence naming `StatusNotifierWatcher`. The
+real icon and menu are by hand on XFCE/KDE, and on GNOME with the AppIndicator
+extension. The Linux backend itself is a `StatusNotifierItem` plus
+`com.canonical.dbusmenu`; a private bus can call `Activate`, `GetLayout`,
+`GetProperty` and `Event` without a panel, which is how the menu layout was
+measured.
+
 ## Reproductions kept by hand
 
 `tests/manual/` holds two standalone C programs and one Bintana project. None runs

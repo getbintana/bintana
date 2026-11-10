@@ -18279,6 +18279,101 @@
       ]
     },
     {
+      "Name": "Tray",
+      "Members": [
+        {
+          "Name": "Available",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this platform can show a tray icon now: Linux needs a StatusNotifierWatcher; Windows and macOS answer true when built",
+          "Native": true
+        },
+        {
+          "Name": "CanMenu",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the platform can show the menu; false is a documented limit",
+          "Native": true
+        },
+        {
+          "Name": "Hide",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "remove the icon but keep the object, so `Show` is cheap. Answers the tray",
+          "Native": true
+        },
+        {
+          "Name": "Icon",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a theme name, or a file path for the platforms that need one; set before or after `Show`",
+          "Native": true
+        },
+        {
+          "Name": "Menu",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "an array of `{ Text, Action, Enabled, Checked, Separator, Items }`; assigning it validates the whole tree and rebuilds the native menu. `Text` and button labels are prose -- wrap them in `Locale.Text`",
+          "Native": true
+        },
+        {
+          "Name": "OnClick",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: the primary click. On macOS with a `Menu`, the click opens the menu and this is not called",
+          "Native": true
+        },
+        {
+          "Name": "OnMenu",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(action) => …`: a menu item was chosen; `action` is its `Action`. The menu is data and actions, never callbacks",
+          "Native": true
+        },
+        {
+          "Name": "Show",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "add the icon and its menu; answers the tray. Refused with no application, or with no status-notifier host on the desktop",
+          "Native": true
+        },
+        {
+          "Name": "Tooltip",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the text the platform shows on hover",
+          "Native": true
+        },
+        {
+          "Name": "Visible",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the icon is shown now",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "UdpSocket",
       "Members": [
         {
@@ -20442,6 +20537,101 @@
           "Signature": "(data)",
           "Returns": "",
           "Doc": "queue text (UTF-8) or `Bytes`; answers the socket. It throws when the socket is not connected, which is a mistake and not a late answer",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "Tray",
+      "Members": [
+        {
+          "Name": "Available",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this platform can show a tray icon now: Linux needs a StatusNotifierWatcher; Windows and macOS answer true when built",
+          "Native": true
+        },
+        {
+          "Name": "CanMenu",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the platform can show the menu; false is a documented limit",
+          "Native": true
+        },
+        {
+          "Name": "Hide",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "remove the icon but keep the object, so `Show` is cheap. Answers the tray",
+          "Native": true
+        },
+        {
+          "Name": "Icon",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "a theme name, or a file path for the platforms that need one; set before or after `Show`",
+          "Native": true
+        },
+        {
+          "Name": "Menu",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "an array of `{ Text, Action, Enabled, Checked, Separator, Items }`; assigning it validates the whole tree and rebuilds the native menu. `Text` and button labels are prose -- wrap them in `Locale.Text`",
+          "Native": true
+        },
+        {
+          "Name": "OnClick",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `() => …`: the primary click. On macOS with a `Menu`, the click opens the menu and this is not called",
+          "Native": true
+        },
+        {
+          "Name": "OnMenu",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(action) => …`: a menu item was chosen; `action` is its `Action`. The menu is data and actions, never callbacks",
+          "Native": true
+        },
+        {
+          "Name": "Show",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "add the icon and its menu; answers the tray. Refused with no application, or with no status-notifier host on the desktop",
+          "Native": true
+        },
+        {
+          "Name": "Tooltip",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the text the platform shows on hover",
+          "Native": true
+        },
+        {
+          "Name": "Visible",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the icon is shown now",
           "Native": true
         }
       ]

@@ -349,3 +349,34 @@ button (`button0`), which is what `MaxButtons` reports. The test observes the
 button labels and action names in the private bus's `Notify` call; the click
 itself is by hand on a real desktop, because a bus with no daemon has nothing to
 click.
+
+## Tray: a D-Bus server, not a client
+
+- **GTK4 has no tray.** `GtkStatusIcon` is GTK3 and gone; `libayatana-appindicator`
+  is GTK3 and would put a second toolkit in the process. The Linux backend is
+  `org.kde.StatusNotifierItem` plus `com.canonical.dbusmenu` over GDBus.
+- **`Ipc.DBus` is a client and does not help.** The tray exports objects and
+  answers methods; that is the opposite direction. The generic `Ipc.DBus` plan
+  stays waiting for an application `Call`/`OnSignal`.
+- **The menu ids are assigned by the backend, not by JS.** `menu_assign_ids`
+  walks the validated `BtaTrayItem` tree and writes `item->id`; `GetLayout`,
+  `GetGroupProperties`, `GetProperty` and `Event` all read that tree. A menu
+  change bumps `revision` and emits `LayoutUpdated`.
+- **A menu is data, never callbacks.** The desktop keeps it for the life of the
+  icon; `OnMenu(action)` is looked up when `Event("clicked")` arrives. The same
+  rule as `Notification.OnActivate`.
+- **The separator parse found a double free.** `Separator: true` with a `Text`
+  was freed inside the branch and again at `done`; the test crashed in
+  `JS_FreeRuntime`. The branch now only throws; the common exit frees once.
+- **`Show` checks the watcher, not the constructor.** `Tray.Available` is a
+  static bool asked at start-up; the `StatusNotifierWatcher` can be absent on
+  GNOME without the AppIndicator extension. `Show` asks the backend again and
+  refuses with a sentence; the no-host child on a private bus is the test.
+- **A visible tray holds the application alive.** `g_application_hold` in
+  `Show`, released in `Hide`, the finalizer and `bta_tray_cleanup`; a hidden
+  form does not end a program whose menu is the way back.
+- **`WindowId` is 0 and `IconName` is a theme name.** A path is split into an
+  icon theme name and a directory for `IconThemePath`; the panel resolves it.
+- **Windows and macOS are stubs for now.** They compile, `Tray.Available` is
+  false and `Show` names the missing backend; the plan and the native shapes
+  are in `docs/plans/tray-plan.md`.

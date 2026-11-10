@@ -1440,6 +1440,11 @@ void bta_cipher_init(JSContext *ctx, JSValue global);
 void bta_notification_init(JSContext *ctx, JSValue global);
 void bta_notification_cleanup(void);   /* forget the click action */
 
+/* Tray -- one status icon, one native backend per platform. */
+void  bta_tray_init(JSContext *ctx, JSValue global);
+void  bta_tray_init_worker(JSContext *ctx, JSValue global);
+void  bta_tray_cleanup(void);
+
 /* --- Zip ------------------------------------------------------------------
  *
  * `Zip.Open` and the `ZipArchive` it answers: a reader of the central directory,

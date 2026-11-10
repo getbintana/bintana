@@ -630,7 +630,7 @@ const TESTS = [
      * parent reads back. */
     "Profile",
     /* Blocking too: a child on a private bus, watched with dbus-monitor. */
-    "Notification",
+    "Notification", "Tray",
     /* And a console example, run as a child: it listens on loopback and talks to itself. */
     "ExampleWebhook",
     /* And the three parts together: a Timer polls a local server through an
@@ -27648,6 +27648,89 @@ class Form1 extends Form {
      * settings daemon. `dbus-monitor` sees the `Notify` call whether or not anyone
      * answers it, which is all that is asserted: what the runtime *asked for*.
      */
+    /* --- Tray ---------------------------------------------------------------
+     *
+     * The object and its menu tree.  `Show` is deliberately not called: with a
+     * status-notifier host on the developer's desktop it would put an icon on
+     * that desktop, which the suite must never do.  The no-host path is a
+     * child on an empty bus, below.
+     */
+    testTray() {
+        check("Tray.Available is a boolean", typeof Tray.Available === "boolean");
+        check("Tray.CanMenu is a boolean", typeof Tray.CanMenu === "boolean");
+
+        const tray = new Tray({ Icon: "org.example.Monitor-symbolic",
+                                Tooltip: "PZEM" });
+
+        eq("the icon is kept", tray.Icon, "org.example.Monitor-symbolic");
+        eq("the tooltip is kept", tray.Tooltip, "PZEM");
+        eq("and it starts hidden", tray.Visible, false);
+
+        tray.Menu = [
+            { Text: "Abrir", Action: "show" },
+            { Separator: true },
+            { Text: "Más", Items: [
+                { Text: "Uno", Action: "one" },
+            ] },
+            { Text: "Sondeo", Action: "poll", Checked: true },
+        ];
+        eq("the menu reads back", tray.Menu.length, 4);
+
+        throws("a second tray is refused", () => new Tray());
+
+        throws("a menu item needs Text",
+               () => { tray.Menu = [{ Action: "x" }]; });
+        throws("a menu item needs an Action or Items",
+               () => { tray.Menu = [{ Text: "Solo" }]; });
+        throws("a misspelt item option is refused",
+               () => { tray.Menu = [{ Text: "A", Action: "a", Textt: "b" }]; });
+        throws("Enabled is a boolean",
+               () => { tray.Menu = [{ Text: "A", Action: "a", Enabled: "yes" }]; });
+        throws("a separator has no Text or Action",
+               () => { tray.Menu = [{ Separator: true, Text: "A" }]; });
+        throws("two items cannot share an action",
+               () => { tray.Menu = [
+                   { Text: "A", Action: "same" },
+                   { Text: "B", Action: "same" },
+               ]; });
+        throws("OnClick is a function or null", () => { tray.OnClick = 5; });
+        throws("OnMenu is a function or null", () => { tray.OnMenu = 5; });
+        tray.OnClick = null;
+        tray.OnMenu = null;
+        eq("turning it off leaves it hidden", tray.Visible, false);
+
+        /* The no-host path: an empty session bus, no watcher, and Show says so
+         * without putting anything anywhere. */
+        if (!Application.HasCommand("dbus-run-session")) {
+            print("Tray: dbus-run-session is not installed; the no-host child "
+                  + "is skipped");
+            return;
+        }
+        const dir = File.Join(SCRATCH, "tray-nohost");
+        Directory.Make(dir);
+        File.SaveJson(File.Join(dir, "project.btp"),
+            { name: "tray-nohost", startup: "F", sources: ["F.js"],
+              version: "1.0" });
+        File.Save(File.Join(dir, "F.form"),
+            '{ "type": "Form", "name": "F", ' +
+            '"properties": { "Width": 80, "Height": 60 }, "children": [] }');
+        File.Save(File.Join(dir, "F.js"),
+            'class F extends Form {\n' +
+            '    Form_Open() {\n' +
+            '        this.Visible = false;\n' +
+            '        try { new Tray().Show(); print("SENT"); }\n' +
+            '        catch (e) { print(e.message); }\n' +
+            '        Application.Quit(0);\n' +
+            '    }\n}\n');
+        const child = Exec.Wait(["dbus-run-session", "--",
+                                 Application.Executable, dir],
+                                { Timeout: 30000 });
+        check("a session with no watcher refuses Show and names it",
+              /StatusNotifierWatcher/.test(child.Output) &&
+              !child.Output.includes("SENT"), child.Output);
+        Directory.DeleteTree(dir);
+    }
+
     testNotification() {
         /* The refusals that happen before anything is sent. */
         throws("a title is needed", () => Notification.Send());

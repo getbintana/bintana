@@ -401,7 +401,7 @@ Traps and their evidence, by area, in `docs/agents/`:
 - [`ide.md`](docs/agents/ide.md) — you change the IDE: designer, tabs, git panel, commands, recovery.
 - [`data.md`](docs/agents/data.md) — you touch `Record`, `Xml`, `Database`/`Table`, `Csv`, `Decimal` or JSON.
 - [`drawing.md`](docs/agents/drawing.md) — you touch `Painter`, `DrawingArea`, `Drawing`, printing, a drawing library, `PdfDocument` or signing with a `Key`.
-- [`media-desktop.md`](docs/agents/media-desktop.md) — you touch `Video`/`AudioPlayer`, the `Media` elements (`Media.Element` and the graph it builds), `Keyring`, `Notification` or desktop entries.
+- [`media-desktop.md`](docs/agents/media-desktop.md) — you touch `Video`/`AudioPlayer`, the `Media` elements (`Media.Element` and the graph it builds), `Keyring`, `Notification`, `Tray` or desktop entries.
 - [`network.md`](docs/agents/network.md) — you touch `Http`, TLS or sockets.
 - [`i18n.md`](docs/agents/i18n.md) — you touch translation, the extractor or `.po` files.
 - [`packaging.md`](docs/agents/packaging.md) — you touch `lib/package`, Flatpak or the CI registry of applications.
@@ -10205,6 +10205,37 @@ button labels and action names in the private bus's `Notify` call; the click
 itself is by hand on a real desktop, because a bus with no daemon has nothing to
 click.
 
+## Tray: a D-Bus server, not a client
+
+- **GTK4 has no tray.** `GtkStatusIcon` is GTK3 and gone; `libayatana-appindicator`
+  is GTK3 and would put a second toolkit in the process. The Linux backend is
+  `org.kde.StatusNotifierItem` plus `com.canonical.dbusmenu` over GDBus.
+- **`Ipc.DBus` is a client and does not help.** The tray exports objects and
+  answers methods; that is the opposite direction. The generic `Ipc.DBus` plan
+  stays waiting for an application `Call`/`OnSignal`.
+- **The menu ids are assigned by the backend, not by JS.** `menu_assign_ids`
+  walks the validated `BtaTrayItem` tree and writes `item->id`; `GetLayout`,
+  `GetGroupProperties`, `GetProperty` and `Event` all read that tree. A menu
+  change bumps `revision` and emits `LayoutUpdated`.
+- **A menu is data, never callbacks.** The desktop keeps it for the life of the
+  icon; `OnMenu(action)` is looked up when `Event("clicked")` arrives. The same
+  rule as `Notification.OnActivate`.
+- **The separator parse found a double free.** `Separator: true` with a `Text`
+  was freed inside the branch and again at `done`; the test crashed in
+  `JS_FreeRuntime`. The branch now only throws; the common exit frees once.
+- **`Show` checks the watcher, not the constructor.** `Tray.Available` is a
+  static bool asked at start-up; the `StatusNotifierWatcher` can be absent on
+  GNOME without the AppIndicator extension. `Show` asks the backend again and
+  refuses with a sentence; the no-host child on a private bus is the test.
+- **A visible tray holds the application alive.** `g_application_hold` in
+  `Show`, released in `Hide`, the finalizer and `bta_tray_cleanup`; a hidden
+  form does not end a program whose menu is the way back.
+- **`WindowId` is 0 and `IconName` is a theme name.** A path is split into an
+  icon theme name and a directory for `IconThemePath`; the panel resolves it.
+- **Windows and macOS are stubs for now.** They compile, `Tray.Available` is
+  false and `Show` names the missing backend; the plan and the native shapes
+  are in `docs/plans/tray-plan.md`.
+
 ---
 
 # docs/agents/network.md
@@ -11987,6 +12018,10 @@ bta_locale.c      po/*.po, Locale, the plural-form expression evaluator, and how
                   the desktop spells a number, a date and an amount of money
 bta_decimal.c     Decimal: exact base-10 arithmetic, with the operators
 bta_form.c        the .form loader
+bta_tray.c        Tray: the object, the menu tree, the dispatcher
+bta_tray_linux.c  StatusNotifierItem + com.canonical.dbusmenu over GDBus
+bta_tray_win32.c  the Windows tray stub (Shell_NotifyIcon is the plan)
+bta_tray_cocoa.c  the macOS tray stub (NSStatusItem is the plan)
 bta_serial.c      SerialPort (POSIX termios, on the main loop)
 bta_sys.c         File, Dir, Exec, Dialog, timers
 bta_plugin.c      native plugins: the host table a library's `.so` is handed,
@@ -14419,6 +14454,24 @@ whose message names it. A real adapter's modem lines are the by-hand half.
 
 `tests/widgets`' `SerialPort` holds the part: the properties, their
 serialisation, and `FormPart.Types()`.
+
+## A tray, which needs a status-notifier host
+
+`tests/widgets`' `Tray` checks the object without showing an icon: the
+one-tray rule, `Icon`/`Tooltip`, a menu that round-trips, the whole validation
+tree (a missing `Text`, a missing `Action`, a duplicate action, a separator
+with children, `Enabled` that is not a boolean), and `OnClick`/`OnMenu`
+refusals. `Show` is deliberately not called from the suite: with a watcher on
+the developer's desktop it would put an icon there, which the suite must never
+do.
+
+A child on `dbus-run-session` with no watcher is the other half: `Tray.Available`
+is false and `Show` answers with a sentence naming `StatusNotifierWatcher`. The
+real icon and menu are by hand on XFCE/KDE, and on GNOME with the AppIndicator
+extension. The Linux backend itself is a `StatusNotifierItem` plus
+`com.canonical.dbusmenu`; a private bus can call `Activate`, `GetLayout`,
+`GetProperty` and `Event` without a panel, which is how the menu layout was
+measured.
 
 ## Reproductions kept by hand
 

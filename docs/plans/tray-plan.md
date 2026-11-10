@@ -1,6 +1,8 @@
 # Tray: a status icon on three native backends
 
-**Status: planned, not started (2026-11-10).** This is the systray half of
+**Status: the common API and the Linux backend are built (2026-11-10);
+Windows and macOS are compiled stubs whose `Available` says false.** This is
+the systray half of
 **R3** of [the October audit](../audit-2026-10.md), and the piece the PZEM
 monitor needs: a program that can be put away and still be one click from its
 window. It is deliberately **not** built on `Ipc.DBus`; see
@@ -267,13 +269,22 @@ on the developer's desktop is never opened by `tests/widgets`.
 0. **This plan.** **Done.**
 1. **The common API and menu model**, with a stub backend whose `Available` is
    `false`; the JS class, validation, `api.json`, docs, and the tests that do
-   not need a desktop. **Not started.**
-2. **Windows**, because `Shell_NotifyIcon` is the most deterministic backend and
-   the CI can at least compile it. **Not started.**
-3. **Linux**, the SNI object and the dbusmenu subset; the one testable on this
-   machine. **Not started.**
-4. **macOS**, blind, with the external tester. **Not started.**
-5. **The docs, `CHANGELOG`, audit R3 and the by-hand checks.** **Not started.**
+   not need a desktop. **Built** (2026-11-10, `runtime/src/bta_tray.c`):
+   `Tray`, the validated `Menu`, `OnClick`/`OnMenu`, `Available`/`CanMenu`,
+   `Show`/`Hide`, and the one-tray rule.
+2. **Linux**, the SNI object and the dbusmenu subset; the one testable on this
+   machine. **Built** (2026-11-10, `runtime/src/bta_tray_linux.c`): the
+   session-bus name, `/StatusNotifierItem`, `/MenuBar`, the watcher
+   registration, `Activate`/`SecondaryActivate`, and the `dbusmenu` layout.
+   The by-hand icon is an XFCE check; no icon is opened by the suite.
+3. **Windows**, because `Shell_NotifyIcon` is the most deterministic backend and
+   the CI can at least compile it. **Not started**: a stub says the backend is
+   missing.
+4. **macOS**, blind, with the external tester. **Not started**: a stub says the
+   backend is missing.
+5. **The docs, `CHANGELOG`, audit R3 and the by-hand checks.** In progress:
+   the pages, the audit and `docs/agents` say what is built; the Windows/macOS
+   icons are still by hand when they land.
 
 ## What is deliberately not here
 

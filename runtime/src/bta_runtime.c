@@ -2805,6 +2805,7 @@ static bool install_globals(BtaApp *app)
     bta_gzip_init(ctx, global);
     bta_cipher_init(ctx, global);
     bta_notification_init(ctx, global);
+    bta_tray_init(ctx, global);
     bta_zip_init(ctx, global);
     bta_probe_init(ctx, global);
     bta_popover_init(ctx, global);
@@ -3785,6 +3786,7 @@ void bta_app_free(BtaApp *app)
     bta_network_cleanup();
     bta_socket_cleanup();
     bta_serial_cleanup();
+    bta_tray_cleanup();
     bta_notification_cleanup();
     /* Forms still shown hold a reference the collector cannot see; drop it
      * before the context goes, or JS_FreeRuntime asserts. */

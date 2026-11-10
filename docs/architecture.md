@@ -26,6 +26,10 @@ bta_locale.c      po/*.po, Locale, the plural-form expression evaluator, and how
                   the desktop spells a number, a date and an amount of money
 bta_decimal.c     Decimal: exact base-10 arithmetic, with the operators
 bta_form.c        the .form loader
+bta_tray.c        Tray: the object, the menu tree, the dispatcher
+bta_tray_linux.c  StatusNotifierItem + com.canonical.dbusmenu over GDBus
+bta_tray_win32.c  the Windows tray stub (Shell_NotifyIcon is the plan)
+bta_tray_cocoa.c  the macOS tray stub (NSStatusItem is the plan)
 bta_serial.c      SerialPort (POSIX termios, on the main loop)
 bta_sys.c         File, Dir, Exec, Dialog, timers
 bta_plugin.c      native plugins: the host table a library's `.so` is handed,

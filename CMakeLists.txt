@@ -243,6 +243,17 @@ else()
     set(BTA_PDF_SOURCES)
 endif()
 
+# The tray is one API and one native backend per platform.  The Windows and
+# macOS files are stubs until their own stages; they compile and `Available`
+# says false, so a project carrying a tray still builds and runs.
+if(WIN32)
+    set(BTA_TRAY_SOURCE runtime/src/bta_tray_win32.c)
+elseif(APPLE)
+    set(BTA_TRAY_SOURCE runtime/src/bta_tray_cocoa.c)
+else()
+    set(BTA_TRAY_SOURCE runtime/src/bta_tray_linux.c)
+endif()
+
 add_executable(bintana
     runtime/src/main.c
     runtime/src/bta_runtime.c
@@ -271,6 +282,8 @@ add_executable(bintana
     runtime/src/bta_random.c
     runtime/src/bta_gzip.c
     runtime/src/bta_notification.c
+    runtime/src/bta_tray.c
+    ${BTA_TRAY_SOURCE}
     runtime/src/bta_zip.c
     runtime/src/bta_probe.c
     runtime/src/bta_popover.c
