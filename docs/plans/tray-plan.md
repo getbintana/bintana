@@ -179,10 +179,16 @@ project that names a tray, or the application passes `FinishArgs`.
   executable's icon, then `IDI_APPLICATION`. A PNG may be converted, but `.ico`
   is the documented road.
 - No new library: `shell32`.
-- **The tray and `GNotification` both use `Shell_NotifyIcon`.** GLib's
-  notification backend creates its own icon; a visible tray plus a notification
-  can leave two icons. This is a known follow-up: either notifications go
-  through the tray's icon or the duplication is documented.
+- **One owner of the Windows icon.** GLib's `GNotification` Win32 backend
+  creates its own `Shell_NotifyIcon` (`NIM_ADD` with `NIF_ICON`) and shows a
+  balloon with `NIM_MODIFY`/`NIF_INFO`; it has no way to reuse a caller's icon.
+  A visible tray plus that backend is two icons. The rule is therefore: **when
+  a tray is visible, `Notification` uses the tray's `NIF_INFO` balloon and
+  `GNotification` is not called on Windows**; without a tray, `GNotification`
+  is the only icon. The balloon has no custom buttons -- a Windows limitation
+  already documented for notifications -- but its click can raise
+  `Notification.OnActivate`. A WinRT toast, which invokes no tray icon at all
+  and supports buttons, is the later road if the feature is needed.
 
 ### macOS: `NSStatusBar`
 
