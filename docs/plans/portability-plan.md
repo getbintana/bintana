@@ -6,12 +6,14 @@ cheaper than this one because every guard here that says "not Windows" already
 does the right thing on Darwin.
 
 **In progress.** The `windows` job in `.github/workflows/ci.yml` builds with
-MSYS2/UCRT64, runs `tests/api.sh` and stages a portable zip
-(`tools/windows-portable.sh`), which is Stage 0/1 as far as it has got: what it
-proves is the build, that the runtime runs, and that the staged tree it ships
-runs too; the windowed suite and a real terminal are still the out-of-scope list
-at the end, and the zip itself is unverified until somebody opens it on a
-Windows desktop. The
+MSYS2/UCRT64, runs `tests/api.sh`, runs the project pass (`tests/check.sh`) and
+stages a portable zip (`tools/windows-portable.sh`), which is Stage 0/1 as far
+as it has got: what it proves is the build, that the runtime runs, and that the
+staged tree it ships runs too. The smoke suite is the first windowed project
+there, as a **diagnostic** step (`tests/run.sh smoke`, 171 assertions on a real
+Windows 11 desktop, 2026-11-10); the rest of the windowed suite and a real
+terminal are still the out-of-scope list at the end, and the zip itself is
+unverified until somebody opens it on a Windows desktop. The
 Stage 1 pieces that are in: the CMake guards (`gio-unix`, `libm` and pthread
 only where they exist), the process layer (`setsid`/`killpg` compiled out,
 `g_subprocess_force_exit` as the one ending `Stop` and `Kill` have, `uname`
@@ -120,8 +122,9 @@ so nothing there changes.
 
 ## Out of scope here, and why
 
-- **The test suite and CI.** The four windowed projects need a real desktop
-  session, and `tests/install` (Xvfb + xdotool) and `tests/icons`/`styles`
+- **The rest of the suite and CI.** `tests/check.sh` checks every project with
+  no window, and `tests/smoke` runs (171 assertions, 2026-11-10); the other
+  windowed projects, `tests/install` (Xvfb + xdotool) and `tests/icons`/`styles`
   (they read the Linux theme off the disk) are Linux-only as they stand. A
   second plan, and the first caller that wants it.
 - **Packaging.** The ZIP exists (`tools/windows-portable.sh`, attached by the

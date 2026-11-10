@@ -767,6 +767,25 @@ jobs:
           BINTANA: ./build/bintana.exe
         run: ./tests/api.sh
 
+      # The project pass: every `project.btp`, `.form` and source in the tree,
+      # with no window. `tests/check.sh` skips `tests/ide` when the checkout's
+      # symlinks are text files (Windows without Developer Mode), and says so.
+      - name: Every project checks
+        env:
+          BINTANA: ./build/bintana.exe
+        run: ./tests/check.sh
+
+      # The first windowed project on Windows, and **not a gate**: whether this
+      # runner has a desktop for the windows to open on is not something this
+      # file can know. The log says what happened; a pass is the day the job
+      # can start widening it.
+      - name: The smoke suite (diagnostic)
+        continue-on-error: true
+        env:
+          BINTANA: ./build/bintana.exe
+          TIMEOUT: 600
+        run: ./tests/run.sh smoke
+
       # The download: the executable, everything it links, the GTK data GTK
       # opens by name, the IDE as the project directory it is and the `.cmd`
       # launcher -- `tools/windows-portable.sh`, which is where the recipe and

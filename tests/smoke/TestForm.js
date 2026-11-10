@@ -274,7 +274,8 @@ class TestForm extends Form {
 
         check("Message is available", typeof Message.Info === "function");
         check("Application.Directory points at the project",
-              Application.Directory.endsWith("tests/smoke"), Application.Directory);
+              Application.Directory.replace(/\\/g, "/").endsWith("tests/smoke"),
+              Application.Directory);
         /*
          * Two versions, and the point of the pair is that they are different
          * questions. `BTA_VERSION` is the runtime's, out of the one place
@@ -706,6 +707,11 @@ class TestForm extends Form {
      * adrift, its `sleep` still running after the program had gone.
      */
     testTaskTeardown() {
+        if (Environment.OS.toLowerCase().includes("windows")) {
+            print("testTaskTeardown: skipped on Windows (sleep, pgrep and pkill are Unix)");
+            return;
+        }
+
         const dir = File.Join(Environment.TempDirectory,
                               `bta-smoke-teardown-${Environment.ProcessId}`);
         const mark = `29.${Environment.ProcessId % 1000}`;

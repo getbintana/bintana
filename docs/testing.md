@@ -6,6 +6,7 @@
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
 ./tests/run.sh ide list                 # what it can be asked for
+./tests/check.sh                        # every project's `bintana check`, no window
 ./tests/pack.sh                         # lib/package, the packaging step's output: 107 assertions
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
@@ -25,6 +26,13 @@ is the argument for a default rather than a rule. `tests/asan.sh` had reached th
 same conclusion first, and both now export `HEADLESS=${HEADLESS-1}`: with `-`
 rather than `:-`, so that an explicitly empty one survives and the way back
 works.
+
+**Windows has no `xvfb-run`.** There the only display is the session's own, so
+`run.sh` leaves `HEADLESS` empty and `HEADLESS=1` cannot be honored. The same
+checkout may have `tests/ide`'s `.form` symlinks written as text files when Git
+could not create links (Developer Mode off); `tests/check.sh` says so and skips
+that one project rather than reporting twenty JSON errors. `tests/check.sh` is
+also the project pass the Windows CI runs, because it opens no window.
 
 **The suite runs with `LANGUAGE=C`**, because its assertions are English and a
 shipped library may carry a catalogue — `lib/check` does, for the accessibility

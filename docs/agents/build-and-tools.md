@@ -314,7 +314,10 @@ disagree.
   test. The job installs GStreamer with `gst-plugins-rs` and poppler too, so
   `Video` and `PdfDocument`'s reading half are compiled there; the portable tree
   carries the plugin directory, the scanner and poppler's data, and asks the
-  staged runtime for both before the zip is published.
+  staged runtime for both before the zip is published. It also runs
+  `tests/check.sh` as a gate and `tests/run.sh smoke` as a diagnostic -- the
+  first windowed project there; the rest of the suite and the `tests/ide`
+  symlinks still need a desktop and a checkout that could create links.
   Editing one blind and pushing is the loop, so keep each guard as small as it
   can be and put the *why* next to it -- the CI log names a line, not a reason.
   **`windows.h` is a macro minefield and it arrives through GTK**: on Windows

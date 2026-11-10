@@ -96,6 +96,15 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   literal name -- so `Error` grew a second argument with nothing to notice
   that three documents said `Error(message)`. Both events are now emitted with
   their names spelled out at the call site.
+- **A Video keeps its picture when the audio endpoint cannot open.** On a
+  virtualized Windows session `wasapi2`, `wasapi` and `waveform` all failed
+  with `GST_RESOURCE_ERROR_SETTINGS`, and `playbin3` reported that as the whole
+  pipeline's error: the first clip played nothing. The bus handler now
+  recognises an error whose source is an `audiosink-*`, rebuilds **once** with
+  `audio-sink=fakesink` and the AUDIO flag off, and lets the video run silently.
+  Measured on Windows 11 (2026-11-10): the Bunny clip that had failed read
+  `POS=1.41 DUR=10.07` after the fallback. A second audio failure is reported
+  as before, because then it is not the missing device.
 - **The engine is playbin3 plus the paintable sink, and neither GstPlayer nor
   GtkVideo.** `GstPlayer` (`gstreamer-player-1.0`) is the deprecated API
   `GstPlay` replaces, and neither ships a GTK4 renderer -- both would still be

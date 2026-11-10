@@ -90,6 +90,7 @@ typedef struct BtaMedia {
     bool        wants;      /* Play was asked for and has not ended: see Playing */
     bool        at_end;     /* EOS seen: Play seeks back before resuming */
     bool        live;       /* the pipeline said NO_PREROLL: do not buffer-pause */
+    bool        audio_fallback; /* an audio sink failed once; play silently */
     bool        dead;       /* torn down: the bus callback must not touch */
     JSValue     self;       /* audio only: the keepalive a playing cue holds */
     JSValue     on_ended;   /* audio only, duplicated */
@@ -2277,6 +2278,30 @@ static const char *media_error_text(const GError *err)
     return bta_gerror_text(err);
 }
 
+/* Whether the error is the audio sink's, which on a machine with no audio
+ * endpoint is a reason to lose the sound and not the picture.  The source
+ * element is the sink that failed (`audiosink-actual-sink-wasapi2`, and its
+ * siblings), and the GError is the resource/settings family. */
+static bool media_error_is_audio(GstMessage *msg, const GError *err)
+{
+    GstObject  *src;
+    const char *name;
+
+    if (!err || err->domain != GST_RESOURCE_ERROR)
+        return false;
+    switch (err->code) {
+    case GST_RESOURCE_ERROR_SETTINGS:
+    case GST_RESOURCE_ERROR_OPEN_READ:
+    case GST_RESOURCE_ERROR_OPEN_READ_WRITE:
+        break;
+    default:
+        return false;
+    }
+    src = GST_MESSAGE_SRC(msg);
+    name = src ? GST_OBJECT_NAME(src) : NULL;
+    return name && strstr(name, "audiosink") != NULL;
+}
+
 static void media_on_error(BtaMedia *m, GstMessage *msg)
 {
     GError *err = NULL;
@@ -2287,6 +2312,33 @@ static void media_on_error(BtaMedia *m, GstMessage *msg)
     m->wants  = false;
     if (m->playbin)
         gst_element_set_state(m->playbin, GST_STATE_NULL);
+
+    /* A Video keeps its picture when the machine has no audio endpoint.  The
+     * first audio error rebuilds the pipeline with a fakesink and the audio
+     * branch off; a second failure is reported, because then it is not the
+     * missing device.  An AudioPlayer has nothing left to save and still
+     * reports it. */
+    if (m->is_video && !m->audio_fallback && media_error_is_audio(msg, err)) {
+        guint       flags = 0;
+        GstElement *fsink;
+
+        m->audio_fallback = true;
+        g_object_get(m->playbin, "flags", &flags, NULL);
+        g_object_set(m->playbin, "flags", flags & ~(guint)0x2, NULL);
+        fsink = gst_element_factory_make("fakesink", NULL);
+        if (fsink)
+            g_object_set(m->playbin, "audio-sink", fsink, NULL);
+        if (m->uri)
+            g_object_set(m->playbin, "uri", m->uri, NULL);
+        m->buffering = 100;
+        m->wants     = true;
+        gst_element_set_state(m->playbin, GST_STATE_PLAYING);
+        bta_log_debug(m->ctx,
+                      "no audio device: playing the video without sound");
+        g_clear_error(&err);
+        g_free(dbg);
+        return;
+    }
 
     /* http_error_text's shape, because a message naming neither the player
      * nor what it was playing is a status line nobody can act on. */

@@ -99,6 +99,7 @@ BINTANA_PROFILE=/tmp/caps ./tests/run.sh          # a Sysprof capture per projec
 ./tests/asan.sh                                   # suite under AddressSanitizer (clang)
 tests/try.sh <project> [args...]                  # run any project on a virtual display
 ./tests/api.sh                                    # is the documented surface the real one, is api.json current, do links land
+./tests/check.sh                                  # every project's `bintana check`, no window
 ./tools/apijson.sh                                # rewrite api.json
 ./tools/llms.sh                                   # rewrite llms-full.txt from llm.txt's list
 ./tests/icons.sh                                  # which declared icons the desktop has, and which draw
@@ -945,7 +946,10 @@ disagree.
   test. The job installs GStreamer with `gst-plugins-rs` and poppler too, so
   `Video` and `PdfDocument`'s reading half are compiled there; the portable tree
   carries the plugin directory, the scanner and poppler's data, and asks the
-  staged runtime for both before the zip is published.
+  staged runtime for both before the zip is published. It also runs
+  `tests/check.sh` as a gate and `tests/run.sh smoke` as a diagnostic -- the
+  first windowed project there; the rest of the suite and the `tests/ide`
+  symlinks still need a desktop and a checkout that could create links.
   Editing one blind and pushing is the loop, so keep each guard as small as it
   can be and put the *why* next to it -- the CI log names a line, not a reason.
   **`windows.h` is a macro minefield and it arrives through GTK**: on Windows
@@ -4049,6 +4053,16 @@ save will edit `examples/hello` for real.
   the install costs to do, and the half hour spent on them is the half hour
   this note exists to save. `sudo dnf install xorg-x11-server-Xvfb xdotool` is
   the whole of it here.
+- **Windows has no Xvfb, and its checkout may not have the symlinks.**
+  `run.sh` leaves `HEADLESS` empty there, so the suite uses the session's own
+  display; `HEADLESS=1` cannot be honored. Measured on Windows 11
+  (2026-11-10): `tests/smoke` ran **171 passed, 0 failed** after the one path
+  assertion learned `\` and its Unix-only `sleep`/`pgrep`/`pkill` teardown
+  learned to skip itself. `tests/check.sh` is the no-display pass the Windows
+  CI runs; it skips `tests/ide` with a sentence when Git wrote the project's
+  `.form` symlinks as text files, which is what a checkout without Developer
+  Mode does. Enable Developer Mode (or `core.symlinks=true` with the
+  privilege) before believing anything about `tests/ide` on Windows.
 - **A test that walks a focus order has to own every stop in it.** `Fixed1` in
   `tests/widgets` had five children by the time `testTabOrder` ran — a scroller
   another test left in it, focusable — so "past the last one the focus leaves"
@@ -9956,6 +9970,15 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   literal name -- so `Error` grew a second argument with nothing to notice
   that three documents said `Error(message)`. Both events are now emitted with
   their names spelled out at the call site.
+- **A Video keeps its picture when the audio endpoint cannot open.** On a
+  virtualized Windows session `wasapi2`, `wasapi` and `waveform` all failed
+  with `GST_RESOURCE_ERROR_SETTINGS`, and `playbin3` reported that as the whole
+  pipeline's error: the first clip played nothing. The bus handler now
+  recognises an error whose source is an `audiosink-*`, rebuilds **once** with
+  `audio-sink=fakesink` and the AUDIO flag off, and lets the video run silently.
+  Measured on Windows 11 (2026-11-10): the Bunny clip that had failed read
+  `POS=1.41 DUR=10.07` after the fallback. A second audio failure is reported
+  as before, because then it is not the missing device.
 - **The engine is playbin3 plus the paintable sink, and neither GstPlayer nor
   GtkVideo.** `GstPlayer` (`gstreamer-player-1.0`) is the deprecated API
   `GstPlay` replaces, and neither ships a GTK4 renderer -- both would still be
@@ -13972,6 +13995,7 @@ and a TagLib wrapper worked through.
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
 ./tests/run.sh ide list                 # what it can be asked for
+./tests/check.sh                        # every project's `bintana check`, no window
 ./tests/pack.sh                         # lib/package, the packaging step's output: 107 assertions
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
@@ -13991,6 +14015,13 @@ is the argument for a default rather than a rule. `tests/asan.sh` had reached th
 same conclusion first, and both now export `HEADLESS=${HEADLESS-1}`: with `-`
 rather than `:-`, so that an explicitly empty one survives and the way back
 works.
+
+**Windows has no `xvfb-run`.** There the only display is the session's own, so
+`run.sh` leaves `HEADLESS` empty and `HEADLESS=1` cannot be honored. The same
+checkout may have `tests/ide`'s `.form` symlinks written as text files when Git
+could not create links (Developer Mode off); `tests/check.sh` says so and skips
+that one project rather than reporting twenty JSON errors. `tests/check.sh` is
+also the project pass the Windows CI runs, because it opens no window.
 
 **The suite runs with `LANGUAGE=C`**, because its assertions are English and a
 shipped library may carry a catalogue — `lib/check` does, for the accessibility

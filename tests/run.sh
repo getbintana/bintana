@@ -11,14 +11,18 @@
 # starts, one `<project>.syscap` under that directory (the runner reads it and
 # turns it into `--profile` on each child, since it builds their command lines).
 #
-# **The virtual display is the default**, and `HEADLESS=` -- empty, not 0 -- is
-# the way back to a real screen for the questions that need one (an icon, a
-# theme). It used to be the other way round: the runner falls back to `xvfb-run`
-# only when there is no `DISPLAY`, which is the CI case and never the desktop
-# case, so the bare command opened the whole suite over whatever the user was
-# doing and took the keyboard for a minute. That happened five times, always by
-# somebody who knew the rule, which is what makes it a default and not a rule.
-# `asan.sh` had reached the same conclusion first.
+# **The virtual display is the default on Linux**, and `HEADLESS=` -- empty,
+# not 0 -- is the way back to a real screen for the questions that need one (an
+# icon, a theme). It used to be the other way round: the runner falls back to
+# `xvfb-run` only when there is no `DISPLAY`, which is the CI case and never the
+# desktop case, so the bare command opened the whole suite over whatever the
+# user was doing and took the keyboard for a minute. That happened five times,
+# always by somebody who knew the rule, which is what makes it a default and not
+# a rule. `asan.sh` had reached the same conclusion first.
+#
+# **Windows has no Xvfb.** Its only display is the session's own, so the default
+# there is the desktop and `HEADLESS=1` cannot be honored; that is said once,
+# below, rather than left to the runner's "install Xvfb" sentence.
 #
 # **The suite itself is `tests/runner`, written in Bintana**, and this is the
 # ten lines that cannot be: finding the binary and saying so when there is none
@@ -30,8 +34,12 @@ cd "$(dirname "$0")/.."
 
 # Exported and not passed, because the runner reads it out of the environment --
 # and with `-` rather than `:-`, or an explicitly empty one would be replaced
-# here and the way back to a real screen would not work.
-export HEADLESS=${HEADLESS-1}
+# here and the way back to a real screen would not work. On Windows there is no
+# virtual display to force: the session's own is the only one.
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) export HEADLESS=${HEADLESS-} ;;
+    *)                    export HEADLESS=${HEADLESS-1} ;;
+esac
 
 # **The suite's assertions are English, and a library may ship a catalogue.**
 # `lib/check` now does, and a developer whose desktop is Spanish saw its

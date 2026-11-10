@@ -387,6 +387,16 @@ save will edit `examples/hello` for real.
   the install costs to do, and the half hour spent on them is the half hour
   this note exists to save. `sudo dnf install xorg-x11-server-Xvfb xdotool` is
   the whole of it here.
+- **Windows has no Xvfb, and its checkout may not have the symlinks.**
+  `run.sh` leaves `HEADLESS` empty there, so the suite uses the session's own
+  display; `HEADLESS=1` cannot be honored. Measured on Windows 11
+  (2026-11-10): `tests/smoke` ran **171 passed, 0 failed** after the one path
+  assertion learned `\` and its Unix-only `sleep`/`pgrep`/`pkill` teardown
+  learned to skip itself. `tests/check.sh` is the no-display pass the Windows
+  CI runs; it skips `tests/ide` with a sentence when Git wrote the project's
+  `.form` symlinks as text files, which is what a checkout without Developer
+  Mode does. Enable Developer Mode (or `core.symlinks=true` with the
+  privilege) before believing anything about `tests/ide` on Windows.
 - **A test that walks a focus order has to own every stop in it.** `Fixed1` in
   `tests/widgets` had five children by the time `testTabOrder` ran — a scroller
   another test left in it, focusable — so "past the last one the focus leaves"
