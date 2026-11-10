@@ -61,7 +61,7 @@ done < <(cd / && find . -maxdepth 1 -type f \
              -printf '%f\n')
 
 dirs=()
-for d in etc home opt tmp usr var ucrt64 dev; do
+for d in etc home opt tmp usr var ucrt64; do
     [ -d "/$d" ] && dirs+=("$d")
 done
 
@@ -72,9 +72,20 @@ done
 tar -C / --dereference \
     --exclude='var/cache/*' \
     --exclude='var/log/*' \
+    --exclude='var/run' \
+    --exclude='var/run/*' \
+    --exclude='var/lock' \
+    --exclude='var/tmp' \
     --exclude='home/*' \
     --exclude='tmp/*' \
     -cf - "${dirs[@]}" "${top[@]}" | tar -C "$dest" -xf -
+
+# `/dev` is a virtual filesystem in a running MSYS2 -- `/dev/fd/3` points at
+# the tar pipe itself, and following it is an archive that contains itself --
+# so it is not copied.  The base has an empty one and the runtime creates the
+# entries a program opens; `home` and `tmp` are real, and the excludes above
+# leave them empty.
+mkdir -p "$dest/dev" "$dest/home" "$dest/tmp"
 
 # The launcher: `-ucrt64` is the toolchain, `-here` is the directory it was
 # run from (a checkout, usually).  Everything after it is handed to the shell,
