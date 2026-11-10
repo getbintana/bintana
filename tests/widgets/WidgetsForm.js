@@ -656,7 +656,7 @@ const TESTS = [
     /* Children too: a file with `export` is a module. */
     "Modules", "FreeNames", "Imports", "Records", "DataBinding", "SettableCache",
     "Time",
-    "Stopwatch", "UndoStack", "TestEq", "Network", "Sockets", "Udp", "WebSocket", "Inhibit",
+    "Stopwatch", "UndoStack", "TestEq", "Network", "Sockets", "SerialPort", "Udp", "WebSocket", "Inhibit",
     "Shortcut", "Decimal", "FieldDecimal",
     /* Early on purpose: they show windows of their own, and the pushed-surface
      * assertions in the async tail measure a form on the frame it settles. See
@@ -673,7 +673,7 @@ const TESTS = [
     "CuratedLanguage", "ReferenceHint", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Cipher", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Parts", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
-    "ColorDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
+    "ColorDialog", "FontDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
     "Available", "TextProperties", "ClassIntrospection", "LibraryEvents", "Signatures", "Locale", "LocaleRead", "TranslatedForm", "Fill", "DesignValues",
     "Grid", "GridCells",
     "File", "Dir", "Trash", "Environment",
@@ -19932,6 +19932,17 @@ class Form1 extends Form {
 
     ColB_Change() { this.colorSaid = (this.colorSaid || 0) + 1; }
 
+    testFontDialog() {
+        throws("Dialog.Font needs a callback, being async",
+               () => Dialog.Font("t", "Cantarell 12"));
+
+        /* A starting description that is not a font is what a form with no
+         * font set yet has; it must open rather than refuse. */
+        Dialog.Font("t", "not a font", () => {});
+        Dialog.Font("t", "", () => {});
+        check("and opens whatever it is started from", true);
+    }
+
     testColorDialog() {
         throws("Dialog.Color needs a callback, being async",
                () => Dialog.Color("t", "#204060"));
@@ -29470,6 +29481,43 @@ class Form1 extends Form {
                 eq("...None, with the Http kind", `${got.down.Connectivity} ${got.down.Why}`, "None Refused");
             }, 6000);
         }, 6000);
+    }
+
+    /* --- SerialPort ----------------------------------------------------------
+     *
+     * The part, its properties and its serialisation.  The wire itself is
+     * `tests/serial.sh`, which has a pty; here there is no device to open, so
+     * only the synchronous half -- including that a part with no PortName
+     * refuses at Open rather than opening something.
+     */
+    testSerialPort() {
+        const part = FormPart.New("SerialPort");
+        part.PortName    = "/dev/ttyUSB0";
+        part.Speed       = 19200;
+        part.DataBits    = 7;
+        part.Parity      = "Even";
+        part.StopBits    = 2;
+        part.FlowControl = "Hardware";
+        part.Line        = true;
+        part.EndOfLine   = "\r\n";
+
+        eq("a SerialPort part keeps its device", part.PortName, "/dev/ttyUSB0");
+        eq("and its speed", part.Speed, 19200);
+        eq("and its data bits", part.DataBits, 7);
+        eq("and its parity", part.Parity, "Even");
+        eq("and its stop bits", part.StopBits, 2);
+        eq("and its flow control", part.FlowControl, "Hardware");
+        eq("and its line mode", part.Line, true);
+        eq("and its separator", part.EndOfLine, "\r\n");
+        eq("its serialised type", part.Serialize().type, "SerialPort");
+        eq("and its serialised speed", part.Serialize().properties.Speed, 19200);
+        check("SerialPort is a part type", FormPart.Types().includes("SerialPort"));
+
+        throws("Open with no PortName names it",
+               () => FormPart.New("SerialPort").Open());
+        throws("a speed the property refuses", () => { part.Speed = 0; });
+        throws("a parity the property refuses", () => { part.Parity = "Half"; });
+        part.Close();
     }
 
     testSockets() {

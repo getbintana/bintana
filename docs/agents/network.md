@@ -286,6 +286,43 @@ each rule below; read it before changing a level.
   timeout was dispatched first. `testNetwork` passed alone and read `Timeout`
   on every row in the full run until its timeouts became a minute.
 
+## SerialPort
+
+- **`GSerialPort` does not exist.** The transports plan named it as if it were
+  a GIO class; GLib 2.88's headers and the upstream tree have no
+  `gunixserialport.h`, and `docs.gtk.org/gio` has no `SerialPort`. A serial
+  port on Unix is a tty, and the interface is the C library's `<termios.h>` --
+  the one `stty` uses -- not a library to install. `libserialport` (sigrok)
+  exists and wraps the same ioctls; it is a dependency this runtime did not
+  need.
+- **A serial read is not a message.** `OnData` hands the bytes one `read`
+  returned; `Line: true` is the same buffer-and-split the socket does, with
+  the same 1 MiB cap. A chunk is not a frame.
+- **`O_NONBLOCK`, a write queue and `G_IO_OUT`.** A serial port can take fewer
+  bytes than `write` was given, and `EAGAIN` is normal when the kernel buffer
+  is full. `Write` queues a `GBytes`; the fd is drained by a second
+  `GUnixFDSource` that exists only while the queue is non-empty. It is removed
+  when the queue empties, or the level-triggered `G_IO_OUT` would spin.
+- **The source holds the wrapper, as `UdpSocket` does.** The `GSource` is C
+  data and holds no `JSValue`; `keep` is a strong reference while the port is
+  open, and the source callback takes another for the length of a delivery (a
+  handler may `Close`). `Close` removes the sources, closes the fd, and drops
+  `keep` last -- freeing it can finalize the wrapper, and nothing reads the
+  struct after it.
+- **`tcgetattr` is the "is this a serial port" question.** `open` succeeds on
+  `/dev/null`; `tcgetattr` answers `ENOTTY`, and `Open` says so. It is also why
+  a pty is a real test of this code: it is a tty, and the same
+  `tcgetattr`/`tcsetattr` path runs. The modem lines are what a pty cannot
+  prove, and they are the by-hand half.
+- **Mark/space parity and hardware flow control are compile-time.**
+  `CMSPAR` and `CRTSCTS` are not on every Unix; `Open` refuses with a sentence
+  when the platform's headers do not offer the bit, rather than opening with a
+  different parity and no warning.
+- **The Windows half is a different API.** `CreateFile`/`SetCommState`/
+  overlapped I/O; the class exists there, its properties answer and a form
+  loads, and `Open` says the half is not written. `Terminal` without VTE is
+  the precedent.
+
 ## Sockets and ServerSocket
 
 - **A TCP read is not a message.** `OnData` hands the bytes one `read`

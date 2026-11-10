@@ -14455,6 +14455,15 @@
           "Native": true
         },
         {
+          "Name": "Font",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(title, [current], cb)",
+          "Returns": "",
+          "Doc": "the desktop's font chooser, opening on `current` (a Pango description). Answers a Pango description — **exactly what [`Font`](docs/reference/widgets/Widget.md#how-it-looks) takes** — or nothing when the person cancels",
+          "Native": true
+        },
+        {
           "Name": "OpenFile",
           "Kind": "Method",
           "Params": 2,
@@ -15229,7 +15238,7 @@
           "Params": 1,
           "Signature": "(type)",
           "Returns": "",
-          "Doc": "a new part of `type` -- `Timer`, `Connection`, `Model`, `HttpClient`, `Socket`, `ServerSocket`, `UdpSocket`, `WebSocket` or `SmtpClient`; a name that is not a part is refused by name",
+          "Doc": "a new part of `type` -- `Timer`, `Connection`, `Model`, `HttpClient`, `Socket`, `ServerSocket`, `SerialPort`, `UdpSocket`, `WebSocket` or `SmtpClient`; a name that is not a part is refused by name",
           "Native": false
         },
         {
@@ -17037,6 +17046,164 @@
           "Signature": "",
           "Returns": "",
           "Doc": "the width of the monitor the application's **active window** is on — the first one the display lists before any window is shown, and `0` with no display at all",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "SerialPort",
+      "Members": [
+        {
+          "Name": "Clear",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "discard what has arrived but not been delivered, and anything queued to write. Answers the port",
+          "Native": true
+        },
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "close it; the next `Open` starts again. `Write` on a closed port throws",
+          "Native": true
+        },
+        {
+          "Name": "DataBits",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`5` to `8`, default `8`",
+          "Native": true
+        },
+        {
+          "Name": "EndOfLine",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the line separator `Line` uses, `\"\\n\"` by default: `\"\\r\\n\"` for many devices",
+          "Native": true
+        },
+        {
+          "Name": "FlowControl",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"None\"` (the default), `\"Hardware\"` or `\"Software\"`",
+          "Native": true
+        },
+        {
+          "Name": "IsOpen",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the port is open now",
+          "Native": true
+        },
+        {
+          "Name": "Line",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`true`: buffer and raise `OnLine` for each complete `EndOfLine`; `false` (the default): `OnData` with the bytes one read returned. **A serial port is a byte stream**, so a chunk is not a frame",
+          "Native": true
+        },
+        {
+          "Name": "OnData",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(bytes) => …`: bytes arrived, **not** a message. `Line: true` uses `OnLine` instead",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(err) => …` with `{ Message, Kind }`; `Kind` is `\"Error\"` or `\"Closed\"`. The port is closed when it arrives",
+          "Native": true
+        },
+        {
+          "Name": "OnLine",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(line) => …`: one complete line, without the separator, in `Line: true` mode",
+          "Native": true
+        },
+        {
+          "Name": "Open",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "open and configure the port. Answers the port; a second `Open` on an open port does nothing",
+          "Native": true
+        },
+        {
+          "Name": "Parity",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"None\"` (the default), `\"Even\"`, `\"Odd\"`, `\"Mark\"` or `\"Space\"`; the last two need the platform's `CMSPAR`",
+          "Native": true
+        },
+        {
+          "Name": "PortName",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the device path, `/dev/ttyUSB0` or `/dev/ttyACM0` on Linux (and `COM3` on the Windows half when it arrives). Set before `Open`",
+          "Native": true
+        },
+        {
+          "Name": "Speed",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the baud rate, 1 to 4000000. A value the system has no `speed_t` for is refused by `Open`, which names it",
+          "Native": true
+        },
+        {
+          "Name": "StopBits",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`1` (the default) or `2`",
+          "Native": true
+        },
+        {
+          "Name": "Write",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(data)",
+          "Returns": "",
+          "Doc": "queue text (UTF-8) or `Bytes`; answers the port. It throws when the port is not open, which is a mistake and not a late answer",
+          "Native": true
+        },
+        {
+          "Name": "WriteLine",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(data)",
+          "Returns": "",
+          "Doc": "`Write` followed by `EndOfLine`",
           "Native": true
         }
       ]
@@ -19792,6 +19959,164 @@
           "Signature": "",
           "Returns": "string",
           "Doc": "what the file says it is called; `\"\"` when it says nothing",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "SerialPort",
+      "Members": [
+        {
+          "Name": "Clear",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "discard what has arrived but not been delivered, and anything queued to write. Answers the port",
+          "Native": true
+        },
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "close it; the next `Open` starts again. `Write` on a closed port throws",
+          "Native": true
+        },
+        {
+          "Name": "DataBits",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`5` to `8`, default `8`",
+          "Native": true
+        },
+        {
+          "Name": "EndOfLine",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the line separator `Line` uses, `\"\\n\"` by default: `\"\\r\\n\"` for many devices",
+          "Native": true
+        },
+        {
+          "Name": "FlowControl",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"None\"` (the default), `\"Hardware\"` or `\"Software\"`",
+          "Native": true
+        },
+        {
+          "Name": "IsOpen",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the port is open now",
+          "Native": true
+        },
+        {
+          "Name": "Line",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`true`: buffer and raise `OnLine` for each complete `EndOfLine`; `false` (the default): `OnData` with the bytes one read returned. **A serial port is a byte stream**, so a chunk is not a frame",
+          "Native": true
+        },
+        {
+          "Name": "OnData",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(bytes) => …`: bytes arrived, **not** a message. `Line: true` uses `OnLine` instead",
+          "Native": true
+        },
+        {
+          "Name": "OnError",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(err) => …` with `{ Message, Kind }`; `Kind` is `\"Error\"` or `\"Closed\"`. The port is closed when it arrives",
+          "Native": true
+        },
+        {
+          "Name": "OnLine",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "assign `(line) => …`: one complete line, without the separator, in `Line: true` mode",
+          "Native": true
+        },
+        {
+          "Name": "Open",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "open and configure the port. Answers the port; a second `Open` on an open port does nothing",
+          "Native": true
+        },
+        {
+          "Name": "Parity",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`\"None\"` (the default), `\"Even\"`, `\"Odd\"`, `\"Mark\"` or `\"Space\"`; the last two need the platform's `CMSPAR`",
+          "Native": true
+        },
+        {
+          "Name": "PortName",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the device path, `/dev/ttyUSB0` or `/dev/ttyACM0` on Linux (and `COM3` on the Windows half when it arrives). Set before `Open`",
+          "Native": true
+        },
+        {
+          "Name": "Speed",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the baud rate, 1 to 4000000. A value the system has no `speed_t` for is refused by `Open`, which names it",
+          "Native": true
+        },
+        {
+          "Name": "StopBits",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`1` (the default) or `2`",
+          "Native": true
+        },
+        {
+          "Name": "Write",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(data)",
+          "Returns": "",
+          "Doc": "queue text (UTF-8) or `Bytes`; answers the port. It throws when the port is not open, which is a mistake and not a late answer",
+          "Native": true
+        },
+        {
+          "Name": "WriteLine",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(data)",
+          "Returns": "",
+          "Doc": "`Write` followed by `EndOfLine`",
           "Native": true
         }
       ]

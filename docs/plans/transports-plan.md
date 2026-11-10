@@ -1,6 +1,6 @@
 # Transports: sockets, serial and IPC beside HTTP
 
-**Status: stages 1 to 5 built (2026-11-08); the rest is staged.** This is the
+**Status: stages 1 to 6 built (2026-11-10); the rest is staged.** This is the
 answer to **R3** of
 [the October audit](../audit-2026-10.md): what a program can talk to that is
 not an HTTP request and not a child process. The first stage is `Socket` and
@@ -177,13 +177,20 @@ port.Write("W\n");
 
 Properties: `PortName`, `Speed`, `DataBits`, `Parity`, `StopBits`,
 `FlowControl`, `IsOpen`. Methods: `Open`, `Close`, `Write`, `WriteLine`,
-`Clear`. Events: `Data`/`Line`, `Error`, `PinChange(pin, value)`. The values
-are strings, checked at assignment (`"None"`, `"Even"`, `"Odd"`,
-`"Hardware"`, `"Software"`, ...), not Gambas' constants -- the same choice
-`Notification` makes with `Urgency`.
+`Clear`. Events: `Data`/`Line`, `Error`. The values are strings, checked at
+assignment (`"None"`, `"Even"`, `"Odd"`, `"Hardware"`, `"Software"`, ...), not
+Gambas' constants -- the same choice `Notification` makes with `Urgency`.
 
-Linux first, over `GSerialPort` from `gio-unix`; Windows needs its own
-`CreateFile`/`SetCommState`/overlapped-I/O half, and is a stage of its own.
+Linux first, over POSIX `termios` (`open`, `tcgetattr`/`tcsetattr`, `read`,
+`write`) on a `GSource` of the main loop. **`termios` is the C library's
+terminal interface -- `<termios.h>`, the one `stty` and every terminal program
+use -- not a library to install or link**: `open()` and `read`/`write` reach the
+kernel's tty layer, and only the configuration calls come from it. There is no
+`GSerialPort` in GIO -- checked against GLib 2.88's headers and the upstream
+tree, where no `gunixserialport.h` exists -- and `libserialport` would be a
+second dependency for the same ioctls. Windows needs its own `CreateFile`/`SetCommState`/
+overlapped-I/O half, and is a stage of its own. `PinChange` is not here: POSIX
+would have to poll `TIOCMGET` and no caller has asked for a pin.
 
 ### `WebSocket` — a client, then a server
 
@@ -337,7 +344,11 @@ service is the case to design `Ipc.DBus` from.
    implicit TLS, `AUTH LOGIN`, MIME with text/HTML and base64 attachments. A
    `StartTls` is refused until `Socket` can upgrade mid-stream; the part keeps
    `User`/`Password` out of the `.form`.
-6. **`SerialPort`** -- Linux over `GSerialPort`; Windows later.
+6. **`SerialPort`** -- Linux over POSIX `termios` on the main loop's
+   `GSource`; Windows later. **Built** (2026-11-10,
+   `runtime/src/bta_serial.c`; `tests/serial.sh`): open/close/configuration,
+   `Data`/`Line`, queued writes, the `FormPart`, and a pseudo-terminal as the
+   peer. The Windows half is the only part of the class that refuses.
 7. **`Ipc`** -- the base `Channel`, `Ipc.Pipe` on Unix (reusing stage 1),
    then the Windows named-pipe backend.
 8. **`Ipc.DBus`** -- last, with a caller.
@@ -347,10 +358,10 @@ service is the case to design `Ipc.DBus` from.
 - **No blocking `Read`/`Accept` on the main loop.** The event road is the
   only one; `*Wait` verbs, if they come, are for `Task` workers and freeze
   the caller by definition, like `Http.GetWait`.
-- **No sockets in a `Task` at first.** A worker has no main loop, so the
-  names are absent or refuse with a sentence -- the same line `Timer` and
-  `Dialog` already take. Blocking `ConnectWait`/`ReadWait`/`WriteWait` are a
-  later road.
+- **No sockets or serial ports in a `Task` at first.** A worker has no main
+  loop, so the names are absent or refuse with a sentence -- the same line
+  `Timer` and `Dialog` already take. Blocking `ConnectWait`/`ReadWait`/
+  `WriteWait` are a later road.
 - **No `Status` integer constants.** `Connected`, `Listening`, `Bound`,
   `IsOpen` and the error's `Kind` answer the questions Gambas' negative
   numbers answer.
@@ -365,7 +376,7 @@ service is the case to design `Ipc.DBus` from.
 
 ## How it will be tested
 
-All of it on loopback, in `tests/widgets`, with no external network:
+The sockets on loopback, in `tests/widgets`, with no external network:
 
 - a `ServerSocket` on `Port: 0` and a `Socket` that connects, writes and
   reads back;
@@ -377,6 +388,12 @@ All of it on loopback, in `tests/widgets`, with no external network:
 - `Stop()` closing a live connection and `Count` going back to zero;
 - the part round trip: a `.form` with a `Socket` and a `ServerSocket`, the
   properties read back, and the form's close closing them.
+
+And `SerialPort` has its own door, `tests/serial.sh`: a C helper makes a
+pseudo-terminal, the console project writes lines and bytes through it, and
+the script's timeout is the assertion the console loop's accounting cannot
+make. A pty is a tty, so `tcgetattr`/`tcsetattr` take the same path a USB
+adapter does; the modem lines are the by-hand half.
 
 `Ipc.Pipe` gets the same pair on Unix; the Windows named-pipe half runs in
 the `windows` job when it exists, because a Linux run cannot prove it.

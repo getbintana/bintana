@@ -179,7 +179,7 @@ needed and what it did instead.
 | The debugger stops in the program's own runtime and **not in a `Task`** — a background computation is unbreakpointable and unsteppable, and `Error` with its stack is the whole of what its failure says | [library.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md#task). The other ten of the eleven are built: [`docs/plans/debug-plan.md`](../plans/debug-plan.md). A loop written entirely on one line also stops only once |
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
-| `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
+| `Database` publishes `Sqlite` alone | [`docs/plans/postgres-plan.md`](../plans/postgres-plan.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 

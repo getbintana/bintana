@@ -8,6 +8,14 @@ one-page answer to *what is new since the release I have*.
 
 ### Runtime and IDE
 
+- **`SerialPort`**, a serial device on the main loop: `PortName`, `Speed`,
+  `DataBits`, `Parity`, `StopBits`, `FlowControl`, `Line`/`EndOfLine`,
+  `Data`/`Line`/`Error`, queued `Write`/`WriteLine`, and the `FormPart`.
+  Linux over POSIX `termios`; the Windows half refuses and says so.
+- **`Dialog.Font(title, [current], cb)`** is the desktop's font chooser, the
+  same asynchronous bargain as `Dialog.Color`: the callback is handed a Pango
+  description (`"Cantarell Bold 12"`), exactly what `Widget.Font` takes, and is
+  not called when the person cancels.
 - **A `Timer` can be declared in a `.form`.** The file carries it in
   `components`, the loader binds it to the form by name, and `Timer1_Tick` is
   the form's handler -- the same rule a control's event follows. `FormPart` is

@@ -93,6 +93,12 @@ jobs:
       - name: The elements API
         run: ./tests/media.sh
 
+      # The serial port over a pseudo-terminal: the termios configuration,
+      # line and byte modes, writes and refusals, with a real tty on the
+      # other end. Console, headless, and its own timeout.
+      - name: The serial port
+        run: ./tests/serial.sh
+
       # What `make install` produces, run out of a staging prefix under /tmp.
       # A step of this job and not one of its own: it installs the build the
       # step above just tested, and re-building it somewhere else would only

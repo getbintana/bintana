@@ -12,7 +12,6 @@ in the same form.
 
 | Issue | The missing capability |
 |---|---|
-| [ISSUE-postgres-driver.md](ISSUE-postgres-driver.md) | `Database` publishes `Sqlite` alone |
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
 
 Seventeen of them came out of the October audit
@@ -25,8 +24,10 @@ argument; these files keep the gap.
 past its answer is a second description of the same feature, written by somebody
 who did not have it yet, in the directory of things that are missing.
 
-Forty-six issues have gone that way, answering forty-seven gaps — forty-two
-filled, two refused, and three that were never missing. Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
+Forty-seven issues have left this directory, answering forty-eight gaps —
+forty-two filled, two refused, three that were never missing, and one that is
+now a plan ([`postgres-plan.md`](../plans/postgres-plan.md), not yet built).
+Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
 `sha256sum` to hash anything, an application that could not ask how big the
 screen was, a `Scroller` that could not say where it was scrolled to, an editor

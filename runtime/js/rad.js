@@ -587,8 +587,8 @@ GLOBAL.FormPart = class FormPart {
 
     /**
      * a new part of `type` -- `Timer`, `Connection`, `Model`, `HttpClient`,
-     * `Socket`, `ServerSocket`, `UdpSocket`, `WebSocket` or `SmtpClient`; a
-     * name that is not a part is refused by name
+     * `Socket`, `ServerSocket`, `SerialPort`, `UdpSocket`, `WebSocket` or
+     * `SmtpClient`; a name that is not a part is refused by name
      */
     static New(type) {
         if (!hasOwn.call(formPartTypes, type))
@@ -1425,6 +1425,176 @@ class UdpSocketPart extends FormPart {
 }
 
 formPartTypes.UdpSocket = UdpSocketPart;
+
+/* ------------------------------------------------------------------------
+ * SerialPort -- a tty a form owns.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * a serial port declared on a form: `OnLine` or `OnData` receives what the
+ * device sends, and the form's close closes the port
+ */
+class SerialPortPart extends FormPart {
+
+    /** the events a serial port raises */
+    static get Events() { return ["Data", "Line", "Error"]; }
+    /** what a `.form` may set: the device and how it is configured */
+    static get Properties() {
+        return ["PortName", "Speed", "DataBits", "Parity", "StopBits",
+                "FlowControl", "Line", "EndOfLine"];
+    }
+
+    constructor() {
+        super();
+        this._portName    = "";
+        this._speed       = 9600;
+        this._dataBits    = 8;
+        this._parity      = "None";
+        this._stopBits    = 1;
+        this._flowControl = "None";
+        this._line        = false;
+        this._endOfLine   = "\n";
+        this._port        = null;
+    }
+
+    /** the C port, made on first use with the properties below */
+    get SerialPort() {
+        if (!this._port) {
+            const port = new SerialPort({
+                PortName:    this._portName,
+                Speed:       this._speed,
+                DataBits:    this._dataBits,
+                Parity:      this._parity,
+                StopBits:    this._stopBits,
+                FlowControl: this._flowControl,
+                Line:        this._line,
+                EndOfLine:   this._endOfLine,
+            });
+
+            port.OnData  = (bytes) => this.Emit("Data", bytes);
+            port.OnLine  = (line) => this.Emit("Line", line);
+            port.OnError = (err) => this.Emit("Error", err);
+            this._port = port;
+        }
+        return this._port;
+    }
+
+    _drop() {
+        if (this._port) {
+            const port = this._port;
+            this._port = null;
+            port.Close();
+        }
+        return this;
+    }
+
+    /** the device path, `/dev/ttyUSB0` on Linux */
+    get PortName() { return this._portName; }
+    set PortName(value) {
+        if (typeof value !== "string")
+            throw new TypeError("SerialPort.PortName: expected text");
+        this._portName = value;
+        this._drop();
+    }
+
+    /** the baud rate */
+    get Speed() { return this._speed; }
+    set Speed(value) {
+        if (typeof value !== "number" || !isFinite(value) || Math.floor(value) !== value)
+            throw new TypeError("SerialPort.Speed: expected a whole number");
+        if (value < 1 || value > 4000000)
+            throw new RangeError("SerialPort.Speed: 1 to 4000000");
+        this._speed = value;
+        this._drop();
+    }
+
+    /** 5 to 8 */
+    get DataBits() { return this._dataBits; }
+    set DataBits(value) {
+        if (typeof value !== "number" || Math.floor(value) !== value)
+            throw new TypeError("SerialPort.DataBits: expected a whole number");
+        if (value < 5 || value > 8)
+            throw new RangeError("SerialPort.DataBits: 5 to 8");
+        this._dataBits = value;
+        this._drop();
+    }
+
+    /** `"None"`, `"Even"`, `"Odd"`, `"Mark"` or `"Space"` */
+    get Parity() { return this._parity; }
+    set Parity(value) {
+        if (value !== "None" && value !== "Even" && value !== "Odd" &&
+            value !== "Mark" && value !== "Space")
+            throw new TypeError("SerialPort.Parity: \"None\", \"Even\", \"Odd\", " +
+                                "\"Mark\" or \"Space\"");
+        this._parity = value;
+        this._drop();
+    }
+
+    /** 1 or 2 */
+    get StopBits() { return this._stopBits; }
+    set StopBits(value) {
+        if (value !== 1 && value !== 2)
+            throw new RangeError("SerialPort.StopBits: 1 or 2");
+        this._stopBits = value;
+        this._drop();
+    }
+
+    /** `"None"`, `"Hardware"` or `"Software"` */
+    get FlowControl() { return this._flowControl; }
+    set FlowControl(value) {
+        if (value !== "None" && value !== "Hardware" && value !== "Software")
+            throw new TypeError("SerialPort.FlowControl: \"None\", \"Hardware\" " +
+                                "or \"Software\"");
+        this._flowControl = value;
+        this._drop();
+    }
+
+    /** `true` pushes whole lines through `Line`, not chunks through `Data` */
+    get Line() { return this._port ? this._port.Line : this._line; }
+    set Line(value) {
+        this._line = !!value;
+        if (this._port) this._port.Line = this._line;
+    }
+
+    /** the separator `Line` uses, `"\n"` by default */
+    get EndOfLine() { return this._port ? this._port.EndOfLine : this._endOfLine; }
+    set EndOfLine(value) {
+        if (typeof value !== "string" || !value)
+            throw new TypeError("SerialPort.EndOfLine: expected text, and not empty");
+        this._endOfLine = value;
+        if (this._port) this._port.EndOfLine = value;
+    }
+
+    /** whether the port is open now */
+    get IsOpen() { return this._port ? this._port.IsOpen : false; }
+
+    /** open and configure it; answers the part */
+    Open() {
+        this.SerialPort.Open();
+        return this;
+    }
+    /** close it; answers the part */
+    Close() { return this._drop(); }
+    /** queue text or `Bytes`; answers the part */
+    Write(data) {
+        this.SerialPort.Write(data);
+        return this;
+    }
+    /** queue it followed by `EndOfLine`; answers the part */
+    WriteLine(data) {
+        this.SerialPort.WriteLine(data);
+        return this;
+    }
+    /** discard what has arrived and anything queued; answers the part */
+    Clear() {
+        this.SerialPort.Clear();
+        return this;
+    }
+    /** the form's close, and `RemovePart`, come through here */
+    Stop() { return this._drop(); }
+}
+
+formPartTypes.SerialPort = SerialPortPart;
 
 /* ------------------------------------------------------------------------
  * WebSocket -- a client connection a form owns.

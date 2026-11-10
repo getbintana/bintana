@@ -10483,6 +10483,43 @@ each rule below; read it before changing a level.
   timeout was dispatched first. `testNetwork` passed alone and read `Timeout`
   on every row in the full run until its timeouts became a minute.
 
+## SerialPort
+
+- **`GSerialPort` does not exist.** The transports plan named it as if it were
+  a GIO class; GLib 2.88's headers and the upstream tree have no
+  `gunixserialport.h`, and `docs.gtk.org/gio` has no `SerialPort`. A serial
+  port on Unix is a tty, and the interface is the C library's `<termios.h>` --
+  the one `stty` uses -- not a library to install. `libserialport` (sigrok)
+  exists and wraps the same ioctls; it is a dependency this runtime did not
+  need.
+- **A serial read is not a message.** `OnData` hands the bytes one `read`
+  returned; `Line: true` is the same buffer-and-split the socket does, with
+  the same 1 MiB cap. A chunk is not a frame.
+- **`O_NONBLOCK`, a write queue and `G_IO_OUT`.** A serial port can take fewer
+  bytes than `write` was given, and `EAGAIN` is normal when the kernel buffer
+  is full. `Write` queues a `GBytes`; the fd is drained by a second
+  `GUnixFDSource` that exists only while the queue is non-empty. It is removed
+  when the queue empties, or the level-triggered `G_IO_OUT` would spin.
+- **The source holds the wrapper, as `UdpSocket` does.** The `GSource` is C
+  data and holds no `JSValue`; `keep` is a strong reference while the port is
+  open, and the source callback takes another for the length of a delivery (a
+  handler may `Close`). `Close` removes the sources, closes the fd, and drops
+  `keep` last -- freeing it can finalize the wrapper, and nothing reads the
+  struct after it.
+- **`tcgetattr` is the "is this a serial port" question.** `open` succeeds on
+  `/dev/null`; `tcgetattr` answers `ENOTTY`, and `Open` says so. It is also why
+  a pty is a real test of this code: it is a tty, and the same
+  `tcgetattr`/`tcsetattr` path runs. The modem lines are what a pty cannot
+  prove, and they are the by-hand half.
+- **Mark/space parity and hardware flow control are compile-time.**
+  `CMSPAR` and `CRTSCTS` are not on every Unix; `Open` refuses with a sentence
+  when the platform's headers do not offer the bit, rather than opening with a
+  different parity and no warning.
+- **The Windows half is a different API.** `CreateFile`/`SetCommState`/
+  overlapped I/O; the class exists there, its properties answer and a form
+  loads, and `Open` says the half is not written. `Terminal` without VTE is
+  the precedent.
+
 ## Sockets and ServerSocket
 
 - **A TCP read is not a message.** `OnData` hands the bytes one `read`
@@ -11936,6 +11973,7 @@ bta_locale.c      po/*.po, Locale, the plural-form expression evaluator, and how
                   the desktop spells a number, a date and an amount of money
 bta_decimal.c     Decimal: exact base-10 arithmetic, with the operators
 bta_form.c        the .form loader
+bta_serial.c      SerialPort (POSIX termios, on the main loop)
 bta_sys.c         File, Dir, Exec, Dialog, timers
 bta_plugin.c      native plugins: the host table a library's `.so` is handed,
                   and the loader that finds one in a library directory
@@ -14344,6 +14382,30 @@ It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 against *that*, which is the only build that proves the refusal half compiles
 and runs (`Media.Available` false, `Media.Element` naming the package).
 
+## A serial port, which needs a pseudo-terminal
+
+```sh
+tests/serial.sh
+```
+
+`SerialPort` is a tty: the kernel's line discipline, configured through
+`termios`. `tests/serial` is a console project -- no display -- and
+`tests/serial/peer.c` makes a pseudo-terminal with `posix_openpt` and hands the
+slave's path in `BINTANA_SERIAL_PORT`. A pty is a tty, so the same
+`tcgetattr`/`tcsetattr` path a USB adapter takes runs; the test opens it, sends
+`PING` and reads `PONG` as a line, switches to byte mode and reads the two
+bytes `0x00 0xFF`, and closes. `tests/serial.sh` gives it a timeout, because an
+open port keeps the console loop alive until `Close` -- the accounting is part
+of the assertion.
+
+The refusals are the other half: an unknown option, a speed below 1, nine data
+bits, an unknown parity or flow control, three stop bits, an empty `EndOfLine`,
+`Open` with no `PortName`, and `Open` on `/dev/null`, which is not a tty and
+whose message names it. A real adapter's modem lines are the by-hand half.
+
+`tests/widgets`' `SerialPort` holds the part: the properties, their
+serialisation, and `FormPart.Types()`.
+
 ## Reproductions kept by hand
 
 `tests/manual/` holds two standalone C programs and one Bintana project. None runs
@@ -14676,7 +14738,8 @@ focused button that answers Enter itself are all invisible from inside.
 this: `Dialog.OpenFile`/`SaveFile`/`SelectFolder` are modal, nothing in JS can
 close one, so the chooser sits on top of the form the *next* test measures. One
 turned `testExec`'s pushed-surface assertions red while `testFileDialog` passed
-on its own — `Dialog.Color`'s two get away with it and a file dialog does not. So
+on its own — `Dialog.Color`'s and `Dialog.Font`'s two each get away with it, and a
+file dialog does not. So
 the accepted options are checked by hand and every **refusal** is in the suite,
 where a refusal shows nothing by construction: it throws before the chooser
 exists. Checking the other half is four numbers off one capture — the title
@@ -15350,7 +15413,7 @@ needed and what it did instead.
 | The debugger stops in the program's own runtime and **not in a `Task`** — a background computation is unbreakpointable and unsteppable, and `Error` with its stack is the whole of what its failure says | [library.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md#task). The other ten of the eleven are built: [`docs/plans/debug-plan.md`](../plans/debug-plan.md). A loop written entirely on one line also stops only once |
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
-| `Database` publishes `Sqlite` alone | [ISSUE-postgres-driver](../issues/ISSUE-postgres-driver.md) |
+| `Database` publishes `Sqlite` alone | [`docs/plans/postgres-plan.md`](../plans/postgres-plan.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 

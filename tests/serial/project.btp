@@ -1,0 +1,7 @@
+{
+  "name": "serial",
+  "main": "Main",
+  "version": "1.0",
+  "description": "SerialPort over a pseudo-terminal: termios configuration, line and byte modes, writes, refusals",
+  "sources": ["Main.js"]
+}

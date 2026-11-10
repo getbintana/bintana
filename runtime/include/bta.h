@@ -1131,6 +1131,13 @@ void  bta_socket_init_worker(JSContext *ctx, JSValue global);
 void  bta_socket_cleanup(void);   /* closes listeners and connections */
 guint bta_socket_pending(void);   /* sockets and listeners still live */
 
+/* SerialPort -- termios, on the main loop.  A worker has no loop, so its name
+ * refuses there. */
+void  bta_serial_init(JSContext *ctx, JSValue global);
+void  bta_serial_init_worker(JSContext *ctx, JSValue global);
+void  bta_serial_cleanup(void);   /* closes open ports */
+guint bta_serial_pending(void);   /* ports still open */
+
 /* --- Http ------------------------------------------------------------- */
 void  bta_http_init(JSContext *ctx, JSValue global);
 /* A worker's `Http`: the blocking verbs only, on a session of this thread. */

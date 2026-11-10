@@ -26,6 +26,7 @@ bta_locale.c      po/*.po, Locale, the plural-form expression evaluator, and how
                   the desktop spells a number, a date and an amount of money
 bta_decimal.c     Decimal: exact base-10 arithmetic, with the operators
 bta_form.c        the .form loader
+bta_serial.c      SerialPort (POSIX termios, on the main loop)
 bta_sys.c         File, Dir, Exec, Dialog, timers
 bta_plugin.c      native plugins: the host table a library's `.so` is handed,
                   and the loader that finds one in a library directory

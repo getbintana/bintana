@@ -3970,6 +3970,87 @@ static JSValue sys_color_dialog(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * Dialog.Font(title, [current], cb) -- the desktop's font chooser.
+ *
+ * The same road as Dialog.Color: a font list is not a Bintana form, GTK4 has
+ * no modal answer to give, and the callback is the answer. What comes back is
+ * a Pango description, which is exactly what `Widget.Font` takes -- so the
+ * chooser hands over what the property was going to be assigned anyway.
+ * Cancelling calls nothing, which is how "never mind" stays different from
+ * "the theme's own font".
+ */
+static void on_font_done(GObject *src, GAsyncResult *res, gpointer user_data)
+{
+    DialogJob     *job = user_data;
+    GtkFontDialog *dlg = GTK_FONT_DIALOG(src);
+    GError        *err = NULL;
+
+    PangoFontDescription *desc =
+        gtk_font_dialog_choose_font_finish(dlg, res, &err);
+    char *text = desc ? pango_font_description_to_string(desc) : NULL;
+
+    if (desc)
+        pango_font_description_free(desc);
+    g_clear_error(&err);          /* cancelling is not an error worth raising */
+
+    /* Same as the colour chooser's: teardown may have taken the job away. */
+    if (!g_list_find(dialog_jobs, job)) {
+        g_free(text);
+        return;
+    }
+
+    dialog_job_finish(job, text);
+}
+
+static JSValue sys_font_dialog(JSContext *ctx, JSValueConst this_val,
+                               int argc, JSValueConst *argv)
+{
+    const char *title   = argc > 0 && JS_IsString(argv[0])
+                              ? JS_ToCString(ctx, argv[0]) : NULL;
+    const char *current = argc > 1 && JS_IsString(argv[1])
+                              ? JS_ToCString(ctx, argv[1]) : NULL;
+
+    JSValueConst cb = argc > 2 ? argv[2] : JS_UNDEFINED;
+
+    if (!JS_IsFunction(ctx, cb)) {
+        JS_FreeCString(ctx, title);
+        JS_FreeCString(ctx, current);
+        return JS_ThrowTypeError(ctx,
+            "Dialog.Font(title, current, cb) needs a callback: it is async");
+    }
+
+    GtkFontDialog *dlg = gtk_font_dialog_new();
+    if (title)
+        gtk_font_dialog_set_title(dlg, title);
+
+    /* Where it opens. Pango takes almost anything -- "," comes back as
+     * "Normal" -- so a description that is not a font simply starts the
+     * chooser from what it spells; judging it here is Widget.Font's rule. */
+    PangoFontDescription *from = NULL;
+    if (current && *current)
+        from = pango_font_description_from_string(current);
+
+    JS_FreeCString(ctx, title);
+    JS_FreeCString(ctx, current);
+
+    DialogJob *job = g_new0(DialogJob, 1);
+    job->ctx    = ctx;
+    job->cb     = JS_DupValue(ctx, cb);
+    job->cancel = g_cancellable_new();
+    dialog_jobs = g_list_prepend(dialog_jobs, job);
+
+    BtaApp    *app    = bta_current_app();
+    GtkWindow *parent = app && app->gapp
+                            ? gtk_application_get_active_window(app->gapp) : NULL;
+
+    gtk_font_dialog_choose_font(dlg, parent, from, job->cancel, on_font_done, job);
+    if (from)
+        pango_font_description_free(from);
+    g_object_unref(dlg);
+    return JS_UNDEFINED;
+}
+
+/*
  * monotonic() -- milliseconds on a clock that only ever goes forward.
  *
  * **The one thing `Date` cannot do.**  A `Date` is the wall clock, and a wall
@@ -4867,6 +4948,14 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      */
     JS_SetPropertyStr(ctx, dialog, "Color",
                       JS_NewCFunction(ctx, sys_color_dialog, "Color", 3));
+    /* Font(title, [current], cb)
+     *   the desktop's font chooser, opening on `current` (a Pango
+     *   description). Answers a Pango description — **exactly what
+     *   [`Font`](docs/reference/widgets/Widget.md#how-it-looks) takes** — or
+     *   nothing when the person cancels
+     */
+    JS_SetPropertyStr(ctx, dialog, "Font",
+                      JS_NewCFunction(ctx, sys_font_dialog, "Font", 3));
     JS_SetPropertyStr(ctx, global, "Dialog", dialog);
 
     JSValue clipboard = JS_NewObject(ctx);

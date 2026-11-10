@@ -1469,6 +1469,7 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     bta_http_init_worker(ctx, global);
     /* The two names exist and refuse: a socket needs the main loop's events. */
     bta_socket_init_worker(ctx, global);
+    bta_serial_init_worker(ctx, global);
     /* A worker computing on a thread is what a capture wants attributed most:
      * `Profile.Begin` here marks the same collector the main thread does (per
      * thread, so it is safe) and the same capture file (under its own lock). */

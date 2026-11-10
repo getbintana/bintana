@@ -492,6 +492,30 @@ It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 against *that*, which is the only build that proves the refusal half compiles
 and runs (`Media.Available` false, `Media.Element` naming the package).
 
+## A serial port, which needs a pseudo-terminal
+
+```sh
+tests/serial.sh
+```
+
+`SerialPort` is a tty: the kernel's line discipline, configured through
+`termios`. `tests/serial` is a console project -- no display -- and
+`tests/serial/peer.c` makes a pseudo-terminal with `posix_openpt` and hands the
+slave's path in `BINTANA_SERIAL_PORT`. A pty is a tty, so the same
+`tcgetattr`/`tcsetattr` path a USB adapter takes runs; the test opens it, sends
+`PING` and reads `PONG` as a line, switches to byte mode and reads the two
+bytes `0x00 0xFF`, and closes. `tests/serial.sh` gives it a timeout, because an
+open port keeps the console loop alive until `Close` -- the accounting is part
+of the assertion.
+
+The refusals are the other half: an unknown option, a speed below 1, nine data
+bits, an unknown parity or flow control, three stop bits, an empty `EndOfLine`,
+`Open` with no `PortName`, and `Open` on `/dev/null`, which is not a tty and
+whose message names it. A real adapter's modem lines are the by-hand half.
+
+`tests/widgets`' `SerialPort` holds the part: the properties, their
+serialisation, and `FormPart.Types()`.
+
 ## Reproductions kept by hand
 
 `tests/manual/` holds two standalone C programs and one Bintana project. None runs
@@ -824,7 +848,8 @@ focused button that answers Enter itself are all invisible from inside.
 this: `Dialog.OpenFile`/`SaveFile`/`SelectFolder` are modal, nothing in JS can
 close one, so the chooser sits on top of the form the *next* test measures. One
 turned `testExec`'s pushed-surface assertions red while `testFileDialog` passed
-on its own — `Dialog.Color`'s two get away with it and a file dialog does not. So
+on its own — `Dialog.Color`'s and `Dialog.Font`'s two each get away with it, and a
+file dialog does not. So
 the accepted options are checked by hand and every **refusal** is in the suite,
 where a refusal shows nothing by construction: it throws before the chooser
 exists. Checking the other half is four numbers off one capture — the title
