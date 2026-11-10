@@ -179,16 +179,16 @@ project that names a tray, or the application passes `FinishArgs`.
   executable's icon, then `IDI_APPLICATION`. A PNG may be converted, but `.ico`
   is the documented road.
 - No new library: `shell32`.
-- **One owner of the Windows icon.** GLib's `GNotification` Win32 backend
-  creates its own `Shell_NotifyIcon` (`NIM_ADD` with `NIF_ICON`) and shows a
-  balloon with `NIM_MODIFY`/`NIF_INFO`; it has no way to reuse a caller's icon.
-  A visible tray plus that backend is two icons. The rule is therefore: **when
-  a tray is visible, `Notification` uses the tray's `NIF_INFO` balloon and
-  `GNotification` is not called on Windows**; without a tray, `GNotification`
-  is the only icon. The balloon has no custom buttons -- a Windows limitation
-  already documented for notifications -- but its click can raise
-  `Notification.OnActivate`. A WinRT toast, which invokes no tray icon at all
-  and supports buttons, is the later road if the feature is needed.
+- **Notifications are independent, and a WinRT toast adds no tray icon.**
+  `Notification` on Windows is planned as a WinRT `ToastNotification` backend;
+  the tray is `Shell_NotifyIcon`. They can be used alone or together, and with
+  WinRT there is no double icon by construction. GLib's `GNotification` Win32
+  backend is *not* used beside a visible tray: it creates its own
+  `Shell_NotifyIcon` and cannot reuse the tray's. If WinRT is not built, a
+  project with a tray must not call `GNotification`; the notification path is
+  the only icon. WinRT also gives the notification what `GNotification` cannot
+  on Windows: buttons, actions and `Withdraw`; the toast still shows while the
+  application runs, which is the only case this project needs.
 
 ### macOS: `NSStatusBar`
 
@@ -279,8 +279,8 @@ on the developer's desktop is never opened by `tests/widgets`.
 
 - **Multiple tray icons per application.** One per app; a second `new Tray` is a
   sentence.
-- **Notifications via the tray.** `Notification` is its own object; the Windows
-  icon duplication is noted above and decided separately.
+- **Notifications via the tray.** `Notification` is its own object; on Windows
+  it is a WinRT toast with no tray icon, so the two are independent.
 - **A tray in a `Task`.** No main loop, no icon.
 - **Global hotkeys, a tray on GNOME without the extension, a portal for a
   tray.** The first is GTK4's absence; the second and third are the desktop's.
