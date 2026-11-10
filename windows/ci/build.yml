@@ -1,7 +1,7 @@
 # The Windows installers: one setup executable per application in `apps/`,
-# published as the releases of the repository this runs in. Copy this file to
-# `.github/workflows/build.yml` in that repository, and `apps/` beside it; see
-# README.md for the one-time setup.
+# and one portable build environment, published as the releases of the
+# repository this runs in. Copy this file to `.github/workflows/build.yml` in
+# that repository, and `apps/` beside it; see README.md for the one-time setup.
 #
 # **The same registry as the Flatpak repository** (`flatpak/ci`), and the same
 # bargain: every directory in `apps/` with an `app.json` is an application, and
@@ -25,6 +25,13 @@
 # A rebuild of a version that already has a release replaces its setup in
 # place (`--clobber`): a new runtime under the same application version is the
 # same release, rebuilt. A new version is a new release.
+#
+# The build environment is the one release that is not an application:
+# `build-<version>` with `bintana-build-<version>-windows-x86_64.zip`, the
+# MSYS2 UCRT64 tree (GCC, the headers, git, ...) for developing Bintana itself
+# on Windows. It is rebuilt when its recipe changes -- the script, the package
+# list in this file, or the runtime's `CMakeLists.txt` -- or on an everything
+# run, and replaced in place like a setup.
 name: windows installers
 
 on:
@@ -98,7 +105,8 @@ jobs:
           ALL: ${{ inputs.all && 'yes' || '' }}
         run: |
           set -euo pipefail
-          apps=$(python - <<'EOF'
+          plan=$(mktemp)
+          python - > "$plan" <<'EOF'
           import glob, hashlib, json, os, subprocess
 
           # What every installer is made of besides the application: a change
@@ -125,6 +133,22 @@ jobs:
 
           everything = bool(os.environ.get("ALL")) or moved(state.get("runtime"), RUNTIME)
 
+          # The build environment is the toolchain, not the source: its recipe
+          # is its own script, the package list in this workflow, and the
+          # runtime's build configuration (a new version is a new release).
+          # A hash and not a commit, so a failed build is retried instead of
+          # recorded as done.
+          def digest(path):
+              return hashlib.sha256(open(path, "rb").read()).hexdigest() \
+                     if os.path.exists(path) else ""
+
+          dev_hash = hashlib.sha256("".join(digest(p) for p in [
+              "sources/bintana/tools/windows-build-tree.sh",
+              "sources/bintana/CMakeLists.txt",
+              "ci/.github/workflows/build.yml",
+          ]).encode()).hexdigest()
+          dev = bool(os.environ.get("ALL")) or dev_hash != state.get("build_env")
+
           names = []
           for entry in sorted(glob.glob("ci/apps/*/app.json")):
               name = os.path.basename(os.path.dirname(entry))
@@ -142,10 +166,18 @@ jobs:
                   names.append(name)
 
           print(" ".join(names))
+          print("yes" if dev else "no")
+          print(dev_hash)
           EOF
-          )
-          echo "decided: ${apps:-nothing}"
+          mapfile -t decided < "$plan"
+          rm -f "$plan"
+          apps=${decided[0]:-}
+          dev=${decided[1]:-no}
+          dev_hash=${decided[2]:-}
+          echo "decided: apps=${apps:-none} build-env=$dev"
           echo "apps=$apps" >> "$GITHUB_OUTPUT"
+          echo "dev=$dev" >> "$GITHUB_OUTPUT"
+          echo "dev_hash=$dev_hash" >> "$GITHUB_OUTPUT"
 
           # And what each one carries of the runtime tree besides the runtime
           # (`with`), one path a line: the MSYS2 steps have no python to read
@@ -156,8 +188,12 @@ jobs:
                   "ci/apps/$name/app.json" | tr -d '\r' > "with/$name"
           done
 
+      # The installers need the first block; the build environment adds what a
+      # person needs to build Bintana itself -- git, make, gettext, the full
+      # compiler group -- and it is installed either way, so the portable tree
+      # is exactly the one the installers were built from.
       - uses: msys2/setup-msys2@v2
-        if: steps.plan.outputs.apps != ''
+        if: steps.plan.outputs.apps != '' || steps.plan.outputs.dev == 'yes'
         with:
           msystem: UCRT64
           update: true
@@ -172,6 +208,24 @@ jobs:
             mingw-w64-ucrt-x86_64-sqlite3
             mingw-w64-ucrt-x86_64-libsoup3
             mingw-w64-ucrt-x86_64-libxml2
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-make
+            git
+            gettext
+            openssh
+            ca-certificates
+            make
+            patch
+            diffutils
+            autoconf
+            automake
+            libtool
+            bison
+            flex
+            zip
+            unzip
+            rsync
+            wget
 
       # The runtime as a Windows user gets it: built, then laid out by
       # `tools/windows-portable.sh` -- the DLLs, the GTK data, the icon themes
@@ -423,5 +477,86 @@ jobs:
               echo "nothing new to record"
           else
               git commit -m "windows: ${{ steps.plan.outputs.apps }}"
+              git push
+          fi
+
+      # The same packages as a portable tree: the environment Bintana is
+      # developed in on Windows, for somebody who does not have MSYS2 at all.
+      # It runs after the setups are published so a failure here cannot keep
+      # an application release from shipping; the job still goes red.
+      - name: The build environment
+        if: steps.plan.outputs.dev == 'yes'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 -oP 'project\(bintana VERSION \K[0-9][^ )]*' sources/bintana/CMakeLists.txt)
+          name="bintana-build-${version}-windows-x86_64"
+          sources/bintana/tools/windows-build-tree.sh "$GITHUB_WORKSPACE/stage/$name"
+          cd "$GITHUB_WORKSPACE/stage"
+          sevenz="/c/Program Files/7-Zip/7z.exe"
+          if [ -x "$sevenz" ]; then
+              "$sevenz" a -tzip -mm=Deflate -mx=7 "$name.zip" "$name"
+          else
+              cmake -E tar cf "$name.zip" --format=zip "$name"
+          fi
+          size=$(stat -c %s "$name.zip")
+          [ "$size" -lt 2000000000 ] \
+              || { echo "build environment: $size bytes is over GitHub's 2 GB asset limit" >&2; exit 1; }
+          ls -lh "$name.zip"
+
+      # A release of its own, `build-<version>`: the same rule as the setups,
+      # a rebuild under the same version replaces the ZIP in place, and a
+      # version with a letter in it is a prerelease.
+      - name: Publish the build environment
+        if: steps.plan.outputs.dev == 'yes'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 -oP 'project\(bintana VERSION \K[0-9][^ )]*' sources/bintana/CMakeLists.txt)
+          zip=$(ls stage/bintana-build-"$version"-windows-x86_64.zip)
+          tag="build-$version"
+          pre=""
+          [[ $version =~ [A-Za-z] ]] && pre="--prerelease"
+          runtime=$(git -C sources/bintana rev-parse HEAD)
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+              gh release create "$tag" --target "$GITHUB_SHA" --latest=false $pre \
+                  --title "Bintana build $version for Windows" \
+                  --notes "The MSYS2 UCRT64 environment Bintana is built with on Windows (x86_64): GCC, binutils, gdb, cmake, ninja, pkgconf, git, gettext, GTK4, GtkSourceView 5, sqlite3, libsoup3 and libxml2, headers included. Unzip it, run \`bintana-build.cmd\`, and build getbintana/bintana at \`$runtime\`."
+          fi
+          gh release upload "$tag" "$zip" --clobber
+          echo "== build: $(basename "$zip") in $tag"
+
+      # And the state, after the upload: a failed ZIP is rebuilt next time,
+      # not recorded as done.  Only `build_env` moves here; the applications
+      # and the runtime's own record were already written by Publish.
+      - name: Record the build environment
+        if: steps.plan.outputs.dev == 'yes'
+        shell: bash
+        env:
+          DEV_HASH: ${{ steps.plan.outputs.dev_hash }}
+        run: |
+          set -euo pipefail
+          python - <<'EOF'
+          import json, os
+
+          path  = "state/builds.json"
+          state = json.load(open(path)) if os.path.exists(path) else {}
+
+          state["build_env"] = os.environ["DEV_HASH"]
+
+          json.dump(state, open(path, "w"), indent=2)
+          EOF
+
+          cd state
+          git config user.name  "bintana-windows"
+          git config user.email "noreply@github.com"
+          git add -A
+          if git diff --cached --quiet; then
+              echo "nothing new to record"
+          else
+              git commit -m "windows: build"
               git push
           fi

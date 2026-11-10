@@ -70,16 +70,17 @@ builds, with the generic icon and a note in the log.
 
 ## What it rebuilds
 
-`builds.json` on `state` records the runtime's commit and one entry per
-application. On every run:
+`builds.json` on `state` records the runtime's commit, one entry per
+application, and the build environment's recipe hash. On every run:
 
 | changed | rebuilt |
 |---|---|
 | no state at all, or *Run workflow* with "everything" ticked | everything |
-| the runtime, `lib/`, the vendor, `tools/pack`, `tools/windows-portable.sh`, `CMakeLists.txt` | every application -- each installer carries its own copy of the runtime |
+| the runtime, `lib/`, the vendor, `tools/pack`, `tools/windows-portable.sh`, `CMakeLists.txt` | every application -- each installer carries its own copy of the runtime -- and the build environment when `CMakeLists.txt` moved |
 | an application's `watch` paths in the runtime's repository | it alone |
 | an application's own repository | it alone |
 | an application's registration (`app.json`) | it alone |
+| the build environment's script or `build.yml` | it alone |
 
 ## What it publishes
 
@@ -93,6 +94,34 @@ not -- **replaces** the setup in that release; a new version is a new release.
 The release is created at this repository's commit, not the application's:
 the tag names the build, and the notes say which commit of the application and
 of the runtime went into it.
+
+### The build environment
+
+One release is not an application: `build-<version>` carries
+`bintana-build-<version>-windows-x86_64.zip`, an MSYS2 UCRT64 tree with GCC,
+binutils, gdb, cmake, ninja, pkgconf, git, gettext, GTK4, GtkSourceView 5,
+sqlite3, libsoup3, libxml2 and their headers -- the environment the setups
+above are built in, for developing Bintana itself on Windows. Unzip it
+anywhere, run `bintana-build.cmd` from the directory where you keep your source
+(or `bintana-build.cmd -where C:\src`), and:
+
+```sh
+git clone https://github.com/getbintana/bintana.git
+cd bintana
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build -j
+./build/bintana.exe ide
+```
+
+It is rebuilt when its recipe changes -- `tools/windows-build-tree.sh`,
+`build.yml` (the package list), or the runtime's `CMakeLists.txt` -- or on an
+*everything* run, and the ZIP replaces in place under the same tag. The recipe
+is hashed in `builds.json`, so a failed build is retried rather than recorded
+as done. The ZIP is Deflate so Explorer extracts it without 7-Zip.
+What is checked while it is made is that the copied tree has the compiler,
+CMake, Ninja, pkgconf, git, gettext and the two pkg-config files; the tree
+itself is unverified until somebody unzips it, the same caveat as the portable
+runtime.
 
 ## What it runs
 

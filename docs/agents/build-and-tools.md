@@ -429,8 +429,9 @@ old version into `api.json` and `tests/api.sh` then fails; the order is
 - **`flatpak/io.github.getbintana.Hello.yml`** and **`...Ide.yml`** --
   `base-version` follows that branch.
 - **`docs/installing.md`** -- `BaseApp//x.y` and the downloadable tarball's name.
-- **`tools/windows-portable.sh`** and **`windows/ci/README.md`** -- the version
-  in their examples, so a reader does not copy the previous release.
+- **`tools/windows-portable.sh`**, **`tools/windows-build-tree.sh`** and
+  **`windows/ci/README.md`** -- the version in their examples, so a reader does
+  not copy the previous release.
 
 **`tests/pack.sh` is the guard for all of the Flatpak half**: it reads the
 BaseApp branch, every other `flatpak/*.yml`'s `base-version` and

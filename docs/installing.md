@@ -193,6 +193,11 @@ A setup that never arrives is the installer step's warning in the log, not a
 failed job: the zip is the established artifact, and the toolchain around the
 installer (a download, the runner's own NSIS) is outside this repository.
 
+For developing Bintana itself on Windows, `getbintana/windows` publishes
+`bintana-build-<version>-windows-x86_64.zip` beside the application setups: an
+MSYS2 UCRT64 tree with GCC, the headers and the tools
+([`windows/ci/`](../windows/ci/README.md#the-build-environment)).
+
 It is the install prefix, so it is extracted anywhere and runs without
 installing:
 
