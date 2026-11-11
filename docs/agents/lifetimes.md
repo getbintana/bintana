@@ -239,6 +239,13 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   held by `tests/widgets`' `HandlerRemakes` under `asan.sh` with
   `BINTANA_PROFILE`. `TableCell` holds the table's half, each assertion red
   without its fix.
+- **A serial handler that closes its own port** dropped `keep` inside the
+  emit, so the next line of `serial_deliver` (the `if (!s->open)` that decides
+  whether to remove the line just delivered) read a freed `SerialData`.
+  `serial_deliver` now takes its own `JS_DupValue(s->self)` for the whole
+  function and releases it on every path: closing the port from `OnData` or
+  `OnLine` is legal, and the hold is what makes the check after the emit mean
+  anything.
 
 ## More lifetime traps
 

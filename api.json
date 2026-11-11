@@ -17185,7 +17185,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "`\"None\"` (the default), `\"Even\"`, `\"Odd\"`, `\"Mark\"` or `\"Space\"`; the last two need the platform's `CMSPAR`",
+          "Doc": "`\"None\"` (the default), `\"Even\"`, `\"Odd\"`, `\"Mark\"` or `\"Space\"`; the last two need the driver's support",
           "Native": true
         },
         {
@@ -17194,7 +17194,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the device path, `/dev/ttyUSB0` or `/dev/ttyACM0` on Linux (and `COM3` on the Windows half when it arrives). Set before `Open`",
+          "Doc": "the device path, `/dev/ttyUSB0` or `/dev/ttyACM0` on Linux, `COM3` (or `\\\\.\\COM3`) on Windows. Set before `Open`",
           "Native": true
         },
         {
@@ -17203,7 +17203,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the baud rate, 1 to 4000000. A value the system has no `speed_t` for is refused by `Open`, which names it",
+          "Doc": "the baud rate, 1 to 4000000. A rate the driver refuses is refused by `Open`, which names it",
           "Native": true
         },
         {
@@ -20193,7 +20193,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "`\"None\"` (the default), `\"Even\"`, `\"Odd\"`, `\"Mark\"` or `\"Space\"`; the last two need the platform's `CMSPAR`",
+          "Doc": "`\"None\"` (the default), `\"Even\"`, `\"Odd\"`, `\"Mark\"` or `\"Space\"`; the last two need the driver's support",
           "Native": true
         },
         {
@@ -20202,7 +20202,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the device path, `/dev/ttyUSB0` or `/dev/ttyACM0` on Linux (and `COM3` on the Windows half when it arrives). Set before `Open`",
+          "Doc": "the device path, `/dev/ttyUSB0` or `/dev/ttyACM0` on Linux, `COM3` (or `\\\\.\\COM3`) on Windows. Set before `Open`",
           "Native": true
         },
         {
@@ -20211,7 +20211,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the baud rate, 1 to 4000000. A value the system has no `speed_t` for is refused by `Open`, which names it",
+          "Doc": "the baud rate, 1 to 4000000. A rate the driver refuses is refused by `Open`, which names it",
           "Native": true
         },
         {

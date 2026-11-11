@@ -405,6 +405,8 @@ Traps and their evidence, by area, in `docs/agents/`:
 - [`drawing.md`](docs/agents/drawing.md) — you touch `Painter`, `DrawingArea`, `Drawing`, printing, a drawing library, `PdfDocument` or signing with a `Key`.
 - [`media-desktop.md`](docs/agents/media-desktop.md) — you touch `Video`/`AudioPlayer`, the `Media` elements (`Media.Element` and the graph it builds), `Keyring`, `Notification`, `Tray` or desktop entries.
 - [`network.md`](docs/agents/network.md) — you touch `Http`, TLS or sockets.
+- [`serial.md`](docs/agents/serial.md) — you touch `SerialPort`, a COM port, a
+  virtual serial pair, or the serial test.
 - [`i18n.md`](docs/agents/i18n.md) — you touch translation, the extractor or `.po` files.
 - [`packaging.md`](docs/agents/packaging.md) — you touch `lib/package`, Flatpak or the CI registry of applications.
 
@@ -2243,6 +2245,13 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   held by `tests/widgets`' `HandlerRemakes` under `asan.sh` with
   `BINTANA_PROFILE`. `TableCell` holds the table's half, each assertion red
   without its fix.
+- **A serial handler that closes its own port** dropped `keep` inside the
+  emit, so the next line of `serial_deliver` (the `if (!s->open)` that decides
+  whether to remove the line just delivered) read a freed `SerialData`.
+  `serial_deliver` now takes its own `JS_DupValue(s->self)` for the whole
+  function and releases it on every path: closing the port from `OnData` or
+  `OnLine` is legal, and the hold is what makes the check after the emit mean
+  anything.
 
 ## More lifetime traps
 
@@ -12184,6 +12193,8 @@ bta_tray_linux.c  StatusNotifierItem + com.canonical.dbusmenu over GDBus
 bta_tray_win32.c  the Windows tray: Shell_NotifyIcon, a hidden window and an HMENU
 bta_tray_cocoa.c  the macOS tray stub (NSStatusItem is the plan)
 bta_serial.c      SerialPort (POSIX termios, on the main loop)
+bta_serial_win32.c SerialPort on Windows: CreateFileW, the DCB, a reader
+                  thread and a writer thread feeding one idle
 bta_sys.c         File, Dir, Exec, Dialog, timers
 bta_plugin.c      native plugins: the host table a library's `.so` is handed,
                   and the loader that finds one in a library directory
@@ -14617,14 +14628,16 @@ It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 against *that*, which is the only build that proves the refusal half compiles
 and runs (`Media.Available` false, `Media.Element` naming the package).
 
-## A serial port, which needs a pseudo-terminal
+## A serial port, which needs a peer
 
 ```sh
 tests/serial.sh
+BINTANA_SERIAL_PORT=COM3 BINTANA_SERIAL_LOOPBACK=1 tests/serial-win.sh
+BINTANA_SERIAL_PORT=COM3 BINTANA_SERIAL_PEER=COM4 tests/serial-win.sh
 ```
 
-`SerialPort` is a tty: the kernel's line discipline, configured through
-`termios`. `tests/serial` is a console project -- no display -- and
+On POSIX, `SerialPort` is a tty: the kernel's line discipline, configured
+through `termios`. `tests/serial` is a console project -- no display -- and
 `tests/serial/peer.c` makes a pseudo-terminal with `posix_openpt` and hands the
 slave's path in `BINTANA_SERIAL_PORT`. A pty is a tty, so the same
 `tcgetattr`/`tcsetattr` path a USB adapter takes runs; the test opens it, sends
@@ -14633,10 +14646,36 @@ bytes `0x00 0xFF`, and closes. `tests/serial.sh` gives it a timeout, because an
 open port keeps the console loop alive until `Close` -- the accounting is part
 of the assertion.
 
+On Windows the loopback is one USB adapter whose TX is tied to RX, or HHD
+Software's script port running `Loopback Serial Port (Push Model).ts`:
+`BINTANA_SERIAL_LOOPBACK=1` sends the same line and the same two bytes back
+through it, so no second process is needed. The peer mode is a pair -- a
+com0com pair or HHD's bridge -- with `tests/serial/peer.ps1` on the other end,
+opening it with the .NET Framework's `System.IO.Ports.SerialPort`, so the
+runtime is tested against a stack it does not share. `tests/serial-win.sh`
+waits for the peer's ready file and checks it answered.
+
+**The test opens the line on one handle and the bytes on a second**, with
+250 ms after the close and after the reopen. HHD's driver blocks the second
+write on one handle: the first `PING` echoes and the next `WriteFile` stays
+pending until `Close` cancels it with `ERROR_OPERATION_ABORTED` (995). A real
+UART does not need this. With it, the peer mode passed five runs in a row on
+2026-11-11 (19 assertions each); HHD's script-port loopback is flakier on its
+trial and passed four of five in later repeats.
+
+The pair is a kernel driver, and **com0com 3.0.0.0's signed driver is
+cross-signed in 2017, which Windows 11 with Secure Boot refuses with
+`CM_PROB_UNSIGNED_DRIVER` (Code 52) even though its catalog verifies**. HHD's
+driver is signed by *Microsoft Windows Hardware Compatibility Publisher*
+(Attested) and loads under Secure Boot. The script says what is missing and
+installs nothing.
+
 The refusals are the other half: an unknown option, a speed below 1, nine data
 bits, an unknown parity or flow control, three stop bits, an empty `EndOfLine`,
-`Open` with no `PortName`, and `Open` on `/dev/null`, which is not a tty and
-whose message names it. A real adapter's modem lines are the by-hand half.
+`Open` with no `PortName`, `Open` on `/dev/null` (not a tty), and `Open` on
+`COM999` (a port Windows does not have). `BINTANA_SERIAL_OPTIONAL=1` runs those
+and skips the data path with a line that says so; the `windows` job runs that
+way, because it has no pair. A real adapter's modem lines are the by-hand half.
 
 `tests/widgets`' `SerialPort` holds the part: the properties, their
 serialisation, and `FormPart.Types()`.

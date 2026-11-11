@@ -783,6 +783,13 @@ jobs:
           BINTANA: ./build/bintana.exe
         run: ./tests/check.sh
 
+      # The SerialPort surface without a port: the option refusals and an
+      # `Open` that names a COM port Windows did not find. The data path is
+      # `tests/serial-win.sh` on a machine with a pair, because a kernel-mode
+      # virtual port needs a driver Windows accepts.
+      - name: The serial port's refusals
+        run: BINTANA_SERIAL_OPTIONAL=1 ./build/bintana.exe tests/serial
+
       # The first windowed project on Windows, and **not a gate**: whether this
       # runner has a desktop for the windows to open on is not something this
       # file can know. The log says what happened; a pass is the day the job

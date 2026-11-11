@@ -250,12 +250,15 @@ endif()
 if(WIN32)
     set(BTA_TRAY_SOURCE runtime/src/bta_tray_win32.c)
     set(BTA_NOTIFICATION_SOURCE runtime/src/bta_notification_win32.c)
+    set(BTA_SERIAL_SOURCE runtime/src/bta_serial_win32.c)
 elseif(APPLE)
     set(BTA_TRAY_SOURCE runtime/src/bta_tray_cocoa.c)
     set(BTA_NOTIFICATION_SOURCE)
+    set(BTA_SERIAL_SOURCE)
 else()
     set(BTA_TRAY_SOURCE runtime/src/bta_tray_linux.c)
     set(BTA_NOTIFICATION_SOURCE)
+    set(BTA_SERIAL_SOURCE)
 endif()
 
 add_executable(bintana
@@ -305,6 +308,7 @@ add_executable(bintana
     runtime/src/bta_network.c
     runtime/src/bta_socket.c
     runtime/src/bta_serial.c
+    ${BTA_SERIAL_SOURCE}
     runtime/src/bta_locale.c
     runtime/src/bta_bytes.c
     runtime/src/bta_bitmap.c

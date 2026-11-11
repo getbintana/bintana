@@ -188,9 +188,15 @@ use -- not a library to install or link**: `open()` and `read`/`write` reach the
 kernel's tty layer, and only the configuration calls come from it. There is no
 `GSerialPort` in GIO -- checked against GLib 2.88's headers and the upstream
 tree, where no `gunixserialport.h` exists -- and `libserialport` would be a
-second dependency for the same ioctls. Windows needs its own `CreateFile`/`SetCommState`/
-overlapped-I/O half, and is a stage of its own. `PinChange` is not here: POSIX
-would have to poll `TIOCMGET` and no caller has asked for a pin.
+second dependency for the same ioctls. Windows needs its own
+`CreateFile`/`GetCommState`/`SetCommState` half: a COM HANDLE is not pollable
+by GLib, so a reader thread does the blocking `ReadFile` and a writer thread
+drains the write queue, and one idle carries both back to the main loop. It is
+synchronous I/O with two threads, not overlapped I/O: the special
+`COMMTIMEOUTS` mode returns the bytes that are already there and otherwise
+waits for the first one, and `CancelSynchronousIo` is what ends the wait.
+`PinChange` is not here: POSIX would have to poll `TIOCMGET` and no caller has
+asked for a pin.
 
 ### `WebSocket` — a client, then a server
 
@@ -345,11 +351,13 @@ from.
    implicit TLS, `AUTH LOGIN`, MIME with text/HTML and base64 attachments. A
    `StartTls` is refused until `Socket` can upgrade mid-stream; the part keeps
    `User`/`Password` out of the `.form`.
-6. **`SerialPort`** -- Linux over POSIX `termios` on the main loop's
-   `GSource`; Windows later. **Built** (2026-11-10,
-   `runtime/src/bta_serial.c`; `tests/serial.sh`): open/close/configuration,
-   `Data`/`Line`, queued writes, the `FormPart`, and a pseudo-terminal as the
-   peer. The Windows half is the only part of the class that refuses.
+6. **`SerialPort`** -- POSIX over `termios` on the main loop's `GSource`;
+   Windows over a COM handle (`CreateFileW`/`SetCommState`) with a reader and
+   a writer thread feeding one idle. **Built** (POSIX 2026-11-10, Windows
+   2026-11-11, `runtime/src/bta_serial.c` and `bta_serial_win32.c`;
+   `tests/serial.sh`, `tests/serial-win.sh`): open/close/configuration,
+   `Data`/`Line`, queued writes, the `FormPart`, and a pseudo-terminal or a
+   virtual pair as the peer.
 7. **`Ipc`** -- the base `Channel`, `Ipc.Pipe` on Unix (reusing stage 1),
    then the Windows named-pipe backend.
 8. **`Ipc.DBus`** -- last, with a caller.
@@ -390,11 +398,18 @@ The sockets on loopback, in `tests/widgets`, with no external network:
 - the part round trip: a `.form` with a `Socket` and a `ServerSocket`, the
   properties read back, and the form's close closing them.
 
-And `SerialPort` has its own door, `tests/serial.sh`: a C helper makes a
-pseudo-terminal, the console project writes lines and bytes through it, and
+And `SerialPort` has two doors. On POSIX, `tests/serial.sh`: a C helper makes
+a pseudo-terminal, the console project writes lines and bytes through it, and
 the script's timeout is the assertion the console loop's accounting cannot
 make. A pty is a tty, so `tcgetattr`/`tcsetattr` take the same path a USB
-adapter does; the modem lines are the by-hand half.
+adapter does; the modem lines are the by-hand half. On Windows,
+`tests/serial-win.sh` runs the same project through one adapter with TX tied
+to RX (or HHD's script port) with `BINTANA_SERIAL_LOOPBACK=1`, or through a
+pair (com0com or HHD's bridge) with `peer.ps1`'s .NET `SerialPort` on the other
+end. The line and the bytes are two opens because HHD's driver blocks a
+second write on one handle; a real UART does not. With no port,
+`BINTANA_SERIAL_OPTIONAL=1` runs only the refusals, which is what the
+`windows` job does.
 
 `Ipc.Pipe` gets the same pair on Unix; the Windows named-pipe half runs in
 the `windows` job when it exists, because a Linux run cannot prove it.

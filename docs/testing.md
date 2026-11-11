@@ -501,14 +501,16 @@ It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 against *that*, which is the only build that proves the refusal half compiles
 and runs (`Media.Available` false, `Media.Element` naming the package).
 
-## A serial port, which needs a pseudo-terminal
+## A serial port, which needs a peer
 
 ```sh
 tests/serial.sh
+BINTANA_SERIAL_PORT=COM3 BINTANA_SERIAL_LOOPBACK=1 tests/serial-win.sh
+BINTANA_SERIAL_PORT=COM3 BINTANA_SERIAL_PEER=COM4 tests/serial-win.sh
 ```
 
-`SerialPort` is a tty: the kernel's line discipline, configured through
-`termios`. `tests/serial` is a console project -- no display -- and
+On POSIX, `SerialPort` is a tty: the kernel's line discipline, configured
+through `termios`. `tests/serial` is a console project -- no display -- and
 `tests/serial/peer.c` makes a pseudo-terminal with `posix_openpt` and hands the
 slave's path in `BINTANA_SERIAL_PORT`. A pty is a tty, so the same
 `tcgetattr`/`tcsetattr` path a USB adapter takes runs; the test opens it, sends
@@ -517,10 +519,36 @@ bytes `0x00 0xFF`, and closes. `tests/serial.sh` gives it a timeout, because an
 open port keeps the console loop alive until `Close` -- the accounting is part
 of the assertion.
 
+On Windows the loopback is one USB adapter whose TX is tied to RX, or HHD
+Software's script port running `Loopback Serial Port (Push Model).ts`:
+`BINTANA_SERIAL_LOOPBACK=1` sends the same line and the same two bytes back
+through it, so no second process is needed. The peer mode is a pair -- a
+com0com pair or HHD's bridge -- with `tests/serial/peer.ps1` on the other end,
+opening it with the .NET Framework's `System.IO.Ports.SerialPort`, so the
+runtime is tested against a stack it does not share. `tests/serial-win.sh`
+waits for the peer's ready file and checks it answered.
+
+**The test opens the line on one handle and the bytes on a second**, with
+250 ms after the close and after the reopen. HHD's driver blocks the second
+write on one handle: the first `PING` echoes and the next `WriteFile` stays
+pending until `Close` cancels it with `ERROR_OPERATION_ABORTED` (995). A real
+UART does not need this. With it, the peer mode passed five runs in a row on
+2026-11-11 (19 assertions each); HHD's script-port loopback is flakier on its
+trial and passed four of five in later repeats.
+
+The pair is a kernel driver, and **com0com 3.0.0.0's signed driver is
+cross-signed in 2017, which Windows 11 with Secure Boot refuses with
+`CM_PROB_UNSIGNED_DRIVER` (Code 52) even though its catalog verifies**. HHD's
+driver is signed by *Microsoft Windows Hardware Compatibility Publisher*
+(Attested) and loads under Secure Boot. The script says what is missing and
+installs nothing.
+
 The refusals are the other half: an unknown option, a speed below 1, nine data
 bits, an unknown parity or flow control, three stop bits, an empty `EndOfLine`,
-`Open` with no `PortName`, and `Open` on `/dev/null`, which is not a tty and
-whose message names it. A real adapter's modem lines are the by-hand half.
+`Open` with no `PortName`, `Open` on `/dev/null` (not a tty), and `Open` on
+`COM999` (a port Windows does not have). `BINTANA_SERIAL_OPTIONAL=1` runs those
+and skips the data path with a line that says so; the `windows` job runs that
+way, because it has no pair. A real adapter's modem lines are the by-hand half.
 
 `tests/widgets`' `SerialPort` holds the part: the properties, their
 serialisation, and `FormPart.Types()`.

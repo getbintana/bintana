@@ -1,12 +1,14 @@
 /*
  * SerialPort -- RS-232 and USB serial adapters on the main loop.
  *
- * The design is stage 6 of docs/plans/transports-plan.md.  A serial port is a
- * tty: `termios` is the C library's interface to the kernel's line
+ * The design is stage 6 of docs/plans/transports-plan.md.  On POSIX a serial
+ * port is a tty: `termios` is the C library's interface to the kernel's line
  * discipline, not a library to install, and `open`/`read`/`write` reach the
- * same `/dev/ttyUSB0` or `/dev/ttyACM0` every other program uses.  What this
- * file adds is the event road the rest of the runtime speaks -- no blocking
- * read, no polling thread -- and the configuration checked at assignment.
+ * same `/dev/ttyUSB0` or `/dev/ttyACM0` every other program uses.  On Windows
+ * it is a COM handle: `CreateFileW`, a `DCB`, and a reader thread because a
+ * HANDLE is not something GLib can poll.  What this file adds on both is the
+ * event road the rest of the runtime speaks -- no blocking read on the
+ * window's thread -- and the configuration checked at assignment.
  *
  * ## The rules worth writing down
  *
@@ -14,33 +16,27 @@
  * hands the bytes one read returned, exactly as `Socket.OnData` does.  `Line`
  * is the one framing here, and it buffers until `EndOfLine`.
  *
- * **A write never blocks.** `Write` queues a `GBytes`; the queue is drained on
- * `G_IO_OUT` when the kernel takes no more.  A write on a closed port throws
- * now, because that is a mistake and not an answer that arrives later.
+ * **A write never blocks.** `Write` queues a `GBytes`; on POSIX the queue is
+ * drained on `G_IO_OUT` when the kernel takes no more, and on Windows by a
+ * writer thread.  A write on a closed port throws now, because that is a
+ * mistake and not an answer that arrives later.
  *
- * **The port keeps itself alive.** The `GSource` that watches the fd is C data;
- * while it runs it holds a strong reference to the wrapper (`keep`), so a
- * program that drops its last JavaScript reference does not close a port it is
- * still using.  `Close` drops it last, when nothing is in flight.
+ * **The port keeps itself alive.** The source that watches the fd, or the
+ * threads that own the COM handle, hold a strong reference to the wrapper
+ * (`keep`) while the port is open, so a program that drops its last
+ * JavaScript reference does not close a port it is still using.  `Close`
+ * drops it last, when nothing is in flight.
  *
  * **The configuration is checked where it is written.** A speed the system
  * does not have, a parity this platform cannot express, or a port that is not
  * a tty throws at `Open` with the setting named; the property setters refuse
  * what can be refused without the device.
- *
- * **Windows is a later stage.** The class exists there, its properties answer
- * and a `.form` carrying one still loads and saves; `Open` says that the
- * Windows half is not written, the way `Terminal` refuses without VTE.  The
- * POSIX half is Linux, macOS and the BSDs.
  */
-#include "bta.h"
+#include "bta_serial_internal.h"
 
-#include <gio/gio.h>
 #include <string.h>
 
-#ifdef G_OS_WIN32
-#include <errno.h>
-#else
+#ifndef G_OS_WIN32
 #include <errno.h>
 #include <fcntl.h>
 #include <termios.h>
@@ -48,52 +44,15 @@
 #include <glib-unix.h>
 #endif
 
-/* One read.  A serial device answers in small frames, but a USB adapter can
- * deliver more; the kernel gives what it has. */
-#define SERIAL_CHUNK 65536
-
-/* A line that never ends is a device that is not speaking the protocol.  The
- * cap is the same order as the socket's, and it turns an unbounded buffer into
- * an error instead of a program that grows until the machine stops. */
-#define SERIAL_LINE_MAX (1024 * 1024)
-
-typedef struct {
-    JSContext *ctx;
-    JSValue    self;       /* BORROWED: the wrapper owns this struct */
-    JSValue    keep;       /* open: a strong reference to self */
-    JSValue    on_data;
-    JSValue    on_line;
-    JSValue    on_error;
-
-    char      *port;       /* PortName */
-    int        speed;
-    int        data_bits;
-    char      *parity;     /* "None", "Even", "Odd", "Mark", "Space" */
-    int        stop_bits;
-    char      *flow;       /* "None", "Hardware", "Software" */
-    bool       line;
-    char      *eol;
-
-    bool       open;
-    bool       in_live;
-    int        fd;
-    guint      in_source;
-    guint      out_source;
-    bool       writing;
-    gsize      write_at;
-    GQueue    *writes;     /* GBytes *, owned */
-    GByteArray *linebuf;
-} SerialData;
-
 static GList    *serial_live;   /* SerialData *, open */
 static JSClassID serial_class_id;
 
 static void serial_close(SerialData *s, bool finalizing);
-static void serial_fail(SerialData *s, const char *kind, const char *detail);
-static void serial_deliver(SerialData *s, const guint8 *data, size_t len);
+#ifndef G_OS_WIN32
 static void serial_write_start(SerialData *s);
 static gboolean on_serial_input(gint fd, GIOCondition cond, gpointer data);
 static gboolean on_serial_output(gint fd, GIOCondition cond, gpointer data);
+#endif
 
 /* --------------------------------------------------------------- utilities */
 
@@ -166,7 +125,7 @@ static JSValue serial_error(JSContext *ctx, const char *kind,
     return e;
 }
 
-static void serial_fail(SerialData *s, const char *kind, const char *detail)
+void bta_serial_fail(SerialData *s, const char *kind, const char *detail)
 {
     JSValue hold;
     JSValue e;
@@ -203,7 +162,7 @@ static void serial_close(SerialData *s, bool finalizing)
         s->out_source = 0;
     }
 #ifdef G_OS_WIN32
-    /* No fd on the Windows half yet. */
+    bta_serial_win32_close(s);
 #else
     if (s->fd >= 0) {
         close(s->fd);
@@ -232,18 +191,26 @@ static void serial_close(SerialData *s, bool finalizing)
 
 /* --------------------------------------------------------------- reading */
 
-static void serial_deliver(SerialData *s, const guint8 *data, size_t len)
+void bta_serial_deliver(SerialData *s, const guint8 *data, size_t len)
 {
     if (!s->open || !len)
         return;
 
+    /* The handler may close the port and drop the last outside reference.
+     * `s->keep` goes away with the Close, so hold the wrapper for the checks
+     * below rather than reading `s` after the emit. */
+    JSValue hold = JS_DupValue(s->ctx, s->self);
+
     if (s->line) {
-        if (!JS_IsFunction(s->ctx, s->on_line))
+        if (!JS_IsFunction(s->ctx, s->on_line)) {
+            JS_FreeValue(s->ctx, hold);
             return;
+        }
 
         g_byte_array_append(s->linebuf, data, len);
         if (s->linebuf->len > SERIAL_LINE_MAX) {
-            serial_fail(s, "Error", "a line is longer than 1 MiB");
+            bta_serial_fail(s, "Error", "a line is longer than 1 MiB");
+            JS_FreeValue(s->ctx, hold);
             return;
         }
 
@@ -260,8 +227,9 @@ static void serial_deliver(SerialData *s, const guint8 *data, size_t len)
 
             if (JS_IsException(line)) {
                 JS_FreeValue(s->ctx, JS_GetException(s->ctx));
-                serial_fail(s, "Error",
+                bta_serial_fail(s, "Error",
                             "the device sent a line that is not UTF-8");
+                JS_FreeValue(s->ctx, hold);
                 return;
             }
             serial_emit(s, s->on_line, 1, &line);
@@ -270,43 +238,55 @@ static void serial_deliver(SerialData *s, const guint8 *data, size_t len)
             /* The handler may have closed the port, or turned line mode off;
              * closing clears the buffer, and the range is only removed while
              * it is still the one we measured. */
-            if (!s->open)
+            if (!s->open) {
+                JS_FreeValue(s->ctx, hold);
                 return;
+            }
             g_byte_array_remove_range(s->linebuf, 0, at + eol_len);
-            if (!s->line)
+            if (!s->line) {
+                JS_FreeValue(s->ctx, hold);
                 return;
+            }
         }
+        JS_FreeValue(s->ctx, hold);
         return;
     }
 
-    if (!JS_IsFunction(s->ctx, s->on_data))
+    if (!JS_IsFunction(s->ctx, s->on_data)) {
+        JS_FreeValue(s->ctx, hold);
         return;
+    }
 
     JSValue bytes = bta_bytes_new(s->ctx, data, len);
-    if (JS_IsException(bytes))
+    if (JS_IsException(bytes)) {
+        JS_FreeValue(s->ctx, hold);
         return;
+    }
     serial_emit(s, s->on_data, 1, &bytes);
     JS_FreeValue(s->ctx, bytes);
+    JS_FreeValue(s->ctx, hold);
 }
+
+#ifdef G_OS_WIN32
+/* The COM handle, its threads and their queue are bta_serial_win32.c. */
+#else  /* !G_OS_WIN32 */
 
 static void serial_read(SerialData *s)
 {
-#ifndef G_OS_WIN32
     guint8  buf[SERIAL_CHUNK];
     ssize_t n = read(s->fd, buf, sizeof buf);
 
     if (n > 0) {
-        serial_deliver(s, buf, (size_t)n);
+        bta_serial_deliver(s, buf, (size_t)n);
         return;
     }
     if (n == 0) {
-        serial_fail(s, "Closed", "the port closed");
+        bta_serial_fail(s, "Closed", "the port closed");
         return;
     }
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
         return;
-    serial_fail(s, "Error", g_strerror(errno));
-#endif
+    bta_serial_fail(s, "Error", g_strerror(errno));
 }
 
 /* --------------------------------------------------------------- writing */
@@ -317,7 +297,6 @@ static void serial_read(SerialData *s)
  * again. */
 static bool serial_write_some(SerialData *s)
 {
-#ifndef G_OS_WIN32
     GBytes      *b = g_queue_peek_head(s->writes);
     gsize        len = 0;
     const guint8 *data;
@@ -336,13 +315,12 @@ static bool serial_write_some(SerialData *s)
         if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK ||
                       errno == EINTR))
             return true;
-        serial_fail(s, "Error", g_strerror(errno));
+        bta_serial_fail(s, "Error", g_strerror(errno));
         return true;
     }
 
     g_bytes_unref(g_queue_pop_head(s->writes));
     s->write_at = 0;
-#endif
     return false;
 }
 
@@ -361,7 +339,6 @@ static void serial_write_start(SerialData *s)
     if (!s->open)
         return;
 
-#ifndef G_OS_WIN32
     if (g_queue_is_empty(s->writes)) {
         if (s->out_source) {
             g_source_remove(s->out_source);
@@ -372,7 +349,6 @@ static void serial_write_start(SerialData *s)
                                            G_IO_OUT | G_IO_ERR | G_IO_HUP,
                                            on_serial_output, s, NULL);
     }
-#endif
 }
 
 /* --------------------------------------------------------------- the loop */
@@ -386,7 +362,7 @@ static gboolean on_serial_input(gint fd, GIOCondition cond, gpointer data)
         if (cond & G_IO_IN)
             serial_read(s);
         if (s->open && (cond & (G_IO_ERR | G_IO_HUP | G_IO_NVAL)))
-            serial_fail(s, "Closed", "the port went away");
+            bta_serial_fail(s, "Closed", "the port went away");
     }
 
     gboolean again = s->open && s->fd == fd;
@@ -402,7 +378,7 @@ static gboolean on_serial_output(gint fd, GIOCondition cond, gpointer data)
 
     if (s->open && s->fd == fd) {
         if (cond & (G_IO_ERR | G_IO_HUP | G_IO_NVAL))
-            serial_fail(s, "Closed", "the port went away");
+            bta_serial_fail(s, "Closed", "the port went away");
         else
             serial_write_start(s);
     }
@@ -413,9 +389,13 @@ static gboolean on_serial_output(gint fd, GIOCondition cond, gpointer data)
     return again ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
 }
 
+#endif  /* !G_OS_WIN32 */
+
 /* ------------------------------------------------------------- termios */
 
-#ifndef G_OS_WIN32
+#ifdef G_OS_WIN32
+/* The DCB and CreateFileW are bta_serial_win32.c. */
+#else  /* !G_OS_WIN32 */
 
 /*
  * The speed is a `speed_t` constant and not a number, and the set is the one
@@ -625,7 +605,7 @@ static bool serial_configure(SerialData *s, int fd, char **why)
     return true;
 }
 
-#endif  /* !G_OS_WIN32 */
+#endif  /* G_OS_WIN32 */
 
 /* ---------------------------------------------------------------- Open */
 
@@ -642,9 +622,34 @@ static JSValue serial_open(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "SerialPort.Open: PortName is empty");
 
 #ifdef G_OS_WIN32
-    return JS_ThrowPlainError(ctx,
-        "SerialPort: the Windows half is not written yet -- this build can "
-        "draw and save a form carrying one, and Open refuses");
+    char *why = NULL;
+
+    if (!bta_serial_win32_open(s, &why)) {
+        JSValue e = JS_ThrowPlainError(ctx, "SerialPort.Open: %s",
+                                       why ? why : "cannot open the port");
+        g_free(why);
+        return e;
+    }
+
+    s->open = true;
+    s->keep = JS_DupValue(ctx, s->self);
+
+    if (!bta_serial_win32_start(s, &why)) {
+        s->open = false;
+        bta_serial_win32_close(s);
+        JS_FreeValue(ctx, s->keep);
+        s->keep = JS_UNDEFINED;
+
+        JSValue e = JS_ThrowPlainError(ctx, "SerialPort.Open: %s",
+                                       why ? why
+                                           : "cannot start the reader and writer threads");
+        g_free(why);
+        return e;
+    }
+    g_free(why);
+
+    serial_live_add(s);
+    return JS_DupValue(ctx, this_val);
 #else
     int flags = O_RDWR | O_NOCTTY | O_NONBLOCK;
 #ifdef O_CLOEXEC
@@ -726,6 +731,16 @@ static GBytes *serial_bytes(JSContext *ctx, JSValueConst v, const char *who)
     return g_bytes_new(data, len);
 }
 
+static void serial_queue_write(SerialData *s, GBytes *bytes)
+{
+#ifdef G_OS_WIN32
+    bta_serial_win32_write(s, bytes);
+#else
+    g_queue_push_tail(s->writes, bytes);
+    serial_write_start(s);
+#endif
+}
+
 static JSValue serial_write(JSContext *ctx, JSValueConst this_val,
                             int argc, JSValueConst *argv)
 {
@@ -745,8 +760,7 @@ static JSValue serial_write(JSContext *ctx, JSValueConst this_val,
         g_bytes_unref(b);
         return JS_DupValue(ctx, this_val);
     }
-    g_queue_push_tail(s->writes, b);
-    serial_write_start(s);
+    serial_queue_write(s, b);
     return JS_DupValue(ctx, this_val);
 }
 
@@ -774,8 +788,7 @@ static JSValue serial_write_line(JSContext *ctx, JSValueConst this_val,
     g_byte_array_append(out, (const guint8 *)s->eol, strlen(s->eol));
     g_bytes_unref(b);
 
-    g_queue_push_tail(s->writes, g_byte_array_free_to_bytes(out));
-    serial_write_start(s);
+    serial_queue_write(s, g_byte_array_free_to_bytes(out));
     return JS_DupValue(ctx, this_val);
 }
 
@@ -789,10 +802,10 @@ static JSValue serial_clear(JSContext *ctx, JSValueConst this_val,
     if (!s)
         return JS_EXCEPTION;
     if (s->open) {
-#ifndef G_OS_WIN32
+#ifdef G_OS_WIN32
+        bta_serial_win32_clear(s);
+#else
         tcflush(s->fd, TCIFLUSH);
-#endif
-        g_byte_array_set_size(s->linebuf, 0);
         while (!g_queue_is_empty(s->writes))
             g_bytes_unref(g_queue_pop_head(s->writes));
         s->write_at = 0;
@@ -800,6 +813,8 @@ static JSValue serial_clear(JSContext *ctx, JSValueConst this_val,
             g_source_remove(s->out_source);
             s->out_source = 0;
         }
+#endif
+        g_byte_array_set_size(s->linebuf, 0);
     }
     return JS_DupValue(ctx, this_val);
 }
@@ -1200,13 +1215,13 @@ static JSValue serial_construct(JSContext *ctx, JSValueConst new_target,
 /* type SerialPort */
 static const JSCFunctionListEntry serial_props[] = {
     /* PortName
-     *   the device path, `/dev/ttyUSB0` or `/dev/ttyACM0` on Linux (and
-     *   `COM3` on the Windows half when it arrives). Set before `Open`
+     *   the device path, `/dev/ttyUSB0` or `/dev/ttyACM0` on Linux, `COM3`
+     *   (or `\\.\COM3`) on Windows. Set before `Open`
      */
     JS_CGETSET_DEF("PortName", serial_get_port, serial_set_port),
     /* Speed
-     *   the baud rate, 1 to 4000000. A value the system has no `speed_t` for
-     *   is refused by `Open`, which names it
+     *   the baud rate, 1 to 4000000. A rate the driver refuses is refused by
+     *   `Open`, which names it
      */
     JS_CGETSET_DEF("Speed", serial_get_speed, serial_set_speed),
     /* DataBits
@@ -1215,7 +1230,7 @@ static const JSCFunctionListEntry serial_props[] = {
     JS_CGETSET_DEF("DataBits", serial_get_data_bits, serial_set_data_bits),
     /* Parity
      *   `"None"` (the default), `"Even"`, `"Odd"`, `"Mark"` or `"Space"`;
-     *   the last two need the platform's `CMSPAR`
+     *   the last two need the driver's support
      */
     JS_CGETSET_DEF("Parity", serial_get_parity, serial_set_parity),
     /* StopBits

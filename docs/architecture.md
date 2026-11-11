@@ -37,6 +37,8 @@ bta_tray_linux.c  StatusNotifierItem + com.canonical.dbusmenu over GDBus
 bta_tray_win32.c  the Windows tray: Shell_NotifyIcon, a hidden window and an HMENU
 bta_tray_cocoa.c  the macOS tray stub (NSStatusItem is the plan)
 bta_serial.c      SerialPort (POSIX termios, on the main loop)
+bta_serial_win32.c SerialPort on Windows: CreateFileW, the DCB, a reader
+                  thread and a writer thread feeding one idle
 bta_sys.c         File, Dir, Exec, Dialog, timers
 bta_plugin.c      native plugins: the host table a library's `.so` is handed,
                   and the loader that finds one in a library directory

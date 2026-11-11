@@ -8,10 +8,14 @@
  *
  * A pty is a tty, so `tcgetattr`/`tcsetattr` take the same path a USB adapter
  * does; what a pty cannot prove is the modem lines, which is a by-hand check.
+ * The slave is closed and opened again between the line and the bytes, so a
+ * master read that returns EIO (or 0) waits for the next open instead of
+ * ending the peer.
  * The helper is compiled by `tests/serial.sh` into its scratch directory, so
  * there is no binary in the tree.
  */
 #define _GNU_SOURCE
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
@@ -75,8 +79,19 @@ int main(int argc, char **argv)
 
         unsigned char buf[4096];
         ssize_t       got = read(master, buf, sizeof buf);
-        if (got <= 0)
+        if (got < 0) {
+            if (errno == EIO || errno == EAGAIN || errno == EINTR) {
+                usleep(10000);
+                continue;
+            }
             break;
+        }
+        if (got == 0) {
+            /* The slave was closed; it may be opened again for the second
+             * half of the test, so wait for it rather than ending the peer. */
+            usleep(10000);
+            continue;
+        }
         printf("got %zd bytes\n", got);
         fflush(stdout);
 

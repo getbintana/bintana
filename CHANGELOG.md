@@ -8,6 +8,19 @@ one-page answer to *what is new since the release I have*.
 
 ### Runtime and IDE
 
+- **`SerialPort` works on Windows.** `Open` is `CreateFileW` on `COM3` (or
+  `\\.\COM3`) and a `DCB` for speed, data bits, parity, stop bits, flow control
+  and DTR/RTS. A COM handle is not pollable by GLib, so a reader thread does
+  the waiting and a writer thread drains `Write`: the window never blocks, and
+  every `OnData`/`OnLine`/`OnError` still runs on the main loop. The properties,
+  the `.form` round trip and the events are the same as Linux.
+  `tests/serial-win.sh` exercises the data path over an HHD virtual port
+  (loopback and peer); the peer mode passed five runs in a row on Windows 11
+  (2026-11-11).
+- **A `SerialPort` handler may close its own port.** `OnData` or `OnLine`
+  could close the port and drop the last reference, and the check the delivery
+  makes after the handler then read a released wrapper. The delivery holds the
+  wrapper across the handler now.
 - **`Tray`**, the application's status icon, with a native menu: `Show`/`Hide`,
   `Icon`, `Tooltip`, `Menu` (data with `Text`/`Action`/`Checked`/`Items`),
   `OnClick` and `OnMenu`, plus `Tray.Available`/`CanMenu`. Linux is built on

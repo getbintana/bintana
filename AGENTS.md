@@ -395,6 +395,8 @@ Traps and their evidence, by area, in `docs/agents/`:
 - [`drawing.md`](docs/agents/drawing.md) — you touch `Painter`, `DrawingArea`, `Drawing`, printing, a drawing library, `PdfDocument` or signing with a `Key`.
 - [`media-desktop.md`](docs/agents/media-desktop.md) — you touch `Video`/`AudioPlayer`, the `Media` elements (`Media.Element` and the graph it builds), `Keyring`, `Notification`, `Tray` or desktop entries.
 - [`network.md`](docs/agents/network.md) — you touch `Http`, TLS or sockets.
+- [`serial.md`](docs/agents/serial.md) — you touch `SerialPort`, a COM port, a
+  virtual serial pair, or the serial test.
 - [`i18n.md`](docs/agents/i18n.md) — you touch translation, the extractor or `.po` files.
 - [`packaging.md`](docs/agents/packaging.md) — you touch `lib/package`, Flatpak or the CI registry of applications.
 
