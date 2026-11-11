@@ -24,7 +24,7 @@ cd "$(dirname "$0")/.." || exit 2
 
 export LANGUAGE=C
 
-BINTANA=${BINTANA:-./build/bintana}
+export BINTANA=${BINTANA:-./build/bintana}
 if [[ ! -x $BINTANA ]]; then
     echo "no runtime at $BINTANA -- build first: cmake --build build" >&2
     exit 2
@@ -132,5 +132,30 @@ if [[ -z $sqlite_lib ]]; then
     echo "odbc.sh: no sqliteodbc driver (sqliteodbc, libsqliteodbc, Homebrew's" \
          "sqliteodbc) -- the run proved nothing" >&2
     exit 2
+fi
+
+# examples/invoices, the same screen on each engine: its --selftest types two
+# invoices, refuses a third mid-transaction, deletes one, and prints a line.
+# It is a window, so it runs on a virtual display (tests/try.sh).
+example() {
+    local engine=$1; shift
+    local got
+    got=$(env "$@" timeout "${TIMEOUT:-60}" tests/try.sh examples/invoices --selftest 2>&1 \
+          | grep '^invoices:')
+    if [[ $got == "invoices: $engine, 2 issued, 1 refused, 1 left, total 2059.80" ]]; then
+        echo "  ok    examples/invoices on $engine"
+    else
+        echo "  FAIL  examples/invoices on $engine -- ${got:-no answer}"
+        status=1
+    fi
+}
+if ! command -v xvfb-run >/dev/null 2>&1; then
+    echo "  skip  examples/invoices -- no xvfb-run for its window"
+else
+    example SQLite INVOICES_ODBC="Driver=BintanaSqlite;Database=$tmp/data/invoices.db"
+    if [[ -n ${BINTANA_ODBC_PG:-} ]]; then
+        example PostgreSQL INVOICES_ODBC="$BINTANA_ODBC_PG" INVOICES_DB_USER=postgres \
+                INVOICES_DB_PASSWORD="$BINTANA_ODBC_PG_PASSWORD"
+    fi
 fi
 exit "$status"

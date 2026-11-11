@@ -306,6 +306,11 @@ is set in `Form_Open`. A form that gives two drivers' properties is refused.
    its password is set in code the IDE cannot run. `tests/ide` (`p_data_odbc`)
    names sqliteodbc by its library's path, which unixODBC accepts in
    `Driver=`, and skips that half without it. **Built.**
+   **`examples/invoices`** is the stages in use: three `Model`s on an ODBC
+   `Connection`, an invoice and its lines in one `Transaction`, a `Cursor` behind
+   an on-demand `TableView`, exact totals; its `--selftest` passes on sqliteodbc
+   and on PostgreSQL, where `Model.Ensure` wrote `bigint` identity, `date` and
+   `numeric`.
 6. **Windows, natively** (another session). The code is written for it;
    nothing of it has been compiled or run there. What to do, in order:
    - **Build** under MSYS2 UCRT64: `odbc32` and MinGW's `sql.h` are linked

@@ -1,0 +1,10 @@
+{
+  "format": "bta-record/1",
+  "class": "Customer",
+  "naming": "snake",
+  "fields": {
+    "Id":    { "kind": "int", "key": true },
+    "Name":  { "kind": "text", "required": true },
+    "TaxId": { "kind": "text" }
+  }
+}

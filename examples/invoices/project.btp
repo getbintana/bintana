@@ -1,0 +1,14 @@
+{
+  "name": "invoices",
+  "startup": "InvoicesForm",
+  "version": "1.0",
+  "sources": [
+    "Customer.js",
+    "Invoice.js",
+    "Line.js",
+    "Billing.js",
+    "SelfTest.js",
+    "InvoicesForm.js"
+  ],
+  "description": "Invoices on a database server through ODBC: three Models on one Connection, an invoice and its lines in one Transaction, exact totals, and the list as a Cursor"
+}

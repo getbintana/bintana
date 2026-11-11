@@ -1,0 +1,13 @@
+{
+  "format": "bta-record/1",
+  "class": "Line",
+  "naming": "snake",
+  "fields": {
+    "Id":        { "kind": "int", "key": true },
+    "InvoiceId": { "kind": "int", "required": true },
+    "Product":   { "kind": "text", "required": true },
+    "Qty":       { "kind": "int" },
+    "Price":     { "kind": "decimal", "decimals": 2 },
+    "Amount":    { "kind": "decimal", "decimals": 2 }
+  }
+}

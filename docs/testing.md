@@ -8,7 +8,7 @@
 ./tests/run.sh ide list                 # what it can be asked for
 ./tests/check.sh                        # every project's `bintana check`, no window
 ./tests/keyring.sh                      # the File provider: 0600 under 0700, no temporary
-./tests/odbc.sh                         # Database.Odbc through real drivers: 187 checks with PostgreSQL
+./tests/odbc.sh                         # Database.Odbc through real drivers: 187 checks, and examples/invoices on both engines
 ./tests/pack.sh                         # lib/package, the packaging step's output: 107 assertions
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
@@ -520,6 +520,13 @@ it is never pulled silently -- with a password holding a `;` and a `}`, which is
 what proves the connection string's bracing against a driver that reads it.
 **A driver's messages come translated** (libpq answered in Spanish here), so a
 check on a failure reads `Code`, the SQLSTATE, and never the text.
+
+**`examples/invoices` runs there too**: its `--selftest` -- two invoices typed
+into the bar (a price with a comma), a third refused in the middle of its
+lines, a delete -- once on sqliteodbc and once on PostgreSQL, on a virtual
+display through `tests/try.sh`, and the script compares the one line it
+prints. The self-test empties its tables, so it refuses to run unless
+`INVOICES_ODBC` names the database.
 
 `tests/widgets` has `testDatabaseOdbc`, which runs in every build: the refusal
 naming the package where there is no driver manager -- the `no-libxml` CI job

@@ -1,0 +1,172 @@
+{
+  "format": "bintana-form/1",
+  "class": "InvoicesForm",
+  "properties": {
+    "Text": "Invoices",
+    "Icon": "accessories-text-editor-symbolic",
+    "Arrangement": "Vertical",
+    "Spacing": 10,
+    "Padding": "12",
+    "Width": 900,
+    "Height": 560
+  },
+  "components": [
+    {
+      "type": "Connection",
+      "name": "Store",
+      "properties": {
+        "Driver": "Odbc",
+        "ConnectionString": "DSN=Invoices"
+      }
+    },
+    {
+      "type": "Model",
+      "name": "Customers",
+      "properties": {
+        "Connection": "Store",
+        "Record": "Customer",
+        "TableName": "customers"
+      }
+    },
+    {
+      "type": "Model",
+      "name": "Invoices",
+      "properties": {
+        "Connection": "Store",
+        "Record": "Invoice",
+        "TableName": "invoices"
+      }
+    },
+    {
+      "type": "Model",
+      "name": "Lines",
+      "properties": {
+        "Connection": "Store",
+        "Record": "Line",
+        "TableName": "lines"
+      }
+    }
+  ],
+  "children": [
+    {
+      "type": "Panel",
+      "name": "Bar",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "ComboBox",
+          "name": "CmbCustomer",
+          "properties": {
+            "AccessibleName": "Customer",
+            "Tooltip": "Who the invoice is for",
+            "Width": 200
+          }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtProduct",
+          "properties": {
+            "Placeholder": "Product",
+            "AccessibleName": "Product",
+            "HExpand": true,
+            "HAlign": "Fill"
+          }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtQty",
+          "properties": {
+            "Placeholder": "Qty",
+            "AccessibleName": "Quantity",
+            "Width": 70
+          }
+        },
+        {
+          "type": "TextBox",
+          "name": "TxtPrice",
+          "properties": {
+            "Placeholder": "Price",
+            "AccessibleName": "Price",
+            "Width": 100
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnAdd",
+          "properties": {
+            "Text": "Add line",
+            "Icon": "list-add-symbolic"
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnIssue",
+          "properties": {
+            "Text": "Issue",
+            "Icon": "document-save-symbolic",
+            "Style": "suggested-action",
+            "Tooltip": "Write the invoice and its lines, all of it or nothing",
+            "Enabled": false
+          }
+        },
+        {
+          "type": "Button",
+          "name": "BtnDelete",
+          "properties": {
+            "Text": "Delete",
+            "Icon": "user-trash-symbolic",
+            "Enabled": false
+          }
+        }
+      ]
+    },
+    {
+      "type": "Split",
+      "name": "Body",
+      "properties": {
+        "Arrangement": "Horizontal",
+        "Position": 480,
+        "Grows": "End",
+        "Expand": true
+      },
+      "children": [
+        {
+          "type": "TableView",
+          "name": "Grid",
+          "properties": {
+            "Columns": [
+              { "Text": "Number", "Width": 70, "Alignment": "Right" },
+              { "Text": "Day", "Width": 100 },
+              { "Text": "Customer", "Width": 180 },
+              { "Text": "Total", "Width": 0, "Alignment": "Right" }
+            ]
+          }
+        },
+        {
+          "type": "TableView",
+          "name": "LinesView",
+          "properties": {
+            "Columns": [
+              { "Text": "Product", "Width": 180 },
+              { "Text": "Qty", "Width": 50, "Alignment": "Right" },
+              { "Text": "Price", "Width": 90, "Alignment": "Right" },
+              { "Text": "Amount", "Width": 0, "Alignment": "Right" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Style": "dim-label",
+        "HAlign": "Start",
+        "Ellipsize": "End"
+      }
+    }
+  ]
+}
