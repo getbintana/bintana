@@ -4,7 +4,10 @@
 [the October audit](../audit-2026-10.md): `Database` publishes `Sqlite` alone,
 so a client-server business application cannot be written. It takes the place of
 the issue that was the report; the gap is now a design, and the report is
-deleted.
+deleted. **Since 2026-11-11 it follows [`odbc-plan.md`](odbc-plan.md)**, which
+reaches every server through one driver and designs the `Dialect` growth below
+for N engines; this plan stays for what ODBC does not give -- no driver to
+install, a Flatpak, a `timestamptz` with its offset, TLS named by the runtime.
 
 ## What the application needed
 
@@ -269,8 +272,9 @@ CI gets a `postgres` job with `libpq-dev` and the container, and a
 
 ## What is deliberately not here
 
-- **MySQL, ODBC, a generic `Database.Open(uri)`.** One driver at a time; a URI
-  would hide the dialect differences the engine names make visible.
+- **MySQL and a generic `Database.Open(uri)`.** A URI would hide the dialect
+  differences the engine names make visible. ODBC is no longer here: it is
+  [`odbc-plan.md`](odbc-plan.md), built first.
 - **Connection pooling.** One `PGconn` per object; a pool belongs to the
   application or a later plan.
 - **Async queries.** See above: `Task` is the road.
@@ -312,7 +316,7 @@ the engines the same.
 
 ## Where it stands
 
-Not started. The next step is stage 0. It needs `libpq`'s development package
+Not started, and after [`odbc-plan.md`](odbc-plan.md). Its stage 0 needs `libpq`'s development package
 (`libpq-devel` on Fedora, `libpq-dev` on Debian/Ubuntu) and a server for the
 tests; `postgres:16` is the image `tests/postgres.sh` will ask for. A build
 without `libpq` compiles, and `Database.Postgres` says what is missing.

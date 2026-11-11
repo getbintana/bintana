@@ -665,7 +665,7 @@ const TESTS = [
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
-    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeForced", "LoadQuiet", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "Action", "Groups",
+    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeForced", "LoadQuiet", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "DatabaseOdbc", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Pdf", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
@@ -4562,6 +4562,41 @@ class Form1 extends Form {
         throws("using it afterwards", () => db.Query("SELECT 1"));
         db.Close();
         check("closing twice is not an error", true);
+    }
+
+    /*
+     * `Database.Odbc` in every build: the refusal where there is no driver
+     * manager, and where there is one, what the manager answers with no driver
+     * at all -- the same on unixODBC and on Windows. The drivers themselves
+     * are tests/odbc.sh's, which owns an odbcinst.ini; this test reads none.
+     */
+    testDatabaseOdbc() {
+        eq("a second driver adds its opener to Database", typeof Database.Odbc,
+           "function");
+
+        let e = null;
+        try { Database.Odbc("DSN=bintana-widgets-no-such-dsn"); } catch (x) { e = x; }
+        check("a DSN that is not there throws", e !== null);
+        if (!e)
+            return;
+        if (e.message.includes("built without ODBC")) {
+            /* Not a skip: the claim is that the name is there and says which
+             * package, rather than a global that is missing. */
+            check("built without ODBC, Database.Odbc names the package",
+                  e.message.includes("unixODBC"), e.message);
+            return;
+        }
+        eq("the driver manager's SQLSTATE is Code", e.Code, "IM002");
+        eq("Native is a number", typeof e.Native, "number");
+        check("Details is an array", Array.isArray(e.Details));
+
+        throws("no connection string", () => Database.Odbc());
+        throws("an option that is not one",
+               () => Database.Odbc("DSN=x", { Pasword: "a" }));
+        throws("User both in the options and in the string",
+               () => Database.Odbc("DSN=x;UID=a", { User: "b" }));
+        throws("a Timeout that is not above zero",
+               () => Database.Odbc("DSN=x", { Timeout: 0 }));
     }
 
     /* --- CheckButton, and what a Group makes of it ------------------------ */

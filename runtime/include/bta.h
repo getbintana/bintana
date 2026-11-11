@@ -1673,6 +1673,13 @@ void bta_database_driver(JSContext *ctx, const char *name,
 void bta_sqlite_init(JSContext *ctx, JSValue global);
 
 /*
+ * The ODBC driver: `Database.Odbc`, through unixODBC on Linux and macOS and
+ * odbc32 on Windows.  Optional at build time (BTA_HAVE_ODBC); without it
+ * `Database.Odbc` says which package is missing.  See docs/plans/odbc-plan.md.
+ */
+void bta_odbc_init(JSContext *ctx, JSValue global);
+
+/*
  * Xml: XML as a **document** -- parse, walk, edit, write -- at JSON's level.
  * Optional at build time (BTA_HAVE_LIBXML), the sqlite mould: without it `Xml`
  * exists, `Available` is false and every verb refuses with a sentence.  A

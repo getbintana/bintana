@@ -2777,6 +2777,7 @@ static bool install_globals(BtaApp *app)
     bta_day_init(ctx, global);
     bta_database_init(ctx, global);
     bta_sqlite_init(ctx, global);
+    bta_odbc_init(ctx, global);
     bta_http_init(ctx, global);
     bta_socket_init(ctx, global);
     bta_serial_init(ctx, global);

@@ -1,13 +1,14 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11306 assertions
+./tests/run.sh                          # all seven projects, 11362 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
 ./tests/run.sh ide list                 # what it can be asked for
 ./tests/check.sh                        # every project's `bintana check`, no window
 ./tests/keyring.sh                      # the File provider: 0600 under 0700, no temporary
+./tests/odbc.sh                         # Database.Odbc through real drivers: 41 checks with PostgreSQL
 ./tests/pack.sh                         # lib/package, the packaging step's output: 107 assertions
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
@@ -500,6 +501,32 @@ It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 `pkg-config` that answers no for `gstreamer-1.0` and runs `tests/media.sh`
 against *that*, which is the only build that proves the refusal half compiles
 and runs (`Media.Available` false, `Media.Element` naming the package).
+
+## ODBC, which needs a driver
+
+```sh
+tests/odbc.sh               # sqliteodbc, and psqlODBC when a server can be had
+POSTGRES=1 tests/odbc.sh    # the PostgreSQL half is required (CI)
+POSTGRES=0 tests/odbc.sh    # sqliteodbc only
+```
+
+`Database.Odbc` is tested through real drivers, never a stand-in. `tests/odbc`
+is a console project; the script writes an `odbcinst.ini` and an `odbc.ini` of
+its own and points `ODBCSYSINI` and `ODBCINI` at them, so a DSN configured on
+the machine neither helps nor breaks a run. sqliteodbc needs no server and is
+required (no driver, exit 2 naming the package). The PostgreSQL half starts
+`postgres:16` in Docker on `127.0.0.1:55433` when the image is already there --
+it is never pulled silently -- with a password holding a `;` and a `}`, which is
+what proves the connection string's bracing against a driver that reads it.
+**A driver's messages come translated** (libpq answered in Spanish here), so a
+check on a failure reads `Code`, the SQLSTATE, and never the text.
+
+`tests/widgets` has `testDatabaseOdbc`, which runs in every build: the refusal
+naming the package where there is no driver manager -- the `no-libxml` CI job
+is also the build without unixODBC, and says so -- and the manager's own
+`IM002` for a DSN that is not there where there is one. Windows keeps its
+drivers in the registry, and running `tests/odbc` there is stage 6 of
+[`odbc-plan.md`](plans/odbc-plan.md).
 
 ## A serial port, which needs a peer
 

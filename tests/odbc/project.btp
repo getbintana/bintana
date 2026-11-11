@@ -1,0 +1,7 @@
+{
+  "name": "odbc",
+  "main": "Main",
+  "version": "1.0",
+  "description": "Database.Odbc through real drivers: sqliteodbc always, psqlODBC against a PostgreSQL in Docker when there is one",
+  "sources": ["Main.js", "OdbcWork.js"]
+}

@@ -230,7 +230,7 @@ own prefix rule expects to find them.
 Three things it deliberately does not do: it does not bundle GTK (the machine
 needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
 a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
-built **without** the optional dependencies (`sqlite3`, `libsoup`, GStreamer,
+built **without** the optional dependencies (`sqlite3`, unixODBC, `libsoup`, GStreamer,
 VTE, `libxml2`, `libsecret`, GnuTLS, PoDoFo, poppler) so that none of them becomes a shared library the
 downloader has to have.
 
@@ -355,6 +355,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | what it turns on | Fedora | Debian / Ubuntu | without it |
 |---|---|---|---|
 | `Database.Sqlite(path)` | `sqlite-devel` | `libsqlite3-dev` | the class is there and says which package is missing when called |
+| `Database.Odbc(connection)` | `unixODBC-devel` | `unixodbc-dev` | the name is there and says which package is missing when called. The runtime links the driver **manager** only: the drivers (`sqliteodbc`, `postgresql-odbc`, `mariadb-connector-odbc`, Microsoft's `msodbcsql18` …) are the machine's, installed and configured with `odbcinst` like any other ODBC program's. On Windows the manager is `odbc32`, part of the system, so `Database.Odbc` is always built there. On macOS, Homebrew's `unixodbc` -- iODBC is not supported |
 | `PdfDocument`, `Probe.Pdf`, `lib/pdfview` (reading a PDF) | `poppler-glib-devel` | `libpoppler-glib-dev` | `PdfDocument.Load` and `Probe.Pdf` exist and refuse with a sentence naming the package; a `PdfView` shows nothing and throws where a file is assigned. 22.02 or newer |
 | `Logger.Target = "Journal"` | `systemd-devel` | `libsystemd-dev` | logging goes to the terminal |
 | `Http`, `Http.Server`, `Http.Stream` | `libsoup3-devel` | `libsoup-3.0-dev` | `Http` exists and refuses by name |
@@ -371,13 +372,15 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 can actually do — a palette filters on it, and so should anything that offers a
 feature rather than using one. For the two globals that are not widgets the
 question is spelled `Xml.Available` (a value, read off the build) and a refusing
-call for `Database.Sqlite`.
+call for `Database.Sqlite` and `Database.Odbc`.
 
 On Windows the same switches come from MSYS2 UCRT64: `mingw-w64-ucrt-x86_64-poppler`,
 `...-gstreamer` with `...-gst-plugins-base`, `...-gst-plugins-good`,
 `...-gst-plugins-bad`, `...-gst-libav` and `...-gst-plugins-rs` (the GTK4 sink),
 `...-sqlite3`, `...-libsoup3`, `...-libxml2`, `...-gnutls` and `...-libvterm`
 (the Windows terminal: ConPTY plus libvterm, since VTE has no Windows port).
+ODBC needs no package there: `odbc32` is part of Windows and MinGW-w64 carries
+its headers, so `Database.Odbc` is in every Windows build.
 libsystemd, sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` uses
 the Windows Credential Manager, so libsecret is not needed there.
 
@@ -436,6 +439,10 @@ sudo apt install xvfb xdotool python3 openssl
 # the Key test signs on a SoftHSM token of its own, made with p11tool:
 #   Fedora         softhsm gnutls-utils
 #   Debian/Ubuntu  softhsm2 gnutls-bin
+# tests/odbc.sh connects through two ODBC drivers (and runs postgres:16 in
+# Docker for the second, if the image is there):
+#   Fedora         sqliteodbc postgresql-odbc
+#   Debian/Ubuntu  libsqliteodbc odbc-postgresql
 ```
 
 ```sh
@@ -496,5 +503,5 @@ and a TagLib wrapper worked through.
 | `Package 'gtksourceview-5' not found` | `gtksourceview5-devel` / `libgtksourceview-5-dev` |
 | compile errors about `gtk_alert_dialog` or `gtk_file_dialog` | the GTK is older than 4.10 — Debian 13 / Ubuntu 24.04 or newer |
 | `no vte` / `no libvterm: Terminal exists and refuses to run one` | not an error: the optional table above |
-| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret`, `no gnutls`, `no poppler-glib` | likewise — a build line, not a failure |
+| `no sqlite3`, `no unixODBC`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret`, `no gnutls`, `no poppler-glib` | likewise — a build line, not a failure |
 | `no sysprof-capture: --profile says so when asked` | likewise; a Sysprof run still shows the samples and GTK's frames |

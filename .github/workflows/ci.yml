@@ -26,6 +26,7 @@ jobs:
             libgtk-4-dev libgtksourceview-5-dev libvte-2.91-gtk4-dev \
             libsqlite3-dev libsoup-3.0-dev libxml2-dev libpoppler-glib-dev \
             libsysprof-capture-4-dev libgnutls28-dev \
+            unixodbc-dev libsqliteodbc odbc-postgresql \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
             gstreamer1.0-tools \
             xvfb xdotool desktop-file-utils \
@@ -98,6 +99,16 @@ jobs:
       # other end. Console, headless, and its own timeout.
       - name: The serial port
         run: ./tests/serial.sh
+
+      # `Database.Odbc` through two real drivers: sqliteodbc with no server,
+      # and psqlODBC against a PostgreSQL in a container. The script owns its
+      # odbcinst.ini and never pulls an image, so the pull is said here, and
+      # `POSTGRES=1` makes a server that did not come up a red line rather
+      # than a skipped half.
+      - name: ODBC
+        run: |
+          docker pull postgres:16
+          POSTGRES=1 ./tests/odbc.sh
 
       # What `make install` produces, run out of a staging prefix under /tmp.
       # A step of this job and not one of its own: it installs the build the
@@ -366,6 +377,11 @@ jobs:
           # `no-vte` and `no-unix-print` carry, for the same reason.
           grep -q 'no libxml2:' cmake.log \
             || { echo "this runner has libxml2: the job would prove nothing"; exit 1; }
+          # And the ODBC refusal: this job installs no unixodbc-dev, so it is
+          # also the build without a driver manager, and `testDatabaseOdbc`
+          # takes its refusing branch here.
+          grep -q 'no unixODBC:' cmake.log \
+            || { echo "this runner has unixODBC: the refusal goes unproved"; exit 1; }
           cmake --build build-noxml -j"$(nproc)"
 
       - name: Test

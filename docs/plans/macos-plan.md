@@ -42,6 +42,7 @@ The dependencies exist in Homebrew at versions that match this tree:
 | GLib/GIO/GModule/`gio-unix-2.0` | `glib` |
 | libsoup3 | `libsoup` |
 | sqlite3 (≥ 3.25; keg-only, needs `PKG_CONFIG_PATH`) | `sqlite` |
+| unixODBC, for `Database.Odbc` (not iODBC: the text layer is UTF-8 over unixODBC) | `unixodbc` |
 | GStreamer + Rust plugins | `gstreamer` (1.28, plugins merged in) |
 | VTE | `vte3` (ships `vte-2.91-gtk4`) — verify, then degrade if absent |
 | `gtk4paintablesink` | inside `gstreamer`, or the official 1.28 macOS framework — verify with `gst-inspect-1.0` |
@@ -60,7 +61,7 @@ deliverable — every line below is confirmed against the tree, none against a
 machine.
 
 ```sh
-brew install gtk4 gtksourceview5 glib sqlite libsoup gstreamer vte3 \
+brew install gtk4 gtksourceview5 glib sqlite unixodbc libsoup gstreamer vte3 \
   pkgconf cmake ninja gobject-introspection meson vala rust
 cmake -S . -B build && cmake --build build -j
 pkg-config --exists gio-unix-2.0 && echo "gio-unix: present"

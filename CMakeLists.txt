@@ -59,6 +59,17 @@ pkg_check_modules(VTE IMPORTED_TARGET vte-2.91-gtk4)
 # an old distribution -- the same reason GTK declares its floor above.
 pkg_check_modules(SQLITE3 IMPORTED_TARGET sqlite3>=3.25)
 
+# Optional: ODBC is what Database.Odbc connects through -- unixODBC on Linux
+# and macOS, found with pkg-config like sqlite, and `odbc32` on Windows, which
+# is part of the system and whose headers MinGW-w64 carries, so it is always
+# there.  Without it `Database.Odbc` exists and says which package is missing.
+# iODBC is not looked for: its `SQLWCHAR` is a 4-byte `wchar_t`, and the text
+# layer in bta_odbc.c is narrow UTF-8 on unixODBC and UTF-16 on Windows --
+# docs/plans/odbc-plan.md has the measurement that decided it.
+if(NOT WIN32)
+    pkg_check_modules(ODBC IMPORTED_TARGET odbc)
+endif()
+
 # Optional: `PdfDocument` and `Probe.Pdf` -- reading a PDF: its pages, its
 # text, its metadata, and a page drawn on a Painter, which is what a viewer is
 # made of.  poppler-glib, the sqlite mould: without it both names exist and say
@@ -301,6 +312,7 @@ add_executable(bintana
     runtime/src/bta_pdf.c
     runtime/src/bta_database.c
     runtime/src/bta_sqlite.c
+    runtime/src/bta_odbc.c
     runtime/src/bta_xml.c
     runtime/src/bta_keyring.c
     runtime/src/bta_cipher.c
@@ -395,6 +407,18 @@ if(SQLITE3_FOUND)
     message(STATUS "sqlite3 ${SQLITE3_VERSION}: Database.Sqlite is available")
 else()
     message(STATUS "no sqlite3: Database.Sqlite will say so when called")
+endif()
+
+if(WIN32)
+    target_link_libraries(bintana PRIVATE odbc32)
+    target_compile_definitions(bintana PRIVATE BTA_HAVE_ODBC=1)
+    message(STATUS "odbc32: Database.Odbc is available")
+elseif(ODBC_FOUND)
+    target_link_libraries(bintana PRIVATE PkgConfig::ODBC)
+    target_compile_definitions(bintana PRIVATE BTA_HAVE_ODBC=1)
+    message(STATUS "unixODBC ${ODBC_VERSION}: Database.Odbc is available")
+else()
+    message(STATUS "no unixODBC: Database.Odbc will say so when called")
 endif()
 
 if(UNIXPRINT_FOUND)

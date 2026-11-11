@@ -1459,6 +1459,7 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     bta_day_init(ctx, global);
     bta_database_init(ctx, global);
     bta_sqlite_init(ctx, global);
+    bta_odbc_init(ctx, global);
     bta_sys_init(ctx, global);
     /* Read-only process state: the same `Environment` without `Set` or the
      * `CurrentDirectory` setter, and `Exec` reduced to the blocking `Wait`

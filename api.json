@@ -14196,6 +14196,15 @@
       "Name": "Database",
       "Members": [
         {
+          "Name": "Odbc",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(connection, [options])",
+          "Returns": "OdbcConnection",
+          "Doc": "connects through an ODBC driver: `connection` is the driver's own string, `\"DSN=name\"` or `\"Driver={…};Server=…;Database=…\"`, passed as written; `options` are `{ User, Password, Timeout }` (milliseconds, 10000 unless told). Never opens a dialog. A failure throws with the driver's message, its SQLSTATE in `Code` and the engine's number in `Native`. A build without a driver manager has the name and refuses, naming the package",
+          "Native": true
+        },
+        {
           "Name": "Sqlite",
           "Kind": "Method",
           "Params": 1,
@@ -19847,6 +19856,56 @@
           "Name": "Click",
           "Signature": "([value])",
           "Doc": "it was chosen. A check item is handed its new state, a dynamic one the index and the text of the entry"
+        }
+      ]
+    },
+    {
+      "Name": "OdbcConnection",
+      "Members": [
+        {
+          "Name": "Close",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "",
+          "Doc": "let it go; twice is not an error",
+          "Native": true
+        },
+        {
+          "Name": "Dbms",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the engine, as the driver names it: `\"PostgreSQL\"`, `\"SQLite\"`, `\"Microsoft SQL Server\"`. Still answers after `Close`",
+          "Native": true
+        },
+        {
+          "Name": "DbmsVersion",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the engine's version, as the driver writes it",
+          "Native": true
+        },
+        {
+          "Name": "Driver",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the driver's own file name: `\"psqlodbcw.so\"`, `\"msodbcsql18.dll\"`",
+          "Native": true
+        },
+        {
+          "Name": "Open",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "boolean",
+          "Doc": "whether it still is",
+          "Native": true
         }
       ]
     },

@@ -751,3 +751,29 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   table, the connection and `Serialize(true)` as read or last written). A
   record the program built has no entry and writes every column; nothing
   changed is no statement, and so no "no row" throw either.
+
+## Database.Odbc: what the drivers did that the specification did not say
+
+Measured on 2026-11-11 with unixODBC 2.3.14, sqliteodbc 0.99991 and psqlODBC
+16.00 against `postgres:16`; the whole table is in
+[`odbc-plan.md`](../plans/odbc-plan.md). The ones that cost time:
+
+- **The wide API turns text into Latin-1 under unixODBC** when the driver has
+  no `…W` entry points (`nm -D` on Fedora's `libsqlite3odbc.so` finds none):
+  the manager converts down, and to ISO 8859-1, so `ñ` became `F1` and `€` lost
+  its high byte. `IconvEncoding` is not read by 2.3.14 at all. Hence the text
+  layer in `bta_odbc.c`: narrow UTF-8 on unixODBC, wide UTF-16 on Windows only.
+  Parameters bound as `SQL_C_WCHAR` survived; the statement text did not.
+- **Braces in a connection string are the driver's to honour.** psqlODBC takes
+  them off `PWD` (and undoubles `}}`) but not off `UID`, `Server` or
+  `Database`: `UID={postgres}` logged in as `{postgres}`. Brace a value only
+  when it holds `;`, a brace, or an edge space.
+- **A driver's messages are translated** -- libpq answered "falló la conexión"
+  on a Spanish desktop -- so a test reads `Code` (the SQLSTATE), never the
+  text. sqliteodbc's `Code` is `HY000` for everything, and psqlODBC appends
+  `;\nError while executing the query` to a server's message.
+- **`SQLGetInfo` counts bytes, the rest of the API counts characters.** On
+  Windows that is half the buffer; `info_text` divides by the unit.
+- **The machine's ODBC configuration is somebody else's state.**
+  `ODBCSYSINI=<dir>` and `ODBCINI=<file>` point unixODBC at an ini of the
+  test's own; `tests/odbc.sh` does that and names its drivers itself.

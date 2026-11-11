@@ -101,6 +101,7 @@ tests/try.sh <project> [args...]                  # run any project on a virtual
 ./tests/api.sh                                    # is the documented surface the real one, is api.json current, do links land
 ./tests/check.sh                                  # every project's `bintana check`, no window
 ./tests/keyring.sh                                # the File provider: 0600 under 0700, no temporary
+./tests/odbc.sh                                   # Database.Odbc through sqliteodbc, and psqlODBC on a postgres:16 in Docker
 ./tools/apijson.sh                                # rewrite api.json
 ./tools/llms.sh                                   # rewrite llms-full.txt from llm.txt's list
 ./tests/icons.sh                                  # which declared icons the desktop has, and which draw
@@ -9457,6 +9458,32 @@ text cannot be modelled beside its attributes (`<guid isPermaLink>`), and
   record the program built has no entry and writes every column; nothing
   changed is no statement, and so no "no row" throw either.
 
+## Database.Odbc: what the drivers did that the specification did not say
+
+Measured on 2026-11-11 with unixODBC 2.3.14, sqliteodbc 0.99991 and psqlODBC
+16.00 against `postgres:16`; the whole table is in
+[`odbc-plan.md`](../plans/odbc-plan.md). The ones that cost time:
+
+- **The wide API turns text into Latin-1 under unixODBC** when the driver has
+  no `…W` entry points (`nm -D` on Fedora's `libsqlite3odbc.so` finds none):
+  the manager converts down, and to ISO 8859-1, so `ñ` became `F1` and `€` lost
+  its high byte. `IconvEncoding` is not read by 2.3.14 at all. Hence the text
+  layer in `bta_odbc.c`: narrow UTF-8 on unixODBC, wide UTF-16 on Windows only.
+  Parameters bound as `SQL_C_WCHAR` survived; the statement text did not.
+- **Braces in a connection string are the driver's to honour.** psqlODBC takes
+  them off `PWD` (and undoubles `}}`) but not off `UID`, `Server` or
+  `Database`: `UID={postgres}` logged in as `{postgres}`. Brace a value only
+  when it holds `;`, a brace, or an edge space.
+- **A driver's messages are translated** -- libpq answered "falló la conexión"
+  on a Spanish desktop -- so a test reads `Code` (the SQLSTATE), never the
+  text. sqliteodbc's `Code` is `HY000` for everything, and psqlODBC appends
+  `;\nError while executing the query` to a server's message.
+- **`SQLGetInfo` counts bytes, the rest of the API counts characters.** On
+  Windows that is half the buffer; `info_text` divides by the unit.
+- **The machine's ODBC configuration is somebody else's state.**
+  `ODBCSYSINI=<dir>` and `ODBCINI=<file>` point unixODBC at an ini of the
+  test's own; `tests/odbc.sh` does that and names its drivers itself.
+
 ---
 
 # docs/agents/drawing.md
@@ -13852,7 +13879,7 @@ own prefix rule expects to find them.
 Three things it deliberately does not do: it does not bundle GTK (the machine
 needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
 a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
-built **without** the optional dependencies (`sqlite3`, `libsoup`, GStreamer,
+built **without** the optional dependencies (`sqlite3`, unixODBC, `libsoup`, GStreamer,
 VTE, `libxml2`, `libsecret`, GnuTLS, PoDoFo, poppler) so that none of them becomes a shared library the
 downloader has to have.
 
@@ -13977,6 +14004,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | what it turns on | Fedora | Debian / Ubuntu | without it |
 |---|---|---|---|
 | `Database.Sqlite(path)` | `sqlite-devel` | `libsqlite3-dev` | the class is there and says which package is missing when called |
+| `Database.Odbc(connection)` | `unixODBC-devel` | `unixodbc-dev` | the name is there and says which package is missing when called. The runtime links the driver **manager** only: the drivers (`sqliteodbc`, `postgresql-odbc`, `mariadb-connector-odbc`, Microsoft's `msodbcsql18` …) are the machine's, installed and configured with `odbcinst` like any other ODBC program's. On Windows the manager is `odbc32`, part of the system, so `Database.Odbc` is always built there. On macOS, Homebrew's `unixodbc` -- iODBC is not supported |
 | `PdfDocument`, `Probe.Pdf`, `lib/pdfview` (reading a PDF) | `poppler-glib-devel` | `libpoppler-glib-dev` | `PdfDocument.Load` and `Probe.Pdf` exist and refuse with a sentence naming the package; a `PdfView` shows nothing and throws where a file is assigned. 22.02 or newer |
 | `Logger.Target = "Journal"` | `systemd-devel` | `libsystemd-dev` | logging goes to the terminal |
 | `Http`, `Http.Server`, `Http.Stream` | `libsoup3-devel` | `libsoup-3.0-dev` | `Http` exists and refuses by name |
@@ -13993,13 +14021,15 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 can actually do — a palette filters on it, and so should anything that offers a
 feature rather than using one. For the two globals that are not widgets the
 question is spelled `Xml.Available` (a value, read off the build) and a refusing
-call for `Database.Sqlite`.
+call for `Database.Sqlite` and `Database.Odbc`.
 
 On Windows the same switches come from MSYS2 UCRT64: `mingw-w64-ucrt-x86_64-poppler`,
 `...-gstreamer` with `...-gst-plugins-base`, `...-gst-plugins-good`,
 `...-gst-plugins-bad`, `...-gst-libav` and `...-gst-plugins-rs` (the GTK4 sink),
 `...-sqlite3`, `...-libsoup3`, `...-libxml2`, `...-gnutls` and `...-libvterm`
 (the Windows terminal: ConPTY plus libvterm, since VTE has no Windows port).
+ODBC needs no package there: `odbc32` is part of Windows and MinGW-w64 carries
+its headers, so `Database.Odbc` is in every Windows build.
 libsystemd, sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` uses
 the Windows Credential Manager, so libsecret is not needed there.
 
@@ -14058,6 +14088,10 @@ sudo apt install xvfb xdotool python3 openssl
 # the Key test signs on a SoftHSM token of its own, made with p11tool:
 #   Fedora         softhsm gnutls-utils
 #   Debian/Ubuntu  softhsm2 gnutls-bin
+# tests/odbc.sh connects through two ODBC drivers (and runs postgres:16 in
+# Docker for the second, if the image is there):
+#   Fedora         sqliteodbc postgresql-odbc
+#   Debian/Ubuntu  libsqliteodbc odbc-postgresql
 ```
 
 ```sh
@@ -14118,7 +14152,7 @@ and a TagLib wrapper worked through.
 | `Package 'gtksourceview-5' not found` | `gtksourceview5-devel` / `libgtksourceview-5-dev` |
 | compile errors about `gtk_alert_dialog` or `gtk_file_dialog` | the GTK is older than 4.10 — Debian 13 / Ubuntu 24.04 or newer |
 | `no vte` / `no libvterm: Terminal exists and refuses to run one` | not an error: the optional table above |
-| `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret`, `no gnutls`, `no poppler-glib` | likewise — a build line, not a failure |
+| `no sqlite3`, `no unixODBC`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret`, `no gnutls`, `no poppler-glib` | likewise — a build line, not a failure |
 | `no sysprof-capture: --profile says so when asked` | likewise; a Sysprof run still shows the samples and GTK's frames |
 
 ---
@@ -14128,13 +14162,14 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11306 assertions
+./tests/run.sh                          # all seven projects, 11362 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
 ./tests/run.sh ide list                 # what it can be asked for
 ./tests/check.sh                        # every project's `bintana check`, no window
 ./tests/keyring.sh                      # the File provider: 0600 under 0700, no temporary
+./tests/odbc.sh                         # Database.Odbc through real drivers: 41 checks with PostgreSQL
 ./tests/pack.sh                         # lib/package, the packaging step's output: 107 assertions
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
@@ -14627,6 +14662,32 @@ It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 `pkg-config` that answers no for `gstreamer-1.0` and runs `tests/media.sh`
 against *that*, which is the only build that proves the refusal half compiles
 and runs (`Media.Available` false, `Media.Element` naming the package).
+
+## ODBC, which needs a driver
+
+```sh
+tests/odbc.sh               # sqliteodbc, and psqlODBC when a server can be had
+POSTGRES=1 tests/odbc.sh    # the PostgreSQL half is required (CI)
+POSTGRES=0 tests/odbc.sh    # sqliteodbc only
+```
+
+`Database.Odbc` is tested through real drivers, never a stand-in. `tests/odbc`
+is a console project; the script writes an `odbcinst.ini` and an `odbc.ini` of
+its own and points `ODBCSYSINI` and `ODBCINI` at them, so a DSN configured on
+the machine neither helps nor breaks a run. sqliteodbc needs no server and is
+required (no driver, exit 2 naming the package). The PostgreSQL half starts
+`postgres:16` in Docker on `127.0.0.1:55433` when the image is already there --
+it is never pulled silently -- with a password holding a `;` and a `}`, which is
+what proves the connection string's bracing against a driver that reads it.
+**A driver's messages come translated** (libpq answered in Spanish here), so a
+check on a failure reads `Code`, the SQLSTATE, and never the text.
+
+`tests/widgets` has `testDatabaseOdbc`, which runs in every build: the refusal
+naming the package where there is no driver manager -- the `no-libxml` CI job
+is also the build without unixODBC, and says so -- and the manager's own
+`IM002` for a DSN that is not there where there is one. Windows keeps its
+drivers in the registry, and running `tests/odbc` there is stage 6 of
+[`odbc-plan.md`](plans/odbc-plan.md).
 
 ## A serial port, which needs a peer
 

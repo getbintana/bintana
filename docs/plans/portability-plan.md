@@ -60,6 +60,7 @@ that match this tree:
 | GtkSourceView 5 | `mingw-w64-ucrt-x86_64-gtksourceview5` |
 | libsoup3 | `mingw-w64-ucrt-x86_64-libsoup3` |
 | sqlite3 | `mingw-w64-ucrt-x86_64-sqlite3` |
+| ODBC | none: `odbc32` is the system's and MinGW-w64 carries `sql.h`; `Database.Odbc` uses the wide API there |
 | GStreamer + GTK4 sink | `gstreamer` + `gst-plugins-rs`, whose `/mingw64/lib/gstreamer-1.0/libgstgtk4.dll` is `gtk4paintablesink` (the official GStreamer 1.28 Windows installers carry it too — but they are MSVC, and **must not be mixed** with a MinGW GTK4) |
 | poppler | `mingw-w64-ucrt-x86_64-poppler`, whose `poppler-glib.pc` turns on `PdfDocument`'s reading half and `lib/pdfview` |
 | VTE, and the terminal | **VTE does not exist on Windows.** The backend is ConPTY (Windows 10 1809+) plus `mingw-w64-ucrt-x86_64-libvterm`: the child gets a real console, libvterm interprets its VT output, and `bta_terminal_win32.c` draws the grid. `BTA_HAVE_LIBVTERM` is optional exactly as `BTA_HAVE_VTE` is; without it the class draws and refuses only the three verbs that need a child |
