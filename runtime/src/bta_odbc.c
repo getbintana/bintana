@@ -98,11 +98,21 @@ typedef struct {
     char   *dbms_ver;    /* SQL_DBMS_VER */
     char   *driver;      /* SQL_DRIVER_NAME */
     SQLULEN stmt_secs;   /* SQL_ATTR_QUERY_TIMEOUT on every statement; 0 none */
+    int     depth;       /* nested Transaction: 0 none, >0 a savepoint */
+    int     reading;     /* Each() calls in progress: a statement is open */
+    bool    sqlserver;   /* SAVE TRANSACTION rather than SAVEPOINT */
 } BtaOdbc;
 
 static void odbc_release(BtaOdbc *c)
 {
     if (c->dbc) {
+        /* Rolled back first: sqliteodbc refuses `SQLDisconnect` with a
+         * transaction open (`25000`, measured) and keeps the connection,
+         * which the next line would then free under it. psqlODBC rolls back
+         * on its own; the explicit one is harmless there. */
+        if (c->depth > 0)
+            SQLEndTran(SQL_HANDLE_DBC, c->dbc, SQL_ROLLBACK);
+        c->depth = 0;
         SQLDisconnect(c->dbc);
         SQLFreeHandle(SQL_HANDLE_DBC, c->dbc);
         c->dbc = NULL;
@@ -457,6 +467,11 @@ static JSValue odbc_close(JSContext *ctx, JSValueConst this_val,
     BtaOdbc *c = odbc_of(ctx, this_val);
     if (!c)
         return JS_EXCEPTION;
+    /* Not while `Each` is reading: its statement handle belongs to the
+     * connection, and freeing the connection would free it under the loop. */
+    if (c->dbc && c->reading)
+        return JS_ThrowTypeError(ctx, "this connection is reading rows in "
+                                      "Each() -- close it after Each returns");
     /* Twice is not an error: it is what a handler that may run after another
      * one already closed it does. */
     odbc_release(c);
@@ -1001,6 +1016,30 @@ static JSValue row_object(JSContext *ctx, SQLHSTMT st, OdbcColumn *cols,
 
 /* ------------------------------------------------- Query, Execute, Script */
 
+/*
+ * Moved to the first result that has columns: a batch, or a driver that
+ * reports a count before the rows (SQL Server without `SET NOCOUNT ON`), puts
+ * results with none ahead of it. 1 found, 0 none at all, -1 a throw.
+ */
+static int first_rows(JSContext *ctx, SQLHSTMT st, SQLSMALLINT *ncol)
+{
+    for (;;) {
+        if (!SQL_SUCCEEDED(SQLNumResultCols(st, ncol))) {
+            throw_odbc(ctx, SQL_HANDLE_STMT, st, "cannot read");
+            return -1;
+        }
+        if (*ncol > 0)
+            return 1;
+        SQLRETURN r = SQLMoreResults(st);
+        if (r == SQL_NO_DATA)
+            return 0;
+        if (!SQL_SUCCEEDED(r)) {
+            throw_odbc(ctx, SQL_HANDLE_STMT, st, "cannot run");
+            return -1;
+        }
+    }
+}
+
 static JSValue query_body(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv)
 {
@@ -1023,25 +1062,11 @@ static JSValue query_body(JSContext *ctx, JSValueConst this_val,
     if (!st || !stmt_run(ctx, st, argv[0], p, n))
         goto done;
 
-    /* The first result that has columns: a batch, or a driver that reports a
-     * count before the rows (SQL Server without `SET NOCOUNT ON`), puts
-     * results with none ahead of it. None at all is `[]`. */
-    for (;;) {
-        if (!SQL_SUCCEEDED(SQLNumResultCols(st, &ncol))) {
-            throw_odbc(ctx, SQL_HANDLE_STMT, st, "cannot read");
-            goto done;
-        }
-        if (ncol > 0)
-            break;
-        SQLRETURN r = SQLMoreResults(st);
-        if (r == SQL_NO_DATA) {
+    int found = first_rows(ctx, st, &ncol);
+    if (found <= 0) {
+        if (found == 0)
             out = JS_NewArray(ctx);
-            goto done;
-        }
-        if (!SQL_SUCCEEDED(r)) {
-            throw_odbc(ctx, SQL_HANDLE_STMT, st, "cannot run");
-            goto done;
-        }
+        goto done;
     }
 
     if (!(cols = columns_read(ctx, st, ncol)))
@@ -1152,6 +1177,235 @@ static JSValue script_body(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * `Each(sql, [params], fn)` -- the rows one at a time, never all at once, as
+ * sqlite's: `fn(row)` for each, `false` stops, the answer is how many were
+ * handed over, a throw in `fn` is the caller's. Whether `fn` may run another
+ * statement on this connection while the rows are open is the driver's
+ * (psqlODBC reads the whole result at execute; SQL Server needs MARS).
+ *
+ * `fn` is the program's code, so it runs in the desktop's locale: the C
+ * numerics the driver needs are put back only around the driver.
+ */
+static JSValue each_body(JSContext *ctx, JSValueConst this_val,
+                         int argc, JSValueConst *argv)
+{
+    BtaOdbc *c = open_of(ctx, this_val);
+    if (!c)
+        return JS_EXCEPTION;
+
+    JSValueConst params = argc > 2 ? argv[1] : JS_UNDEFINED;
+    JSValueConst fn     = argc > 2 ? argv[2] : (argc > 1 ? argv[1] : JS_UNDEFINED);
+    if (argc < 2 || !JS_IsString(argv[0]) || !JS_IsFunction(ctx, fn))
+        return JS_ThrowTypeError(ctx, "Each(sql, [params], fn): fn is called "
+                                      "with each row");
+
+    OdbcParam *p;
+    uint32_t   n;
+    if (!params_read(ctx, params, &p, &n))
+        return JS_EXCEPTION;
+
+    SQLHSTMT    st   = stmt_new(ctx, c);
+    JSValue     out  = JS_EXCEPTION;
+    OdbcColumn *cols = NULL;
+    SQLSMALLINT ncol = 0;
+    /* Held: `fn` may drop the last reference to itself or to the connection. */
+    JSValue     call = JS_DupValue(ctx, fn);
+    JSValue     self = JS_DupValue(ctx, this_val);
+    int64_t     seen = 0;
+    bool        stopped = false;
+
+    if (!st || !stmt_run(ctx, st, argv[0], p, n))
+        goto done;
+    int found = first_rows(ctx, st, &ncol);
+    if (found <= 0) {
+        if (found == 0)
+            out = JS_NewInt64(ctx, 0);
+        goto done;
+    }
+    if (!(cols = columns_read(ctx, st, ncol)))
+        goto done;
+
+    c->reading++;
+    for (;;) {
+        SQLRETURN r = SQLFetch(st);
+        if (r == SQL_NO_DATA)
+            break;
+        if (!SQL_SUCCEEDED(r)) {
+            throw_odbc(ctx, SQL_HANDLE_STMT, st, "cannot read");
+            break;
+        }
+        JSValue row = row_object(ctx, st, cols, ncol);
+        if (JS_IsException(row))
+            break;
+        seen++;
+
+#ifndef G_OS_WIN32
+        locale_t here = uselocale(LC_GLOBAL_LOCALE);
+#endif
+        JSValue res = JS_Call(ctx, call, JS_UNDEFINED, 1, (JSValueConst *)&row);
+#ifndef G_OS_WIN32
+        uselocale(here);
+#endif
+        JS_FreeValue(ctx, row);
+        if (JS_IsException(res))
+            break;
+        stopped = JS_IsBool(res) && !JS_ToBool(ctx, res);
+        JS_FreeValue(ctx, res);
+        if (stopped)
+            break;
+    }
+    c->reading--;
+
+    if (!JS_HasException(ctx) && (stopped || stmt_drain(ctx, st)))
+        out = JS_NewInt64(ctx, seen);
+
+done:
+    columns_free(cols, ncol);
+    if (st)
+        SQLFreeHandle(SQL_HANDLE_STMT, st);
+    params_free(p, n);
+    JS_FreeValue(ctx, call);
+    JS_FreeValue(ctx, self);
+    return out;
+}
+
+/* One statement of our own, no parameters, its results run past. `quiet`
+ * leaves any exception it would raise unraised, for the rollback that must
+ * not replace the error that caused it. */
+static bool exec_text(JSContext *ctx, BtaOdbc *c, const char *sql,
+                      const char *what, bool quiet)
+{
+    SQLHSTMT st = SQL_NULL_HSTMT;
+
+    if (!SQL_SUCCEEDED(SQLAllocHandle(SQL_HANDLE_STMT, c->dbc, &st))) {
+        if (!quiet)
+            throw_odbc(ctx, SQL_HANDLE_DBC, c->dbc, what);
+        return false;
+    }
+    BtaOdbcChar *in = odbc_in(sql);
+    SQLRETURN    r  = ODBC_API(SQLExecDirect)(st, in, SQL_NTS);
+    g_free(in);
+
+    bool ok = ran(r);
+    if (ok)
+        while ((r = SQLMoreResults(st)) != SQL_NO_DATA)
+            if (!SQL_SUCCEEDED(r)) {
+                ok = false;
+                break;
+            }
+    if (!ok && !quiet)
+        throw_odbc(ctx, SQL_HANDLE_STMT, st, what);
+    SQLFreeHandle(SQL_HANDLE_STMT, st);
+    return ok;
+}
+
+/* The outermost unit ends: committed or rolled back, and autocommit back on
+ * either way, so the statements after it are their own again. */
+static bool end_outer(JSContext *ctx, BtaOdbc *c, SQLSMALLINT how, bool quiet)
+{
+    SQLRETURN r  = SQLEndTran(SQL_HANDLE_DBC, c->dbc, how);
+    bool      ok = SQL_SUCCEEDED(r);
+
+    if (!ok && !quiet)
+        throw_odbc(ctx, SQL_HANDLE_DBC, c->dbc,
+                   how == SQL_COMMIT ? "cannot commit" : "cannot roll back");
+    if (!ok && how == SQL_COMMIT)
+        SQLEndTran(SQL_HANDLE_DBC, c->dbc, SQL_ROLLBACK);
+    SQLSetConnectAttr(c->dbc, SQL_ATTR_AUTOCOMMIT,
+                      (SQLPOINTER)(uintptr_t)SQL_AUTOCOMMIT_ON, 0);
+    return ok;
+}
+
+/*
+ * A unit of work: everything, or nothing -- sqlite's contract. The outermost
+ * is ODBC's own (autocommit off, `SQLEndTran`); a nested one is a savepoint,
+ * in the engine's spelling: `SAVE TRANSACTION`/`ROLLBACK TRANSACTION` on SQL
+ * Server, which has no release, and the standard's everywhere else. An
+ * engine without savepoints refuses the nested call with its own error.
+ *
+ * Measured: psqlODBC rolls back only the statement that failed, so a program
+ * that catches an error inside `fn` and carries on commits the rest -- it is
+ * not PostgreSQL's aborted transaction that a bare libpq client meets.
+ */
+static JSValue odbc_transaction(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    BtaOdbc *c = open_of(ctx, this_val);
+    if (!c)
+        return JS_EXCEPTION;
+    if (argc < 1 || !JS_IsFunction(ctx, argv[0]))
+        return JS_ThrowTypeError(ctx, "Transaction expects a function: what to "
+                                      "do, all of it or none");
+
+    bool  nested = c->depth > 0;
+    char *begin = NULL, *ok = NULL, *undo = NULL;
+
+    if (nested) {
+        int d = c->depth;
+        begin = c->sqlserver ? g_strdup_printf("SAVE TRANSACTION bta_%d", d)
+                             : g_strdup_printf("SAVEPOINT bta_%d", d);
+        ok    = c->sqlserver ? NULL
+                             : g_strdup_printf("RELEASE SAVEPOINT bta_%d", d);
+        undo  = c->sqlserver ? g_strdup_printf("ROLLBACK TRANSACTION bta_%d", d)
+                             : g_strdup_printf("ROLLBACK TO SAVEPOINT bta_%d", d);
+        if (!exec_text(ctx, c, begin, "cannot begin a nested transaction", false)) {
+            g_free(begin); g_free(ok); g_free(undo);
+            return JS_EXCEPTION;
+        }
+    } else if (!SQL_SUCCEEDED(SQLSetConnectAttr(c->dbc, SQL_ATTR_AUTOCOMMIT,
+                    (SQLPOINTER)(uintptr_t)SQL_AUTOCOMMIT_OFF, 0))) {
+        return throw_odbc(ctx, SQL_HANDLE_DBC, c->dbc, "cannot begin");
+    }
+
+    JSValue self = JS_DupValue(ctx, this_val);
+    c->depth++;
+    JSValue r = JS_Call(ctx, argv[0], JS_UNDEFINED, 0, NULL);
+    c->depth--;
+
+    JSValue out;
+    if (!c->dbc) {
+        /* Closed inside its own transaction: `odbc_release` rolled it back. */
+        if (JS_IsException(r))
+            out = r;
+        else {
+            JS_FreeValue(ctx, r);
+            out = JS_ThrowTypeError(ctx, "the connection was closed inside its "
+                                         "own transaction, so there was nothing "
+                                         "left to commit");
+        }
+    } else if (JS_IsException(r)) {
+        /* The exception is kept and put back: the rollback runs SQL of its
+         * own, and the program must hear what went wrong, not how undoing it
+         * went. */
+        JSValue held = JS_GetException(ctx);
+        if (nested)
+            exec_text(ctx, c, undo, "", true);
+        else
+            end_outer(ctx, c, SQL_ROLLBACK, true);
+        out = JS_Throw(ctx, held);
+    } else if (nested) {
+        if (ok && !exec_text(ctx, c, ok, "cannot release a nested transaction",
+                             false)) {
+            JSValue held = JS_GetException(ctx);
+            exec_text(ctx, c, undo, "", true);
+            JS_FreeValue(ctx, r);
+            out = JS_Throw(ctx, held);
+        } else {
+            out = r;
+        }
+    } else if (!end_outer(ctx, c, SQL_COMMIT, false)) {
+        JS_FreeValue(ctx, r);
+        out = JS_EXCEPTION;
+    } else {
+        out = r;
+    }
+
+    JS_FreeValue(ctx, self);
+    g_free(begin); g_free(ok); g_free(undo);
+    return out;
+}
+
+/*
  * **The driver is talked to in the C numeric locale.** GTK calls
  * `setlocale(LC_ALL, "")`, and psqlODBC formats a `NUMERIC` it hands back as
  * text with the process's `LC_NUMERIC`: on an es_AR desktop `12.30` arrived as
@@ -1214,6 +1468,12 @@ static JSValue odbc_script(JSContext *ctx, JSValueConst this_val,
                            int argc, JSValueConst *argv)
 {
     return in_c_numeric(script_body, ctx, this_val, argc, argv);
+}
+
+static JSValue odbc_each(JSContext *ctx, JSValueConst this_val,
+                         int argc, JSValueConst *argv)
+{
+    return in_c_numeric(each_body, ctx, this_val, argc, argv);
 }
 
 /* ---------------------------------------------------------- Database.Odbc */
@@ -1314,6 +1574,7 @@ static JSValue database_odbc(JSContext *ctx, JSValueConst this_val,
     }
 
     c->dbms     = info_text(c->dbc, SQL_DBMS_NAME);
+    c->sqlserver = strcmp(c->dbms, "Microsoft SQL Server") == 0;
     c->dbms_ver = info_text(c->dbc, SQL_DBMS_VER);
     c->driver   = info_text(c->dbc, SQL_DRIVER_NAME);
 
@@ -1371,6 +1632,18 @@ static const JSCFunctionListEntry odbc_props[] = {
      *   psqlODBC takes one, sqliteodbc refuses a second statement
      */
     JS_CFUNC_DEF("Script",        1, odbc_script),
+    /* Each(sql, [params], fn) -> number
+     *   the rows **one at a time**: `fn(row)` for each, never an array of all
+     *   of them. `fn` returning `false` stops; the answer is how many rows were
+     *   handed over. `Close()` is refused while it reads
+     */
+    JS_CFUNC_DEF("Each",          3, odbc_each),
+    /* Transaction(fn)
+     *   everything in `fn` or nothing, and what `fn` returns. **Nests**,
+     *   through savepoints in the engine's spelling. A throw rolls back and
+     *   is rethrown
+     */
+    JS_CFUNC_DEF("Transaction",   1, odbc_transaction),
     /* Close()
      *   let it go; twice is not an error
      */
@@ -1435,10 +1708,10 @@ void bta_odbc_init(JSContext *ctx, JSValue global)
 /*
  * ## Where it stands
  *
- * Stages 0 and 1 of docs/plans/odbc-plan.md: the build on three platforms,
+ * Stages 0 to 3 of docs/plans/odbc-plan.md: the build on three platforms,
  * the text layer, `Database.Odbc` connecting and refusing, diagnostics as
  * `Code`/`Native`/`Details`, `Open`, `Dbms`, `DbmsVersion`, `Driver`, `Close`,
- * and `Query`, `Execute` and `Script` with every type both ways. `Each`,
- * `Transaction`, `Columns`, `Tables` and `Dialect` -- the rest of what `Table`
- * asks for -- are the stages after it.
+ * `Query`, `Execute` and `Script` with every type both ways, `Each` and
+ * `Transaction` (stages 2 and 3). `Columns`, `Tables` and `Dialect` -- the rest
+ * of what `Table` and `Cursor` ask for -- are stage 4.
  */

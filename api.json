@@ -19899,6 +19899,15 @@
           "Native": true
         },
         {
+          "Name": "Each",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(sql, [params], fn)",
+          "Returns": "number",
+          "Doc": "the rows **one at a time**: `fn(row)` for each, never an array of all of them. `fn` returning `false` stops; the answer is how many rows were handed over. `Close()` is refused while it reads",
+          "Native": true
+        },
+        {
           "Name": "Execute",
           "Kind": "Method",
           "Params": 1,
@@ -19932,6 +19941,15 @@
           "Signature": "(sql)",
           "Returns": "",
           "Doc": "several statements and **no parameters**, as the driver runs a batch: psqlODBC takes one, sqliteodbc refuses a second statement",
+          "Native": true
+        },
+        {
+          "Name": "Transaction",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(fn)",
+          "Returns": "",
+          "Doc": "everything in `fn` or nothing, and what `fn` returns. **Nests**, through savepoints in the engine's spelling. A throw rolls back and is rethrown",
           "Native": true
         }
       ]

@@ -269,6 +269,28 @@ function statements(sqlite, dir) {
         check("Script runs a statement", db.Query("SELECT count(*) AS c FROM u")[0].c === 0);
     });
 
+    block("sqlite Each", () => eachChecks(db, "sqlite"));
+    block("sqlite Transaction", () => transactionChecks(db, "sqlite"));
+    block("Close inside a Transaction", () => {
+        const path2 = File.Join(dir, "close.db");
+        const d2 = Database.Odbc(`Driver=${sqlite};Database=${path2}`);
+        d2.Execute("CREATE TABLE z (a INTEGER)");
+        refused("Close inside its own Transaction says there was nothing to commit",
+                () => d2.Transaction(() => { d2.Execute("INSERT INTO z (a) VALUES (1)"); d2.Close(); }),
+                TypeError);
+        check("...and the connection is closed", !d2.Open);
+        /* sqliteodbc refuses to disconnect inside a transaction and keeps the
+         * connection -- and its write lock. A write from a new connection,
+         * with a short busy timeout, is what tells a rollback from a leak. */
+        const d3 = Database.Odbc(`Driver=${sqlite};Database=${path2};Timeout=300`);
+        const locked = caught(() => d3.Execute("INSERT INTO z (a) VALUES (2)"));
+        check("...rolled back and let go: another connection can write", locked === null,
+              locked && locked.message);
+        check("...and the insert inside it is gone",
+              d3.Query("SELECT count(*) AS c FROM z")[0].c === 1);
+        d3.Close();
+    });
+
     db.Close();
     refused("Query after Close", () => db.Query("SELECT 1"), TypeError);
 }
@@ -328,6 +350,18 @@ function postgresStatements(cs, pw) {
         check("...and psqlODBC undid the statements before it",
               db.Query("SELECT count(*) AS c FROM t")[0].c === 1);
     });
+    block("postgres Each", () => eachChecks(db, "postgres"));
+    block("postgres Transaction", () => transactionChecks(db, "postgres"));
+    block("postgres statement-level rollback", () => {
+        db.Execute("DELETE FROM w");
+        db.Transaction(() => {
+            db.Execute("INSERT INTO w (a) VALUES (1)");
+            caught(() => db.Query("SELECT nope FROM w"));
+            db.Execute("INSERT INTO w (a) VALUES (2)");
+        });
+        check("psqlODBC: an error caught inside a transaction undoes only its statement",
+              db.Query("SELECT count(*) AS c FROM w")[0].c === 2);
+    });
     db.Close();
 
     block("BoolsAsChar=0", () => {
@@ -347,4 +381,70 @@ function postgresStatements(cs, pw) {
               `${took} ms, ${e ? e.Code + " " + e.message : "no error"}`);
         s.Close();
     });
+}
+
+/* Each, on either driver: one row at a time, `false` stops, a throw is the
+ * caller's, `Close` inside is refused. */
+function eachChecks(db, who) {
+    db.Script("DROP TABLE IF EXISTS w");
+    db.Script("CREATE TABLE w (a INTEGER)");
+    db.Transaction(() => {
+        for (let i = 0; i < 2000; i++)
+            db.Execute("INSERT INTO w (a) VALUES (?)", [i]);
+    });
+
+    let sum = 0, order = true, last = -1;
+    const n = db.Each("SELECT a FROM w ORDER BY a", (row) => {
+        sum += row.a;
+        if (row.a !== last + 1) order = false;
+        last = row.a;
+    });
+    check(`${who}: Each hands over every row`, n === 2000 && sum === 1999 * 2000 / 2, `${n} rows, sum ${sum}`);
+    check(`${who}: ...in order`, order);
+
+    const some = db.Each("SELECT a FROM w WHERE a < ? ORDER BY a", [10], (row) => row.a < 4);
+    check(`${who}: false stops, and the count is what was handed over`, some === 5, some);
+    check(`${who}: no rows is 0`, db.Each("SELECT a FROM w WHERE a < 0", () => {}) === 0);
+
+    const thrown = caught(() => db.Each("SELECT a FROM w", () => { throw new Error("from fn"); }));
+    check(`${who}: a throw in fn is the caller's`, thrown && thrown.message === "from fn",
+          thrown && thrown.message);
+    refused(`${who}: Close inside Each`, () => db.Each("SELECT a FROM w", () => { db.Close(); }), TypeError);
+    check(`${who}: ...and the connection is still open`, db.Open);
+    check(`${who}: the connection works after all of that`,
+          db.Query("SELECT count(*) AS c FROM w")[0].c === 2000);
+    refused(`${who}: Each without fn`, () => db.Each("SELECT 1"), TypeError);
+}
+
+/* Transaction, on either driver: commit, rollback with the error kept, the
+ * value of fn, nesting through savepoints. */
+function transactionChecks(db, who) {
+    db.Execute("DELETE FROM w");
+    const count = () => db.Query("SELECT count(*) AS c FROM w")[0].c;
+
+    const v = db.Transaction(() => { db.Execute("INSERT INTO w (a) VALUES (1)"); return 42; });
+    check(`${who}: Transaction answers what fn returns`, v === 42, v);
+    check(`${who}: ...and committed`, count() === 1);
+
+    const e = caught(() => db.Transaction(() => {
+        db.Execute("INSERT INTO w (a) VALUES (2)");
+        throw new Error("undo it");
+    }));
+    check(`${who}: a throw is rethrown as it was`, e && e.message === "undo it", e && e.message);
+    check(`${who}: ...and rolled back`, count() === 1, count());
+
+    db.Transaction(() => {
+        db.Execute("INSERT INTO w (a) VALUES (3)");
+        caught(() => db.Transaction(() => {
+            db.Execute("INSERT INTO w (a) VALUES (4)");
+            throw new Error("inner");
+        }));
+        db.Transaction(() => db.Execute("INSERT INTO w (a) VALUES (5)"));
+    });
+    const kept = db.Query("SELECT a FROM w ORDER BY a").map((r) => r.a).join(",");
+    check(`${who}: a nested throw undoes only the inner unit`, kept === "1,3,5", kept);
+
+    check(`${who}: autocommit is back after a Transaction`,
+          db.Execute("INSERT INTO w (a) VALUES (6)").Changes === 1 && count() === 4);
+    refused(`${who}: Transaction without a function`, () => db.Transaction(1), TypeError);
 }

@@ -8,7 +8,7 @@
 ./tests/run.sh ide list                 # what it can be asked for
 ./tests/check.sh                        # every project's `bintana check`, no window
 ./tests/keyring.sh                      # the File provider: 0600 under 0700, no temporary
-./tests/odbc.sh                         # Database.Odbc through real drivers: 85 checks with PostgreSQL
+./tests/odbc.sh                         # Database.Odbc through real drivers: 122 checks with PostgreSQL
 ./tests/pack.sh                         # lib/package, the packaging step's output: 107 assertions
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on

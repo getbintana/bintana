@@ -1,6 +1,6 @@
 # ODBC: `Database.Odbc`, the driver that reaches the servers
 
-**Status: stages 0 and 1 built (2026-11-11). Comes before
+**Status: stages 0, 1 and 3 built, and `Each` of stage 2 (2026-11-11). Comes before
 [`postgres-plan.md`](postgres-plan.md).** Designed for Linux, Windows and macOS
 from the first line: the API is the same on all three, and what differs (the
 driver manager, the text encoding, where the drivers live) is decided here,
@@ -253,9 +253,19 @@ is set in `Form_Open`. A form that gives two drivers' properties is refused.
    `LC_NUMERIC`** -- `12,30` under GTK's `setlocale` -- so the three words run
    with `uselocale` set to C numerics for the thread, and the C probe that
    never called `setlocale` could not have seen it.
-2. **`Each`/`Cursor`** over `SQLFetch`. **Not started.**
+2. **`Each`/`Cursor`** over `SQLFetch`. **`Each` built**: `false` stops, a
+   throw in `fn` is the caller's, `Close` inside is refused, and `fn` runs in
+   the desktop's locale while the driver keeps C numerics. `Cursor` needs
+   `Dialect`, so it is tested with stage 4.
 3. **`Transaction`**: autocommit, `SQLEndTran`, savepoints by engine.
-   **Not started.**
+   **Built**: the value of `fn`, a throw rolled back and rethrown as it was,
+   nesting through `SAVEPOINT` (`SAVE TRANSACTION` on SQL Server, not yet run),
+   autocommit back on after. Measured: psqlODBC rolls back only the statement
+   that failed, so an error caught inside `fn` does not lose the rest; and
+   sqliteodbc refuses `SQLDisconnect` inside a transaction (`25000`) and keeps
+   the connection and its write lock, so `Close` rolls back first -- the test
+   writes from a second connection, since a read could not tell a rollback
+   from a leak.
 4. **`Columns`/`Tables` and `Dialect`**: the catalogue functions, the engine
    table, `Table.Insert` with `Returning`/`Output`, `Model.Ensure` from
    `Dialect.Types`. **Not started.**

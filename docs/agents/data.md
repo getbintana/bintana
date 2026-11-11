@@ -785,3 +785,10 @@ Measured on 2026-11-11 with unixODBC 2.3.14, sqliteodbc 0.99991 and psqlODBC
   driver from inside the runtime, never only from a bare C program.
 - **`SQL_NO_DATA` from `SQLExecute` is success**: an `UPDATE` or `DELETE` that
   matched nothing answers it, on both drivers measured.
+- **psqlODBC rolls back the statement, not the transaction.** An error caught
+  inside a `Transaction` leaves the statements before and after it to commit
+  -- unlike a bare libpq client, whose transaction is aborted until it ends.
+- **sqliteodbc refuses `SQLDisconnect` inside a transaction** (`25000`) and
+  keeps the connection, its uncommitted writes and its write lock. A test that
+  reads from another connection sees the old rows either way; only a *write*
+  from another connection tells a rollback from a leaked lock.
