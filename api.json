@@ -11909,6 +11909,15 @@
       "Parent": "Control",
       "Members": [
         {
+          "Name": "Attach",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(sink)",
+          "Returns": "",
+          "Doc": "shows the frames of a pipeline the program built, instead of its own `Uri`: `sink` is a `gtk4paintablesink` from `Media.Element`. The Video's own playback stops, `SourceWidth`, `SourceHeight` and `Save` answer for the attached frames, and the next `Play` goes back to `Uri`. `Attach(null)` lets go and leaves the control empty. It follows the pipeline and does not drive it: starting, stopping and errors are the pipeline's `State` and `Bus`, and dropping the pipeline leaves its last frame up. It is how a form shows a camera while the same pipeline records it: the device's `Element()` (see `Media.Devices`), a `tee`, and a `queue` before each branch",
+          "Native": true
+        },
+        {
           "Name": "Available",
           "Kind": "ReadOnly",
           "Params": -1,
@@ -15944,6 +15953,15 @@
           "Native": true
         },
         {
+          "Name": "Devices",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "([class])",
+          "Returns": "Device[]",
+          "Doc": "the cameras, microphones and speakers the desktop knows of now, each once: no argument answers those three kinds, and a class keeps to one -- `\"Video/Source\"`, `\"Audio/Source\"`, `\"Audio/Sink\"`, or another of GStreamer's. Each answers `Name`, `Modes` and `Element()`, a source already pointed at it, so a camera is chosen by name on every platform GStreamer has a provider for (PipeWire or V4L2, Media Foundation, AVFoundation). It asks the system every time, tens of milliseconds, a couple of hundred for all three: ask on a button, not on a timer",
+          "Native": true
+        },
+        {
           "Name": "Element",
           "Kind": "Method",
           "Params": 2,
@@ -19161,6 +19179,56 @@
           "Signature": "(fn)",
           "Returns": "",
           "Doc": "everything in `fn` or nothing. **Nests**, through savepoints, so a function that wraps its own work in one is safe to call from inside another",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "Device",
+      "Members": [
+        {
+          "Name": "Class",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "GStreamer's class: `\"Video/Source\"` for a camera, `\"Audio/Source\"` for a microphone, `\"Audio/Sink\"` for a speaker",
+          "Native": true
+        },
+        {
+          "Name": "Element",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "Element",
+          "Doc": "a new source (or sink) element already pointed at this device -- `pipewiresrc`, `v4l2src`, `mfvideosrc`, `wasapi2src`, whichever the platform's provider makes -- to `Add` to a pipeline like any other. Each call makes another one",
+          "Native": true
+        },
+        {
+          "Name": "Modes",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "array",
+          "Doc": "what it can produce, one object per format GStreamer reports: `Type` (`\"video/x-raw\"`, `\"image/jpeg\"`, `\"audio/x-raw\"`), the fields under their GStreamer names (`width`, `height`, `format`, `rate`, `channels`; a rate as a number, `30` or `7.5`; a list as an array, a range left out), and `Caps`, the same mode as text for a `capsfilter`. A camera usually lists one per size; a device that reports nothing answers `[]`",
+          "Native": true
+        },
+        {
+          "Name": "Name",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "what the desktop calls it: `\"Integrated Camera\"`, a headset's name",
+          "Native": true
+        },
+        {
+          "Name": "Properties",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "object",
+          "Doc": "what its provider says about it (`device.path`, `device.api`, `is-default` ...), numbers, strings and booleans. Provider- and platform-specific: for showing or logging, not for choosing",
           "Native": true
         }
       ]

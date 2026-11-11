@@ -50,6 +50,7 @@ static JSClassID audioplayer_class_id;
 static JSClassID element_class_id;
 static JSClassID pad_class_id;
 static JSClassID bus_class_id;
+static JSClassID device_class_id;
 
 static const char *const MEDIA_FIT[] = { "Fill", "Contain", "Cover", "ScaleDown" };
 #ifdef BTA_HAVE_GST
@@ -91,6 +92,7 @@ typedef struct BtaMedia {
     bool        at_end;     /* EOS seen: Play seeks back before resuming */
     bool        live;       /* the pipeline said NO_PREROLL: do not buffer-pause */
     bool        audio_fallback; /* an audio sink failed once; play silently */
+    bool        attached;   /* video only: showing a sink of the program's (Attach) */
     bool        dead;       /* torn down: the bus callback must not touch */
     JSValue     self;       /* audio only: the keepalive a playing cue holds */
     JSValue     on_ended;   /* audio only, duplicated */
@@ -220,6 +222,16 @@ typedef struct BtaBus {
 #endif
 } BtaBus;
 
+/* A device the monitor found: one reference, nothing else -- no JSValue, so
+ * no gc_mark, and nothing a teardown has to stop. */
+typedef struct BtaDevice {
+#ifdef BTA_HAVE_GST
+    GstDevice  *device;     /* one reference */
+#else
+    int         unused;
+#endif
+} BtaDevice;
+
 static const char *const MEDIA_BUS_TYPES[] = {
     "error", "warning", "info", "eos", "buffering", "state-changed",
     "clock-lost", "async-done", "element"
@@ -267,6 +279,14 @@ static JSValue pad_link(JSContext *ctx, JSValueConst this_val, int argc,
                         JSValueConst *argv);
 static JSValue bus_on(JSContext *ctx, JSValueConst this_val, int argc,
                       JSValueConst *argv);
+static JSValue media_devices(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv);
+static JSValue device_get_name(JSContext *ctx, JSValueConst this_val);
+static JSValue device_get_class(JSContext *ctx, JSValueConst this_val);
+static JSValue device_get_modes(JSContext *ctx, JSValueConst this_val);
+static JSValue device_get_properties(JSContext *ctx, JSValueConst this_val);
+static JSValue device_element(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv);
 
 #ifdef BTA_HAVE_GST
 static BtaElem *elem_this(JSContext *ctx, JSValueConst this_val)
@@ -526,6 +546,7 @@ static JSValue media_get_available(JSContext *ctx, JSValueConst this_val);
 static JSValue video_get_source_width(JSContext *ctx, JSValueConst this_val);
 static JSValue video_get_source_height(JSContext *ctx, JSValueConst this_val);
 static JSValue video_save(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+static JSValue video_attach(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
 static const JSCFunctionListEntry video_props[] = {
     /* Uri
@@ -636,6 +657,19 @@ static const JSCFunctionListEntry video_props[] = {
      *   spelling. **Refused before anything has been decoded**
      */
     JS_CFUNC_DEF("Save",  1, video_save),
+    /* Attach(sink)
+     *   shows the frames of a pipeline the program built, instead of its own
+     *   `Uri`: `sink` is a `gtk4paintablesink` from `Media.Element`. The
+     *   Video's own playback stops, `SourceWidth`, `SourceHeight` and `Save`
+     *   answer for the attached frames, and the next `Play` goes back to
+     *   `Uri`. `Attach(null)` lets go and leaves the control empty. It
+     *   follows the pipeline and does not drive it: starting, stopping and
+     *   errors are the pipeline's `State` and `Bus`, and dropping the
+     *   pipeline leaves its last frame up. It is how a form shows a camera
+     *   while the same pipeline records it: the device's `Element()` (see
+     *   `Media.Devices`), a `tee`, and a `queue` before each branch
+     */
+    JS_CFUNC_DEF("Attach", 1, video_attach),
 };
 
 static JSValue audio_get_onended(JSContext *ctx, JSValueConst this_val);
@@ -1607,7 +1641,8 @@ static JSValue audioplayer_construct(JSContext *ctx, JSValueConst new_target,
 /* --------------------------------------------------------- the three types
  *
  * No global constructor holds these: `Media.Element` makes the first, and the
- * rest arrive from verbs (`Pad`, `Bus`) and signal arguments. The
+ * rest arrive from verbs (`Pad`, `Bus`) and signal arguments; a `Device`
+ * comes from `Media.Devices`. The
  * descriptions here are the published ones -- `Widget.Members("Element")` and
  * the documentation repositories answer from these tables.
  */
@@ -1726,6 +1761,42 @@ static const JSCFunctionListEntry bus_props[] = {
     JS_CFUNC_DEF("On", 2, bus_on),
 };
 
+/* type Device */
+static const JSCFunctionListEntry device_props[] = {
+    /* Name -> string
+     *   what the desktop calls it: `"Integrated Camera"`, a headset's name
+     */
+    JS_CGETSET_DEF("Name", device_get_name, NULL),
+    /* Class -> string
+     *   GStreamer's class: `"Video/Source"` for a camera, `"Audio/Source"`
+     *   for a microphone, `"Audio/Sink"` for a speaker
+     */
+    JS_CGETSET_DEF("Class", device_get_class, NULL),
+    /* Modes -> array
+     *   what it can produce, one object per format GStreamer reports:
+     *   `Type` (`"video/x-raw"`, `"image/jpeg"`, `"audio/x-raw"`), the
+     *   fields under their GStreamer names (`width`, `height`, `format`,
+     *   `rate`, `channels`; a rate as a number, `30` or `7.5`; a list as an
+     *   array, a range left out), and `Caps`, the same mode as text for a
+     *   `capsfilter`. A camera usually lists one per size; a device that
+     *   reports nothing answers `[]`
+     */
+    JS_CGETSET_DEF("Modes", device_get_modes, NULL),
+    /* Properties -> object
+     *   what its provider says about it (`device.path`, `device.api`,
+     *   `is-default` ...), numbers, strings and booleans. Provider- and
+     *   platform-specific: for showing or logging, not for choosing
+     */
+    JS_CGETSET_DEF("Properties", device_get_properties, NULL),
+    /* Element() -> Element
+     *   a new source (or sink) element already pointed at this device --
+     *   `pipewiresrc`, `v4l2src`, `mfvideosrc`, `wasapi2src`, whichever the
+     *   platform's provider makes -- to `Add` to a pipeline like any other.
+     *   Each call makes another one
+     */
+    JS_CFUNC_DEF("Element", 0, device_element),
+};
+
 static void element_finalizer(JSRuntime *rt, JSValue v)
 {
     BtaElem *e = JS_GetOpaque(v, element_class_id);
@@ -1833,6 +1904,25 @@ static const JSClassDef bus_class = {
     .gc_mark   = bus_gc_mark,
 };
 
+static void device_finalizer(JSRuntime *rt, JSValue v)
+{
+    BtaDevice *d = JS_GetOpaque(v, device_class_id);
+
+    (void)rt;
+    if (!d)
+        return;
+#ifdef BTA_HAVE_GST
+    if (d->device)
+        gst_object_unref(d->device);
+#endif
+    g_free(d);
+}
+
+static const JSClassDef device_class = {
+    "Device",
+    .finalizer = device_finalizer,
+};
+
 static const JSCFunctionListEntry media_global_props[] = {
     /* Element(type, [props]) -> Element
      *   builds an element by its factory name (`rtspsrc`, `tee`, `wavenc`)
@@ -1843,6 +1933,18 @@ static const JSCFunctionListEntry media_global_props[] = {
      *   nothing
      */
     JS_CFUNC_DEF("Element", 2, media_element),
+    /* Devices([class]) -> Device[]
+     *   the cameras, microphones and speakers the desktop knows of now, each
+     *   once: no argument answers those three kinds, and a class keeps to
+     *   one -- `"Video/Source"`, `"Audio/Source"`, `"Audio/Sink"`, or another
+     *   of GStreamer's. Each answers `Name`,
+     *   `Modes` and `Element()`, a source already pointed at it, so a camera
+     *   is chosen by name on every platform GStreamer has a provider for
+     *   (PipeWire or V4L2, Media Foundation, AVFoundation). It asks the
+     *   system every time, tens of milliseconds, a couple of hundred for
+     *   all three: ask on a button, not on a timer
+     */
+    JS_CFUNC_DEF("Devices", 1, media_devices),
 };
 
 void bta_media_init(JSContext *ctx, JSValue global)
@@ -1864,8 +1966,8 @@ void bta_media_init(JSContext *ctx, JSValue global)
 
     JS_SetPropertyStr(ctx, global, "AudioPlayer", ctor);
 
-    /* The elements API: three classes no global holds, and the `Media` object
-     * that makes the first of them. Registered in both builds -- the classes
+    /* The elements API: four classes no global holds, and the `Media` object
+     * that makes the first of them (`Media.Devices` the fourth). Registered in both builds -- the classes
      * answer about themselves with no engine, the designer's rule. */
     JS_NewClassID(JS_GetRuntime(ctx), &element_class_id);
     JS_NewClass(JS_GetRuntime(ctx), element_class_id, &element_class);
@@ -1889,6 +1991,15 @@ void bta_media_init(JSContext *ctx, JSValue global)
 
     JS_SetPropertyFunctionList(ctx, bus_proto, bus_props, G_N_ELEMENTS(bus_props));
     JS_SetClassProto(ctx, bus_class_id, bus_proto);
+
+    JS_NewClassID(JS_GetRuntime(ctx), &device_class_id);
+    JS_NewClass(JS_GetRuntime(ctx), device_class_id, &device_class);
+
+    JSValue device_proto = JS_NewObject(ctx);
+
+    JS_SetPropertyFunctionList(ctx, device_proto, device_props,
+                               G_N_ELEMENTS(device_props));
+    JS_SetClassProto(ctx, device_class_id, device_proto);
 
     JSValue media = JS_NewObject(ctx);
 
@@ -2428,6 +2539,27 @@ static gboolean media_bus_cb(GstBus *bus, GstMessage *msg, gpointer data)
     return TRUE;
 }
 
+/* After `Attach` the picture shows the program's sink, so a `Play` from the
+ * Video's own `Uri` puts its own sink's paintable back first -- the picture
+ * is the one place both write, and only one of them may own it. */
+static void video_reclaim(BtaMedia *m)
+{
+    GstElement   *sink = NULL;
+    GdkPaintable *p    = NULL;
+
+    if (!m->attached || !m->playbin)
+        return;
+    g_object_get(m->playbin, "video-sink", &sink, NULL);
+    if (sink) {
+        g_object_get(sink, "paintable", &p, NULL);
+        gst_object_unref(sink);
+    }
+    gtk_picture_set_paintable(GTK_PICTURE(m->picture), p);
+    if (p)
+        g_object_unref(p);
+    m->attached = false;
+}
+
 /* The pipeline is built on first use, so constructing a Video never fails for
  * lack of a plugin: Widget.New("Video") and CssNode() work regardless, and
  * the refusal lands where playback was asked for, naming the element.
@@ -2442,8 +2574,10 @@ static bool engine_ensure(JSContext *ctx, BtaMedia *m)
     GstElement *pb;
     GstBus     *bus;
 
-    if (m->playbin)
+    if (m->playbin) {
+        video_reclaim(m);
         return true;
+    }
     if (!gst_ready) {
         gst_init(NULL, NULL);
         gst_ready = true;
@@ -2487,6 +2621,7 @@ static bool engine_ensure(JSContext *ctx, BtaMedia *m)
         }
         gtk_picture_set_paintable(GTK_PICTURE(m->picture), paintable);
         g_object_unref(paintable);
+        m->attached = false;
     } else {
         /* Audio only, twice over: the flag keeps the video branch from ever
          * being decoded (0x1 is VIDEO in the playbin flags, kept in step with
@@ -4728,6 +4863,316 @@ static void bus_teardown(BtaBus *b)
     b->ctx = NULL;
 }
 
+/* ================================================================ devices
+ *
+ * `Media.Devices` is a GstDeviceMonitor asked once and let go. **Started,
+ * not only probed**: `gst_device_monitor_get_devices` on a monitor that was
+ * never started probes every provider and answers each device once per
+ * provider -- measured on a desk with PipeWire, the camera came back twice
+ * (`pipewiresrc` and `v4l2src`) and the microphones four times (PipeWire,
+ * PulseAudio, ALSA): 13 sources where the desktop has 3. A started monitor
+ * applies the providers' `hidden-providers` (PipeWire hides the others) and
+ * answers 1 and 3. Starting costs what probing does: 16 to 105 ms for one
+ * class, 213 with no filter.
+ */
+
+static JSValue device_wrap_owned(JSContext *ctx, GstDevice *device)
+{
+    JSValue proto = JS_GetClassProto(ctx, device_class_id);
+    JSValue obj   = JS_NewObjectProtoClass(ctx, proto, device_class_id);
+
+    JS_FreeValue(ctx, proto);
+    if (JS_IsException(obj)) {
+        gst_object_unref(device);
+        return obj;
+    }
+
+    BtaDevice *d = g_new0(BtaDevice, 1);
+
+    d->device = device;
+    JS_SetOpaque(obj, d);
+    return obj;
+}
+
+static JSValue media_devices(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv)
+{
+    char             *klass = NULL;
+    GstDeviceMonitor *mon;
+    GList            *found;
+    gboolean          started;
+    JSValue           out;
+    uint32_t          i = 0;
+
+    (void)this_val;
+    if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+        const char *s;
+
+        if (!JS_IsString(argv[0]))
+            return JS_ThrowTypeError(ctx,
+                "Devices: the class is text, like \"Video/Source\"");
+        s = JS_ToCString(ctx, argv[0]);
+        if (!s)
+            return JS_EXCEPTION;
+        klass = g_strdup(s);
+        JS_FreeCString(ctx, s);
+    }
+
+    if (!gst_is_initialized())
+        gst_init(NULL, NULL);
+
+    mon = gst_device_monitor_new();
+    /* No class is the three a person picks from, and not every class: with
+     * no filter PipeWire also answers each application's open stream
+     * (`Stream/Output/Audio`, named `unknown` more often than not), which
+     * nobody chooses from a list. An empty string is the same as none. */
+    if (klass && *klass) {
+        gst_device_monitor_add_filter(mon, klass, NULL);
+    } else {
+        gst_device_monitor_add_filter(mon, "Video/Source", NULL);
+        gst_device_monitor_add_filter(mon, "Audio/Source", NULL);
+        gst_device_monitor_add_filter(mon, "Audio/Sink", NULL);
+    }
+    started = gst_device_monitor_start(mon);
+    found   = gst_device_monitor_get_devices(mon);
+    if (started)
+        gst_device_monitor_stop(mon);
+    gst_object_unref(mon);
+    g_free(klass);
+
+    out = JS_NewArray(ctx);
+    for (GList *l = found; l; l = l->next) {
+        JSValue dev = device_wrap_owned(ctx, l->data);   /* takes the ref */
+
+        l->data = NULL;
+        if (JS_IsException(dev)) {
+            JS_FreeValue(ctx, out);
+            out = JS_EXCEPTION;
+            /* The rest still hold their references. */
+            for (GList *r = l->next; r; r = r->next)
+                gst_object_unref(r->data);
+            break;
+        }
+        JS_SetPropertyUint32(ctx, out, i++, dev);
+    }
+    g_list_free(found);
+    return out;
+}
+
+static BtaDevice *device_this(JSContext *ctx, JSValueConst this_val)
+{
+    BtaDevice *d = JS_GetOpaque(this_val, device_class_id);
+
+    if (!d || !d->device) {
+        JS_ThrowTypeError(ctx, "not a Device");
+        return NULL;
+    }
+    return d;
+}
+
+static JSValue device_get_name(JSContext *ctx, JSValueConst this_val)
+{
+    BtaDevice *d = device_this(ctx, this_val);
+    gchar     *s;
+    JSValue    r;
+
+    if (!d)
+        return JS_EXCEPTION;
+    s = gst_device_get_display_name(d->device);
+    r = JS_NewString(ctx, s ? s : "");
+    g_free(s);
+    return r;
+}
+
+static JSValue device_get_class(JSContext *ctx, JSValueConst this_val)
+{
+    BtaDevice *d = device_this(ctx, this_val);
+    gchar     *s;
+    JSValue    r;
+
+    if (!d)
+        return JS_EXCEPTION;
+    s = gst_device_get_device_class(d->device);
+    r = JS_NewString(ctx, s ? s : "");
+    g_free(s);
+    return r;
+}
+
+/* One field of a mode: what `bus_field` carries, plus the two shapes caps
+ * are made of -- a fraction (a frame rate) as its number, and a list as an
+ * array of what it lists. A range, or a list holding one, is left out: it is
+ * not a mode but a family of them, and guessing a point in it is the
+ * program's business. */
+static JSValue mode_field(JSContext *ctx, const GValue *v)
+{
+    GType t = G_VALUE_TYPE(v);
+
+    if (t == GST_TYPE_FRACTION) {
+        int d = gst_value_get_fraction_denominator(v);
+
+        return d ? JS_NewFloat64(ctx, (double)gst_value_get_fraction_numerator(v) / d)
+                 : JS_UNDEFINED;
+    }
+    if (t == GST_TYPE_LIST) {
+        guint   n   = gst_value_list_get_size(v);
+        JSValue arr = JS_NewArray(ctx);
+
+        for (guint i = 0; i < n; i++) {
+            JSValue el = mode_field(ctx, gst_value_list_get_value(v, i));
+
+            if (JS_IsUndefined(el)) {
+                JS_FreeValue(ctx, arr);
+                return JS_UNDEFINED;
+            }
+            JS_SetPropertyUint32(ctx, arr, i, el);
+        }
+        return arr;
+    }
+    return bus_field(ctx, v);
+}
+
+static JSValue device_get_modes(JSContext *ctx, JSValueConst this_val)
+{
+    BtaDevice *d = device_this(ctx, this_val);
+    GstCaps   *caps;
+    JSValue    out;
+
+    if (!d)
+        return JS_EXCEPTION;
+    out  = JS_NewArray(ctx);
+    caps = gst_device_get_caps(d->device);
+    if (!caps)
+        return out;
+    for (guint i = 0; i < gst_caps_get_size(caps); i++) {
+        const GstStructure *s    = gst_caps_get_structure(caps, i);
+        JSValue             mode = JS_NewObject(ctx);
+        gchar              *text = gst_structure_to_string(s);
+        gsize               tl   = strlen(text);
+
+        /* GStreamer 1.20+ ends a structure's text with `;`, which is a
+         * separator between structures and not part of one mode. */
+        if (tl && text[tl - 1] == ';')
+            text[tl - 1] = '\0';
+
+        JS_SetPropertyStr(ctx, mode, "Type", JS_NewString(ctx, gst_structure_get_name(s)));
+        for (gint f = 0; f < gst_structure_n_fields(s); f++) {
+            const char   *name = gst_structure_nth_field_name(s, f);
+            const GValue *v    = gst_structure_get_value(s, name);
+            JSValue       val  = v ? mode_field(ctx, v) : JS_UNDEFINED;
+
+            if (!JS_IsUndefined(val))
+                JS_SetPropertyStr(ctx, mode, name, val);
+        }
+        JS_SetPropertyStr(ctx, mode, "Caps", JS_NewString(ctx, text));
+        g_free(text);
+        JS_SetPropertyUint32(ctx, out, i, mode);
+    }
+    gst_caps_unref(caps);
+    return out;
+}
+
+static JSValue device_get_properties(JSContext *ctx, JSValueConst this_val)
+{
+    BtaDevice    *d = device_this(ctx, this_val);
+    GstStructure *props;
+    JSValue       r;
+
+    if (!d)
+        return JS_EXCEPTION;
+    props = gst_device_get_properties(d->device);
+    if (!props)
+        return JS_NewObject(ctx);
+    r = bus_element_fields(ctx, props);
+    gst_structure_free(props);
+    return r;
+}
+
+static JSValue device_element(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv)
+{
+    BtaDevice  *d = device_this(ctx, this_val);
+    GstElement *el;
+
+    (void)argc; (void)argv;
+    if (!d)
+        return JS_EXCEPTION;
+    el = gst_device_create_element(d->device, NULL);
+    if (!el) {
+        gchar  *name = gst_device_get_display_name(d->device);
+        JSValue r    = bta_throw_text(ctx, "Element: no element could be made "
+                                           "for the device '%s'", name ? name : "");
+
+        g_free(name);
+        return r;
+    }
+    return elem_wrap_owned(ctx, gst_object_ref_sink(el));
+}
+
+/* ================================================================= Attach
+ *
+ * A Video showing a sink the program built. Everything is checked before the
+ * Video's own playback is touched, so a refusal leaves it playing; the
+ * paintable is the one thing handed over, held by the GtkPicture -- the
+ * element is not held at all, so dropping the pipeline drops nothing the
+ * picture needs (the paintable keeps its last frame).
+ */
+static JSValue video_attach(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv)
+{
+    BtaWidget    *w = bta_this(ctx, this_val);
+    BtaMedia     *m;
+    BtaElem      *e;
+    GParamSpec   *ps;
+    GdkPaintable *p = NULL;
+
+    if (!w)
+        return JS_EXCEPTION;
+    m = media_this(ctx, this_val);
+    if (!m)
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Attach expects (sink), or null to let go");
+
+    if (JS_IsNull(argv[0]) || JS_IsUndefined(argv[0])) {
+        if (m->attached) {
+            gtk_picture_set_paintable(GTK_PICTURE(w->gtk), NULL);
+            m->attached = false;
+        }
+        return JS_UNDEFINED;
+    }
+
+    e = JS_GetOpaque(argv[0], element_class_id);
+    if (!e)
+        return JS_ThrowTypeError(ctx,
+            "Attach: the sink is an Element -- Media.Element(\"gtk4paintablesink\")");
+    if (e->dead || !e->element)
+        return JS_ThrowPlainError(ctx, "Attach: that element is torn down");
+
+    ps = g_object_class_find_property(G_OBJECT_GET_CLASS(e->element), "paintable");
+    if (!ps || !(ps->flags & G_PARAM_READABLE) ||
+        !g_type_is_a(ps->value_type, GDK_TYPE_PAINTABLE)) {
+        GstElementFactory *f = gst_element_get_factory(e->element);
+
+        return JS_ThrowTypeError(ctx,
+            "Attach: a '%s' has no picture to show -- the sink is a "
+            "gtk4paintablesink", f ? GST_OBJECT_NAME(f) : GST_OBJECT_NAME(e->element));
+    }
+    g_object_get(e->element, "paintable", &p, NULL);
+    if (!p)
+        return JS_ThrowPlainError(ctx, "Attach: the sink produced no paintable");
+
+    /* Stop's own lines: the Video's own pipeline is parked, not paused, so
+     * nothing of it competes for the picture or keeps a console loop alive. */
+    engine_park(m);
+    m->wants     = false;
+    m->at_end    = false;
+    m->buffering = 100;
+    gtk_picture_set_paintable(GTK_PICTURE(w->gtk), p);
+    g_object_unref(p);
+    m->attached = true;
+    return JS_UNDEFINED;
+}
+
 #else /* no GStreamer at build time */
 
 /* ========================================================= no engine here
@@ -4863,6 +5308,58 @@ static JSValue bus_on(JSContext *ctx, JSValueConst this_val, int argc,
                       JSValueConst *argv)
 {
     (void)this_val; (void)argc; (void)argv;
+    return JS_ThrowPlainError(ctx, MEDIA_NO_GST);
+}
+
+static JSValue media_devices(JSContext *ctx, JSValueConst this_val, int argc,
+                             JSValueConst *argv)
+{
+    (void)this_val; (void)argc; (void)argv;
+    return JS_ThrowPlainError(ctx, MEDIA_NO_GST);
+}
+
+static JSValue device_get_name(JSContext *ctx, JSValueConst this_val)
+{
+    (void)this_val;
+    return JS_ThrowPlainError(ctx, MEDIA_NO_GST);
+}
+
+static JSValue device_get_class(JSContext *ctx, JSValueConst this_val)
+{
+    (void)this_val;
+    return JS_ThrowPlainError(ctx, MEDIA_NO_GST);
+}
+
+static JSValue device_get_modes(JSContext *ctx, JSValueConst this_val)
+{
+    (void)this_val;
+    return JS_ThrowPlainError(ctx, MEDIA_NO_GST);
+}
+
+static JSValue device_get_properties(JSContext *ctx, JSValueConst this_val)
+{
+    (void)this_val;
+    return JS_ThrowPlainError(ctx, MEDIA_NO_GST);
+}
+
+static JSValue device_element(JSContext *ctx, JSValueConst this_val, int argc,
+                              JSValueConst *argv)
+{
+    (void)this_val; (void)argc; (void)argv;
+    return JS_ThrowPlainError(ctx, MEDIA_NO_GST);
+}
+
+/* Letting go of nothing is answered; anything else could only have come from
+ * `Media.Element`, which refuses first -- so this refusal is the same one. */
+static JSValue video_attach(JSContext *ctx, JSValueConst this_val, int argc,
+                            JSValueConst *argv)
+{
+    if (!bta_this(ctx, this_val))
+        return JS_EXCEPTION;
+    if (argc < 1)
+        return JS_ThrowTypeError(ctx, "Attach expects (sink), or null to let go");
+    if (JS_IsNull(argv[0]) || JS_IsUndefined(argv[0]))
+        return JS_UNDEFINED;
     return JS_ThrowPlainError(ctx, MEDIA_NO_GST);
 }
 

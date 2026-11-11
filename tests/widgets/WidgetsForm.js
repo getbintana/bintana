@@ -663,7 +663,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "Direction", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "MediaAttach", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeForced", "LoadQuiet", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "DatabaseOdbc", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Pdf", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
@@ -5547,6 +5547,112 @@ class Form1 extends Form {
            ran.ExitCode, 0);
         check("...having reported the error first", ran.Output.includes("DONE NotFound"),
               ran.Output);
+    }
+
+    /*
+     * **`Video.Attach`: a Video showing a pipeline the program built** -- the
+     * half of a camera form `Uri` cannot be, since a camera is a device and
+     * not a URI on every platform but Linux, and a form that records what it
+     * shows needs the graph in its own hands. A live `videotestsrc` stands in
+     * for the camera: what is asserted is the frame's own size, which only
+     * the program's caps can have given it.
+     *
+     * The order is the one a viewer meets: its own clip first, the
+     * program's frames over it, then `Play` back to the clip -- which is the
+     * picture changing hands twice, and the second time is the one nothing
+     * else would do (the Video's own sink has to be put back; without that
+     * the frames stay 200 wide and the wait below never ends).
+     */
+    testMediaAttach() {
+        if (!Widget.Available("Video")) {
+            print("  (skipping Attach: this machine has no Video -- no GTK4 sink)");
+            return;
+        }
+
+        const box = new Panel();
+        this.Fixed1.Add(box);
+        box.Move(0, 0);
+        box.Resize(340, 260);
+
+        const v = new Video();
+        box.Add(v);
+        v.Resize(320, 240);
+
+        throws("Attach takes an Element", () => { v.Attach(42); });
+        throws("and one that has a picture", () => { v.Attach(Media.Element("fakesink")); });
+        v.Attach(null);
+        eq("letting go of nothing is nothing", v.SourceWidth, 0);
+
+        const pipe = Media.Element("pipeline");
+        const src  = pipe.Add(Media.Element("videotestsrc", { "is-live": true }));
+        const caps = pipe.Add(Media.Element("capsfilter",
+                                            { caps: "video/x-raw,width=200,height=150" }));
+        const conv = pipe.Add(Media.Element("videoconvert"));
+        const sink = pipe.Add(Media.Element("gtk4paintablesink"));
+
+        src.Link(caps).Link(conv).Link(sink);
+
+        const dir  = File.Join(Environment.TempDirectory,
+                               `bintana-attach-${Environment.ProcessId}`);
+        const clip = File.Join(dir, "own.ogv");
+        let   made = false;
+
+        if (Application.HasCommand("gst-launch-1.0")) {
+            Directory.Make(dir);
+            made = Exec.Wait(["gst-launch-1.0", "-q",
+                              "videotestsrc", "num-buffers=30", "!",
+                              "video/x-raw,width=160,height=120,framerate=30/1", "!",
+                              "theoraenc", "!", "oggmux", "!",
+                              "filesink", `location=${clip}`], { Timeout: 30000 }).ExitCode === 0;
+        }
+
+        const attach = () => {
+            v.Attach(sink);
+            pipe.State = "Playing";
+            eq("an attached Video is not playing its own", v.Playing, false);
+            until("...and the program's frames arrive", () => v.SourceWidth === 200, () => {
+                eq("their height is the program's caps too", v.SourceHeight, 150);
+
+                const shot = File.Join(Environment.TempDirectory,
+                                       `bintana-attach-${Environment.ProcessId}.png`);
+
+                v.Save(shot);
+                check("Save writes the attached frame",
+                      File.Exists(shot) && File.Info(shot).Size > 0, shot);
+                File.Delete(shot);
+                if (!made) {
+                    print("  (skipping Play after Attach: no clip, it needs gst-launch-1.0)");
+                    letGo();
+                    return;
+                }
+                v.Play();
+                eq("Play after Attach plays the Video's own again", v.Playing, true);
+                until("...with its own frames", () => v.SourceWidth === 160, () => {
+                    v.Stop();
+                    v.Attach(sink);
+                    letGo();
+                });
+            });
+        };
+        const letGo = () => {
+            check("attached, there is a frame to let go of", v.SourceWidth > 0,
+                  String(v.SourceWidth));
+            v.Attach(null);
+            eq("Attach(null) leaves the control empty", v.SourceWidth, 0);
+            pipe.State = "Null";
+            v.Delete();
+            box.Delete();
+            if (made)
+                Directory.DeleteTree(dir);
+        };
+
+        if (!made) {
+            attach();
+            return;
+        }
+        v.Uri = clip;
+        v.Play();
+        until("the Video's own clip plays first", () => v.SourceWidth === 160, attach);
     }
 
     /*

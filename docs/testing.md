@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11388 assertions
+./tests/run.sh                          # all seven projects, 11397 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -475,7 +475,7 @@ not there.
 tests/media.sh
 ```
 
-`Media.Element` and the three classes behind it are the one part of the runtime
+`Media.Element` and the classes behind it are the one part of the runtime
 whose behavior is not a control's: a graph of GStreamer elements, a bus and a
 withdrawal of messages from them. `tests/media` is a console project -- no GTK,
 no window -- and `tests/media.sh` gives it a binary and, more importantly, a
@@ -486,6 +486,13 @@ that hang; the others assert the conversions, the refusals, the graph rules,
 the bus kinds -- the `element` message among them, held to the `level`
 element's two channels of dB numbers -- `Eos` flushing a WAV header whose
 sizes are then read back, and `pad-added` over the suite's own `win.wav`.
+`Media.Devices` is held to its shape on whatever the machine has (a runner
+has no camera, and the per-device half says it skipped) and to listing each
+device once -- red without starting the monitor, which answers a device per
+provider. `Video.Attach` needs a display and is `tests/widgets`'s
+`MediaAttach`: a live `videotestsrc` at the program's own caps over a
+Video's clip, then `Play` back to the clip, red without the picture being
+handed back.
 
 Four scenarios hold the lifetimes of the subscriptions, each of which crashed,
 hung or leaked before: `busDrop` (a handler takes another wrapper of the same

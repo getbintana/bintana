@@ -224,6 +224,66 @@ Each of these was measured while building it, and each one shaped a rule.
   guessed at. `tests/media`'s `levels` scenario holds it to two channels'
   peaks in dB.
 
+### Cameras: `Media.Devices` and `Video.Attach`
+
+Windows.Media.Capture was the model asked about (2026-11-11): a device list,
+a preview, a photo, a recording. What it took here was two pieces, and the
+rest is JavaScript over the elements API.
+
+- **On Linux a camera already was a `Uri`.** `playbin3` takes
+  `v4l2:///dev/video0` (v4l2src is a URI handler), and a `Video` played the
+  desk's camera at 1920x1080 with `Duration` -1 and `Seekable` false, and
+  `Save` wrote the frame. That is Linux only -- the Windows and macOS sources
+  register no URI scheme -- and it bypasses PipeWire, so a Flatpak needs
+  `--device=all` for it.
+- **A device monitor only probed answers each device once per provider.**
+  `gst_device_monitor_get_devices` on a monitor never started asked
+  PipeWire, V4L2, PulseAudio and ALSA each for themselves: 2 cameras where
+  there is 1 (`pipewiresrc` and `v4l2src`), 13 microphones where there are 3.
+  Started, the providers' `hidden-providers` apply (PipeWire hides the rest)
+  and the answer is 1 and 3. `Media.Devices` starts, asks and stops;
+  `tests/media`'s "each device once" goes red without the start (measured).
+- **No filter is not "every device".** With none, PipeWire also lists each
+  application's open stream (`Stream/Output/Audio`, mostly named `unknown`),
+  which the de-duplication check caught as two identical rows. No argument
+  is the three classes a person chooses from: `Video/Source`,
+  `Audio/Source`, `Audio/Sink`.
+- **It costs a probe each time**: 16 ms for the sinks, 30 for the
+  microphones, 105 for the camera (PipeWire's round trip) and about 220 for
+  all three on this desk. Nothing is cached, because a device plugged in
+  since is the reason to ask again; the description says to ask on a button.
+- **`Attach` is a method, not a property**, because the serialiser saves
+  every accessor with a getter and a setter, and an `Element` in a `.form`
+  means nothing. It hands the GtkPicture the sink's `paintable` and holds
+  **nothing else** -- not the element, not a JSValue -- so there is no
+  `gc_mark` to add and no lifetime to get wrong: the pipeline dropped, the
+  paintable keeps its last frame. Everything is checked before the Video's
+  own playbin is parked, so a refused `Attach` leaves it playing.
+- **The picture has one owner at a time, so `Play` takes it back.** A playbin
+  built before the `Attach` had set its own paintable once, at
+  construction; without `video_reclaim` a `Play` after an `Attach` ran the
+  Video's clip into a sink nobody shows, and `testMediaAttach` waited for
+  160-wide frames that never came (red, measured).
+- **A camera's larger sizes are often JPEG only.** This desk's
+  (`Integrated Camera`, uvcvideo) offers 1920x1080 at 30 fps as
+  `image/jpeg` and as raw YUYV only at 5 fps, so a preview is `decodebin`
+  and not a bare `videoconvert`; `Device.Modes` is where a program reads
+  that. The documented example's shape (`decodebin` with `pad-added`, then
+  `Attach`) was run against `videotestsrc ! jpegenc`, not the camera:
+  turning a person's camera on for a test needs their say-so.
+- **`examples/camera` is the whole form**: the list, `bestCaps` over
+  `Modes`, a preview, `Save` as the photograph, and a recording through a
+  `tee` into VP8 and Opus in WebM. Recording *rebuilds* the pipeline with
+  the second branch instead of adding it to the running tee, which needs pad
+  probes this surface does not carry -- the preview blinks at Record and at
+  Stop. `vp8enc` needs `deadline` 1 (real time) or it falls behind a
+  camera. It was run on Xvfb from a copy whose device list was a stand-in
+  over `videotestsrc` and whose microphone was `audiotestsrc`: 2.5 s of VP8
+  and 48 kHz Opus, a duration in the file (the `Eos` wrote the index), the
+  preview back after; and with no device at all, "No camera found." and
+  every control off. The example carries no test pattern of its own -- a
+  fake row in a list of cameras is the kind of thing that gets copied.
+
 
 ## Desktop integration
 

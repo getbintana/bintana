@@ -601,6 +601,72 @@ function descriptors() {
     return n;
 }
 
+/*
+ * `Media.Devices`: what the desktop has, each once. A runner has no camera and
+ * may have no sound card either, so the per-device half reads whatever is
+ * there and says so when nothing is -- the shape and the refusals hold on
+ * any machine.
+ *
+ * **No two devices share a name and a class.** That is the effect of
+ * starting the monitor rather than only probing it: probed, every provider
+ * answers for itself and this desk listed its camera twice (PipeWire and
+ * V4L2) and each microphone up to four times (PipeWire, PulseAudio, ALSA).
+ * Two identical cameras on one machine would read as a false red here; no
+ * desk the suite runs on has them.
+ */
+function devices() {
+    print("devices:");
+    const all = Media.Devices();
+
+    check("Devices answers an array", Array.isArray(all), typeof all);
+    const none = Media.Devices("Nope/Nothing");
+
+    check("a class nothing has answers none", none.length === 0, String(none.length));
+    refused("a class that is not text", () => Media.Devices(42));
+
+    const seen = new Set();
+    let   twice = "";
+
+    for (const d of all) {
+        const key = d.Class + " " + d.Name;
+
+        if (seen.has(key))
+            twice = key;
+        seen.add(key);
+    }
+    check("each device once", twice === "", twice);
+
+    const sinks = Media.Devices("Audio/Sink");
+
+    check("a class keeps to its class",
+          sinks.every((d) => d.Class.indexOf("Audio/Sink") >= 0),
+          JSON.stringify(sinks.map((d) => d.Class)));
+
+    if (!all.length) {
+        print("  (no devices on this machine: the per-device checks are skipped)");
+        return;
+    }
+
+    const d = all[0];
+
+    check("a device has a name", typeof d.Name === "string" && d.Name !== "", d.Name);
+    check("and a class", /\//.test(d.Class), d.Class);
+    check("its modes are an array of typed modes, each with its caps",
+          Array.isArray(d.Modes) &&
+          d.Modes.every((m) => typeof m.Type === "string" && typeof m.Caps === "string" &&
+                               m.Caps.indexOf(m.Type) === 0 && !m.Caps.endsWith(";")),
+          JSON.stringify(d.Modes.slice(0, 2)));
+    check("its properties are an object", typeof d.Properties === "object" && d.Properties !== null);
+
+    const e1 = d.Element();
+    const e2 = d.Element();
+
+    check("Element makes an element, not yet started", e1.State === "Null", e1.State);
+    check("and another one each time", e1.Get("name") !== e2.Get("name"),
+          e1.Get("name") + " " + e2.Get("name"));
+    print("  (" + all.length + " devices; the first is a " + d.Class + ")");
+}
+
 /* A subscription is held by the pipeline's wrapper and goes with it: twenty
  * pipelines in a row, each with three Bus handlers that do not name it, and
  * the process must end where it began. Before, each one left its Bus
@@ -673,6 +739,7 @@ function Main() {
          * is false, and the verbs refuse with the one sentence. */
         check("Media.Available is false", Media.Available === false);
         refused("Element refuses with no engine", () => Media.Element("fakesink"));
+        refused("Devices refuses with no engine", () => Media.Devices());
         print("");
         print("media: " + checks + " checks, " + fails + " failed");
         Application.Quit(fails ? 1 : 0);
@@ -681,6 +748,7 @@ function Main() {
     check("Media.Available is true", Media.Available === true);
 
     conversions();
+    devices();
 
     print("the graph, running:");
     subscriptionsGo(rest);

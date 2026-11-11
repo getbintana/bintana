@@ -436,8 +436,9 @@ Each with the trigger that reopens it:
   `stream-start`, `latency`, `qos`, and a subscription to all of them —
   trigger: a program that shows now-playing metadata or a progress bar from
   the bus.
-- **Object-valued `Get`/`Set`** — the door a paintable comes through, and the
-  next thing after this plan (below).
+- **Object-valued `Get`/`Set`** — no longer needed for a picture (`Video.Attach`
+  wires the paintable without it, below); trigger: another object a program
+  has to hold.
 - **Events other than `Eos`** — seeking a graph of your own, flush, gap; the
   players' `Seek` answers the playback case; trigger: a caller that seeks (or
   otherwise sends events to) a pipeline it built.
@@ -451,16 +452,16 @@ Each with the trigger that reopens it:
   make; trigger: a caller that needs one, and
   `gst_element_factory_make_with_properties` (1.20) is the answer.
 
-## What this does not reach: a picture
+## A picture: built as `Video.Attach`
 
-The four verbs build a graph; they do not put one on a form.
-`gtk4paintablesink`'s `paintable` is an object property and `Get` does not
-carry objects, and `Picture` takes a file, bytes and a zoom — not a paintable.
-Two roads, neither in this plan: a `Picture` (or `Video`) that can be handed
-one — which is the object-valued `Get` above — or a sink whose `paintable` the
-runtime itself wires into a widget. Trigger: the first camera wall whose frames
-have to be *seen* on a form, which is the caller this plan keeps half an eye
-on.
+The four verbs build a graph; they did not put one on a form, since
+`gtk4paintablesink`'s `paintable` is an object property and `Get` carries no
+objects. Of the two roads this section named, the second was built on
+2026-11-11, when a camera was asked for: `Video.Attach(sink)` takes the
+`Element` and wires its paintable into the Video itself, so no object crosses
+into JavaScript and object-valued `Get` stays deferred. `Media.Devices` came
+with it, for the camera to be chosen by name; `examples/camera` is the shape,
+and the measurements are in [`media-desktop.md`](../agents/media-desktop.md).
 
 ## Stages
 
@@ -477,7 +478,7 @@ measurement demanded: the *synchronous* delivery (see above; the deferred one
 loses `pad-added`) and the keepalive a subscription holds. `pad-added` over a
 real `decodebin` is in `tests/media`, and `source-setup` rides the same road.
 
-Then the picture road above, when a caller wants it.
+The picture road came later, as `Video.Attach` (above).
 
 ## How it is tested
 
