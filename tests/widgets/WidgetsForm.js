@@ -34557,10 +34557,14 @@ class PQ extends Form {
                   '        try { gone = c.gone(); } catch (e) { gone = "gone"; }\n' +
                   '        c.v = 5;\n' +
                   '        print(`${c.f()} v=${c.v} saved=${c.saved} ${Calc.s()} ${gone} loan=${new Loan().pay()}`);\n' +
-                  '        if (n >= 5) Application.Quit(0);\n' +
+                  '        if (n >= 20) Application.Quit(0);\n' +
                   '    });\n' +
                   '}\n');
 
+        /* Twenty ticks, not five: eight replace orders travel over the control
+         * pipe while the program runs, and on a loaded Windows box five ticks
+         * (150 ms) ended it before the last three were read. The assertions look
+         * only at the first and last lines, so extra ticks change nothing. */
         const out     = [];
         const answers = {};
         const send    = (o) => job.Write(JSON.stringify(o));

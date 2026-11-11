@@ -141,6 +141,16 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   grandchild's, which `testExecControlLate` still holds is dropped. And an
   exit callback in a test reads what it asserts through a guard: **a throw in
   the callback that continues a chain is a hang, not a red line.**
+  **Windows has the same lifetime in a thread instead of an async read.** The
+  control stream is a named pipe (`BINTANA_CONTROL_PIPE`), because there is no
+  descriptor 3 to inherit; a reader thread owns a reference to an
+  `ExecControl`, and every line is posted to the main loop carrying the job's
+  **id**, not its pointer. `exec_job_free` sets `closing`, connects a dummy
+  client to wake a thread blocked in `ConnectNamedPipe`, cancels the read, and
+  joins; a line that arrives after the job is gone finds no id and is dropped.
+  The socket/pipe handle is closed only after the join, or a thread can be left
+  reading a closed handle. The same rule as the Unix read: **what frees the job
+  cancels the read, not teardown alone.**
   **The next run of the same job hung the same way one test earlier**, and
   that one was the test's own race: `testDebuggerRunTo` sent `runto` *and*
   `continue` at `ready`, but `runto` already lets the program go -- so on the

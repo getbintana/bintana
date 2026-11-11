@@ -14,11 +14,12 @@
  * process.
  *
  * **The channel is two halves of a pipe and not one.** Events go out on
- * descriptor 3, opened by whoever spawned us; commands come in on stdin.
- * stdout is taken -- the program being debugged prints, and that is what the
- * IDE's output pane shows -- and marking protocol lines with a prefix would
- * mean a program that prints the prefix breaks the debugger, silently. A
- * descriptor of its own is the only spelling with no failure mode.
+ * descriptor 3 on Unix, or on the named pipe `BINTANA_CONTROL_PIPE` names on
+ * Windows; commands come in on stdin. stdout is taken -- the program being
+ * debugged prints, and that is what the IDE's output pane shows -- and marking
+ * protocol lines with a prefix would mean a program that prints the prefix
+ * breaks the debugger, silently. A stream of its own is the only spelling with
+ * no failure mode.
  *
  * **What it costs when nothing is armed.** The handler returns on its first
  * line whenever there is nothing to look for: no breakpoints, not stepping, no
@@ -35,15 +36,19 @@
 
 #include <errno.h>
 #include <string.h>
+#ifndef G_OS_WIN32
 #include <unistd.h>
+#else
+#include <io.h>
+#include <windows.h>
+#endif
 
 /*
  * `poll` is POSIX and MinGW has no `poll.h` at all.  It is here for one
- * question -- has the IDE said anything while the program ran -- and the whole
- * channel it asks about is Unix: descriptor 3 is opened by the parent and
- * `Exec`'s `Control` is refused on Windows for exactly that reason.  So the
- * question is asked where it can be answered, and `bta_debug_start` says out
- * loud that `--debug` is not available there.
+ * question -- has the IDE said anything while the program ran -- and that
+ * question is asked where it can be answered: on Windows a stop still reads
+ * stdin with `fgetc`, but an order sent *between* stops waits for the next
+ * stop instead of being noticed by `take_messages`.
  */
 #ifndef G_OS_WIN32
 #include <glib-unix.h>
@@ -52,8 +57,14 @@
 #include <signal.h>
 #endif
 
-/* Where events go.  Descriptor 3 by convention: 0, 1 and 2 are spoken for. */
+/* Where events go.  Descriptor 3 by convention on Unix: 0, 1 and 2 are spoken
+ * for.  Windows has no descriptor 3; the parent names a pipe in
+ * BINTANA_CONTROL_PIPE and this process opens it. */
+#ifndef G_OS_WIN32
 #define CONTROL_FD 3
+#else
+static HANDLE control_handle = INVALID_HANDLE_VALUE;
+#endif
 
 /* What the program is doing between stops. */
 typedef enum {
@@ -545,6 +556,29 @@ static void emit(const char *json)
     size_t      len = strlen(json);
     const char *nl  = "\n";
 
+#ifdef G_OS_WIN32
+    g_mutex_lock(&emit_lock);
+    bool  failed = control_handle == INVALID_HANDLE_VALUE;
+    DWORD why    = ERROR_INVALID_HANDLE;
+    DWORD wrote  = 0;
+
+    if (!failed) {
+        failed = !WriteFile(control_handle, json, (DWORD)len, &wrote, NULL) ||
+                 !WriteFile(control_handle, nl, 1, &wrote, NULL);
+        why = GetLastError();
+    }
+    g_mutex_unlock(&emit_lock);
+
+    if (failed) {
+        if (why == ERROR_BROKEN_PIPE || why == ERROR_NO_DATA) {
+            /* The reader closed its end: the same as end of input. */
+            if (here.ctx || dbg.ctx)
+                detach(here.ctx ? here.ctx : dbg.ctx);
+        } else {
+            fprintf(stderr, "bintana debug: %s\n", json);
+        }
+    }
+#else
     /*
      * SIGPIPE is held off for these two writes and not ignored for the
      * process: an ignored signal is inherited across `exec`, so every child an
@@ -552,24 +586,20 @@ static void emit(const char *json)
      * a write to a closed reader answers EPIPE, the pending signal is taken
      * off the queue, and the mask goes back as it was.
      */
-#ifndef G_OS_WIN32
     sigset_t pipe_set, was_set;
 
     sigemptyset(&pipe_set);
     sigaddset(&pipe_set, SIGPIPE);
     pthread_sigmask(SIG_BLOCK, &pipe_set, &was_set);
-#endif
     g_mutex_lock(&emit_lock);
     bool failed = write(CONTROL_FD, json, len) < 0 || write(CONTROL_FD, nl, 1) < 0;
     int  why    = errno;
     g_mutex_unlock(&emit_lock);
-#ifndef G_OS_WIN32
     if (failed && why == EPIPE) {
         struct timespec now = { 0, 0 };
         sigtimedwait(&pipe_set, NULL, &now);
     }
     pthread_sigmask(SIG_SETMASK, &was_set, NULL);
-#endif
     errno = why;
 
     if (failed) {
@@ -583,6 +613,7 @@ static void emit(const char *json)
         if (errno == EPIPE && (here.ctx || dbg.ctx))
             detach(here.ctx ? here.ctx : dbg.ctx);
     }
+#endif
 }
 
 /* How much of an object is worth putting on one line before it stops being a
@@ -2102,19 +2133,41 @@ static bool step_wants_this(int depth_now)
  * exactly the situation somebody presses Pause in: a program that is not going
  * to reach one.
  */
+#ifdef G_OS_WIN32
+/* Whether stdin has something to read, without blocking: the Windows spelling
+ * of `poll(..., 0)`.  The child's stdin is a pipe, and PeekNamedPipe works on
+ * anonymous pipes as well as named ones. */
+static bool stdin_ready(void)
+{
+    HANDLE handle = (HANDLE)_get_osfhandle(_fileno(stdin));
+    DWORD  avail  = 0;
+
+    if (handle == INVALID_HANDLE_VALUE)
+        return false;
+    if (!PeekNamedPipe(handle, NULL, 0, NULL, &avail, NULL))
+        return false;
+    return avail > 0;
+}
+#endif
+
 static void take_messages(JSContext *ctx, int depth_now)
 {
 #ifndef G_OS_WIN32
     struct pollfd in    = { .fd = STDIN_FILENO, .events = POLLIN };
+#endif
 
     /* A worker stopped somewhere owns the channel and is reading it: what is
      * on stdin is its orders, not this thread's. */
     if (!g_rec_mutex_trylock(&channel_lock))
         return;
 
-    GString      *order = g_string_new(NULL);
+    GString *order = g_string_new(NULL);
 
+#ifdef G_OS_WIN32
+    while (stdin_ready()) {
+#else
     while (poll(&in, 1, 0) > 0 && (in.revents & (POLLIN | POLLHUP))) {
+#endif
         if (!read_order(order)) {
             detach(ctx);
             break;
@@ -2125,10 +2178,6 @@ static void take_messages(JSContext *ctx, int depth_now)
     }
     g_string_free(order, TRUE);
     g_rec_mutex_unlock(&channel_lock);
-#else
-    (void)ctx;
-    (void)depth_now;
-#endif
 }
 
 /*
@@ -2145,6 +2194,20 @@ static void take_messages(JSContext *ctx, int depth_now)
 static gboolean on_idle_orders(gint fd, GIOCondition cond, gpointer data)
 {
     (void)fd; (void)cond; (void)data;
+
+    if (!dbg.attached)
+        return G_SOURCE_REMOVE;
+    here.ctx = dbg.ctx;
+    take_messages(dbg.ctx, 0);
+    return dbg.attached ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
+}
+#else
+/* A pipe HANDLE is not a GLib pollable stream, so this is the small timer the
+ * Windows build pays instead of a watch: four dozen microseconds of a peek,
+ * only while `--debug` is attached. */
+static gboolean on_idle_orders_win32(gpointer data)
+{
+    (void)data;
 
     if (!dbg.attached)
         return G_SOURCE_REMOVE;
@@ -2356,14 +2419,35 @@ void bta_debug_start(JSContext *ctx)
 
 #ifdef G_OS_WIN32
     /*
-     * The channel is a descriptor the parent opened (3) and this process's
-     * stdin -- a Unix arrangement, and the same one that makes `Exec`'s
-     * `Control` refuse on Windows.  Saying so beats a program that stops at
-     * `ready` waiting for a debugger nobody can drive.
+     * The parent names a pipe.  `Exec`'s Control created the server end and
+     * put the name in this variable; a person running `bintana --debug`
+     * without one gets a sentence rather than a program stopped at `ready`
+     * with nobody able to answer.
      */
-    fprintf(stderr, "bintana: --debug needs a control channel this platform has not got\n");
-    dbg.on = false;
-    return;
+    const char *pipe_name = g_getenv("BINTANA_CONTROL_PIPE");
+
+    if (!pipe_name || !*pipe_name) {
+        fprintf(stderr, "bintana: --debug needs the control pipe Exec sets up\n");
+        dbg.on = false;
+        return;
+    }
+    wchar_t *wide = g_utf8_to_utf16(pipe_name, -1, NULL, NULL, NULL);
+
+    if (!wide) {
+        fprintf(stderr, "bintana: --debug: the control pipe name is not UTF-8\n");
+        dbg.on = false;
+        return;
+    }
+    control_handle = CreateFileW(wide, GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
+                                 0, NULL);
+    g_free(wide);
+    if (control_handle == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "bintana: --debug could not open the control pipe "
+                        "(Windows error %lu)\n",
+                (unsigned long)GetLastError());
+        dbg.on = false;
+        return;
+    }
 #endif
 
     dbg.ctx    = ctx;
@@ -2399,6 +2483,9 @@ void bta_debug_start(JSContext *ctx)
 #ifndef G_OS_WIN32
     if (dbg.attached)
         g_unix_fd_add(STDIN_FILENO, G_IO_IN | G_IO_HUP, on_idle_orders, NULL);
+#else
+    if (dbg.attached)
+        g_timeout_add(20, on_idle_orders_win32, NULL);
 #endif
 }
 
@@ -2415,6 +2502,12 @@ void bta_debug_stopping(JSContext *ctx, int code)
     json = g_strdup_printf("{\"event\":\"exited\",\"code\":%d}", code);
     emit(json);
     g_free(json);
+#ifdef G_OS_WIN32
+    if (control_handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(control_handle);
+        control_handle = INVALID_HANDLE_VALUE;
+    }
+#endif
 }
 
 void bta_debug_want(void) { dbg.on = true; }

@@ -17,6 +17,14 @@ one-page answer to *what is new since the release I have*.
   first audio-sink failure rebuilds the pipeline once with a `fakesink` and the
   audio branch off, so a virtualized Windows session with no audio device shows
   the clip silently instead of failing whole. A second failure is reported.
+- **`Exec`'s `Control` stream works on Windows.** There is no descriptor 3 to
+  inherit there, so `Exec` creates a named pipe and passes its name in the
+  child's `BINTANA_CONTROL_PIPE`; `bintana --debug` opens it, which makes the
+  IDE's debugger and its breakpoints work on Windows. The callback, the
+  one-line-at-a-time protocol, `Write` on stdin and the rule that the control
+  stream ending is not the run ending are unchanged. A child of your own opens
+  that environment variable and writes lines to it; Unix still gets descriptor
+  3.
 - **`Terminal` runs a child on Windows.** ConPTY (Windows 10 1809+) gives it a
   real console -- input, output and window size -- and libvterm turns the VT
   stream into a grid drawn by the runtime, with scrollback, colours, selection,

@@ -21,9 +21,10 @@ only where they exist), the process layer (`setsid`/`killpg` compiled out,
 `g_subprocess_force_exit` as the one ending `Stop` and `Kill` have, `uname`
 asked of GLib, `HasDisplay` true), `bta_exe_path` in place of `/proc/self/exe`,
 `G_SEARCHPATH_SEPARATOR` for `BINTANA_LIB_PATH`, the console's UTF-8 code page,
-and `%'` replaced by the same grouping written out. `Exec`'s `Control` stream is
-**refused with a sentence** on Windows rather than accepted and ignored: it is a
-descriptor a child inherits by number, and there is no such thing there.
+and `%'` replaced by the same grouping written out. `Exec`'s `Control` stream
+is a **named pipe** on Windows instead of descriptor 3: the parent creates it,
+the name travels in `BINTANA_CONTROL_PIPE`, and a reader thread feeds the same
+callback. `bintana --debug` opens it, so the IDE's debugger works there.
 
 What the port depended on is: the IDE's output pane is a read-only `TextEditor`
 over `Exec`, and `Terminal` is optional at build time and answers through
@@ -120,9 +121,10 @@ so nothing there changes.
   examples/hello`: the IDE opens, the log view shows a run's output, a
   traceback is clickable, Stop works, and the terminal tab is **present**:
   `Terminal.Available` is true, `Run(["cmd.exe"])` gives a prompt, `ssh` runs
-  as an ordinary child, and `Exit` reaches the form. The `no-vte` CI job runs
-  the whole suite against a build without a backend on Linux, so the stub is
-  already covered; what is left to find here is Windows.
+  as an ordinary child, and `Exit` reaches the form. `--debug` stops at a
+  breakpoint: `Exec.Control` is the named pipe on that platform. The `no-vte`
+  CI job runs the whole suite against a build without a backend on Linux, so
+  the stub is already covered; what is left to find here is Windows.
 - The console-tool projects, which need no display, are the first part of a
   future Windows CI: `tests/api`, `tests/icons`, `tests/styles`.
 

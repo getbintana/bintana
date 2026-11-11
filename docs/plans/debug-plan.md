@@ -263,7 +263,7 @@ IDE's:
 | | |
 |---|---|
 | `job.Write(text)` | say something to a child. The handle has `ProcessId`, `Running`, `ExitCode`, `TimedOut`, `Stop()` and `Kill()`, and no way to talk to it at all |
-| `Exec(argv, { Control: (line) => … }, …)` | a **third stream**, on descriptor 3, for a child that speaks a protocol as well as printing |
+| `Exec(argv, { Control: (line) => … }, …)` | a **third stream**, on descriptor 3, for a child that speaks a protocol as well as printing; on Windows the same stream is a named pipe named in `BINTANA_CONTROL_PIPE` |
 
 The third stream is the part worth arguing. stdout is taken: the program being
 debugged prints, and that is what the output pane shows. Marking protocol lines
@@ -280,7 +280,7 @@ because its servers print nothing else; gdb/MI the same. Neither is our case.
 One JSON object per line — the runtime has `JSON`, the IDE parses it with what it
 already uses, and a person can read a session out of a log.
 
-From the child, on descriptor 3:
+From the child, on descriptor 3 (or the named pipe on Windows):
 
 ```
 {"event":"ready"}

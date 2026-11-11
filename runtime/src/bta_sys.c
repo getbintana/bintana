@@ -18,14 +18,12 @@
 #include <unistd.h>
 
 /*
- * The two things here that are Unix and not POSIX.
- *
- * `GUnixInputStream` is what this side reads an `Exec`'s third stream with: a
- * pipe whose writing end becomes descriptor 3 in the child.  Windows has no
- * `GUnixInputStream` and no descriptor a child inherits by number -- see
- * `exec_control_fd`, which refuses that stream out loud there rather than
- * accepting a callback that would never be called.  `uname` is the other one;
- * `env_os` asks GLib instead where it does not exist.
+ * The one genuinely Unix shape here is `Exec`'s third stream: on Unix it is a
+ * pipe whose writing end becomes descriptor 3 in the child and
+ * `GUnixInputStream` reads the other end.  Windows has neither, so that half
+ * is a named pipe named in `BINTANA_CONTROL_PIPE` and read on a thread; the
+ * `bintana --debug` child opens it, and any other child can too.  The rest is
+ * GLib, with `uname` asked through `g_get_os_info`.
  */
 #ifndef G_OS_WIN32
 #include <gio/gunixinputstream.h>
@@ -1496,6 +1494,32 @@ static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
  * C -- the collector cannot see them -- so every exit path must free them,
  * including runtime teardown while the child is still alive.
  */
+#ifdef G_OS_WIN32
+/*
+ * The Windows control channel is a named pipe, because Windows has no
+ * descriptor 3 and `g_subprocess_launcher_take_fd` is Unix-only.  The server
+ * end lives in this process; the child opens the name passed in
+ * BINTANA_CONTROL_PIPE and writes one line at a time.  The thread exists
+ * because a pipe HANDLE has no GLib pollable stream -- the same reason the
+ * terminal has a reader thread.
+ */
+typedef struct {
+    gint     refs;
+    HANDLE   pipe;
+    HANDLE   thread;
+    char    *name_utf8;
+    wchar_t *name_w;
+    GMutex   lock;
+    bool     closing;
+    int      job_id;
+} ExecControl;
+
+typedef struct {
+    int   job_id;
+    char *line;     /* NULL is end of the control stream */
+} ExecControlEvent;
+#endif
+
 typedef struct {
     JSContext        *ctx;
     JSValue           on_line;
@@ -1512,12 +1536,16 @@ typedef struct {
     /*
      * The third stream, and the way back.
      *
-     * `control` is descriptor 3 in the child, read here a line at a time, for a
-     * child that speaks a protocol as well as printing: stdout is what it says
-     * to a person and this is what it says to a program. `in` is its stdin,
-     * which is what `Write` writes to. Both NULL unless asked for.
+     * `control` is descriptor 3 in the child on Unix; on Windows it is a named
+     * pipe (`control_win`).  It is read here a line at a time, for a child
+     * that speaks a protocol as well as printing: stdout is what it says to a
+     * person and this is what it says to a program. `in` is its stdin, which
+     * is what `Write` writes to. Both NULL unless asked for.
      */
     GDataInputStream *control;
+#ifdef G_OS_WIN32
+    ExecControl      *control_win;
+#endif
     JSValue           on_control;
     GOutputStream    *in;
     GCancellable     *cancel;
@@ -1563,6 +1591,22 @@ typedef struct {
 static GList *exec_jobs;   /* ExecJob*, live children */
 static int    exec_next_id = 1;
 
+static ExecJob *exec_find(int id)
+{
+    for (GList *l = exec_jobs; l; l = l->next) {
+        ExecJob *job = l->data;
+
+        if (job->id == id)
+            return job;
+    }
+    return NULL;
+}
+
+#ifdef G_OS_WIN32
+static void exec_control_close(ExecControl *control);
+static void exec_control_unref(ExecControl *control);
+#endif
+
 static void exec_job_free(ExecJob *job)
 {
     exec_jobs = g_list_remove(exec_jobs, job);
@@ -1589,6 +1633,12 @@ static void exec_job_free(ExecJob *job)
     JS_FreeValue(job->ctx, job->on_line);
     JS_FreeValue(job->ctx, job->on_control);
     g_clear_object(&job->control);
+#ifdef G_OS_WIN32
+    if (job->control_win) {
+        exec_control_close(job->control_win);
+        exec_control_unref(job->control_win);
+    }
+#endif
     JS_FreeValue(job->ctx, job->on_exit);
     JS_FreeValue(job->ctx, job->handle);
     /* The line in flight is not in this queue: its operation holds it, and is
@@ -1628,7 +1678,12 @@ static void exec_maybe_finish(ExecJob *job)
      * before it ended is owed: the debugger's last logpoints were dropped on a
      * loaded machine when the exit was dispatched first.  Wait for its end, a
      * bounded while. */
-    if (job->control && !job->ctl_eof) {
+    bool has_control = job->control != NULL;
+#ifdef G_OS_WIN32
+    if (job->control_win)
+        has_control = true;
+#endif
+    if (has_control && !job->ctl_eof) {
         if (!job->linger)
             job->linger = g_timeout_add(EXEC_CONTROL_LINGER, on_exec_linger, job);
         return;
@@ -1653,6 +1708,212 @@ static void exec_maybe_finish(ExecJob *job)
     }
     exec_job_free(job);
 }
+
+#ifdef G_OS_WIN32
+static ExecControl *exec_control_ref(ExecControl *control)
+{
+    g_atomic_int_inc(&control->refs);
+    return control;
+}
+
+static void exec_control_unref(ExecControl *control)
+{
+    if (!g_atomic_int_dec_and_test(&control->refs))
+        return;
+    g_free(control->name_utf8);
+    g_free(control->name_w);
+    g_mutex_clear(&control->lock);
+    g_free(control);
+}
+
+static void exec_control_event_free(gpointer data)
+{
+    ExecControlEvent *event = data;
+
+    g_free(event->line);
+    g_free(event);
+}
+
+static gboolean exec_control_dispatch(gpointer data)
+{
+    ExecControlEvent *event = data;
+    ExecJob          *job   = exec_find(event->job_id);
+
+    if (!job)
+        return G_SOURCE_REMOVE;
+
+    if (event->line) {
+        if (JS_IsFunction(job->ctx, job->on_control)) {
+            JSContext *ctx = job->ctx;
+            JSValue    fn  = JS_DupValue(ctx, job->on_control);
+            JSValue    arg = JS_NewString(ctx, event->line);
+            JSValue    r   = JS_Call(ctx, fn, JS_UNDEFINED, 1,
+                                     (JSValueConst *)&arg);
+
+            if (JS_IsException(r))
+                bta_dump_error(ctx);
+            JS_FreeValue(ctx, r);
+            JS_FreeValue(ctx, arg);
+            JS_FreeValue(ctx, fn);
+        }
+    } else {
+        job->ctl_eof = true;
+        exec_maybe_finish(job);
+    }
+    return G_SOURCE_REMOVE;
+}
+
+/* Called from the reader thread: the job itself is only touched on the main
+ * loop, and by id, so a line posted just as the job ends finds no job and is
+ * dropped. */
+static void exec_control_post(ExecControl *control, const char *line)
+{
+    g_mutex_lock(&control->lock);
+    bool closing = control->closing;
+    g_mutex_unlock(&control->lock);
+
+    if (closing)
+        return;
+
+    ExecControlEvent *event = g_new0(ExecControlEvent, 1);
+
+    event->job_id = control->job_id;
+    event->line   = line ? g_strdup(line) : NULL;
+    g_idle_add_full(G_PRIORITY_DEFAULT, exec_control_dispatch, event,
+                    exec_control_event_free);
+}
+
+static DWORD WINAPI exec_control_reader(LPVOID data)
+{
+    ExecControl *control = data;
+    GString     *line    = g_string_new(NULL);
+    char         buffer[4096];
+
+    if (!ConnectNamedPipe(control->pipe, NULL) &&
+        GetLastError() != ERROR_PIPE_CONNECTED)
+        goto done;
+
+    for (;;) {
+        DWORD read = 0;
+
+        if (!ReadFile(control->pipe, buffer, sizeof(buffer), &read, NULL) ||
+            read == 0)
+            break;
+        for (DWORD i = 0; i < read; i++) {
+            if (buffer[i] == '\n') {
+                exec_control_post(control, line->str);
+                g_string_truncate(line, 0);
+            } else if (buffer[i] != '\r') {
+                g_string_append_c(line, buffer[i]);
+            }
+        }
+    }
+    if (line->len)
+        exec_control_post(control, line->str);
+
+done:
+    g_string_free(line, TRUE);
+    exec_control_post(control, NULL);
+    exec_control_unref(control);
+    return 0;
+}
+
+static void exec_control_close(ExecControl *control)
+{
+    g_mutex_lock(&control->lock);
+    if (control->closing) {
+        g_mutex_unlock(&control->lock);
+        return;
+    }
+    control->closing = true;
+    g_mutex_unlock(&control->lock);
+
+    /* A thread blocked in ConnectNamedPipe is woken by connecting to it once:
+     * the client closes immediately, the thread reads end of file and exits.
+     * CancelSynchronousIo is for the read half, and the wait keeps the pipe
+     * and the thread handles valid while it does. */
+    if (control->thread && control->name_w) {
+        HANDLE dummy = CreateFileW(control->name_w, GENERIC_WRITE, 0, NULL,
+                                   OPEN_EXISTING, 0, NULL);
+
+        if (dummy != INVALID_HANDLE_VALUE)
+            CloseHandle(dummy);
+    }
+    if (control->thread)
+        CancelSynchronousIo(control->thread);
+    if (control->thread)
+        WaitForSingleObject(control->thread, 5000);
+
+    if (control->pipe != INVALID_HANDLE_VALUE) {
+        DisconnectNamedPipe(control->pipe);
+        CloseHandle(control->pipe);
+        control->pipe = INVALID_HANDLE_VALUE;
+    }
+    if (control->thread) {
+        CloseHandle(control->thread);
+        control->thread = NULL;
+    }
+}
+
+static ExecControl *exec_control_new(GSubprocessLauncher *launcher,
+                                     char **error)
+{
+    static gint sequence;
+    int   number = g_atomic_int_add(&sequence, 1);
+    char *utf8   = g_strdup_printf("\\\\.\\pipe\\bintana-exec-%lu-%d",
+                                   (unsigned long)GetCurrentProcessId(),
+                                   number);
+    wchar_t *wide = g_utf8_to_utf16(utf8, -1, NULL, NULL, NULL);
+
+    *error = NULL;
+    if (!wide) {
+        *error = g_strdup("the pipe name is not valid UTF-8");
+        g_free(utf8);
+        return NULL;
+    }
+
+    HANDLE pipe = CreateNamedPipeW(
+        wide,
+        PIPE_ACCESS_INBOUND | FILE_FLAG_FIRST_PIPE_INSTANCE,
+        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT |
+            PIPE_REJECT_REMOTE_CLIENTS,
+        1, 0, 65536, 0, NULL);
+
+    if (pipe == INVALID_HANDLE_VALUE) {
+        *error = g_strdup_printf("CreateNamedPipe failed with Windows error %lu",
+                                 (unsigned long)GetLastError());
+        g_free(wide);
+        g_free(utf8);
+        return NULL;
+    }
+
+    ExecControl *control = g_new0(ExecControl, 1);
+
+    control->refs      = 1;
+    control->pipe      = pipe;
+    control->name_utf8 = utf8;
+    control->name_w    = wide;
+    g_mutex_init(&control->lock);
+
+    /* The child finds it by name.  A named pipe and not an inheritable handle:
+     * GSubprocess does not promise which handles reach the child, and a number
+     * is not a path a program written for another platform can be handed. */
+    g_subprocess_launcher_setenv(launcher, "BINTANA_CONTROL_PIPE", utf8, TRUE);
+    return control;
+}
+
+static bool exec_control_start(ExecControl *control, int job_id)
+{
+    control->job_id = job_id;
+    control->thread = CreateThread(NULL, 0, exec_control_reader,
+                                   exec_control_ref(control), 0, NULL);
+    if (!control->thread) {
+        exec_control_unref(control);
+        return false;
+    }
+    return true;
+}
+#endif /* G_OS_WIN32 */
 
 /*
  * Ending a child, which is two verbs on Unix and one on Windows.
@@ -2309,49 +2570,45 @@ static GPtrArray *exec_build_argv(JSContext *ctx, JSValueConst list,
 /*
  * The third stream, when the caller asked for one.
  *
- * A pipe whose writing end becomes descriptor 3 in the child, and whose reading
- * end this side keeps. Three, because 0, 1 and 2 are spoken for and a protocol
- * cannot share stdout with what the program prints: marking its lines with a
- * prefix would mean a program that prints the prefix breaks its own tooling,
- * silently. `-1` when no `Control` was given, which is every caller but one.
+ * On Unix: a pipe whose writing end becomes descriptor 3 in the child, and
+ * whose reading end this side keeps. Three, because 0, 1 and 2 are spoken for
+ * and a protocol cannot share stdout with what the program prints: marking its
+ * lines with a prefix would mean a program that prints the prefix breaks its
+ * own tooling, silently. `-1` when no `Control` was given.
  *
- * **Windows refuses it rather than ignoring it** (`-2`, exception pending).
- * A callback that is accepted and never called is the silent failure this
- * whole runtime is written against, and there is no version of it to offer
- * there: `g_subprocess_launcher_take_fd` is Unix-only, and so is
- * `GUnixInputStream`. The debugger is the one caller in the tree, and it is
- * Linux's for now.
+ * On Windows: a named pipe created before the spawn, whose name travels in
+ * `BINTANA_CONTROL_PIPE`; the server end is read by a thread because a pipe
+ * HANDLE has no GLib pollable stream. The failure is an exception on both
+ * platforms, because a callback accepted and never called is the silent
+ * failure this whole runtime is written against.
  */
+static bool exec_wants_control(JSContext *ctx, JSValueConst opts)
+{
+    if (JS_IsUndefined(opts))
+        return false;
+
+    JSValue cb = JS_GetPropertyStr(ctx, opts, "Control");
+    bool    yes = JS_IsFunction(ctx, cb);
+
+    JS_FreeValue(ctx, cb);
+    return yes;
+}
+
+#ifndef G_OS_WIN32
 static int exec_control_fd(JSContext *ctx, JSValueConst opts,
                            GSubprocessLauncher *launcher)
 {
-    JSValue cb;
-#ifndef G_OS_WIN32
-    int     ends[2];
-#endif
+    int ends[2];
 
-    if (JS_IsUndefined(opts))
+    if (!exec_wants_control(ctx, opts))
         return -1;
 
-    cb = JS_GetPropertyStr(ctx, opts, "Control");
-    if (!JS_IsFunction(ctx, cb)) {
-        JS_FreeValue(ctx, cb);
-        return -1;
-    }
-    JS_FreeValue(ctx, cb);
-
-#ifdef G_OS_WIN32
-    JS_ThrowPlainError(ctx,
-        "Exec: Control needs a descriptor a child inherits, which this platform has not got");
-    return -2;
-#else
     /*
      * A refusal and not an absence.  `-1` here means *no Control was asked
      * for*, so returning it for a pipe that could not be made handed back a
      * child with the stream silently missing -- descriptor exhaustion (EMFILE)
-     * losing the debugger's channel with nothing said.  `-2` is the shape the
-     * Windows arm above already answers with, so the two platforms now agree
-     * about what failure looks like.
+     * losing the debugger's channel with nothing said.  `-2` is the failure
+     * answer.
      */
     if (pipe(ends) != 0) {
         JS_ThrowPlainError(ctx, "Exec: Control could not be opened: %s",
@@ -2365,8 +2622,8 @@ static int exec_control_fd(JSContext *ctx, JSValueConst opts,
        child goes away. */
     g_subprocess_launcher_take_fd(launcher, ends[1], 3);
     return ends[0];
-#endif
 }
+#endif
 
 static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
                                           bool split)
@@ -2423,7 +2680,23 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
         g_ptr_array_unref(args);
         return JS_EXCEPTION;
     }
-    int                  ctl_fd  = exec_control_fd(ctx, opts, launcher);
+#ifdef G_OS_WIN32
+    ExecControl *control_win = NULL;
+    if (exec_wants_control(ctx, opts)) {
+        char *why = NULL;
+
+        control_win = exec_control_new(launcher, &why);
+        if (!control_win) {
+            JS_ThrowPlainError(ctx, "Exec: Control could not be opened: %s",
+                               why ? why : "the control pipe could not be made");
+            g_free(why);
+            g_object_unref(launcher);
+            g_ptr_array_unref(args);
+            return JS_EXCEPTION;
+        }
+    }
+#else
+    int ctl_fd = exec_control_fd(ctx, opts, launcher);
 
     /* Refused, and the refusal is the answer: see exec_control_fd. */
     if (ctl_fd == -2) {
@@ -2431,6 +2704,7 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
         g_ptr_array_unref(args);
         return JS_EXCEPTION;
     }
+#endif
 
     GError      *err  = NULL;
     GSubprocess *proc = g_subprocess_launcher_spawnv(
@@ -2442,8 +2716,15 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
         JSValue e = JS_ThrowPlainError(ctx, "Exec failed: %s",
                                        bta_gerror_text(err));
         g_clear_error(&err);
+#ifdef G_OS_WIN32
+        if (control_win) {
+            exec_control_close(control_win);
+            exec_control_unref(control_win);
+        }
+#else
         if (ctl_fd >= 0)
             close(ctl_fd);
+#endif
         return e;
     }
 
@@ -2472,12 +2753,25 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     job->on_line = argc > cb     ? JS_DupValue(ctx, argv[cb])     : JS_UNDEFINED;
     job->on_exit = argc > cb + 1 ? JS_DupValue(ctx, argv[cb + 1]) : JS_UNDEFINED;
     job->out     = g_data_input_stream_new(g_subprocess_get_stdout_pipe(proc));
+    /* Windows console programs write CRLF; the default LF-only reader left the
+     * `\r` on every line, so every comparison in the suite grew one.  ANY is
+     * the text answer on both systems -- LF, CRLF or a lone CR end a line. */
+    g_data_input_stream_set_newline_type(job->out,
+                                         G_DATA_STREAM_NEWLINE_TYPE_ANY);
     job->err     = split ? g_data_input_stream_new(g_subprocess_get_stderr_pipe(proc))
                          : NULL;
+    if (job->err)
+        g_data_input_stream_set_newline_type(job->err,
+                                             G_DATA_STREAM_NEWLINE_TYPE_ANY);
     job->err_eof = !split;   /* no second pipe is a second pipe already drained */
     job->in      = g_subprocess_get_stdin_pipe(proc);
     job->on_control = JS_UNDEFINED;
-#ifndef G_OS_WIN32
+#ifdef G_OS_WIN32
+    if (control_win) {
+        job->control_win = control_win;
+        job->on_control  = JS_GetPropertyStr(ctx, opts, "Control");
+    }
+#else
     if (ctl_fd >= 0) {
         job->control    = g_data_input_stream_new(
             g_unix_input_stream_new(ctl_fd, TRUE));
@@ -2488,6 +2782,20 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     job->kill_after = exec_millis(ctx, opts, "KillAfter", EXEC_KILL_AFTER);
 
     exec_jobs = g_list_prepend(exec_jobs, job);
+
+#ifdef G_OS_WIN32
+    if (job->control_win &&
+        !exec_control_start(job->control_win, job->id)) {
+        /* The thread is the only way to read the pipe; without it there is
+         * nothing honest to call.  Close it, and let the run finish. */
+        exec_control_close(job->control_win);
+        exec_control_unref(job->control_win);
+        job->control_win = NULL;
+        job->ctl_eof     = true;
+        JS_FreeValue(ctx, job->on_control);
+        job->on_control  = JS_UNDEFINED;
+    }
+#endif
 
     exec_read_next(job, job->out);
     if (job->err)
