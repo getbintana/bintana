@@ -1,5 +1,5 @@
 /*
- * Terminal -- VTE 2.91 for GTK4.
+ * Terminal -- a real pty and the screen in front of it.
  *
  * A real terminal, not a text pane pretending to be one: the child gets a pty,
  * so colours, progress output and interactive prompts behave.  It is what a
@@ -8,19 +8,21 @@
  * For a command whose output you show, `Exec` and a `TextEditor` are the pair
  * (which is what the IDE's own output pane is).
  *
- * **VTE is optional at build time** (`BTA_HAVE_VTE`), the bargain sqlite,
- * libsoup and GStreamer already make here -- and the reason is portability:
- * VTE is the one dependency with no Windows port.  Without it the class is
- * still registered, still builds the same outer GTK shape, still loads out of a
- * `.form` and still answers every property it has; what refuses is the three
- * verbs that need a child.  `Terminal.Available` and `Widget.Available`
- * ("Terminal") are how a palette asks before it offers the button.
+ * **The backend is optional at build time**, the bargain sqlite, libsoup and
+ * GStreamer already make here -- and the reason is portability: VTE is the one
+ * dependency with no Windows port.  Linux uses VTE (`BTA_HAVE_VTE`); Windows
+ * uses ConPTY and libvterm (`BTA_HAVE_LIBVTERM`), in
+ * `bta_terminal_win32.c`.  Without either the class is still registered, still
+ * builds the same outer GTK shape, still loads out of a `.form` and still
+ * answers every property it has; what refuses is the three verbs that need a
+ * child.  `Terminal.Available` and `Widget.Available` ("Terminal") are how a
+ * palette asks before it offers the button.
  *
  * The split below is bta_media.c's: one shared half holding everything a
  * property does, and two implementations of the handful of calls that are
- * really VTE's.  Everything VTE's headers bring -- `vte/vte.h`, and `signal.h`
- * and `sys/wait.h`, which do not exist on Windows either -- is inside the
- * guard.
+ * really the backend's.  Everything VTE's headers bring -- `vte/vte.h`, and
+ * `signal.h` and `sys/wait.h`, which do not exist on Windows either -- is
+ * inside the guard.
  */
 #include "bta.h"
 
@@ -31,18 +33,28 @@
 
 #include <signal.h>
 #include <sys/wait.h>
+#elif defined(G_OS_WIN32) && defined(BTA_HAVE_LIBVTERM)
+#include "bta_terminal_win32.h"
 #endif
 
 /* What a runtime with no pty says, in one place: the sqlite/libsoup wording,
  * and no distribution's package names. */
-#define TERM_NO_VTE                                                          \
+#ifdef G_OS_WIN32
+#define TERM_NO_PTY                                                          \
+    "this runtime was built without libvterm, so a Terminal cannot run a "    \
+    "child. Install libvterm's development package and build again -- "       \
+    "CMake finds it with pkg-config and prints what it found"
+#else
+#define TERM_NO_PTY                                                          \
     "this runtime was built without VTE, so a Terminal cannot run a child. "  \
     "Install VTE's development package (vte-2.91-gtk4) and build again -- "   \
     "CMake finds it with pkg-config and prints what it found"
+#endif
 
 /* Whether this build has one, as the class row declares it and as the JS side
  * is answered.  One expression, read in both places. */
-#ifdef BTA_HAVE_VTE
+#if defined(BTA_HAVE_VTE) || \
+    (defined(G_OS_WIN32) && defined(BTA_HAVE_LIBVTERM))
 #define TERM_AVAILABLE true
 #else
 #define TERM_AVAILABLE false
@@ -76,7 +88,8 @@ static bool  term_spawn(JSContext *ctx, BtaWidget *w, char **argv, const char *c
 static bool  term_alive(BtaWidget *w);
 static void  term_write(BtaWidget *w, const char *s, size_t len);
 static void  term_reset(BtaWidget *w);
-#ifdef BTA_HAVE_VTE
+#if defined(BTA_HAVE_VTE) || \
+    (defined(G_OS_WIN32) && defined(BTA_HAVE_LIBVTERM))
 static bool  term_kill(BtaWidget *w, bool hard);      /* false: no child */
 #endif
 static char *term_read(BtaWidget *w);                 /* g_free the answer */
@@ -141,13 +154,14 @@ static JSValue term_signal(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-#ifdef BTA_HAVE_VTE
+#if defined(BTA_HAVE_VTE) || \
+    (defined(G_OS_WIN32) && defined(BTA_HAVE_LIBVTERM))
     return JS_NewBool(ctx, term_kill(w, magic != 0));
 #else
     /* A verb, and the verbs refuse: a build with no pty has no child to end,
      * and answering `false` would say *there was none running* about a runtime
      * where there can never be one. */
-    return JS_ThrowPlainError(ctx, TERM_NO_VTE);
+    return JS_ThrowPlainError(ctx, TERM_NO_PTY);
 #endif
 }
 
@@ -246,9 +260,11 @@ static JSValue term_get_scrollback(JSContext *ctx, JSValueConst this_val)
     BtaWidget *w = bta_this(ctx, this_val);
     if (!w)
         return JS_EXCEPTION;
-#ifdef BTA_HAVE_VTE
+#if defined(BTA_HAVE_VTE)
     return JS_NewInt32(ctx,
         (int)vte_terminal_get_scrollback_lines(VTE_TERMINAL(w->inner)));
+#elif defined(G_OS_WIN32) && defined(BTA_HAVE_LIBVTERM)
+    return JS_NewInt32(ctx, bta_terminal_win32_get_scrollback(w));
 #else
     return JS_NewInt32(ctx,
         GPOINTER_TO_INT(g_object_get_data(G_OBJECT(w->inner), SCROLLBACK_KEY)));
@@ -265,8 +281,10 @@ static JSValue term_set_scrollback(JSContext *ctx, JSValueConst this_val,
     int32_t n;
     if (!bta_to_int(ctx, val, "ScrollbackLines", &n))
         return JS_EXCEPTION;
-#ifdef BTA_HAVE_VTE
+#if defined(BTA_HAVE_VTE)
     vte_terminal_set_scrollback_lines(VTE_TERMINAL(w->inner), n);
+#elif defined(G_OS_WIN32) && defined(BTA_HAVE_LIBVTERM)
+    bta_terminal_win32_set_scrollback(w, n);
 #else
     g_object_set_data(G_OBJECT(w->inner), SCROLLBACK_KEY, GINT_TO_POINTER(n));
 #endif
@@ -278,8 +296,10 @@ static JSValue term_get_font_scale(JSContext *ctx, JSValueConst this_val)
     BtaWidget *w = bta_this(ctx, this_val);
     if (!w)
         return JS_EXCEPTION;
-#ifdef BTA_HAVE_VTE
+#if defined(BTA_HAVE_VTE)
     return JS_NewFloat64(ctx, vte_terminal_get_font_scale(VTE_TERMINAL(w->inner)));
+#elif defined(G_OS_WIN32) && defined(BTA_HAVE_LIBVTERM)
+    return JS_NewFloat64(ctx, bta_terminal_win32_get_font_scale(w));
 #else
     double *held = g_object_get_data(G_OBJECT(w->inner), FONTSCALE_KEY);
     return JS_NewFloat64(ctx, held ? *held : 1.0);
@@ -296,8 +316,10 @@ static JSValue term_set_font_scale(JSContext *ctx, JSValueConst this_val,
     double d;
     if (!bta_to_number(ctx, val, "FontScale", &d))
         return JS_EXCEPTION;
-#ifdef BTA_HAVE_VTE
+#if defined(BTA_HAVE_VTE)
     vte_terminal_set_font_scale(VTE_TERMINAL(w->inner), d);
+#elif defined(G_OS_WIN32) && defined(BTA_HAVE_LIBVTERM)
+    bta_terminal_win32_set_font_scale(w, d);
 #else
     double *held = g_new(double, 1);
     *held = d;
@@ -359,8 +381,8 @@ static const JSCFunctionListEntry terminal_props[] = {
      *   whether this build can run a child. `Widget.Available("Terminal")` is
      *   [the same question asked of the
      *   class](docs/llm/controls.md#what-there-is-and-what-this-build-can-run),
-     *   which is what a palette wants. `false` on a runtime built without
-     *   VTE, where the three verbs refuse
+     *   which is what a palette wants. `false` on a runtime built without a
+     *   terminal backend, where the three verbs refuse
      */
     JS_CGETSET_DEF("Available",       term_get_available,  NULL),
     /* LinkPattern
@@ -393,12 +415,13 @@ static const JSCFunctionListEntry terminal_props[] = {
      */
     JS_CFUNC_DEF("Run",   2, term_run),
     /* Stop()
-     *   SIGTERM to the child's **process group**, which is what reaches a
-     *   shell's own children
+     *   asks the child to end: SIGTERM to its **process group** on Linux,
+     *   Ctrl+C on the console on Windows
      */
     JS_CFUNC_MAGIC_DEF("Stop", 0, term_signal, 0),
     /* Kill()
-     *   SIGKILL, for the one that did not answer
+     *   makes it end, for the one that did not answer: SIGKILL on Linux, the
+     *   process and its children terminated on Windows
      */
     JS_CFUNC_MAGIC_DEF("Kill", 0, term_signal, 1),
     /* Feed(text)
@@ -691,7 +714,58 @@ static bool term_pattern(JSContext *ctx, BtaWidget *w, const char *pattern)
     return true;
 }
 
-#else /* no VTE at build time */
+#elif defined(G_OS_WIN32) && defined(BTA_HAVE_LIBVTERM)
+
+/* ============================================================ Windows ConPTY
+ *
+ * The implementation is `bta_terminal_win32.c`: ConPTY gives the child a real
+ * console, libvterm interprets its output and a `GtkDrawingArea` draws the
+ * grid.  These wrappers are the same eight calls the VTE half above answers,
+ * so nothing in the shared half knows which backend it has.
+ */
+
+static void term_build(BtaWidget *w)
+{
+    bta_terminal_win32_build(w);
+}
+
+static bool term_spawn(JSContext *ctx, BtaWidget *w, char **argv,
+                       const char *cwd)
+{
+    return bta_terminal_win32_spawn(ctx, w, argv, cwd);
+}
+
+static bool term_kill(BtaWidget *w, bool hard)
+{
+    return bta_terminal_win32_kill(w, hard);
+}
+
+static bool term_alive(BtaWidget *w)
+{
+    return bta_terminal_win32_alive(w);
+}
+
+static void term_write(BtaWidget *w, const char *s, size_t len)
+{
+    bta_terminal_win32_write(w, s, len);
+}
+
+static void term_reset(BtaWidget *w)
+{
+    bta_terminal_win32_reset(w);
+}
+
+static char *term_read(BtaWidget *w)
+{
+    return bta_terminal_win32_read(w);
+}
+
+static bool term_pattern(JSContext *ctx, BtaWidget *w, const char *pattern)
+{
+    return bta_terminal_win32_pattern(ctx, w, pattern);
+}
+
+#else /* no pty at build time */
 
 /* ============================================================ no pty here
  *
@@ -721,7 +795,7 @@ static void term_build(BtaWidget *w)
 static bool term_spawn(JSContext *ctx, BtaWidget *w, char **argv, const char *cwd)
 {
     (void)w; (void)argv; (void)cwd;
-    JS_ThrowPlainError(ctx, TERM_NO_VTE);
+    JS_ThrowPlainError(ctx, TERM_NO_PTY);
     return false;
 }
 

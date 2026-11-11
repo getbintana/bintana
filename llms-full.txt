@@ -808,8 +808,9 @@ plugin loader and comes with glib. QuickJS is vendored as a submodule, so
 nothing to install for it -- and a fresh clone wants `--recurse-submodules`, or
 `git submodule update --init` before the first configure. The optional ones are
 reported by CMake either way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`,
-**`vte-2.91-gtk4`** -- the pty behind `Terminal`, and the only dependency with
-no Windows port -- `libxml2`, which is what `Xml` parses with,
+**`vte-2.91-gtk4`** on Linux -- the pty behind `Terminal`, and the one dependency
+with no Windows port -- **`vterm`** (libvterm) on Windows, the screen behind
+ConPTY, `libxml2`, which is what `Xml` parses with,
 `libsecret-1`, the system's vault behind `Keyring` on Linux (Windows uses the
 Credential Manager and macOS the Keychain, so neither needs it), `sysprof-capture-4` (Fedora `sysprof-capture-devel`), which is what
 `--profile` and the runtime's marks in a Sysprof capture are built on, and
@@ -995,8 +996,9 @@ test whose name contains it** (`hash` runs `Hash`), plus what `NEEDS` adds; a
 second name is ignored and the line says `[only Hash]`.
 - **An optional dependency is not the same question as an optional *widget*, and
   `Widget.Types()` is the wrong list to build a palette from.** `Terminal` on a
-  build without VTE is there, constructs, draws, loads out of a `.form` and
-  answers every property: the class is not what is missing, the pty is. So the
+  build without a terminal backend is there, constructs, draws, loads out of a
+  `.form` and answers every property: the class is not what is missing, the pty
+  is. (Linux's backend is VTE; Windows' is ConPTY plus libvterm.) So the
   class table gained `available` (`BTA_CLASS_OPTIONAL` passes it; every other
   macro defaults it to true), `Widget.Available(type)` reads it for a caller that
   has a name and no control, and the instance publishes `Available` for one that
@@ -1004,8 +1006,9 @@ second name is ignored and the line says `[only Hash]`.
   palette filters on the first and `Widget.New` still builds the stub, because a
   `.form` that already holds one has to open.
 - **...and a build-time flag is a different question from a machine's answer, so
-  a class can now answer with a probe.** `Terminal`'s `available` is whether VTE
-  was linked in, which is a constant; `Video` needs GStreamer *and* the
+  a class can now answer with a probe.** `Terminal`'s `available` is whether a
+  backend was linked in (VTE on Linux, libvterm on Windows), which is a
+  constant; `Video` needs GStreamer *and* the
   `gtk4paintablesink` element, and a runtime built with GStreamer on a machine
   whose registry lacks gst-plugins-rs is a real shape -- a CI runner.  So
   `BtaClass.probe` is a function the class declares and `bta_class_runnable`
@@ -3657,6 +3660,14 @@ no longer stops a load, a live binding, a task class in a module) plus
 `CheckSource`/`Symbols` on a module and a module's top-level `await` (patch 13's half that needed a module), and
 `modulesDebugger` stops in one. Taking the `export` off `lib/markdown` turns the
 two markdown assertions red.
+- **A worker's import arrives as a whole path, and on Windows that path starts
+  with a drive letter.** `module_normalize` recognized `/`, `./` and `../` as
+  paths and took `C:\...\lib\xlsx\Xlsx.js` for a library called that, so
+  `import { Xlsx } from "xlsx"` inside a `Task` was refused with *no library of
+  that name* on Windows while the same file loaded in the main process. The test
+  is `g_path_is_absolute` now, plus the drive and UNC spellings; the relative
+  branch no longer demands a slash either. Measured: `tests/widgets`'
+  `LibraryTask` was the caller.
 - **Every `ide/**/*.js` is a module, so a top-level name is its file's** --
   `Runner` reaches `MainForm`'s `SOURCE_LINK` and `Palette` `Chrome`'s
   `SELECT_COLOR` because both are exported, and two files may now declare the
@@ -6289,6 +6300,35 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   `Kill()` would be the IDE sending SIGKILL to whatever build or editor somebody
   had running. A test can only assert the first half, so it drives `SHELL` at
   `/bin/cat`; the second half is a by-hand measurement and says so.
+- **On Windows the terminal is ConPTY plus libvterm, and three of its details
+  are not optional.**
+  1. **`CREATE_SUSPENDED` disconnects the child.** ConPTY connects a process
+     while starting it; a suspended process is never connected, its stdout falls
+     back to the parent's handle and the pipe carries only conhost's opening
+     sequences. Measured: `cmd /c echo HELLO` appeared in the parent's redirected
+     output, not in the terminal, until the flag was removed.
+  2. **`STARTF_USESTDHANDLES` with the three handles zeroed.** Without it
+     `cmd.exe` inherits the parent's stdout and its own `echo` bypasses the
+     pseudoconsole. Windows Terminal's `ConptyConnection` sets exactly that.
+  3. **Keys travel as win32-input-mode (`CSI Vk;Sc;Uc;Kd;Cs;Rc_`).** ConPTY
+     announces it with `CSI ? 9001 h`. Writing the byte `0x03` is not a Ctrl+C
+     key event there: `ping -t` keeps running, while the same sequence for
+     `VK_CANCEL` is delivered as a `CTRL_BREAK_EVENT` to a child that installs a
+     handler. The terminal scans the announcement in the output before libvterm
+     sees it and encodes every key in that form; plain VT remains the fallback.
+- **Closing ConPTY while the output pipe is undrained deadlocks.** The reader
+  thread must keep reading and discarding even after `closing` is set, because
+  `ClosePseudoConsole` waits for conhost and conhost can be blocked writing its
+  final frame. The shutdown path terminates the job first, cancels the reader's
+  synchronous read, and waits for both threads before closing the handles.
+- **The job object is what leaves no grandchildren behind.** A `KILL_ON_JOB_CLOSE`
+  job per terminal plus `ClosePseudoConsole` is the Windows spelling of the pty
+  hangup; `Kill()` terminates the job, and a runtime that exits does too.
+- **`Exit` waits for the reader, so do not wait for the reader.** ConPTY does not
+  close the output pipe when the child exits -- only when the pseudoconsole
+  closes -- so a waiter that joins the reader delays `Exit` by its whole timeout.
+  The waiter waits 50 ms, drains what is queued, and raises the event; the final
+  bytes are still in the queue and are drained first.
 
 **A key an editor would take is not `KeyPress`'s, and the call that proves it
 is the one a test cannot make.** `KeyPress` is a *bubbling* controller on
@@ -12076,7 +12116,8 @@ bta_paint.c       DrawingArea (GtkDrawingArea) and Painter (cairo)
                   ...and in bta_runtime.c: `uses`, the library search path
 bta_text.c        Editor (abstract) and TextEditor (GtkTextView)
 bta_editor.c      SourceEditor (GtkSourceView), on top of Editor
-bta_terminal.c    Terminal (VTE, optional: BTA_HAVE_VTE)
+bta_terminal.c    Terminal (VTE on Linux, ConPTY + libvterm on Windows;
+                  optional: BTA_HAVE_VTE / BTA_HAVE_LIBVTERM)
 bta_tree.c        TreeView (GtkListView + GtkTreeListModel)
 bta_menu.c        menus, as GMenu models wired to actions
 bta_locale.c      po/*.po, Locale, the plural-form expression evaluator, and how
@@ -12112,8 +12153,8 @@ refusal of `async` where it is written, and the parser's symbol report behind
 `ReferenceError` carries, and class fields as members. The fork's `BINTANA.md` is how it is rebased; all twenty are
 in [`docs/agents/quickjs.md`](agents/quickjs.md#the-twenty-patches-in-vendor), each with what
 dropping it costs. GTK4 (4.10 or newer) and GtkSourceView 5 come from pkg-config and are
-required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0 and VTE come from
-pkg-config and are not.
+required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0, VTE (Linux) and
+libvterm (Windows) come from pkg-config and are not.
 
 `rad.js` is turned into a C string at build time (`tools/embed_text.cmake`
 produces `bta_prelude.h`) and evaluated once, after the native classes are
@@ -13877,7 +13918,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | `Http`, `Http.Server`, `Http.Stream` | `libsoup3-devel` | `libsoup-3.0-dev` | `Http` exists and refuses by name |
 | `Video`, `AudioPlayer` | `gstreamer1-devel gstreamer1-plugins-base-devel` | `libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev` | both exist and say nothing can be played |
 | ...and the picture, not just the sound | `gstreamer1-plugin-gtk4` | `gstreamer1.0-gtk4` | `Video`'s sink (`gtk4paintablesink`, from gst-plugins-rs) is missing and `AudioPlayer` still works |
-| `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
+| `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. Linux uses VTE; Windows uses ConPTY with `libvterm` |
 | `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
 | `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | on Linux without it `Keyring` uses the `File` provider (`0600` under `Application.ConfigDirectory/secrets/`), and `Keyring.Provider` says `"File"`. Windows uses the Credential Manager and macOS the Keychain, so neither needs libsecret; the library itself is on every GNOME desktop already |
 | `Cipher` (AES-256-GCM) and `Key` (a private key from a smart card, a token or a file) | `gnutls-devel` | `libgnutls28-dev` | `Cipher` and `Key` exist, `Available` is `false`, and their verbs refuse with a sentence naming the package. GnuTLS is already the TLS library under libsoup on a Linux desktop, but the headers are a separate package |
@@ -13893,9 +13934,10 @@ call for `Database.Sqlite`.
 On Windows the same switches come from MSYS2 UCRT64: `mingw-w64-ucrt-x86_64-poppler`,
 `...-gstreamer` with `...-gst-plugins-base`, `...-gst-plugins-good`,
 `...-gst-plugins-bad`, `...-gst-libav` and `...-gst-plugins-rs` (the GTK4 sink),
-`...-sqlite3`, `...-libsoup3`, `...-libxml2` and `...-gnutls`. VTE, libsystemd,
-sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` uses the Windows
-Credential Manager, so libsecret is not needed there.
+`...-sqlite3`, `...-libsoup3`, `...-libxml2`, `...-gnutls` and `...-libvterm`
+(the Windows terminal: ConPTY plus libvterm, since VTE has no Windows port).
+libsystemd, sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` uses
+the Windows Credential Manager, so libsecret is not needed there.
 
 ## Profiling
 

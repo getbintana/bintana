@@ -105,7 +105,8 @@ cat > "$dest/README.md" <<'EOF'
 A portable MSYS2 UCRT64 tree with what Bintana is built with on Windows:
 GCC, binutils, gdb, cmake, ninja, pkgconf, git, gettext, GTK4, GtkSourceView 5,
 sqlite3, libsoup3, libxml2, GStreamer with gst-plugins-rs (the GTK4 sink),
-poppler, and their headers. It is the same environment the Windows CI uses.
+poppler, libvterm (the Windows terminal), and their headers. It is the same
+environment the Windows CI uses.
 
 Unzip anywhere and run `bintana-build.cmd` from the directory where you keep
 your source -- or `bintana-build.cmd -where C:\src`; it opens a UCRT64 shell
@@ -146,5 +147,7 @@ need ucrt64/bin/gst-inspect-1.0.exe   "GStreamer's inspect tool"
 need ucrt64/lib/gstreamer-1.0/libgstgtk4.dll "GStreamer's GTK4 sink (gst-plugins-rs)"
 need ucrt64/libexec/gstreamer-1.0/gst-plugin-scanner.exe "GStreamer's plugin scanner"
 need ucrt64/lib/pkgconfig/poppler-glib.pc "poppler-glib's pkg-config file"
+need ucrt64/lib/pkgconfig/vterm.pc "libvterm's pkg-config file"
+need ucrt64/bin/libvterm-0.dll "libvterm, the Windows terminal's screen"
 
 echo "windows-build-tree: $root -> $dest"

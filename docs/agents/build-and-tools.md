@@ -175,8 +175,9 @@ plugin loader and comes with glib. QuickJS is vendored as a submodule, so
 nothing to install for it -- and a fresh clone wants `--recurse-submodules`, or
 `git submodule update --init` before the first configure. The optional ones are
 reported by CMake either way: `sqlite3`, `libsystemd`, `libsoup-3.0`, `gstreamer-1.0`,
-**`vte-2.91-gtk4`** -- the pty behind `Terminal`, and the only dependency with
-no Windows port -- `libxml2`, which is what `Xml` parses with,
+**`vte-2.91-gtk4`** on Linux -- the pty behind `Terminal`, and the one dependency
+with no Windows port -- **`vterm`** (libvterm) on Windows, the screen behind
+ConPTY, `libxml2`, which is what `Xml` parses with,
 `libsecret-1`, the system's vault behind `Keyring` on Linux (Windows uses the
 Credential Manager and macOS the Keychain, so neither needs it), `sysprof-capture-4` (Fedora `sysprof-capture-devel`), which is what
 `--profile` and the runtime's marks in a Sysprof capture are built on, and
@@ -362,8 +363,9 @@ test whose name contains it** (`hash` runs `Hash`), plus what `NEEDS` adds; a
 second name is ignored and the line says `[only Hash]`.
 - **An optional dependency is not the same question as an optional *widget*, and
   `Widget.Types()` is the wrong list to build a palette from.** `Terminal` on a
-  build without VTE is there, constructs, draws, loads out of a `.form` and
-  answers every property: the class is not what is missing, the pty is. So the
+  build without a terminal backend is there, constructs, draws, loads out of a
+  `.form` and answers every property: the class is not what is missing, the pty
+  is. (Linux's backend is VTE; Windows' is ConPTY plus libvterm.) So the
   class table gained `available` (`BTA_CLASS_OPTIONAL` passes it; every other
   macro defaults it to true), `Widget.Available(type)` reads it for a caller that
   has a name and no control, and the instance publishes `Available` for one that
@@ -371,8 +373,9 @@ second name is ignored and the line says `[only Hash]`.
   palette filters on the first and `Widget.New` still builds the stub, because a
   `.form` that already holds one has to open.
 - **...and a build-time flag is a different question from a machine's answer, so
-  a class can now answer with a probe.** `Terminal`'s `available` is whether VTE
-  was linked in, which is a constant; `Video` needs GStreamer *and* the
+  a class can now answer with a probe.** `Terminal`'s `available` is whether a
+  backend was linked in (VTE on Linux, libvterm on Windows), which is a
+  constant; `Video` needs GStreamer *and* the
   `gtk4paintablesink` element, and a runtime built with GStreamer on a machine
   whose registry lacks gst-plugins-rs is a real shape -- a CI runner.  So
   `BtaClass.probe` is a function the class declares and `bta_class_runnable`

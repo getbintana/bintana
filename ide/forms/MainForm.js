@@ -1152,9 +1152,9 @@ export class MainForm extends Form {
      *
      * The bottom panel's second page, and the only place a real `Terminal` is
      * left in the IDE: the output pane above it is a log view, because showing
-     * what a child printed needs no pty.  This one does -- it is Linux's actual
-     * terminal, for git, a service, a file to move -- and it is why `Terminal`
-     * was not removed when the console stopped being one.
+     * what a child printed needs no pty.  This one does -- it is the platform's
+     * actual terminal, for git, a service, a file to move -- and it is why
+     * `Terminal` was not removed when the console stopped being one.
      *
      * `Shell` and not `Terminal` for the control's name, because `Terminal` is
      * the class: a field of that name in this file would read as the class in
@@ -1163,8 +1163,9 @@ export class MainForm extends Form {
      */
 
     /* The page exists only where a child can be run in it, which is what
-     * `Widget.Available` answers: a build without VTE gets a bottom panel of
-     * one page, and no tab promising something that would refuse.
+     * `Widget.Available` answers: a build without a terminal backend gets a
+     * bottom panel of one page, and no tab promising something that would
+     * refuse.
      *
      * Asked of the *class* and not of a control, because there is no control
      * yet -- which is the whole reason `Widget.Available(type)` exists beside
@@ -1213,8 +1214,12 @@ export class MainForm extends Form {
         if (!this.Shell || index !== this.shellPage) return;
         if (this.Shell.Running) return;
 
-        const shell = Environment.Get("SHELL") || "/bin/sh";
-        this.Shell.Run([shell], this.project || Environment.Get("HOME") || "/");
+        /* `SHELL` is the Unix answer and `COMSPEC` the Windows one; a build
+         * with neither falls back to the path this file has always used. */
+        const shell = Environment.Get("SHELL") || Environment.Get("COMSPEC") ||
+                      "/bin/sh";
+        this.Shell.Run([shell], this.project || Environment.Get("HOME") ||
+                                     Environment.Get("USERPROFILE") || "/");
     }
 
     /* A shell that ended says so where it ended, and the next look at the tab
@@ -1224,19 +1229,21 @@ export class MainForm extends Form {
     }
 
     /*
-     * Asks the child to end (SIGTERM, reaching its whole process group) on the
-     * way out, and on the way back to the page so a dead shell is replaced.
+     * Asks the child to end on the way out, and on the way back to the page so
+     * a dead shell is replaced: SIGTERM to the process group on Linux, the
+     * console's interrupt on Windows.
      *
      * **It is not what ends an interactive shell**, and that is worth knowing
-     * rather than assuming: bash ignores SIGTERM when it is interactive, so
-     * `Running` is still true after this. What ends it is the pty being closed
-     * -- the kernel hangs up the foreground process group, which is what
-     * closing a terminal window has always meant, and VTE does it when the
-     * widget goes. Measured: no shell is left behind after the IDE quits.
+     * rather than assuming: bash ignores SIGTERM when it is interactive, and a
+     * command prompt ignores Ctrl+C at its own prompt, so `Running` is still
+     * true after this. What ends it is the pty or ConPTY being closed -- the
+     * kernel hangs up the foreground process group, and ConPTY terminates its
+     * attached client -- which is what closing a terminal window has always
+     * meant. Measured: no shell is left behind after the IDE quits.
      *
-     * So this is for everything that *does* honour SIGTERM, and for saying out
-     * loud that the child is ours. It deliberately does not follow with a
-     * `Kill()`: what is in the terminal may be a build or an editor, and
+     * So this is for everything that *does* honour an interrupt, and for
+     * saying out loud that the child is ours. It deliberately does not follow
+     * with a `Kill()`: what is in the terminal may be a build or an editor, and
      * SIGKILL is not the IDE's to send on somebody's behalf.
      */
     stopShell() {

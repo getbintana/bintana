@@ -757,6 +757,7 @@ jobs:
             mingw-w64-ucrt-x86_64-gst-libav
             mingw-w64-ucrt-x86_64-gst-plugins-rs
             mingw-w64-ucrt-x86_64-poppler
+            mingw-w64-ucrt-x86_64-libvterm
 
       - name: Build
         run: |
@@ -809,6 +810,9 @@ jobs:
           # finds it and why the closure alone would drop it.
           test -f "stage/$name/bin/vulkan-1.dll"
           test -f "stage/$name/bin/librsvg-2-2.dll"
+          # The Windows terminal's screen: linked by bintana.exe, and without
+          # the DLL the runtime does not start at all.
+          test -f "stage/$name/bin/libvterm-0.dll"
           # The optional halves the environment promises: `Video` asks the
           # GStreamer registry for `gtk4paintablesink` (the plugin DLL, opened
           # by name, never by the link closure), and poppler's data is what a

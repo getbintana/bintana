@@ -19064,11 +19064,12 @@ class Form1 extends Form {
      * a console pane a couple of rows tall is the normal case, and one that
      * reported only the visible rows could not be tested against at all.
      *
-     * **VTE is optional at build time**, so the first thing asked is whether
-     * there is a pty here at all -- the way `testMedia` asks about GStreamer.
-     * What survives the answer being no is checked either way: the class is
-     * there, it draws, its state answers, and the three verbs that need a
-     * child refuse by name.
+     * **The terminal backend is optional at build time** (VTE on Linux,
+     * ConPTY+libvterm on Windows), so the first thing asked is whether there
+     * is a pty here at all -- the way `testMedia` asks about GStreamer. What
+     * survives the answer being no is checked either way: the class is there,
+     * it draws, its state answers, and the three verbs that need a child refuse
+     * by name.
      */
     testTerminal() {
         const term = new Terminal();
@@ -19085,7 +19086,7 @@ class Form1 extends Form {
               typeof term.Available === "boolean", `${term.Available}`);
 
         /*
-         * Without VTE the *state* still answers and the *verbs* refuse, which
+         * Without a backend the *state* still answers and the *verbs* refuse, which
          * is not a nicety: the designer reads every value of a selected
          * control and the serialiser reads them all again to save, so a getter
          * that threw would make a runtime with no VTE one that could not draw
@@ -19107,7 +19108,7 @@ class Form1 extends Form {
             for (const verb of [() => term.Run(["true"]), () => term.Stop(),
                                 () => term.Kill()]) {
                 try { verb(); refused.push("did not refuse"); }
-                catch (e) { refused.push(/VTE/.test(e.message) ? "named" : e.message); }
+                catch (e) { refused.push(/VTE|libvterm/.test(e.message) ? "named" : e.message); }
             }
             eq("the three verbs that need a child refuse, naming the package",
                JSON.stringify(refused), '["named","named","named"]');
@@ -19173,7 +19174,7 @@ class Form1 extends Form {
      */
     testTerminalSpawnLifetime() {
         if (!Widget.Available("Terminal")) {
-            print("  (skipping the terminal-spawn child: this build has no VTE)");
+            print("  (skipping the terminal-spawn child: this build has no terminal backend)");
             return;
         }
 

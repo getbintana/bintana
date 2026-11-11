@@ -357,7 +357,7 @@ project in [plugins.md](plugins.md#building-one) says where that is.
 | `Http`, `Http.Server`, `Http.Stream` | `libsoup3-devel` | `libsoup-3.0-dev` | `Http` exists and refuses by name |
 | `Video`, `AudioPlayer` | `gstreamer1-devel gstreamer1-plugins-base-devel` | `libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev` | both exist and say nothing can be played |
 | ...and the picture, not just the sound | `gstreamer1-plugin-gtk4` | `gstreamer1.0-gtk4` | `Video`'s sink (`gtk4paintablesink`, from gst-plugins-rs) is missing and `AudioPlayer` still works |
-| `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. The only dependency with no Windows port |
+| `Terminal` | `vte291-gtk4-devel` | `libvte-2.91-gtk4-dev` | the class still draws and still round-trips a `.form`; only `Run`, `Stop` and `Kill` refuse. Linux uses VTE; Windows uses ConPTY with `libvterm` |
 | `Xml`, `File.LoadXml`/`SaveXml` | `libxml2-devel` | `libxml2-dev` | `Xml` exists, `Available` is `false`, and every verb refuses with a sentence. GTK4 itself already loads libxml2 at runtime on most desktops, so this is a **build** dependency and not a new runtime one |
 | `Keyring` (a token in the system's vault) | `libsecret-devel` | `libsecret-1-dev` | on Linux without it `Keyring` uses the `File` provider (`0600` under `Application.ConfigDirectory/secrets/`), and `Keyring.Provider` says `"File"`. Windows uses the Credential Manager and macOS the Keychain, so neither needs libsecret; the library itself is on every GNOME desktop already |
 | `Cipher` (AES-256-GCM) and `Key` (a private key from a smart card, a token or a file) | `gnutls-devel` | `libgnutls28-dev` | `Cipher` and `Key` exist, `Available` is `false`, and their verbs refuse with a sentence naming the package. GnuTLS is already the TLS library under libsoup on a Linux desktop, but the headers are a separate package |
@@ -373,9 +373,10 @@ call for `Database.Sqlite`.
 On Windows the same switches come from MSYS2 UCRT64: `mingw-w64-ucrt-x86_64-poppler`,
 `...-gstreamer` with `...-gst-plugins-base`, `...-gst-plugins-good`,
 `...-gst-plugins-bad`, `...-gst-libav` and `...-gst-plugins-rs` (the GTK4 sink),
-`...-sqlite3`, `...-libsoup3`, `...-libxml2` and `...-gnutls`. VTE, libsystemd,
-sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` uses the Windows
-Credential Manager, so libsecret is not needed there.
+`...-sqlite3`, `...-libsoup3`, `...-libxml2`, `...-gnutls` and `...-libvterm`
+(the Windows terminal: ConPTY plus libvterm, since VTE has no Windows port).
+libsystemd, sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` uses
+the Windows Credential Manager, so libsecret is not needed there.
 
 ## Profiling
 
@@ -491,6 +492,6 @@ and a TagLib wrapper worked through.
 | `Package 'gtk4' not found` | `gtk4-devel` / `libgtk-4-dev` |
 | `Package 'gtksourceview-5' not found` | `gtksourceview5-devel` / `libgtksourceview-5-dev` |
 | compile errors about `gtk_alert_dialog` or `gtk_file_dialog` | the GTK is older than 4.10 — Debian 13 / Ubuntu 24.04 or newer |
-| `no vte: Terminal exists and refuses to run one` | not an error: the optional table above |
+| `no vte` / `no libvterm: Terminal exists and refuses to run one` | not an error: the optional table above |
 | `no sqlite3`, `no libsoup`, `no gstreamer`, `no libxml2`, `no libsecret`, `no gnutls`, `no poppler-glib` | likewise — a build line, not a failure |
 | `no sysprof-capture: --profile says so when asked` | likewise; a Sysprof run still shows the samples and GTK's frames |

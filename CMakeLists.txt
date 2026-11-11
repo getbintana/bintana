@@ -273,6 +273,7 @@ add_executable(bintana
     runtime/src/bta_text.c
     runtime/src/bta_editor.c
     runtime/src/bta_terminal.c
+    runtime/src/bta_terminal_win32.c
     runtime/src/bta_menu.c
     runtime/src/bta_tree.c
     runtime/src/bta_table.c
@@ -353,6 +354,27 @@ if(VTE_FOUND)
     message(STATUS "vte ${VTE_VERSION}: Terminal can run a child")
 else()
     message(STATUS "no vte: Terminal exists and refuses to run one")
+endif()
+
+# Windows has no VTE.  ConPTY (Windows 10 1809+) gives the child a real
+# console and libvterm interprets the VT sequences that come out of it;
+# `bta_terminal_win32.c` is the widget that draws the grid.  Optional like VTE:
+# without libvterm the class exists and the three verbs that need a child
+# refuse, so a project that only draws a form naming a Terminal still loads.
+if(WIN32)
+    # No imported target: MSYS2's vterm.pc writes `includedir=/ucrt64/include`
+    # literally instead of through `prefix`, and CMake refuses to generate a
+    # project whose imported target points outside the filesystem.  The
+    # compiler's own search path already has that directory, and the library
+    # is a plain `-lvterm`.
+    pkg_check_modules(LIBVTERM vterm)
+    if(LIBVTERM_FOUND)
+        target_link_libraries(bintana PRIVATE ${LIBVTERM_LINK_LIBRARIES})
+        target_compile_definitions(bintana PRIVATE BTA_HAVE_LIBVTERM=1)
+        message(STATUS "libvterm ${LIBVTERM_VERSION}: Terminal runs a child through ConPTY")
+    else()
+        message(STATUS "no libvterm: Terminal exists and refuses to run one")
+    endif()
 endif()
 
 if(POPPLER_FOUND)

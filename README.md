@@ -71,4 +71,5 @@ MIT — see [LICENSE](LICENSE).
 QuickJS-ng, vendored under `vendor/quickjs`, is MIT as well and carries its own
 [LICENSE](vendor/quickjs/LICENSE); its copyright notice has to travel with any
 copy of it, which is what that file is for. Nothing else is bundled: GTK4,
-GtkSourceView and VTE are linked against and belong to their own projects.
+GtkSourceView, VTE on Linux and libvterm on Windows are linked against and
+belong to their own projects.

@@ -11,9 +11,11 @@ stages a portable zip (`tools/windows-portable.sh`), which is Stage 0/1 as far
 as it has got: what it proves is the build, that the runtime runs, and that the
 staged tree it ships runs too. The smoke suite is the first windowed project
 there, as a **diagnostic** step (`tests/run.sh smoke`, 171 assertions on a real
-Windows 11 desktop, 2026-11-10); the rest of the windowed suite and a real
-terminal are still the out-of-scope list at the end, and the zip itself is
-unverified until somebody opens it on a Windows desktop. The
+Windows 11 desktop, 2026-11-10); the rest of the windowed suite is still the
+out-of-scope list at the end. The terminal has landed since: ConPTY plus
+libvterm, behind the same `Terminal` surface, and the IDE's tab appears by
+itself. The zip itself is unverified until somebody opens it on a Windows
+desktop. The
 Stage 1 pieces that are in: the CMake guards (`gio-unix`, `libm` and pthread
 only where they exist), the process layer (`setsid`/`killpg` compiled out,
 `g_subprocess_force_exit` as the one ending `Stop` and `Kill` have, `uname`
@@ -24,9 +26,11 @@ and `%'` replaced by the same grouping written out. `Exec`'s `Control` stream is
 descriptor a child inherits by number, and there is no such thing there.
 
 What the port depended on is: the IDE's output pane is a read-only `TextEditor`
-over `Exec`, `Terminal` is optional at build time (`BTA_HAVE_VTE`) and
-`Widget.Available` is what hides a control this build cannot run — so nothing on
-the IDE's critical path needs VTE, which has no Windows port. See
+over `Exec`, and `Terminal` is optional at build time and answers through
+`Widget.Available` — so a build without a terminal backend still hides the
+control instead of offering one that would refuse. Linux's backend is VTE, which
+has no Windows port; Windows' is ConPTY (Windows 10 1809+) plus libvterm, in
+`bta_terminal_win32.c`. See
 [`widgets.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/widgets.md#a-build-without-vte) and
 [`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#running).
 
@@ -39,8 +43,9 @@ found out by whoever unzips the tree.
 
 The target is **native Windows**, built with **MSYS2 / MinGW-w64 (UCRT64)**.
 The scope is deliberately narrow: **the runtime and the IDE compile and run,
-and the examples with them.** The test suite and CI, packaging/installer, and a
-real Windows terminal are out of scope here and listed at the end.
+and the examples with them.** The terminal has landed (ConPTY + libvterm); the
+rest of the windowed suite the build environment, and packaging/installer are
+out of scope here and listed at the end.
 
 ## Why this is possible
 
@@ -56,7 +61,7 @@ that match this tree:
 | sqlite3 | `mingw-w64-ucrt-x86_64-sqlite3` |
 | GStreamer + GTK4 sink | `gstreamer` + `gst-plugins-rs`, whose `/mingw64/lib/gstreamer-1.0/libgstgtk4.dll` is `gtk4paintablesink` (the official GStreamer 1.28 Windows installers carry it too — but they are MSVC, and **must not be mixed** with a MinGW GTK4) |
 | poppler | `mingw-w64-ucrt-x86_64-poppler`, whose `poppler-glib.pc` turns on `PdfDocument`'s reading half and `lib/pdfview` |
-| VTE | **does not exist on Windows** — and nothing needs it: `BTA_HAVE_VTE` is already optional, and the class without it draws, loads and answers, refusing only the three verbs that need a child |
+| VTE, and the terminal | **VTE does not exist on Windows.** The backend is ConPTY (Windows 10 1809+) plus `mingw-w64-ucrt-x86_64-libvterm`: the child gets a real console, libvterm interprets its VT output, and `bta_terminal_win32.c` draws the grid. `BTA_HAVE_LIBVTERM` is optional exactly as `BTA_HAVE_VTE` is; without it the class draws and refuses only the three verbs that need a child |
 | QuickJS | vendored, and already has native `_WIN32` paths; no pthread needed |
 
 The GTK4 Win32 backend implements `request_layout`/`compute_size`, so
@@ -76,13 +81,13 @@ shim below already has its place.
 
 | File | Work |
 |---|---|
-| `CMakeLists.txt` | `find_library(M_LIB m)` and `pthread` only where they exist; `-Wall -Wextra` guarded to GCC/Clang; VTE absent (`BTA_HAVE_VTE` undefined); install layout unchanged (`bin/` beside `share/bintana/` is the hop `lib_candidates` already walks) |
+| `CMakeLists.txt` | `find_library(M_LIB m)` and `pthread` only where they exist; `-Wall -Wextra` guarded to GCC/Clang; VTE absent (`BTA_HAVE_VTE` undefined) and libvterm optional (`BTA_HAVE_LIBVTERM`); install layout unchanged (`bin/` beside `share/bintana/` is the hop `lib_candidates` already walks) |
 | `runtime/src/bta_sys.c` | the process layer: no `killpg`/`kill`/`setsid`. `g_subprocess_get_identifier` returns `GetProcessId()` on Windows (GLib documents it), so a PID is a real PID; `g_subprocess_force_exit()` (GLib ≥ 2.80) replaces `Kill`, and `taskkill /T /F` over the PID is what reaches what a wrapper started, since Windows has no process groups here. `exec_child_setup`'s `setsid` compiles out. `uname()` becomes `g_get_os_info()`. `HasDisplay` answers `true` on Windows — a Windows session offers a display, and `tests/runner` must not go looking for `xvfb-run` |
 | `runtime/src/bta_runtime.c` | `g_file_read_link("/proc/self/exe")` twice (`Application.Executable`, `lib_candidates`) becomes `GetModuleFileNameW`; `BINTANA_LIB_PATH` splits on `G_SEARCHPATH_SEPARATOR` (`:` splits `C:\...` in two); the `/usr/share/bintana/lib` fallback is harmless |
 | `runtime/src/bta_locale.c` | `%'.*f` is a POSIX printf flag UCRT does not implement; `Locale.Number`/`Currency` for doubles go through the hand-written grouping `locale_group` already does for decimals, or are proven against MinGW's ANSI printf. Asserted by `Locale.Number` and the `JsonFiles` decimal-comma test |
 | `runtime/src/main.c` | console UTF-8 (`SetConsoleOutputCP(CP_UTF8)` / the UCRT's `.UTF-8` locale) and the subsystem decision: a console build keeps `print`/`Logger` output when launched from a shell, which is what the IDE's Run and the suite want |
 | `runtime/src/bta_plugin.c` | no work of its own: GModule names the suffix (`.dll`) and does the load, and the plugin contract is a table of function pointers, so a plugin compiled by MSVC, MinGW or clang links nothing and needs no export list. `BTA_PLUGIN_EXPORT` is the one platform line, at the plugin's side of the header |
-| `bta_journal.c`, `bta_terminal.c` | no work: both are already stubbed without their dependency, and everything either stub needs (`signal.h`, `sys/wait.h`) is inside the `#ifdef` |
+| `bta_journal.c`, `bta_terminal.c`, `bta_terminal_win32.c` | the journal is already stubbed without its dependency; `bta_terminal.c` keeps the shared surface and VTE, and the Windows half is ConPTY + libvterm in its own file. Everything VTE's stub needs (`signal.h`, `sys/wait.h`) is inside the `#ifdef`; the Windows half uses `windows.h` and `vterm.h` only under `G_OS_WIN32` |
 
 QuickJS is already portable, and the patches in `vendor/` — arithmetic on
 a `Decimal`, `js_atod` for JSON numbers and the rest — are platform-independent,
@@ -113,10 +118,11 @@ so nothing there changes.
   — the stubs are part of the deliverable.
 - `./build/bintana.exe examples/hello`, then `./build/bintana.exe ide
   examples/hello`: the IDE opens, the log view shows a run's output, a
-  traceback is clickable, Stop works, and the terminal tab is correctly
-  absent (no VTE on this platform yet) — as is the palette's `Terminal` button.
-  The `no-vte` CI job already runs the whole suite that way on Linux, so what is
-  left to find here is Windows and not the stub.
+  traceback is clickable, Stop works, and the terminal tab is **present**:
+  `Terminal.Available` is true, `Run(["cmd.exe"])` gives a prompt, `ssh` runs
+  as an ordinary child, and `Exit` reaches the form. The `no-vte` CI job runs
+  the whole suite against a build without a backend on Linux, so the stub is
+  already covered; what is left to find here is Windows.
 - The console-tool projects, which need no display, are the first part of a
   future Windows CI: `tests/api`, `tests/icons`, `tests/styles`.
 
@@ -134,16 +140,14 @@ so nothing there changes.
   under `share/bintana/tools/nsis`. What is still missing is a signature (no
   certificate) and an end-to-end run of a produced installer on a real desktop
   -- CI builds the compiler bundle but cannot click through a setup.
-- **A real terminal on Windows.** ConPTY (Windows 10 1809+) plus an emulation
-  core — MSYS2 has `libvterm` — behind the same `Terminal` surface. That is its
-  own plan, and the day it lands `Available` becomes true and the IDE's tab
-  appears by itself.
 
 ## Risks
 
 - **No process groups.** A `Stop()` that signals a wrapper is not enough on
   Windows; `taskkill /T` over the PID is the pragmatic answer, Job Objects the
-  complete one. The runner's hang guard is the caller to test it with.
+  complete one. The terminal uses a `KILL_ON_JOB_CLOSE` job per child so
+  `ClosePseudoConsole` and process exit leave no grandchildren. The runner's
+  hang guard is the caller to test it with.
 - **Fonts, metrics and icons** differ from the Linux desktop, so `.form`s
   drawn with a Linux theme can measure differently on Windows. That is the
   same class of finding `examples/` already exists to measure.

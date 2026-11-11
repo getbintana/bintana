@@ -179,6 +179,14 @@ no longer stops a load, a live binding, a task class in a module) plus
 `CheckSource`/`Symbols` on a module and a module's top-level `await` (patch 13's half that needed a module), and
 `modulesDebugger` stops in one. Taking the `export` off `lib/markdown` turns the
 two markdown assertions red.
+- **A worker's import arrives as a whole path, and on Windows that path starts
+  with a drive letter.** `module_normalize` recognized `/`, `./` and `../` as
+  paths and took `C:\...\lib\xlsx\Xlsx.js` for a library called that, so
+  `import { Xlsx } from "xlsx"` inside a `Task` was refused with *no library of
+  that name* on Windows while the same file loaded in the main process. The test
+  is `g_path_is_absolute` now, plus the drive and UNC spellings; the relative
+  branch no longer demands a slash either. Measured: `tests/widgets`'
+  `LibraryTask` was the caller.
 - **Every `ide/**/*.js` is a module, so a top-level name is its file's** --
   `Runner` reaches `MainForm`'s `SOURCE_LINK` and `Palette` `Chrome`'s
   `SELECT_COLOR` because both are exported, and two files may now declare the

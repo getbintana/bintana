@@ -1071,6 +1071,18 @@ static char *module_normalize(JSContext *ctx, const char *base,
 
     bool path = spec[0] == '/' || g_str_has_prefix(spec, "./") ||
                 g_str_has_prefix(spec, "../");
+#ifdef G_OS_WIN32
+    /* A worker's module map hands imports over as whole paths, and a Windows
+     * path starts with a drive letter (or a UNC double slash) rather than the
+     * POSIX slash this test was written for.  Without this, `import "xlsx"`
+     * inside a Task arrived as `C:\...\lib\xlsx\Xlsx.js` and was refused as a
+     * library of that name. */
+    if (g_ascii_isalpha(spec[0]) && spec[1] == ':' &&
+        (spec[2] == '\\' || spec[2] == '/'))
+        path = true;
+    if (spec[0] == '\\' && spec[1] == '\\')
+        path = true;
+#endif
 
     if (!path) {
         if (library_named(st, spec))
@@ -1086,7 +1098,7 @@ static char *module_normalize(JSContext *ctx, const char *base,
 
     /* A library's own module names its files by their whole path. */
     char *dir = NULL;
-    if (spec[0] != '/') {
+    if (!g_path_is_absolute(spec)) {
         if (!g_path_is_absolute(base)) {
             JS_ThrowReferenceError(ctx, "import from '%s': %s is not a file, so "
                                    "there is nothing for the path to be "

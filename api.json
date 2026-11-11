@@ -10508,7 +10508,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "whether this build can run a child. `Widget.Available(\"Terminal\")` is [the same question asked of the class](docs/llm/controls.md#what-there-is-and-what-this-build-can-run), which is what a palette wants. `false` on a runtime built without VTE, where the three verbs refuse",
+          "Doc": "whether this build can run a child. `Widget.Available(\"Terminal\")` is [the same question asked of the class](docs/llm/controls.md#what-there-is-and-what-this-build-can-run), which is what a palette wants. `false` on a runtime built without a terminal backend, where the three verbs refuse",
           "Native": true
         },
         {
@@ -10544,7 +10544,7 @@
           "Params": 0,
           "Signature": "()",
           "Returns": "",
-          "Doc": "SIGKILL, for the one that did not answer",
+          "Doc": "makes it end, for the one that did not answer: SIGKILL on Linux, the process and its children terminated on Windows",
           "Native": true
         },
         {
@@ -10589,7 +10589,7 @@
           "Params": 0,
           "Signature": "()",
           "Returns": "",
-          "Doc": "SIGTERM to the child's **process group**, which is what reaches a shell's own children",
+          "Doc": "asks the child to end: SIGTERM to its **process group** on Linux, Ctrl+C on the console on Windows",
           "Native": true
         },
         {

@@ -19,7 +19,8 @@ bta_paint.c       DrawingArea (GtkDrawingArea) and Painter (cairo)
                   ...and in bta_runtime.c: `uses`, the library search path
 bta_text.c        Editor (abstract) and TextEditor (GtkTextView)
 bta_editor.c      SourceEditor (GtkSourceView), on top of Editor
-bta_terminal.c    Terminal (VTE, optional: BTA_HAVE_VTE)
+bta_terminal.c    Terminal (VTE on Linux, ConPTY + libvterm on Windows;
+                  optional: BTA_HAVE_VTE / BTA_HAVE_LIBVTERM)
 bta_tree.c        TreeView (GtkListView + GtkTreeListModel)
 bta_menu.c        menus, as GMenu models wired to actions
 bta_locale.c      po/*.po, Locale, the plural-form expression evaluator, and how
@@ -55,8 +56,8 @@ refusal of `async` where it is written, and the parser's symbol report behind
 `ReferenceError` carries, and class fields as members. The fork's `BINTANA.md` is how it is rebased; all twenty are
 in [`docs/agents/quickjs.md`](agents/quickjs.md#the-twenty-patches-in-vendor), each with what
 dropping it costs. GTK4 (4.10 or newer) and GtkSourceView 5 come from pkg-config and are
-required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0 and VTE come from
-pkg-config and are not.
+required; sqlite3, libsystemd, libsoup-3.0, gstreamer-1.0, VTE (Linux) and
+libvterm (Windows) come from pkg-config and are not.
 
 `rad.js` is turned into a C string at build time (`tools/embed_text.cmake`
 produces `bta_prelude.h`) and evaluated once, after the native classes are

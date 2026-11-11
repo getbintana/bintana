@@ -17,6 +17,20 @@ one-page answer to *what is new since the release I have*.
   first audio-sink failure rebuilds the pipeline once with a `fakesink` and the
   audio branch off, so a virtualized Windows session with no audio device shows
   the clip silently instead of failing whole. A second failure is reported.
+- **`Terminal` runs a child on Windows.** ConPTY (Windows 10 1809+) gives it a
+  real console -- input, output and window size -- and libvterm turns the VT
+  stream into a grid drawn by the runtime, with scrollback, colours, selection,
+  `LinkPattern` and a scrollbar. `Terminal.Available` is true, the IDE's
+  Terminal tab appears, and `ssh` is an ordinary interactive child. The three
+  verbs mean what they do on Linux: `Stop` sends the console interrupt and
+  `Kill` terminates the process and its job. A build without libvterm behaves
+  as before: the class exists, draws, and the three verbs refuse naming the
+  package. Linux keeps VTE.
+- **A `Task` worker can import a shipped library on Windows.** A worker's
+  module map hands an import over as a whole path, and the loader only
+  recognized POSIX absolute paths: `C:\...\lib\xlsx\Xlsx.js` was taken for a
+  library of that name and refused. A drive-letter or UNC prefix is a path now,
+  so the same `import { Xlsx } from "xlsx"` works in a worker on both systems.
 - **`Printer.Names` and `Printer.Default` work on Windows.** The Windows
   implementation asks `EnumPrintersW`/`GetDefaultPrinterW` instead of GTK's
   Unix-only `gtk_enumerate_printers`; `Printer.Send`/`ToFile` already used

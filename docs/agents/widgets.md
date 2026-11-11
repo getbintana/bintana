@@ -1204,6 +1204,35 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   `Kill()` would be the IDE sending SIGKILL to whatever build or editor somebody
   had running. A test can only assert the first half, so it drives `SHELL` at
   `/bin/cat`; the second half is a by-hand measurement and says so.
+- **On Windows the terminal is ConPTY plus libvterm, and three of its details
+  are not optional.**
+  1. **`CREATE_SUSPENDED` disconnects the child.** ConPTY connects a process
+     while starting it; a suspended process is never connected, its stdout falls
+     back to the parent's handle and the pipe carries only conhost's opening
+     sequences. Measured: `cmd /c echo HELLO` appeared in the parent's redirected
+     output, not in the terminal, until the flag was removed.
+  2. **`STARTF_USESTDHANDLES` with the three handles zeroed.** Without it
+     `cmd.exe` inherits the parent's stdout and its own `echo` bypasses the
+     pseudoconsole. Windows Terminal's `ConptyConnection` sets exactly that.
+  3. **Keys travel as win32-input-mode (`CSI Vk;Sc;Uc;Kd;Cs;Rc_`).** ConPTY
+     announces it with `CSI ? 9001 h`. Writing the byte `0x03` is not a Ctrl+C
+     key event there: `ping -t` keeps running, while the same sequence for
+     `VK_CANCEL` is delivered as a `CTRL_BREAK_EVENT` to a child that installs a
+     handler. The terminal scans the announcement in the output before libvterm
+     sees it and encodes every key in that form; plain VT remains the fallback.
+- **Closing ConPTY while the output pipe is undrained deadlocks.** The reader
+  thread must keep reading and discarding even after `closing` is set, because
+  `ClosePseudoConsole` waits for conhost and conhost can be blocked writing its
+  final frame. The shutdown path terminates the job first, cancels the reader's
+  synchronous read, and waits for both threads before closing the handles.
+- **The job object is what leaves no grandchildren behind.** A `KILL_ON_JOB_CLOSE`
+  job per terminal plus `ClosePseudoConsole` is the Windows spelling of the pty
+  hangup; `Kill()` terminates the job, and a runtime that exits does too.
+- **`Exit` waits for the reader, so do not wait for the reader.** ConPTY does not
+  close the output pipe when the child exits -- only when the pseudoconsole
+  closes -- so a waiter that joins the reader delays `Exit` by its whole timeout.
+  The waiter waits 50 ms, drains what is queued, and raises the event; the final
+  bytes are still in the queue and are drained first.
 
 **A key an editor would take is not `KeyPress`'s, and the call that proves it
 is the one a test cannot make.** `KeyPress` is a *bubbling* controller on
