@@ -4058,9 +4058,16 @@ class Form1 extends Form {
 
         eq("a database in memory reports its path", db.Path, ":memory:");
         eq("and is open",                           db.Open, true);
-        eq("the dialect is the three facts a Table cannot assume",
+        eq("the dialect is what a Table, a Cursor and a Model cannot assume",
            JSON.stringify(db.Dialect),
-           JSON.stringify({ Placeholder: "?", Quote: "\"", NewKey: "LastId" }));
+           JSON.stringify({ Placeholder: "?", Quote: "\"", NewKey: "LastId",
+                            KeyQuery: null, Page: "Limit", Decimal: "Text",
+                            AutoKey: "",
+                            Types: { text: "TEXT", enum: "TEXT", date: "TEXT",
+                                     time: "TEXT", datetime: "TEXT",
+                                     decimal: "TEXT", int: "INTEGER",
+                                     bool: "INTEGER", number: "REAL",
+                                     bytes: "BLOB" } }));
 
         db.Script(`
             CREATE TABLE clients (

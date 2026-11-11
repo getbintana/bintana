@@ -1,3 +1,22 @@
+class Item extends Record {
+    static Fields = {
+        id:    Field.Int({ key: true }),
+        name:  Field.Text({ required: true }),
+        price: Field.Decimal({ decimals: 2 }),
+        ok:    Field.Bool(false),
+        day:   Field.Date(),
+        at:    Field.DateTime(),
+        data:  Field.Bytes(),
+        n:     Field.Number(),
+    };
+}
+
+/* A Model that takes the connection it is handed, so `Ensure` runs over any
+ * driver without a form or a `Connection` part (that is stage 5). */
+class HandedModel extends ModelPart {
+    get Db() { return this._handed; }
+}
+
 /*
  * Database.Odbc through real drivers -- docs/plans/odbc-plan.md.
  *
@@ -271,6 +290,12 @@ function statements(sqlite, dir) {
 
     block("sqlite Each", () => eachChecks(db, "sqlite"));
     block("sqlite Transaction", () => transactionChecks(db, "sqlite"));
+    block("sqlite Table and Model", () => modelChecks(db, "sqlite"));
+    block("Database.Sqlite Table and Model", () => {
+        const native = Database.Sqlite(":memory:");
+        modelChecks(native, "Database.Sqlite");
+        native.Close();
+    });
     block("Close inside a Transaction", () => {
         const path2 = File.Join(dir, "close.db");
         const d2 = Database.Odbc(`Driver=${sqlite};Database=${path2}`);
@@ -319,7 +344,8 @@ function postgresStatements(cs, pw) {
         const r = db.Query("SELECT * FROM t WHERE id = ?", [1])[0];
         check("text round-trips", r.name === "Año ñandú € 𝄞", r.name);
         check("NUMERIC is the server's text, exactly", r.price === "12.30", r.price);
-        check("boolean is psqlODBC's \"1\" unless BoolsAsChar=0", r.ok === "1", JSON.stringify(r.ok));
+        check("a boolean is a boolean, with psqlODBC's default BoolsAsChar too",
+              r.ok === true, JSON.stringify(r.ok));
         check("DATE", r.d === "2026-11-11", r.d);
         check("TIME", r.tm === "10:20:30", r.tm);
         check("a TIMESTAMP keeps its fraction", r.ts === "2026-11-11T10:20:30.25", r.ts);
@@ -352,6 +378,7 @@ function postgresStatements(cs, pw) {
     });
     block("postgres Each", () => eachChecks(db, "postgres"));
     block("postgres Transaction", () => transactionChecks(db, "postgres"));
+    block("postgres Table and Model", () => modelChecks(db, "postgres"));
     block("postgres statement-level rollback", () => {
         db.Execute("DELETE FROM w");
         db.Transaction(() => {
@@ -447,4 +474,73 @@ function transactionChecks(db, who) {
     check(`${who}: autocommit is back after a Transaction`,
           db.Execute("INSERT INTO w (a) VALUES (6)").Changes === 1 && count() === 4);
     refused(`${who}: Transaction without a function`, () => db.Transaction(1), TypeError);
+}
+
+/*
+ * Stage 4, the same on every connection: Model.Ensure creates the table from
+ * Dialect.Types, Table.Insert learns the new key the engine's way, a record
+ * round-trips every kind, Cursor pages, and Columns/Tables answer.
+ */
+function modelChecks(db, who) {
+    if (db.Tables.includes("items_x"))
+        db.Execute("DROP TABLE items_x");
+
+    const m = new HandedModel();
+    m._handed = db;
+    m.Record = "Item";
+    m.TableName = "items_x";
+    m.Ensure();
+    check(`${who}: Model.Ensure creates the table`, db.Tables.includes("items_x"),
+          db.Tables.join(","));
+    m.Ensure();
+    ok(`${who}: Ensure twice is not an error`);
+
+    const cols = db.Columns("items_x");
+    check(`${who}: Columns names every field`,
+          cols.map((c) => c.Name).join(",") === "id,name,price,ok,day,at,data,n",
+          cols.map((c) => c.Name).join(","));
+    const id = cols.find((c) => c.Name === "id");
+    check(`${who}: Columns marks the key with its position`, id && id.Key === 1 &&
+          cols.filter((c) => c.Key !== 0).length === 1, JSON.stringify(cols));
+    check(`${who}: Columns marks a required column`,
+          cols.find((c) => c.Name === "name").Required === true);
+    check(`${who}: Columns of a table that is not there is []`,
+          db.Columns("no_such_table").length === 0);
+
+    const items = db.Table("items_x", Item);
+    const a = new Item();
+    a.name = "Año ñandú"; a.price = new Decimal("19.90", 2); a.ok = true;
+    a.day = "2026-11-11"; a.at = "2026-11-11T10:20:30"; a.data = new Bytes([0, 1, 255]);
+    a.n = 2.5;
+    items.Insert(a);
+    check(`${who}: Insert tells the record its new key`, a.id === 1, a.id);
+    const b = new Item();
+    b.name = "second";
+    items.Insert(b);
+    check(`${who}: ...and the next one`, b.id === 2, b.id);
+
+    const back = items.Find(1);
+    check(`${who}: text`, back.name === "Año ñandú", back.name);
+    check(`${who}: a decimal, exactly`, `${back.price}` === "19.90", `${back.price}`);
+    check(`${who}: a boolean`, back.ok === true, back.ok);
+    check(`${who}: a date`, back.day === "2026-11-11", back.day);
+    check(`${who}: a datetime`, `${back.at}` === "2026-11-11T10:20:30", `${back.at}`);
+    check(`${who}: bytes`, back.data.Equals(new Bytes([0, 1, 255])), hex(back.data));
+    check(`${who}: a number`, back.n === 2.5, back.n);
+
+    back.name = "changed";
+    items.Update(back);
+    check(`${who}: Update writes`, items.Find(1).name === "changed");
+
+    for (let i = 0; i < 30; i++) {
+        const r = new Item();
+        r.name = `row ${i}`;
+        items.Insert(r);
+    }
+    const cur = items.Cursor("id > ? ORDER BY id", 2);
+    check(`${who}: a Cursor counts`, cur.Count === 30, cur.Count);
+    check(`${who}: ...and pages`, cur.Row(25).name === "row 25", cur.Row(25) && cur.Row(25).name);
+
+    items.Delete(items.Find(2));
+    check(`${who}: Delete removes`, items.Find(2) === null || items.Find(2) === undefined);
 }

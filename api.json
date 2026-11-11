@@ -14005,8 +14005,8 @@
           "Kind": "Property",
           "Params": -1,
           "Signature": "",
-          "Returns": "string",
-          "Doc": "`{ Placeholder, Quote, NewKey }` — **what differs per engine**, so the portable half above can build SQL without knowing which engine it is talking to",
+          "Returns": "object",
+          "Doc": "`{ Placeholder, Quote, NewKey, KeyQuery, Page, Decimal, Types, AutoKey }` — **what differs per engine**, so the portable half above can build SQL without knowing which engine it is talking to",
           "Native": true
         },
         {
@@ -19078,8 +19078,8 @@
           "Kind": "Property",
           "Params": -1,
           "Signature": "",
-          "Returns": "string",
-          "Doc": "`{ Placeholder, Quote, NewKey }` — **what differs per engine**, so the portable half above can build SQL without knowing which engine it is talking to",
+          "Returns": "object",
+          "Doc": "`{ Placeholder, Quote, NewKey, KeyQuery, Page, Decimal, Types, AutoKey }` — **what differs per engine**, so the portable half above can build SQL without knowing which engine it is talking to",
           "Native": true
         },
         {
@@ -19872,6 +19872,15 @@
           "Native": true
         },
         {
+          "Name": "Columns",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(table)",
+          "Returns": "{ Name, Type, Required, Key }[]",
+          "Doc": "what is really in the table, from the driver's catalogue: `Type` is the engine's own name for it, `Key` the position in the primary key (0 for none); `[]` when there is no such table",
+          "Native": true
+        },
+        {
           "Name": "Dbms",
           "Kind": "Property",
           "Params": -1,
@@ -19887,6 +19896,15 @@
           "Signature": "",
           "Returns": "string",
           "Doc": "the engine's version, as the driver writes it",
+          "Native": true
+        },
+        {
+          "Name": "Dialect",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "object",
+          "Doc": "what differs per engine, from `Dbms`: `Placeholder`, `Quote`, `NewKey` (`\"Returning\"`, `\"Output\"`, `\"Select\"` with `KeyQuery`, or `\"None\"`), `Page`, `Decimal`, `Types` and `AutoKey` -- what `Table`, `Cursor` and `Model` read instead of assuming sqlite",
           "Native": true
         },
         {
@@ -19941,6 +19959,15 @@
           "Signature": "(sql)",
           "Returns": "",
           "Doc": "several statements and **no parameters**, as the driver runs a batch: psqlODBC takes one, sqliteodbc refuses a second statement",
+          "Native": true
+        },
+        {
+          "Name": "Tables",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string[]",
+          "Doc": "the tables and views, ordered, each name once whatever schema it is in; the engine's own schemas are left out",
           "Native": true
         },
         {

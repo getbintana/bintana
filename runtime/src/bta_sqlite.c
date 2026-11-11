@@ -36,7 +36,7 @@
  *   Query(sql, params) -> rows        Execute(sql, params) -> { Changes, ... }
  *   Each(sql, params, fn) -> count    Transaction(fn)
  *   Columns(table) -> [{ Name, Type, Required, Key }]
- *   Tables                            Dialect -> { Placeholder, Quote, NewKey }
+ *   Tables                            Dialect -> { Placeholder, Quote, NewKey, ... }
  *
  * and gets `Table` and `Cursor` for nothing, both in `rad.js`. `Each` is the
  * one a driver cannot skip if it wants a cursor that never holds every row:
@@ -1266,6 +1266,27 @@ static JSValue conn_get_dialect(JSContext *ctx, JSValueConst this_val)
     JS_SetPropertyStr(ctx, d, "Placeholder", JS_NewString(ctx, "?"));
     JS_SetPropertyStr(ctx, d, "Quote",       JS_NewString(ctx, "\""));
     JS_SetPropertyStr(ctx, d, "NewKey",      JS_NewString(ctx, "LastId"));
+
+    /*
+     * The four facts a second engine made necessary (docs/plans/odbc-plan.md,
+     * stage 4), with the values `rad.js` used to assume: `LIMIT ? OFFSET ?`
+     * pages a cursor, a decimal needs TEXT affinity, `Model.Ensure` writes
+     * these types, and `""` for `AutoKey` is the `INTEGER PRIMARY KEY` that
+     * makes a rowid alias.
+     */
+    JS_SetPropertyStr(ctx, d, "KeyQuery",    JS_NULL);
+    JS_SetPropertyStr(ctx, d, "Page",        JS_NewString(ctx, "Limit"));
+    JS_SetPropertyStr(ctx, d, "Decimal",     JS_NewString(ctx, "Text"));
+    JS_SetPropertyStr(ctx, d, "AutoKey",     JS_NewString(ctx, ""));
+
+    static const char *const types[] = {
+        "text", "TEXT", "enum", "TEXT", "date", "TEXT", "time", "TEXT",
+        "datetime", "TEXT", "decimal", "TEXT", "int", "INTEGER",
+        "bool", "INTEGER", "number", "REAL", "bytes", "BLOB", NULL };
+    JSValue t = JS_NewObject(ctx);
+    for (const char *const *p = types; *p; p += 2)
+        JS_SetPropertyStr(ctx, t, p[0], JS_NewString(ctx, p[1]));
+    JS_SetPropertyStr(ctx, d, "Types", t);
     return d;
 }
 
@@ -1359,10 +1380,10 @@ static JSValue database_sqlite(JSContext *ctx, JSValueConst this_val,
 
 /* type Connection */
 static const JSCFunctionListEntry conn_props[] = {
-    /* Dialect -> string
-     *   `{ Placeholder, Quote, NewKey }` — **what differs per engine**, so
-     *   the portable half above can build SQL without knowing which engine it
-     *   is talking to
+    /* Dialect -> object
+     *   `{ Placeholder, Quote, NewKey, KeyQuery, Page, Decimal, Types,
+     *   AutoKey }` — **what differs per engine**, so the portable half above
+     *   can build SQL without knowing which engine it is talking to
      */
     JS_CGETSET_DEF("Dialect", conn_get_dialect, NULL),
     /* Path -> string

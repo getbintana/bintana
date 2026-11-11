@@ -792,3 +792,15 @@ Measured on 2026-11-11 with unixODBC 2.3.14, sqliteodbc 0.99991 and psqlODBC
   keeps the connection, its uncommitted writes and its write lock. A test that
   reads from another connection sees the old rows either way; only a *write*
   from another connection tells a rollback from a leaked lock.
+- **A table name is a pattern in the catalogue calls**: `_` and `%` are
+  wildcards, and `SQLColumns("a_b")` answered `axb`'s columns too on both
+  drivers. Escape with `SQL_SEARCH_PATTERN_ESCAPE` and hold the rows to the
+  exact name.
+- **`SQLTables` lists every schema, `SQLColumns` resolves through the search
+  path** (psqlODBC): `other.a_b` was listed and not described.
+- **`Table` used to write a `Bytes` field as base64 text.** sqlite stored the
+  text in the BLOB column and read it back as text, so nothing failed; a
+  `BYTEA` takes the text as its bytes. `Table.#bind` now binds `Bytes`, and an
+  empty date, time, datetime or decimal as NULL on an engine with real types
+  (PostgreSQL refuses `""` with `22007`). Found only by running the same
+  `Table` test on a second engine.

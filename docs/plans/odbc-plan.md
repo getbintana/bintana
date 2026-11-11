@@ -1,6 +1,6 @@
 # ODBC: `Database.Odbc`, the driver that reaches the servers
 
-**Status: stages 0, 1 and 3 built, and `Each` of stage 2 (2026-11-11). Comes before
+**Status: stages 0 to 4 built (2026-11-11); `Cursor` is tested with stage 4. Comes before
 [`postgres-plan.md`](postgres-plan.md).** Designed for Linux, Windows and macOS
 from the first line: the API is the same on all three, and what differs (the
 driver manager, the text encoding, where the drivers live) is decided here,
@@ -253,10 +253,10 @@ is set in `Form_Open`. A form that gives two drivers' properties is refused.
    `LC_NUMERIC`** -- `12,30` under GTK's `setlocale` -- so the three words run
    with `uselocale` set to C numerics for the thread, and the C probe that
    never called `setlocale` could not have seen it.
-2. **`Each`/`Cursor`** over `SQLFetch`. **`Each` built**: `false` stops, a
-   throw in `fn` is the caller's, `Close` inside is refused, and `fn` runs in
-   the desktop's locale while the driver keeps C numerics. `Cursor` needs
-   `Dialect`, so it is tested with stage 4.
+2. **`Each`/`Cursor`** over `SQLFetch`. **Built**: `false` stops, a throw in
+   `fn` is the caller's, `Close` inside is refused, and `fn` runs in the
+   desktop's locale while the driver keeps C numerics. `Cursor` needed
+   `Dialect` and is tested with stage 4.
 3. **`Transaction`**: autocommit, `SQLEndTran`, savepoints by engine.
    **Built**: the value of `fn`, a throw rolled back and rethrown as it was,
    nesting through `SAVEPOINT` (`SAVE TRANSACTION` on SQL Server, not yet run),
@@ -268,7 +268,27 @@ is set in `Form_Open`. A form that gives two drivers' properties is refused.
    from a leak.
 4. **`Columns`/`Tables` and `Dialect`**: the catalogue functions, the engine
    table, `Table.Insert` with `Returning`/`Output`, `Model.Ensure` from
-   `Dialect.Types`. **Not started.**
+   `Dialect.Types`. **Built.** `Dialect` grew, on sqlite too, to `{ Placeholder,
+   Quote, NewKey, KeyQuery, Page, Decimal, Types, AutoKey }`; `NewKey` is
+   `"Returning"`, `"Output"`, `"Select"` (with `KeyQuery`: sqliteodbc and MySQL
+   are asked right after the insert, so `Execute` pays nothing extra) or
+   `"None"`. `Cursor` pages only where `Page` is `"Limit"` and refuses
+   elsewhere (SQL Server, until it is run); its subquery got the `AS bta_page`
+   PostgreSQL before 16 needs. `Model.Ensure` writes `Dialect.Types`, checks
+   `Tables` instead of `IF NOT EXISTS`, and refuses an engine whose `Types` is
+   null (SQL Server, MySQL: not run). `Tables` lists each name once outside the
+   engine's schemas; `Columns` answers `Key` as the position in the key, as
+   sqlite does. Measured on the way: **`_` is a wildcard** in the catalogue
+   calls (`a_b` matched `axb` on both drivers), so the name is escaped with the
+   driver's character and the rows held to it; psqlODBC's `boolean` arrives as
+   `"1"` by default, which `Record` refuses, so a text column whose type name
+   is `bool` is read as a boolean; an unset date serializes to `""`, which
+   PostgreSQL refuses (`22007`), so a typed engine binds it as NULL; and
+   **`Table` wrote a `Bytes` field as base64 text** -- sqlite kept the text in
+   its BLOB column and read it back, which hid it; a `BYTEA` cannot -- so a
+   bytes field is now bound as `Bytes`, on sqlite too, and base64 text written
+   before still reads. One test, `modelChecks`, runs on `Database.Sqlite`,
+   sqliteodbc and psqlODBC alike.
 5. **The `Connection` part.** **Not started.**
 6. **Tests, CI, documentation** — and the Windows measurement: which driver
    the CI runner can install with no prompt, and a run of the same assertions

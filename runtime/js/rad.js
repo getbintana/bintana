@@ -899,20 +899,34 @@ class ModelPart extends FormPart {
     Ensure() {
         if (!this._record) return this;
 
-        const cls    = this.RecordClass;
-        const shape  = Record.Shape(cls);
-        const naming = NAMINGS[cls.Naming || "same"];
-        const quote  = this.Db.Dialect.Quote;
-        const table  = this._tableName || this._record;
+        const cls     = this.RecordClass;
+        const shape   = Record.Shape(cls);
+        const naming  = NAMINGS[cls.Naming || "same"];
+        const dialect = this.Db.Dialect;
+        const quote   = dialect.Quote;
+        const table   = this._tableName || this._record;
 
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table))
             throw new TypeError(`Model: '${table}' is not a usable table name`);
 
-        const SQL_TYPE = {
-            text: "TEXT", enum: "TEXT", date: "TEXT", time: "TEXT",
-            datetime: "TEXT", decimal: "TEXT", int: "INTEGER",
-            bool: "INTEGER", number: "REAL", bytes: "BLOB",
-        };
+        /*
+         * **The types are the engine's**, from `Dialect.Types`: sqlite keeps
+         * a date as TEXT, PostgreSQL has DATE. An engine whose types nobody
+         * has run this on answers null, and a guessed CREATE TABLE is worse
+         * than a sentence -- docs/plans/odbc-plan.md, stage 4.
+         */
+        const SQL_TYPE = dialect.Types;
+        if (!SQL_TYPE)
+            throw new Error(`Model: this connection does not say how to create ` +
+                            `a table (${this.Db.Dbms || "its engine"}) -- create ` +
+                            `${table} yourself, and the Model will use it`);
+
+        /* There already, under any case: `IF NOT EXISTS` is not every
+         * engine's (SQL Server has none), and the catalogue is. */
+        const lower = `${table}`.toLowerCase();
+        if (this.Db.Tables.some((t) => `${t}`.toLowerCase() === lower))
+            return this;
+
         const columns = [];
         const keys    = [];
 
@@ -932,14 +946,18 @@ class ModelPart extends FormPart {
             columns.push(def);
         }
 
-        if (keys.length === 1 && keys[0].type === "INTEGER")
-            columns[keys[0].at] += " PRIMARY KEY";
+        /* A single integer key is generated: sqlite's `INTEGER PRIMARY KEY`
+         * is a rowid alias (`AutoKey` ""), every other engine says it with
+         * its own words before PRIMARY KEY. */
+        if (keys.length === 1 && keys[0].type === SQL_TYPE.int)
+            columns[keys[0].at] += dialect.AutoKey ? ` ${dialect.AutoKey} PRIMARY KEY`
+                                                   : " PRIMARY KEY";
         else if (keys.length)
             columns.push(`PRIMARY KEY (${keys.map((k) =>
                 `${quote}${k.column}${quote}`).join(", ")})`);
 
-        this.Db.Script(`CREATE TABLE IF NOT EXISTS ${quote}${table}${quote} ` +
-                       `(${columns.join(", ")})`);
+        this.Db.Execute(`CREATE TABLE ${quote}${table}${quote} ` +
+                        `(${columns.join(", ")})`);
         return this;
     }
 
@@ -5937,15 +5955,18 @@ function sqliteAffinity(declared) {
  * ## What it needs from a connection, and nothing more
  *
  *     Query(sql, params)   Execute(sql, params)   Transaction(fn)
- *     Dialect -> { Placeholder, Quote, NewKey }
+ *     Dialect -> { Placeholder, Quote, NewKey, KeyQuery, Page, Decimal,
+ *                  Types, AutoKey }
  *
  * and `Each(sql, params, fn)` for `Cursor.Each`, the one place a row at a time
  * is the point.
  *
- * So a `Database.Postgres` written later changes nothing in this class: the
- * three facts known to differ between engines -- how a bound value is spelled,
- * how a name is quoted, how the key of a new row comes back -- are read off
- * `Dialect` instead of assumed.
+ * So a second engine changes nothing in this class: what differs between
+ * engines -- how a bound value is spelled, how a name is quoted, how the key
+ * of a new row comes back, how a cursor pages, where a decimal is exact, which
+ * types a Model creates -- is read off `Dialect` instead of assumed. The
+ * first three were sqlite's alone; the rest arrived with `Database.Odbc`
+ * (docs/plans/odbc-plan.md, stage 4).
  *
  * ## The two things it does not have to invent
  *
@@ -6121,7 +6142,7 @@ GLOBAL.Table = class Table {
         const columns = this.#conn.Columns(this.#name);
         if (!columns.length)
             throw new Error(`there is no table called ${this.#name} in ` +
-                            `${this.#conn.Path || "this database"}`);
+                            `${this.#conn.Path || this.#conn.Dbms || "this database"}`);
 
         const lower = {}, declared = {};
         for (const col of columns) {
@@ -6168,7 +6189,20 @@ GLOBAL.Table = class Table {
              * by sqlite's own rules, in sqlite's own order.
              */
             const declaredType = declared[`${want}`.toLowerCase()] || "";
-            if (info.Kind === "decimal") {
+            /*
+             * An engine with an exact numeric type (`Dialect.Decimal` is
+             * "Exact") keeps a decimal in NUMERIC, DECIMAL or text; what loses
+             * the cent there is a binary float, refused the same way.
+             */
+            if (info.Kind === "decimal" && this.#conn.Dialect.Decimal === "Exact") {
+                const t = declaredType.toLowerCase();
+                if (t.includes("float") || t.includes("double") || t.includes("real"))
+                    throw new Error(
+                        `${this.#of.name}.${name} is a decimal and ` +
+                        `${this.#name}.${found} is declared '${declaredType}', a ` +
+                        `binary float that would store 19.90 as 19.899999... -- ` +
+                        `declare it NUMERIC or DECIMAL`);
+            } else if (info.Kind === "decimal") {
                 const affinity = sqliteAffinity(declaredType);
 
                 if (affinity !== "TEXT" && affinity !== "BLOB")
@@ -6354,32 +6388,95 @@ GLOBAL.Table = class Table {
             throw new Error(`${rec.constructor.name} has nothing to insert: ` +
                             `every field is at what it starts from`);
 
-        const marks = cols.map((c, i) => this.#mark(i + 1)).join(", ");
-        const done  = this.#conn.Execute(
-            `INSERT INTO ${this.#quote(this.#name)} ` +
-            `(${cols.map((c) => this.#quote(c)).join(", ")}) VALUES (${marks})`,
-            cols.map((c) => row[c]));
-
         /*
          * The generated key, back into the record -- through its setter, so it
          * is checked like anything else. Only when the engine reports one and
          * only for a single key it was asked to generate: a compound key or one
          * the program chose has nothing to learn here.
+         *
+         * How it comes back is the engine's (`Dialect.NewKey`): sqlite reports
+         * it beside the change (`LastId`), PostgreSQL answers it as a row of
+         * the INSERT itself (`Returning`), SQL Server too but with the clause
+         * before VALUES (`Output`), and MySQL or sqlite through ODBC are asked
+         * right after on the same connection (`Select`, with `KeyQuery`).
          */
-        if (blanks.length === 1 && keys.length === 1) {
-            if (this.#conn.Dialect.NewKey !== "LastId")
-                throw new Error(
-                    `this driver reports a new key by ` +
-                    `'${this.#conn.Dialect.NewKey}', which Table does not do ` +
-                    `yet -- give ${rec.constructor.name} its key before ` +
-                    `inserting`);
-            rec[this.#property(blanks[0])] = done.LastId;
+        const marks  = cols.map((c, i) => this.#mark(i + 1)).join(", ");
+        const target = `INSERT INTO ${this.#quote(this.#name)} ` +
+                       `(${cols.map((c) => this.#quote(c)).join(", ")})`;
+        const values = this.#bind(cols, row);
+        const wants  = blanks.length === 1 && keys.length === 1;
+        const how    = this.#conn.Dialect.NewKey;
+
+        if (wants && how !== "LastId" && how !== "Returning" && how !== "Output" &&
+            !(how === "Select" && this.#conn.Dialect.KeyQuery))
+            throw new Error(
+                `this driver reports a new key by '${how}', which Table does ` +
+                `not do -- give ${rec.constructor.name} its key before ` +
+                `inserting`);
+
+        let key;
+        if (wants && how === "Returning") {
+            const got = this.#conn.Query(
+                `${target} VALUES (${marks}) RETURNING ${this.#quote(blanks[0].Column)}`,
+                values);
+            key = got.length ? got[0][blanks[0].Column] : undefined;
+        } else if (wants && how === "Output") {
+            const got = this.#conn.Query(
+                `${target} OUTPUT INSERTED.${this.#quote(blanks[0].Column)} ` +
+                `VALUES (${marks})`, values);
+            key = got.length ? got[0][blanks[0].Column] : undefined;
+        } else {
+            const done = this.#conn.Execute(`${target} VALUES (${marks})`, values);
+            if (wants && how === "LastId")
+                key = done.LastId;
+            else if (wants) {
+                const got = this.#conn.Query(this.#conn.Dialect.KeyQuery);
+                const first = got.length ? got[0] : null;
+                key = first ? first[ownKeys(first)[0]] : undefined;
+            }
+        }
+        if (wants) {
+            if (key === undefined || key === null)
+                throw new Error(`${this.#name}: the INSERT ran and the engine ` +
+                                `answered no new key`);
+            rec[this.#property(blanks[0])] = key;
         }
         this.#seen(rec);
         return rec;
     }
 
     /* What the row is now, after a write that went through here. */
+    /*
+     * The values of a row as they are bound. A row is `Serialize(true)`, where
+     * a `Bytes` field is base64 -- the shape a JSON file needs, and the one
+     * `Update` compares -- but a column is BLOB or BYTEA, and base64 text in
+     * it is the wrong bytes (sqlite kept it as TEXT and read it back, which hid
+     * it; a BYTEA cannot). So a bytes field is bound as `Bytes`. Reading takes
+     * either: `Field.Bytes` reads base64 text from a row written before.
+     */
+    #bind(cols, row) {
+        const blank = this.#blank();
+        const bytes = new Set(), typed = new Set();
+        /* An engine with real column types (not sqlite's "Text" dialect)
+         * refuses `""` as a DATE, a TIME, a TIMESTAMP or a NUMERIC (PostgreSQL:
+         * 22007), and `""` is what an unset field of those kinds serializes
+         * to. It is NULL there, which a field reads back as its default --
+         * the same `""`. sqlite keeps storing `""`, as it always has. */
+        const empties = this.#conn.Dialect.Decimal !== "Text";
+        for (const name of blank.PropertyNames()) {
+            const info = blank.PropertyInfo(name);
+            if (!info) continue;
+            if (info.Kind === "bytes") bytes.add(info.Column);
+            if (empties && (info.Kind === "date" || info.Kind === "time" ||
+                            info.Kind === "datetime" || info.Kind === "decimal"))
+                typed.add(info.Column);
+        }
+        return cols.map((c) =>
+            bytes.has(c) && typeof row[c] === "string" ? Bytes.FromBase64(row[c])
+            : typed.has(c) && row[c] === "" ? null
+            : row[c]);
+    }
+
     #seen(rec) {
         tableRowSeen.set(rec, { table: this.#name, conn: this.#conn, row: rec.Serialize(true) });
     }
@@ -6430,7 +6527,7 @@ GLOBAL.Table = class Table {
                         .join(" AND ");
         const done = this.#conn.Execute(
             `UPDATE ${this.#quote(this.#name)} SET ${set} WHERE ${on}`,
-            cols.map((c) => row[c]).concat(keys.map((k) => row[k.Column])));
+            this.#bind(cols, row).concat(this.#bind(keys.map((k) => k.Column), row)));
 
         if (!done.Changes)
             throw new Error(
@@ -6662,12 +6759,24 @@ GLOBAL.Cursor = class Cursor {
 
     /* `LIMIT`/`OFFSET` around the statement, its placeholders numbered on. */
     #read(from, count) {
-        const p  = this.#conn.Dialect.Placeholder;
+        const dialect = this.#conn.Dialect;
+        const p  = dialect.Placeholder;
         const at = this.#params.length;
         const mark = (n) => (p.includes("%d") ? p.replace("%d", `${n}`) : p);
 
+        /* `LIMIT … OFFSET` is not every engine's: SQL Server pages with
+         * `OFFSET … FETCH` and an outer `ORDER BY`, which nobody has run
+         * here yet. Said, rather than sent and refused by the server. */
+        if (dialect.Page !== undefined && dialect.Page !== "Limit")
+            throw new Error(`Cursor: this engine (${this.#conn.Dbms || "?"}) has ` +
+                            `no LIMIT/OFFSET, and its way of paging is not built ` +
+                            `-- use Each, or Query with the engine's own paging`);
+
+        /* The alias is PostgreSQL's before 16, which refuses a subquery in
+         * FROM without one; sqlite takes it as well. */
         return this.#conn.Query(
-            `SELECT * FROM (\n${this.#sql}\n) LIMIT ${mark(at + 1)} OFFSET ${mark(at + 2)}`,
+            `SELECT * FROM (\n${this.#sql}\n) AS bta_page LIMIT ${mark(at + 1)} ` +
+            `OFFSET ${mark(at + 2)}`,
             this.#params.concat([count, from]));
     }
 };

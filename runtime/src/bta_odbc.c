@@ -79,6 +79,9 @@ static BtaOdbcChar *odbc_in(const char *utf8)
  * repaired with U+FFFD rather than a string QuickJS would take on trust. */
 static char *odbc_out(const BtaOdbcChar *s, gssize units)
 {
+    /* An empty value read in parts is an empty array, whose data is NULL. */
+    if (!s || units == 0)
+        return g_strdup("");
 #ifdef G_OS_WIN32
     char *u = g_utf16_to_utf8((const gunichar2 *)s, units, NULL, NULL, NULL);
     return u ? u : g_strdup("");
@@ -97,6 +100,8 @@ typedef struct {
     char   *dbms;        /* SQL_DBMS_NAME, read once at connect */
     char   *dbms_ver;    /* SQL_DBMS_VER */
     char   *driver;      /* SQL_DRIVER_NAME */
+    char   *escape;      /* SQL_SEARCH_PATTERN_ESCAPE, "" when the driver has none */
+    char   *quote;       /* SQL_IDENTIFIER_QUOTE_CHAR */
     SQLULEN stmt_secs;   /* SQL_ATTR_QUERY_TIMEOUT on every statement; 0 none */
     int     depth;       /* nested Transaction: 0 none, >0 a savepoint */
     int     reading;     /* Each() calls in progress: a statement is open */
@@ -135,6 +140,8 @@ static void odbc_finalizer(JSRuntime *rt, JSValue val)
     odbc_release(c);
     g_free(c->dbms);
     g_free(c->dbms_ver);
+    g_free(c->escape);
+    g_free(c->quote);
     g_free(c->driver);
     g_free(c);
 }
@@ -802,6 +809,38 @@ static void columns_free(OdbcColumn *cols, SQLSMALLINT n)
     g_free(cols);
 }
 
+static bool is_text_type(SQLSMALLINT t)
+{
+    return t == SQL_CHAR || t == SQL_VARCHAR || t == SQL_LONGVARCHAR
+        || t == SQL_WCHAR || t == SQL_WVARCHAR || t == SQL_WLONGVARCHAR;
+}
+
+/*
+ * Whether the engine's own name for a column's type is a boolean. psqlODBC
+ * describes `boolean` as `SQL_VARCHAR` holding `"1"`/`"0"` unless the
+ * connection string says `BoolsAsChar=0` (measured), and `Record` takes a
+ * boolean as `true`/`false` or `0`/`1` -- so every boolean field would refuse
+ * what the default driver hands it. The type name is the engine's and says
+ * `bool` either way; such a column is read as `SQL_BIT`.
+ */
+static bool names_a_boolean(SQLHSTMT st, SQLUSMALLINT col)
+{
+    BtaOdbcChar buf[64];
+    SQLSMALLINT bytes = 0;
+
+    if (!SQL_SUCCEEDED(ODBC_API(SQLColAttribute)(st, col, SQL_DESC_TYPE_NAME,
+                                                 buf, sizeof buf, &bytes, NULL)))
+        return false;
+    gssize units = bytes / (SQLSMALLINT)sizeof(BtaOdbcChar);
+    if (units < 0 || units >= (gssize)G_N_ELEMENTS(buf))
+        units = G_N_ELEMENTS(buf) - 1;
+    char *name = odbc_out(buf, units);
+    bool  yes  = g_ascii_strcasecmp(name, "bool") == 0
+              || g_ascii_strcasecmp(name, "boolean") == 0;
+    g_free(name);
+    return yes;
+}
+
 static OdbcColumn *columns_read(JSContext *ctx, SQLHSTMT st, SQLSMALLINT n)
 {
     OdbcColumn *cols = g_new0(OdbcColumn, n);
@@ -828,7 +867,8 @@ static OdbcColumn *columns_read(JSContext *ctx, SQLHSTMT st, SQLSMALLINT n)
         } else {
             cols[k].name = odbc_out(name, len);
         }
-        cols[k].type = type;
+        cols[k].type = is_text_type(type) && names_a_boolean(st, k + 1)
+                     ? SQL_BIT : type;
     }
     return cols;
 }
@@ -1174,6 +1214,337 @@ static JSValue script_body(JSContext *ctx, JSValueConst this_val,
     }
     g_free(in);
     return out;
+}
+
+/* -------------------------------------------------------- the catalogue */
+
+/* A text column of a result as a C string (g_free it), NULL for NULL; `*err`
+ * says a throw is pending. */
+static char *text_c(JSContext *ctx, SQLHSTMT st, SQLUSMALLINT col, bool *err)
+{
+    bool        null;
+    GByteArray *all = get_long(ctx, st, col,
+#ifdef G_OS_WIN32
+                               SQL_C_WCHAR, sizeof(SQLWCHAR),
+#else
+                               SQL_C_CHAR, 1,
+#endif
+                               &null);
+    *err = !all && !null;
+    if (!all)
+        return NULL;
+    char *u = odbc_out((const BtaOdbcChar *)all->data,
+                       (gssize)(all->len / sizeof(BtaOdbcChar)));
+    g_byte_array_unref(all);
+    return u;
+}
+
+/*
+ * A table name as the catalogue functions' *pattern*: `_` and `%` are
+ * wildcards there, and `a_b` matched `axb` on both drivers measured. Escaped
+ * with the driver's own character; the rows are also held to the exact name,
+ * for a driver that has none.
+ */
+static BtaOdbcChar *catalog_pattern(BtaOdbc *c, const char *name)
+{
+    GString *s = g_string_new(NULL);
+    char     esc = c->escape ? c->escape[0] : '\0';
+
+    for (const char *p = name; *p; p++) {
+        if (esc && (*p == '_' || *p == '%' || *p == esc))
+            g_string_append_c(s, esc);
+        g_string_append_c(s, *p);
+    }
+    BtaOdbcChar *out = odbc_in(s->str);
+    g_string_free(s, TRUE);
+    return out;
+}
+
+/* The schemas that are the engine's and not the program's. */
+static bool system_schema(const char *s)
+{
+    static const char *const sys[] = { "information_schema", "pg_catalog",
+                                       "pg_toast", "sys", "mysql",
+                                       "performance_schema", NULL };
+    for (const char *const *q = sys; s && *q; q++)
+        if (g_ascii_strcasecmp(s, *q) == 0)
+            return true;
+    return false;
+}
+
+static int compare_names(gconstpointer a, gconstpointer b)
+{
+    return strcmp(*(char *const *)a, *(char *const *)b);
+}
+
+/*
+ * `Tables` -- the tables and views, by name, ordered, each once. `SQLTables`
+ * lists every schema (psqlODBC answered `other.a_b` beside `public.a_b`) while
+ * `SQLColumns` resolves a bare name through the search path, so a name in two
+ * schemas is one name here: it is what `Table(name)` will find. The engine's
+ * own schemas are left out.
+ */
+static JSValue odbc_get_tables(JSContext *ctx, JSValueConst this_val)
+{
+    BtaOdbc *c = open_of(ctx, this_val);
+    if (!c)
+        return JS_EXCEPTION;
+
+    SQLHSTMT st = stmt_new(ctx, c);
+    if (!st)
+        return JS_EXCEPTION;
+
+    BtaOdbcChar *types = odbc_in("TABLE,VIEW");
+    SQLRETURN    r = ODBC_API(SQLTables)(st, NULL, 0, NULL, 0, NULL, 0,
+                                         types, SQL_NTS);
+    g_free(types);
+    if (!SQL_SUCCEEDED(r)) {
+        throw_odbc(ctx, SQL_HANDLE_STMT, st, "cannot list the tables");
+        SQLFreeHandle(SQL_HANDLE_STMT, st);
+        return JS_EXCEPTION;
+    }
+
+    GHashTable *seen  = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+    bool        err   = false;
+
+    while (!err && SQL_SUCCEEDED(r = SQLFetch(st))) {
+        char *schema = text_c(ctx, st, 2, &err);
+        char *name   = err ? NULL : text_c(ctx, st, 3, &err);
+        if (name && !system_schema(schema) && !g_hash_table_contains(seen, name))
+            g_hash_table_add(seen, name);
+        else
+            g_free(name);
+        g_free(schema);
+    }
+    if (!err && r != SQL_NO_DATA) {
+        throw_odbc(ctx, SQL_HANDLE_STMT, st, "cannot list the tables");
+        err = true;
+    }
+    SQLFreeHandle(SQL_HANDLE_STMT, st);
+
+    JSValue out = JS_EXCEPTION;
+    if (!err) {
+        GPtrArray *names = g_hash_table_get_keys_as_ptr_array(seen);
+        g_ptr_array_sort(names, compare_names);
+        out = JS_NewArray(ctx);
+        for (guint i = 0; i < names->len; i++)
+            JS_SetPropertyUint32(ctx, out, i,
+                                 JS_NewString(ctx, g_ptr_array_index(names, i)));
+        g_ptr_array_unref(names);
+    }
+    g_hash_table_unref(seen);
+    return out;
+}
+
+/*
+ * `Columns(table)` -- `[{ Name, Type, Required, Key }]`, sqlite's shape:
+ * `Type` is the engine's own name (`numeric`, `NUMERIC(12,2)`), `Required` a
+ * column that refuses NULL, `Key` one in the primary key. `[]` when there is
+ * no such table, which is how `Table` says so. One schema: the first row's,
+ * for a driver that answers the name from several.
+ */
+static JSValue odbc_columns(JSContext *ctx, JSValueConst this_val,
+                            int argc, JSValueConst *argv)
+{
+    BtaOdbc *c = open_of(ctx, this_val);
+    if (!c)
+        return JS_EXCEPTION;
+    if (argc < 1 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx, "Columns expects the name of a table");
+
+    const char *table = JS_ToCString(ctx, argv[0]);
+    if (!table)
+        return JS_EXCEPTION;
+
+    SQLHSTMT st = stmt_new(ctx, c);
+    if (!st) {
+        JS_FreeCString(ctx, table);
+        return JS_EXCEPTION;
+    }
+
+    JSValue      out     = JS_NewArray(ctx);
+    uint32_t     at      = 0;
+    char        *schema  = NULL;
+    bool         have    = false;
+    bool         err     = false;
+    BtaOdbcChar *pattern = catalog_pattern(c, table);
+    SQLRETURN    r = ODBC_API(SQLColumns)(st, NULL, 0, NULL, 0, pattern, SQL_NTS,
+                                          NULL, 0);
+    if (!SQL_SUCCEEDED(r)) {
+        throw_odbc(ctx, SQL_HANDLE_STMT, st, "cannot read the columns");
+        err = true;
+    }
+    while (!err && SQL_SUCCEEDED(r = SQLFetch(st))) {
+        char *sch  = text_c(ctx, st, 2, &err);
+        char *name = err ? NULL : text_c(ctx, st, 3, &err);
+        char *col  = err ? NULL : text_c(ctx, st, 4, &err);
+        char *type = err ? NULL : text_c(ctx, st, 6, &err);
+        SQLSMALLINT nullable = SQL_NULLABLE_UNKNOWN;
+        SQLLEN      ind = 0;
+        if (!err)
+            SQLGetData(st, 11, SQL_C_SSHORT, &nullable, sizeof nullable, &ind);
+
+        bool mine = !err && name && col && strcmp(name, table) == 0
+                 && (!have || g_strcmp0(sch, schema) == 0);
+        if (mine) {
+            if (!have) {
+                schema = g_strdup(sch);
+                have   = true;
+            }
+            JSValue o = JS_NewObject(ctx);
+            JS_SetPropertyStr(ctx, o, "Name", JS_NewString(ctx, col));
+            JS_SetPropertyStr(ctx, o, "Type", JS_NewString(ctx, type ? type : ""));
+            JS_SetPropertyStr(ctx, o, "Required",
+                              JS_NewBool(ctx, ind != SQL_NULL_DATA
+                                              && nullable == SQL_NO_NULLS));
+            /* sqlite's contract: the position in the key, 0 for none --
+             * a compound key says 1, 2, 3 and the order is the answer. */
+            JS_SetPropertyStr(ctx, o, "Key", JS_NewInt32(ctx, 0));
+            JS_SetPropertyUint32(ctx, out, at++, o);
+        }
+        g_free(sch); g_free(name); g_free(col); g_free(type);
+    }
+    if (!err && r != SQL_NO_DATA) {
+        throw_odbc(ctx, SQL_HANDLE_STMT, st, "cannot read the columns");
+        err = true;
+    }
+    SQLFreeStmt(st, SQL_CLOSE);
+
+    /* The key, from its own call, marked on the columns already read. */
+    if (!err && at > 0) {
+        BtaOdbcChar *sch = schema ? odbc_in(schema) : NULL;
+        BtaOdbcChar *tab = odbc_in(table);
+        r = ODBC_API(SQLPrimaryKeys)(st, NULL, 0, sch, sch ? SQL_NTS : 0,
+                                     tab, SQL_NTS);
+        g_free(sch);
+        g_free(tab);
+        while (!err && SQL_SUCCEEDED(r) && SQL_SUCCEEDED(r = SQLFetch(st))) {
+            char *name = text_c(ctx, st, 3, &err);
+            char *col  = err ? NULL : text_c(ctx, st, 4, &err);
+            SQLSMALLINT seq = 0;
+            SQLLEN      sind = 0;
+            if (!err)
+                SQLGetData(st, 5, SQL_C_SSHORT, &seq, sizeof seq, &sind);
+            if (!err && name && col && strcmp(name, table) == 0)
+                for (uint32_t i = 0; i < at; i++) {
+                    JSValue o = JS_GetPropertyUint32(ctx, out, i);
+                    JSValue n = JS_GetPropertyStr(ctx, o, "Name");
+                    const char *s = JS_ToCString(ctx, n);
+                    if (s && strcmp(s, col) == 0)
+                        JS_SetPropertyStr(ctx, o, "Key",
+                                          JS_NewInt32(ctx, sind == SQL_NULL_DATA ? 1 : seq));
+                    JS_FreeCString(ctx, s);
+                    JS_FreeValue(ctx, n);
+                    JS_FreeValue(ctx, o);
+                }
+            g_free(name);
+            g_free(col);
+        }
+        /* A driver without the call answers no key rather than failing the
+         * columns it did read. */
+    }
+
+    SQLFreeHandle(SQL_HANDLE_STMT, st);
+    g_free(schema);
+    JS_FreeCString(ctx, table);
+    if (err) {
+        JS_FreeValue(ctx, out);
+        return JS_EXCEPTION;
+    }
+    return out;
+}
+
+/* ------------------------------------------------------------ the dialect */
+
+/*
+ * What `Table`, `Cursor` and `Model` must not assume, per engine, keyed by
+ * `SQL_DBMS_NAME`. ODBC makes the connection alike, not the SQL.
+ *
+ *   NewKey     how the key of a new row comes back: `"Returning"` (an
+ *              `INSERT … RETURNING`, measured on psqlODBC), `"Output"` (SQL
+ *              Server's `OUTPUT INSERTED`), `"Select"` (`KeyQuery` right after
+ *              the insert: sqliteodbc drops `RETURNING`'s rows, measured), or
+ *              `"None"`, which `Table.Insert` refuses
+ *   Page       `"Limit"` when `LIMIT ? OFFSET ?` pages a `Cursor`; `""` and
+ *              `Cursor` refuses (SQL Server, until it can be run)
+ *   Decimal    `"Text"`: sqlite's rule, a decimal needs TEXT affinity;
+ *              `"Exact"`: an exact numeric or text, never a float
+ *   Types      the column type per field kind, for `Model.Ensure`; null for
+ *              an engine nobody has run it on, and `Ensure` refuses
+ *   AutoKey    what makes a single integer key generated; `""` is sqlite's
+ *              `INTEGER PRIMARY KEY`
+ *
+ * The SQL Server and MySQL rows come from the drivers' documentation and have
+ * not been run.
+ */
+typedef struct {
+    const char        *dbms;
+    const char        *newkey;
+    const char        *keyquery;
+    const char        *page;
+    const char        *decimal;
+    const char        *autokey;
+    const char *const *types;     /* kind, type, … NULL; NULL for none */
+} OdbcEngine;
+
+static const char *const sqlite_types[] = {
+    "text", "TEXT", "enum", "TEXT", "date", "TEXT", "time", "TEXT",
+    "datetime", "TEXT", "decimal", "TEXT", "int", "INTEGER", "bool", "INTEGER",
+    "number", "REAL", "bytes", "BLOB", NULL };
+
+static const char *const postgres_types[] = {
+    "text", "TEXT", "enum", "TEXT", "date", "DATE", "time", "TIME(0)",
+    "datetime", "TIMESTAMP(0)", "decimal", "NUMERIC", "int", "BIGINT",
+    "bool", "BOOLEAN", "number", "DOUBLE PRECISION", "bytes", "BYTEA", NULL };
+
+static const OdbcEngine engines[] = {
+    { "PostgreSQL", "Returning", NULL, "Limit", "Exact",
+      "GENERATED BY DEFAULT AS IDENTITY", postgres_types },
+    { "SQLite", "Select", "SELECT last_insert_rowid() AS id", "Limit", "Text",
+      "", sqlite_types },
+    { "Microsoft SQL Server", "Output", NULL, "", "Exact", NULL, NULL },
+    { "MySQL", "Select", "SELECT LAST_INSERT_ID() AS id", "Limit", "Exact",
+      NULL, NULL },
+    { "MariaDB", "Select", "SELECT LAST_INSERT_ID() AS id", "Limit", "Exact",
+      NULL, NULL },
+};
+
+static const OdbcEngine unknown_engine = { "", "None", NULL, "", "Exact",
+                                           NULL, NULL };
+
+static JSValue odbc_get_dialect(JSContext *ctx, JSValueConst this_val)
+{
+    BtaOdbc *c = odbc_of(ctx, this_val);
+    if (!c)
+        return JS_EXCEPTION;
+
+    const OdbcEngine *e = &unknown_engine;
+    for (size_t i = 0; i < G_N_ELEMENTS(engines); i++)
+        if (c->dbms && strcmp(c->dbms, engines[i].dbms) == 0)
+            e = &engines[i];
+
+    JSValue d = JS_NewObject(ctx);
+    JS_SetPropertyStr(ctx, d, "Placeholder", JS_NewString(ctx, "?"));
+    /* The driver's own answer; a space is its way of saying "none". */
+    const char *q = c->quote && *c->quote && strcmp(c->quote, " ") != 0
+                  ? c->quote : "\"";
+    JS_SetPropertyStr(ctx, d, "Quote",    JS_NewString(ctx, q));
+    JS_SetPropertyStr(ctx, d, "NewKey",   JS_NewString(ctx, e->newkey));
+    JS_SetPropertyStr(ctx, d, "KeyQuery",
+                      e->keyquery ? JS_NewString(ctx, e->keyquery) : JS_NULL);
+    JS_SetPropertyStr(ctx, d, "Page",     JS_NewString(ctx, e->page));
+    JS_SetPropertyStr(ctx, d, "Decimal",  JS_NewString(ctx, e->decimal));
+    JS_SetPropertyStr(ctx, d, "AutoKey",
+                      e->autokey ? JS_NewString(ctx, e->autokey) : JS_NULL);
+    if (e->types) {
+        JSValue t = JS_NewObject(ctx);
+        for (const char *const *p = e->types; *p; p += 2)
+            JS_SetPropertyStr(ctx, t, p[0], JS_NewString(ctx, p[1]));
+        JS_SetPropertyStr(ctx, d, "Types", t);
+    } else {
+        JS_SetPropertyStr(ctx, d, "Types", JS_NULL);
+    }
+    return d;
 }
 
 /*
@@ -1577,6 +1948,8 @@ static JSValue database_odbc(JSContext *ctx, JSValueConst this_val,
     c->sqlserver = strcmp(c->dbms, "Microsoft SQL Server") == 0;
     c->dbms_ver = info_text(c->dbc, SQL_DBMS_VER);
     c->driver   = info_text(c->dbc, SQL_DRIVER_NAME);
+    c->escape   = info_text(c->dbc, SQL_SEARCH_PATTERN_ESCAPE);
+    c->quote    = info_text(c->dbc, SQL_IDENTIFIER_QUOTE_CHAR);
 
     result = JS_NewObjectClass(ctx, bta_odbc_class_id);
     if (!JS_IsException(result)) {
@@ -1590,6 +1963,8 @@ out:
         odbc_release(c);
         g_free(c->dbms);
         g_free(c->dbms_ver);
+        g_free(c->escape);
+        g_free(c->quote);
         g_free(c->driver);
         g_free(c);
     }
@@ -1644,6 +2019,24 @@ static const JSCFunctionListEntry odbc_props[] = {
      *   is rethrown
      */
     JS_CFUNC_DEF("Transaction",   1, odbc_transaction),
+    /* Columns(table) -> { Name, Type, Required, Key }[]
+     *   what is really in the table, from the driver's catalogue: `Type` is
+     *   the engine's own name for it, `Key` the position in the primary key
+     *   (0 for none); `[]` when there is no such table
+     */
+    JS_CFUNC_DEF("Columns",       1, odbc_columns),
+    /* Tables -> string[]
+     *   the tables and views, ordered, each name once whatever schema it is
+     *   in; the engine's own schemas are left out
+     */
+    JS_CGETSET_DEF("Tables",      odbc_get_tables,       NULL),
+    /* Dialect -> object
+     *   what differs per engine, from `Dbms`: `Placeholder`, `Quote`,
+     *   `NewKey` (`"Returning"`, `"Output"`, `"Select"` with `KeyQuery`, or
+     *   `"None"`), `Page`, `Decimal`, `Types` and `AutoKey` -- what `Table`,
+     *   `Cursor` and `Model` read instead of assuming sqlite
+     */
+    JS_CGETSET_DEF("Dialect",     odbc_get_dialect,      NULL),
     /* Close()
      *   let it go; twice is not an error
      */
@@ -1708,10 +2101,11 @@ void bta_odbc_init(JSContext *ctx, JSValue global)
 /*
  * ## Where it stands
  *
- * Stages 0 to 3 of docs/plans/odbc-plan.md: the build on three platforms,
+ * Stages 0 to 4 of docs/plans/odbc-plan.md: the build on three platforms,
  * the text layer, `Database.Odbc` connecting and refusing, diagnostics as
  * `Code`/`Native`/`Details`, `Open`, `Dbms`, `DbmsVersion`, `Driver`, `Close`,
  * `Query`, `Execute` and `Script` with every type both ways, `Each` and
- * `Transaction` (stages 2 and 3). `Columns`, `Tables` and `Dialect` -- the rest
- * of what `Table` and `Cursor` ask for -- are stage 4.
+ * `Transaction`, and `Columns`, `Tables` and `Dialect` -- everything `Table`,
+ * `Cursor` and `Model` ask for (stages 2 to 4). The `Connection` part of a
+ * form is stage 5.
  */
