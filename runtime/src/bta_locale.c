@@ -1618,6 +1618,7 @@ char *bta_locale_format_number(JSContext *ctx, JSValueConst v, const BtaNumberFm
         return NULL;
 
     char *amount;
+    bool  negative = false;
 
     if (held > 0) {
         /* A Decimal: its own digits, never a double -- the one place the
@@ -1630,6 +1631,13 @@ char *bta_locale_format_number(JSContext *ctx, JSValueConst v, const BtaNumberFm
 
         int decimals = want >= 0 ? want : locale_decimals_for(value);
 #ifdef G_OS_WIN32
+        /* UCRT's `%f` spelled a negative number `5-` on this machine: the
+         * locale's negative sign is appended instead of prefixed.  Format the
+         * magnitude and put the sign where every reader expects it. */
+        if (value < 0) {
+            negative = true;
+            value    = -value;
+        }
         amount = f->group ? locale_group_double(value, decimals)
                           : g_strdup_printf("%.*f", decimals, value);
 #else
@@ -1642,6 +1650,8 @@ char *bta_locale_format_number(JSContext *ctx, JSValueConst v, const BtaNumberFm
     const char *symbol = number_symbol(f, &before, &space);
     GString    *out    = g_string_new(NULL);
 
+    if (negative)
+        g_string_append_c(out, '-');
     if (f->prefix)
         g_string_append(out, f->prefix);
     if (symbol && before) {
@@ -2064,6 +2074,17 @@ static GDateTime *locale_when(JSContext *ctx, JSValueConst v)
 static char *locale_date_default(GDateTime *when)
 {
 #ifdef G_OS_WIN32
+    /* The CRT's `%x` under the C locale is `%m/%d/%y` -- two digits, which is
+     * the same trap the POSIX branch widens.  The C locale has a known order,
+     * so name it; other Windows locales keep `%x`, whose short date is four
+     * digits in the ones the CRT ships. */
+    const char *lc_all = g_getenv("LC_ALL");
+    const char *lang   = g_getenv("LANG");
+    const char *want   = (lc_all && *lc_all) ? lc_all : lang;
+
+    if (want && (!g_ascii_strcasecmp(want, "C") ||
+                 !g_ascii_strcasecmp(want, "POSIX")))
+        return g_date_time_format(when, "%m/%d/%Y");
     return g_date_time_format(when, "%x");
 #else
     const char *pattern = nl_langinfo(D_FMT);

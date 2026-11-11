@@ -353,7 +353,7 @@ export class Runner {
         /* Tabs are keyed by the name relative to the project, which is what the
          * file tree and `openInTab` both speak. */
         let name = path;
-        if (path.startsWith("/")) {
+        if (File.IsAbsolute(path)) {
             if (!File.Within(path, ide.project)) return false;
             name = File.Relative(path, ide.project);
         }
@@ -391,7 +391,7 @@ export class Runner {
             const path = at[1];
             /* Ours, or the runtime's? Only the first question has an answer the
              * IDE can act on. */
-            if (path.startsWith("/") &&
+            if (File.IsAbsolute(path) &&
                 !File.Within(path, this.ide.project)) continue;
             return { path, line: Number(at[2]) };
         }

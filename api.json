@@ -15008,7 +15008,16 @@
           "Params": 2,
           "Signature": "(path, [cancellable])",
           "Returns": "{ Size, Modified, Type, Icon, IsDir }",
-          "Doc": "`{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a content type you can test (`\"image/png\"`), `.Icon` is the name the desktop draws for that kind of file, and `.Modified` is a real `Date`, to the millisecond. A `Cancellable` last ends a query that is stuck, and throws rather than answering `null`",
+          "Doc": "`{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a content type you can test (`\"image/png\"`), `.Icon` is the name the desktop draws for that kind of file, and `.Modified` is a real `Date`, to the millisecond. Where the platform has no shared MIME database, the common media types are answered from the extension instead of a bare `.pdf`. A `Cancellable` last ends a query that is stuck, and throws rather than answering `null`",
+          "Native": true
+        },
+        {
+          "Name": "IsAbsolute",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(path)",
+          "Returns": "boolean",
+          "Doc": "whether the path stands on its own, by the **platform's** rule and not by a leading slash: `/x` on POSIX; `C:\\x`, `C:/x` and a UNC share on Windows, where `C:` and `C:x` are drive-relative. Purely lexical, so a path that does not exist yet answers like any other",
           "Native": true
         },
         {
@@ -15035,7 +15044,7 @@
           "Params": 2,
           "Signature": "(...parts)",
           "Returns": "string",
-          "Doc": "one path out of pieces, with the separator the platform uses, **and normalised**: `.` and `..` are worked out by the letters, so `Join(root, \"../../etc/x\")` answers `/etc/x` -- a name that is data cannot hide where it leads. Whether it is still inside is `Within(path, root)`. A relative path keeps the `..` it cannot climb out of; nothing is asked of the disk, so `..` after a link goes back up the name",
+          "Doc": "one path out of pieces, with the separator the platform uses, **and normalised**: `.` and `..` are worked out by the letters, so `Join(root, \"../../etc/x\")` answers `/etc/x` -- a name that is data cannot hide where it leads. Whether it is still inside is `Within(path, root)`. It **concatenates**: a piece that is itself absolute does not replace the ones before it, so ask `IsAbsolute(path)` when a path may already stand on its own. A relative path keeps the `..` it cannot climb out of; nothing is asked of the disk, so `..` after a link goes back up the name",
           "Native": true
         },
         {

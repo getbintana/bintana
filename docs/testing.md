@@ -266,6 +266,74 @@ Two things filtering exposed, both of which had been unreachable:
 Both are the same lesson: **a path the suite never takes is a path nobody has
 tested**, and running part of a test suite takes paths the whole one does not.
 
+## Windows, where the suite gets a desktop
+
+```sh
+./tests/run.sh smoke
+./tests/run.sh widgets
+./tests/run.sh widgets =DesignHeightShort
+HEADLESS= ./tests/run.sh smoke      # this screen, for an icon or a theme
+```
+
+Windows has no Xvfb. `tests/run.sh` builds `tests/win-desktop.c` into
+`build/win-desktop.exe` with the MSYS2 compiler and starts the runner on a
+private `CreateDesktop` desktop, so no test window appears on the screen being
+used. The child still sees an ordinary display, which is why `tests/runner`
+takes its usual path instead of looking for `xvfb-run`. A machine without a
+compiler falls back to the real screen with a sentence, and `HEADLESS=` is the
+way back on purpose.
+
+`tests/check.sh`, `tests/api.sh` and the console projects (`tests/pack`,
+`tests/qr`, `tests/xlsx`) need no desktop. `tests/ide` needs its `.form`
+symlinks; a checkout without Developer Mode stores them as text files, and the
+runner skips it with a warning, as `tests/check.sh` already does. `tests/serial`
+has `tests/serial-win.sh` for a Windows port. The tests that need `/bin/sh`,
+`xdotool`, `chmod`, `ln`, `gio`, `desktop-file-validate`, `soffice` or a POSIX
+collation skip themselves with a line saying so; they are not failures.
+
+`tests/run.sh` sets `GTK_IM_MODULE=none` on Windows. GTK 4's Win32 IME filter
+crashes when a window message reaches a context that has already been destroyed
+(the stack is in `libgtk-4-1.dll`), and it can land under any test once the
+suite has been up for a few minutes. No test types IME text on Windows, so the
+suite runs without one; that is a workaround for a GTK bug and not a runtime
+setting. It removes that crash, not every one: a native run of `tests/widgets`
+still reaches the `Exec` chain and takes a `g_utf8_to_utf16`-with-NULL
+segmentation fault inside `libgtk`'s window procedure. The timing under gdb is
+enough to miss it, which is how the rest of the suite was measured.
+
+Measured on Windows 11 26H2 (2026-11-11), on that desktop: `tests/smoke`
+171/0, `tests/markdown` 171/0, `tests/qr` 120/0, `tests/report` 259/0 and
+`tests/xlsx` 57/0. `tests/widgets` runs to the end under gdb — 6112 assertions,
+53 failures, many of them the slower debugger and HTTP timing — and its native
+run is the GTK crash above; the remaining reds are the Windows differences
+listed below and in [`docs/agents/testing.md`](agents/testing.md).
+
+The Windows differences worth knowing before reading a red run:
+
+- **`Exec` merges stderr in C there.** GLib's `STDERR_MERGE` loses a console
+  child's stderr on Windows, so the launcher always pipes both and
+  `Exec.Wait`/`onLine` fold them. Without it a child's `Bintana error:` line
+  was empty in `Output` and present only under `Stderr: "separate"`.
+- **`Exec.Wait.Output` keeps the child's line endings.** The line callback
+  strips CRLF; a test that splits `Output` on `\n` uses `outputLines()` in
+  `WidgetsForm.js`, or it compares a `\r` the platform put there.
+- **There is no shared MIME database in the build tree, and `File.Info`
+  answers the extension for the common media types** — `application/pdf`,
+  `image/png` and their siblings — so the PDF assertions still mean something.
+  A real content type is never overruled; only a platform answer that is just
+  a dot-suffix is.
+- **Several POSIX controls have no Windows counterpart.** `Printer.Send` opens
+  the native, modal print dialog, which its own loop owns: a timer cannot
+  close it, so `PrintAtQuit` skips. `Stop()` is `TerminateProcess`, which
+  reports status `1` rather than a signal's `-1`, and there are no process
+  groups: `ExecKill` skips. `DISPLAY` is X11's, so a console child still has a
+  display: the form-needs-`DISPLAY` control skips while its `main` half runs.
+- **The font and colour choosers are modal and nothing in JS can close them.**
+  `testFileDialog` already refuses to open one for that reason; the two
+  `Dialog.Color` calls got away with sitting open on Linux, and the font
+  chooser's preview is one more GTK/Win32 path with a NULL family. Both are
+  skipped on Windows and only their refusals are asserted.
+
 ## What a test has to prove
 
 **Make the round trip.** Assigning `TextBox1.Text` from JS has to reach GTK, come

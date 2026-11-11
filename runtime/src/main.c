@@ -221,6 +221,23 @@ int main(int argc, char **argv)
      * reason.  See the note above `Locale.Number` in bta_locale.c.
      */
     setlocale(LC_ALL, "");
+#ifdef G_OS_WIN32
+    /*
+     * **UCRT's `setlocale(LC_ALL, "")` ignores `LC_ALL`/`LANG`.**  A child
+     * started with `LC_ALL=C` -- the one locale every POSIX machine has, and
+     * what a script or a test uses to pin machine-readable text -- kept the
+     * user's Spanish separators and two-digit date under Windows.  Honour the
+     * two spellings this platform can actually mean; anything else stays the
+     * desktop's, which is what `""` already does.
+     */
+    const char *lc_all = g_getenv("LC_ALL");
+    const char *lang   = g_getenv("LANG");
+    const char *want   = (lc_all && *lc_all) ? lc_all : lang;
+
+    if (want && (!g_ascii_strcasecmp(want, "C") ||
+                 !g_ascii_strcasecmp(want, "POSIX")))
+        setlocale(LC_ALL, "C");
+#endif
 
 #ifdef G_OS_WIN32
     /*

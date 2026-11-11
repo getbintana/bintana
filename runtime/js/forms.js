@@ -1520,7 +1520,15 @@ function rowsFrom(source, recordClass) {
             const table = source.slice(dot + 1);
             const db    = Database.Sqlite(File.Join(project, spec.path));
 
-            return db.Table(table, recordClass).All();
+            /* **The connection is read and closed.**  `All()` has every row in
+             * hand by the time it answers, so the handle is not needed after;
+             * keeping it open locked the file on Windows, where a test that
+             * deleted its database then failed on the lock. */
+            try {
+                return db.Table(table, recordClass).All();
+            } finally {
+                db.Close();
+            }
         }
     }
 

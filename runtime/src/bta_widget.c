@@ -14,6 +14,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef G_OS_WIN32
+#include <gdk/win32/gdkwin32.h>
+#endif
+
 JSClassID bta_widget_class_id;
 
 /* ------------------------------------------------------------- unwrapping */
@@ -284,10 +288,46 @@ void bta_widget_relayout(BtaWidget *w)
 
     if (w->is_form) {
         /* A form's box is the window itself, not a slot in some parent. */
-        if (w->w > 0 || w->h > 0)
+        if (w->w > 0 || w->h > 0) {
             gtk_window_set_default_size(GTK_WINDOW(w->gtk),
                                         w->w > 0 ? w->w : -1,
                                         w->h > 0 ? w->h : -1);
+            /* **`set_default_size` only affects the first show.** GTK has no
+             * `gtk_window_resize` in GTK4, and on Windows the default-size
+             * property is ignored once the surface exists: measured with this
+             * very test, a 400x300 form resized to 400x480 kept its 300.  The
+             * Win32 surface still has its HWND, so ask the window directly.
+             * `SWP_NOACTIVATE` keeps it from stealing the focus, and the size
+             * is the form's content box, which is what `Height` means here. */
+            if (gtk_widget_get_mapped(w->gtk)) {
+#ifdef G_OS_WIN32
+                GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(w->gtk));
+                HWND        hwnd    = surface ? gdk_win32_surface_get_handle(surface)
+                                             : NULL;
+
+                if (hwnd) {
+                    /* `SetWindowPos` counts the whole window; a form's `Width`
+                     * and `Height` are its content.  The title bar and border
+                     * are the difference between the two rectangles, measured
+                     * on this window and added back in physical pixels. */
+                    RECT wr, cr;
+                    int  scale = gdk_surface_get_scale_factor(surface);
+
+                    GetWindowRect(hwnd, &wr);
+                    GetClientRect(hwnd, &cr);
+                    int frame_w = (wr.right - wr.left) - (cr.right - cr.left);
+                    int frame_h = (wr.bottom - wr.top) - (cr.bottom - cr.top);
+                    int width   = w->w > 0 ? w->w : gtk_widget_get_width(w->gtk);
+                    int height  = w->h > 0 ? w->h : gtk_widget_get_height(w->gtk);
+
+                    SetWindowPos(hwnd, NULL, 0, 0,
+                                 width * scale + frame_w,
+                                 height * scale + frame_h,
+                                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+#endif
+            }
+        }
         return;
     }
 

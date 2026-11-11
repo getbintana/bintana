@@ -273,6 +273,37 @@ function chosen(only) {
 }
 
 /*
+ * **The IDE project is a set of symlinks to the IDE's own forms.**  A Windows
+ * checkout without Developer Mode stores the link as a text file holding its
+ * target; the project then has forms that are not forms and every test in it
+ * fails before it starts.  `tests/check.sh` already skips it in that state;
+ * the runner says so once and runs the rest, because the other six projects
+ * still say what they were built to say.
+ */
+let ideUsable;
+
+function ideFormsAreReal() {
+    if (ideUsable !== undefined)
+        return ideUsable;
+
+    const sample = File.Join(TESTS, "ide", "MainForm.form");
+    if (!File.Exists(sample)) {
+        ideUsable = false;
+        return ideUsable;
+    }
+
+    try {
+        ideUsable = File.Load(sample).trim().startsWith("{");
+    } catch (e) {
+        ideUsable = false;
+    }
+    if (!ideUsable)
+        Logger.Warning("tests/ide skipped: its .form files are symlinks stored "
+                       + "as text; enable Developer Mode or clone with symlinks");
+    return ideUsable;
+}
+
+/*
  * A directory with a manifest, and that manifest declaring a form.
  *
  * The second half is what keeps this project from running itself, and it is the
@@ -283,6 +314,9 @@ function chosen(only) {
 function isTestProject(name) {
     const manifest = File.Join(TESTS, name, "project.btp");
     if (!File.Exists(manifest)) return false;
+
+    if (name === "ide" && !ideFormsAreReal())
+        return false;
 
     try {
         return !File.LoadJson(manifest).main;

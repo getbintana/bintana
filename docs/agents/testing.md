@@ -387,16 +387,42 @@ save will edit `examples/hello` for real.
   the install costs to do, and the half hour spent on them is the half hour
   this note exists to save. `sudo dnf install xorg-x11-server-Xvfb xdotool` is
   the whole of it here.
-- **Windows has no Xvfb, and its checkout may not have the symlinks.**
-  `run.sh` leaves `HEADLESS` empty there, so the suite uses the session's own
-  display; `HEADLESS=1` cannot be honored. Measured on Windows 11
-  (2026-11-10): `tests/smoke` ran **171 passed, 0 failed** after the one path
-  assertion learned `\` and its Unix-only `sleep`/`pgrep`/`pkill` teardown
-  learned to skip itself. `tests/check.sh` is the no-display pass the Windows
-  CI runs; it skips `tests/ide` with a sentence when Git wrote the project's
+- **Windows has no Xvfb; `run.sh` gives it a private desktop.**  The helper is
+  `tests/win-desktop.c`, built into `build/win-desktop.exe` by `run.sh` with the
+  MSYS2 compiler; it creates a `CreateDesktop` desktop and starts the runner on
+  it, so the default is virtual there too. `HEADLESS=` (empty) is the way to the
+  real screen, exactly as on Linux, and a machine without `cc` falls back to it
+  with a sentence. The child still sees a display, so `tests/runner` takes its
+  ordinary path rather than looking for `xvfb-run`. Measured on Windows 11
+  (2026-11-11): `tests/smoke` 171/0, `tests/markdown` 171/0, `tests/qr`
+  120/0, `tests/report` 259/0 and `tests/xlsx` 57/0 on that desktop.
+  `tests/widgets` runs to the end under gdb (6112 assertions, 53 failures,
+  many of them the slower debugger and HTTP timing); its native run still hits
+  the GTK SEGV below. `tests/check.sh` is the no-display pass the Windows CI
+  runs; it skips `tests/ide` with a sentence when Git wrote the project's
   `.form` symlinks as text files, which is what a checkout without Developer
-  Mode does. Enable Developer Mode (or `core.symlinks=true` with the
-  privilege) before believing anything about `tests/ide` on Windows.
+  Mode does. The runner does the same now, so `tests/run.sh` continues with the
+  other six projects instead of failing `ide` before it starts. Enable
+  Developer Mode (or `core.symlinks=true` with the privilege) before believing
+  anything about `tests/ide` on Windows.
+- **GTK 4's Win32 window procedure can take the suite down.** Measured with gdb
+  on Windows 11 (2026-11-11): first
+  `gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)'
+  failed`, then a SIGSEGV whose top frame is inside `libgtk-4-1.dll`, reached
+  from `SendMessageW`. It is a GTK bug -- a window message arrives at an IME
+  context that has already been destroyed -- and it can land minutes into
+  `tests/widgets`, under whichever test happens to be running.
+  `GTK_IM_MODULE=none` removes that one. A second, timing-dependent SEGV
+  remains: `g_utf8_to_utf16: assertion 'str != NULL' failed` followed by a
+  crash in GTK, reached during the `Exec` chain; gdb is slow enough to miss it,
+  which is how the rest of the suite was measured. Do not go looking for a
+  `JSValue` lifetime for either: the stack says `libgtk`.
+- **A modal dialog left open sits on the next test.** `testFileDialog` already
+  refuses to open one for that reason; `Dialog.Color`'s two got away with it on
+  Linux and the font chooser is one more GTK/Win32 surface nobody can close
+  from JS. Both choosers are skipped on Windows and only their refusals are
+  asserted. This is a test-harness rule, not the explanation of every GTK crash
+  after a dialog: skipping them did not remove the `Exec`-chain SEGV above.
 - **A test that walks a focus order has to own every stop in it.** `Fixed1` in
   `tests/widgets` had five children by the time `testTabOrder` ran — a scroller
   another test left in it, focusable — so "past the last one the focus leaves"

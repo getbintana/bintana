@@ -1762,6 +1762,18 @@ icon when the theme has one by that name (`gtkapplication.c`).
   zero, and a per-call `{ Timeout: 0 }` outranks it. `tests/widgets` holds the
   opt-out -- the half minute itself is the constant, and waiting it out in the
   suite would cost more than it says.
+- **Windows has no process group, and both `Exec` spellings felt it.** A child
+  that exits while a grandchild holds the pipe kept the job -- or the blocking
+  wait -- alive forever: `sh -c "sleep 30"` with `Timeout: 150` took the whole
+  thirty seconds, and `{ KillAfter: 5000 }` waited that long too because a
+  timeout `GSource` attached after the private context had been iterated once
+  was not woken by its deadline. `Exec.Wait` now assigns the child to a **job
+  object** and terminates the job at the deadline, and drives the wait with a
+  non-blocking context loop that owns the deadline. The asynchronous spelling
+  has no job: once its leader is reaped it drains the pipes for 250 ms and
+  reports, which is the only way to end a job whose grandchild cannot be named.
+  The cost, documented in `Exec.md`: on Windows a background process a child
+  starts is not waited for after the leader exits.
 - **An option's default was decided by a second reading of the same key, and
   the two readings disagreed about `null`.** `Print`'s reader took `undefined`
   and `null` alike for "not given"; the line that makes `To` default to the
@@ -4087,16 +4099,40 @@ save will edit `examples/hello` for real.
   the install costs to do, and the half hour spent on them is the half hour
   this note exists to save. `sudo dnf install xorg-x11-server-Xvfb xdotool` is
   the whole of it here.
-- **Windows has no Xvfb, and its checkout may not have the symlinks.**
-  `run.sh` leaves `HEADLESS` empty there, so the suite uses the session's own
-  display; `HEADLESS=1` cannot be honored. Measured on Windows 11
-  (2026-11-10): `tests/smoke` ran **171 passed, 0 failed** after the one path
-  assertion learned `\` and its Unix-only `sleep`/`pgrep`/`pkill` teardown
-  learned to skip itself. `tests/check.sh` is the no-display pass the Windows
-  CI runs; it skips `tests/ide` with a sentence when Git wrote the project's
-  `.form` symlinks as text files, which is what a checkout without Developer
-  Mode does. Enable Developer Mode (or `core.symlinks=true` with the
-  privilege) before believing anything about `tests/ide` on Windows.
+- **Windows has no Xvfb; `run.sh` gives it a private desktop.**  The helper is
+  `tests/win-desktop.c`, built into `build/win-desktop.exe` by `run.sh` with the
+  MSYS2 compiler; it creates a `CreateDesktop` desktop and starts the runner on
+  it, so the default is virtual there too. `HEADLESS=` (empty) is the way to the
+  real screen, exactly as on Linux, and a machine without `cc` falls back to it
+  with a sentence. The child still sees a display, so `tests/runner` takes its
+  ordinary path rather than looking for `xvfb-run`. Measured on Windows 11
+  (2026-11-11): `tests/smoke` 171/0, `tests/markdown` 169/0 and `tests/qr`
+  120/0 on that desktop; `tests/widgets` is the project still being brought up,
+  and its remaining reds are listed by `docs/testing.md`'s Windows section.
+  `tests/check.sh` is the no-display pass the Windows CI runs; it skips
+  `tests/ide` with a sentence when Git wrote the project's `.form` symlinks as
+  text files, which is what a checkout without Developer Mode does. The runner
+  does the same now, so `tests/run.sh` continues with the other six projects
+  instead of failing `ide` before it starts. Enable Developer Mode (or
+  `core.symlinks=true` with the privilege) before believing anything about
+  `tests/ide` on Windows.
+- **GTK 4's Win32 IME filter can take the suite down.** Measured with gdb on
+  Windows 11 (2026-11-11): `gtk_im_context_ime_message_filter: assertion
+  'GTK_IS_IM_CONTEXT_IME (data)' failed`, then a SIGSEGV whose top frame is
+  inside `libgtk-4-1.dll`, reached from `SendMessageW`. It is a GTK bug -- a
+  window message arrives at an IME context that has already been destroyed --
+  and it can land minutes into `tests/widgets`, under whichever test happens to
+  be running. `tests/run.sh` sets `GTK_IM_MODULE=none` on Windows; the suite
+  types no IME text there, and the run is stable. Do not go looking for a
+  `JSValue` lifetime for this one: the stack says `libgtk`.
+- **A modal dialog left open sits on the next test, and on Windows the font
+  chooser's preview crashes.** `testFileDialog` already refuses to open one for
+  that reason; `testColorDialog` and `testFontDialog` got away with it on Linux,
+  and on Windows the font chooser's preview reaches `g_utf8_to_utf16` with a
+  NULL family and takes the process down minutes later, under whichever test is
+  running. Both choosers are skipped on Windows and only their refusals are
+  asserted. A crash whose stack is inside `libgtk` after a font or dialog test
+  is this, not a lifetime bug in the runtime.
 - **A test that walks a focus order has to own every stop in it.** `Fixed1` in
   `tests/widgets` had five children by the time `testTabOrder` ran — a scroller
   another test left in it, focusable — so "past the last one the focus leaves"
@@ -14392,6 +14428,66 @@ Two things filtering exposed, both of which had been unreachable:
 
 Both are the same lesson: **a path the suite never takes is a path nobody has
 tested**, and running part of a test suite takes paths the whole one does not.
+
+## Windows, where the suite gets a desktop
+
+```sh
+./tests/run.sh smoke
+./tests/run.sh widgets
+./tests/run.sh widgets =DesignHeightShort
+HEADLESS= ./tests/run.sh smoke      # this screen, for an icon or a theme
+```
+
+Windows has no Xvfb. `tests/run.sh` builds `tests/win-desktop.c` into
+`build/win-desktop.exe` with the MSYS2 compiler and starts the runner on a
+private `CreateDesktop` desktop, so no test window appears on the screen being
+used. The child still sees an ordinary display, which is why `tests/runner`
+takes its usual path instead of looking for `xvfb-run`. A machine without a
+compiler falls back to the real screen with a sentence, and `HEADLESS=` is the
+way back on purpose.
+
+`tests/check.sh`, `tests/api.sh` and the console projects (`tests/pack`,
+`tests/qr`, `tests/xlsx`) need no desktop. `tests/ide` needs its `.form`
+symlinks; a checkout without Developer Mode stores them as text files, and the
+runner skips it with a warning, as `tests/check.sh` already does. `tests/serial`
+has `tests/serial-win.sh` for a Windows port. The tests that need `/bin/sh`,
+`xdotool`, `chmod`, `ln`, `gio`, `desktop-file-validate`, `soffice` or a POSIX
+collation skip themselves with a line saying so; they are not failures.
+
+`tests/run.sh` sets `GTK_IM_MODULE=none` on Windows. GTK 4's Win32 IME filter
+crashes when a window message reaches a context that has already been destroyed
+(the stack is in `libgtk-4-1.dll`), and it can land under any test once the
+suite has been up for a few minutes. No test types IME text on Windows, so the
+suite runs without one; that is a workaround for a GTK bug and not a runtime
+setting.
+
+Four Windows differences are worth knowing before reading a red run:
+
+- **`Exec` merges stderr in C there.** GLib's `STDERR_MERGE` loses a console
+  child's stderr on Windows, so the launcher always pipes both and
+  `Exec.Wait`/`onLine` fold them. Without it a child's `Bintana error:` line
+  was empty in `Output` and present only under `Stderr: "separate"`.
+- **`Exec.Wait.Output` keeps the child's line endings.** The line callback
+  strips CRLF; a test that splits `Output` on `\n` uses `outputLines()` in
+  `WidgetsForm.js`, or it compares a `\r` the platform put there.
+- **There is no shared MIME database in the build tree, and `File.Info`
+  answers the extension for the common media types** — `application/pdf`,
+  `image/png` and their siblings — so the PDF assertions still mean something.
+  A real content type is never overruled; only a platform answer that is just
+  a dot-suffix is.
+- **Several POSIX controls have no Windows counterpart.** `Printer.Send` opens
+  the native, modal print dialog, which its own loop owns: a timer cannot
+  close it, so `PrintAtQuit` skips. `Stop()` is `TerminateProcess`, which
+  reports status `1` rather than a signal's `-1`, and there are no process
+  groups: `ExecKill` skips. `DISPLAY` is X11's, so a console child still has a
+  display: the form-needs-`DISPLAY` control skips while its `main` half runs.
+- **The font and colour choosers are modal and nothing in JS can close them.**
+  On Linux the two `Dialog.Color` calls in `testColorDialog` got away with
+  sitting open; on Windows the font chooser's preview walks a NULL family into
+  `g_utf8_to_utf16` and takes the process down, minutes later and under
+  whichever test is running. Both choosers are skipped there and only their
+  refusals are asserted — the file dialog's test already refuses to open one
+  for the same reason.
 
 ## What a test has to prove
 

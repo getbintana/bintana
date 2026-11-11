@@ -636,6 +636,18 @@ icon when the theme has one by that name (`gtkapplication.c`).
   zero, and a per-call `{ Timeout: 0 }` outranks it. `tests/widgets` holds the
   opt-out -- the half minute itself is the constant, and waiting it out in the
   suite would cost more than it says.
+- **Windows has no process group, and both `Exec` spellings felt it.** A child
+  that exits while a grandchild holds the pipe kept the job -- or the blocking
+  wait -- alive forever: `sh -c "sleep 30"` with `Timeout: 150` took the whole
+  thirty seconds, and `{ KillAfter: 5000 }` waited that long too because a
+  timeout `GSource` attached after the private context had been iterated once
+  was not woken by its deadline. `Exec.Wait` now assigns the child to a **job
+  object** and terminates the job at the deadline, and drives the wait with a
+  non-blocking context loop that owns the deadline. The asynchronous spelling
+  has no job: once its leader is reaped it drains the pipes for 250 ms and
+  reports, which is the only way to end a job whose grandchild cannot be named.
+  The cost, documented in `Exec.md`: on Windows a background process a child
+  starts is not waited for after the leader exits.
 - **An option's default was decided by a second reading of the same key, and
   the two readings disagreed about `null`.** `Print`'s reader took `undefined`
   and `null` alike for "not given"; the line that makes `To` default to the
