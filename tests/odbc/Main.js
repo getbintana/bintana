@@ -147,6 +147,7 @@ function Main() {
     Database.Odbc(`Driver=${sqlite};Database=${File.Join(dir, "c.db")}`);
     ok("a connection left open is left to the finaliser");
 
+    statements(sqlite, dir);
     postgres();
 
     /* And in a worker, which has its own registration. */
@@ -182,4 +183,168 @@ function postgres() {
                                             { User: "postgres", Password: pw, Timeout: 3000 }));
     check("a closed port is refused", port !== null && port.Code === "08001",
           port ? port.Code : "it connected");
+
+    postgresStatements(cs, pw);
+}
+
+/* The run of one block, as a check: an exception is a failure with its
+ * message, and the block's own checks are counted inside it. */
+function block(name, fn) {
+    const e = caught(fn);
+    if (e)
+        fail(name, `${e.message} Code=${e.Code}`);
+}
+
+/* Bytes as hex, for a message. */
+function hex(b) {
+    return b && b.ToHex ? b.ToHex() : String(b);
+}
+
+/*
+ * Stage 1 through sqliteodbc: statements, parameters and every type the
+ * driver describes. What is sqlite's and not ODBC's (no exact decimal, one
+ * statement per call) is left to the PostgreSQL half.
+ */
+function statements(sqlite, dir) {
+    refused("StatementTimeout 0", () => Database.Odbc("DSN=x", { StatementTimeout: 0 }), RangeError);
+
+    const db = Database.Odbc(`Driver=${sqlite};Database=${File.Join(dir, "s.db")}`,
+                             { StatementTimeout: 5000 });
+    refused("Query with no statement", () => db.Query(), TypeError);
+    refused("Execute with a number", () => db.Execute(5), TypeError);
+
+    block("sqlite statements", () => {
+        db.Execute("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT, n INTEGER, " +
+                   "r REAL, ok BOOLEAN, d DATE, ts TIMESTAMP, b BLOB)");
+        const blob = new Bytes([0, 255, 1, 0]);
+        let done = db.Execute("INSERT INTO t (id, name, n, r, ok, d, ts, b) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                              [1, "Año ñandú € 𝄞", 1099511627776, 1.5, true, "2026-11-11",
+                               "2026-11-11 10:20:30", blob]);
+        check("Execute answers Changes", done.Changes === 1, JSON.stringify(done));
+        db.Execute("INSERT INTO t (id, name) VALUES (?, ?)", [2, null]);
+
+        const rows = db.Query("SELECT * FROM t ORDER BY id");
+        check("Query answers the rows", rows.length === 2, rows.length);
+        const r = rows[0];
+        check("text with ñ, € and a 4-byte character round-trips", r.name === "Año ñandú € 𝄞", r.name);
+        check("a whole number past 2^31 is itself", r.n === 1099511627776, r.n);
+        check("a REAL is a number", r.r === 1.5, r.r);
+        check("a BOOLEAN is a boolean", r.ok === true, r.ok);
+        check("a DATE is YYYY-MM-DD", r.d === "2026-11-11", r.d);
+        check("a TIMESTAMP is YYYY-MM-DDTHH:MM:SS", r.ts === "2026-11-11T10:20:30", r.ts);
+        check("a BLOB is Bytes, NULs and all", r.b instanceof Bytes && r.b.Equals(blob), hex(r.b));
+        check("NULL is null", rows[1].name === null && rows[1].n === null, JSON.stringify(rows[1]));
+
+        /* Past the 8 KiB a read takes at a time: the parts are joined, and a
+         * multi-byte character cut between two parts is whole again. */
+        const long = "ñ".repeat(9000) + "end";
+        const big = Bytes.FromHex("00ff".repeat(10000));
+        db.Execute("INSERT INTO t (id, name, b) VALUES (?, ?, ?)", [3, long, big]);
+        const back = db.Query("SELECT name, b FROM t WHERE id = ?", [3])[0];
+        check("text longer than one read comes back whole", back.name === long,
+              `${back.name.length} characters`);
+        check("bytes longer than one read come back whole", back.b.Equals(big),
+              `${back.b.Length} bytes`);
+
+        done = db.Execute("UPDATE t SET name = ? WHERE id = ?", ["x", 99]);
+        check("an UPDATE that matched nothing is Changes 0, not an error", done.Changes === 0,
+              JSON.stringify(done));
+        check("a statement with no rows answers []",
+              db.Query("DELETE FROM t WHERE id = 99").length === 0);
+
+        refused("too few parameters", () => db.Query("SELECT * FROM t WHERE id = ? AND n = ?", [1]),
+                RangeError);
+        const before = db.Query("SELECT count(*) AS c FROM t")[0].c;
+        refused("an object is not a parameter",
+                () => db.Execute("INSERT INTO t (id, name) VALUES (?, ?)", [4, { a: 1 }]), TypeError);
+        refused("parameters that are not a list", () => db.Query("SELECT ?", "a"), TypeError);
+        check("...and a refused parameter ran nothing",
+              db.Query("SELECT count(*) AS c FROM t")[0].c === before);
+
+        const bad = caught(() => db.Query("SELECT nope FROM t"));
+        check("an error from the driver carries a Code", bad !== null && typeof bad.Code === "string"
+              && bad.Code.length === 5, bad && bad.Code);
+
+        db.Script("CREATE TABLE u (a INTEGER)");
+        check("Script runs a statement", db.Query("SELECT count(*) AS c FROM u")[0].c === 0);
+    });
+
+    db.Close();
+    refused("Query after Close", () => db.Query("SELECT 1"), TypeError);
+}
+
+/*
+ * Stage 1 through psqlODBC: what sqlite cannot show -- an exact NUMERIC,
+ * real SQLSTATEs, a batch, RETURNING, a timestamp with a fraction.
+ */
+function postgresStatements(cs, pw) {
+    const db = Database.Odbc(cs, { User: "postgres", Password: pw });
+    block("postgres statements", () => {
+        db.Script("DROP TABLE IF EXISTS t; " +
+                  "CREATE TABLE t (id INT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, " +
+                  "name TEXT, price NUMERIC(12,2), ok BOOLEAN, d DATE, tm TIME, " +
+                  "ts TIMESTAMP, b BYTEA, big BIGINT)");
+        ok("Script runs a batch");
+
+        const blob = new Bytes([0, 255, 0]);
+        const ins = db.Query("INSERT INTO t (name, price, ok, d, tm, ts, b, big) " +
+                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+                             ["Año ñandú € 𝄞", new Decimal("12.30", 2), true, "2026-11-11",
+                              "10:20:30", "2026-11-11 10:20:30.25", blob, 1099511627776]);
+        check("INSERT … RETURNING through Query answers the key",
+              ins.length === 1 && ins[0].id === 1, JSON.stringify(ins));
+
+        const r = db.Query("SELECT * FROM t WHERE id = ?", [1])[0];
+        check("text round-trips", r.name === "Año ñandú € 𝄞", r.name);
+        check("NUMERIC is the server's text, exactly", r.price === "12.30", r.price);
+        check("boolean is psqlODBC's \"1\" unless BoolsAsChar=0", r.ok === "1", JSON.stringify(r.ok));
+        check("DATE", r.d === "2026-11-11", r.d);
+        check("TIME", r.tm === "10:20:30", r.tm);
+        check("a TIMESTAMP keeps its fraction", r.ts === "2026-11-11T10:20:30.25", r.ts);
+        check("BYTEA is Bytes with its NULs", r.b instanceof Bytes && r.b.Equals(blob), hex(r.b));
+        check("BIGINT", r.big === 1099511627776, r.big);
+
+        const exact = db.Query("SELECT CAST(? AS NUMERIC(12,2)) + 0.01 AS n",
+                               [new Decimal("99999999.99", 2)])[0].n;
+        check("a Decimal parameter never passes through a double", exact === "100000000.00", exact);
+        const half = db.Query("SELECT CAST(? AS NUMERIC(6,2)) AS n, CAST(? AS FLOAT8) AS f", [1.5, 2.25])[0];
+        check("a number parameter is written with a point, whatever the desktop's locale",
+              half.n === "1.50" && half.f === 2.25, JSON.stringify(half));
+
+        check("an UPDATE that matched nothing is Changes 0",
+              db.Execute("UPDATE t SET name = 'x' WHERE id = 99").Changes === 0);
+        check("an UPDATE answers how many",
+              db.Execute("UPDATE t SET name = name WHERE id = ?", [1]).Changes === 1);
+
+        const missing = caught(() => db.Query("SELECT nope FROM t"));
+        check("a missing column is 42703", missing && missing.Code === "42703", missing && missing.Code);
+        const zero = caught(() => db.Query("SELECT 1 / 0"));
+        check("a division by zero is 22012", zero && zero.Code === "22012", zero && zero.Code);
+
+        const batch = caught(() => db.Script("INSERT INTO t (name) VALUES ('a'); " +
+                                             "INSERT INTO nope VALUES (1); " +
+                                             "INSERT INTO t (name) VALUES ('b')"));
+        check("a batch with a failing statement throws", batch !== null);
+        check("...and psqlODBC undid the statements before it",
+              db.Query("SELECT count(*) AS c FROM t")[0].c === 1);
+    });
+    db.Close();
+
+    block("BoolsAsChar=0", () => {
+        const b = Database.Odbc(cs + ";BoolsAsChar=0", { User: "postgres", Password: pw });
+        const v = b.Query("SELECT true AS yes, false AS no, NULL::boolean AS none")[0];
+        check("with BoolsAsChar=0 a boolean is a boolean",
+              v.yes === true && v.no === false && v.none === null, JSON.stringify(v));
+        b.Close();
+    });
+
+    block("StatementTimeout", () => {
+        const s = Database.Odbc(cs, { User: "postgres", Password: pw, StatementTimeout: 1000 });
+        const started = Date.now();
+        const e = caught(() => s.Query("SELECT pg_sleep(5)"));
+        const took = Date.now() - started;
+        check("StatementTimeout stops a long statement", e !== null && took < 4000,
+              `${took} ms, ${e ? e.Code + " " + e.message : "no error"}`);
+        s.Close();
+    });
 }

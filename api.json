@@ -19899,12 +19899,39 @@
           "Native": true
         },
         {
+          "Name": "Execute",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(sql, [params])",
+          "Returns": "{ Changes }",
+          "Doc": "**one** statement, answering `{ Changes }` -- the rows it touched, `-1` when the driver cannot say. An `UPDATE` that matched nothing is `0`, not an error",
+          "Native": true
+        },
+        {
           "Name": "Open",
           "Kind": "Property",
           "Params": -1,
           "Signature": "",
           "Returns": "boolean",
           "Doc": "whether it still is",
+          "Native": true
+        },
+        {
+          "Name": "Query",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(sql, [params])",
+          "Returns": "any[]",
+          "Doc": "the rows of the first result that has any, as **plain objects**; `[]` for a statement with none. Values are bound to `?`, never pasted: text, a number, a boolean, a `Decimal`, a `Bytes` or null",
+          "Native": true
+        },
+        {
+          "Name": "Script",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(sql)",
+          "Returns": "",
+          "Doc": "several statements and **no parameters**, as the driver runs a batch: psqlODBC takes one, sqliteodbc refuses a second statement",
           "Native": true
         }
       ]

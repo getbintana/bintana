@@ -777,3 +777,11 @@ Measured on 2026-11-11 with unixODBC 2.3.14, sqliteodbc 0.99991 and psqlODBC
 - **The machine's ODBC configuration is somebody else's state.**
   `ODBCSYSINI=<dir>` and `ODBCINI=<file>` point unixODBC at an ini of the
   test's own; `tests/odbc.sh` does that and names its drivers itself.
+- **psqlODBC writes a `NUMERIC` with the process's `LC_NUMERIC`.** Under GTK's
+  `setlocale(LC_ALL, "")` on an es_AR desktop, `12.30` came back as `12,30`;
+  a C probe that never calls `setlocale` sees `12.30` and proves nothing. The
+  driver's words run under `uselocale` with C numerics for the calling thread
+  (`in_c_numeric` in `bta_odbc.c`); a bound `double` was not affected. Test a
+  driver from inside the runtime, never only from a bare C program.
+- **`SQL_NO_DATA` from `SQLExecute` is success**: an `UPDATE` or `DELETE` that
+  matched nothing answers it, on both drivers measured.

@@ -1,6 +1,6 @@
 # ODBC: `Database.Odbc`, the driver that reaches the servers
 
-**Status: stage 0 built, and the connect of stage 1 (2026-11-11). Comes before
+**Status: stages 0 and 1 built (2026-11-11). Comes before
 [`postgres-plan.md`](postgres-plan.md).** Designed for Linux, Windows and macOS
 from the first line: the API is the same on all three, and what differs (the
 driver manager, the text encoding, where the drivers live) is decided here,
@@ -180,15 +180,15 @@ By the ODBC type `SQLDescribeCol` reports, the same for every driver:
 
 | ODBC | JavaScript | read as |
 |---|---|---|
-| `SQL_BIT` | boolean | `SQL_C_CHAR`, `"1"`/`"0"` |
+| `SQL_BIT` | boolean | `SQL_C_BIT` |
 | `SQL_TINYINT`, `SMALLINT`, `INTEGER` | number | `SQL_C_SBIGINT` |
-| `SQL_BIGINT` | number, the sqlite driver's rule past 2^53 | `SQL_C_CHAR` |
+| `SQL_BIGINT` | number, Int64 as the sqlite driver gives it (a double past 2^53) | `SQL_C_SBIGINT` |
 | `SQL_REAL`, `FLOAT`, `DOUBLE` | number | `SQL_C_DOUBLE` |
 | `SQL_NUMERIC`, `SQL_DECIMAL` | the driver's text, exactly | `SQL_C_CHAR` |
 | `SQL_CHAR`, `VARCHAR`, `LONGVARCHAR` and the `W` ones, `SQL_GUID` | string | text, in parts |
 | `SQL_TYPE_DATE` | `YYYY-MM-DD` | `SQL_DATE_STRUCT` |
 | `SQL_TYPE_TIME` | `HH:MM:SS` | `SQL_TIME_STRUCT` |
-| `SQL_TYPE_TIMESTAMP` | `YYYY-MM-DDTHH:MM:SS`; a fraction is refused into a `datetime` field, as in the PostgreSQL plan | `SQL_TIMESTAMP_STRUCT` |
+| `SQL_TYPE_TIMESTAMP` | `YYYY-MM-DDTHH:MM:SS`, and `.f` when there is a fraction (trailing zeros dropped) -- kept visible so a `datetime` field refuses it, as in the PostgreSQL plan | `SQL_TIMESTAMP_STRUCT` |
 | `SQL_BINARY`, `VARBINARY`, `LONGVARBINARY` | `Bytes` | `SQL_C_BINARY`, in parts |
 | `SQL_NULL_DATA` | null | |
 
@@ -241,12 +241,18 @@ is set in `Form_Open`. A form that gives two drivers' properties is refused.
    **Built on Linux.** The Windows half is written and will first compile in
    the `windows` CI job; nobody has built it on a Windows machine yet.
 1. **Connect, `Query`, `Execute`, `Script`, types and errors**, through the
-   text layer, against sqliteodbc and psqlODBC. **The connect is built**:
-   `Database.Odbc` with `User`/`Password`/`Timeout`, diagnostics as
-   `Code`/`Native`/`Details`, and `Open`, `Dbms`, `DbmsVersion`, `Driver`,
-   `Close`; `tests/odbc.sh` runs 41 checks (a path with `ñ` and `€` through the
-   connection string, a password with `;` and `}` against psqlODBC, `08001`
-   and `IM002`, a `Task` with its own connection). The statements are next.
+   text layer, against sqliteodbc and psqlODBC. **Built**: `Database.Odbc`
+   with `User`/`Password`/`Timeout`/`StatementTimeout`, diagnostics as
+   `Code`/`Native`/`Details`, `Open`, `Dbms`, `DbmsVersion`, `Driver`,
+   `Close`, and `Query`/`Execute`/`Script`; `tests/odbc.sh` runs 85 checks (a
+   path with `ñ` and `€` through the connection string, a password with `;`
+   and `}`, `08001`, `IM002`, `42703`, `22012`, every type both ways, text and
+   bytes longer than one read, an exact `NUMERIC` on an es_AR desktop, a batch
+   psqlODBC undoes, `StatementTimeout` stopping `pg_sleep`, a `Task`).
+   **Measured on the way: psqlODBC writes a `NUMERIC` with the process's
+   `LC_NUMERIC`** -- `12,30` under GTK's `setlocale` -- so the three words run
+   with `uselocale` set to C numerics for the thread, and the C probe that
+   never called `setlocale` could not have seen it.
 2. **`Each`/`Cursor`** over `SQLFetch`. **Not started.**
 3. **`Transaction`**: autocommit, `SQLEndTran`, savepoints by engine.
    **Not started.**
