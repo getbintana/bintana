@@ -1484,6 +1484,34 @@ Form.prototype.Rows = function (recordClass) {
     return rows;
 };
 
+/* The connection a `.conn` describes, opened. */
+function openConn(spec, conn, project) {
+    if (!spec || typeof spec !== "object")
+        throw new Error(`${conn}: a connection says where its database is`);
+    const kind = spec && spec.kind !== undefined ? spec.kind : "sqlite";
+
+    if (kind === "odbc") {
+        if (typeof spec.connection !== "string" || !spec.connection)
+            throw new Error(`${conn}: an odbc connection says its connection string`);
+        const options = {};
+        if (spec.user) options.User = String(spec.user);
+        if (spec.password_env) {
+            const secret = Environment.Get(String(spec.password_env));
+            if (secret === null || secret === undefined || secret === "")
+                throw new Error(`${conn}: the password is in ${spec.password_env}, ` +
+                                `which is not set`);
+            options.Password = secret;
+        }
+        return Database.Odbc(spec.connection, options);
+    }
+    if (kind !== "sqlite")
+        throw new Error(`${conn}: a connection of kind '${kind}' is not one ` +
+                        `this runtime opens -- sqlite or odbc`);
+    if (!spec.path)
+        throw new Error(`${conn}: a connection says where its database is`);
+    return Database.Sqlite(File.Join(project, spec.path));
+}
+
 /*
  * **A source is a table or a file, and it is told apart by looking.**
  *
@@ -1491,6 +1519,12 @@ Form.prototype.Rows = function (recordClass) {
  * `.conn` file beside the project's other resources:
  *
  *     { "kind": "sqlite", "path": "data/clients.db" }
+ *     { "kind": "odbc", "connection": "DSN=Ventas", "user": "billing",
+ *       "password_env": "VENTAS_DB_PASSWORD" }
+ *
+ * An ODBC connection keeps **no password in the file**: `password_env` names
+ * the environment variable that holds it, read when the source is, and the
+ * DSN may hold it instead. The connection is closed once the rows are read.
  *
  * Anything else names a file, read as JSON.  That is the plan's order --
  * a declared connection first, a file of the project second -- and nothing is
@@ -1513,14 +1547,15 @@ function rowsFrom(source, recordClass) {
         const path = File.Join(project, conn);
 
         if (File.Exists(path)) {
-            const spec = File.LoadJson(path);
-            if (!spec || !spec.path)
-                throw new Error(`${conn}: a connection says where its database is`);
-
+            const spec  = File.LoadJson(path);
             const table = source.slice(dot + 1);
-            const db    = Database.Sqlite(File.Join(project, spec.path));
+            const db    = openConn(spec, conn, project);
 
-            return db.Table(table, recordClass).All();
+            try {
+                return db.Table(table, recordClass).All();
+            } finally {
+                db.Close();
+            }
         }
     }
 

@@ -12697,6 +12697,8 @@ function* p_data(ide) {
     check("still without a database file", !File.Exists(File.Join(TMP, "stock.db")));
     File.Delete(stockPath);
 
+    yield* p_data_odbc(ide);
+
     /* The other road: a form's `Connection` part, with no `.conn` file at all.
      * The model is the same one, so the table and its record stay. */
     try { File.Delete(File.Join(TMP, "shop.conn")); } catch (e) {}
@@ -12720,6 +12722,123 @@ function* p_data(ide) {
     yield* settled(ide);
     check("the database leaves the list with its file",
           !ide.data.DbList.Items.includes("shop"));
+}
+
+/*
+ * A server, through ODBC: the connection dialog's other kind, and the Data
+ * view over it.
+ *
+ * The dialog half needs no driver: what it refuses and what it writes. The
+ * view half needs one, and **names it by its library's path** -- unixODBC takes
+ * `Driver=/path/libsqlite3odbc.so` -- so it reads nothing the machine
+ * registered. Without a driver, or in a build without ODBC, that half is
+ * skipped and says so.
+ */
+function odbcSqliteLibrary() {
+    for (const p of ["/usr/lib64/libsqlite3odbc.so",
+                     "/usr/lib/x86_64-linux-gnu/odbc/libsqlite3odbc.so",
+                     "/usr/lib/aarch64-linux-gnu/odbc/libsqlite3odbc.so",
+                     "/opt/homebrew/lib/libsqlite3odbc.dylib",
+                     "/usr/local/lib/libsqlite3odbc.dylib"])
+        if (File.Exists(p)) return p;
+    return "";
+}
+
+function* p_data_odbc(ide) {
+    ide.MnuNewConnection.Click();
+    const dlg = ide.connectionEditor;
+    dlg.TxtConnName.Text = "erp";
+    dlg.CmbConnKind.Index = 1;
+    dlg.CmbConnKind.Emit("Select");
+
+    check("the ODBC kind asks for a user and where the password is",
+          dlg.TxtConnUser.Visible && dlg.TxtConnSecret.Visible && dlg.BtnConnTest.Visible);
+    eq("and its first row is the connection string", dlg.LblConnPath.Text, "Connection:");
+    check("with no file chooser", dlg.TxtConnPath.Icon === "", dlg.TxtConnPath.Icon);
+    check("no connection string, no OK", !dlg.BtnConnOk.Enabled);
+
+    dlg.TxtConnPath.Text = "DSN=erp;PWD=secret";
+    check("a password in the connection string is refused",
+          !dlg.BtnConnOk.Enabled && dlg.LblConnState.Text.includes("password out"),
+          dlg.LblConnState.Text);
+
+    const lib = odbcSqliteLibrary();
+    const dbFile = File.Join(TMP, "erp-odbc.db");
+    const cs = `Driver=${lib || "/no/driver.so"};Database=${dbFile}`;
+    dlg.TxtConnPath.Text = cs;
+    dlg.TxtConnUser.Text = "billing";
+    dlg.TxtConnSecret.Text = "NOT A NAME";
+    check("a variable name with spaces is refused", !dlg.BtnConnOk.Enabled,
+          dlg.LblConnState.Text);
+    dlg.TxtConnSecret.Text = "BINTANA_TEST_ERP_PASSWORD";
+    check("a connection string, a user and a variable can be written",
+          dlg.BtnConnOk.Enabled, dlg.LblConnState.Text);
+
+    let hasOdbc = !!lib;
+    if (hasOdbc) {
+        try {
+            const live = Database.Odbc(cs);
+            live.Execute("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY, name TEXT)");
+            live.Execute("INSERT INTO items (name) VALUES ('uno')");
+            live.Close();
+        } catch (e) {
+            print(`Data: ODBC not usable here (${e.message}); the view half is skipped`);
+            hasOdbc = false;
+        }
+    } else {
+        print("Data: no sqliteodbc driver; the ODBC view half is skipped");
+    }
+
+    if (hasOdbc) {
+        dlg.BtnConnTest.Emit("Click");
+        check("Test connects and says what the server is",
+              dlg.LblConnState.Text.includes("SQLite") && dlg.LblConnState.Text.includes("1 table"),
+              dlg.LblConnState.Text);
+    }
+
+    dlg.BtnConnOk.Click();
+    yield* settled(ide);
+
+    const erpPath = File.Join(TMP, "erp.conn");
+    const doc = File.Exists(erpPath) ? File.LoadJson(erpPath) : {};
+    eq("an ODBC .conn says its kind", doc.kind, "odbc");
+    eq("its connection string", doc.connection, cs);
+    eq("its user", doc.user, "billing");
+    eq("and the variable the password is in, never the password",
+       doc.password_env, "BINTANA_TEST_ERP_PASSWORD");
+    check("and no path", doc.path === undefined, JSON.stringify(doc));
+
+    if (hasOdbc) {
+        const at = ide.data.DbList.Items.indexOf("erp");
+        check("the Data view offers the ODBC connection", at >= 0,
+              JSON.stringify(ide.data.DbList.Items));
+        if (at >= 0) {
+            ide.data.DbList.Index = at;
+            ide.data.DbList.Emit("Select");
+            check("and reads its tables through the driver",
+                  ide.data.Schema.Exists(ide.data.tableKeys["items"]),
+                  ide.data.Message.Text);
+            ide.data.Schema.Key = ide.data.tableKeys["items"];
+            ide.data.activate();
+            yield* until(() => ide.data.Rows.Count > 0);
+            eq("a table previews its rows over ODBC", ide.data.Rows.Cell(0, 1), "uno");
+        }
+    }
+
+    /* Reopened, the dialog shows what it wrote. */
+    ide.FileTree.Key = "erp.conn";
+    ide.refresh();
+    ide.MnuFtConnection.Click();
+    const again = ide.connectionEditor;
+    eq("reopened, the kind is ODBC", again.CmbConnKind.Index, 1);
+    eq("with its connection string", again.TxtConnPath.Text, cs);
+    eq("and its variable", again.TxtConnSecret.Text, "BINTANA_TEST_ERP_PASSWORD");
+    again.BtnConnCancel.Click();
+
+    File.Delete(erpPath);
+    if (File.Exists(dbFile)) File.Delete(dbFile);
+    ide.listFiles();
+    yield* settled(ide);
 }
 
 /*

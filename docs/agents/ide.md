@@ -1522,3 +1522,18 @@ report. The design and the measured limits are in
   cleanup forgets its file's breakpoints wherever they are, since F9 on the old
   line would add one.
 
+
+## Databases in the IDE
+
+- **`Data.open(db)` is the one place the IDE opens a database**, for the Data
+  view, the designer's table list (`Binding.tablesOf`) and the connection
+  dialog's *Connect*: `Database.Sqlite` for a file, `Database.Odbc` for a
+  server. An ODBC password is never in the project -- a `.conn` names the
+  environment variable (`password_env`) and a form's part sets it in code the
+  IDE cannot run -- so a part opens in the IDE only when its DSN carries it.
+- **A server is never asked on a keystroke**: the dialog connects on its
+  button, the designer's table list keeps a server's answer for 30 s, and the
+  console reads a select over ODBC a row at a time up to what it shows.
+- `tests/ide` names sqliteodbc by its library's path (`Driver=/…/libsqlite3odbc.so`,
+  which unixODBC accepts) so it reads nothing the machine registered, and
+  skips the ODBC half without one.

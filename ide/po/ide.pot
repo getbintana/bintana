@@ -33,7 +33,7 @@ msgstr ""
 #: forms/MenuForm.form: BtnDelete.Text
 #: forms/RecordForm.form: BtnRecDel.Text
 #: forms/ReportForm.form: BtnDelete.Text
-#: forms/MainForm.js:3304
+#: forms/MainForm.js:3299
 #: modules/FormFiles.js:726
 msgid "Delete"
 msgstr ""
@@ -386,7 +386,12 @@ msgstr ""
 msgid "an SQLite file"
 msgstr ""
 
+#: forms/ConnectionForm.form: CmbConnKind.Items
+msgid "a server, through ODBC"
+msgstr ""
+
 #: forms/ConnectionForm.form: LblConnPath.Text
+#: forms/ConnectionForm.js:95
 msgid "Database:"
 msgstr ""
 
@@ -395,13 +400,46 @@ msgid "data/sales.db"
 msgstr ""
 
 #: forms/ConnectionForm.form: TxtConnPath.Tooltip
+#: forms/ConnectionForm.js:100
 msgid "The file, relative to the project so it travels with it. It need not exist yet: the program creates it the first time it opens it"
+msgstr ""
+
+#: forms/ConnectionForm.form: LblConnUser.Text
+msgid "User:"
+msgstr ""
+
+#: forms/ConnectionForm.form: TxtConnUser.Placeholder
+msgid "billing"
+msgstr ""
+
+#: forms/ConnectionForm.form: TxtConnUser.Tooltip
+msgid "The user the server knows; empty leaves it to the DSN or the connection string"
+msgstr ""
+
+#: forms/ConnectionForm.form: LblConnSecret.Text
+msgid "Password in:"
+msgstr ""
+
+#: forms/ConnectionForm.form: TxtConnSecret.Placeholder
+msgid "SALES_DB_PASSWORD"
+msgstr ""
+
+#: forms/ConnectionForm.form: TxtConnSecret.Tooltip
+msgid "The environment variable that holds the password. The password itself never goes in the project"
+msgstr ""
+
+#: forms/ConnectionForm.form: BtnConnTest.Text
+msgid "Connect"
+msgstr ""
+
+#: forms/ConnectionForm.form: BtnConnTest.Tooltip
+msgid "Connect to the server now and say what it answers"
 msgstr ""
 
 #: forms/GitForm.form: GitForm.Text
 #: forms/MainForm.form: SideStack.Tabs
 #: modules/Changes.js:74
-#: modules/Data.js:697
+#: modules/Data.js:757
 msgid "Changes"
 msgstr ""
 
@@ -457,7 +495,7 @@ msgid "Take the chosen files back out of the next commit"
 msgstr ""
 
 #: forms/GitForm.form: BtnDiscard.Text
-#: forms/GitForm.js:324
+#: forms/GitForm.js:323
 #: modules/Changes.js:415
 #: modules/Recovery.js:308
 msgid "Discard"
@@ -480,7 +518,7 @@ msgstr ""
 
 #: forms/GitForm.form: BtnCommit.Text
 #: forms/MainForm.form: BtnChCommit.Text
-#: forms/LogForm.js:55
+#: forms/LogForm.js:54
 msgid "Commit"
 msgstr ""
 
@@ -642,7 +680,7 @@ msgstr ""
 
 #: forms/MainForm.form: menu MnuCloseTab
 #: forms/MainForm.form: TabActions.Menu MnuTabClose
-#: modules/TabSet.js:690
+#: modules/TabSet.js:691
 msgid "Close tab"
 msgstr ""
 
@@ -664,7 +702,7 @@ msgid "Autosave..."
 msgstr ""
 
 #: forms/MainForm.form: menu MnuQuit
-#: forms/MainForm.js:1070
+#: forms/MainForm.js:1074
 msgid "Quit"
 msgstr ""
 
@@ -955,7 +993,7 @@ msgid "_Help"
 msgstr ""
 
 #: forms/MainForm.form: menu MnuAbout
-#: forms/MainForm.js:3642
+#: forms/MainForm.js:3637
 msgid "About Bintana"
 msgstr ""
 
@@ -1036,7 +1074,7 @@ msgstr ""
 
 #: forms/MainForm.form: action ActRun
 #: forms/LaunchForm.js:155
-#: modules/Data.js:228
+#: modules/Data.js:257
 msgid "Run"
 msgstr ""
 
@@ -1240,7 +1278,7 @@ msgid "Stop (Shift+F9)"
 msgstr ""
 
 #: forms/MainForm.form: LblStatus.Text
-#: forms/MainForm.js:1445
+#: forms/MainForm.js:1449
 msgid "No project"
 msgstr ""
 
@@ -1324,7 +1362,7 @@ msgid "Commit what is staged, with the button below. Enter writes a line"
 msgstr ""
 
 #: forms/MainForm.form: BtnTakeDisk.Text
-#: forms/MainForm.js:2711
+#: forms/MainForm.js:2706
 msgid "Reload"
 msgstr ""
 
@@ -1680,7 +1718,7 @@ msgid "Base folder:"
 msgstr ""
 
 #: forms/NewProjectForm.form: BtnCreate.Text
-#: forms/MainForm.js:3167
+#: forms/MainForm.js:3162
 msgid "Create"
 msgstr ""
 
@@ -2055,7 +2093,7 @@ msgid "Images"
 msgstr ""
 
 #: forms/AppForm.js:96
-#: forms/ConnectionForm.js:163
+#: forms/ConnectionForm.js:233
 #: modules/Exporter.js:63
 #: modules/Installer.js:63
 msgid "All files"
@@ -2067,8 +2105,8 @@ msgstr ""
 
 #: forms/AppForm.js:109
 #: forms/AppForm.js:121
-#: forms/ClassForm.js:202
-#: forms/ClassForm.js:216
+#: forms/ClassForm.js:201
+#: forms/ClassForm.js:215
 #: forms/ColumnForm.js:315
 msgid "{0}"
 msgstr ""
@@ -2089,11 +2127,11 @@ msgstr ""
 msgid "{0} says more than this can edit — a gradient, a transition or a selector of its own. Open {1} and edit it there."
 msgstr ""
 
-#: forms/ClassForm.js:206
+#: forms/ClassForm.js:205
 msgid "A class with nothing in it would do nothing."
 msgstr ""
 
-#: forms/ClassForm.js:193
+#: forms/ClassForm.js:192
 msgid "{0} is not a class name: a letter first, then letters, digits, dashes or underscores."
 msgstr ""
 
@@ -2105,49 +2143,83 @@ msgstr ""
 msgid "Accept"
 msgstr ""
 
-#: forms/ConnectionForm.js:88
-msgid "Outside the project, so it will not travel with it."
-msgstr ""
-
-#: forms/ConnectionForm.js:91
-msgid "Not created yet: the program creates it the first time it opens it."
-msgstr ""
-
 #: forms/ConnectionForm.js:95
-msgid "That is a folder, not a database file."
+msgid "Connection:"
 msgstr ""
 
-#: forms/ConnectionForm.js:108
-msgid "SQLite cannot open it: {0}"
+#: forms/ConnectionForm.js:99
+msgid "The driver's connection string, DSN=… or Driver={…};Server=…;Database=…, with no password in it"
+msgstr ""
+
+#: forms/ConnectionForm.js:124
+msgid "{0} is not set here, so Connect tries with no password."
 msgstr ""
 
 #: forms/ConnectionForm.js:125
-msgid "A connection needs a name: the forms reach its tables by it."
-msgstr ""
-
-#: forms/ConnectionForm.js:127
-msgid "\"{0}\" cannot be a connection's name: letters, digits, _ and -, and no dot, since a source is <name>.<table>."
-msgstr ""
-
-#: forms/ConnectionForm.js:129
-msgid "{0}.conn already exists."
+msgid "Connect asks the server and says what it answers."
 msgstr ""
 
 #: forms/ConnectionForm.js:132
+msgid "Outside the project, so it will not travel with it."
+msgstr ""
+
+#: forms/ConnectionForm.js:135
+msgid "Not created yet: the program creates it the first time it opens it."
+msgstr ""
+
+#: forms/ConnectionForm.js:139
+msgid "That is a folder, not a database file."
+msgstr ""
+
+#: forms/ConnectionForm.js:152
+msgid "SQLite cannot open it: {0}"
+msgstr ""
+
+#: forms/ConnectionForm.js:169
+msgid "A connection needs a name: the forms reach its tables by it."
+msgstr ""
+
+#: forms/ConnectionForm.js:171
+msgid "\"{0}\" cannot be a connection's name: letters, digits, _ and -, and no dot, since a source is <name>.<table>."
+msgstr ""
+
+#: forms/ConnectionForm.js:173
+msgid "{0}.conn already exists."
+msgstr ""
+
+#: forms/ConnectionForm.js:179
+msgid "The driver's connection string: DSN=… or Driver={…};Server=…;Database=…."
+msgstr ""
+
+#: forms/ConnectionForm.js:181
+msgid "Keep the password out of the project: name the environment variable that holds it."
+msgstr ""
+
+#: forms/ConnectionForm.js:183
+msgid "\"{0}\" cannot be an environment variable's name."
+msgstr ""
+
+#: forms/ConnectionForm.js:187
 msgid "Where the database file is, relative to the project."
 msgstr ""
 
-#: forms/ConnectionForm.js:160
+#: forms/ConnectionForm.js:230
 msgid "Choose a database"
 msgstr ""
 
-#: forms/ConnectionForm.js:162
+#: forms/ConnectionForm.js:232
 msgid "SQLite databases"
 msgstr ""
 
-#: forms/ConnectionForm.js:105
+#: forms/ConnectionForm.js:149
 msgid "A database with {0} table."
 msgid_plural "A database with {0} tables."
+msgstr[0] ""
+msgstr[1] ""
+
+#: forms/ConnectionForm.js:250
+msgid "Connected to {1} {2}: {0} table."
+msgid_plural "Connected to {1} {2}: {0} tables."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -2156,39 +2228,39 @@ msgid "Changes -- {0}"
 msgstr ""
 
 #: forms/GitForm.js:90
-#: forms/LogForm.js:59
+#: forms/LogForm.js:58
 #: modules/Changes.js:179
 msgid "File"
 msgstr ""
 
 #: forms/GitForm.js:91
-#: forms/LogForm.js:60
+#: forms/LogForm.js:59
 #: modules/Changes.js:178
 msgid "State"
 msgstr ""
 
 #: forms/GitForm.js:152
-#: forms/LogForm.js:121
+#: forms/LogForm.js:120
 msgid "changed"
 msgstr ""
 
 #: forms/GitForm.js:153
-#: forms/LogForm.js:121
+#: forms/LogForm.js:120
 msgid "added"
 msgstr ""
 
 #: forms/GitForm.js:154
-#: forms/LogForm.js:122
+#: forms/LogForm.js:121
 msgid "deleted"
 msgstr ""
 
 #: forms/GitForm.js:155
-#: forms/LogForm.js:122
+#: forms/LogForm.js:121
 msgid "renamed"
 msgstr ""
 
 #: forms/GitForm.js:156
-#: forms/LogForm.js:123
+#: forms/LogForm.js:122
 msgid "copied"
 msgstr ""
 
@@ -2200,31 +2272,31 @@ msgstr ""
 msgid "untracked"
 msgstr ""
 
-#: forms/GitForm.js:226
+#: forms/GitForm.js:225
 msgid "Too big to show side by side. The unified tab has it."
 msgstr ""
 
-#: forms/GitForm.js:316
+#: forms/GitForm.js:315
 #: modules/Changes.js:407
 msgid "Discard changes"
 msgstr ""
 
-#: forms/GitForm.js:353
+#: forms/GitForm.js:352
 msgid "A commit needs a message."
 msgstr ""
 
-#: forms/GitForm.js:357
+#: forms/GitForm.js:356
 msgid "Nothing is staged."
 msgstr ""
 
-#: forms/GitForm.js:318
+#: forms/GitForm.js:317
 #: modules/Changes.js:409
 msgid "Throw away {0} file, and delete it if it is new?"
 msgid_plural "Throw away {0} files, deleting the new ones?"
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/GitForm.js:321
+#: forms/GitForm.js:320
 #: modules/Changes.js:412
 msgid "Throw away what was written in {0} file?"
 msgid_plural "Throw away what was written in {0} files?"
@@ -2294,199 +2366,199 @@ msgstr ""
 msgid "History -- {0}"
 msgstr ""
 
-#: forms/LogForm.js:56
+#: forms/LogForm.js:55
 msgid "Subject"
 msgstr ""
 
-#: forms/LogForm.js:57
+#: forms/LogForm.js:56
 msgid "Who"
 msgstr ""
 
-#: forms/LogForm.js:58
+#: forms/LogForm.js:57
 msgid "When"
 msgstr ""
 
-#: forms/LogForm.js:105
+#: forms/LogForm.js:104
 msgid "{0} file in this commit"
 msgid_plural "{0} files in this commit"
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:500
+#: forms/MainForm.js:503
 msgid "Bintana IDE -- {0}"
 msgstr ""
 
-#: forms/MainForm.js:613
+#: forms/MainForm.js:616
 msgid "(select a control)"
 msgstr ""
 
-#: forms/MainForm.js:628
-#: forms/MainForm.js:635
+#: forms/MainForm.js:631
+#: forms/MainForm.js:638
 msgid "(none yet)"
 msgstr ""
 
-#: forms/MainForm.js:768
+#: forms/MainForm.js:771
 msgid "Leave the project"
 msgstr ""
 
-#: forms/MainForm.js:769
+#: forms/MainForm.js:772
 msgid "Discard and continue"
 msgstr ""
 
-#: forms/MainForm.js:770
+#: forms/MainForm.js:773
 msgid "Save all and continue"
 msgstr ""
 
-#: forms/MainForm.js:1074
+#: forms/MainForm.js:1078
 msgid "Quit without saving"
 msgstr ""
 
-#: forms/MainForm.js:1076
+#: forms/MainForm.js:1080
 msgid "Save all and quit"
 msgstr ""
 
-#: forms/MainForm.js:1187
+#: forms/MainForm.js:1185
 msgid "Terminal"
 msgstr ""
 
-#: forms/MainForm.js:1226
+#: forms/MainForm.js:1228
 msgid "the shell ended"
 msgstr ""
 
-#: forms/MainForm.js:1450
+#: forms/MainForm.js:1454
 msgid "{0}   double click to edit"
 msgstr ""
 
-#: forms/MainForm.js:1452
+#: forms/MainForm.js:1456
 msgid "{0}   double click to edit its fields"
 msgstr ""
 
-#: forms/MainForm.js:1455
+#: forms/MainForm.js:1459
 msgid "{0}   double click to show its tables"
 msgstr ""
 
-#: forms/MainForm.js:1464
+#: forms/MainForm.js:1468
 msgid "   read-only: not UTF-8"
 msgstr ""
 
-#: forms/MainForm.js:1474
+#: forms/MainForm.js:1478
 msgid "   form {0}x{1}"
 msgstr ""
 
-#: forms/MainForm.js:1477
+#: forms/MainForm.js:1481
 msgid "   Ln {0}, Col {1}"
 msgstr ""
 
-#: forms/MainForm.js:2023
+#: forms/MainForm.js:2018
 msgid "Checking the project..."
 msgstr ""
 
-#: forms/MainForm.js:2687
+#: forms/MainForm.js:2682
 msgid "{0} is no longer on disk."
 msgstr ""
 
-#: forms/MainForm.js:2689
+#: forms/MainForm.js:2684
 msgid "{0} changed on disk, and there are unsaved changes here."
 msgstr ""
 
-#: forms/MainForm.js:2691
+#: forms/MainForm.js:2686
 msgid "{0} changed on disk."
 msgstr ""
 
-#: forms/MainForm.js:2712
+#: forms/MainForm.js:2707
 msgid "{0} changed on disk. Take the newer file and lose what is unsaved here?"
 msgstr ""
 
-#: forms/MainForm.js:2713
+#: forms/MainForm.js:2708
 msgid "Reload without saving"
 msgstr ""
 
-#: forms/MainForm.js:3043
-#: forms/MainForm.js:3065
+#: forms/MainForm.js:3038
+#: forms/MainForm.js:3060
 #: modules/Navigator.js:72
 msgid "Put the cursor on a name first."
 msgstr ""
 
-#: forms/MainForm.js:3070
+#: forms/MainForm.js:3065
 #: forms/RefsForm.js:105
 msgid "Rename symbol"
 msgstr ""
 
-#: forms/MainForm.js:3070
+#: forms/MainForm.js:3065
 #: forms/RefsForm.js:105
 msgid "New name:"
 msgstr ""
 
-#: forms/MainForm.js:3165
+#: forms/MainForm.js:3160
 msgid "Start a repository"
 msgstr ""
 
-#: forms/MainForm.js:3166
+#: forms/MainForm.js:3161
 msgid "Create a git repository in {0}?"
 msgstr ""
 
-#: forms/MainForm.js:3222
+#: forms/MainForm.js:3217
 msgid "(no branches yet)"
 msgstr ""
 
-#: forms/MainForm.js:3229
+#: forms/MainForm.js:3224
 msgid "(no other branch)"
 msgstr ""
 
-#: forms/MainForm.js:3263
+#: forms/MainForm.js:3258
 msgid "Switch branch"
 msgstr ""
 
-#: forms/MainForm.js:3267
+#: forms/MainForm.js:3262
 msgid "Switch"
 msgstr ""
 
-#: forms/MainForm.js:3282
+#: forms/MainForm.js:3277
 msgid "New branch"
 msgstr ""
 
-#: forms/MainForm.js:3282
+#: forms/MainForm.js:3277
 msgid "Called"
 msgstr ""
 
-#: forms/MainForm.js:3302
+#: forms/MainForm.js:3297
 msgid "Delete a branch"
 msgstr ""
 
-#: forms/MainForm.js:3303
+#: forms/MainForm.js:3298
 msgid "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr ""
 
-#: forms/MainForm.js:3395
+#: forms/MainForm.js:3390
 msgid "Clone a repository"
 msgstr ""
 
-#: forms/MainForm.js:3395
+#: forms/MainForm.js:3390
 msgid "From"
 msgstr ""
 
-#: forms/MainForm.js:3403
+#: forms/MainForm.js:3398
 msgid "Clone into"
 msgstr ""
 
-#: forms/MainForm.js:3645
+#: forms/MainForm.js:3640
 msgid "Version {0}, on Bintana {1}"
 msgstr ""
 
-#: forms/MainForm.js:3647
+#: forms/MainForm.js:3642
 msgid "On Bintana {0}"
 msgstr ""
 
-#: forms/MainForm.js:3649
+#: forms/MainForm.js:3644
 msgid "A RAD environment in the spirit of Visual Basic and Gambas: QuickJS embedded in a GTK4 runtime. The IDE is written in Bintana and runs on it with no privileges of its own."
 msgstr ""
 
-#: forms/MainForm.js:3650
+#: forms/MainForm.js:3645
 msgid "Copyright © 2026 Matias De lellis — MIT License"
 msgstr ""
 
-#: forms/MainForm.js:1071
-#: modules/TabSet.js:807
+#: forms/MainForm.js:1075
+#: modules/TabSet.js:808
 msgid "{1} has unsaved changes."
 msgid_plural ""
 "{0} files have unsaved changes:\n"
@@ -2494,101 +2566,101 @@ msgid_plural ""
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:1458
+#: forms/MainForm.js:1462
 #: forms/QuickForm.js:265
 msgid "{0} file"
 msgid_plural "{0} files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:3264
+#: forms/MainForm.js:3259
 msgid "There is {0} change here. Switching keeps it, unless the two branches disagree about the same file."
 msgid_plural "There are {0} changes here. Switching keeps them, unless the two branches disagree about the same file."
 msgstr[0] ""
 msgstr[1] ""
 
-#: forms/MainForm.js:920
-#: forms/MainForm.js:1693
+#: forms/MainForm.js:924
+#: forms/MainForm.js:1688
 #: modules/Exporter.js:38
 #: modules/Installer.js:27
 msgid "Open a project first."
 msgstr ""
 
-#: forms/MainForm.js:1983
+#: forms/MainForm.js:1978
 msgid "There is no template yet. Run Project > Update translations first: it gathers every string the project shows and writes the .pot a translation starts from."
 msgstr ""
 
-#: forms/MainForm.js:484
+#: forms/MainForm.js:487
 msgid ""
 "{0} has no project.btp.\n"
 "It can still be edited, but it will not be able to run."
 msgstr ""
 
-#: forms/MainForm.js:1526
+#: forms/MainForm.js:1530
 msgid ""
 "{0}\n"
 "is not there any more."
 msgstr ""
 
-#: forms/MainForm.js:3543
+#: forms/MainForm.js:3538
 msgid "Open a form to preview it."
 msgstr ""
 
-#: forms/MainForm.js:3566
+#: forms/MainForm.js:3561
 msgid "Open a form's design to edit its menus."
 msgstr ""
 
-#: forms/MainForm.js:3585
+#: forms/MainForm.js:3580
 msgid "Open a form's design to edit its commands."
 msgstr ""
 
-#: forms/MainForm.js:3621
+#: forms/MainForm.js:3616
 msgid "Open a form's design to edit its tab order."
 msgstr ""
 
-#: forms/MainForm.js:476
+#: forms/MainForm.js:478
 msgid ""
 "No such directory:\n"
 "{0}"
 msgstr ""
 
-#: forms/MainForm.js:776
+#: forms/MainForm.js:779
 msgid "{0} already exists and is not a folder."
 msgstr ""
 
-#: forms/MainForm.js:786
+#: forms/MainForm.js:790
 msgid "{0} is already a project."
 msgstr ""
 
-#: forms/MainForm.js:1850
+#: forms/MainForm.js:1845
 msgid ""
 "Cannot open {0}:\n"
 "{1}"
 msgstr ""
 
-#: forms/MainForm.js:1870
-#: forms/MainForm.js:1901
+#: forms/MainForm.js:1865
+#: forms/MainForm.js:1896
 #: forms/MetainfoForm.js:58
 msgid ""
 "Cannot read {0}:\n"
 "{1}"
 msgstr ""
 
-#: forms/MainForm.js:1881
-#: forms/MainForm.js:1905
-#: forms/MainForm.js:1913
+#: forms/MainForm.js:1876
+#: forms/MainForm.js:1900
+#: forms/MainForm.js:1908
 msgid ""
 "Cannot edit {0}:\n"
 "{1}"
 msgstr ""
 
-#: forms/MainForm.js:1929
+#: forms/MainForm.js:1924
 msgid ""
 "Cannot write {0}:\n"
 "{1}"
 msgstr ""
 
-#: forms/MainForm.js:3420
+#: forms/MainForm.js:3415
 #: modules/FormFiles.js:429
 #: modules/FormFiles.js:610
 #: modules/Tests.js:83
@@ -2619,20 +2691,20 @@ msgstr ""
 msgid "This project declares no application id, so it has no application info yet. Set one in Project settings, and this dialog writes the file."
 msgstr ""
 
-#: forms/NewProjectForm.js:103
+#: forms/NewProjectForm.js:93
 msgid "Base folder"
 msgstr ""
 
-#: forms/NewProjectForm.js:73
+#: forms/NewProjectForm.js:63
 msgid "\"{0}\" is not usable as a folder name."
 msgstr ""
 
-#: forms/NewProjectForm.js:80
-#: forms/ProjectForm.js:312
+#: forms/NewProjectForm.js:70
+#: forms/ProjectForm.js:307
 msgid "\"{0}\" is not an application id. Use a reverse-DNS name like io.github.you.App."
 msgstr ""
 
-#: forms/NewProjectForm.js:84
+#: forms/NewProjectForm.js:74
 msgid ""
 "The base folder does not exist:\n"
 "{0}"
@@ -2651,18 +2723,18 @@ msgid "Translations — {0}"
 msgstr ""
 
 #: forms/PoForm.js:394
-#: modules/TabSet.js:691
+#: modules/TabSet.js:692
 msgid "Close {0} without saving the changes?"
 msgstr ""
 
 #: forms/PoForm.js:395
-#: modules/TabSet.js:692
-#: modules/TabSet.js:786
+#: modules/TabSet.js:693
+#: modules/TabSet.js:787
 msgid "Close without saving"
 msgstr ""
 
 #: forms/PoForm.js:397
-#: modules/TabSet.js:787
+#: modules/TabSet.js:788
 msgid "Save and close"
 msgstr ""
 
@@ -2698,24 +2770,24 @@ msgstr ""
 msgid "As written"
 msgstr ""
 
-#: forms/ProjectForm.js:183
+#: forms/ProjectForm.js:178
 msgid "{0} -- not found"
 msgstr ""
 
-#: forms/ProjectForm.js:185
+#: forms/ProjectForm.js:180
 msgid "This project names it and nothing on this machine has it. The runtime refuses to start a project whose library is missing."
 msgstr ""
 
-#: forms/ProjectForm.js:201
+#: forms/ProjectForm.js:196
 msgid "Directories of shared classes, loaded before this project's own. Offered here are the ones this machine has, nearest first: the project's own lib/ before anything installed."
 msgstr ""
 
-#: forms/ProjectForm.js:202
+#: forms/ProjectForm.js:197
 msgid "A library is a directory of shared classes that several projects can load. There is none on this machine, and none named here."
 msgstr ""
 
-#: forms/ProjectForm.js:301
-#: modules/Manifest.js:47
+#: forms/ProjectForm.js:296
+#: modules/Manifest.js:58
 msgid ""
 "project.btp was left alone:\n"
 "{0}"
@@ -2975,97 +3047,97 @@ msgstr ""
 msgid "Rename control"
 msgstr ""
 
-#: modules/Data.js:97
-#: modules/Data.js:200
-#: modules/Data.js:264
+#: modules/Data.js:125
+#: modules/Data.js:229
+#: modules/Data.js:293
 msgid "Data"
 msgstr ""
 
-#: modules/Data.js:98
+#: modules/Data.js:126
 msgid "Show the database view"
 msgstr ""
 
-#: modules/Data.js:172
+#: modules/Data.js:201
 msgid "Which database to show"
 msgstr ""
 
-#: modules/Data.js:178
+#: modules/Data.js:207
 msgid "Read the project and its databases again"
 msgstr ""
 
-#: modules/Data.js:408
+#: modules/Data.js:454
 msgid "(not created)"
 msgstr ""
 
-#: modules/Data.js:446
+#: modules/Data.js:492
 msgid "No databases in this project."
 msgstr ""
 
-#: modules/Data.js:458
+#: modules/Data.js:504
 msgid "{0} is a {1} connection, which the IDE cannot open yet."
 msgstr ""
 
-#: modules/Data.js:466
+#: modules/Data.js:512
 msgid "{0} is not there yet. Run the application to create it."
 msgstr ""
 
-#: modules/Data.js:509
+#: modules/Data.js:557
 msgid "required"
 msgstr ""
 
-#: modules/Data.js:510
+#: modules/Data.js:558
 msgid "key"
 msgstr ""
 
-#: modules/Data.js:523
+#: modules/Data.js:571
 msgid "Model {0} -> {1}"
 msgstr ""
 
-#: modules/Data.js:532
+#: modules/Data.js:580
 msgid "Record {0}"
 msgstr ""
 
-#: modules/Data.js:549
+#: modules/Data.js:597
 msgid "Model {0} -> {1} (table not created)"
 msgstr ""
 
-#: modules/Data.js:555
+#: modules/Data.js:603
 msgid "This database has no tables."
 msgstr ""
 
-#: modules/Data.js:636
+#: modules/Data.js:687
 msgid "Choose a database first."
 msgstr ""
 
-#: modules/Data.js:640
+#: modules/Data.js:691
 msgid "{0} is not there yet."
 msgstr ""
 
-#: modules/Data.js:644
-msgid "The console speaks SQLite."
-msgstr ""
-
-#: modules/Data.js:650
-msgid "Type a statement first."
-msgstr ""
-
-#: modules/Data.js:684
-msgid "No rows."
-msgstr ""
-
-#: modules/Data.js:692
-msgid "Showing {0} of {1} rows."
-msgstr ""
-
-#: modules/Data.js:698
-msgid "Last id"
+#: modules/Data.js:695
+msgid "The console speaks SQLite and ODBC."
 msgstr ""
 
 #: modules/Data.js:701
+msgid "Type a statement first."
+msgstr ""
+
+#: modules/Data.js:744
+msgid "No rows."
+msgstr ""
+
+#: modules/Data.js:752
+msgid "Showing {0} of {1} rows."
+msgstr ""
+
+#: modules/Data.js:758
+msgid "Last id"
+msgstr ""
+
+#: modules/Data.js:761
 msgid "Statement executed."
 msgstr ""
 
-#: modules/Data.js:693
+#: modules/Data.js:753
 msgid "{0} row"
 msgid_plural "{0} rows"
 msgstr[0] ""
@@ -3494,21 +3566,21 @@ msgstr ""
 msgid "(none declared)"
 msgstr ""
 
-#: modules/Manifest.js:38
+#: modules/Manifest.js:49
 msgid ""
 "project.btp could not be read:\n"
 "{0}"
 msgstr ""
 
-#: modules/Manifest.js:104
+#: modules/Manifest.js:115
 msgid "The project starts at {0}, which no longer exists. It will not be able to run."
 msgstr ""
 
-#: modules/Manifest.js:147
+#: modules/Manifest.js:158
 msgid "{0} has no project.btp to edit."
 msgstr ""
 
-#: modules/Manifest.js:194
+#: modules/Manifest.js:205
 msgid ""
 "project.btp was saved, but {0} could not follow it:\n"
 "{1}"
@@ -3731,28 +3803,28 @@ msgstr ""
 msgid "It dresses what a control keeps inside itself, which a class on the control cannot reach. A rule of your own in app.css can: see the styling section of docs/widgets.md."
 msgstr ""
 
-#: modules/TabSet.js:298
+#: modules/TabSet.js:299
 msgid "This project"
 msgstr ""
 
-#: modules/TabSet.js:449
+#: modules/TabSet.js:450
 msgid "{0} is not UTF-8: it is open read-only and will not be saved from the IDE."
 msgstr ""
 
-#: modules/TabSet.js:672
+#: modules/TabSet.js:673
 msgid "The running program uses an earlier version of this file; start it again to use this one"
 msgstr ""
 
-#: modules/TabSet.js:785
+#: modules/TabSet.js:786
 msgid "Close tabs"
 msgstr ""
 
-#: modules/TabSet.js:456
+#: modules/TabSet.js:457
 msgid "The project has no {0}."
 msgstr ""
 
-#: modules/TabSet.js:1060
-#: modules/TabSet.js:1301
+#: modules/TabSet.js:1061
+#: modules/TabSet.js:1302
 msgid ""
 "Could not save {0}:\n"
 "{1}"

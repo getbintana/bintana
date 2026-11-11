@@ -1,6 +1,6 @@
 # ODBC: `Database.Odbc`, the driver that reaches the servers
 
-**Status: stages 0 to 5 built (2026-11-11); stage 6, Windows and the IDE's data views, is left. Comes before
+**Status: stages 0 to 5 built, the IDE included (2026-11-11); stage 6, Windows natively, is left -- its list is below. Comes before
 [`postgres-plan.md`](postgres-plan.md).** Designed for Linux, Windows and macOS
 from the first line: the API is the same on all three, and what differs (the
 driver manager, the text encoding, where the drivers live) is decided here,
@@ -295,12 +295,43 @@ is set in `Form_Open`. A form that gives two drivers' properties is refused.
    that carries the other driver's properties is refused when it opens. On the
    way: `ConnectionPart.Tables()` called the connection's `Tables` getter as a
    function and had always thrown -- the test that now covers it was the first
-   to call it. **Left out, and said**: the IDE's Data view and binding list
-   only sqlite connections (an ODBC part is skipped, not an error), and a
-   `.conn` resource is still a sqlite path.
-6. **Tests, CI, documentation** — and the Windows measurement: which driver
-   the CI runner can install with no prompt, and a run of the same assertions
-   through the wide API. **Not started.**
+   to call it. **And the IDE**: a `.conn` is `{ "kind": "odbc", "connection",
+   "user", "password_env" }` -- the password is never in the file, only the
+   name of the variable that holds it, read alike by `rowsFrom` and the IDE;
+   `ConnectionForm` edits that kind, refuses a `PWD` in the string, and
+   connects only on its *Connect* button; the Data view lists, browses and
+   queries an ODBC connection (a select read a row at a time up to what it
+   shows), and the designer's table list asks a server at most every 30 s. A
+   form's ODBC part opens in the IDE only when its DSN carries the password:
+   its password is set in code the IDE cannot run. `tests/ide` (`p_data_odbc`)
+   names sqliteodbc by its library's path, which unixODBC accepts in
+   `Driver=`, and skips that half without it. **Built.**
+6. **Windows, natively** (another session). The code is written for it;
+   nothing of it has been compiled or run there. What to do, in order:
+   - **Build** under MSYS2 UCRT64: `odbc32` and MinGW's `sql.h` are linked
+     unconditionally (`BTA_HAVE_ODBC` is always on). The wide half of
+     `bta_odbc.c` is what is new to a compiler: `BtaOdbcChar` is `SQLWCHAR`,
+     `ODBC_API(f)` is `f##W`, and the lengths differ per call --
+     `SQLGetInfoW`/`SQLColAttributeW` count **bytes**, `SQLDriverConnectW`,
+     `SQLGetDiagRecW` and `SQLDescribeColW` count **characters**, a
+     `SQL_C_WCHAR` parameter's length is bytes and its column size characters.
+   - **Install a driver with no prompt** and say which: the psqlODBC MSI
+     (`PostgreSQL Unicode(x64)`), Werner's sqliteodbc (`SQLite3 ODBC Driver`),
+     or SQL Server's own; `Driver={…}` by name, since `ODBCSYSINI` and a
+     library path are unixODBC's.
+   - **Run `tests/odbc` by hand** with `BINTANA_ODBC_SQLITE` set to the
+     driver's name (and `BINTANA_ODBC_PG` for a server): the text layer
+     through the wide API (`ñ`, `€`, a 4-byte character, a path with them in
+     `Database=`), and every type both ways.
+   - **The decimal comma**: with a Spanish regional format, does psqlODBC
+     answer `12,30`? The guard is written (`_configthreadlocale` plus
+     `setlocale(LC_NUMERIC, "C")`, on the reasoning that an MSVC-built driver
+     shares `ucrtbase.dll` and so the locale GTK set) and has never run.
+   - **SQL Server**, if one is at hand: `OUTPUT INSERTED`, `SAVE
+     TRANSACTION`, `Cursor` refused, `Model.Ensure` refused -- the rows of
+     the engine table that come from documentation.
+   - A `tests/odbc-win.sh` beside `tests/serial-win.sh`, and the `windows` CI
+     job running it if a driver installs there.
 
 ## How it will be tested
 

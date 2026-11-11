@@ -515,6 +515,112 @@ static JSValue odbc_get_driver(JSContext *ctx, JSValueConst this_val)
 
 /* ------------------------------------------------------------ statements */
 
+/*
+ * **The driver is talked to in the C numeric locale.** GTK calls
+ * `setlocale(LC_ALL, "")`, and psqlODBC formats a `NUMERIC` it hands back as
+ * text with the process's `LC_NUMERIC`: on an es_AR desktop `12.30` arrived as
+ * `12,30`, which no `Decimal` reads (measured; the bare C probe never saw it,
+ * having never called `setlocale`). So the driver works with C numerics for
+ * **this thread alone**, and only for as long as it is working -- the rest of
+ * the program, and the program's own code inside `Each`, keep the desktop's.
+ *
+ *   - POSIX: `uselocale` with a locale that is the desktop's but for
+ *     `LC_NUMERIC`.
+ *   - Windows: `_configthreadlocale(_ENABLE_PER_THREAD_LOCALE)` and
+ *     `setlocale(LC_NUMERIC, "C")` for the thread, put back after. The UCRT is
+ *     one `ucrtbase.dll` for the program and an MSVC-built driver alike, so
+ *     the desktop locale GTK set does reach a driver there too. **Written, not
+ *     yet run on Windows** (docs/plans/odbc-plan.md, stage 6).
+ *
+ * `numeric_now` is the thread's innermost entry, so `Each` can step out to
+ * the desktop's locale around its callback and back in after it.
+ */
+typedef struct OdbcNumeric {
+    struct OdbcNumeric *outer;
+#ifndef G_OS_WIN32
+    locale_t was;
+    bool     set;
+#else
+    int      mode;
+    char    *saved;
+#endif
+} OdbcNumeric;
+
+static _Thread_local OdbcNumeric *numeric_now;
+
+#ifndef G_OS_WIN32
+static locale_t odbc_c_numeric(void)
+{
+    static gsize once = 0;
+    static locale_t loc;
+
+    if (g_once_init_enter(&once)) {
+        locale_t base = duplocale(LC_GLOBAL_LOCALE);
+        loc = base ? newlocale(LC_NUMERIC_MASK, "C", base) : (locale_t)0;
+        if (!loc && base)
+            freelocale(base);
+        g_once_init_leave(&once, 1);
+    }
+    return loc;
+}
+#endif
+
+static void numeric_c(OdbcNumeric *s)
+{
+#ifndef G_OS_WIN32
+    locale_t c = odbc_c_numeric();
+    s->set = c != (locale_t)0;
+    s->was = s->set ? uselocale(c) : (locale_t)0;
+#else
+    s->mode  = _configthreadlocale(_ENABLE_PER_THREAD_LOCALE);
+    s->saved = g_strdup(setlocale(LC_NUMERIC, NULL));
+    setlocale(LC_NUMERIC, "C");
+#endif
+}
+
+static void numeric_back(OdbcNumeric *s)
+{
+#ifndef G_OS_WIN32
+    if (s->set)
+        uselocale(s->was);
+#else
+    if (s->saved)
+        setlocale(LC_NUMERIC, s->saved);
+    g_free(s->saved);
+    s->saved = NULL;
+    if (s->mode != -1)
+        _configthreadlocale(s->mode);
+#endif
+}
+
+static void numeric_enter(OdbcNumeric *s)
+{
+    s->outer = numeric_now;
+    numeric_c(s);
+    numeric_now = s;
+}
+
+static void numeric_leave(OdbcNumeric *s)
+{
+    numeric_back(s);
+    numeric_now = s->outer;
+}
+
+/* The program's own code, called from inside the driver's work: in the
+ * desktop's locale, and back to C numerics after it. */
+static JSValue call_in_desktop_locale(JSContext *ctx, JSValueConst fn,
+                                      JSValueConst arg)
+{
+    OdbcNumeric *s = numeric_now;
+    if (s)
+        numeric_leave(s);
+    JSValue r = JS_Call(ctx, fn, JS_UNDEFINED, 1, &arg);
+    if (s)
+        numeric_enter(s);
+    return r;
+}
+
+
 /* The handle, open, or a throw: "used after Close" is one sentence here
  * rather than whatever the driver manager says about a freed handle. */
 static BtaOdbc *open_of(JSContext *ctx, JSValueConst this_val)
@@ -1610,13 +1716,7 @@ static JSValue each_body(JSContext *ctx, JSValueConst this_val,
             break;
         seen++;
 
-#ifndef G_OS_WIN32
-        locale_t here = uselocale(LC_GLOBAL_LOCALE);
-#endif
-        JSValue res = JS_Call(ctx, call, JS_UNDEFINED, 1, (JSValueConst *)&row);
-#ifndef G_OS_WIN32
-        uselocale(here);
-#endif
+        JSValue res = call_in_desktop_locale(ctx, call, row);
         JS_FreeValue(ctx, row);
         if (JS_IsException(res))
             break;
@@ -1776,51 +1876,16 @@ static JSValue odbc_transaction(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
-/*
- * **The driver is talked to in the C numeric locale.** GTK calls
- * `setlocale(LC_ALL, "")`, and psqlODBC formats a `NUMERIC` it hands back as
- * text with the process's `LC_NUMERIC`: on an es_AR desktop `12.30` arrived as
- * `12,30`, which no `Decimal` reads (measured; the bare C probe never saw it,
- * having never called `setlocale`). `uselocale` changes this thread alone and
- * only `LC_NUMERIC`, for exactly as long as the driver is working -- the rest
- * of the program keeps the desktop's.
- *
- * Windows has no `uselocale`, and a driver DLL carries its own C runtime whose
- * locale GTK's `setlocale` does not reach; whether one localizes anyway is
- * stage 6's to measure.
- */
-#ifndef G_OS_WIN32
-static locale_t odbc_c_numeric(void)
-{
-    static gsize once = 0;
-    static locale_t loc;
-
-    if (g_once_init_enter(&once)) {
-        locale_t base = duplocale(LC_GLOBAL_LOCALE);
-        loc = base ? newlocale(LC_NUMERIC_MASK, "C", base) : (locale_t)0;
-        if (!loc && base)
-            freelocale(base);
-        g_once_init_leave(&once, 1);
-    }
-    return loc;
-}
-#endif
-
 typedef JSValue OdbcWord(JSContext *, JSValueConst, int, JSValueConst *);
 
 static JSValue in_c_numeric(OdbcWord *word, JSContext *ctx,
                             JSValueConst this_val, int argc, JSValueConst *argv)
 {
-#ifndef G_OS_WIN32
-    locale_t c = odbc_c_numeric();
-    locale_t was = c ? uselocale(c) : (locale_t)0;
-    JSValue  out = word(ctx, this_val, argc, argv);
-    if (c)
-        uselocale(was);
+    OdbcNumeric s;
+    numeric_enter(&s);
+    JSValue out = word(ctx, this_val, argc, argv);
+    numeric_leave(&s);
     return out;
-#else
-    return word(ctx, this_val, argc, argv);
-#endif
 }
 
 static JSValue odbc_query(JSContext *ctx, JSValueConst this_val,

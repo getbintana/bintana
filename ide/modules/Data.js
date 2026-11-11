@@ -3,13 +3,14 @@
  * that map onto them, with a console over the selected one.
  *
  * **The runtime is the one that opens the database.**  A `.conn` file says
- * where a database is (`{ "kind": "sqlite", "path": "data/clients.db" }`), and
- * a form's `Connection` part says the same thing in its `Path`; this view only
- * reads what `Database.Sqlite` answers -- `Tables`, `Columns(table)` and
- * `Query(sql)` -- and never invents a schema of its own.  A database that does
- * not exist yet is shown as *not created*, not created by the act of looking
- * at it: a browser that writes is a browser that changes the program it is
- * supposed to describe.
+ * where a database is (`{ "kind": "sqlite", "path": "data/clients.db" }`, or
+ * `{ "kind": "odbc", "connection": "DSN=Ventas", "user": …, "password_env": … }`),
+ * and a form's `Connection` part says the same thing in its properties; this
+ * view only reads what `Database.Sqlite` or `Database.Odbc` answers --
+ * `Tables`, `Columns(table)` and `Query(sql)` -- and never invents a schema of
+ * its own.  A database that does not exist yet is shown as *not created*, not
+ * created by the act of looking at it: a browser that writes is a browser
+ * that changes the program it is supposed to describe.
  *
  * **A record is a shape, not a table.**  The fields under a table come from
  * the project's `.record` files, read through `Binding` -- the same answer the
@@ -86,6 +87,33 @@ function cellText(value) {
 
 export class Data {
 
+    /* Whether the IDE can open a database of this descriptor's kind. */
+    static opens(db) {
+        return !!db && (db.kind === "sqlite" || db.kind === "odbc");
+    }
+
+    /*
+     * The descriptor's database, opened through the runtime -- the same
+     * `Database.Sqlite` or `Database.Odbc` the program calls. An ODBC
+     * connection's password is never in the project: a `.conn` names the
+     * environment variable that holds it (`password_env`), and a form's part
+     * sets it in code, which the IDE cannot run -- so a part opens only when
+     * its DSN or connection string carries the password. The driver's refusal
+     * is what the view then says.
+     */
+    static open(db) {
+        if (db.kind === "odbc") {
+            const options = {};
+            if (db.user) options.User = db.user;
+            if (db.passwordEnv) {
+                const secret = Environment.Get(db.passwordEnv);
+                if (secret) options.Password = secret;
+            }
+            return Database.Odbc(db.connection, options);
+        }
+        return Database.Sqlite(db.path);
+    }
+
     /*
      * What this page contributes to the side bar: one row, shaped like the
      * ones `ProjectTree.sideEntries` and `Changes.sideEntries` return.  The
@@ -109,9 +137,10 @@ export class Data {
 
         /* Every database the project declares or keeps, in the order the combo
          * offers them.  A descriptor is `{ name, path, kind, file, models,
-         * missing, tables, error }`. */
+         * missing, tables, error }`, and for an ODBC one also `connection`,
+         * `user` and `passwordEnv`; `id` is what identifies it. */
         this.databases = [];
-        this.chosenPath = "";
+        this.chosenId = "";
 
         /* The selected descriptor and what its tree holds.  The action maps are
          * keyed by the tree's own keys: a key is the only thing an `Activate`
@@ -295,17 +324,29 @@ export class Data {
         this.databases = [];
         if (!project) return;
 
-        const add = (name, path, file, kind) => {
-            if (!path) return null;
-
-            const abs = File.Absolute(File.Join(project, path));
-            let db = found.get(abs);
+        /* `spec` is `{ kind, path }` for sqlite and `{ kind: "odbc", connection,
+         * user, passwordEnv }` for a server. The identity is the file for one
+         * and the connection string with its user for the other. */
+        const add = (name, spec, file) => {
+            const kind = spec.kind || "sqlite";
+            let id, abs = "";
+            if (kind === "odbc") {
+                if (!spec.connection) return null;
+                id = `odbc:${spec.connection}\u0001${spec.user || ""}`;
+            } else {
+                if (!spec.path) return null;
+                abs = File.Absolute(File.Join(project, spec.path));
+                id = abs;
+            }
+            let db = found.get(id);
             if (!db) {
-                db = { name: name || File.BaseName(abs), path: abs,
-                       kind: kind || "sqlite", file: file || "",
-                       models: [], missing: !File.Exists(abs),
-                       tables: [], quote: '"', error: "" };
-                found.set(abs, db);
+                db = { name: name || File.BaseName(abs), path: abs, id,
+                       kind, file: file || "",
+                       connection: spec.connection || "", user: spec.user || "",
+                       passwordEnv: spec.passwordEnv || "",
+                       models: [], missing: kind === "sqlite" && !File.Exists(abs),
+                       tables: [], quote: '"', page: "Limit", error: "" };
+                found.set(id, db);
                 this.databases.push(db);
             } else {
                 if (!db.file && file) db.file = file;
@@ -332,8 +373,10 @@ export class Data {
             let doc;
             try { doc = File.LoadJson(File.Join(project, file)); }
             catch (e) { doc = null; }
-            if (!doc || !doc.path) continue;
-            add(File.BaseName(file), doc.path, file, doc.kind || "sqlite");
+            if (!doc) continue;
+            add(File.BaseName(file), { kind: doc.kind, path: doc.path,
+                                       connection: doc.connection, user: doc.user,
+                                       passwordEnv: doc.password_env }, file);
         }
 
         for (const form of forms) {
@@ -343,9 +386,12 @@ export class Data {
             for (const part of parts) {
                 if (!part || part.type !== "Connection") continue;
                 const props = part.properties || {};
-                if (!props.Path) continue;
-
-                const db = add(part.name, props.Path, form.file, "sqlite");
+                /* A part's password is set in code, so the IDE has none: a DSN
+                 * or a connection string that carries it is what opens. */
+                const db = props.Driver === "Odbc"
+                    ? add(part.name, { kind: "odbc", connection: props.ConnectionString,
+                                       user: props.User }, form.file)
+                    : add(part.name, { kind: "sqlite", path: props.Path }, form.file);
                 if (db) connections.set(part.name, db);
             }
 
@@ -369,7 +415,7 @@ export class Data {
         for (const file of ide.classes.files) {
             const ext = File.Extension(file).toLowerCase();
             if (!SQLITE_EXTENSIONS.includes(ext)) continue;
-            add(File.BaseName(file), file, file, "sqlite");
+            add(File.BaseName(file), { kind: "sqlite", path: file }, file);
         }
 
         this.databases.sort((a, b) => Locale.Compare(a.name, b.name));
@@ -390,7 +436,7 @@ export class Data {
         const at = this.DbList.Index;
         if (at < 0 || at >= this.databases.length) return;
 
-        this.chosenPath = this.databases[at].path;
+        this.chosenId = this.databases[at].id;
         this.show(at);
     }
 
@@ -407,7 +453,7 @@ export class Data {
         const names = this.databases.map((db) =>
             db.name + (db.missing ? " " + Locale.Text("(not created)") : ""));
 
-        let at = this.databases.findIndex((db) => db.path === this.chosenPath);
+        let at = this.databases.findIndex((db) => db.id === this.chosenId);
         if (at < 0) at = this.databases.length ? 0 : -1;
 
         this.dressing = true;
@@ -415,7 +461,7 @@ export class Data {
         this.DbList.Index = at;
         this.dressing = false;
 
-        this.chosenPath = at >= 0 ? this.databases[at].path : "";
+        this.chosenId = at >= 0 ? this.databases[at].id : "";
         this.show(at);
     }
 
@@ -454,7 +500,7 @@ export class Data {
         this.Target.Text = db.name;
         db.error = "";
 
-        if (db.kind !== "sqlite") {
+        if (!Data.opens(db)) {
             this.Message.Text = Locale.Text(
                 "{0} is a {1} connection, which the IDE cannot open yet.",
                 db.name, db.kind);
@@ -472,9 +518,11 @@ export class Data {
 
         let live = null;
         try {
-            live = Database.Sqlite(db.path);
+            live = Data.open(db);
             db.tables = live.Tables;
             db.quote = live.Dialect && live.Dialect.Quote ? live.Dialect.Quote : '"';
+            db.page  = live.Dialect && live.Dialect.Page !== undefined
+                     ? live.Dialect.Page : "Limit";
         } catch (e) {
             db.error = e.message || String(e);
             db.tables = [];
@@ -609,13 +657,16 @@ export class Data {
      * away. */
     preview(table, column) {
         const db = this.current;
-        if (!db || db.missing || db.kind !== "sqlite") return;
+        if (!db || db.missing || !Data.opens(db)) return;
 
         const quote = db.quote || '"';
         const q = (name) => quote + String(name).split(quote).join(quote + quote) + quote;
+        /* An engine with no LIMIT (SQL Server) gets the bare SELECT; the
+         * console reads it a row at a time and stops at what it shows. */
+        const limit = db.page === "Limit" ? ` LIMIT ${PREVIEW_ROWS}` : "";
         const sql = column
-            ? `SELECT ${q(column)} FROM ${q(table)} LIMIT ${PREVIEW_ROWS}`
-            : `SELECT * FROM ${q(table)} LIMIT ${PREVIEW_ROWS}`;
+            ? `SELECT ${q(column)} FROM ${q(table)}${limit}`
+            : `SELECT * FROM ${q(table)}${limit}`;
 
         this.Sql.Text = sql;
         this.run();
@@ -640,8 +691,8 @@ export class Data {
             this.say(Locale.Text("{0} is not there yet.", db.path), true);
             return;
         }
-        if (db.kind !== "sqlite") {
-            this.say(Locale.Text("The console speaks SQLite."), true);
+        if (!Data.opens(db)) {
+            this.say(Locale.Text("The console speaks SQLite and ODBC."), true);
             return;
         }
 
@@ -656,10 +707,19 @@ export class Data {
 
         let live = null;
         try {
-            live = Database.Sqlite(db.path);
+            live = Data.open(db);
             const word = firstWord(sql);
             if (["select", "with", "pragma", "explain"].includes(word)) {
-                this.fill(live.Query(sql));
+                /* Over a server, a row at a time and no further than what is
+                 * shown: a SELECT with no limit on a big table must not bring
+                 * it all into the IDE. A file is read whole, as before. */
+                if (db.kind === "odbc") {
+                    const rows = [];
+                    live.Each(sql, (row) => { rows.push(row); return rows.length < SHOWN_ROWS; });
+                    this.fill(rows);
+                } else {
+                    this.fill(live.Query(sql));
+                }
             } else {
                 const info = live.Execute(sql);
                 this.fillStatement(info);

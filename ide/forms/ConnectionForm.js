@@ -19,9 +19,21 @@
  */
 "use strict";
 
-/* `CmbConnKind`'s entries, in its order: the `kind` each one writes. One today;
- * a second driver is a second row here and in the `.form`. */
-const CONN_KINDS = ["sqlite"];
+/* `CmbConnKind`'s entries, in its order: the `kind` each one writes. A third
+ * driver is a third row here and in the `.form`. */
+const CONN_KINDS = ["sqlite", "odbc"];
+
+/* An environment variable's name, as a shell would take it. */
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/* Whether a connection string carries a password of its own -- a key `PWD` or
+ * `Password` at the start of one of its pairs. */
+function carriesPassword(cs) {
+    return String(cs).split(";").some((pair) => {
+        const key = pair.split("=")[0].trim().toLowerCase();
+        return pair.includes("=") && (key === "pwd" || key === "password");
+    });
+}
 
 /* A connection's name is the part of a `Source` before its first dot, so a dot
  * in it could never be reached -- and it is a file name at the project's root. */
@@ -57,12 +69,38 @@ export class ConnectionForm extends Form {
         dlg.TxtConnName.Text     = file ? File.BaseName(file) : "";
         dlg.TxtConnName.Enabled  = !file;
         dlg.CmbConnKind.Index    = CONN_KINDS.indexOf(kind);
-        dlg.TxtConnPath.Text     = typeof dlg.doc.path === "string" ? dlg.doc.path : "";
+        const text = (key) => typeof dlg.doc[key] === "string" ? dlg.doc[key] : "";
+        dlg.TxtConnPath.Text     = kind === "odbc" ? text("connection") : text("path");
+        dlg.TxtConnUser.Text     = text("user");
+        dlg.TxtConnSecret.Text   = text("password_env");
 
+        dlg.dressKind();
         dlg.showState();
         dlg.Show();
         (file ? dlg.TxtConnPath : dlg.TxtConnName).SetFocus();
         return dlg;
+    }
+
+    get kind() { return CONN_KINDS[this.CmbConnKind.Index] || "sqlite"; }
+
+    /*
+     * The rows the kind has. A file has a path and a chooser for it; a server
+     * has a connection string, a user and the variable its password is in --
+     * and a Connect button, since connecting on every keystroke would be asking a
+     * server the same question once per letter.
+     */
+    dressKind() {
+        const odbc = this.kind === "odbc";
+
+        this.LblConnPath.Text       = odbc ? Locale.Text("Connection:") : Locale.Text("Database:");
+        this.TxtConnPath.Placeholder = odbc ? "DSN=sales" : "data/sales.db";
+        this.TxtConnPath.Icon       = odbc ? "" : "document-open-symbolic";
+        this.TxtConnPath.Tooltip    = odbc
+            ? Locale.Text("The driver's connection string, DSN=… or Driver={…};Server=…;Database=…, with no password in it")
+            : Locale.Text("The file, relative to the project so it travels with it. It need not exist yet: the program creates it the first time it opens it");
+        for (const c of [this.LblConnUser, this.TxtConnUser, this.LblConnSecret,
+                         this.TxtConnSecret, this.BtnConnTest])
+            c.Visible = odbc;
     }
 
     /*
@@ -73,9 +111,18 @@ export class ConnectionForm extends Form {
      */
     showState() {
         const problem = this.refusal();
-        this.BtnConnOk.Enabled = problem === "";
+        this.BtnConnOk.Enabled   = problem === "";
+        this.BtnConnTest.Enabled = problem === "";
         if (problem) {
             this.say(problem, false);
+            return;
+        }
+
+        if (this.kind === "odbc") {
+            const env = this.TxtConnSecret.Text.trim();
+            this.say(env && !Environment.Get(env)
+                ? Locale.Text("{0} is not set here, so Connect tries with no password.", env)
+                : Locale.Text("Connect asks the server and says what it answers."), false);
             return;
         }
 
@@ -125,6 +172,17 @@ export class ConnectionForm extends Form {
             if (File.Exists(File.Join(this.project, `${name}.conn`)))
                 return Locale.Text("{0}.conn already exists.", name);
         }
+        if (this.kind === "odbc") {
+            const cs  = this.TxtConnPath.Text.trim();
+            const env = this.TxtConnSecret.Text.trim();
+            if (!cs)
+                return Locale.Text("The driver's connection string: DSN=… or Driver={…};Server=…;Database=….");
+            if (carriesPassword(cs))
+                return Locale.Text("Keep the password out of the project: name the environment variable that holds it.");
+            if (env && !ENV_NAME.test(env))
+                return Locale.Text("\"{0}\" cannot be an environment variable's name.", env);
+            return "";
+        }
         if (!this.TxtConnPath.Text.trim())
             return Locale.Text("Where the database file is, relative to the project.");
         return "";
@@ -136,8 +194,22 @@ export class ConnectionForm extends Form {
         const file = this.file || `${this.TxtConnName.Text.trim()}.conn`;
         const doc  = this.doc;
 
-        doc.kind = CONN_KINDS[this.CmbConnKind.Index] || "sqlite";
-        doc.path = this.TxtConnPath.Text.trim();
+        /* The other kind's keys go: they are this dialog's, and a file that
+         * said both would leave the reader to guess which one is meant. */
+        doc.kind = this.kind;
+        if (doc.kind === "odbc") {
+            delete doc.path;
+            doc.connection = this.TxtConnPath.Text.trim();
+            const user = this.TxtConnUser.Text.trim();
+            const env  = this.TxtConnSecret.Text.trim();
+            if (user) doc.user = user; else delete doc.user;
+            if (env) doc.password_env = env; else delete doc.password_env;
+        } else {
+            delete doc.connection;
+            delete doc.user;
+            delete doc.password_env;
+            doc.path = this.TxtConnPath.Text.trim();
+        }
 
         this.Close();
         if (this.onAccept) this.onAccept(file, doc);
@@ -151,6 +223,7 @@ export class ConnectionForm extends Form {
      * inside it -- the spelling that still works when the project is moved.
      */
     TxtConnPath_IconClick() {
+        if (this.kind !== "sqlite") return;
         const typed = this.TxtConnPath.Text.trim();
         const dir   = typed ? File.Directory(File.Join(this.project, typed)) : this.project;
 
@@ -165,6 +238,29 @@ export class ConnectionForm extends Form {
             });
     }
 
+    /* Connect now, with what the fields say, and say what came back. */
+    test() {
+        if (this.refusal()) return;
+        let db = null;
+        try {
+            db = Data.open({ kind: "odbc", connection: this.TxtConnPath.Text.trim(),
+                             user: this.TxtConnUser.Text.trim(),
+                             passwordEnv: this.TxtConnSecret.Text.trim() });
+            const tables = db.Tables.length;
+            this.say(Locale.Plural("Connected to {1} {2}: {0} table.",
+                                   "Connected to {1} {2}: {0} tables.",
+                                   tables, db.Dbms, db.DbmsVersion), false);
+        } catch (e) {
+            this.say(e.Code ? `${e.message} (${e.Code})` : (e.message || String(e)), true);
+        } finally {
+            if (db) db.Close();
+        }
+    }
+
+    CmbConnKind_Select()   { this.dressKind(); this.showState(); }
+    TxtConnUser_Change()   { this.showState(); }
+    TxtConnSecret_Change() { this.showState(); }
+    BtnConnTest_Click()    { this.test(); }
     TxtConnName_Change() { this.showState(); }
     TxtConnPath_Change() { this.showState(); }
     TxtConnName_Activate() { this.FocusNext(); }

@@ -3,7 +3,7 @@
   "class": "ConnectionForm",
   "properties": {
     "Arrangement": "Vertical",
-    "Height": 250,
+    "Height": 320,
     "Text": "Connection",
     "Width": 540
   },
@@ -62,7 +62,8 @@
                 "HExpand": true,
                 "Index": 0,
                 "Items": [
-                  "an SQLite file"
+                  "an SQLite file",
+                  "a server, through ODBC"
                 ]
               }
             },
@@ -88,6 +89,48 @@
             },
             {
               "type": "Label",
+              "name": "LblConnUser",
+              "properties": {
+                "HAlign": "End",
+                "Text": "User:",
+                "For": "TxtConnUser",
+                "Visible": false
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtConnUser",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Placeholder": "billing",
+                "Tooltip": "The user the server knows; empty leaves it to the DSN or the connection string",
+                "Visible": false
+              }
+            },
+            {
+              "type": "Label",
+              "name": "LblConnSecret",
+              "properties": {
+                "HAlign": "End",
+                "Text": "Password in:",
+                "For": "TxtConnSecret",
+                "Visible": false
+              }
+            },
+            {
+              "type": "TextBox",
+              "name": "TxtConnSecret",
+              "properties": {
+                "HAlign": "Fill",
+                "HExpand": true,
+                "Placeholder": "SALES_DB_PASSWORD",
+                "Tooltip": "The environment variable that holds the password. The password itself never goes in the project",
+                "Visible": false
+              }
+            },
+            {
+              "type": "Label",
               "name": "LblConnState",
               "properties": {
                 "ColumnSpan": 2,
@@ -109,6 +152,15 @@
             "VExpand": true
           },
           "children": [
+            {
+              "type": "Button",
+              "name": "BtnConnTest",
+              "properties": {
+                "Text": "Connect",
+                "Tooltip": "Connect to the server now and say what it answers",
+                "Visible": false
+              }
+            },
             {
               "type": "Button",
               "name": "BtnConnCancel",

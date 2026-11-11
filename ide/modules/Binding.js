@@ -84,9 +84,31 @@ export class Binding {
     tablesOf(file) {
         const conn = this.read(file, () => {
             const doc = File.LoadJson(File.Join(this.ide.project, file));
-            return doc && doc.path ? doc : null;
+            return doc && (doc.path || doc.kind === "odbc") ? doc : null;
         });
         if (!conn) return [];
+
+        /* A server has no file to stamp: what it answered is kept for a
+         * while instead, so a grid rebuilt on every click does not connect on
+         * every click, and a table added on the server still shows up. */
+        if (conn.kind === "odbc") {
+            const key  = `odbc:${file}`;
+            const now  = Date.now();
+            const seen = this.tables.get(key);
+            if (seen && now - seen.at < 30000) return seen.names;
+
+            let names = [];
+            try {
+                const db = Data.open({ kind: "odbc", connection: conn.connection,
+                                       user: conn.user, passwordEnv: conn.password_env });
+                names = db.Tables;
+                db.Close();
+            } catch (e) {
+                names = [];     /* a server nobody can reach offers nothing */
+            }
+            this.tables.set(key, { at: now, names });
+            return names;
+        }
 
         const dbPath = File.Join(this.ide.project, conn.path);
         const info   = File.Info(dbPath);
