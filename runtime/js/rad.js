@@ -720,28 +720,59 @@ formPartTypes.Timer = GLOBAL.Timer;
  *
  *   "components": [
  *       { "type": "Connection", "name": "Db",
- *         "properties": { "Path": "data/clients.db" } }
+ *         "properties": { "Path": "data/clients.db" } },
+ *       { "type": "Connection", "name": "Erp",
+ *         "properties": { "Driver": "Odbc", "User": "billing",
+ *                         "ConnectionString": "DSN=Ventas" } }
  *   ]
  *
  *   this.Db.Query("select * from clients");
  *
- * The path is relative to the project.  The database is opened on first use,
- * not while a form is loading or being drawn, and `Close()` (or the form's
- * close, through `Stop`) releases it.
+ * `Driver` is `"Sqlite"` unless told, so every `.form` written before there
+ * was a second one still loads: `Path` is the sqlite file, relative to the
+ * project. `"Odbc"` takes `ConnectionString` and `User`; **the password is not
+ * a property** -- the serialiser never writes it and the grid does not offer
+ * it -- and is set in `Form_Open`, from `Keyring` or the environment, the way
+ * `SmtpClient`'s is. A part that gives the other driver's properties is
+ * refused when it opens rather than choosing one.
+ *
+ * The database is opened on first use, not while a form is loading or being
+ * drawn, and `Close()` (or the form's close, through `Stop`) releases it.
  * ---------------------------------------------------------------------- */
+
+const CONNECTION_DRIVERS = ["Sqlite", "Odbc"];
 
 class ConnectionPart extends FormPart {
 
     static get Events()     { return []; }
-    static get Properties() { return ["Path"]; }
+    /** what a `.form` may set, `Driver` first so the rest apply to it */
+    static get Properties() { return ["Driver", "Path", "ConnectionString", "User"]; }
 
     constructor() {
         super();
-        this._path = "";
-        this._db   = null;
+        this._driver   = "Sqlite";
+        this._path     = "";
+        this._cs       = "";
+        this._user     = "";
+        this._password = "";
+        this._db       = null;
     }
 
-    /** the database file, relative to the project; `""` when it is not set */
+    /** the closed lists: `Driver` is `"Sqlite"` or `"Odbc"` */
+    PropertyOptions(name) {
+        return name === "Driver" ? CONNECTION_DRIVERS.slice() : null;
+    }
+
+    /** `"Sqlite"`, a file of the project, or `"Odbc"`, a server through a driver */
+    get Driver() { return this._driver; }
+    set Driver(value) {
+        if (!CONNECTION_DRIVERS.includes(value))
+            throw new TypeError(`Connection.Driver: ${CONNECTION_DRIVERS.join(" or ")}`);
+        this._driver = value;
+        this.Close();
+    }
+
+    /** the sqlite file, relative to the project; `""` when it is not set */
     get Path() { return this._path; }
     set Path(value) {
         if (typeof value !== "string")
@@ -750,12 +781,58 @@ class ConnectionPart extends FormPart {
         this.Close();
     }
 
+    /** the ODBC connection string, `"DSN=…"` or `"Driver={…};…"`, with no password */
+    get ConnectionString() { return this._cs; }
+    set ConnectionString(value) {
+        if (typeof value !== "string")
+            throw new TypeError("Connection.ConnectionString: expected text");
+        this._cs = value;
+        this.Close();
+    }
+
+    /** the ODBC user; `""` leaves it to the connection string or the DSN */
+    get User() { return this._user; }
+    set User(value) {
+        if (typeof value !== "string")
+            throw new TypeError("Connection.User: expected text");
+        this._user = value;
+        this.Close();
+    }
+
+    /* Not a `Properties` entry: a secret does not belong in a `.form` under
+     * version control. Kept across `Close`, so changing a property does not
+     * forget it. */
+    /** the ODBC password, set in code; never written to the `.form` */
+    get Password() { return this._password; }
+    set Password(value) {
+        if (typeof value !== "string")
+            throw new TypeError("Connection.Password: expected text");
+        this._password = value;
+        this.Close();
+    }
+
     /** the live `Connection`, opened on first use */
     get Db() {
         if (!this._db) {
-            if (!this._path)
-                throw new Error("Connection: Path is empty");
-            this._db = Database.Sqlite(File.Join(Application.Directory, this._path));
+            if (this._driver === "Odbc") {
+                if (this._path)
+                    throw new Error("Connection: Path is sqlite's, and Driver is " +
+                                    "Odbc -- give one or the other");
+                if (!this._cs)
+                    throw new Error("Connection: ConnectionString is empty");
+                const options = {};
+                if (this._user)     options.User = this._user;
+                if (this._password) options.Password = this._password;
+                this._db = Database.Odbc(this._cs, options);
+            } else {
+                if (this._cs || this._user || this._password)
+                    throw new Error("Connection: ConnectionString, User and " +
+                                    "Password are ODBC's, and Driver is Sqlite -- " +
+                                    "set Driver to Odbc, or give only Path");
+                if (!this._path)
+                    throw new Error("Connection: Path is empty");
+                this._db = Database.Sqlite(File.Join(Application.Directory, this._path));
+            }
         }
         return this._db;
     }
@@ -769,7 +846,7 @@ class ConnectionPart extends FormPart {
     /** a record class over a table: `Table("clients", Client)` */
     Table(name, of)             { return this.Db.Table(name, of); }
     /** every table name */
-    Tables()                    { return this.Db.Tables(); }
+    Tables()                    { return this.Db.Tables; }
     /** the columns of one table */
     Columns(table)              { return this.Db.Columns(table); }
     /** one transaction around `fn` */

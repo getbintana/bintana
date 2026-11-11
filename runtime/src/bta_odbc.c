@@ -2101,11 +2101,11 @@ void bta_odbc_init(JSContext *ctx, JSValue global)
 /*
  * ## Where it stands
  *
- * Stages 0 to 4 of docs/plans/odbc-plan.md: the build on three platforms,
+ * Stages 0 to 5 of docs/plans/odbc-plan.md: the build on three platforms,
  * the text layer, `Database.Odbc` connecting and refusing, diagnostics as
  * `Code`/`Native`/`Details`, `Open`, `Dbms`, `DbmsVersion`, `Driver`, `Close`,
  * `Query`, `Execute` and `Script` with every type both ways, `Each` and
  * `Transaction`, and `Columns`, `Tables` and `Dialect` -- everything `Table`,
- * `Cursor` and `Model` ask for (stages 2 to 4). The `Connection` part of a
- * form is stage 5.
+ * `Cursor` and `Model` ask for (stages 2 to 4). A form's `Connection` part
+ * opens one with `Driver: "Odbc"` (stage 5, in rad.js).
  */

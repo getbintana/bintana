@@ -291,6 +291,22 @@ function statements(sqlite, dir) {
     block("sqlite Each", () => eachChecks(db, "sqlite"));
     block("sqlite Transaction", () => transactionChecks(db, "sqlite"));
     block("sqlite Table and Model", () => modelChecks(db, "sqlite"));
+    block("a Connection part over ODBC", () => {
+        const part = FormPart.New("Connection");
+        part.Driver = "Odbc";
+        part.ConnectionString = `Driver=${sqlite};Database=${File.Join(dir, "part.db")}`;
+        check("a Connection part with Driver Odbc opens through the driver",
+              part.Db.Dbms === "SQLite", part.Db.Dbms);
+        part.Execute("CREATE TABLE IF NOT EXISTS p (a INTEGER)");
+        check("...and answers through it", part.Tables().includes("p"));
+        eq_props(part, { Driver: "Odbc", ConnectionString: part.ConnectionString });
+        part.Path = "data/x.db";
+        refused("Path on an Odbc part is refused when it opens", () => part.Db);
+        part.Path = "";
+        part.ConnectionString = "";
+        refused("an Odbc part with no ConnectionString", () => part.Db);
+        part.Stop();
+    });
     block("Database.Sqlite Table and Model", () => {
         const native = Database.Sqlite(":memory:");
         modelChecks(native, "Database.Sqlite");
@@ -379,6 +395,18 @@ function postgresStatements(cs, pw) {
     block("postgres Each", () => eachChecks(db, "postgres"));
     block("postgres Transaction", () => transactionChecks(db, "postgres"));
     block("postgres Table and Model", () => modelChecks(db, "postgres"));
+    block("a Connection part over psqlODBC", () => {
+        const part = FormPart.New("Connection");
+        part.Driver = "Odbc";
+        part.ConnectionString = cs;
+        part.User = "postgres";
+        part.Password = pw;
+        check("User and Password reach the driver", part.Db.Dbms === "PostgreSQL");
+        eq_props(part, { Driver: "Odbc", ConnectionString: cs, User: "postgres" });
+        check("...and the password is not in the .form",
+              !JSON.stringify(part.Serialize()).includes(pw));
+        part.Stop();
+    });
     block("postgres statement-level rollback", () => {
         db.Execute("DELETE FROM w");
         db.Transaction(() => {
@@ -543,4 +571,10 @@ function modelChecks(db, who) {
 
     items.Delete(items.Find(2));
     check(`${who}: Delete removes`, items.Find(2) === null || items.Find(2) === undefined);
+}
+
+/* What a part writes to its `.form`, exactly. */
+function eq_props(part, want) {
+    const got = JSON.stringify(part.Serialize().properties);
+    check(`the part writes ${JSON.stringify(want)}`, got === JSON.stringify(want), got);
 }

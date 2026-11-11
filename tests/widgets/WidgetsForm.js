@@ -19408,10 +19408,30 @@ class Form1 extends Form {
 
         const conn = FormPart.New("Connection");
         check("Connection is a part", conn instanceof FormPart);
-        eq("with Path as its property", conn.PropertyNames().join(","), "Name,Path");
+        eq("with Driver first, and each driver's properties",
+           conn.PropertyNames().join(","), "Name,Driver,Path,ConnectionString,User");
+        eq("Driver is Sqlite unless told, so an old .form still loads", conn.Driver, "Sqlite");
+        eq("...and its options are the two drivers",
+           JSON.stringify(conn.PropertyOptions("Driver")), '["Sqlite","Odbc"]');
+        throws("a driver that is not one", () => { conn.Driver = "Postgres"; });
         conn.Path = "data/pulse.db";
         eq("the path it was given", conn.Path, "data/pulse.db");
         eq("and the type it writes", conn.Serialize().type, "Connection");
+        eq("a sqlite part writes only its Path",
+           JSON.stringify(conn.Serialize().properties), '{"Path":"data/pulse.db"}');
+        conn.Password = "secret";
+        check("a password is never written to the .form",
+              !JSON.stringify(conn.Serialize()).includes("secret"));
+        throws("ODBC's properties on a sqlite part are refused when it opens",
+               () => conn.Db);
+        conn.Password = "";
+        Directory.Make(SCRATCH);
+        /* Path is the project's; up to the root and down to the scratch. */
+        conn.Path = "../".repeat(Application.Directory.split("/").filter((x) => x).length) +
+                    File.Join(SCRATCH, "parts-tables.db").slice(1);
+        conn.Execute("CREATE TABLE IF NOT EXISTS t1 (a INTEGER)");
+        check("Tables() answers the names", conn.Tables().includes("t1"),
+              JSON.stringify(conn.Tables()));
         conn.Stop();
 
         const model = FormPart.New("Model");
@@ -19464,7 +19484,7 @@ class Form1 extends Form {
               FormPart.Types().includes("HttpClient"));
 
         eq("a part class says its properties without an instance",
-           FormPart.Properties("Connection").join(","), "Name,Path");
+           FormPart.Properties("Connection").join(","), "Name,Driver,Path,ConnectionString,User");
         eq("and a Model's",
            FormPart.Properties("Model").join(","),
            "Name,Connection,Record,TableName");

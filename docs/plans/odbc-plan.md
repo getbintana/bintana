@@ -1,6 +1,6 @@
 # ODBC: `Database.Odbc`, the driver that reaches the servers
 
-**Status: stages 0 to 4 built (2026-11-11); `Cursor` is tested with stage 4. Comes before
+**Status: stages 0 to 5 built (2026-11-11); stage 6, Windows and the IDE's data views, is left. Comes before
 [`postgres-plan.md`](postgres-plan.md).** Designed for Linux, Windows and macOS
 from the first line: the API is the same on all three, and what differs (the
 driver manager, the text encoding, where the drivers live) is decided here,
@@ -289,7 +289,15 @@ is set in `Form_Open`. A form that gives two drivers' properties is refused.
    bytes field is now bound as `Bytes`, on sqlite too, and base64 text written
    before still reads. One test, `modelChecks`, runs on `Database.Sqlite`,
    sqliteodbc and psqlODBC alike.
-5. **The `Connection` part.** **Not started.**
+5. **The `Connection` part.** **Built**: `Driver` (`"Sqlite"` unless told, so
+   every old `.form` loads unchanged), `Path` for sqlite, `ConnectionString` and
+   `User` for ODBC, and `Password` set in code and never serialised. A part
+   that carries the other driver's properties is refused when it opens. On the
+   way: `ConnectionPart.Tables()` called the connection's `Tables` getter as a
+   function and had always thrown -- the test that now covers it was the first
+   to call it. **Left out, and said**: the IDE's Data view and binding list
+   only sqlite connections (an ODBC part is skipped, not an error), and a
+   `.conn` resource is still a sqlite path.
 6. **Tests, CI, documentation** — and the Windows measurement: which driver
    the CI runner can install with no prompt, and a run of the same assertions
    through the wide API. **Not started.**
