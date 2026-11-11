@@ -92,6 +92,46 @@ Five things cost a build cycle each when this was built, so they are here:
 [#6818]: https://github.com/flatpak/flatpak/issues/6818
 [#1983]: https://github.com/flatpak/xdg-desktop-portal/issues/1983
 
+## The Windows installer
+
+**The payload list has to mirror the portable tree's optional data.** `Nsis.Stage`
+copies GTK's schemas, icon themes, loaders, GtkSourceView's specs, the MIME
+database and the shipped libraries -- but it did **not** copy
+`lib/gstreamer-1.0`, `libexec/gstreamer-1.0`, `share/gstreamer-1.0` or
+`share/poppler`. Measured on Windows 11 (2026-11-11): an 85 MB setup installed
+and launched, and the installed runtime answered `Video=false` and
+`PdfRead=false`; the portable tree answered true for both. With the four
+directories in the list the setup is 125 MB, the installed runtime answers
+`Video=true`, `PdfRead=true`, `Terminal=true`, and `tests/pack` asserts all four
+are staged. **A smaller setup is not a smaller application when the missing
+piece is a plugin directory**, and the only way to see it is to run the
+installed tree, not just to compile the installer.
+
+The rest of the end-to-end test, so the next person can repeat it:
+
+```powershell
+# stage the tree, then build the IDE's setup from it
+tools/windows-portable.sh build stage/bintana
+BINTANA=stage/bintana/bin/bintana.exe tools/pack.sh --nsis ide stage/setup \
+    --exe stage/bintana-setup.exe --prefix stage/bintana \
+    --with share/bintana/examples --with share/doc/bintana \
+    --with share/bintana/tools/nsis
+# silent, per-user, into a scratch directory; /D must be last
+stage/bintana-setup.exe /S /D=C:\Temp\bintana-installed
+# then, with only System32 on PATH:
+C:\Temp\bintana-installed\bin\bintana.exe --version
+C:\Temp\bintana-installed\Uninstall.exe /S
+```
+
+The shortcut starts `bin\bintanaw.exe` with the installed project directory as
+its argument -- read back from the `.lnk` and launched -- and the uninstaller
+removes the directory, the Start Menu folder and the `HKCU` uninstall key.
+The bundled compiler was checked too: the official NSIS 3.12 tree under
+`share/bintana/tools/nsis` answered `v3.12` from the installed directory, so a
+setup can be built without NSIS installed. There is no `tools/check` beside an
+installed runtime, so `bintana check` is a development-tree command and not a
+post-install probe.
+
 **And a package's file dialog is the desktop's portal, with no other.** GTK
 routes a sandboxed application's chooser through
 `org.freedesktop.portal.Desktop` — `gdk_running_in_sandbox()` is just

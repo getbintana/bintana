@@ -547,6 +547,10 @@ function checkNsis(root) {
     put(File.Join("share", "bintana", "examples", "hello", "project.btp"), "{}");
     put(File.Join("share", "bintana", "tools", "nsis", "Bin", "makensis.exe"), "MZ");
     put(File.Join("share", "doc", "bintana", "README.md"), "# Bintana");
+    put(File.Join("lib", "gstreamer-1.0", "libgstgtk4.dll"), "DLL");
+    put(File.Join("libexec", "gstreamer-1.0", "gst-plugin-scanner.exe"), "MZ");
+    put(File.Join("share", "gstreamer-1.0", "presets", "x.prs"), "preset");
+    put(File.Join("share", "poppler", "cMap", "Adobe-Japan1"), "CMap");
 
     const staged = Nsis.Stage(dir, File.Join(root, "out-stage"), { Prefix: prefix });
     check("the executable travels",
@@ -569,6 +573,12 @@ function checkNsis(root) {
     check("with the data GTK opens by name",
           File.Exists(File.Join(staged, "share", "glib-2.0", "schemas", "x.schema")) &&
           File.Exists(File.Join(staged, "etc", "gtk-4.0", "settings.ini")));
+    check("and the optional halves the portable tree carries: Video's sink, "
+          + "its scanner, its data and poppler's",
+          File.Exists(File.Join(staged, "lib", "gstreamer-1.0", "libgstgtk4.dll")) &&
+          File.Exists(File.Join(staged, "libexec", "gstreamer-1.0", "gst-plugin-scanner.exe")) &&
+          File.Exists(File.Join(staged, "share", "gstreamer-1.0", "presets", "x.prs")) &&
+          File.Exists(File.Join(staged, "share", "poppler", "cMap", "Adobe-Japan1")));
     check("and the shipped libraries the project's uses resolve from",
           File.Exists(File.Join(staged, "share", "bintana", "lib", "x.js")));
     check("without the IDE beside them",

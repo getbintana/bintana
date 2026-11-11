@@ -184,14 +184,17 @@ The `package` job in the CI produces exactly that tree as one file —
 `bintana-<version>-linux-<arch>.tar.gz` — and every push keeps it as an
 artifact of the run; a tag also attaches it to the release. The `windows` job
 does the same for Windows, as a `.zip` with the GTK runtime data
-(`tools/windows-portable.sh`), and that one **is unverified**: it is built and
-staged by the job, but the IDE on Windows is a first look and not a claim. The
-same job also builds `bintana-<version>-windows-<arch>-setup.exe` -- the IDE
-as a per-user installer, compiled by the staged tree out of its own metainfo
-(`tools/pack.sh --nsis`) -- which a tag attaches to the release beside the zip.
-A setup that never arrives is the installer step's warning in the log, not a
-failed job: the zip is the established artifact, and the toolchain around the
-installer (a download, the runner's own NSIS) is outside this repository.
+(`tools/windows-portable.sh`), and that one **is verified on Windows 11**
+(2026-11-11): the staged tree runs with only `System32` on `PATH`, and the setup
+below was installed, launched and uninstalled from it. The same job builds
+`bintana-<version>-windows-<arch>-setup.exe` -- the IDE as a per-user installer,
+compiled by the staged tree out of its own metainfo (`tools/pack.sh --nsis`) --
+which a tag attaches to the release beside the zip. The setup carries the same
+optional data as the zip: GStreamer's plugins and scanner, poppler's CMaps and
+the bundled NSIS. A setup that never arrives is the installer step's warning in
+the log, not a failed job: the zip is the established artifact, and the
+toolchain around the installer (a download, the runner's own NSIS) is outside
+this repository.
 
 For developing Bintana itself on Windows, `getbintana/windows` publishes
 `bintana-build-<version>-windows-x86_64.zip` beside the application setups: an

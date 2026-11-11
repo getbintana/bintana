@@ -17,6 +17,10 @@ one-page answer to *what is new since the release I have*.
   first audio-sink failure rebuilds the pipeline once with a `fakesink` and the
   audio branch off, so a virtualized Windows session with no audio device shows
   the clip silently instead of failing whole. A second failure is reported.
+- **The Windows installer carries Video and PDF.** The NSIS payload now copies
+  GStreamer's plugins, its scanner and its data, and poppler's CMaps, the same
+  directories the portable ZIP has. Without them the installed IDE launched but
+  answered `Video=false` and `PdfRead=false`; `tests/pack` asserts they travel.
 - **`Exec`'s `Control` stream works on Windows.** There is no descriptor 3 to
   inherit there, so `Exec` creates a named pipe and passes its name in the
   child's `BINTANA_CONTROL_PIPE`; `bintana --debug` opens it, which makes the
