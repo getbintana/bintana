@@ -1,0 +1,9 @@
+{
+  "name": "Camera",
+  "startup": "CameraForm",
+  "sources": [
+    "CameraForm.js"
+  ],
+  "version": "1.0",
+  "description": "A camera in a form: Media.Devices to list and choose it, a pipeline of its Element shown through Video.Attach, a photograph with Save, and a recording with sound through a tee -- the shape of Windows.Media.Capture, built from the elements API"
+}

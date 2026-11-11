@@ -1,0 +1,129 @@
+{
+  "format": "bintana-form/1",
+  "class": "CameraForm",
+  "properties": {
+    "Text": "Camera",
+    "Width": 680,
+    "Height": 520
+  },
+  "children": [
+    {
+      "type": "ComboBox",
+      "name": "CmbCamera",
+      "properties": {
+        "AccessibleName": "Camera",
+        "HAlign": "Fill",
+        "Height": 34,
+        "Width": 514,
+        "X": 12,
+        "Y": 12
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnFolder",
+      "properties": {
+        "Focusable": false,
+        "HAlign": "End",
+        "Height": 34,
+        "Text": "Folder…",
+        "Width": 132,
+        "X": 536,
+        "Y": 12
+      }
+    },
+    {
+      "type": "Video",
+      "name": "Preview",
+      "properties": {
+        "Fit": "Contain",
+        "HAlign": "Fill",
+        "Height": 360,
+        "VAlign": "Fill",
+        "Width": 656,
+        "X": 12,
+        "Y": 56
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnPhoto",
+      "properties": {
+        "Focusable": false,
+        "Height": 40,
+        "Shortcut": [
+          "p"
+        ],
+        "Style": "suggested-action",
+        "Text": "Photo",
+        "Tooltip": "P",
+        "VAlign": "End",
+        "Width": 132,
+        "X": 12,
+        "Y": 428
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnRecord",
+      "properties": {
+        "Focusable": false,
+        "Height": 40,
+        "Shortcut": [
+          "r"
+        ],
+        "Text": "Record",
+        "Tooltip": "R",
+        "VAlign": "End",
+        "Width": 132,
+        "X": 154,
+        "Y": 428
+      }
+    },
+    {
+      "type": "CheckButton",
+      "name": "ChkSound",
+      "properties": {
+        "Active": true,
+        "Height": 40,
+        "Text": "With sound",
+        "VAlign": "End",
+        "Width": 140,
+        "X": 298,
+        "Y": 428
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnLast",
+      "properties": {
+        "AccessibleName": "Open the last file",
+        "Enabled": false,
+        "Focusable": false,
+        "HAlign": "Fill",
+        "Height": 40,
+        "Style": "link",
+        "Text": "",
+        "VAlign": "End",
+        "Width": 218,
+        "X": 450,
+        "Y": 428
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Ellipsize": true,
+        "HAlign": "Fill",
+        "Height": 24,
+        "Style": "dim-label",
+        "Text": "",
+        "VAlign": "End",
+        "Width": 656,
+        "X": 12,
+        "Y": 480
+      }
+    }
+  ]
+}
