@@ -414,9 +414,15 @@ save will edit `examples/hello` for real.
   `tests/widgets`, under whichever test happens to be running.
   `GTK_IM_MODULE=none` removes that one. A second, timing-dependent SEGV
   remains: `g_utf8_to_utf16: assertion 'str != NULL' failed` followed by a
-  crash in GTK, reached during the `Exec` chain; gdb is slow enough to miss it,
-  which is how the rest of the suite was measured. Do not go looking for a
-  `JSValue` lifetime for either: the stack says `libgtk`.
+  crash in GTK. **It is not the `Exec` chain**: a run stopped at
+  `ExecCloseInput` — before `PrintAtQuit`, `ExecGrandchild` and `Exec` — still
+  hits it, in the idle before the summary. It is a pending Win32 message that
+  GTK's window procedure processes at the end of a long session; gdb is slow
+  enough to miss it, which is how the rest of the suite was measured. Two
+  processes do not help: the prefix still crashes in that idle, and a fresh
+  tail needs the tests before it (`TimerShorthand`'s timer is read by
+  `checkTimers`). Do not go looking for a `JSValue` lifetime for either crash:
+  the stack says `libgtk`.
 - **A modal dialog left open sits on the next test.** `testFileDialog` already
   refuses to open one for that reason; `Dialog.Color`'s two got away with it on
   Linux and the font chooser is one more GTK/Win32 surface nobody can close

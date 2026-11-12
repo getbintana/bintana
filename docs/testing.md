@@ -297,9 +297,10 @@ crashes when a window message reaches a context that has already been destroyed
 suite has been up for a few minutes. No test types IME text on Windows, so the
 suite runs without one; that is a workaround for a GTK bug and not a runtime
 setting. It removes that crash, not every one: a native run of `tests/widgets`
-still reaches the `Exec` chain and takes a `g_utf8_to_utf16`-with-NULL
-segmentation fault inside `libgtk`'s window procedure. The timing under gdb is
-enough to miss it, which is how the rest of the suite was measured.
+still takes a `g_utf8_to_utf16`-with-NULL segmentation fault inside `libgtk`'s
+window procedure, at the end of the run, in the idle before the summary — a run
+stopped at `ExecCloseInput` hits it too, so it is not `Exec`'s chain. The timing
+under gdb is enough to miss it, which is how the rest of the suite was measured.
 
 Measured on Windows 11 26H2 (2026-11-11), on that desktop: `tests/smoke`
 171/0, `tests/markdown` 171/0, `tests/qr` 120/0, `tests/report` 259/0 and
