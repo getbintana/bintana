@@ -133,6 +133,41 @@ static JSValue sys_file_load_in(JSContext *ctx, JSValueConst this_val,
 }
 BTA_CANCEL_SCOPED(sys_file_load, "File.Load")
 
+/*
+ * `g_file_set_contents`, which `File.Save` and `File.SaveBytes` are: a
+ * temporary beside the file, renamed over it.
+ *
+ * **On Windows a refused rename is often only a moment long.** The rename
+ * fails with access denied while another process holds the target open
+ * without `FILE_SHARE_DELETE` -- the scanner or the indexer looking at what was
+ * just written is the usual one. Four tasks saving one file under a `Lock`
+ * each failed that way inside `tests/widgets` (the book stopped at 105 of
+ * 160), while the same 800 saves alone never did (2026-11-12). Linux has no
+ * such moment, so the call that succeeds there is retried briefly here,
+ * 315 ms in all, and only for that error -- which a file that really is
+ * read-only also answers, a third of a second later than it used to.
+ */
+static bool bta_save_contents(const char *path, const char *data, gssize len,
+                              GError **err)
+{
+#ifdef G_OS_WIN32
+    for (int wait = 5; ; wait *= 2) {
+        GError *e = NULL;
+
+        if (g_file_set_contents(path, data, len, &e))
+            return true;
+        if (wait > 160 || !g_error_matches(e, G_FILE_ERROR, G_FILE_ERROR_ACCES)) {
+            g_propagate_error(err, e);
+            return false;
+        }
+        g_clear_error(&e);
+        g_usleep((gulong)wait * 1000);
+    }
+#else
+    return g_file_set_contents(path, data, len, err);
+#endif
+}
+
 static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -162,7 +197,7 @@ static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
     GError *err = NULL;
     /* A JS string lives in memory, so it cannot outgrow G_MAXSSIZE; the cast
      * is for the signedness of the length the write takes. */
-    bool ok = g_file_set_contents(path, text, (gssize)len, &err);
+    bool ok = bta_save_contents(path, text, (gssize)len, &err);
 
     JS_FreeCString(ctx, text);
     if (!ok) {
@@ -770,7 +805,31 @@ static JSValue sys_file_info_in(JSContext *ctx, JSValueConst this_val,
             if (bta_icon_available(NULL, names[i]))
                 icon_name = names[i];
     }
+
+    /*
+     * **And a type the platform did not name has the icon its type names.**
+     * Windows hands back no themed icon a theme draws for `.png`, so a PNG
+     * said `image/png` and had no icon at all (2026-11-12). The freedesktop
+     * names are derived from the type -- `image-png`, then `image-x-generic`
+     * -- and the first one the theme really draws is the answer, as above.
+     */
+    char *derived = NULL;
+    if (!icon_name && *shown && strchr(shown, '/')) {
+        const char *slash = strchr(shown, '/');
+        char *candidates[2] = {
+            g_strdelimit(g_strdup(shown), "/", '-'),
+            g_strdup_printf("%.*s-x-generic", (int)(slash - shown), shown),
+        };
+        for (int i = 0; i < 2; i++) {
+            if (!derived && bta_icon_available(NULL, candidates[i]))
+                derived = candidates[i];
+            else
+                g_free(candidates[i]);
+        }
+        icon_name = derived;
+    }
     JS_SetPropertyStr(ctx, out, "Icon", JS_NewString(ctx, icon_name ? icon_name : ""));
+    g_free(derived);
 
     g_object_unref(info);
     return out;
@@ -4732,7 +4791,7 @@ static JSValue sys_file_save_bytes(JSContext *ctx, JSValueConst this_val,
     }
 
     GError *err = NULL;
-    bool    ok  = g_file_set_contents(path, (const char *)bytes, (gssize)len, &err);
+    bool    ok  = bta_save_contents(path, (const char *)bytes, (gssize)len, &err);
 
     if (!ok) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,

@@ -6049,7 +6049,8 @@ class Form1 extends Form {
             "Main.js": main('import "./E.js";', "    print('EFFECT USED ' + fromEffect);"),
         });
         check("an import for its effect runs the file once and hands out its exports",
-              r.Output.split("EFFECT\n").length - 1 === 1 && r.Output.includes("EFFECT USED e"), r.Output);
+              outputLines(r.Output).filter((l) => l === "EFFECT").length === 1 &&
+              r.Output.includes("EFFECT USED e"), r.Output);
 
         /* An entry a module keeps to itself says how to publish it. */
         r = run("entry", { sources: ["Main.js"] }, {
@@ -27025,7 +27026,12 @@ class Form1 extends Form {
         File.Save(File.Join(dir, "Main.js"),
                   'function main() {\n' +
                   '    print(Day.Today);\n' +
-                  '    print(Locale.Date(new Date(), "ISO").slice(-6));\n' +
+                  /* The offset alone: UTC is written `Z`, and the last six
+                   * characters of that are the minutes and seconds -- two
+                   * children a second apart then looked like two zones
+                   * (Windows, where GLib knows no `Etc/` name, 2026-11-12). */
+                  '    const iso = Locale.Date(new Date(), "ISO");\n' +
+                  '    print(iso.endsWith("Z") ? "Z" : iso.slice(-6));\n' +
                   '    Application.Quit(0);\n' +
                   '}\n');
 
@@ -31506,7 +31512,8 @@ class Form1 extends Form {
             t.Error = (m) => fail(`exec errored: ${m}`);
             t.Done  = (r) => {
                 eq("a worker runs Exec.Wait", r.code, 0);
-                eq("...and reads its output", r.out, "hi");
+                /* `echo` on Windows ends the line with CRLF. */
+                eq("...and reads its output", r.out.trimEnd(), "hi");
                 check("...while the callback spelling refuses",
                       String(r.async).includes("callbacks"), r.async);
                 next();
@@ -31573,9 +31580,15 @@ class Form1 extends Form {
          * blocks: `/dev/zero` never ends, so nothing but the token can end the
          * hash or the compression -- which used to run on past `KillAfter`,
          * since no interrupt reaches C. The compressor's temporary goes with
-         * it. */
+         * it. Windows has no file that never ends, and what is asserted is
+         * the token reaching the C loop, the same code there: Linux runs it. */
         for (const verb of ["hash", "gzip"]) {
             steps.push(() => {
+                if (!File.Exists("/dev/zero")) {
+                    print(`  (skipping the endless ${verb}: no /dev/zero on this platform)`);
+                    next();
+                    return;
+                }
                 const out  = File.Join(SCRATCH, "endless.gz");
                 const t    = new TaskWork();
                 let   from = 0;
@@ -34808,27 +34821,34 @@ class PQ extends Form {
                   'export class Loan {\n' +
                   '    pay() { return RATE; }\n' +
                   '}\n');
+        /* **The program ends when the test says so, not after a count of
+         * ticks.** Eight replace orders travel over the control pipe while it
+         * runs; five ticks (150 ms) ended it before the last three were read on
+         * a loaded Windows box, and twenty (600 ms) still did inside the whole
+         * suite there -- "applied,,," (2026-11-12). Now the test drops a file
+         * once all eight are answered, and the program quits on the tick
+         * *after* it sees it, so its last line is printed after every change.
+         * Changes that never land leave it to the Timeout: a red line. */
+        const doneFile = File.Join(proj, "done");
+        if (File.Exists(doneFile)) File.Delete(doneFile);
         File.Save(File.Join(proj, "Main.js"),
                   '"use strict";\n' +
                   'function Main() {\n' +
                   '    const c = new Calc();\n' +
-                  '    let n = 0;\n' +
+                  '    let told = false;\n' +
                   '    Timer.Every(30, () => {\n' +
-                  '        n++;\n' +
+                  '        if (told) { Application.Quit(0); return; }\n' +
                   '        let gone;\n' +
                   '        try { gone = c.gone(); } catch (e) { gone = "gone"; }\n' +
                   '        c.v = 5;\n' +
                   '        print(`${c.f()} v=${c.v} saved=${c.saved} ${Calc.s()} ${gone} loan=${new Loan().pay()}`);\n' +
-                  '        if (n >= 20) Application.Quit(0);\n' +
+                  `        told = File.Exists(${JSON.stringify(doneFile)});\n` +
                   '    });\n' +
                   '}\n');
 
-        /* Twenty ticks, not five: eight replace orders travel over the control
-         * pipe while the program runs, and on a loaded Windows box five ticks
-         * (150 ms) ended it before the last three were read. The assertions look
-         * only at the first and last lines, so extra ticks change nothing. */
         const out     = [];
         const answers = {};
+        let   answered = 0;
         const send    = (o) => job.Write(JSON.stringify(o));
 
         waiting++;
@@ -34839,7 +34859,10 @@ class PQ extends Form {
                     const msg  = JSON.parse(line);
                     const kind = msg.event || msg.reply;
                     if (kind === "ready") send({ do: "continue" });
-                    else if (kind === "replace") answers[msg.id] = msg.applied ? "applied" : msg.why;
+                    else if (kind === "replace") {
+                        answers[msg.id] = msg.applied ? "applied" : msg.why;
+                        if (++answered === 8) File.Save(doneFile, "");
+                    }
                 },
             },
             (line) => {

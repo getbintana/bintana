@@ -394,10 +394,24 @@ static bool path_inside(const char *path, const char *root);
  * of `uses`, whole otherwise -- a basename alone made two `Csv.js` in two
  * folders one name in the very sentence that is about telling them apart.
  */
+/*
+ * The two relative spellings use `/` on every platform: they are the names a
+ * project writes in `sources` and `uses`, and the same project gets the same
+ * sentence everywhere -- Windows said `csv\Csv.js and ini\Csv.js` where the
+ * project said `csv/Csv.js` (2026-11-12). A path outside both stays native.
+ */
+static char *shown_relative(char *rel)
+{
+#ifdef G_OS_WIN32
+    g_strdelimit(rel, "\\", '/');
+#endif
+    return rel;
+}
+
 static char *shown_path(ModState *st, const char *path)
 {
     if (st && st->project && path_inside(path, st->project))
-        return g_strdup(path + strlen(st->project) + 1);
+        return shown_relative(g_strdup(path + strlen(st->project) + 1));
     for (guint i = 0; st && st->libs && i < st->libs->len; i++) {
         char *lib = g_canonicalize_filename(st->libs->pdata[i], NULL);
         if (path_inside(path, lib)) {
@@ -405,7 +419,7 @@ static char *shown_path(ModState *st, const char *path)
             char *out  = g_build_filename(name, path + strlen(lib) + 1, NULL);
             g_free(name);
             g_free(lib);
-            return out;
+            return shown_relative(out);
         }
         g_free(lib);
     }

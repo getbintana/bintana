@@ -407,11 +407,14 @@ save will edit `examples/hello` for real.
   ordinary path rather than looking for `xvfb-run`. Measured on Windows 11
   (2026-11-11): `tests/smoke` 171/0, `tests/markdown` 171/0, `tests/qr`
   120/0, `tests/report` 259/0 and `tests/xlsx` 57/0 on that desktop.
-  `tests/widgets` runs to the end under gdb (6112 assertions, 53 failures,
-  many of them the slower debugger and HTTP timing); its native run still hits
-  the clipboard SEGV below (2026-11-12: three native runs out of three; with
-  `testClipboard` skipped, 6146 passed and 65 failed -- plugins, local HTTP
-  timeouts, charts -- and no crash). `tests/check.sh` is the no-display pass the Windows CI
+  `tests/widgets` runs natively there with `testClipboard`'s round trip
+  skipped (the clipboard SEGV below): 6322 passed, 4 failed on 2026-11-12,
+  from 65 that morning. The four left: `Form.Resize` on a shown
+  `Resizable = false` window does nothing (GDK holds such a surface to its
+  size in the Win32 size messages; see `bta_widget_relayout`), a server
+  restarted on the port it just left is refused for a while (see
+  [`network.md`](network.md)), and `Network.Probe` once answered `Error`
+  where alone it answers `Refused`. `tests/check.sh` is the no-display pass the Windows CI
   runs; it skips `tests/ide` with a sentence when Git wrote the project's
   `.form` symlinks as text files, which is what a checkout without Developer
   Mode does. The runner does the same now, so `tests/run.sh` continues with the

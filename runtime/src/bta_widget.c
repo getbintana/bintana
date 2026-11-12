@@ -320,6 +320,13 @@ void bta_widget_relayout(BtaWidget *w)
                     int width   = w->w > 0 ? w->w : gtk_widget_get_width(w->gtk);
                     int height  = w->h > 0 ? w->h : gtk_widget_get_height(w->gtk);
 
+                    /* **Not yet for a window the user cannot drag**: GDK holds
+                     * a non-resizable surface to its size in the Win32 size
+                     * messages, so this call is refused silently -- a shown
+                     * `Resizable = false` form stayed at 320x200 where a
+                     * resizable one went to 410x270 (2026-11-12). Lifting
+                     * `Resizable` around the call does not help: GDK takes
+                     * the new limits at the next present, not at once. */
                     SetWindowPos(hwnd, NULL, 0, 0,
                                  width * scale + frame_w,
                                  height * scale + frame_h,
