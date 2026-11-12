@@ -3584,6 +3584,84 @@ static JSValue event_signature_of_proto(JSContext *ctx, JSValueConst start,
  * function; what it walks is the prototype chain, exactly as a control's call
  * would.
  */
+#ifdef BTA_META_ONLY
+/* `g_ptr_array_sort` hands the comparator the *address* of each element, so a
+ * cast of `g_strcmp0` compares two pointers as if they were strings and the
+ * answer is whatever the addresses happen to be.  This is the one-line
+ * correction; the real prelude sorts with `Array.prototype.sort`. */
+static gint meta_str_cmp(gconstpointer a, gconstpointer b)
+{
+    return g_strcmp0(*(const char *const *)a, *(const char *const *)b);
+}
+
+/*
+ * The metadata host has no `forms.js`, and `PropertyNames` is the one answer
+ * that lives there: the serialiser's walk, written once for the widget it
+ * serialises.  This is the same walk over the same prototypes -- a name is
+ * settable when its most derived declaration is a getter *and* a setter, a
+ * `__` note is not a property, and the order is sorted -- with the one
+ * simplification the host can afford: no per-prototype cache, because a script
+ * asks a handful of times and never edits a prototype.
+ */
+static JSValue meta_property_names(JSContext *ctx, JSValueConst start)
+{
+    GPtrArray  *out  = g_ptr_array_new_with_free_func(g_free);
+    GHashTable *seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+    JSValue     proto = JS_DupValue(ctx, start);
+
+    while (JS_IsObject(proto) && !JS_IsStrictEqual(ctx, proto, bta_object_proto)) {
+        JSPropertyEnum *tab = NULL;
+        uint32_t        len = 0;
+
+        if (JS_GetOwnPropertyNames(ctx, &tab, &len, proto,
+                                   JS_GPN_STRING_MASK) == 0) {
+            for (uint32_t i = 0; i < len; i++) {
+                JSPropertyDescriptor d;
+                const char *name = JS_AtomToCString(ctx, tab[i].atom);
+
+                if (!name || !*name || g_str_equal(name, "constructor") ||
+                    g_str_has_prefix(name, "__")) {
+                    if (name) JS_FreeCString(ctx, name);
+                    continue;
+                }
+                if (g_hash_table_contains(seen, name)) {
+                    JS_FreeCString(ctx, name);
+                    continue;
+                }
+                g_hash_table_add(seen, g_strdup(name));
+
+                if (JS_GetOwnProperty(ctx, &d, proto, tab[i].atom) == 1) {
+                    if (JS_IsFunction(ctx, d.getter) &&
+                        JS_IsFunction(ctx, d.setter) &&
+                        !g_str_equal(name, "Caption"))
+                        g_ptr_array_add(out, g_strdup(name));
+                    JS_FreeValue(ctx, d.value);
+                    JS_FreeValue(ctx, d.getter);
+                    JS_FreeValue(ctx, d.setter);
+                }
+                JS_FreeCString(ctx, name);
+            }
+            JS_FreePropertyEnum(ctx, tab, len);
+        }
+
+        JSValue parent = JS_GetPrototype(ctx, proto);
+        JS_FreeValue(ctx, proto);
+        proto = parent;
+    }
+    JS_FreeValue(ctx, proto);
+    g_hash_table_destroy(seen);
+
+    g_ptr_array_sort(out, meta_str_cmp);
+
+    JSValue names = JS_NewArray(ctx);
+    for (guint i = 0; i < out->len; i++)
+        JS_SetPropertyUint32(ctx, names, i,
+                             JS_NewString(ctx, g_ptr_array_index(out, i)));
+    g_ptr_array_free(out, TRUE);
+    return names;
+}
+#endif
+
 static JSValue w_property_names_by_type(JSContext *ctx, JSValueConst this_val,
                                         int argc, JSValueConst *argv)
 {
@@ -3591,6 +3669,33 @@ static JSValue w_property_names_by_type(JSContext *ctx, JSValueConst this_val,
     if (JS_IsException(proto))
         return proto;
 
+#ifdef BTA_META_ONLY
+    /*
+     * `forms.js` declares the real walk on `Widget.prototype`; use it when the
+     * prelude loaded. The C walk below is the fallback for a host that did not
+     * get the prelude, and it is the one that lacks `DataField`.
+     */
+    JSValue fn = JS_GetPropertyStr(ctx, proto, "PropertyNames");
+
+    if (JS_IsException(fn)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        fn = JS_UNDEFINED;
+    }
+    if (JS_IsFunction(ctx, fn)) {
+        JSValue anchor = JS_NewObjectProto(ctx, proto);
+        JSValue out    = JS_Call(ctx, fn, anchor, 0, NULL);
+
+        JS_FreeValue(ctx, anchor);
+        JS_FreeValue(ctx, fn);
+        JS_FreeValue(ctx, proto);
+        return out;
+    }
+    JS_FreeValue(ctx, fn);
+
+    JSValue names = meta_property_names(ctx, proto);
+    JS_FreeValue(ctx, proto);
+    return names;
+#else
     JSValue anchor = JS_NewObjectProto(ctx, proto);
     if (JS_IsException(anchor)) {
         JS_FreeValue(ctx, proto);
@@ -3604,6 +3709,7 @@ static JSValue w_property_names_by_type(JSContext *ctx, JSValueConst this_val,
     JS_FreeValue(ctx, anchor);
     JS_FreeValue(ctx, proto);
     return out;
+#endif
 }
 
 /*
@@ -10327,8 +10433,14 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
 {
     JSRuntime *rt = JS_GetRuntime(ctx);
 
+#ifndef BTA_META_ONLY
     JS_NewClassID(rt, &bta_widget_class_id);
     JS_NewClass(rt, bta_widget_class_id, &widget_class_def);
+#else
+    /* No widget can be built here: the metadata host has no toolkit and no
+     * finalizer, and every constructor is the stub below. */
+    (void)rt;
+#endif
 
     /* The boundary the shape walks stop at, before the hatches take the way to
      * ask for it again. */
@@ -10353,8 +10465,13 @@ void bta_widgets_init(JSContext *ctx, JSValue global)
         if (cls->props)
             JS_SetPropertyFunctionList(ctx, proto, cls->props, cls->nprops);
 
+#ifdef BTA_META_ONLY
+        JSValue ctor = JS_NewCFunctionMagic(ctx, bta_meta_ctor, cls->name, 0,
+                                            JS_CFUNC_constructor_magic, i);
+#else
         JSValue ctor = JS_NewCFunctionMagic(ctx, bta_ctor, cls->name, 0,
                                             JS_CFUNC_constructor_magic, i);
+#endif
         JS_SetConstructor(ctx, ctor, proto);
 
         cls->proto = proto;

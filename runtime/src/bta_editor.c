@@ -3136,6 +3136,18 @@ static const JSCFunctionListEntry source_props[] = {
  */
 static const char *editor_options(const char *prop)
 {
+#ifdef BTA_META_ONLY
+    /*
+     * The two lists are what **GtkSourceView** currently ships, so a host that
+     * does not link it cannot answer them. Null is the same answer a property
+     * with no enumeration gives; the graphical host is where the real list
+     * lives, and a metadata-only consumer (a check, a completion in a build
+     * machine) gets "free-form" rather than a list copied here that would
+     * drift on the next GtkSourceView release.
+     */
+    (void)prop;
+    return NULL;
+#else
     static char *languages, *themes;
 
     if (!strcmp(prop, "Language")) {
@@ -3159,6 +3171,7 @@ static const char *editor_options(const char *prop)
         return themes;
     }
     return NULL;
+#endif
 }
 
 void bta_editor_register(void)

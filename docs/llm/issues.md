@@ -179,7 +179,7 @@ needed and what it did instead.
 | A **native PostgreSQL driver** — `Database.Odbc` reaches PostgreSQL, SQL Server, MySQL and Firebird through the machine's driver, but a program that cannot ask for one (a Flatpak, an installation that ships its own runtime) has no libpq driver | [`docs/plans/postgres-plan.md`](../plans/postgres-plan.md) |
 | A released application cannot change its schema — `Model.Ensure` creates a table and never alters one | [`docs/plans/migrations-plan.md`](../plans/migrations-plan.md) |
 | A library cannot be published, versioned or installed — `uses` resolves a directory, and there is no registry, lock or `bintana add`; a project also starts from an empty form rather than a template | [`docs/plans/ecosystem-plan.md`](../plans/ecosystem-plan.md) |
-| No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
+| No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md), with the design in [distribution-plan.md](../plans/distribution-plan.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 
 ## One more thing

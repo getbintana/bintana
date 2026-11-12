@@ -76,6 +76,13 @@ jobs:
       - name: Test
         run: ./tests/run.sh
 
+      # Phase 1 of docs/plans/headless-runtime-plan.md: the class metadata
+      # without GTK in the link, held to what the graphical runtime answers.
+      # It builds `bintana-meta` already (the build target above is all of
+      # them) and opens no display: both halves run a `main` project.
+      - name: The metadata host
+        run: ./tests/headless.sh
+
       # Does the runtime still say what it publishes -- every member's
       # signature and description beside it, and `api.json` current? Cheap: it
       # parses C and Markdown and opens no window.

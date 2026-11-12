@@ -1,0 +1,7 @@
+{
+  "name": "headless",
+  "main": "Main",
+  "sources": [
+    "Main.js"
+  ]
+}

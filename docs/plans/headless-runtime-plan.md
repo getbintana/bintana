@@ -1,6 +1,17 @@
 # Un runtime sin GTK: el host de consola
 
-**Estado: propuesto, no empezado.** Este plan separa el runtime en dos hosts: uno
+**Estado: Fase 0 medida y Fase 1 probada (2026-11-12); Fase 2 no empezada.**
+El spike está en [`docs/notes/headless-runtime.md`](../notes/headless-runtime.md):
+`bintana-meta` compila las filas de clases con stubs, no enlaza GTK, carga
+`forms.js` con los diez captures de `rad.js`, y sus respuestas coinciden con
+las del runtime gráfico en `Types`, `PropertyNames` (con `DataField`),
+`Methods`, `Members` (con `Doc`), eventos, firmas, textos, opciones, diferidos
+y `Available`. Lo que falta es el host de consola de la Fase 2.
+
+**La distribución espera su Fase 1**:
+[`distribution-plan.md`](distribution-plan.md) no fija los nombres ni las
+dependencias de los paquetes hasta que la prueba de metadata diga si `bintana`
+es un host o dos. Este plan separa el runtime en dos hosts: uno
 de consola que **no enlaza ni carga GTK/GtkSourceView/VTE**, y uno gráfico que sí.
 El comando `bintana <proyecto>` sigue funcionando para los dos: el host de consola
 lee `project.btp` y, si el proyecto declara `startup`, ejecuta el host gráfico.
@@ -131,11 +142,36 @@ En ambos casos, el entregable es un target **`bintana-meta`** (no se instala) qu
 Si el camino 2 funciona, es el más barato para llegar al objetivo. Si no, el
 camino 1 es el que queda.
 
-**Decisión de contrato:** ¿el host de consola carga `forms.js`? Si sí, conserva
-`Widget.Members` completo y el lenguaje es el mismo; si no, `Widget.Members`
-pierde los métodos JS y `tests/api` hay que moverlo al host gráfico. La
-recomendación es cargarlo solo para metadata, con los prototipos stub, y no
-instanciar nada.
+**Spike hecho (2026-11-12): el camino 2 funciona y el camino 1 no hace falta.**
+`cmake --build build --target bintana-meta` construye un binario de 3,5 MB que
+enlaza **15 bibliotecas** (GLib, GIO, libc) y ninguna de GTK, GtkSourceView o
+VTE; el runtime gráfico enlaza 153. Las mismas preguntas tardan 0,11 s y 46,3 MB
+en `bintana` contra 0,06 s y 9,4 MB en `bintana-meta`. El detalle y los números
+están en [`docs/notes/headless-runtime.md`](../notes/headless-runtime.md).
+
+La metadata coincide: `Types`, `PropertyNames` (con `DataField`), `Methods`,
+`EventNames`, `Member`, `Signature`, `EventSignature`, `TextProperties`,
+`PropertyOptions`, `DeferredProperties` y `Available`. También coincide
+`Members` entero, nombre, tipo, aridad, firma, retorno, `Native` y `Doc`, porque
+el host corre el pase de símbolos sobre `rad.js` y `forms.js`.
+`tests/headless.sh` corre el mismo `Main.js` en los dos hosts y los difea. Dos
+límites quedan nombrados:
+
+- **`SourceEditor.Language` y `.Theme`** son listas de GtkSourceView; el host
+  que no la enlaza contesta `NULL` en vez de copiar una lista que envejece.
+- **`Video.Available`** usa el `available` de la fila, no el probe de la
+  máquina; el probe es del host gráfico.
+
+No se generó una tabla `BtaClassMeta`: las filas, con stubs, son la única
+declaración. `forms.js` se carga con los diez captures de `rad.js` y un
+`FormPart` vacío; `Widget.PropertyNames` es el walk real, y el walk C queda como
+fallback si el prelude no carga.
+
+**Decisión de contrato:** sí, el host carga `forms.js`; es lo que hace que
+`PropertyNames` y `Members` tengan los miembros del prelude, que es lo que el
+IDE y `tests/api` leen. El `Doc` de esos miembros salió del mismo pase de
+símbolos del compilador, en una versión sin la maquinaria de módulos: el core de
+la Fase 2 hereda esa idea, o mueve el `bta_symbols` real.
 
 ## Fase 2 — partir boot y globals (2-4 semanas)
 

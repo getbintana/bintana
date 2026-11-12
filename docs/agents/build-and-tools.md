@@ -474,6 +474,48 @@ scheduled trigger -- tag first, then dispatch it, so its planner sees the new
 tag and rebuilds the BaseApp and every application. The notes a changelog
 earns are in `CHANGELOG.md`; the generated release notes are the fallback.
 
+## The metadata target
+
+**`bintana-meta` is the Phase 1 spike of
+[`plans/headless-runtime-plan.md`](../plans/headless-runtime-plan.md), and its
+proof is a link line, not an answer.** It compiles fourteen widget files with
+`BTA_META_ONLY`, links `quickjs` and GLib/GIO, and nothing graphical.
+`tests/headless.sh` diffs its `Widget.*` answers against the running runtime and
+reads `ldd` for GTK, GtkSourceView and VTE.
+
+- **`bta.h` includes `<gtk/gtk.h>`, so the compile is not the boundary; the
+  link is.** The macro overrides under `BTA_META_ONLY` make every property entry
+  a `static inline` stub and drop `build`/`probe` from each class row. The
+  stubs keep the name, flags, magic, arity and **whether a getter or a setter
+  is NULL** -- that is what keeps `Widget.Member` saying `ReadOnly` rather than
+  `Property`.
+- **`-ffunction-sections -fdata-sections` and `-Wl,--gc-sections` are the other
+  half.** A function nothing references is dropped, and with it the GTK call
+  that made it live. Without the GC flags the link pulls GTK and the target
+  proves nothing.
+- **`(uintptr_t)func` in the stub macros, not `func ? ... : NULL`.** GCC warns
+  that a function address is always true for the latter; the cast is what keeps
+  a build of the target from being a wall of `-Waddress` warnings.
+- **`bta_widgets_init` skips `JS_NewClassID`/`JS_NewClass` and uses a stub
+  constructor; `bta_widgets_cleanup` still runs.** The table holds `JSValue`
+  prototypes and constructors, and `JS_FreeRuntime` aborts on anything left.
+- **`bta_meta.c` is a test host, not a console host.** It copies
+  `bta_lookup_global`, answers `bta_module_runtime_owns` false, and prints an
+  exception with `bta_dump_error`. It evaluates `forms.js` with ten captures of
+  `rad.js` and a stub `FormPart`, and it carries a `bta_symbols` without the
+  module machinery so the prelude's JSDoc reaches `Members`; that is what gives
+  it `DataField`, `Serialize`, `Doc` and the rest of the prelude's members.
+  Phase 2 owns the real boot and globals.
+- **`PropertyNames` now uses the real walk in `forms.js`.** The C walk in
+  `bta_widget.c` is the fallback for a host whose prelude did not load, and it
+  is the one without `DataField`. `Members` matches in full, `Doc` included:
+  `bta_meta.c` carries a version of `bta_symbols` without the module machinery
+  and runs it over both generated prelude sources. `SourceEditor.Language` and
+  `.Theme` are GtkSourceView's lists and answer `NULL` here;
+  `Video.Available` uses the row's `available`, not the machine's probe.
+- **`tests/api.sh` does not see the stubs.** They are `static inline` in the
+  header and not exported names, which is why they are not in `api.json`.
+
 ## To review later
 
 - **Three files hold a third of the runtime's C**: `bta_widget.c` (9959 lines),

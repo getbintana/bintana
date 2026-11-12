@@ -37,6 +37,11 @@ endif()
 # to be exported from this executable for it (runtime/include/bta_plugin.h).
 pkg_check_modules(GMODULE REQUIRED IMPORTED_TARGET gmodule-2.0)
 
+# The metadata host links GLib and GIO and nothing graphical.  GTK is a
+# dependency of the widget files at compile time -- their headers name its types
+# -- but the link is what this target proves can be without it.
+pkg_check_modules(GLIBCORE REQUIRED IMPORTED_TARGET glib-2.0 gobject-2.0 gio-2.0)
+
 # Optional: VTE is the pty behind `Terminal`, and it is the only dependency
 # with no Windows port -- which is why it stopped being required. Without it
 # the class is still there, a .form naming one still loads and every property
@@ -502,6 +507,69 @@ target_compile_definitions(bintana PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION
 # which carry explicit casts instead.)
 target_compile_options(bintana PRIVATE -Wall -Wextra -Wno-unused-parameter
                                           -Wshadow -Wnull-dereference -Wformat=2)
+
+# ----------------------------------------------------------- metadata host ---
+# Phase 1 of docs/plans/headless-runtime-plan.md: the class rows and their
+# property tables, with no toolkit in the link.  `BTA_META_ONLY` turns every
+# property entry into a stub and drops `build`/`probe` from each row; the
+# functions those rows named are then unreferenced, and the linker's GC drops
+# everything that would call GTK.  `bta_meta.c` is the small host around it.
+#
+# **Not installed.**  It is a test target: `tests/headless.sh` runs a script
+# against it and checks what `Widget.*` answers, and `ldd` must not list GTK,
+# GtkSourceView or VTE.
+set(BTA_META_SOURCES
+    runtime/src/bta_meta.c
+    runtime/src/bta_widget.c
+    runtime/src/bta_controls.c
+    runtime/src/bta_layout.c
+    runtime/src/bta_notebook.c
+    runtime/src/bta_switcher.c
+    runtime/src/bta_paint.c
+    runtime/src/bta_text.c
+    runtime/src/bta_editor.c
+    runtime/src/bta_terminal.c
+    runtime/src/bta_menu.c
+    runtime/src/bta_tree.c
+    runtime/src/bta_table.c
+    runtime/src/bta_media.c
+    ${PRELUDE_H}
+    ${FORMS_H}
+)
+# The Windows host is Phase 3's: its linker and its `bintanaw.exe` split need a
+# real desktop to prove, and the metadata host does not belong in a job that
+# cannot run `tests/headless.sh` yet.
+if(NOT WIN32)
+    add_executable(bintana-meta ${BTA_META_SOURCES})
+    target_include_directories(bintana-meta PRIVATE
+        ${CMAKE_SOURCE_DIR}/runtime/include
+        ${CMAKE_BINARY_DIR}/generated
+        ${GTK4_INCLUDE_DIRS}
+        ${GTKSOURCE_INCLUDE_DIRS}
+        ${VTE_INCLUDE_DIRS}
+        ${GSTREAMER_INCLUDE_DIRS}
+    )
+    target_compile_definitions(bintana-meta PRIVATE
+        BTA_META_ONLY
+        BTA_VERSION_STRING="${PROJECT_VERSION}"
+    )
+    if(VTE_FOUND)
+        target_compile_definitions(bintana-meta PRIVATE BTA_HAVE_VTE=1)
+    endif()
+    if(GSTREAMER_FOUND)
+        target_compile_definitions(bintana-meta PRIVATE BTA_HAVE_GST=1)
+    endif()
+    target_link_libraries(bintana-meta PRIVATE quickjs PkgConfig::GLIBCORE)
+    target_compile_options(bintana-meta PRIVATE
+        -ffunction-sections -fdata-sections
+        -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow
+    )
+    if(APPLE)
+        target_link_options(bintana-meta PRIVATE -Wl,-dead_strip)
+    else()
+        target_link_options(bintana-meta PRIVATE -Wl,--gc-sections)
+    endif()
+endif()
 
 # ----------------------------------------------------------- test plugins ---
 # The shared objects the suite loads, built here so `cmake --build build` is the

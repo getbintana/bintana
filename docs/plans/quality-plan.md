@@ -15,7 +15,7 @@ on every platform, before a release is handed to somebody else.
   suite's shared state is not what makes a test pass.
 - `./tests/asan.sh`: the suite under AddressSanitizer; `./tests/lsan.supp`.
 - `./tests/api.sh`: the public surface against `api.json` and the descriptions
-  beside the C/JS members; 276 links over 74 pages of `docs/`.
+  beside the C/JS members; 292 links over 79 pages of `docs/`.
 - `./tests/check.sh`: every project's `bintana check`, no window.
 - `./tests/formfuzz.sh`: mutations of `.form` through the loader and `check`.
 - `./tests/pack.sh`, `./tests/install.sh`, `./tests/odbc.sh`,

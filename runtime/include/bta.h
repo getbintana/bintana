@@ -12,6 +12,122 @@
 #include <gtk/gtk.h>
 #include "quickjs.h"
 
+/*
+ * **The metadata host compiles the widget files without GTK in the link.**
+ *
+ * The class rows and their property tables are the one declaration of what a
+ * control is; the metadata target needs them without the toolkit behind them.
+ * Under `BTA_META_ONLY` a property entry points at a stub with the same name
+ * and arity, and a class row carries no `build` and no `probe`, so the linker
+ * can drop every function that would call GTK. The names, kinds, lengths and
+ * getter/setter pairs -- which is what `Widget.*` reads -- stay exactly what
+ * the rows declare.
+ *
+ * This is the spike of `docs/plans/headless-runtime-plan.md` Phase 1, not the
+ * final split: the header still includes GTK for its types, and the core will
+ * move `BtaClass` and `BtaWidget` out of it when the host is real.
+ */
+#ifdef BTA_META_ONLY
+#include <stdint.h>
+/*
+ * The stubs are `static inline` and not exported symbols: they are a property
+ * of this build, not of the API, and a link that named them would be one more
+ * name `tests/api` had to describe.
+ */
+static inline JSValue bta_meta_ctor(JSContext *ctx, JSValueConst new_target,
+                                    int argc, JSValueConst *argv, int magic)
+{
+    (void)new_target; (void)argc; (void)argv; (void)magic;
+    return JS_ThrowTypeError(ctx, "the metadata host cannot build a widget");
+}
+
+static inline JSValue bta_meta_func(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    (void)ctx; (void)this_val; (void)argc; (void)argv;
+    return JS_UNDEFINED;
+}
+
+static inline JSValue bta_meta_func_magic(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv,
+                                          int magic)
+{
+    (void)ctx; (void)this_val; (void)argc; (void)argv; (void)magic;
+    return JS_UNDEFINED;
+}
+
+static inline JSValue bta_meta_get(JSContext *ctx, JSValueConst this_val)
+{
+    (void)ctx; (void)this_val;
+    return JS_UNDEFINED;
+}
+
+static inline JSValue bta_meta_set(JSContext *ctx, JSValueConst this_val,
+                                   JSValueConst val)
+{
+    (void)ctx; (void)this_val; (void)val;
+    return JS_UNDEFINED;
+}
+
+static inline JSValue bta_meta_get_magic(JSContext *ctx, JSValueConst this_val,
+                                         int magic)
+{
+    (void)ctx; (void)this_val; (void)magic;
+    return JS_UNDEFINED;
+}
+
+static inline JSValue bta_meta_set_magic(JSContext *ctx, JSValueConst this_val,
+                                         JSValueConst val, int magic)
+{
+    (void)ctx; (void)this_val; (void)val; (void)magic;
+    return JS_UNDEFINED;
+}
+
+#undef JS_CFUNC_DEF
+#undef JS_CFUNC_DEF2
+#undef JS_CFUNC_MAGIC_DEF
+#undef JS_CGETSET_DEF
+#undef JS_CGETSET_DEF2
+#undef JS_CGETSET_MAGIC_DEF
+#undef JS_CGETSET_MAGIC_DEF2
+
+/* The flags and the magic are the row's; only the code behind it is gone. */
+#define JS_CFUNC_DEF(name, length, func1) \
+    { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, 0, \
+      { .func = { length, JS_CFUNC_generic, { .generic = bta_meta_func } } } }
+#define JS_CFUNC_DEF2(name, length, func1, prop_flags) \
+    { name, prop_flags, JS_DEF_CFUNC, 0, \
+      { .func = { length, JS_CFUNC_generic, { .generic = bta_meta_func } } } }
+#define JS_CFUNC_MAGIC_DEF(name, length, func1, magic) \
+    { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, magic, \
+      { .func = { length, JS_CFUNC_generic_magic, \
+                  { .generic_magic = bta_meta_func_magic } } } }
+#define JS_CGETSET_DEF(name, fgetter, fsetter) \
+    { name, JS_PROP_CONFIGURABLE, JS_DEF_CGETSET, 0, \
+      { .getset = { .get = { .getter = \
+                                 (uintptr_t)(fgetter) ? bta_meta_get : NULL }, \
+                    .set = { .setter = \
+                                 (uintptr_t)(fsetter) ? bta_meta_set : NULL } } } }
+#define JS_CGETSET_DEF2(name, fgetter, fsetter, prop_flags) \
+    { name, prop_flags, JS_DEF_CGETSET, 0, \
+      { .getset = { .get = { .getter = \
+                                 (uintptr_t)(fgetter) ? bta_meta_get : NULL }, \
+                    .set = { .setter = \
+                                 (uintptr_t)(fsetter) ? bta_meta_set : NULL } } } }
+#define JS_CGETSET_MAGIC_DEF(name, fgetter, fsetter, magic) \
+    { name, JS_PROP_CONFIGURABLE, JS_DEF_CGETSET_MAGIC, magic, \
+      { .getset = { .get = { .getter_magic = \
+                                 (uintptr_t)(fgetter) ? bta_meta_get_magic : NULL }, \
+                    .set = { .setter_magic = \
+                                 (uintptr_t)(fsetter) ? bta_meta_set_magic : NULL } } } }
+#define JS_CGETSET_MAGIC_DEF2(name, fgetter, fsetter, magic, prop_flags) \
+    { name, prop_flags, JS_DEF_CGETSET_MAGIC, magic, \
+      { .getset = { .get = { .getter_magic = \
+                                 (uintptr_t)(fgetter) ? bta_meta_get_magic : NULL }, \
+                    .set = { .setter_magic = \
+                                 (uintptr_t)(fsetter) ? bta_meta_set_magic : NULL } } } }
+#endif
+
 typedef struct BtaWidget BtaWidget;
 typedef struct BtaApp    BtaApp;
 
@@ -695,14 +811,25 @@ void bta_table_register(void);      /* bta_tree.c     */
  * initialiser is `false` -- so `BTA_CLASS_FULL` fills it in and
  * `BTA_CLASS_OPTIONAL` is how the exception says otherwise.
  */
+#ifdef BTA_META_ONLY
+/* The metadata host has no toolkit: the row keeps what it says about itself
+ * and drops the two function pointers that would pull GTK into the link. */
+# define BTA_CLASS_BUILD(build_) NULL
+# define BTA_CLASS_PROBE(probe_) NULL
+#else
+# define BTA_CLASS_BUILD(build_) build_
+# define BTA_CLASS_PROBE(probe_) probe_
+#endif
+
 #define BTA_CLASS_AT(cname, parent_, build_, props_, nprops_, is_form_,   \
                      options_, texts_, available_, probe_, events_,      \
                      deferred_)                                           \
-    { .name = cname, .parent = parent_, .build = build_,                  \
+    { .name = cname, .parent = parent_,                                   \
+      .build = BTA_CLASS_BUILD(build_),                                   \
       .props = props_, .nprops = nprops_, .is_form = is_form_,            \
       .options = options_, .texts = texts_, .deferred = deferred_,        \
       .events = events_,                                                  \
-      .available = available_, .probe = probe_,                           \
+      .available = available_, .probe = BTA_CLASS_PROBE(probe_),          \
       .proto = JS_UNDEFINED, .ctor = JS_UNDEFINED }
 
 /* Available, which all but the optional-engine classes are (see the field). */

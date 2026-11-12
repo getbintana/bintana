@@ -10,6 +10,7 @@
 ./tests/keyring.sh                      # the File provider: 0600 under 0700, no temporary
 ./tests/odbc.sh                         # Database.Odbc through real drivers: 187 checks, and examples/invoices on both engines
 ./tests/pack.sh                         # lib/package, the packaging step's output: 107 assertions
+./tests/headless.sh                     # the metadata host: no toolkit in the link, the same Widget.* answers
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
 BINTANA_PROFILE=/tmp/caps ./tests/run.sh
@@ -719,6 +720,28 @@ rule that stops matching.
 
 The vocabulary it prints, and the node table to read it against, are in
 [widgets.md](https://github.com/getbintana/bintana-docs/blob/main/docs/widgets.md#styling-the-vocabulary).
+
+## The metadata host, which opens no display
+
+`tests/headless.sh` holds the Phase 1 spike of
+[plans/headless-runtime-plan.md](plans/headless-runtime-plan.md) to the runtime
+it describes. The same `tests/headless/Main.js` runs twice: once as a `main`
+project under `bintana`, whose class prototypes are the real ones, and once
+under `bintana-meta`, which compiles the class rows with stubs and links no
+GTK. The two outputs are diffed, and `ldd` is read for a toolkit.
+
+```sh
+./tests/headless.sh
+```
+
+It proves three things the rest of the suite cannot: the class metadata is
+readable with **no GTK, GtkSourceView or VTE in the closure** (15 libraries
+against 153), the answers are the same -- types, properties including
+`DataField`, methods, members with `Doc`, events, signatures, text properties,
+options, deferred properties and availability -- and a class row or a property
+table that stopped being read is a diff rather than a green run. The
+measurements behind the target are in
+[notes/headless-runtime.md](notes/headless-runtime.md).
 
 ## The install, which the suite cannot see either
 
