@@ -281,6 +281,12 @@ export class MainForm extends Form {
     /* The changed files as a page of the side bar, with the message box: the
      * Changes window is for reading a diff, and this is for living in. */
     changes   = new Changes(this);
+    /* The commits, as the side panel's third page: the list is chosen there,
+     * the diff is read in the Git tab. */
+    history   = new History(this);
+    /* The git view as a tab of the notebook: the diff the side panel chose.
+     * `null` while another tab is on screen, like `Editor` and `designer`. */
+    gitTab    = null;
     /* The project's databases, their schema and a console over them: a page of
      * the side bar and a page of the bottom panel. */
     data      = new Data(this);
@@ -389,8 +395,10 @@ export class MainForm extends Form {
          * presented, so what is restored here is what it is mapped at. */
         this.session.restoreWindow();
 
-        /* The side bar's and the bottom panel's Data pages, before either list
-         * of views is dressed: how many there are is this module's answer. */
+        /* The side bar's History page (the changes page is in the .form) and
+         * the bottom panel's Data pages, before either list of views is
+         * dressed: how many there are is this module's answer. */
+        this.history.install();
         this.data.install();
 
         this.dressTabActions();
@@ -1275,8 +1283,11 @@ export class MainForm extends Form {
          * others, even though it is not a program run. */
         this.ActStop.Enabled   = this.running || this.tests.running;
         this.ActNewForm.Enabled = open;
-        this.MnuRename.Enabled  = this.activeFile !== null;
-        this.MnuDelete.Enabled  = this.activeFile !== null;
+        /* A view is not a file: renaming or deleting the git tab would be two
+         * commands about a path that does not exist. */
+        this.MnuRename.Enabled  = this.activeFile !== null &&
+                                  !this.tabs.isSynthetic(this.activeFile);
+        this.MnuDelete.Enabled  = this.MnuRename.Enabled;
         this.MnuCloseTab.Enabled = this.activeFile !== null;
         this.MnuAdd.Enabled    = design;
         this.showHandlers(picked);
@@ -1426,6 +1437,14 @@ export class MainForm extends Form {
         this.MnuGitLog.Enabled     = repo;
         this.MnuGitNewBranch.Enabled = repo;
 
+        /* *Open file* is about the diff on screen, not the repository: with no
+         * diff tab there is no file to open. The tab is a view, so it is asked
+         * of the state rather than of `ide.gitTab`, which is null when another
+         * tab is on screen. */
+        const gitView = this.tabs.openTabs.get("git:tab");
+        this.MnuGitOpen.Enabled = repo &&
+            !!(gitView && gitView.git && gitView.git.currentFile());
+
         /*
          * The remotes need somewhere to talk to, and only one of them may be in
          * flight: `Git` keeps one job, and a second Fetch while the first is
@@ -1461,7 +1480,10 @@ export class MainForm extends Form {
         } else if (!this.activeFile) {
             status = Locale.Plural("{0} file", "{0} files", this.files.length);
         } else {
-            status = `${this.activeFile}${dirty ? " *" : ""}`;
+            const state = this.openTabs.get(this.activeFile);
+            const shown = state && state.displayName ? state.displayName
+                                                     : this.activeFile;
+            status = `${shown}${dirty ? " *" : ""}`;
             /* Said where the file is named, for as long as it is on screen:
              * the log line went by when it was opened. */
             if (this.tabs.isForeign(this.activeFile))
@@ -2222,7 +2244,7 @@ export class MainForm extends Form {
      */
     sideViews() {
         return [...ProjectTree.sideEntries, ...Changes.sideEntries,
-                ...Data.sideEntries];
+                ...History.sideEntries, ...Data.sideEntries];
     }
 
     /*
@@ -3145,7 +3167,24 @@ export class MainForm extends Form {
      */
     MnuGitRefresh_Click() { this.refreshGit(); }
 
-    MnuGitChanges_Click() { GitForm.open(this); }
+    /*
+     * *Changes* is the side panel's page: the list, the ticks and the commit
+     * box already live there. The tab is the history and a chosen file's diff,
+     * so opening it for *Changes* would be a second list where one exists.
+     */
+    MnuGitChanges_Click() { this.showSideByName(Locale.Text("Changes")); }
+
+    /* The side panel is the one place a view is chosen, whichever menu asked:
+     * the two Git entries are *show Changes* and *show History*, and the diff
+     * is opened by the row chosen in either. */
+    showSideByName(name) {
+        const at = this.sideViews().findIndex((v) => v.text === name);
+        if (at < 0) return;
+
+        this.CmbView.Index = at;
+        this.showSideView(at);
+        this.unfoldSide();
+    }
 
     /*
      * A repository where there was none.
@@ -3186,12 +3225,15 @@ export class MainForm extends Form {
         this.git.refreshStatus();
         this.git.markTree();
         this.changes.reload();
+        if (this.gitTab) this.gitTab.refresh();
     }
 
     refreshGit() {
         this.git.refresh();
         this.git.markTree();
         this.changes.reload();
+        this.history.reload();
+        if (this.gitTab) this.gitTab.reload(true);
         this.showBranches();
         this.refresh();
     }
@@ -3304,7 +3346,13 @@ export class MainForm extends Form {
             });
     }
 
-    MnuGitLog_Click() { LogForm.open(this); }
+    MnuGitLog_Click() { this.showSideByName(Locale.Text("History")); }
+
+    MnuGitOpen_Click() {
+        const state = this.tabs.openTabs.get("git:tab");
+        const view  = state && state.git;
+        if (view) view.openCurrentFile();
+    }
 
     /*
      * --- the Changes page of the side bar -----------------------------------
@@ -3338,7 +3386,7 @@ export class MainForm extends Form {
     MnuChDiscard_Click() { this.changes.discard(); }
     MnuChIgnore_Click()  { this.changes.ignore(); }
     MnuChAll_Click()     { this.changes.stageAll(); }
-    MnuChWindow_Click()  { GitForm.open(this); }
+
 
     /*
      * --- the remotes --------------------------------------------------------

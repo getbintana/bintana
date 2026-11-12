@@ -62,7 +62,7 @@ under it -- it stood beside the whole notebook and the strip stopped at the
 editor's edge. The cost was measured with Sysprof before the choice was made:
 the whole workspace is ~7 ms with an empty palette, the palette is most of it
 at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
-(the canvas, the designer and the form built for real). Four things follow:
+(the canvas, the designer and the form built for real). What follows from that:
 - **A widget built in code is not published on the form.** Only the `.form`
   loader does `form[name] = control`; `Container.Add` binds it for dispatch and
   nothing else. So `ide.WidgetTree`, `ide.PropGrid` and the rest do not exist
@@ -81,6 +81,12 @@ at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
   rebuilt with every tab, so `Session.divider(name, fallback)` answers with the
   live value of the page on screen and falls back to the saved one, and
   `DIVIDERS` lists `PageSplit`/`CenterSplit`/`SideSplit`/`EditSplit`.
+- **A tab that is a view and not a file has a name the tree does not have.**
+  `git:tab` is `GitTab`'s key in `openTabs`, and `switchNow` used to point
+  `FileTree.Key` at it; the strict setter refused, correctly, because the tree
+  has no such row. A state with `synthetic: true` clears the tree's selection
+  instead, and `Session.saveTabs` skips it -- reopening it by name would ask for
+  a file the project does not have. The git view is the first of these.
 - **The project panel folds to its own strip, and the half of the split stays
   under it.** `MainForm.foldSide` hides the content and keeps the half -- hiding
   the half whole would hand its room to the work area and GTK would hide the

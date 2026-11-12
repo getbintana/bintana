@@ -417,6 +417,43 @@ export class TabSet {
     }
 
     /*
+     * The git view, which is one tab per project and not a file.
+     *
+     * **A tab and not a window** -- the argument is `GitTab`'s: reading a diff
+     * is done on the way to the code, and a window that covers the editor
+     * makes every round trip two window operations. The state carries
+     * `synthetic: true`, which is the one flag the rest of this class asks
+     * before it treats the name as a path: nothing is watched, nothing is
+     * saved, and the session does not reopen it.
+     *
+     * The tab is only the diff: the side panel's Changes and History pages are
+     * what choose it, and they call `showWorktree`/`showCommit` after this.
+     */
+    openGit() {
+        const key = "git:tab";
+
+        if (this.openTabs.has(key)) {
+            this.switchTo(key);
+            return true;
+        }
+
+        const gitTab = new GitTab(this.ide);
+        this.ide.Tabs.Append(gitTab.page);
+
+        const label = new Label();
+        label.Text = Locale.Text("Diff");
+        this.ide.Tabs.SetTabLabel(this.ide.Tabs.Count - 1, label);
+
+        const state = { name: key, displayName: Locale.Text("Diff"),
+                        mode: "git", synthetic: true, view: gitTab.page,
+                        git: gitTab, label, dirty: false };
+        this.openTabs.set(key, state);
+        this.tabOrder.push(key);
+        this.switchTo(key);
+        return true;
+    }
+
+    /*
      * **A file that is not UTF-8 opens read-only, and is never written from
      * here.** `File.Load` answers text, and text cannot hold a byte that is not
      * one: every invalid sequence becomes U+FFFD. So a Latin-1 `.js` opened and
@@ -444,6 +481,24 @@ export class TabSet {
     isForeign(name) {
         const state = name ? this.openTabs.get(name) : null;
         return !!(state && state.foreign);
+    }
+
+    /* A tab that is a view and not a file -- the git view today. The rest of
+     * the IDE asks before it renames, deletes or saves what has no path. */
+    isSynthetic(name) {
+        const state = name ? this.openTabs.get(name) : null;
+        return !!(state && state.synthetic);
+    }
+
+    /* A view whose subject changes -- the diff's file and branch -- writes its
+     * one line here. `render` reads `displayName` on every switch, so the tab
+     * cannot come back with the name it had. */
+    retitle(name, text) {
+        const state = name ? this.openTabs.get(name) : null;
+        if (!state) return;
+
+        state.displayName = text;
+        if (state.label) state.label.Text = text;
     }
 
     warnForeign(name) {
@@ -588,13 +643,24 @@ export class TabSet {
 
         this.ide.Tabs.Current = this.tabOrder.indexOf(name);
 
-        if (this.ide.FileTree.Key !== name) {
+        const state = this.openTabs.get(name);
+
+        /* **A view has no row in the project tree.** `git:tab` is a name the
+         * tree never heard of, and the strict setter refuses it -- correctly:
+         * asking the tree to point at a file that does not exist is a question
+         * with no true answer. Clearing the selection is the honest one. */
+        const key = state && state.synthetic ? "" : name;
+        if (this.ide.FileTree.Key !== key) {
             this.ide.muted = true;
-            this.ide.FileTree.Key = name;
+            this.ide.FileTree.Key = key;
             this.ide.muted = false;
         }
 
         this.render();
+        /* A view that draws somebody else's state -- the git tab -- is asked
+         * again when it comes forward: the repository changes while another tab
+         * is on screen, and a stale diff is worse than a redraw. */
+        if (state && state.git) state.git.shown();
         this.ide.refresh();
     }
 
@@ -663,7 +729,8 @@ export class TabSet {
             const name  = this.tabOrder[i];
             const state = this.openTabs.get(name);
             if (!state || !state.label) continue;
-            const text = this.dirtyOf(name, state) ? `${name} *` : name;
+            const shown = state.displayName || name;
+            const text  = this.dirtyOf(name, state) ? `${shown} *` : shown;
             /* In italics while the program running under the debugger has not
              * taken all of what this file now says: it runs an earlier text. */
             const behind = this.ide.debugger_ && this.ide.debugger_.behind(name);
@@ -967,6 +1034,7 @@ export class TabSet {
         this.ide.Editor   = state ? state.editor   || null : null;
         this.ide.designer = state ? state.designer || null : null;
         this.ide.document = state ? state.document || null : null;
+        this.ide.gitTab   = state ? state.git      || null : null;
 
         /*
          * **The canvas names go down with the designer, not only up with one.**
@@ -1049,6 +1117,8 @@ export class TabSet {
         const state = this.activeState();
         if (!state) return false;
 
+        /* A view is not a file: the git tab has nothing to write. */
+        if (state.synthetic) return true;
         if (!this.liveDirty(state)) return true;   // nothing to save
         if (state.foreign) { this.warnForeign(state.name); return false; }
 

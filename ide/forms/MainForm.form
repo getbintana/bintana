@@ -716,13 +716,17 @@
         },
         {
           "name": "MnuGitChanges",
-          "text": "Changes...",
+          "text": "Changes",
           "shortcut": "<Control><Shift>d"
         },
         {
           "name": "MnuGitLog",
-          "text": "History...",
+          "text": "History",
           "shortcut": "<Control><Shift>h"
+        },
+        {
+          "name": "MnuGitOpen",
+          "text": "Open file"
         },
         {
           "separator": true
@@ -1694,10 +1698,6 @@
                                       {
                                         "name": "MnuChAll",
                                         "text": "Stage everything"
-                                      },
-                                      {
-                                        "name": "MnuChWindow",
-                                        "text": "Changes window..."
                                       }
                                     ],
                                     "RowLines": false,

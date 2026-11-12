@@ -1,18 +1,17 @@
 /*
  * What has changed, as a page of the side panel.
  *
- * The *Changes* window (`GitForm`) is where a change is **read** -- two panes
- * of the file's own language, scrolled together, which is what answers *what am
- * I about to commit*. What it is not is a place to live: it is a window, it
- * covers the editor, and committing three edits over an afternoon meant opening
- * and closing it three times.
+ * The *Git* tab (`GitTab`) is where a change is **read** -- two panes of the
+ * file's own language, scrolled together, which is what answers *what am I
+ * about to commit*. What it is not is a place to live: it is a page of the
+ * notebook, and the editor it replaces is one keystroke away.
  *
  * So the list moves to where the project tree already is, in the side bar's
  * own chooser: the changed files, a box for the message, and the button that is
- * the whole of a small commit. Double clicking a row opens the window on **that
- * file**, which is the one thing the panel does not try to do itself -- a diff
- * in a 260-pixel column would be a worse answer than the one that already
- * exists.
+ * the whole of a small commit. Double clicking a row opens **that file's diff
+ * in the Git tab**, which is the one thing the panel does not try to do itself
+ * -- a diff in a 260-pixel column would be a worse answer than the one that
+ * already exists.
  *
  * Prior art: this is Android Studio's *Commit* tool window, and IntelliJ's
  * before it -- a list of changed files and a message box, docked beside the
@@ -312,7 +311,6 @@ export class Changes {
         ide.MnuChDiff.Enabled    = what.length > 0;
         ide.MnuChOpen.Enabled    = what.length > 0;
         ide.MnuChAll.Enabled     = ide.git.isRepo;
-        ide.MnuChWindow.Enabled  = ide.git.isRepo;
     }
 
     /* --- what is chosen ----------------------------------------------------- */
@@ -475,7 +473,8 @@ export class Changes {
         const row = this.chosen()[0];
         if (!row) return;
 
-        GitForm.openAt(this.ide, row.path, !row.untracked && row.tree === " ");
+        this.ide.tabs.openGit();
+        this.ide.gitTab.showWorktree(row.path, !row.untracked && row.tree === " ");
     }
 
     /* The file itself, in a tab -- the worktree's copy, which is the one that

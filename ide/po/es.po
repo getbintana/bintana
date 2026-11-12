@@ -598,6 +598,70 @@ msgstr "Las nuevas configuraciones arrancan con estos dos como están ahora."
 msgid "History"
 msgstr "Historia"
 
+#: modules/GitTab.js
+msgid "Diff"
+msgstr "Diff"
+
+#: modules/GitTab.js
+msgid "Choose a change or a commit."
+msgstr "Elegí un cambio o un commit."
+
+#: modules/GitTab.js
+msgid "diff: {0} ({1})"
+msgstr "diff: {0} ({1})"
+
+#: modules/GitTab.js
+msgid "diff ({0})"
+msgstr "diff ({0})"
+
+#: modules/GitTab.js
+msgid "Commit: {0} ({1})"
+msgstr "Commit: {0} ({1})"
+
+#: modules/GitTab.js
+msgid "Commit ({0})"
+msgstr "Commit ({0})"
+
+#: modules/GitTab.js
+msgid "Diferencia previa"
+msgstr "Diferencia previa"
+
+#: modules/GitTab.js
+msgid "Siguiente"
+msgstr "Siguiente"
+
+#: modules/GitTab.js
+msgid "Saltar al archivo"
+msgstr "Saltar al archivo"
+
+#: modules/GitTab.js
+msgid "Archivo anterior"
+msgstr "Archivo anterior"
+
+#: modules/GitTab.js
+msgid "Archivo siguiente"
+msgstr "Archivo siguiente"
+
+#: modules/GitTab.js
+msgid "Go to the previous difference"
+msgstr "Ir a la diferencia anterior"
+
+#: modules/GitTab.js
+msgid "Go to the next difference"
+msgstr "Ir a la siguiente diferencia"
+
+#: modules/GitTab.js
+msgid "Compare the previous changed file"
+msgstr "Comparar el archivo cambiado anterior"
+
+#: modules/GitTab.js
+msgid "Compare the next changed file"
+msgstr "Comparar el siguiente archivo cambiado"
+
+#: modules/History.js
+msgid "Show the commits"
+msgstr "Mostrar los commits"
+
 #: forms/LogForm.form: Commits.Tooltip
 msgid "The last commits, newest first"
 msgstr "Los últimos commits, el más nuevo primero"
@@ -4063,6 +4127,76 @@ msgstr "Eventos"
 #: modules/Workspace.js:453
 msgid "Outline"
 msgstr "Contenido"
+
+#: modules/GitTab.js
+msgid "Git"
+msgstr "Git"
+
+#: forms/MainForm.form: menu MnuChWindow
+msgid "Open Git tab"
+msgstr "Abrir pestaña Git"
+
+#: modules/GitTab.js
+msgid "Ask the remote what changed"
+msgstr "Preguntar al remoto qué cambió"
+
+#: modules/GitTab.js
+msgid "Bring the remote's commits into this branch"
+msgstr "Traer los commits del remoto a esta rama"
+
+#: modules/GitTab.js
+msgid "Send this branch's commits to the remote"
+msgstr "Enviar los commits de esta rama al remoto"
+
+#: modules/GitTab.js
+msgid "Open file"
+msgstr "Abrir archivo"
+
+#: modules/GitTab.js
+msgid "Open the file in the worktree"
+msgstr "Abrir el archivo del árbol de trabajo"
+
+#: modules/GitTab.js
+msgid "This project is not a git repository."
+msgstr "Este proyecto no es un repositorio git."
+
+#: modules/GitTab.js
+msgid "There are no commits yet."
+msgstr "Todavía no hay commits."
+
+#: modules/GitTab.js
+msgid "Choose a file in the changes panel."
+msgstr "Elegí un archivo en el panel de cambios."
+
+#: modules/GitTab.js
+msgid "There is nothing to commit."
+msgstr "No hay nada para confirmar."
+
+#: modules/GitTab.js
+msgid "Choose a file for the side-by-side view."
+msgstr "Elegí un archivo para la vista lado a lado."
+
+#: modules/GitTab.js
+msgid "Choose a file to see what changed."
+msgstr "Elegí un archivo para ver qué cambió."
+
+#: modules/GitTab.js
+msgid "{0} file staged"
+msgid_plural "{0} files staged"
+msgstr[0] "{0} archivo preparado"
+msgstr[1] "{0} archivos preparados"
+
+#: modules/GitTab.js
+msgid "{0}  (staged)"
+msgstr "{0}  (preparado)"
+
+#: modules/GitTab.js
+msgid "{0}  in {1}"
+msgstr "{0}  en {1}"
+
+#: modules/GitTab.js
+msgid "Commit {0}"
+msgstr "Commit {0}"
 
 #~ msgid "The console speaks SQLite."
 #~ msgstr "La consola habla SQLite."

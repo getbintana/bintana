@@ -117,8 +117,8 @@ export class Data {
     /*
      * What this page contributes to the side bar: one row, shaped like the
      * ones `ProjectTree.sideEntries` and `Changes.sideEntries` return.  The
-     * page is the third of `SideStack`, appended by `install` -- the tree and
-     * the changes page are the two the .form declares.
+     * page is the fourth of `SideStack`, appended by `install` after History --
+     * the tree and the changes page are the two the .form declares.
      */
     static get sideEntries() {
         return [{
@@ -126,7 +126,7 @@ export class Data {
             tip:   Locale.Text("Show the database view"),
             icons: ["x-office-spreadsheet-symbolic", "view-list-symbolic",
                     "bta-grid-symbolic"],
-            page:  2,
+            page:  3,
             show:  (ide) => ide.data.shown(),
         }];
     }

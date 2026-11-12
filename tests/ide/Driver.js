@@ -6302,9 +6302,10 @@ function* p_views(ide) {
     yield;
 
     /* --- the chooser -------------------------------------------------------- */
-    eq("the side bar offers four views", ide.CmbView.Count, 4);
+    eq("the side bar offers five views", ide.CmbView.Count, 5);
     eq("and starts on the project's", ide.CmbView.Index, 0);
-    eq("the last is the database view", ide.sideViews()[3].page, ide.data.sidePage);
+    eq("the fourth is History", ide.sideViews()[3].page, ide.history.sidePage);
+    eq("and the last is the database view", ide.sideViews()[4].page, ide.data.sidePage);
 
     /* The strip that opens one of them while the panel is folded is the same
      * list with pictures, and every picture resolves: the last entry of each
@@ -16249,12 +16250,86 @@ function* p_git(ide) {
     ide.ChangeTable_Activate();
     yield* settled(ide);
 
-    const opened = GitForm.open(ide);
-    check("double clicking a row opens the window on that file",
-          opened.chosen()[0] === "Uno.js", JSON.stringify(opened.chosen()));
-    check("with its diff in the panes", opened.After.Text.includes("cuatro"),
-          opened.After.Text);
-    opened.Close();
+    check("double clicking a row opens the diff as a tab",
+          ide.activeFile === "git:tab", ide.activeFile);
+    check("on that file", ide.gitTab.Diff.path === "Uno.js", ide.gitTab.Diff.path);
+    check("with its diff in the panes", ide.gitTab.Diff.After.Text.includes("cuatro"),
+          ide.gitTab.Diff.After.Text);
+
+    /* --- the Git tab ------------------------------------------------------- */
+    const tabTitle = ide.tabs.openTabs.get("git:tab").displayName;
+    eq("the tab names the file and the branch", tabTitle,
+       `diff: Uno.js (${git.branchName})`);
+    eq("the chosen change is a worktree diff", ide.gitTab.Diff.mode, "worktree");
+
+    /* The differences of one file, and the neighbouring files of the list. */
+    check("the diff has a difference to go to", ide.gitTab.Diff.count() > 0,
+          `${ide.gitTab.Diff.count()}`);
+    check("with previous and next on",
+          ide.gitTab.Diff.BtnPrevDiff.Enabled && ide.gitTab.Diff.BtnNextDiff.Enabled);
+    ide.gitTab.Diff.nextDifference();
+    eq("Siguiente picks the first one", ide.gitTab.Diff.hunk, 0);
+    check("and the counter names it", ide.gitTab.Diff.LblHunk.Text.includes("1 /"),
+          ide.gitTab.Diff.LblHunk.Text);
+
+    File.Save(File.Join(repo, "otro.txt"), "otro\n");
+    ide.refreshGit();
+    yield* settled(ide);
+
+    const navPaths = git.changes().map((c) => c.path);
+    const navAt    = navPaths.indexOf("Uno.js");
+    const navStep  = navAt + 1 < navPaths.length ? 1 : -1;
+    ide.gitTab.stepFile(navStep);
+    check("the next file walks the changed list",
+          ide.gitTab.Diff.path !== "Uno.js", ide.gitTab.Diff.path);
+    ide.gitTab.stepFile(-navStep);
+    eq("and back is the file it came from", ide.gitTab.Diff.path, "Uno.js");
+
+    File.Delete(File.Join(repo, "otro.txt"));
+    ide.refreshGit();
+    yield* settled(ide);
+
+    /* **The diff fills the tab's height**, which is what a page that forgot to
+     * expand used to clip. Taller window, taller view. */
+    const diffTall = ide.gitTab.Diff.How.Bounds().Height;
+    ide.Height += 160;
+    yield* until(() => ide.gitTab.Diff.How.Bounds().Height > diffTall, 60);
+    check("the diff takes the height the tab gives it",
+          ide.gitTab.Diff.How.Bounds().Height > diffTall,
+          `${diffTall} -> ${ide.gitTab.Diff.How.Bounds().Height}`);
+    ide.Height -= 160;
+    yield* settled(ide);
+
+    /* --- History, in the side panel ---------------------------------------- */
+    ide.MnuGitLog_Click();
+    yield* settled(ide);
+
+    eq("History is the side panel's page", ide.SideStack.Current,
+       ide.history.sidePage);
+    check("with the commits", ide.history.Commits.Count > 0,
+          `${ide.history.Commits.Count}`);
+    eq("newest first", ide.history.commits[0].subject, "tercero");
+    eq("and the first opens its diff in the tab", ide.gitTab.Diff.mode, "commit");
+    eq("named as a commit, with its file and the branch",
+       ide.tabs.openTabs.get("git:tab").displayName,
+       `Commit: ${ide.gitTab.Diff.file} (${git.branchName})`);
+    check("with git's own diff", ide.gitTab.Diff.Unified.Text.includes("diff --git"),
+          ide.gitTab.Diff.Unified.Text.slice(0, 60));
+
+    ide.history.Files.Index = 0;
+    ide.history.choseFile();
+    check("choosing one of its files fills the pair",
+          ide.gitTab.Diff.After.Text !== "" || ide.gitTab.Diff.Before.Text !== "",
+          `${ide.gitTab.Diff.Before.Text.slice(0, 40)} | ` +
+          `${ide.gitTab.Diff.After.Text.slice(0, 40)}`);
+
+    /* Back to Changes for the rest of the phase, and close the tab: the phases
+     * after this one start from the pages they did before, not from a view. */
+    ide.MnuGitChanges_Click();
+    yield* settled(ide);
+    eq("Changes from the Git menu is the side panel's page",
+       ide.SideStack.Current, 1);
+    ide.closeTabByName("git:tab", true);
     yield* settled(ide);
 
     /* Rollback, which is the one command with no undo and therefore asks. */
@@ -18054,7 +18129,7 @@ function* p_session(ide) {
 
     check("the button folds the project panel away", !ide.SideView.Visible);
     check("and leaves the strip that opens a view", ide.SideStrip.Visible);
-    eq("with a button for each view", ide.sideButtons.length, 4);
+    eq("with a button for each view", ide.sideButtons.length, ide.CmbView.Count);
     check("all of them showing", ide.sideButtons.every((b) => b.Visible),
           JSON.stringify(ide.sideButtons.map((b) => b.Visible)));
     check("the half of the split is a strip now",

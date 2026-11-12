@@ -9,6 +9,18 @@ because a project without a repository is the one case where a menu of disabled
 items is a dead end. **The seven of [the core](#why-this-matters-and-what-the-core-is)
 are answered.**
 
+**And the view is one tab now (2026-11-11).** `GitTab` is one page of the
+notebook: **the diff**, and nothing else. **History is a page of the side
+panel**, beside Changes: the commits, the files each touched, and the row that
+opens its diff in the tab. The changes list, the ticks and the commit box stay
+in Changes -- one sidebar, not two. The tab is only the diff, titled
+`diff: <file> (<branch>)` for a change and `Commit: <file> (<branch>)` for one
+from History; Fetch/Pull/Push and Open file are the Git menu's. Its icon bar
+walks the differences and the changed files, with the old Side by
+side/Unified toggle on the right. `GitForm` and `LogForm` stay as the first
+shape and as the suite's own windows; the two Git menu entries show the side
+panel's Changes or History.
+
 This document is the design as well as the record: what *is* settled is recorded
 as settled, with the precedent or the measurement that settled it.
 
@@ -76,9 +88,11 @@ makes with its RTSP password, which never reads back.
 
 ## The core: the diff viewer
 
-A non-modal window of its own (`GitForm`), single instance raised rather than
-stacked — the `SearchForm` precedent, since the point of a diff is to go back
-to the editor behind it.
+The first shape was a non-modal window of its own (`GitForm`), single instance
+raised rather than stacked — the `SearchForm` precedent, since the point of a
+diff is to go back to the editor behind it. The tab (`GitTab`) keeps the same
+two panes; the side panel's Changes and History choose the subject. The diagram
+below is the window's.
 
 ```
 Split
@@ -88,6 +102,12 @@ Split
            unified:      SourceEditor RO, Language="diff"
 bottom: message TextEditor + Stage / Unstage / Discard / Commit
 ```
+
+The tab is the diff. The side panel's **History** page is the list: the
+commits, the files of the chosen one, and a row that opens that file's diff in
+the tab. **Changes** does the same for uncommitted files, and keeps the ticks,
+the message and the commit box. One sidebar, and the tab has no list of its
+own.
 
 Where each half comes from, per position of the toggle:
 
@@ -103,10 +123,13 @@ instead of filling two buffers with something unreadable. `diff` highlighting
 costs nothing: it is a GtkSourceView id the machine already has, confirmed via
 `PropertyOptions("Language")` rather than written down.
 
-Going to a file is `Activate` (double click, Enter) and never selection — the
-catalogue's reason word for word: selection walks with the arrow keys, and a
-viewer reloading a `git show` per row walked through is unusable, besides
-spawning N children for one look.
+The window made a file `Activate` (double click, Enter) and never selection —
+the catalogue's reason word for word: a viewer reloading a `git show` per row
+walked through is unusable. The tab changes that bargain: the list is the
+navigation and the diff is the page, so a selection shows the diff, as every
+modern git client does. It costs a `git diff` and a `git show` per selection; a
+repository with hundreds of changed files is the case to cache if it ever
+hurts.
 
 **Staging is per file in v1, on purpose.** Per-hunk stage needs a hunk parser
 plus `git apply --cached`, which is a second feature wearing the first one's
@@ -156,10 +179,11 @@ should have: they overlap, and `git checkout <name>` moves to a branch *or*
 throws away a file's changes depending on what the name turns out to be. That
 ambiguity is what `switch` and `restore` were split out to end, and a branch
 name that is also a path is not hypothetical in a project with folders called
-`forms` and `modules`. The log is a **window** and not a page of the Changes
-one, for the reason that window's own buttons give: it stages, discards and
-commits, and a read-only history behind them would make each of them ask
-whether it applies.
+`forms` and `modules`. The log is a **page of the side panel** beside Changes,
+not a page of the Changes window, for the reason that window's own buttons gave:
+it stages, discards and commits, and a read-only history behind them would make
+each of them ask whether it applies. The two pages choose the diff and the tab
+holds no list, so the question is answered by which page is up.
 
 **Stage 5 added one thing the design did not name: the environment that forbids
 asking.** *No authentication of its own* was written as *use the credential

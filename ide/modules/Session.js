@@ -393,6 +393,11 @@ export class Session {
         const files = [];
         for (const name of ide.tabs.tabOrder) {
             const state  = ide.tabs.openTabs.get(name);
+            /* A view is not a file, and reopening one by name would ask for a
+             * file the project does not have. The git tab is opened from its
+             * menu, not from what was open last time. */
+            if (state && state.synthetic) continue;
+
             const line   = state && state.editor ? state.editor.Line : 0;
             const column = state && state.editor ? state.editor.Column : 0;
 

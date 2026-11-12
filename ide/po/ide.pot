@@ -637,6 +637,70 @@ msgstr ""
 msgid "History"
 msgstr ""
 
+#: modules/GitTab.js
+msgid "Diff"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Choose a change or a commit."
+msgstr ""
+
+#: modules/GitTab.js
+msgid "diff: {0} ({1})"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "diff ({0})"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Commit: {0} ({1})"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Commit ({0})"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Diferencia previa"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Siguiente"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Saltar al archivo"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Archivo anterior"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Archivo siguiente"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Go to the previous difference"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Go to the next difference"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Compare the previous changed file"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Compare the next changed file"
+msgstr ""
+
+#: modules/History.js
+msgid "Show the commits"
+msgstr ""
+
 #: forms/LogForm.form: Commits.Tooltip
 msgid "The last commits, newest first"
 msgstr ""
@@ -3942,4 +4006,74 @@ msgstr ""
 
 #: modules/Workspace.js:453
 msgid "Outline"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Git"
+msgstr ""
+
+#: forms/MainForm.form: menu MnuChWindow
+msgid "Open Git tab"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Ask the remote what changed"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Bring the remote's commits into this branch"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Send this branch's commits to the remote"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Open file"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Open the file in the worktree"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "This project is not a git repository."
+msgstr ""
+
+#: modules/GitTab.js
+msgid "There are no commits yet."
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Choose a file in the changes panel."
+msgstr ""
+
+#: modules/GitTab.js
+msgid "There is nothing to commit."
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Choose a file for the side-by-side view."
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Choose a file to see what changed."
+msgstr ""
+
+#: modules/GitTab.js
+msgid "{0} file staged"
+msgid_plural "{0} files staged"
+msgstr[0] ""
+msgstr[1] ""
+
+#: modules/GitTab.js
+msgid "{0}  (staged)"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "{0}  in {1}"
+msgstr ""
+
+#: modules/GitTab.js
+msgid "Commit {0}"
 msgstr ""

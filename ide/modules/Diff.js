@@ -64,10 +64,10 @@ export class Diff {
         if (!hunks.length) {
             if (!old.length && now.length) return faced(now, "Added", true);
             if (!now.length && old.length) return faced(old, "Removed", false);
-            return { left: plain(old), right: plain(now) };
+            return { left: plain(old), right: plain(now), starts: [] };
         }
 
-        const left = [], right = [];
+        const left = [], right = [], starts = [];
         let bi = 0, ai = 0;                      /* 0-based, into old and now */
 
         for (const hunk of hunks) {
@@ -80,6 +80,10 @@ export class Diff {
                 left.push({ text: old[bi++], kind: "" });
                 right.push({ text: now[ai++], kind: "" });
             }
+
+            /* The screen row the hunk begins on, in both columns: what
+             * *previous/next difference* scrolls to. */
+            starts.push(left.length);
 
             /*
              * Inside a hunk, a run of `-` and the run of `+` that follows it are
@@ -128,7 +132,7 @@ export class Diff {
                                        : { text: "", kind: "Gap" });
         }
 
-        return { left, right };
+        return { left, right, starts };
     }
 
     /*
@@ -142,6 +146,7 @@ export class Diff {
     static hunks(text) {
         const out = [];
         let hunk = null;
+        let at = 0;                              /* 0-based line in the diff */
 
         /*
          * `lines` and not a bare split: a diff ends in a newline like every
@@ -150,11 +155,12 @@ export class Diff {
          * columns still level and one line of nothing at the bottom of both.
          */
         for (const line of lines(text)) {
+            const here = at++;
             const head = HUNK.exec(line);
 
             if (head) {
                 hunk = { from: Number(head[1]) - 1, to: Number(head[3]) - 1,
-                         body: [] };
+                         line: here, body: [] };
                 out.push(hunk);
                 continue;
             }
@@ -215,6 +221,8 @@ function faced(all, kind, onRight) {
     const there = all.map((text) => ({ text, kind }));
     const empty = all.map(() => ({ text: "", kind: "Gap" }));
 
-    return onRight ? { left: empty, right: there }
-                   : { left: there, right: empty };
+    const starts = all.length ? [0] : [];
+
+    return onRight ? { left: empty, right: there, starts }
+                   : { left: there, right: empty, starts };
 }
