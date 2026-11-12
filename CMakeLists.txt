@@ -535,6 +535,7 @@ set(BTA_META_SOURCES
     runtime/src/bta_media.c
     ${PRELUDE_H}
     ${FORMS_H}
+    ${SIGNATURES_H}
 )
 # The Windows host is Phase 3's: its linker and its `bintanaw.exe` split need a
 # real desktop to prove, and the metadata host does not belong in a job that
@@ -561,6 +562,11 @@ if(NOT WIN32)
     endif()
     target_link_libraries(bintana-meta PRIVATE quickjs PkgConfig::GLIBCORE)
     target_compile_options(bintana-meta PRIVATE
+        # `-O2` merges the GObject class structs G_DEFINE_TYPE builds into one
+        # `.data.rel.ro` section, and the linker then keeps the vfuncs that
+        # point at GTK even though `get_type` itself is dropped. `-O1` keeps
+        # them sectioned; the metadata host has no hot path to lose.
+        -O1
         -ffunction-sections -fdata-sections
         -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow
     )
@@ -612,6 +618,7 @@ if(NOT WIN32)
         runtime/src/bta_tree.c
         runtime/src/bta_table.c
         runtime/src/bta_media.c
+        ${SIGNATURES_H}
     )
     add_library(bta-headless-widgets OBJECT ${BTA_HEADLESS_META_SOURCES})
     target_include_directories(bta-headless-widgets PRIVATE
@@ -633,6 +640,9 @@ if(NOT WIN32)
         target_compile_definitions(bta-headless-widgets PRIVATE BTA_HAVE_GST=1)
     endif()
     target_compile_options(bta-headless-widgets PRIVATE
+        # See the metadata target: `-O2` merges the GObject class structs and
+        # the linker keeps their GTK vfuncs. This object is only `Widget.*`.
+        -O1
         -ffunction-sections -fdata-sections
         -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow
     )

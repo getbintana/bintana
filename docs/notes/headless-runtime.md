@@ -169,6 +169,9 @@ installed yet.
 
 The `check ide` rows are the same pass, and their output is byte for byte the
 same (`--json` too); the console host uses half the memory and maps no toolkit.
+Those rows are the Debug build (`build/`). On `RelWithDebInfo` (`build-rwd`)
+the same check is **1.63 s and 28.6 MB** against **1.68 s and 57.1 MB** for the
+graphical binary; `--version` stays at 5.6 MB.
 
 **How it is put together.** The widget files are compiled into an object
 library with `BTA_META_ONLY` (the metadata host's stubs); `bta_sys.c` is compiled

@@ -31,6 +31,11 @@ to attack it at all.
 The spreads `bench.sh` printed were 8-341 ms; the two string programs spend
 their time in the C library, not the loop, and moved within theirs.
 
+**A later run, 2026-11-12, on the tree with the console host:** `RelWithDebInfo`
+(`build-rwd`), `taskset -c 2`, load average 4.4, best of three: **28.9 s in
+all** (26.6 s unpinned on the same loaded machine). The same tree in Debug:
+95.0 s. No program moved outside its spread, and the stage 2 gate is unchanged.
+
 **Stage 0 is done**: this table is its first step, and the split of three real
 workloads below is the rest -- which closes the gate on stage 2.
 

@@ -527,6 +527,12 @@ runs both.
   files are compiled once into `bta-headless-widgets` with the define; a
   `set_source_files_properties` would also change the sources in `bintana`, and
   the main binary would build metadata-only props.
+- **The metadata objects are built `-O1`, and that is not a performance
+  choice.** At `-O2` GCC merges the GObject class structs `G_DEFINE_TYPE`
+  builds into a `.data.rel.ro` section the linker cannot split; the vfuncs that
+  point at GtkSourceCompletion are then kept even though their `get_type` is
+  dropped, and a no-GTK link fails on `gtk_source_completion_*`. `-O1` keeps
+  them sectioned; nothing in this target is hot.
 - **`BTA_HEADLESS` is the other define, and it is on the core files.** It leaves
   `Screen`, `Dialog`, `Clipboard` and `File.Open` out of `bta_sys_init` and the
   icon lookup out of `File.Info`; the GUI tables are unreferenced and the linker
