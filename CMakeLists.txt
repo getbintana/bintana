@@ -571,6 +571,112 @@ if(NOT WIN32)
     endif()
 endif()
 
+# ----------------------------------------------------------- console host ---
+# Phase 2's first slice: `bintana-headless --version` and `check`, with the
+# core globals and the metadata rows, and no toolkit in the link.  The widget
+# files are the same `BTA_META_ONLY` ones; `bta_sys.c` leaves out the desktop
+# objects under `BTA_HEADLESS`; `bta_headless.c` supplies the few symbols that
+# live in `bta_runtime.c` today.  Not installed yet: the package split is
+# Stage 1 of docs/plans/distribution-plan.md.
+if(NOT WIN32)
+    set(BTA_HEADLESS_SOURCES
+        runtime/src/bta_headless.c
+        runtime/src/bta_module.c
+        runtime/src/bta_debug.c
+        runtime/src/bta_sys.c
+        runtime/src/bta_form.c
+        runtime/src/bta_locale.c
+        runtime/src/bta_xml.c
+        runtime/src/bta_network.c
+        runtime/src/bta_decimal.c
+        runtime/src/bta_day.c
+        runtime/src/bta_bytes.c
+        runtime/src/bta_cancellable.c
+        ${PRELUDE_H}
+        ${FORMS_H}
+    )
+    # The widget files are metadata-only, and that define must not reach the
+    # core files beside them: an object library is the one CMake shape that
+    # compiles the same sources with a definition for this target alone.
+    set(BTA_HEADLESS_META_SOURCES
+        runtime/src/bta_widget.c
+        runtime/src/bta_controls.c
+        runtime/src/bta_layout.c
+        runtime/src/bta_notebook.c
+        runtime/src/bta_switcher.c
+        runtime/src/bta_paint.c
+        runtime/src/bta_text.c
+        runtime/src/bta_editor.c
+        runtime/src/bta_terminal.c
+        runtime/src/bta_menu.c
+        runtime/src/bta_tree.c
+        runtime/src/bta_table.c
+        runtime/src/bta_media.c
+    )
+    add_library(bta-headless-widgets OBJECT ${BTA_HEADLESS_META_SOURCES})
+    target_include_directories(bta-headless-widgets PRIVATE
+        ${CMAKE_SOURCE_DIR}/runtime/include
+        ${CMAKE_BINARY_DIR}/generated
+        ${GTK4_INCLUDE_DIRS}
+        ${GTKSOURCE_INCLUDE_DIRS}
+        ${VTE_INCLUDE_DIRS}
+        ${GSTREAMER_INCLUDE_DIRS}
+    )
+    target_compile_definitions(bta-headless-widgets PRIVATE
+        BTA_META_ONLY
+        BTA_VERSION_STRING="${PROJECT_VERSION}"
+    )
+    if(VTE_FOUND)
+        target_compile_definitions(bta-headless-widgets PRIVATE BTA_HAVE_VTE=1)
+    endif()
+    if(GSTREAMER_FOUND)
+        target_compile_definitions(bta-headless-widgets PRIVATE BTA_HAVE_GST=1)
+    endif()
+    target_compile_options(bta-headless-widgets PRIVATE
+        -ffunction-sections -fdata-sections
+        -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow
+    )
+    # Object libraries do not propagate a linked target's include paths, and
+    # `bta.h` includes `quickjs.h`; naming it here is the include, and the
+    # executable links the library once.
+    target_link_libraries(bta-headless-widgets PRIVATE quickjs)
+
+    add_executable(bintana-headless ${BTA_HEADLESS_SOURCES})
+    target_include_directories(bintana-headless PRIVATE
+        ${CMAKE_SOURCE_DIR}/runtime/include
+        ${CMAKE_BINARY_DIR}/generated
+        ${GTK4_INCLUDE_DIRS}
+        ${GTKSOURCE_INCLUDE_DIRS}
+        ${VTE_INCLUDE_DIRS}
+        ${GSTREAMER_INCLUDE_DIRS}
+        ${LIBXML_INCLUDE_DIRS}
+    )
+    target_compile_definitions(bintana-headless PRIVATE
+        BTA_HEADLESS
+        BTA_VERSION_STRING="${PROJECT_VERSION}"
+    )
+    if(VTE_FOUND)
+        target_compile_definitions(bintana-headless PRIVATE BTA_HAVE_VTE=1)
+    endif()
+    if(GSTREAMER_FOUND)
+        target_compile_definitions(bintana-headless PRIVATE BTA_HAVE_GST=1)
+    endif()
+    if(LIBXML_FOUND)
+        target_compile_definitions(bintana-headless PRIVATE BTA_HAVE_LIBXML=1)
+        target_link_libraries(bintana-headless PRIVATE PkgConfig::LIBXML)
+    endif()
+    target_link_libraries(bintana-headless PRIVATE
+        quickjs PkgConfig::GLIBCORE bta-headless-widgets)
+    if(NOT WIN32)
+        target_link_libraries(bintana-headless PRIVATE PkgConfig::GIOUNIX)
+    endif()
+    target_compile_options(bintana-headless PRIVATE
+        -ffunction-sections -fdata-sections
+        -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow
+    )
+    target_link_options(bintana-headless PRIVATE -Wl,--gc-sections)
+endif()
+
 # ----------------------------------------------------------- test plugins ---
 # The shared objects the suite loads, built here so `cmake --build build` is the
 # whole of what testing them takes.  They are **not installed**: what this tree

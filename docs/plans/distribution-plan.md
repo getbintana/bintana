@@ -89,10 +89,12 @@ layout and the names above are not placeholders. The staging layer in Stage 1
 takes a list of hosts and a list of data directories, never one hard-coded
 binary.
 
-**The core `bintana` package still waits on Phase 2/3**, because
-`bintana-meta` is a metadata test host and not a console runtime; until the two
-hosts exist, the package that ships is `bintana-desktop`. The staging code is
-written for the split list now, not for one binary.
+**The core `bintana` package still waits for the rest of Phase 2**, because
+`bintana-headless` today runs `check` and not an arbitrary project's `main`;
+until that runner and the installation exist, the package that ships is
+`bintana-desktop`. The staging code is written for the split list now, not for
+one binary. The console binary is 4.1 MB and 17 libraries, and
+`bintana-headless check` already matches the graphical check byte for byte.
 
 **`Package` stays the Flatpak context.** `Deb`, `Rpm` and `AppImage` are
 separate classes beside `Nsis`, because each one consumes a different tree and

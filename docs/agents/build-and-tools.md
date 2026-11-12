@@ -516,6 +516,45 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 - **`tests/api.sh` does not see the stubs.** They are `static inline` in the
   header and not exported names, which is why they are not in `api.json`.
 
+## The console host
+
+**`bintana-headless` is Phase 2's first slice: `--version` and `check`, with no
+toolkit in the link.** It links 17 libraries, and `check ide` answers byte for
+byte what `bintana check ide` answers with half the memory. `tests/headless.sh`
+runs both.
+
+- **`BTA_META_ONLY` is an object library, not a source property.** The widget
+  files are compiled once into `bta-headless-widgets` with the define; a
+  `set_source_files_properties` would also change the sources in `bintana`, and
+  the main binary would build metadata-only props.
+- **`BTA_HEADLESS` is the other define, and it is on the core files.** It leaves
+  `Screen`, `Dialog`, `Clipboard` and `File.Open` out of `bta_sys_init` and the
+  icon lookup out of `File.Info`; the GUI tables are unreferenced and the linker
+  drops them. Without it the link pulls GDK through `File.Info`.
+- **The core tables must stay real.** `Locale`, `Hash`, `Xml`, `Network` and
+  `File` use `JS_CGETSET_DEF`/`JS_CFUNC_DEF`; compiling those files with
+  `BTA_META_ONLY` stubs the properties and `Locale.Text` returns `undefined`.
+  That was the first failure: the check ran but every sentence was
+  `undefined`. `Text.LineOf` is implemented in the host over
+  `bta_line_of_utf16`; the measuring half of `Text` needs Pango and is not here.
+- **`bta_sys_init` is the core object set once the guards are in**, and
+  `bta_headless.c` adds `Logger`, `Text` and empty objects for the graphical
+  names (`Message`, `Printer`, `Database`, `Http`, ...). The empty objects are
+  what keeps `Application.Globals()` honest for `Names.unresolved`; a call to
+  one is a `TypeError` until Phase 3 gives it a sentence.
+- **`bta_modules_scope` goes after `rad.js`/`forms.js`, not before.** It
+  photographs the runtime's names for `Application.FreeNames`; taken before the
+  prelude, every `Regex` in a project was reported as undeclared.
+- **`bta_module_run` takes the compiled module** (`JS_EvalFunction` does); freeing
+  it again aborts in QuickJS. A script from `bta_compile` goes through
+  `JS_EvalFunction`.
+- **The host supplies `bta_lookup_global`, `bta_dump_error`, `bta_symbols`,
+  `bta_split_doc`, `bta_read_file`, `bta_drain_jobs`, `bta_gerror_text`,
+  `bta_errno_text`, `bta_current_app`, `bta_task_hard_cancellable` and the
+  library listing.** They live in `bta_runtime.c` today; Phase 3 moves them to
+  `bta_core.c`. `bta_symbols`/`bta_split_doc` are the same code the graphical
+  host uses, not a second reader.
+
 ## To review later
 
 - **Three files hold a third of the runtime's C**: `bta_widget.c` (9959 lines),

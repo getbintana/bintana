@@ -743,6 +743,13 @@ table that stopped being read is a diff rather than a green run. The
 measurements behind the target are in
 [notes/headless-runtime.md](notes/headless-runtime.md).
 
+**The same script holds the console host.** `bintana-headless --version`,
+`check examples/hello`, and `check --json tests/smoke` are diffed against the
+graphical binary's own answers, and `ldd` is read again. It is the first real
+console runtime, not the test host: it loads `tools/check` and `lib/check`, and
+`check` is byte for byte the graphical pass with **17 libraries against 153**
+and 31.1 MB against 60.2 MB on the IDE's own project.
+
 ## The install, which the suite cannot see either
 
 `tests/install.sh` answers a question none of the suite's projects can be asked:

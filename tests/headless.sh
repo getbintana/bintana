@@ -27,6 +27,12 @@ if [[ ! -x $BINTANA_META ]]; then
     exit 2
 fi
 
+BINTANA_HEADLESS=${BINTANA_HEADLESS:-$(dirname "$BINTANA")/bintana-headless}
+if [[ ! -x $BINTANA_HEADLESS ]]; then
+    echo "no console host at $BINTANA_HEADLESS -- build it: cmake --build build --target bintana-headless" >&2
+    exit 2
+fi
+
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/bta-headless-XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
@@ -75,5 +81,49 @@ for wanted in '"Click"' '"Property"' '"Method"' '"Index"' 'true'; do
         fail=1
     fi
 done
+
+# --- the console host --------------------------------------------------------
+#
+# `--version` is its own answer, and `check --json` is the same pass the
+# graphical binary runs -- the same text, the same lines, the same exit status.
+if "$BINTANA_HEADLESS" --version | grep -q '^bintana-headless '; then
+    echo "the console host says its own version"
+else
+    echo "the console host did not answer --version" >&2
+    fail=1
+fi
+
+if "$BINTANA_HEADLESS" check examples/hello >"$tmp/cli-hello.out" 2>"$tmp/cli-hello.err"; then
+    echo "the console host checks a clean project"
+else
+    echo "the console host failed a clean project:" >&2
+    cat "$tmp/cli-hello.err" >&2
+    fail=1
+fi
+
+if "$BINTANA_HEADLESS" check --json tests/smoke >"$tmp/cli-smoke.out" 2>"$tmp/cli-smoke.err" &&
+   "$BINTANA" check --json tests/smoke >"$tmp/gui-smoke.out" 2>"$tmp/gui-smoke.err"; then
+    if diff -u "$tmp/gui-smoke.out" "$tmp/cli-smoke.out" >"$tmp/smoke.diff"; then
+        echo "the console check answers what the runtime check answers"
+    else
+        echo "the console check and the runtime check disagree:" >&2
+        cat "$tmp/smoke.diff" >&2
+        fail=1
+    fi
+else
+    echo "one of the two checks failed to run" >&2
+    cat "$tmp/cli-smoke.err" "$tmp/gui-smoke.err" >&2
+    fail=1
+fi
+
+if command -v ldd >/dev/null; then
+    if ldd "$BINTANA_HEADLESS" | grep -Eiq 'libgtk|libgtksource|libvte'; then
+        echo "the console host links a toolkit:" >&2
+        ldd "$BINTANA_HEADLESS" | grep -Ei 'libgtk|libgtksource|libvte' >&2
+        fail=1
+    else
+        echo "the console host links no GTK, GtkSourceView or VTE"
+    fi
+fi
 
 exit "$fail"

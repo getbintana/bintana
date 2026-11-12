@@ -1,6 +1,9 @@
 # Un runtime sin GTK: el host de consola
 
-**Estado: Fase 0 medida y Fase 1 probada (2026-11-12); Fase 2 no empezada.**
+**Estado: Fase 0 medida y Fase 1 probada (2026-11-12), y el primer slice de
+Fase 2 construido**: `bintana-headless --version` y `check`, sin GTK, con la
+misma salida que el check gráfico. Lo que falta de Fase 2 es el runner de un
+`main` y el dispatch al host gráfico.
 El spike está en [`docs/notes/headless-runtime.md`](../notes/headless-runtime.md):
 `bintana-meta` compila las filas de clases con stubs, no enlaza GTK, carga
 `forms.js` con los diez captures de `rad.js`, y sus respuestas coinciden con
@@ -176,6 +179,22 @@ la Fase 2 hereda esa idea, o mueve el `bta_symbols` real.
 ## Fase 2 — partir boot y globals (2-4 semanas)
 
 **Objetivo: un target que corre un `main` de verdad sin GTK.**
+
+**Primer slice hecho (2026-11-12): `bintana-headless --version` y `check`.**
+Enlaza 17 bibliotecas (ninguna gráfica), 4,1 MB, y `check ide` da la misma salida
+que el check gráfico con 31,1 MB contra 60,2 MB. Corre `tools/check` y
+`lib/check` como módulos, con las globals core (`File`, `Exec`, `Directory`,
+`Hash`, `Locale`, `Xml`, `Network`, `Text.LineOf`, `Decimal`, `Day`, `Bytes`),
+`Application` con `Symbols`/`FreeNames`/`CheckSource`/`Globals`/`LibraryPath`,
+`rad.js` y `forms.js`. Las clases de widgets son el object library
+`BTA_META_ONLY`; `bta_sys.c` se compila con `BTA_HEADLESS` y deja afuera
+`Screen`/`Dialog`/`Clipboard`/`File.Open`. Los nombres gráficos que faltan
+(`Message`, `Printer`, `Database`, `Http`, ...) son objetos vacíos para que
+`Application.Globals()` no invente "no declarado"; una llamada a uno de ellos
+todavía no tiene su frase de refusal. Lo que falta de esta fase: el runner de un
+`project.btp` arbitrario (`main`), el dispatch a `bintana-gui` para `startup`, y
+la instalación. `tests/headless.sh` corre el meta-host, el check headless y el
+gráfico, y difea las dos respuestas.
 
 1. **`bta_boot.c` (core):** leer `project.btp`, resolver `sources`, `uses`,
    `main`/`startup`, construir el contexto, cargar módulos y `rad.js`. Sacar de

@@ -684,6 +684,7 @@ static JSValue sys_file_info_in(JSContext *ctx, JSValueConst this_val,
      * really draws, by the same rule everything else here follows.
      */
     const char *icon_name = NULL;
+#ifndef BTA_HEADLESS
     GIcon      *icon      = g_file_info_get_icon(info);
 
     if (G_IS_THEMED_ICON(icon)) {
@@ -692,6 +693,10 @@ static JSValue sys_file_info_in(JSContext *ctx, JSValueConst this_val,
             if (bta_icon_available(NULL, names[i]))
                 icon_name = names[i];
     }
+#else
+    /* No theme to ask, and a console tool reads the type, not the picture. */
+    (void)icon_name;
+#endif
     JS_SetPropertyStr(ctx, out, "Icon", JS_NewString(ctx, icon_name ? icon_name : ""));
 
     g_object_unref(info);
@@ -722,6 +727,7 @@ BTA_CANCEL_SCOPED(sys_file_info, "File.Info")
  * A web address is not this: `LinkButton` is what hands a URI to the desktop,
  * and giving a *file* verb two meanings would be the wrong place to put it.
  */
+#ifndef BTA_HEADLESS
 static void on_launched(GObject *source, GAsyncResult *result, gpointer data)
 {
     GError *error = NULL;
@@ -765,6 +771,15 @@ static JSValue sys_file_open(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, path);
     return JS_UNDEFINED;
 }
+#else
+static JSValue sys_file_open(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    (void)this_val; (void)argc; (void)argv;
+    return JS_ThrowPlainError(ctx, "File.Open needs a desktop, and this is the "
+                                   "console host");
+}
+#endif
 
 /* ------------------------------------------------------------- File.Watch
  *
@@ -3630,6 +3645,7 @@ static JSValue screen_get_touch(JSContext *ctx, JSValueConst t)
                       (gdk_seat_get_capabilities(seat) & GDK_SEAT_CAPABILITY_TOUCH));
 }
 
+#ifndef BTA_HEADLESS
 static const JSCFunctionListEntry screen_props[] = {
     /* Width
      *   the width of the monitor the application's **active window** is on —
@@ -3660,6 +3676,7 @@ static const JSCFunctionListEntry screen_props[] = {
      */
     JS_CFUNC_DEF("Monitors", 0, screen_list),
 };
+#endif
 
 /* ------------------------------------------------------------- Clipboard */
 
@@ -5052,9 +5069,11 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyFunctionList(ctx, hash, hash_props, G_N_ELEMENTS(hash_props));
     JS_SetPropertyStr(ctx, global, "Hash", hash);
 
+#ifndef BTA_HEADLESS
     JSValue screen = JS_NewObject(ctx);
     JS_SetPropertyFunctionList(ctx, screen, screen_props, G_N_ELEMENTS(screen_props));
     JS_SetPropertyStr(ctx, global, "Screen", screen);
+#endif
 
     JSValue dir = JS_NewObject(ctx);
     /* List(path, [pattern], [cancellable]) -> string[]
@@ -5221,6 +5240,7 @@ void bta_sys_init(JSContext *ctx, JSValue global)
 
     JS_SetPropertyStr(ctx, global, "Environment", env);
 
+#ifndef BTA_HEADLESS
     JSValue dialog = JS_NewObject(ctx);
     /* SelectFolder(title, [options], cb)
      *   for a directory
@@ -5265,7 +5285,9 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, dialog, "Font",
                       JS_NewCFunction(ctx, sys_font_dialog, "Font", 3));
     JS_SetPropertyStr(ctx, global, "Dialog", dialog);
+#endif
 
+#ifndef BTA_HEADLESS
     JSValue clipboard = JS_NewObject(ctx);
     /* Copy(text)
      *   **immediate**: the text is on the clipboard when the call returns
@@ -5291,6 +5313,7 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, clipboard, "PasteImage",
                       JS_NewCFunction(ctx, sys_clip_paste_image, "PasteImage", 1));
     JS_SetPropertyStr(ctx, global, "Clipboard", clipboard);
+#endif
 }
 
 /*

@@ -153,12 +153,60 @@ host whose prelude did not load; it is not the answer the test exercises.
   whole point is that `check` is the console path; it needs `Widget.*` and the
   C metadata, which this spike proves are there.
 
+## Phase 2: the console host, first slice
+
+`bintana-headless` is the first real console runtime: `--version` and `check`,
+with no GTK in the link. It is not a test host -- it loads `tools/check`, the
+`lib/check` modules and the core globals a check needs -- and it is not
+installed yet.
+
+| command | wall | max RSS | libraries |
+|---|---:|---:|---:|
+| `bintana-headless --version` | 0.00 s | 5.6 MB | 17 |
+| `bintana-headless check examples/hello` | 0.09 s | 14.0 MB | 17 |
+| `bintana-headless check ide` | 5.40 s | 31.1 MB | 17 |
+| `bintana check ide` | 5.50 s | 60.2 MB | 153 |
+
+The `check ide` rows are the same pass, and their output is byte for byte the
+same (`--json` too); the console host uses half the memory and maps no toolkit.
+
+**How it is put together.** The widget files are compiled into an object
+library with `BTA_META_ONLY` (the metadata host's stubs); `bta_sys.c` is compiled
+with `BTA_HEADLESS`, which leaves `Screen`, `Dialog`, `Clipboard` and
+`File.Open` out and keeps `File`, `Directory`, `Exec`, `Hash` and `Environment`.
+`bta_headless.c` is the boot: it installs the core globals, `Application`, rad.js
+and forms.js, then `bta_modules_scope`, then `lib/check` and `tools/check`'s
+`main`. The files `bta_runtime.c` would have supplied -- `bta_lookup_global`,
+`bta_dump_error`, `bta_symbols`, `bta_split_doc`, `bta_read_file`,
+`bta_drain_jobs`, the error text, the library listing -- are in the host.
+
+**What is deliberately a stub.** `Message`, `Dialog`, `Screen`, `Clipboard`,
+`Printer`, `Tray`, `Notification`, `Desktop`, `Popover`, `Keyring`, `Http`,
+`Socket`, `SerialPort`, `Database`, `Task`, `Media` and the rest of the
+graphical/optional surface are **empty objects**, so `Application.Globals()`
+answers the same names the graphical host has and a check does not report a
+false "not declared". A project that calls one gets a `TypeError` today; Phase 3
+replaces each with its refusal sentence. `Application.Replacements()` is empty
+for the same reason: this host does not close the hatches, so the names are
+still there.
+
+`Text.LineOf` is the one measuring answer a check reads, and it is implemented
+in the host over `bta_line_of_utf16`; the rest of `Text` needs Pango and a font
+map and belongs to the graphical host. `File.Info` answers no icon name -- there
+is no theme to ask -- which no check reads.
+
+**What it does not do yet.** A project's `main` is not the command; the host
+runs `tools/check`, not an arbitrary project. There is no dispatch to the
+graphical host, no `bintana-headless <project>`, no Windows target, and the
+binary is not installed. Those are the rest of Phase 2 and Phase 3.
+
 ## Reproducing
 
 ```sh
-cmake --build build --target bintana-meta
+cmake --build build --target bintana-meta bintana-headless
 ./tests/headless.sh
-ldd build/bintana-meta | grep -Ei 'gtk|gtksource|vte'   # no output
+ldd build/bintana-meta build/bintana-headless | grep -Ei 'gtk|gtksource|vte'  # no output
 ```
 
-`tests/headless.sh` needs no display: both halves run a `main` project.
+`tests/headless.sh` needs no display: both the metadata host and the console
+host run a `main` project, and the check it diffs is the graphical one's.
