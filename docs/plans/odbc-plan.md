@@ -8,10 +8,10 @@ not discovered on the second platform.
 
 ## Why ODBC before PostgreSQL
 
-The audit's R1 ([`audit-2026-10.md`](../audit-2026-10.md)) is that a
-client-server business application cannot be written: `Database` publishes
-`Sqlite` alone. The PostgreSQL plan answers it for one server. ODBC answers it
-for whatever server the office already runs — and since the runtime builds on
+The audit's database finding was that a client-server business application
+could not be written: `Database` published `Sqlite` alone. The PostgreSQL plan
+answers it for one server. ODBC answers it for whatever server the office
+already runs — and since the runtime builds on
 Windows ([`portability-plan.md`](portability-plan.md)), that is as likely to be
 SQL Server, MySQL/MariaDB, Firebird or an Access file as PostgreSQL.
 

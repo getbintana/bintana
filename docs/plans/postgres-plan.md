@@ -1,13 +1,13 @@
 # PostgreSQL: `Database.Postgres`, the second driver
 
-**Status: planned, not started (2026-11-09).** This is the answer to **R1** of
-[the October audit](../audit-2026-10.md): `Database` publishes `Sqlite` alone,
-so a client-server business application cannot be written. It takes the place of
-the issue that was the report; the gap is now a design, and the report is
-deleted. **Since 2026-11-11 it follows [`odbc-plan.md`](odbc-plan.md)**, which
-reaches every server through one driver and designs the `Dialect` growth below
-for N engines; this plan stays for what ODBC does not give -- no driver to
-install, a Flatpak, a `timestamptz` with its offset, TLS named by the runtime.
+**Status: planned, not started (2026-11-09).** This is the native driver after
+`Database.Odbc`, which answered the October audit's database finding -- that
+`Database` published `Sqlite` alone, so a client-server business application
+could not be written. **Since 2026-11-11 it follows
+[`odbc-plan.md`](odbc-plan.md)**, which reaches every server through one driver
+and designs the `Dialect` growth below for N engines; this plan stays for what
+ODBC does not give -- no driver to install, a Flatpak, a `timestamptz` with its
+offset, TLS named by the runtime.
 
 ## What the application needed
 

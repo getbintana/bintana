@@ -2,24 +2,17 @@
 
 `Http.Server` is built, documented under `runtime-api.md`'s `## Http Server`
 and `llm/library.md`'s, tested by `tests/widgets`' `testHttpServer` and shown
-by `examples/serve`. What that leaves is this file: two things the design
-deliberately reserved, with the argument for each written down so that
-picking one up does not mean having the conversation again. (The third, a
-deferred answer, is built: `req.Hold()`.)
+by `examples/serve`. What that leaves is this file: the one thing the design
+deliberately reserved, with the argument written down so that picking it up
+does not mean having the conversation again.
+
+Two of the three are built since: a deferred answer is `req.Hold()`, and
+WebSocket is `Http.Server.WebSocket` with the `WebSocket` client and
+server-side connection (see [`transports-plan.md`](transports-plan.md)).
 
 The stance is the client's, and does not move: callbacks stay canonical, and
 there is no `Promise`, `async` or `fetch` to seat anything on. A request
 arrives as an event with a handler.
-
-## WebSocket
-
-Reserved, not rejected. `soup_server_add_websocket_handler` exists.
-
-Frames are a second protocol with their own lifetime -- a connection that
-outlives every request -- so it is a feature of its own rather than a flag on
-this one. It would want its own object, its own events, and its own answer to
-what happens when the form that opened it closes. Nothing in the current
-surface is in its way.
 
 ## CGI/WSGI shapes
 

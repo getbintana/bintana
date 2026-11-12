@@ -18,13 +18,13 @@ picks up the rest does not have to have the argument again.
 ## Why this is the gap that matters
 
 Put the IDE beside the environments the [README](../README.md) names — Visual
-Basic and Gambas — and beside Delphi and Lazarus, and four things are missing:
+Basic and Gambas — and beside Delphi and Lazarus, and four things were missing:
 a debugger, packaging, a form bound to a table, and printing. Three of the four
-have a substitute today. Exporting hands over the project tree; `SavePdf` writes
-the page a printer would; a screen over a table is written by hand, twice, in
+had a substitute then. Exporting handed over the project tree; `SavePdf` wrote
+the page a printer would; a screen over a table was written by hand, twice, in
 [`examples/quote`](../../examples/quote) and [`examples/clients`](../../examples/clients).
 
-**Debugging has none.** It is `Logger.Debug`, save, run, read the pane. Every
+**Debugging had none.** It was `Logger.Debug`, save, run, read the pane. Every
 other environment in this family has had breakpoints since the nineties.
 
 ## What *complete* means

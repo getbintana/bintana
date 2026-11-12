@@ -6,7 +6,101 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
-### Runtime and IDE
+### Language and IDE
+
+- **The project manifest is `project.btp`.** `project.json` becomes
+  `project.btp` across the tree; a project written before the rename still runs
+  from the old name, and nothing new writes it. The type is registered, a double
+  click opens the project in the IDE, and `bintana`, `bintana test` and
+  `bintana check` take the file as well as the directory.
+- **`Application.FreeNames`** answers the names a piece of source uses and
+  nothing declares, and `bintana check` reports them. Name collisions are loud
+  now: a control's sealed method, a project class that hides one, and a name two
+  modules export used with no `import` are refused with the place and the name.
+- **`Application.Theme`** forces light or dark for the program, and the form's
+  `ThemeChange` arrives with the new colours; `""` puts the desktop's back.
+- **`Application.ProtectPrototype`** closes `Object.prototype` to new names, so
+  a plugin cannot polyfill into every `for...in` in the program.
+- A `.form` raises no handler by name while it loads: `Index`, `Text` and a
+  component's `Value` declared in the file reach none of `Select`, `Change` or
+  the component's own event, where the program's own assignments still do.
+- **`Editor.Format`** reindents the selection or the whole file, and the IDE
+  renames a local, a parameter or a class field across the project.
+- **The debugger is complete**: hit counts on a breakpoint and a logpoint, a
+  breakpoint inside a `Task` stopping on the worker's thread while the window
+  runs, Pause reaching a spinning task, edit and continue a member at a time,
+  data breakpoints on a task's objects, the value of a name under the pointer,
+  the Breakpoints page, and *Debug tests* for the test under the caret. DAP is
+  the one thing written down to evaluate.
+- **History is a page of the side panel**, beside Changes: the commits, the
+  files each touched, and the diff opened in the **Git tab** in the main panel.
+  The changes list, the ticks and the commit box stay in Changes, so there is one
+  sidebar and no duplicate; the tab is the diff, titled `diff: <file> (<branch>)`
+  for a change and `Commit: <file> (<branch>)` for one from History, and
+  fetch/pull/push are the menus'. Its bar has icon buttons for previous/next
+  difference, jump to file and previous/next changed file, with the old Side by
+  side/Unified toggle on the right. The old Changes and History windows remain
+  as the first shape and as the suite's own.
+- **The IDE's Data view**: a project's `.conn` files, a form's `Connection` part
+  and a loose `.db` are one entry per path, with tables, columns, a schema and a
+  SQL console. `ConnectionForm` edits sqlite and ODBC connections, and an ODBC
+  password is the name of an environment variable, never in the file.
+- **The report designer** drags the bands and their elements on the page, and a
+  `Report` with `Input`/`Signature` is a fillable PDF form.
+- A control subclass declared in the project is drawn as the runtime control it
+  extends, with its own design values, without evaluating the class.
+- The accessibility level is a project setting, and the IDE's check reports at
+  it.
+
+### Data
+
+- **`Database.Odbc`**, one API for the server the office runs -- SQL Server,
+  MySQL/MariaDB, PostgreSQL, Firebird, an Access file -- on unixODBC and
+  `odbc32`: `Query`, `Execute`, `Script`, `Each`, `Transaction`, `Columns`,
+  `Tables`, `Dialect`, and `Table`/`Cursor`/`Model` on any engine. The text
+  layer is UTF-8 on unixODBC and UTF-16 on Windows, the driver's SQLSTATE is
+  `Code`, and a `Decimal` stays exact where the driver reports it exactly.
+  `ConnectionPart` takes `Driver: "Odbc"`, and `examples/invoices` is a billing
+  screen over three models and one transaction.
+- **`Database.Sqlite` completed** as the model a second driver answers:
+  `Cursor`, `Each`, the language's order in a statement (`COLLATE LOCALE`) and
+  an `Update` that writes only what changed.
+- **`lib/datagrid`**: frozen columns, a row of totals under each column, one
+  sort across both halves, groups, a rectangle of cells, copy and paste to a
+  spreadsheet, and the selection and hover shared by both halves.
+- **PDF**: `PdfDocument` reads (poppler) and writes (PoDoFo), encrypts with
+  AES-256, `Probe.Pdf` measures without a window, `lib/pdfview` shows a page,
+  `Printer.Preview` previews what `DrawPage` draws, and `PdfDocument.Sign` signs
+  with a `Key` from a file, a smart card or a PKCS#11 token; `Signatures`
+  verifies.
+- **`Bitmap`** loads once and scales, crops, rotates and flips into new
+  pictures; `Picture.Source` shows one and `Painter.Image` draws one.
+- **`Cipher`** is AES-256-GCM, and `Key` loads PEM, DER, PKCS#12 and encrypted
+  PKCS#8 keys.
+- `examples/sales` is a year of sales in a `DataGrid`.
+
+### Runtime and libraries
+
+- **Transports**: `Socket`/`ServerSocket` (TCP and Unix, TLS with a CA or a
+  pin), `UdpSocket` (unicast and broadcast), `WebSocket` (client and
+  `Http.Server` upgrade), `SmtpClient` (plain or implicit TLS) and
+  `SerialPort`, each a part a form can own.
+- **`Http.Server` `req.Hold([timeout])`** lets a handler answer from a callback,
+  with one `Answer`, a deadline, and a 503 when it passes.
+- **`Media.Devices`** lists the cameras and `Video.Attach` shows a pipeline;
+  `examples/camera` previews, photographs and records.
+- **`GridRow`/`GridColumn`/`GridRowSpan`** place a child at a cell; `-1`
+  follows the order, so every form written before keeps its layout.
+- **`TextBox.Mask`** and **`TextBox.Completion`**: the shape of what is typed,
+  and a list of words offered without restricting the text.
+- **`Direction`** is left-to-right, right-to-left or inherited, with mirrored
+  icons and `Start`/`End` swapped in a `Fixed`.
+- **`TableView`** gained a rectangle of cells, a tree folded from the keyboard,
+  `Hover`/`HoverRow`, `ScrollX`, `ColumnWidths`, `Headers`, `ColumnResize`, Tab
+  leaving the grid, and `AddRows`/`NodeToggle`.
+- **`lib/propertygrid`** edits an object's properties as rows.
+
+### Platform and parts
 
 - **`SerialPort` works on Windows.** `Open` is `CreateFileW` on `COM3` (or
   `\\.\COM3`) and a `DCB` for speed, data bits, parity, stop bits, flow control
@@ -77,7 +171,8 @@ one-page answer to *what is new since the release I have*.
 - **`SerialPort`**, a serial device on the main loop: `PortName`, `Speed`,
   `DataBits`, `Parity`, `StopBits`, `FlowControl`, `Line`/`EndOfLine`,
   `Data`/`Line`/`Error`, queued `Write`/`WriteLine`, and the `FormPart`.
-  Linux over POSIX `termios`; the Windows half refuses and says so.
+  Linux over POSIX `termios`; the Windows half is the `CreateFileW`/`DCB`
+  implementation above.
 - **`Dialog.Font(title, [current], cb)`** is the desktop's font chooser, the
   same asynchronous bargain as `Dialog.Color`: the callback is handed a Pango
   description (`"Cantarell Bold 12"`), exactly what `Widget.Font` takes, and is
@@ -188,6 +283,10 @@ one-page answer to *what is new since the release I have*.
 - A View menu for the panels and the editor's look; snippets, folding and the
   minimap; a Problems panel that repairs what it can; the outline, completion
   and rename follow what a module exports.
+- **Arrange in boxes** turns a region of a `Fixed` form into rows, columns and
+  grids, keeping the names and handlers, with the editor taking the height and
+  each row's gap; overlapping controls are refused and the whole arrangement is
+  one undo.
 - **The debugger** opens an object's values a level at a time (`expand`), stops
   where a field changes (`watch`), runs to the cursor, records logpoints, and
   *Project → Run with profiling* writes a Sysprof capture.

@@ -161,7 +161,6 @@ and in [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/l
 | a mnemonic on a control | The marker lives inside translated prose and collisions are silent. Controls have `Shortcut`; menus have mnemonics |
 | reading a supplier's invoice out of its PDF (the number, the date, the lines) | Its layout is the supplier's, not PDF's: every supplier is a parser. `PdfDocument.Text(page)` is the text in reading order, which is what a search, an index or a program's own parser starts from |
 | a blocking `MsgBox` | GTK4's dialogs are asynchronous. A question is a form |
-| `Promise` / `async` | This is a language of events. Sequences are callbacks |
 | `setTimeout` | `Timer.After` |
 | `Object.keys` and the rest of `Object` | `Dictionary`, and `get`/`set` in a class |
 | a box container class | A container with `Arrangement: "Horizontal"` *is* one |
@@ -175,11 +174,9 @@ needed and what it did instead.
 
 | Gap | Where it is written down |
 |---|---|
-| A **form** bound to a table — a control that names a field and fills itself | [`docs/plans/data-plan.md`](../plans/data-plan.md). The records-over-a-table half exists: [`Database.Sqlite` and `Table`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md#database-and-table) |
-| The debugger stops in the program's own runtime and **not in a `Task`** — a background computation is unbreakpointable and unsteppable, and `Error` with its stack is the whole of what its failure says | [library.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md#task). The other ten of the eleven are built: [`docs/plans/debug-plan.md`](../plans/debug-plan.md). A loop written entirely on one line also stops only once |
 | Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
-| `Database` publishes `Sqlite` alone | [`docs/plans/postgres-plan.md`](../plans/postgres-plan.md) |
+| A **native PostgreSQL driver** — `Database.Odbc` reaches PostgreSQL, SQL Server, MySQL and Firebird through the machine's driver, but a program that cannot ask for one (a Flatpak, an installation that ships its own runtime) has no libpq driver | [`docs/plans/postgres-plan.md`](../plans/postgres-plan.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 
