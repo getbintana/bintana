@@ -518,16 +518,27 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 
 ## The console host
 
-**`bintana-headless` is Phase 2's first slice: `--version` and `check`, with no
-toolkit in the link.** It links 17 libraries, and `check ide` answers byte for
-byte what `bintana check ide` answers with half the memory. `tests/headless.sh`
-runs both.
+**`bintana-headless` is Phase 2's console host: `--version`, `check`, and a
+project's `main`, with no toolkit in the link.** It links 17 libraries, and
+`check ide` answers byte for byte what `bintana check ide` answers with half the
+memory. `tests/headless.sh` runs both, and diffs the console run of a fixture
+project against the graphical one.
 
 - **The console host links no widget file.** `bintana-meta --dump` writes
   `check/widgets.json` from the real rows, property tables, both preludes and
   the generated signatures; `runtime/js/widget-meta.js` answers `Widget.*` over
   it. The data is 1.7 MB and loads only for `check`; the binary is 2.9 MB.
   A `main` that never asks for a widget never sees `Widget` at all.
+- **`bta_project.c` is the boot both hosts share, and it must stay toolkit-free.**
+  It holds `project.btp`, `uses`, the six-place library search and the source
+  order; `bta_runtime.c` and `bta_headless.c` both link it. A GTK call added
+  there breaks the console link, and a second copy of the search would let the
+  two hosts resolve a library differently. `bta_project_libs` exits 2 on a name
+  that is nowhere, so both hosts stop with the same sentence.
+- **The console runner refuses `startup`; it does not open one.** It names the
+  form and says the host has no display, and exits 2. The arguments after the
+  project become `Application.Arguments`, exactly as in the graphical host.
+  Dispatch to the graphical binary is Phase 3; do not fake it with a stub form.
 - **`BTA_META_ONLY` belongs to `bintana-meta` now, and it is built `-O1`.**
   At `-O2` GCC merges the GObject class structs `G_DEFINE_TYPE` builds into a
   `.data.rel.ro` section the linker cannot split; the vfuncs that point at
@@ -560,10 +571,11 @@ runs both.
   `JS_EvalFunction`.
 - **The host supplies `bta_lookup_global`, `bta_dump_error`, `bta_symbols`,
   `bta_split_doc`, `bta_read_file`, `bta_drain_jobs`, `bta_gerror_text`,
-  `bta_errno_text`, `bta_current_app`, `bta_task_hard_cancellable` and the
-  library listing.** They live in `bta_runtime.c` today; Phase 3 moves them to
-  `bta_core.c`. `bta_symbols`/`bta_split_doc` are the same code the graphical
-  host uses, not a second reader.
+  `bta_errno_text`, `bta_current_app` and `bta_task_hard_cancellable`.** They
+  live in `bta_runtime.c` today; Phase 3 moves them to `bta_core.c`. The
+  library listing is already shared, in `bta_project.c`. `bta_symbols` and
+  `bta_split_doc` are the same code the graphical host uses, not a second
+  reader.
 
 ## To review later
 

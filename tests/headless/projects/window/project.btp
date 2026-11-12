@@ -1,0 +1,5 @@
+{
+  "name": "headless-window",
+  "description": "A window project, used to hold the console host to its refusal",
+  "startup": "MainForm"
+}

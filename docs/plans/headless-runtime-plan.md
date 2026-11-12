@@ -1,15 +1,15 @@
 # Un runtime sin GTK: el host de consola
 
-**Estado: Fase 0 medida y Fase 1 probada (2026-11-12), y el primer slice de
-Fase 2 construido**: `bintana-headless --version` y `check`, sin GTK, con la
-misma salida que el check gráfico. Lo que falta de Fase 2 es el runner de un
-`main` y el dispatch al host gráfico.
+**Estado: Fase 0 medida y Fase 1 probada (2026-11-12), y Fase 2 en curso**:
+`bintana-headless --version`, `check` y el `main` de un proyecto corren sin GTK,
+con la misma salida que el runtime gráfico. Lo que falta de Fase 2 es el dispatch
+al host gráfico y la instalación.
 El spike está en [`docs/notes/headless-runtime.md`](../notes/headless-runtime.md):
 `bintana-meta` compila las filas de clases con stubs, no enlaza GTK, carga
 `forms.js` con los diez captures de `rad.js`, y sus respuestas coinciden con
 las del runtime gráfico en `Types`, `PropertyNames` (con `DataField`),
 `Methods`, `Members` (con `Doc`), eventos, firmas, textos, opciones, diferidos
-y `Available`. Lo que falta es el host de consola de la Fase 2.
+y `Available`.
 
 **La distribución espera su Fase 1**:
 [`distribution-plan.md`](distribution-plan.md) no fija los nombres ni las
@@ -180,28 +180,37 @@ la Fase 2 hereda esa idea, o mueve el `bta_symbols` real.
 
 **Objetivo: un target que corre un `main` de verdad sin GTK.**
 
-**Primer slice hecho (2026-11-12): `bintana-headless --version` y `check`.**
-Enlaza 17 bibliotecas (ninguna gráfica), **2,9 MB** (más un `widgets.json` de
-1,7 MB que solo carga para `check`), y `check ide` da la misma salida que el
-check gráfico con 35,5 MB contra 60,2 MB en Debug, **32,8 contra 57,2 MB** en
-`RelWithDebInfo`. Corre `tools/check` y `lib/check` como módulos, con las globals
-core (`File`, `Exec`, `Directory`, `Hash`, `Locale`, `Xml`, `Network`,
-`Text.LineOf`, `Decimal`, `Day`, `Bytes`), `Application` con
-`Symbols`/`FreeNames`/`CheckSource`/`Globals`/`LibraryPath` y `rad.js`. **No
-enlaza ningún archivo de widgets:** `bintana-meta --dump` genera
+**Primer slice hecho (2026-11-12): `bintana-headless --version`, `check` y el
+`main` de un proyecto.** Enlaza 17 bibliotecas (ninguna gráfica), **2,9 MB**
+(más un `widgets.json` de 1,7 MB que solo carga para `check`), y `check ide` da
+la misma salida que el check gráfico con 35,5 MB contra 60,2 MB en Debug,
+**32,8 contra 58,0 MB** en `RelWithDebInfo`. Corre `tools/check` y `lib/check`
+como módulos, con las globals core (`File`, `Exec`, `Directory`, `Hash`,
+`Locale`, `Xml`, `Network`, `Text.LineOf`, `Decimal`, `Day`, `Bytes`),
+`Application` con `Symbols`/`FreeNames`/`CheckSource`/`Globals`/`LibraryPath` y
+`rad.js`. **No enlaza ningún archivo de widgets:** `bintana-meta --dump` genera
 `check/widgets.json` de las filas y firmas reales, y `widget-meta.js` responde
 `Widget.*` sobre ese documento solo cuando corre `check`. `bta_sys.c` se compila
 con `BTA_HEADLESS` y deja afuera `Screen`/`Dialog`/`Clipboard`/`File.Open`. Los
 nombres gráficos que faltan (`Message`, `Printer`, `Database`, `Http`, ...) son
 objetos vacíos para que `Application.Globals()` no invente "no declarado"; una
-llamada a uno de ellos todavía no tiene su frase de refusal. Lo que falta de
-esta fase: el runner de un `project.btp` arbitrario (`main`), el dispatch a
-`bintana-gui` para `startup`, y la instalación. `tests/headless.sh` corre el
-meta-host, el check headless y el gráfico, y difea las dos respuestas.
+llamada a uno de ellos todavía no tiene su frase de refusal. **El boot de
+proyecto es compartido:** `bta_project.c` lee `project.btp`, resuelve `uses` y
+ordena las fuentes para los dos hosts, así que una librería se busca igual en
+consola y en gráfico. `bintana-headless <proyecto>` corre el `main` (con los
+argumentos en `Application.Arguments`) y **refusa un `startup` nombrando el
+formulario y la falta de display**; un `main` no ve `Widget`, porque la metadata
+es un documento de `check`, no un toolkit. Lo que falta de esta fase: el
+dispatch a `bintana-gui` para `startup` y la instalación. `tests/headless.sh`
+corre el meta-host, el check headless, el runner y el gráfico, y difea las
+respuestas.
 
 1. **`bta_boot.c` (core):** leer `project.btp`, resolver `sources`, `uses`,
    `main`/`startup`, construir el contexto, cargar módulos y `rad.js`. Sacar de
    `bta_runtime.c` lo que no toca GTK. `bta_app_new`/`bta_app_free` quedan acá.
+   **En curso:** `bta_project.c` ya tiene el manifiesto, `uses`, la búsqueda de
+   librerías y el orden de fuentes, compartidos por los dos hosts; falta mover
+   el contexto y `bta_app_new`/`bta_app_free`.
 2. **`bta_core_globals.c`:** la mitad core de `install_globals`: `print`,
    `Logger`, `Application` (sin iconos/decorations), `Message` (stderr sin
    display), `Locale`, `File`, `Exec`, `Environment`, `Http`, `Socket`, `Serial`,
@@ -217,7 +226,9 @@ meta-host, el check headless y el gráfico, y difea las dos respuestas.
    desaparece en silencio.
 4. **`bta_headless.c`:** `run_console` movido de `bta_runtime.c`, con el
    instalador core. Sin `GtkApplication`, sin `gtk_init`, sin `forms.js` si se
-   decidió no cargarlo.
+   decidió no cargarlo. **Hecho para `main` y `check`:** `run_project` y
+   `run_check` comparten `install_core`, sin toolkit y sin metadata para un
+   `main`.
 5. **`bta_gui.c`:** `GtkApplication`, `on_activate`, `run_gui`, `--form`,
    `--theme`, `--text-scale`, `--rtl`, alertas, iconos.
 6. **`bta_classes.c`:** filas de metadata y las funciones `Widget.*` sin GTK; la

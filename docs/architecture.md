@@ -4,8 +4,13 @@
 
 ```
 main.c            argv -> project directory
-bta_runtime.c     interpreter setup, globals, project loading, the GTK main loop
+bta_runtime.c     interpreter setup, the graphical globals, the GTK main loop
                   -- and the console one, for a project that declares `main`
+bta_project.c     project.btp, `uses`, the library search path and load order;
+                  the boot both hosts share, with no toolkit in it
+bta_util.c        bta_to_number and bta_to_int, needed by every host and by
+                  the network and XML globals rather than by the widgets alone
+bta_headless.c    the console host: version, check, and a project's `main`
 bta_widget.c      the base Widget: geometry, Style and colours, events, drag and
                   drop, the class table machinery, lifetimes
 bta_controls.c    Form, Container, Panel, Label, Button, Image, TextBox,
@@ -16,7 +21,6 @@ bta_layout.c      Split, Frame, Overlay, RowList, Scroller, Flow
 bta_notebook.c    Notebook
 bta_switcher.c    Switcher (GtkStackSwitcher over a GtkStack)
 bta_paint.c       DrawingArea (GtkDrawingArea) and Painter (cairo)
-                  ...and in bta_runtime.c: `uses`, the library search path
 bta_text.c        Editor (abstract) and TextEditor (GtkTextView)
 bta_editor.c      SourceEditor (GtkSourceView), on top of Editor
 bta_terminal.c    Terminal (VTE on Linux, ConPTY + libvterm on Windows;

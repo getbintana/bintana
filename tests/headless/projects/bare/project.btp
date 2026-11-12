@@ -1,0 +1,6 @@
+{
+  "name": "headless-bare",
+  "main": "Main",
+  "description": "Asks the bare host what it does not have",
+  "sources": ["Main.js"]
+}

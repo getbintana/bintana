@@ -1,8 +1,9 @@
 # The headless runtime: Phase 0 measured, Phase 1 spiked
 
-**Status: Phase 0 measured and the Phase 1 spike passed on the C half
-(2026-11-12, Linux).** Phase 2 and 3 are not started; the prelude's JavaScript
-half is still the open decision. The design is
+**Status: Phase 0 measured, the Phase 1 spike passed, and Phase 2's console
+host runs `check` and a project's `main` (2026-11-12, Linux).** The remaining
+Phase 2 work is dispatch to a graphical host and the installation; the
+prelude's JavaScript half is now carried as data for `check`. The design is
 [`plans/headless-runtime-plan.md`](../plans/headless-runtime-plan.md).
 
 ## What Phase 0 measured
@@ -155,10 +156,10 @@ host whose prelude did not load; it is not the answer the test exercises.
 
 ## Phase 2: the console host, first slice
 
-`bintana-headless` is the first real console runtime: `--version` and `check`,
-with no GTK in the link. It is not a test host -- it loads `tools/check`, the
-`lib/check` modules and the core globals a check needs -- and it is not
-installed yet.
+`bintana-headless` is the first real console runtime: `--version`, `check`, and
+a project's `main`, with no GTK in the link. It is not a test host -- it loads
+`tools/check`, `lib/check`, and an arbitrary console project with the libraries
+its `uses` names -- and it is not installed yet.
 
 | command | wall | max RSS | libraries |
 |---|---:|---:|---:|
@@ -166,13 +167,18 @@ installed yet.
 | `bintana-headless check examples/hello` | 0.08 s | 20.8 MB | 17 |
 | `bintana-headless check ide` | 5.83 s | 35.5 MB | 17 |
 | `bintana check ide` | 5.60 s | 60.2 MB | 153 |
+| `bintana-headless tests/headless/projects/run` (a `main`) | 0.01 s | 8.7 MB | 17 |
+| `bintana tests/headless/projects/run` | 0.04 s | 43.3 MB | 153 |
 
 The `check ide` rows are the same pass, and their output is byte for byte the
 same (`--json` too); the console host uses less memory and maps no toolkit.
-Those rows are the Debug build (`build/`). On `RelWithDebInfo` (`build-rwd`)
-the same check is **1.48 s and 32.8 MB** against **1.52 s and 58.0 MB** for the
-graphical binary; `--version` stays at 5.6 MB. The binary is **2.9 MB**; the
-metadata document it loads for `check` is **1.7 MB**.
+The `check` rows are the Debug build (`build/`). On `RelWithDebInfo`
+(`build-rwd`) the same check is **1.48 s and 32.8 MB** against **1.52 s and
+58.0 MB** for the graphical binary; `--version` stays at 5.6 MB. The two
+project rows are `RelWithDebInfo`, and a `main` over a tiny library costs the
+console host **8.7 MB against 43.3 MB** -- the toolkit is mapped before the
+graphical runtime's `main` even reads `project.btp`. The binary is **2.9 MB**;
+the metadata document it loads for `check` is **1.7 MB**.
 
 **How it is put together.** The console host links **no widget file**. At build
 time `bintana-meta --dump` writes `check/widgets.json` from the real class rows,
@@ -180,13 +186,27 @@ their property tables, both preludes and the generated signatures;
 `runtime/js/widget-meta.js` reads that document and answers `Widget.*` from it.
 `bta_sys.c` is compiled with `BTA_HEADLESS`, which leaves `Screen`, `Dialog`,
 `Clipboard` and the GTK `File.Open` out and keeps `File`, `Directory`, `Exec`,
-`Hash` and `Environment`. `bta_headless.c` is the boot: core globals,
-`Application`, `rad.js`, then -- for `check` only -- the metadata document,
-`bta_modules_scope`, `lib/check` and `tools/check`'s `main`. The files
-`bta_runtime.c` would have supplied -- `bta_lookup_global`, `bta_dump_error`,
-`bta_symbols`, `bta_split_doc`, `bta_read_file`, `bta_drain_jobs`, the error
-text, the library listing -- are in the host. `bintana-meta` is the generator
-and the test; it is not installed.
+`Hash` and `Environment`. **`bta_project.c` is the boot both hosts share**:
+`project.btp`, `uses`, the six-place library search and the order sources load
+in. It has no toolkit in it, so `bintana-headless` resolves a library the same
+way `bintana` does instead of keeping a second answer. `bta_headless.c` is the
+rest of the host: core globals, `Application`, `rad.js`, then either the
+project's libraries, sources and `main`, or -- for `check` only -- the metadata
+document, `bta_modules_scope`, `lib/check` and `tools/check`'s `main`. The
+files `bta_runtime.c` would have supplied -- `bta_lookup_global`,
+`bta_dump_error`, `bta_symbols`, `bta_split_doc`, `bta_read_file`,
+`bta_drain_jobs` and the error text -- are in the host.
+`bintana-meta` is the generator and the test; it is not installed.
+
+**`bintana-headless <project>` runs a `main`.** The words after the project are
+`Application.Arguments`, exactly as the graphical runtime hands them over; a
+project that declares `startup` instead is refused with a sentence that names
+the form and says this host has no display. A `main` that names a widget sees
+no `Widget` at all -- the metadata is a `check` document, not a toolkit -- and
+the language's own `ReferenceError` is the answer, not a stub that pretends.
+`tests/headless/projects/` holds the three fixtures the shell test uses: a
+console project with a library, a window project for the refusal, and one that
+asks `typeof Widget`.
 
 **What is deliberately a stub.** `Message`, `Dialog`, `Screen`, `Clipboard`,
 `Printer`, `Tray`, `Notification`, `Desktop`, `Popover`, `Keyring`, `Http`,
@@ -205,12 +225,12 @@ in the host over `bta_line_of_utf16`; the rest of `Text` needs Pango and a font
 map and belongs to the graphical host. `File.Info` answers no icon name -- there
 is no theme to ask -- which no check reads.
 
-**What it does not do yet.** A project's `main` is not the command; the host
-runs `tools/check`, not an arbitrary project. There is no dispatch to the
-graphical host, no `bintana-headless <project>`, no Windows target, and the
-binary is not installed. Those are the rest of Phase 2 and Phase 3. A `main`
-that names a widget in this host sees no `Widget` at all: the metadata is loaded
-only for `check`.
+**What it does not do yet.** There is no dispatch to the graphical host: a
+`startup` project is refused with its form's name, not launched, and the words
+after it are not yet forwarded. The binary is not installed, the Windows target
+does not exist, and the Phase 2 acceptance projects -- `tests/report`'s
+`testDocument`, `tests/media`, and `tests/api` with its `Widget.*` -- are still
+the graphical host's. Those are the rest of Phase 2 and Phase 3.
 
 ## Reproducing
 

@@ -752,6 +752,16 @@ the graphical pass with **17 libraries against 153** and about 33 MB against
 58 MB on the IDE's own project. The binary links no widget file; the document
 is 1.7 MB and is loaded only for `check`.
 
+**It runs a project's `main` too, and the fixtures are in
+`tests/headless/projects/`.** `run` is a console project with a library in
+`lib/greeting`: the script runs it through both hosts and diffs the output, so
+`uses`, the library-first load order and `Application.Arguments` are held to
+the graphical answer. `bare` prints `typeof Widget` and must say `undefined` --
+the console host has no toolkit even for a `main`. `window` declares `startup`
+and is refused with exit 2 and the form's name in the sentence, since dispatch
+to the graphical host is Phase 3. The console run costs **8.7 MB against
+43.3 MB** on the same fixture.
+
 ## The install, which the suite cannot see either
 
 `tests/install.sh` answers a question none of the suite's projects can be asked:

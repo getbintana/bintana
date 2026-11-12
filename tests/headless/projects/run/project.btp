@@ -1,0 +1,8 @@
+{
+  "name": "headless-run",
+  "version": "1.0",
+  "main": "Main",
+  "description": "A console project the headless host runs: a library first, then its own sources, then project.btp's main",
+  "uses": ["greeting"],
+  "sources": ["Main.js"]
+}

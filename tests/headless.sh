@@ -116,6 +116,61 @@ else
     fail=1
 fi
 
+# --- the project runner ------------------------------------------------------
+#
+# A project that declares `main` runs here, and the answer is the graphical
+# runtime's: the same library first, the same sources, the same words after the
+# project in `Application.Arguments`. The console host has no window, so a
+# project that declares `startup` is refused by naming the form.
+if "$BINTANA_HEADLESS" run tests/headless/projects/run one two \
+        >"$tmp/headless-run.out" 2>"$tmp/headless-run.err"; then
+    echo "the console host runs a project's main"
+else
+    echo "the console host failed a console project:" >&2
+    cat "$tmp/headless-run.err" >&2
+    fail=1
+fi
+
+if "$BINTANA" tests/headless/projects/run one two \
+        >"$tmp/gui-run.out" 2>"$tmp/gui-run.err"; then
+    if diff -u "$tmp/gui-run.out" "$tmp/headless-run.out" >"$tmp/run.diff"; then
+        echo "the console run answers what the runtime run answers"
+    else
+        echo "the console run and the runtime run disagree:" >&2
+        cat "$tmp/run.diff" >&2
+        fail=1
+    fi
+else
+    echo "the runtime failed the fixture project:" >&2
+    cat "$tmp/gui-run.err" >&2
+    fail=1
+fi
+
+# The binary links no widget file, and the metadata document is loaded only for
+# `check`: a `main` gets the language's own answer for `Widget`.
+if out=$("$BINTANA_HEADLESS" tests/headless/projects/bare 2>"$tmp/bare.err") &&
+   [[ $out == undefined ]]; then
+    echo "the bare host has no Widget for a main"
+else
+    echo "the bare host answered '$out' about Widget" >&2
+    cat "$tmp/bare.err" >&2
+    fail=1
+fi
+
+"$BINTANA_HEADLESS" tests/headless/projects/window \
+    >"$tmp/window.out" 2>"$tmp/window.err"
+window_status=$?
+if [[ $window_status -eq 2 ]] &&
+   grep -q "startup 'MainForm'" "$tmp/window.err" &&
+   grep -q "no display" "$tmp/window.err"; then
+    echo "the console host refuses a window project, naming the form"
+else
+    echo "the console host did not refuse a window project: exit " \
+         "$window_status" >&2
+    cat "$tmp/window.err" >&2
+    fail=1
+fi
+
 if command -v ldd >/dev/null; then
     if ldd "$BINTANA_HEADLESS" | grep -Eiq 'libgtk|libgtksource|libvte'; then
         echo "the console host links a toolkit:" >&2

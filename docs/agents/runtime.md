@@ -746,7 +746,9 @@ icon when the theme has one by that name (`gtkapplication.c`).
   died with no message at all -- found while testing something unrelated, and
   costing a `gdb` backtrace to identify because there was nothing to read. It is
   a refusal now (`bta_ctor`): *a project with a `main` has no display, so it
-  cannot make widgets*.
+  cannot make widgets*. `bintana-headless` goes further and does not install the
+  class at all for a `main`: the metadata document is loaded only for `check`,
+  so the answer there is the language's `ReferenceError` and not a stub.
 - **A library is a directory, and the runtime finds it one hop from its own
   binary.** `"uses": ["charts"]` in project.btp resolves over the project's
   `lib/`, `$BINTANA_LIB_PATH`, `~/.local/share/bintana/lib`, `<bin>/../lib` (the
@@ -759,9 +761,12 @@ icon when the theme has one by that name (`gtkapplication.c`).
   like the class loading and the form silently not. The search is published in
   **both directions** and neither belongs anywhere else: `Application.LibraryPath`
   resolves one name, `Application.Libraries` says which names there are, and both
-  walk `lib_candidates` in `bta_runtime.c`. The IDE ticks libraries in its project
-  dialog off the second; a copy of that path in JavaScript would be the copy that
-  goes stale, because the C one is what every program runs.
+  walk `bta_library_candidates` in `runtime/src/bta_project.c`. **That file is
+  also the console host's**, so the project manifest, `uses` and the load order
+  have one definition in `bintana` and `bintana-headless`; do not add a GTK call
+  there, and do not grow a second search in either host. The IDE ticks libraries
+  in its project dialog off the second; a copy of that path in JavaScript would
+  be the copy that goes stale, because the C one is what every program runs.
 - **In a console project, an asynchronous `Exec` says nothing while you poll
   with `Exec.Wait`.** Line and exit callbacks arrive on the default main
   context, and `Exec.Wait` iterates a private one — so a `for` loop that waits

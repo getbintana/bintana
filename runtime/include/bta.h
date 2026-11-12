@@ -945,6 +945,30 @@ JSValue bta_lookup_global(JSContext *ctx, const char *name);
  * owns the result. */
 JSValue bta_symbols(JSContext *ctx, const char *src);
 
+/* --- projects and libraries (bta_project.c) ------------------------------ */
+/* The project directory a command-line argument names: the directory itself,
+ * or the one a `project.btp` handed over as a file sits in. Free it. */
+char *bta_project_dir(const char *path);
+/* `<dir>/project.btp`, or the old `project.json` when it is the only one. */
+char *bta_project_manifest(const char *dir);
+/* A string key out of a parsed manifest, or `fallback` when it is absent or
+ * is not text. */
+char *bta_project_string(JSContext *ctx, JSValueConst cfg, const char *key,
+                         const char *fallback);
+/* Every `.js` under a directory, subdirectories included. `root` skips the
+ * project's own `tests/`, which a run never loads. */
+void bta_collect_js(GPtrArray *out, const char *dir, bool root);
+/* Where a library may be, most specific first; the array owns its paths. */
+void bta_library_candidates(const char *project, GPtrArray *out);
+/* The directory of the first place `name` is, or NULL with `tried` naming the
+ * places that were not. Free the answer. */
+char *bta_library_resolve(const char *project, const char *name, GString *tried);
+/* What `uses` named, resolved; a name that is nowhere stops the program. */
+GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg);
+/* The project's files in load order, a library's sources in front of them. */
+GPtrArray *bta_project_sources(JSContext *ctx, const char *dir, GPtrArray *libs,
+                               JSValueConst cfg);
+
 /* --- modules (bta_module.c, docs/plans/modules-plan.md) ------------------- */
 /* Compiles `src` as a script, or as a module when only that compiles -- the
  * further of the two compiles decides, and its error is the one thrown.  The
@@ -987,7 +1011,7 @@ void    bta_modules_scope(JSContext *ctx, const char *project, GPtrArray *libs);
 bool    bta_module_done(JSContext *ctx, const char *path);
 /* Around a compile that only checks a text: no import reads the disk. */
 void    bta_modules_checking(JSContext *ctx, bool on);
-/* A library's `.js` files in the order it loads them (bta_runtime.c). */
+/* A library's `.js` files in the order it loads them (bta_project.c). */
 GPtrArray *bta_library_sources(JSContext *ctx, const char *dir);
 /* The files its `project.btp` names for a `Task` worker, or NULL when it
  * declares none.  An empty array is "no safe worker files", not "no key". */

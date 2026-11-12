@@ -280,6 +280,7 @@ endif()
 add_executable(bintana
     runtime/src/main.c
     runtime/src/bta_runtime.c
+    runtime/src/bta_project.c
     runtime/src/bta_util.c
     runtime/src/bta_module.c
     runtime/src/bta_journal.c
@@ -589,6 +590,7 @@ endif()
 if(NOT WIN32)
     set(BTA_HEADLESS_SOURCES
         runtime/src/bta_headless.c
+        runtime/src/bta_project.c
         runtime/src/bta_util.c
         runtime/src/bta_module.c
         runtime/src/bta_debug.c

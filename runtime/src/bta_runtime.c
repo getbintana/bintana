@@ -3090,195 +3090,6 @@ void bta_close_hatches(JSContext *ctx)
 
 /* ---------------------------------------------------------------- project */
 
-static char *json_str(JSContext *ctx, JSValueConst obj, const char *key,
-                      const char *fallback)
-{
-    JSValue v = JS_GetPropertyStr(ctx, obj, key);
-    char   *out;
-
-    if (JS_IsString(v)) {
-        const char *s = JS_ToCString(ctx, v);
-        out = g_strdup(s);
-        JS_FreeCString(ctx, s);
-    } else {
-        out = g_strdup(fallback);
-    }
-    JS_FreeValue(ctx, v);
-    return out;
-}
-
-/* Every .js under a directory, subdirectories included: a project is allowed to
- * organise its classes in folders, and one that lists no sources still means
- * "all of my code". */
-/* `root` is the project directory: its `tests/` is `bintana test`'s and is
- * never loaded by a run, listed or not (see `Test` in rad.js). */
-static void collect_js(GPtrArray *out, const char *dir, bool root)
-{
-    GDir *d = g_dir_open(dir, 0, NULL);
-    if (!d)
-        return;
-
-    const char *name;
-    while ((name = g_dir_read_name(d))) {
-        if (name[0] == '.')
-            continue;   /* .git and whatever else a project keeps to itself */
-        if (root && g_str_equal(name, "tests"))
-            continue;
-
-        char *path = g_build_filename(dir, name, NULL);
-        if (g_file_test(path, G_FILE_TEST_IS_DIR)) {
-            collect_js(out, path, false);
-            g_free(path);
-        } else if (g_str_has_suffix(name, ".js")) {
-            g_ptr_array_add(out, path);
-        } else {
-            g_free(path);
-        }
-    }
-    g_dir_close(d);
-}
-
-/*
- * ------------------------------------------------------------------ libraries
- *
- * `"uses": ["charts"]` in project.btp, and where a library by that name lives.
- *
- * **A library is a directory of `.js` and `.form` files.** No manifest, no
- * version, no dependency of its own: the thing a project is short of is a place
- * for shared *classes*, and a directory of them is the whole of what that takes.
- * Its sources load before the project's, and its forms are indexed with the
- * project's, which is what lets a `.form` say `"type": "Chart"` about a class
- * that is not in the project tree.
- *
- * **Six places, most specific first**, and the reason each is there:
- *
- *   <project>/lib/<name>            the project's own copy, or a private library
- *   $BINTANA_LIB_PATH (colon separated) developing a library outside any tree
- *   ~/.local/share/bintana/lib     installed for one person, without root
- *   <binary>/../lib                 **the source tree**, uninstalled
- *   <binary>/../share/bintana/lib  installed beside the binary
- *   /usr/share/bintana/lib         a distribution's, with the binary elsewhere
- *
- * The two that resolve from the binary are the same relative hop, and that is
- * deliberate: `bin/` and `share/bintana/` move together under `--prefix` and
- * under a packager's DESTDIR, where a path baked in at configure time does not.
- * It is the argument `tools/bintana-ide.in` already makes for the launcher, applied
- * inside the runtime -- and it is what makes `./build/bintana examples/charts` find
- * `lib/charts` in the source tree with nothing configured and nothing installed.
- *
- * The order follows the icon theme's, which this codebase already walks in
- * `tests/icons`: the user's own, then the system's. A library is data, and data
- * is looked up the way the desktop looks up data.
- */
-static void lib_candidates(const char *project, GPtrArray *out)
-{
-    if (project && *project)
-        g_ptr_array_add(out, g_build_filename(project, "lib", NULL));
-
-    const char *env = g_getenv("BINTANA_LIB_PATH");
-    if (env && *env) {
-        /* `G_SEARCHPATH_SEPARATOR` and not a colon: the variable holds paths,
-         * and on Windows a path begins with `C:` -- splitting on the colon
-         * there cuts the first one in two. */
-        char **parts = g_strsplit(env, G_SEARCHPATH_SEPARATOR_S, -1);
-        for (int i = 0; parts[i]; i++)
-            if (*parts[i])
-                g_ptr_array_add(out, g_strdup(parts[i]));
-        g_strfreev(parts);
-    }
-
-    g_ptr_array_add(out, g_build_filename(g_get_user_data_dir(), "bintana",
-                                          "lib", NULL));
-
-    char *exe = bta_exe_path();
-    if (exe) {
-        char *bin = g_path_get_dirname(exe);
-        char *up  = g_path_get_dirname(bin);
-
-        g_ptr_array_add(out, g_build_filename(up, "lib", NULL));
-        g_ptr_array_add(out, g_build_filename(up, "share", "bintana", "lib", NULL));
-        g_free(up);
-        g_free(bin);
-        g_free(exe);
-    }
-    g_ptr_array_add(out, g_build_filename("/usr", "share", "bintana", "lib", NULL));
-}
-
-/* The directory, or NULL with `tried` filled in -- because a library that is not
- * there has to say where it was looked for, or the answer is unactionable. */
-static char *lib_resolve(const char *project, const char *name, GString *tried)
-{
-    GPtrArray *where = g_ptr_array_new_with_free_func(g_free);
-    char      *found = NULL;
-
-    lib_candidates(project, where);
-
-    for (guint i = 0; i < where->len && !found; i++) {
-        char *path = g_build_filename(g_ptr_array_index(where, i), name, NULL);
-
-        if (g_file_test(path, G_FILE_TEST_IS_DIR))
-            found = path;
-        else {
-            if (tried)
-                g_string_append_printf(tried, "\n  %s", path);
-            g_free(path);
-        }
-    }
-    g_ptr_array_free(where, TRUE);
-    return found;
-}
-
-/*
- * What "uses" named, resolved. A name that is not there **stops the program**:
- * a library whose classes half the forms refer to is not something to carry on
- * without, and the failure a moment later would be `unknown widget type 'Chart'`
- * with nothing about a missing library in it.
- */
-static GPtrArray *collect_libs(BtaApp *app, JSValueConst cfg)
-{
-    GPtrArray *out = g_ptr_array_new_with_free_func(g_free);
-    JSContext *ctx = app->ctx;
-    JSValue    arr = JS_GetPropertyStr(ctx, cfg, "uses");
-
-    if (!JS_IsArray(arr)) {
-        JS_FreeValue(ctx, arr);
-        return out;
-    }
-
-    JSValue  lenv = JS_GetPropertyStr(ctx, arr, "length");
-    uint32_t n    = 0;
-    JS_ToUint32(ctx, &n, lenv);
-    JS_FreeValue(ctx, lenv);
-
-    for (uint32_t i = 0; i < n; i++) {
-        JSValue     e    = JS_GetPropertyUint32(ctx, arr, i);
-        const char *name = JS_ToCString(ctx, e);
-
-        if (name && *name) {
-            GString *tried = g_string_new(NULL);
-            char    *dir   = lib_resolve(app->dir, name, tried);
-
-            if (dir) {
-                g_ptr_array_add(out, dir);
-            } else {
-                fprintf(stderr, "bintana: project.btp uses \"%s\", which is not "
-                                "in any of:%s\n", name, tried->str);
-                g_string_free(tried, TRUE);
-                JS_FreeCString(ctx, name);
-                JS_FreeValue(ctx, e);
-                g_ptr_array_free(out, TRUE);
-                JS_FreeValue(ctx, arr);
-                exit(2);
-            }
-            g_string_free(tried, TRUE);
-        }
-        JS_FreeCString(ctx, name);
-        JS_FreeValue(ctx, e);
-    }
-    JS_FreeValue(ctx, arr);
-    return out;
-}
-
 static JSValue js_library_path(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
 {
@@ -3296,8 +3107,8 @@ static JSValue js_library_path(JSContext *ctx, JSValueConst this_val,
     }
 
     BtaApp *app = bta_current_app();
-    char   *dir = lib_resolve(project ? project : (app ? app->dir : NULL),
-                              name, NULL);
+    char   *dir = bta_library_resolve(
+        project ? project : (app ? app->dir : NULL), name, NULL);
     JSValue out = JS_NewString(ctx, dir ? dir : "");
 
     g_free(dir);
@@ -3310,10 +3121,10 @@ static JSValue js_library_path(JSContext *ctx, JSValueConst this_val,
 /*
  * Every library a project could name, out of the same six places.
  *
- * **A directory is a library**, which is exactly what `lib_resolve` decides
- * with: anything stricter here -- "it must hold a `.js`" -- would be a second
- * opinion about what a library is, and the two would disagree about some
- * directory on somebody's machine. A name found twice is listed once and means
+ * **A directory is a library**, which is exactly what
+ * `bta_library_resolve` decides with: anything stricter here -- "it must hold a
+ * `.js`" -- would be a second opinion about what a library is, and the two
+ * would disagree about some directory on somebody's machine. A name found twice is listed once and means
  * the first one, because that is the one `uses` would load.
  *
  * Sorted, for the reason `Icons` is sorted: whoever asks is about to show them
@@ -3332,7 +3143,7 @@ static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
     BtaApp    *app   = bta_current_app();
     GPtrArray *where = g_ptr_array_new_with_free_func(g_free);
 
-    lib_candidates(project ? project : (app ? app->dir : NULL), where);
+    bta_library_candidates(project ? project : (app ? app->dir : NULL), where);
 
     JSValue     out  = JS_NewArray(ctx);
     /* Owning the keys, so the names outlive the `GDir` they were read from. */
@@ -3373,175 +3184,6 @@ static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
     JS_FreeValue(ctx, r);
     JS_FreeValue(ctx, sort);
     return out;
-}
-
-/*
- * The manifest's path: `project.btp`, the project's one name, and the old
- * `project.json` still read when it is the only one. The fallback is what lets
- * a tree written before the rename run without being touched; the IDE is where
- * one is migrated, and nothing new writes the old name.
- */
-static char *project_manifest(const char *dir)
-{
-    char *path = g_build_filename(dir, "project.btp", NULL);
-
-    if (g_file_test(path, G_FILE_TEST_IS_REGULAR))
-        return path;
-
-    g_free(path);
-    return g_build_filename(dir, "project.json", NULL);
-}
-
-/*
- * A library's own `.js`: the order it loads them on the main thread, and the
- * subset a `Task` worker may import.
- *
- * **A library may carry a `project.btp`, and two of its keys are read.**
- * `sources` orders the library's own files; one class needs no order and most
- * libraries will not have the file, but one whose classes extend each other
- * does -- `BarChart extends Chart` sorts the wrong way round by path, which is
- * the same reason a project has `sources` at all. `worker` names the files a
- * worker may import, for a library whose `sources` include a module that
- * extends `Component`; its absence keeps the old answer (the sources list,
- * with scripts skipped), and an empty list says there is no safe subset.
- * Reusing the names is the whole of the mechanism: anybody who has written a
- * project already knows them, and there is no second manifest format to learn
- * or to keep working.
- *
- * Nothing else in that file means anything here: a library is not a project and
- * `bintana <library>` is not a thing to do.
- *
- * One list at a time: NULL when the file is absent, cannot be read, is not
- * JSON, or `key` is not an array -- the caller decides what to fall back to.
- * An **empty array** is a real answer: the library declared no files for that
- * purpose.
- */
-static GPtrArray *library_list(JSContext *ctx, const char *dir, const char *key)
-{
-    GPtrArray *out  = NULL;
-    char      *path = project_manifest(dir);
-    char      *text = NULL;
-
-    if (g_file_test(path, G_FILE_TEST_IS_REGULAR))
-        text = bta_read_file(path, NULL);
-    g_free(path);
-    if (!text)
-        return NULL;
-
-    JSValue cfg = JS_ParseJSON(ctx, text, strlen(text), "library");
-
-    if (JS_IsException(cfg)) {
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        fprintf(stderr, "bintana: %s's project file is not JSON; loading its "
-                        "files by path\n", dir);
-    } else {
-        JSValue arr = JS_GetPropertyStr(ctx, cfg, key);
-
-        if (JS_IsArray(arr)) {
-            JSValue  lenv = JS_GetPropertyStr(ctx, arr, "length");
-            uint32_t n    = 0;
-
-            JS_ToUint32(ctx, &n, lenv);
-            JS_FreeValue(ctx, lenv);
-            out = g_ptr_array_new_with_free_func(g_free);
-            for (uint32_t i = 0; i < n; i++) {
-                JSValue     e = JS_GetPropertyUint32(ctx, arr, i);
-                const char *f = JS_ToCString(ctx, e);
-
-                if (f && *f)
-                    g_ptr_array_add(out, g_build_filename(dir, f, NULL));
-                JS_FreeCString(ctx, f);
-                JS_FreeValue(ctx, e);
-            }
-        }
-        JS_FreeValue(ctx, arr);
-        JS_FreeValue(ctx, cfg);
-    }
-    g_free(text);
-    return out;
-}
-
-GPtrArray *bta_library_sources(JSContext *ctx, const char *dir)
-{
-    GPtrArray *out = library_list(ctx, dir, "sources");
-
-    if (!out)
-        out = g_ptr_array_new_with_free_func(g_free);
-
-    /* No list, an empty one, or a file that would not parse: every `.js` in it,
-     * sorted by path -- the same fallback and the same limit a project has. */
-    if (out->len == 0) {
-        collect_js(out, dir, true);
-        g_ptr_array_sort_values(out, (GCompareFunc)g_strcmp0);
-    }
-    return out;
-}
-
-/*
- * The files a library says a `Task` worker may import, or NULL when it has no
- * `worker` key.  An empty list is a declaration that the library has no safe
- * half, and is not the same as the key's absence: the worker loader falls back
- * to `sources` only for the absence.
- */
-GPtrArray *bta_library_worker_sources(JSContext *ctx, const char *dir)
-{
-    return library_list(ctx, dir, "worker");
-}
-
-/* Explicit "sources" order wins; otherwise every .js in the project, sorted,
- * so that at least the ordering is reproducible. */
-static GPtrArray *collect_sources(BtaApp *app, JSValueConst cfg)
-{
-    GPtrArray *out = g_ptr_array_new_with_free_func(g_free);
-    JSContext *ctx = app->ctx;
-    JSValue    arr = JS_GetPropertyStr(ctx, cfg, "sources");
-
-    if (JS_IsArray(arr)) {
-        JSValue lenv = JS_GetPropertyStr(ctx, arr, "length");
-        uint32_t n = 0;
-        JS_ToUint32(ctx, &n, lenv);
-        JS_FreeValue(ctx, lenv);
-
-        for (uint32_t i = 0; i < n; i++) {
-            JSValue     e = JS_GetPropertyUint32(ctx, arr, i);
-            const char *s = JS_ToCString(ctx, e);
-            if (s)
-                g_ptr_array_add(out, g_build_filename(app->dir, s, NULL));
-            JS_FreeCString(ctx, s);
-            JS_FreeValue(ctx, e);
-        }
-    }
-    JS_FreeValue(ctx, arr);
-
-    if (out->len == 0) {
-        collect_js(out, app->dir, true);
-        /* By path, so that a project without a "sources" list at least loads
-         * the same way twice.  Which is all sorting can promise: a class that
-         * extends another has to be loaded after it, and only an explicit list
-         * can say so. */
-        g_ptr_array_sort_values(out, (GCompareFunc)g_strcmp0);
-    }
-
-    /*
-     * **A library's sources go in front of the project's**, whichever way the
-     * project's were chosen: a project's class may extend a library's, and never
-     * the other way round.
-     */
-    GPtrArray *first = g_ptr_array_new_with_free_func(g_free);
-
-    for (guint i = 0; app->libs && i < app->libs->len; i++) {
-        const char *dir  = g_ptr_array_index(app->libs, i);
-        GPtrArray  *mine = bta_library_sources(ctx, dir);
-
-        for (guint j = 0; j < mine->len; j++)
-            g_ptr_array_add(first, g_strdup(g_ptr_array_index(mine, j)));
-        g_ptr_array_free(mine, TRUE);
-    }
-    for (guint i = 0; i < out->len; i++)
-        g_ptr_array_add(first, g_strdup(g_ptr_array_index(out, i)));
-
-    g_ptr_array_free(out, TRUE);
-    return first;
 }
 
 /*
@@ -3597,16 +3239,9 @@ BtaApp *bta_app_new(const char *project_dir)
     BtaApp *app = g_new0(BtaApp, 1);
 
     app->startup_form = JS_UNDEFINED;   /* not all-zero: g_new0 is not enough */
-    app->dir = g_canonicalize_filename(project_dir, NULL);
-
     /* A manifest handed over as a file (`bintana project.btp`) names the
      * project by the directory it sits in; the file itself is read below. */
-    if (g_file_test(app->dir, G_FILE_TEST_IS_REGULAR)) {
-        char *parent = g_path_get_dirname(app->dir);
-
-        g_free(app->dir);
-        app->dir = parent;
-    }
+    app->dir = bta_project_dir(project_dir);
 
     app->rt  = JS_NewRuntime();
     if (!app->rt) {
@@ -3678,7 +3313,7 @@ BtaApp *bta_app_new(const char *project_dir)
     app->id      = g_strdup("");
     app->startup = g_strdup("Form1");
 
-    char *cfg_path = project_manifest(app->dir);
+    char *cfg_path = bta_project_manifest(app->dir);
     size_t len;
     char  *cfg_src = bta_read_file(cfg_path, &len);
 
@@ -3691,13 +3326,13 @@ BtaApp *bta_app_new(const char *project_dir)
             g_free(app->version);
             g_free(app->id);
             g_free(app->startup);
-            app->name    = json_str(app->ctx, cfg, "name", "app");
-            app->version = json_str(app->ctx, cfg, "version", "");
-            app->id      = json_str(app->ctx, cfg, "id", "");
-            /* `json_str` falls back for a value that is not text, which for
-             * the id meant `"id": 5` was the same as no id -- the silence the
-             * refusal below exists to end. Anything present and not text is
-             * refused by the same door. */
+            app->name    = bta_project_string(app->ctx, cfg, "name", "app");
+            app->version = bta_project_string(app->ctx, cfg, "version", "");
+            app->id      = bta_project_string(app->ctx, cfg, "id", "");
+            /* `bta_project_string` falls back for a value that is not text,
+             * which for the id meant `"id": 5` was the same as no id -- the
+             * silence the refusal below exists to end. Anything present and
+             * not text is refused by the same door. */
             JSValue idv = JS_GetPropertyStr(app->ctx, cfg, "id");
             bool    bad = !JS_IsUndefined(idv) && !JS_IsString(idv);
             JS_FreeValue(app->ctx, idv);
@@ -3717,12 +3352,12 @@ BtaApp *bta_app_new(const char *project_dir)
             }
             app->single = JS_ToBool(app->ctx, sv) > 0;
             JS_FreeValue(app->ctx, sv);
-            app->startup = json_str(app->ctx, cfg, "startup", "Form1");
+            app->startup = bta_project_string(app->ctx, cfg, "startup", "Form1");
             /* A project declares one or the other: "startup" opens a form,
              * "main" calls a function and never touches the display. */
-            app->entry   = json_str(app->ctx, cfg, "main", NULL);
-            app->libs    = collect_libs(app, cfg);
-            app->sources = collect_sources(app, cfg);
+            app->entry   = bta_project_string(app->ctx, cfg, "main", NULL);
+            app->libs    = bta_project_libs(app->ctx, app->dir, cfg);
+            app->sources = bta_project_sources(app->ctx, app->dir, app->libs, cfg);
         }
         JS_FreeValue(app->ctx, cfg);
         g_free(cfg_src);
@@ -3760,7 +3395,7 @@ BtaApp *bta_app_new(const char *project_dir)
 
     if (!app->sources) {
         JSValue empty = JS_NewObject(app->ctx);
-        app->sources = collect_sources(app, empty);
+        app->sources = bta_project_sources(app->ctx, app->dir, app->libs, empty);
         JS_FreeValue(app->ctx, empty);
     }
 
@@ -3812,7 +3447,7 @@ void bta_app_free(BtaApp *app)
     g_clear_pointer(&theme_forced, g_free);
     g_free(app->test_filter);
     g_free(app->entry);
-    /* Owns its paths (collect_libs builds it with g_free as the element free
+    /* Owns its paths (bta_project_libs builds it with g_free as the element free
      * func), and only bta_plugins_load reads it -- which is long done. */
     if (app->libs)
         g_ptr_array_unref(app->libs);

@@ -98,39 +98,6 @@ const char *bta_errno_text(int errnum)
     return text;
 }
 
-/* The `.js` files of a library directory, sorted. The graphical host's search
- * is six places wide and belongs to Phase 3; a library the host itself uses is
- * one directory, and this is the listing the module loader consumes. */
-static gint path_cmp(gconstpointer a, gconstpointer b)
-{
-    return g_strcmp0(*(const char *const *)a, *(const char *const *)b);
-}
-
-GPtrArray *bta_library_sources(JSContext *ctx, const char *dir)
-{
-    (void)ctx;
-    GPtrArray *out = g_ptr_array_new_with_free_func(g_free);
-    GDir      *d   = dir ? g_dir_open(dir, 0, NULL) : NULL;
-    const char *name;
-
-    if (!d)
-        return out;
-
-    while ((name = g_dir_read_name(d)) != NULL)
-        if (g_str_has_suffix(name, ".js"))
-            g_ptr_array_add(out, g_build_filename(dir, name, NULL));
-
-    g_dir_close(d);
-    g_ptr_array_sort(out, path_cmp);
-    return out;
-}
-
-GPtrArray *bta_library_worker_sources(JSContext *ctx, const char *dir)
-{
-    (void)ctx; (void)dir;
-    return NULL;
-}
-
 /* ---------------------------------------------------------- the language */
 
 static bool is_class_path(const char *name)
@@ -178,8 +145,15 @@ JSValue bta_lookup_global(JSContext *ctx, const char *name)
     return v;
 }
 
+/* Whether any error was reported. A callback that throws after `main` returned
+ * still has to reach the exit status, or a runner reads "it worked" over a
+ * traceback -- the failure `run_console` fixes with `app->uncaught`. */
+static bool headless_uncaught;
+
 void bta_dump_error(JSContext *ctx)
 {
+    headless_uncaught = true;
+
     JSValue     exc = JS_GetException(ctx);
     const char *msg = JS_ToCString(ctx, exc);
     JSValue     st  = JS_IsObject(exc) ? JS_GetPropertyStr(ctx, exc, "stack")
@@ -581,47 +555,6 @@ static JSValue js_application_replacements(JSContext *ctx, JSValueConst this_val
     return JS_NewObject(ctx);
 }
 
-/* The places a library may be, in the order the CLI's own tree offers them. */
-static char *find_library(const char *name, const char *project)
-{
-    GPtrArray *tried = g_ptr_array_new_with_free_func(g_free);
-    char      *exe   = bta_exe_path();
-
-    if (project && *project) {
-        char *dir = g_canonicalize_filename(project, NULL);
-        for (int up = 0; up < 4 && dir && *dir; up++) {
-            g_ptr_array_add(tried, g_build_filename(dir, "lib", name, NULL));
-            char *parent = g_path_get_dirname(dir);
-            if (g_strcmp0(parent, dir) == 0) {
-                g_free(parent);
-                break;
-            }
-            g_free(dir);
-            dir = parent;
-        }
-        g_free(dir);
-    }
-    if (exe) {
-        char *bin = g_path_get_dirname(exe);
-        char *up  = g_path_get_dirname(bin);
-        g_ptr_array_add(tried, g_build_filename(up, "lib", name, NULL));
-        g_ptr_array_add(tried, g_build_filename(up, "share", "bintana", "lib",
-                                                name, NULL));
-        g_free(up);
-        g_free(bin);
-        g_free(exe);
-    }
-    g_ptr_array_add(tried, g_build_filename("/usr", "share", "bintana", "lib",
-                                            name, NULL));
-
-    char *found = NULL;
-    for (guint i = 0; i < tried->len && !found; i++)
-        if (g_file_test(tried->pdata[i], G_FILE_TEST_IS_DIR))
-            found = g_strdup(tried->pdata[i]);
-    g_ptr_array_unref(tried);
-    return found;
-}
-
 static JSValue js_application_library_path(JSContext *ctx, JSValueConst this_val,
                                            int argc, JSValueConst *argv)
 {
@@ -633,7 +566,7 @@ static JSValue js_application_library_path(JSContext *ctx, JSValueConst this_val
         return JS_ThrowTypeError(ctx, "Application.LibraryPath(name) needs a name");
     }
 
-    char  *found = find_library(name, project);
+    char  *found = bta_library_resolve(project, name, NULL);
     JSValue out  = JS_NewString(ctx, found ? found : "");
 
     g_free(found);
@@ -1025,13 +958,16 @@ static int run_check(int argc, char **argv)
         return 2;
     }
 
-    char *library = find_library("check", tools);
+    GString *tried   = g_string_new(NULL);
+    char    *library = bta_library_resolve(tools, "check", tried);
     if (!library) {
-        fprintf(stderr, "bintana-headless: lib/check is not where the binary "
-                        "or the project looks\n");
+        fprintf(stderr, "bintana-headless: lib/check is not in any of:%s\n",
+                tried->str);
+        g_string_free(tried, TRUE);
         g_free(tools);
         return 2;
     }
+    g_string_free(tried, TRUE);
 
     /* The options may come before the target, so they travel as they were
      * written: `tools/check` is the parser, and `File.Absolute` resolves the
@@ -1112,13 +1048,15 @@ static int run_check(int argc, char **argv)
     bta_modules_scope(ctx, tools, libs);
 
     GPtrArray *files = bta_library_sources(ctx, library);
-    for (guint i = 0; i < files->len; i++)
-        if (!eval_file(ctx, files->pdata[i]))
-            break;
+    bool       ok    = true;
+
+    for (guint i = 0; i < files->len && ok; i++)
+        ok = eval_file(ctx, files->pdata[i]);
     g_ptr_array_unref(files);
 
     char *main_js = g_build_filename(tools, "Main.js", NULL);
-    bool  ok      = eval_file(ctx, main_js);
+    if (ok)
+        ok = eval_file(ctx, main_js);
     g_free(main_js);
 
     if (ok) {
@@ -1147,7 +1085,174 @@ static int run_check(int argc, char **argv)
     JS_FreeRuntime(rt);
     g_ptr_array_unref(libs);
     g_free(tools); g_free(library);
-    return ok ? 0 : 1;
+    return ok && !headless_uncaught ? 0 : 1;
+}
+
+/* The console loop's own tick: stop once the services that answer later have
+ * nothing left. It is the check `run_console` makes, for the services this host
+ * links -- a `main` that starts a `Network.Reach` must not exit before the
+ * answer arrives and its callback runs. */
+static gboolean project_idle(gpointer data)
+{
+    GMainLoop *loop = data;
+
+    if (bta_sys_pending() + bta_network_pending() > 0)
+        return G_SOURCE_CONTINUE;
+
+    g_main_loop_quit(loop);
+    return G_SOURCE_REMOVE;
+}
+
+/*
+ * `bintana-headless [run] <project> [args...]`: the project's own `main`.
+ *
+ * A project that declares `startup` instead opens a window, and this host has
+ * no display: it refuses by naming the form, rather than failing later with a
+ * `ReferenceError` about a widget. Dispatch to the graphical host is Phase 3.
+ *
+ * The classes are the core's. `Widget` is not installed for a `main` -- a
+ * console project that asks for a control does not get a stub that pretends;
+ * it gets the language's own "not defined", which is the truth about this
+ * binary.
+ */
+static int run_project(int argc, char **argv)
+{
+    if (argc < 1) {
+        fprintf(stderr, "usage: bintana-headless [run] <project> [args...]\n");
+        return 2;
+    }
+
+    char   *dir      = bta_project_dir(argv[0]);
+    char   *manifest = bta_project_manifest(dir);
+    size_t  len      = 0;
+    char   *text     = bta_read_file(manifest, &len);
+
+    if (!text) {
+        fprintf(stderr, "bintana-headless: no project.btp in %s\n", dir);
+        g_free(manifest);
+        g_free(dir);
+        return 2;
+    }
+
+    JSRuntime *rt = JS_NewRuntime();
+    if (!rt) {
+        g_free(text); g_free(manifest); g_free(dir);
+        return 2;
+    }
+    JS_SetMaxStackSize(rt, 2 * 1024 * 1024);
+
+    JSContext *ctx = headless_context(rt);
+    if (!ctx) {
+        JS_FreeRuntime(rt);
+        g_free(text); g_free(manifest); g_free(dir);
+        return 2;
+    }
+
+    int      status = 1;
+    JSValue  global = JS_GetGlobalObject(ctx);
+    JSValue  cfg    = JS_UNDEFINED;
+    JSValue  entry  = JS_UNDEFINED;
+    GPtrArray *libs = NULL, *sources = NULL;
+    char    *name = NULL, *version = NULL, *startup = NULL, *entry_name = NULL;
+
+    JS_SetPropertyStr(ctx, global, "print",
+                      JS_NewCFunction(ctx, headless_print, "print", 1));
+    JS_SetPropertyStr(ctx, global, "BTA_VERSION",
+                      JS_NewString(ctx, BTA_VERSION_STRING));
+
+    cfg = JS_ParseJSON(ctx, text, len, manifest);
+    if (JS_IsException(cfg)) {
+        bta_dump_error(ctx);
+        goto out;
+    }
+
+    char *base    = g_path_get_basename(dir);
+    name          = bta_project_string(ctx, cfg, "name", base);
+    version       = bta_project_string(ctx, cfg, "version", "");
+    startup       = bta_project_string(ctx, cfg, "startup", "Form1");
+    entry_name    = bta_project_string(ctx, cfg, "main", NULL);
+    g_free(base);
+
+    if (!entry_name) {
+        fprintf(stderr,
+                "bintana-headless: '%s' opens a window (startup '%s'); this "
+                "host has no display. Run it with the graphical bintana.\n",
+                name, startup);
+        status = 2;
+        goto out;
+    }
+
+    /* The words after the project are the program's, as `Application.Arguments`
+     * describes them in the graphical runtime. */
+    install_application(ctx, global, dir, name, version, argv + 1, argc - 1);
+    libs    = bta_project_libs(ctx, dir, cfg);
+    sources = bta_project_sources(ctx, dir, libs, cfg);
+    install_core(ctx, global, dir, libs);
+
+    if (!load_prelude(ctx))
+        goto out;
+
+    bta_modules_scope(ctx, dir, libs);
+
+    /* `sources` already carries every library's files in front of the
+     * project's: that order is `bta_project_sources`'s contract, and loading
+     * the libraries again here would run them twice. */
+    for (guint i = 0; i < sources->len; i++)
+        if (!eval_file(ctx, sources->pdata[i]))
+            goto out;
+
+    if (bta_modules_check(ctx) < 0) {
+        bta_dump_error(ctx);
+        goto out;
+    }
+
+    entry = bta_lookup_global(ctx, entry_name);
+    if (JS_IsException(entry)) {
+        bta_dump_error(ctx);
+        goto out;
+    }
+    if (!JS_IsFunction(ctx, entry)) {
+        fprintf(stderr, "bintana-headless: main function '%s' not found\n",
+                entry_name);
+        goto out;
+    }
+
+    JSValue r = JS_Call(ctx, entry, JS_UNDEFINED, 0, NULL);
+    if (JS_IsException(r)) {
+        bta_dump_error(ctx);
+        JS_FreeValue(ctx, r);
+        goto out;
+    }
+    JS_FreeValue(ctx, r);
+    bta_drain_jobs(rt);
+
+    if (bta_sys_pending() + bta_network_pending() > 0) {
+        GMainLoop *loop = g_main_loop_new(NULL, FALSE);
+
+        guint tick = g_timeout_add(20, project_idle, loop);
+        g_main_loop_run(loop);
+        g_source_remove(tick);
+        g_main_loop_unref(loop);
+    }
+    status = headless_uncaught ? 1 : 0;
+
+out:
+    if (libs)    g_ptr_array_unref(libs);
+    if (sources) g_ptr_array_unref(sources);
+    g_free(name);
+    g_free(version);
+    g_free(startup);
+    g_free(entry_name);
+    JS_FreeValue(ctx, entry);
+    JS_FreeValue(ctx, cfg);
+    JS_FreeValue(ctx, global);
+    bta_modules_forget(ctx);
+    JS_FreeContext(ctx);
+    JS_FreeRuntime(rt);
+    g_free(text);
+    g_free(manifest);
+    g_free(dir);
+    return status;
 }
 
 int main(int argc, char **argv)
@@ -1156,11 +1261,26 @@ int main(int argc, char **argv)
         printf("bintana-headless %s\n", BTA_VERSION_STRING);
         return 0;
     }
+    if (argc >= 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
+        printf("usage: bintana-headless [run] <project> [args...]\n"
+               "       bintana-headless check [options] <project>\n"
+               "       bintana-headless --version\n");
+        return 0;
+    }
     if (argc >= 2 && !strcmp(argv[1], "check"))
         return run_check(argc - 2, argv + 2);
 
+    if (argc >= 2 && !strcmp(argv[1], "run")) {
+        argv++;
+        argc--;
+    }
+
+    if (argc >= 2 && argv[1][0] != '-')
+        return run_project(argc - 1, argv + 1);
+
     fprintf(stderr,
-            "usage: bintana-headless check [options] <project>\n"
+            "usage: bintana-headless [run] <project> [args...]\n"
+            "       bintana-headless check [options] <project>\n"
             "       bintana-headless --version\n");
     return 2;
 }
