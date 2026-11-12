@@ -20064,17 +20064,12 @@ class Form1 extends Form {
         throws("Dialog.Font needs a callback, being async",
                () => Dialog.Font("t", "Cantarell 12"));
 
-        /* **The chooser is modal and nothing in JS can close it.** The file
-         * dialog's test already says that a modal left open sits on top of the
-         * next test; the font and colour choosers got away with it on Linux,
-         * and on Windows they do not -- the font preview is where GTK's Win32
-         * port walks a NULL family into `g_utf8_to_utf16` and takes the
-         * process down. What is left to assert here is the refusal, and it
-         * shows nothing. */
-        if (Environment.OS === "Windows") {
-            print("  (skipping the font chooser: modal, and GTK's Win32 preview crashes)");
-            return;
-        }
+        /* **The chooser is modal and nothing in JS can close it**, so it stays
+         * up until the run ends. It runs on Windows too: it was once skipped
+         * there as "the font preview crashes in `g_utf8_to_utf16`", and that
+         * crash was the clipboard's (ISSUE-windows-clipboard-crash) -- on its
+         * own the chooser survived four runs in four, and the suite with it
+         * did not crash (2026-11-12). */
 
         /* A starting description that is not a font is what a form with no
          * font set yet has; it must open rather than refuse. */

@@ -452,9 +452,11 @@ save will edit `examples/hello` for real.
 - **A modal dialog left open sits on the next test.** `testFileDialog` already
   refuses to open one for that reason; `Dialog.Color`'s two got away with it on
   Linux and the font chooser is one more GTK/Win32 surface nobody can close
-  from JS. Both choosers are skipped on Windows and only their refusals are
-  asserted. This is a test-harness rule, not the explanation of every GTK crash
-  after a dialog: skipping them did not remove the clipboard SEGV above.
+  from JS. The colour chooser is skipped on Windows and only its refusals are
+  asserted. The font chooser runs there again: it had been skipped as the
+  `g_utf8_to_utf16` crash, which was the clipboard's (above). On its own it
+  survived four runs in four, and the suite with it ran without a crash
+  (2026-11-12).
 - **A test that walks a focus order has to own every stop in it.** `Fixed1` in
   `tests/widgets` had five children by the time `testTabOrder` ran — a scroller
   another test left in it, focusable — so "past the last one the focus leaves"
