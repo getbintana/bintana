@@ -2347,10 +2347,49 @@ static void term_view_owned_free(gpointer data)
     term_view_unref(tv);
 }
 
+/*
+ * **The input method is the area's only while the area has a window.**
+ * GTK's Windows IME context registers a message filter on the display in
+ * `focus_in`, with itself as the filter's data, and removes it only in
+ * `focus_out` -- which returns early, filter still in place, once the client
+ * widget has no surface. Neither its dispose nor the multicontext's teardown
+ * calls `focus_out` (read in GTK 4.24.1). A Terminal deleted while it held
+ * the focus therefore left a filter pointing at a freed context, and the next
+ * window message ran it: `gtk_im_context_ime_message_filter: assertion
+ * 'GTK_IS_IM_CONTEXT_IME (data)' failed` and an access violation from
+ * `SendMessageW`, at the end of `tests/widgets`. The multicontext also keeps a
+ * `notify::gtk-im-module` handler on the client's settings until it is told
+ * the client is gone. So the client is set on realize and taken away on
+ * unrealize, focus first, while the surface is still there -- what GtkText
+ * does. The handler runs before the class's own unrealize.
+ */
+static void term_area_realize(GtkWidget *widget, gpointer data)
+{
+    TermView *tv = data;
+
+    if (tv->im)
+        gtk_im_context_set_client_widget(tv->im, widget);
+}
+
+static void term_area_unrealize(GtkWidget *widget, gpointer data)
+{
+    TermView *tv = data;
+
+    (void)widget;
+    if (tv->im) {
+        gtk_im_context_focus_out(tv->im);
+        gtk_im_context_set_client_widget(tv->im, NULL);
+    }
+}
+
 static void term_area_destroy(GtkWidget *widget, gpointer data)
 {
+    TermView *tv = data;
+
     (void)widget;
-    term_view_detach(data);
+    if (tv->im)
+        gtk_im_context_set_client_widget(tv->im, NULL);
+    term_view_detach(tv);
 }
 
 static void term_bar_changed(GtkAdjustment *adj, gpointer data)
@@ -2468,9 +2507,10 @@ void bta_terminal_win32_build(BtaWidget *w)
     gtk_widget_add_controller(area, scroll);
 
     tv->im = gtk_im_multicontext_new();
-    gtk_im_context_set_client_widget(tv->im, area);
     gtk_im_context_set_use_preedit(tv->im, TRUE);
     g_signal_connect(tv->im, "commit", G_CALLBACK(term_im_commit), tv);
+    g_signal_connect(area, "realize", G_CALLBACK(term_area_realize), tv);
+    g_signal_connect(area, "unrealize", G_CALLBACK(term_area_unrealize), tv);
 
     w->inner = area;
     w->gtk   = box;

@@ -398,37 +398,55 @@ save will edit `examples/hello` for real.
   120/0, `tests/report` 259/0 and `tests/xlsx` 57/0 on that desktop.
   `tests/widgets` runs to the end under gdb (6112 assertions, 53 failures,
   many of them the slower debugger and HTTP timing); its native run still hits
-  the GTK SEGV below. `tests/check.sh` is the no-display pass the Windows CI
+  the clipboard SEGV below (2026-11-12: three native runs out of three; with
+  `testClipboard` skipped, 6146 passed and 65 failed -- plugins, local HTTP
+  timeouts, charts -- and no crash). `tests/check.sh` is the no-display pass the Windows CI
   runs; it skips `tests/ide` with a sentence when Git wrote the project's
   `.form` symlinks as text files, which is what a checkout without Developer
   Mode does. The runner does the same now, so `tests/run.sh` continues with the
   other six projects instead of failing `ide` before it starts. Enable
   Developer Mode (or `core.symlinks=true` with the privilege) before believing
   anything about `tests/ide` on Windows.
-- **GTK 4's Win32 window procedure can take the suite down.** Measured with gdb
-  on Windows 11 (2026-11-11): first
-  `gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)'
-  failed`, then a SIGSEGV whose top frame is inside `libgtk-4-1.dll`, reached
-  from `SendMessageW`. It is a GTK bug -- a window message arrives at an IME
-  context that has already been destroyed -- and it can land minutes into
-  `tests/widgets`, under whichever test happens to be running.
-  `GTK_IM_MODULE=none` removes that one. A second, timing-dependent SEGV
-  remains: `g_utf8_to_utf16: assertion 'str != NULL' failed` followed by a
-  crash in GTK. **It is not the `Exec` chain**: a run stopped at
-  `ExecCloseInput` — before `PrintAtQuit`, `ExecGrandchild` and `Exec` — still
-  hits it, in the idle before the summary. It is a pending Win32 message that
-  GTK's window procedure processes at the end of a long session; gdb is slow
-  enough to miss it, which is how the rest of the suite was measured. Two
-  processes do not help: the prefix still crashes in that idle, and a fresh
-  tail needs the tests before it (`TimerShorthand`'s timer is read by
-  `checkTimers`). Do not go looking for a `JSValue` lifetime for either crash:
-  the stack says `libgtk`.
+- **Two SEGVs on Windows, two different causes; read the critical before the
+  crash to tell them apart.** A stack with no application frame says where a
+  pointer was *used*, not who left it dangling.
+  1. `gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME
+     (data)' failed`, then a SIGSEGV reached from `SendMessageW` (seen under
+     gdb, 2026-11-11). **Ours:** the Windows `Terminal` never took its IM
+     context off its area, and GTK's IME context only removes its display
+     filter in a `focus_out` that still finds a surface -- see the terminal
+     entry in [`widgets.md`](widgets.md). Fixed 2026-11-12; not seen since,
+     though it was never on demand.
+  2. `g_utf8_to_utf16: assertion 'str != NULL' failed`, then a SIGSEGV. **GTK's
+     (4.24.1), set off by `testClipboard`.** It is *not* a window message: a
+     native stack taken at the critical (`RtlCaptureStackBackTrace` in a
+     `g_log_set_handler` for "GLib", then module+offset) is the main loop
+     completing a `GTask` -> GDK's Win32 clipboard render
+     (`clipboard_render_hdata_ready`) -> `g_output_stream_close` on a
+     `GdkWin32HDataOutputStream` -> `transmute_utf8_string_to_cf_unicodetext`.
+     A render request for text comes while the content GDK writes cannot be
+     written as text (the test copies a string and replaces it with an image at
+     once). The write fails, the failure branch still closes the stream, and
+     `close()` converts a buffer that was never allocated. `g_utf8_to_utf16(NULL)`
+     returns NULL with no `GError`, and the converter reads `wcptr[0]`. The
+     request comes from *another process*: the clipboard belongs to the window
+     station, so the private desktop does not isolate it, and clipboard history
+     or any clipboard reader on the machine asks. That is why the moment varies
+     and gdb hides it. Measured: three native runs out of three crashed; with
+     `testClipboard` skipped, none did. Hammering `Get-Clipboard` against a
+     project that alternates `Copy`/`CopyImage` gives `gdk_clipboard_write_async:
+     assertion 'priv->local' failed` and `Clipboard rendering timed out`, and
+     killed the process once in three, so it is a race, not a recipe.
+  `GTK_IM_MODULE=none` only removes the first. **It is not the `Exec` chain**:
+  a run stopped at `ExecCloseInput` still crashed. Two processes do not help either:
+  a fresh tail needs the tests before it (`TimerShorthand`'s timer is read by
+  `checkTimers`). The suite on Windows also writes to the user's real clipboard.
 - **A modal dialog left open sits on the next test.** `testFileDialog` already
   refuses to open one for that reason; `Dialog.Color`'s two got away with it on
   Linux and the font chooser is one more GTK/Win32 surface nobody can close
   from JS. Both choosers are skipped on Windows and only their refusals are
   asserted. This is a test-harness rule, not the explanation of every GTK crash
-  after a dialog: skipping them did not remove the `Exec`-chain SEGV above.
+  after a dialog: skipping them did not remove the clipboard SEGV above.
 - **A test that walks a focus order has to own every stop in it.** `Fixed1` in
   `tests/widgets` had five children by the time `testTabOrder` ran — a scroller
   another test left in it, focusable — so "past the last one the focus leaves"
