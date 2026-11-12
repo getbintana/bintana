@@ -387,6 +387,17 @@ save will edit `examples/hello` for real.
   the install costs to do, and the half hour spent on them is the half hour
   this note exists to save. `sudo dnf install xorg-x11-server-Xvfb xdotool` is
   the whole of it here.
+- **A path pasted into a child's source is a JavaScript literal: write it with
+  `JSON.stringify`.** `File.Join("${SCRATCH}", ...)` inside a template is fine
+  on Linux and on Windows turns `C:\src\...\tmp\bta-test-widgets` into a string
+  with a tab and a backspace in it: the chart child could not save its PNG and
+  eighteen assertions read `undefined`. `${JSON.stringify(SCRATCH)}` is right
+  on both. Assertions about paths count either separator.
+- **The suite's own servers are asked with `LOOPBACK` (a minute).** Tests
+  overlap and a later test's `*Wait` blocks the loop; a timeout and an answer
+  due during the block are dispatched timeout first. On Windows the blocks are
+  longer, and five server tests read `timeout` at 5 s in the whole run while
+  passing alone. `testNetwork`'s `LONG` is the same lesson, learned first.
 - **Windows has no Xvfb; `run.sh` gives it a private desktop.**  The helper is
   `tests/win-desktop.c`, built into `build/win-desktop.exe` by `run.sh` with the
   MSYS2 compiler; it creates a `CreateDesktop` desktop and starts the runner on

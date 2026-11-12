@@ -4,6 +4,18 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 ## Http
 
+- **On Windows a closing WebSocket often ends in a reset, not an EOF.** After a
+  client's own `Close()` and after a server's `Stop()`, libsoup raised
+  "Error receiving data: Se ha anulado una conexión..." into `OnError`;
+  `testWebSocket` was red four runs in four there and green on Linux. An I/O
+  error once a close frame has gone or come is the close and is not raised
+  (`on_ws_error`); a protocol error still is. Windows also takes ~2 s to
+  report a refused connect to a closed `127.0.0.1` port (it retries the SYN):
+  a test that wants `Refused` gives it more than 2000 ms.
+- **On Windows a stopped server's port is not free at once.** `Stop()` then
+  `Start()` on the same port answered "the address is already in use" (the
+  TLS step of `testHttpServer`, now and then); GLib does not set
+  `SO_REUSEADDR` there. Not fixed yet.
 - **A request body with no limit is a hole, and the declared length is the
   cheap half of the answer.** `Http.Server` flattened whatever arrived, so a
   body grew until the process died (R4 of the October audit). `MaxBody` is a

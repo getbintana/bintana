@@ -12,6 +12,15 @@
 const SCRATCH = File.Join(Environment.TempDirectory,
     `bta-test-widgets${Application.Arguments[0] ? `-${Application.Arguments[0]}` : ""}`);
 
+/* **A request to one of the suite's own servers waits a minute**, which a
+ * loopback answer never reaches. Tests overlap, and a later test's `*Wait`
+ * blocks the main loop: an answer and a timeout that both came due during the
+ * block are ready together, and the timeout was dispatched first. On Windows
+ * the blocks are longer -- a refused local connect alone takes ~2 s there --
+ * and five server tests read `timeout` at 5 s in the whole run while passing
+ * alone (2026-11-12). `testNetwork`'s `LONG` is the same lesson. */
+const LOOPBACK = 60000;
+
 /* The pictures this project ships, for the tests that need a real file: a
  * `Picture`, an `Image`, and a drawing that puts one down. */
 const IMAGES = File.Join(Application.Directory, "images");
@@ -8621,7 +8630,7 @@ class Spike extends Form {
     Form_Open() {
         this.Visible = false;                 /* never mapped: see the note above */
         this.C.Series = [{ Values: [0, 0, 10, 0, 0, 5, 5, 0, 0] }];
-        this.C.Save(File.Join("${SCRATCH}", "spike.png"), 400, 240);
+        this.C.Save(File.Join(${JSON.stringify(SCRATCH)},"spike.png"), 400, 240);
 
         const box  = this.C.Document.lastBox;
         const zero = this.C.Document.yOf(box, 0), top = this.C.Document.yOf(box, 10);
@@ -8650,7 +8659,7 @@ class Spike extends Form {
 
         this.C.Count = 100;
         this.C.From  = 500;
-        this.C.Save(File.Join("${SCRATCH}", "window.png"), 400, 240);
+        this.C.Save(File.Join(${JSON.stringify(SCRATCH)},"window.png"), 400, 240);
 
         const b = this.C.Document.lastBox;
         print("count:" + b.view.count);
@@ -8674,12 +8683,12 @@ class Spike extends Form {
         /* And the wheel keeps the datum under the pointer where it was: zooming
          * is a lens, not a jump. */
         this.C.From = 1000; this.C.Count = 200;
-        this.C.Save(File.Join("${SCRATCH}", "window.png"), 400, 240);
+        this.C.Save(File.Join(${JSON.stringify(SCRATCH)},"window.png"), 400, 240);
         const box2 = this.C.Document.lastBox;
         this.C.pointer = (box2.left + box2.right) / 2;
         const under = this.C.Document.indexAt(box2, this.C.pointer);
         this.C.Canvas_MouseWheel(0, -1);
-        this.C.Save(File.Join("${SCRATCH}", "window.png"), 400, 240);
+        this.C.Save(File.Join(${JSON.stringify(SCRATCH)},"window.png"), 400, 240);
         print("closer:" + (this.C.Document.view().count < 200));
         print("kept:" + Math.abs(this.C.Document.indexAt(this.C.Document.lastBox, this.C.pointer) - under));
 
@@ -8697,7 +8706,7 @@ class Spike extends Form {
         this.C.Lines  = [{ Value: 1, Text: "SLO", Color: "#e01b24" }];
         this.C.Series = [{ Name: "one", Values: [1, 2], Format: "Percent" },
                          { Name: "two", Values: [2, 1], Mirror: true }];
-        this.C.Save(File.Join("${SCRATCH}", "fmt.png"), 400, 240);
+        this.C.Save(File.Join(${JSON.stringify(SCRATCH)},"fmt.png"), 400, 240);
         const fmt = this.C.Canvas.Dump();
         print("percent:" + fmt.includes("1 %"));
         print("threshold:" + fmt.includes("SLO"));
@@ -8707,10 +8716,10 @@ class Spike extends Form {
         print("tooltip:" + (!!tip && tip.Text.includes(" %") && tip.Width > 0));
         const lh = this.C.Document.legendHits[0];
         this.C.Canvas_MouseDown(lh.x + 2, lh.y + 2);
-        this.C.Save(File.Join("${SCRATCH}", "fmt.png"), 400, 240);
+        this.C.Save(File.Join(${JSON.stringify(SCRATCH)},"fmt.png"), 400, 240);
         print("hidden:" + (this.C.Series[0].Hidden && this.C.Document.bars.length === 2));
         this.C.Canvas_MouseDown(lh.x + 2, lh.y + 2);
-        this.C.Save(File.Join("${SCRATCH}", "fmt.png"), 400, 240);
+        this.C.Save(File.Join(${JSON.stringify(SCRATCH)},"fmt.png"), 400, 240);
         print("shown:" + (!this.C.Series[0].Hidden && this.C.Document.bars.length === 4));
 
         Application.Quit(0);
@@ -8783,9 +8792,13 @@ class Spike extends Form {
                  const all = said.join("\n");
                  check("saying what it looked for",
                        all.includes('uses "nosuchlibrary"'), all);
+                 /* Each place is a path ending in the name, with the
+                  * platform's separator; Windows has no system data folder
+                  * beside the project's, the user's and the runtime's own. */
+                 const places = (all.split("/nosuchlibrary").length - 1) +
+                                (all.split("\\nosuchlibrary").length - 1);
                  check("...and every place it looked",
-                       all.includes("/nosuchlibrary") &&
-                       all.split("/nosuchlibrary").length - 1 >= 4, all);
+                       places >= (Environment.OS === "Windows" ? 3 : 4), all);
                  check("and the main never ran", !all.includes("ran"), all);
                  waiting--;
                  this.errorIsNotColoured();
@@ -28923,8 +28936,11 @@ class Form1 extends Form {
                  * so a catch can tell a deadline from a refusal. */
                 let thrown = null;
 
+                /* Room for Windows, which retries the SYN after a refusal and
+                 * says so only after ~2 s (2040-2089 ms measured on a closed
+                 * 127.0.0.1 port); 2000 made that a Timeout. */
                 try {
-                    Http.GetWait("http://127.0.0.1:9/", { Timeout: 2000 });
+                    Http.GetWait("http://127.0.0.1:9/", { Timeout: 6000 });
                 } catch (e) {
                     thrown = e;
                 }
@@ -29506,7 +29522,7 @@ class Form1 extends Form {
         srv.Start();
 
         waiting++;
-        const api  = Http.Client({ BaseUrl: srv.Url, Timeout: 5000 });
+        const api  = Http.Client({ BaseUrl: srv.Url, Timeout: LOOPBACK });
         const done = (why) => { srv.Stop(); waiting--; if (why) failures.push(why); };
 
         api.Get("/", (r1) => {
@@ -29536,7 +29552,7 @@ class Form1 extends Form {
         eq("the server is running before the request", srv.Running, true);
 
         waiting++;
-        const api  = Http.Client({ BaseUrl: srv.Url, Timeout: 5000 });
+        const api  = Http.Client({ BaseUrl: srv.Url, Timeout: LOOPBACK });
         const done = (why) => { srv.Stop(); waiting--; if (why) failures.push(why); };
 
         api.Get("/", (r) => {
@@ -29565,7 +29581,7 @@ class Form1 extends Form {
 
         waiting++;
         const done = (why) => { waiting--; if (why) failures.push(why); };
-        Http.Get(url, { Timeout: 5000 }, (r) => {
+        Http.Get(url, { Timeout: LOOPBACK }, (r) => {
             eq("a server dropped inside its own handler still answers",
                r.Body.ToText(), "bye");
             eq("...and that reference really was the last", srv, null);
@@ -29634,7 +29650,7 @@ class Form1 extends Form {
          * owed -- a hang instead of a red line -- so a throw is a failure and
          * the end of the test. */
         const get = (path, then) =>
-            Http.Get(url + path, { Timeout: 5000 }, (r) => {
+            Http.Get(url + path, { Timeout: LOOPBACK }, (r) => {
                 try { then(r); } catch (e) { done(`${path}: ${e.message}`); }
             }, (e) => done(`${path} errored: ${e.Message}`));
 
@@ -30713,7 +30729,7 @@ class Form1 extends Form {
         /* Counted: like testHttp's chain, or the tail ends the run early --
          * and emptied at the end, for the same cycle the other chain taught. */
         waiting++;
-        const api = Http.Client({ BaseUrl: srv.Url, Timeout: 5000,
+        const api = Http.Client({ BaseUrl: srv.Url, Timeout: LOOPBACK,
                                   Headers: { "User-Agent": "Dogfood/1" } });
         const finish = () => {
             srv.Stop();

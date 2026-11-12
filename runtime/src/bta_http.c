@@ -3936,6 +3936,21 @@ static void on_ws_error(SoupWebsocketConnection *conn, GError *err, gpointer dat
 {
     WebSocketData *w = data;
 
+    /*
+     * **A connection torn down while it closes is the close, not an error.**
+     * Once a close frame has gone or come (CLOSING, or the peer's code is in),
+     * the end of the TCP connection is what `OnClosed` reports. On Linux that
+     * end is a clean EOF; on Windows the peer's socket is often reset instead,
+     * and libsoup raised it: "Error receiving data: Se ha anulado una
+     * conexion..." after a client's own `Close()` and after a server's `Stop()`
+     * -- red in `testWebSocket` there and never here (2026-11-12). Only I/O
+     * errors are taken as the close; a protocol error still says so.
+     */
+    if (err && err->domain == G_IO_ERROR &&
+        (soup_websocket_connection_get_state(conn) == SOUP_WEBSOCKET_STATE_CLOSING ||
+         soup_websocket_connection_get_close_code(conn) != 0))
+        return;
+
     JSValue e = websocket_error_object(w->ctx, websocket_kind_for(err),
                                        err ? err->message : "the WebSocket failed");
 
