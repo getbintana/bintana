@@ -96,7 +96,8 @@ host runs `check`, a project's `main`, and dispatches `startup` to the graphical
 host, but the console binary is not installed and the one-binary split is Phase
 3's. Until then, the package that ships is `bintana-desktop`. The staging code
 is written for the split list now, not for one binary. The console binary is
-2.9 MB and 17 libraries, the check document is 1.7 MB, and `bintana-headless
+2.9 MB in Debug and 7.4 MB with `RelWithDebInfo`'s symbols (a packager strips
+them), with 17 libraries; the check document is 1.7 MB, and `bintana-headless
 check` already matches the graphical check byte for byte.
 
 **`Package` stays the Flatpak context.** `Deb`, `Rpm` and `AppImage` are

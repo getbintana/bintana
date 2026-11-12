@@ -181,8 +181,9 @@ la Fase 2 hereda esa idea, o mueve el `bta_symbols` real.
 **Objetivo: un target que corre un `main` de verdad sin GTK.**
 
 **Primer slice hecho (2026-11-12): `bintana-headless --version`, `check` y el
-`main` de un proyecto.** Enlaza 17 bibliotecas (ninguna gráfica), **2,9 MB**
-(más un `widgets.json` de 1,7 MB que solo carga para `check`), y `check ide` da
+`main` de un proyecto.** Enlaza 17 bibliotecas (ninguna gráfica), **2,9 MB en
+Debug** (7,4 MB con los símbolos de `RelWithDebInfo`; un paquete los strippea)
+más un `widgets.json` de 1,7 MB que solo carga para `check`, y `check ide` da
 la misma salida que el check gráfico con 35,5 MB contra 60,2 MB en Debug,
 **32,8 contra 58,0 MB** en `RelWithDebInfo`. Corre `tools/check` y `lib/check`
 como módulos, con las globals core (`File`, `Exec`, `Directory`, `Hash`,

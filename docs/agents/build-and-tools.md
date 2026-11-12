@@ -527,7 +527,8 @@ project against the graphical one.
 - **The console host links no widget file.** `bintana-meta --dump` writes
   `check/widgets.json` from the real rows, property tables, both preludes and
   the generated signatures; `runtime/js/widget-meta.js` answers `Widget.*` over
-  it. The data is 1.7 MB and loads only for `check`; the binary is 2.9 MB.
+  it. The data is 1.7 MB and loads only for `check`; the binary is 2.9 MB in
+  Debug and 7.4 MB with `RelWithDebInfo`'s symbols, which a packager strips.
   A `main` that never asks for a widget never sees `Widget` at all.
 - **`bta_project.c` is the boot both hosts share, and it must stay toolkit-free.**
   It holds `project.btp`, `uses`, the six-place library search and the source

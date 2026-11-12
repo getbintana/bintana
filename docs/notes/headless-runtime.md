@@ -179,8 +179,9 @@ The `check` rows are the Debug build (`build/`). On `RelWithDebInfo`
 58.0 MB** for the graphical binary; `--version` stays at 5.6 MB. The two
 project rows are `RelWithDebInfo`, and a `main` over a tiny library costs the
 console host **8.7 MB against 43.3 MB** -- the toolkit is mapped before the
-graphical runtime's `main` even reads `project.btp`. The binary is **2.9 MB**;
-the metadata document it loads for `check` is **1.7 MB**.
+graphical runtime's `main` even reads `project.btp`. The binary is **2.9 MB**
+in the Debug build and **7.4 MB** with `RelWithDebInfo`'s symbols -- a packager
+strips them; the metadata document it loads for `check` is **1.7 MB**.
 
 **How it is put together.** The console host links **no widget file**. At build
 time `bintana-meta --dump` writes `check/widgets.json` from the real class rows,
