@@ -174,7 +174,7 @@ needed and what it did instead.
 
 | Gap | Where it is written down |
 |---|---|
-| Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
+| Git in the IDE stops at a fast-forward — a pull that cannot merge, a rebase and a conflict are the `Terminal` tab, and staging is per file rather than per hunk | [`docs/plans/git-plan.md`](../plans/git-plan.md) (all seven stages built, this is what is not in it), [git-collaboration-plan.md](../plans/git-collaboration-plan.md) (deferred while one person works alone, with the triggers) and [ide.md](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#what-git-does-not-do) |
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | A **native PostgreSQL driver** — `Database.Odbc` reaches PostgreSQL, SQL Server, MySQL and Firebird through the machine's driver, but a program that cannot ask for one (a Flatpak, an installation that ships its own runtime) has no libpq driver | [`docs/plans/postgres-plan.md`](../plans/postgres-plan.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |

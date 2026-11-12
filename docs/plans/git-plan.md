@@ -9,6 +9,11 @@ because a project without a repository is the one case where a menu of disabled
 items is a dead end. **The seven of [the core](#why-this-matters-and-what-the-core-is)
 are answered.**
 
+**For a single author, the collaboration half is deferred on purpose.** Merge
+and conflict resolution, rebase, blame, stash and per-hunk staging wait for the
+second person; [git-collaboration-plan.md](git-collaboration-plan.md) records
+why, and what reopens each.
+
 **And the view is one tab now (2026-11-11).** `GitTab` is one page of the
 notebook: **the diff**, and nothing else. **History is a page of the side
 panel**, beside Changes: the commits, the files each touched, and the row that
