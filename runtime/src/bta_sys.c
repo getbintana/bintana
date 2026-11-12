@@ -459,6 +459,16 @@ static JSValue sys_file_relative(JSContext *ctx, JSValueConst this_val,
     GFile *p   = g_file_new_for_path(path);
     char  *rel = g_file_get_relative_path(r, p);
 
+#ifdef G_OS_WIN32
+    /* **A relative spelling is a name inside a tree, and it uses `/` on every
+     * platform**: it is what a project writes in `sources`, what a tree keys
+     * its rows by and what a message names, and Windows takes `/` in any path.
+     * The native `\` made the IDE ask its tree for `tests\InvoiceTest.js`, a
+     * row keyed `tests/InvoiceTest.js`, and throw (2026-11-12). */
+    if (rel)
+        g_strdelimit(rel, "\\", '/');
+#endif
+
     /* No relative spelling, and not the root itself: the path it was given. */
     const char *out = rel ? rel : (g_file_equal(r, p) ? "" : path);
 
@@ -5339,8 +5349,9 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, file, "Within",
                       JS_NewCFunction(ctx, sys_file_within, "Within", 2));
     /* Relative(path, root) -> string
-     *   `path` with `root` taken off; the path unchanged when there is no
-     *   relative spelling, and `""` for the root itself
+     *   `path` with `root` taken off, written with `/` on every platform; the
+     *   path unchanged when there is no relative spelling, and `""` for the
+     *   root itself
      */
     JS_SetPropertyStr(ctx, file, "Relative",
                       JS_NewCFunction(ctx, sys_file_relative, "Relative", 2));

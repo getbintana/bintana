@@ -25364,6 +25364,11 @@ class Form1 extends Form {
            File.Relative("/home/u/proj", "/home/u/proj"), "");
         eq("and a path with no relative spelling is answered unchanged",
            File.Relative("/home/u/proj2/x.js", "/home/u/proj"), "/home/u/proj2/x.js");
+        /* A name inside a tree, so `/` on every platform -- built with the
+         * native separator, which on Windows is `\`. */
+        eq("a relative spelling is written with /",
+           File.Relative(File.Join(Environment.TempDirectory, "p", "a", "b.js"),
+                         File.Join(Environment.TempDirectory, "p")), "a/b.js");
 
         eq("Within says no to the sibling that shares the prefix",
            File.Within("/home/u/proj2/x.js", "/home/u/proj"), false);

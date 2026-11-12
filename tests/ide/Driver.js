@@ -6,7 +6,7 @@
  * toolbar buttons.  MainForm.form is a symlink to the IDE's own, so the two
  * cannot drift apart.
  *
- * The project it opens is generated in /tmp and quits by itself, so pressing
+ * The project it opens is generated in the temporary folder and quits by itself, so pressing
  * Run terminates instead of leaving a window open forever.
  */
 "use strict";
@@ -17,7 +17,18 @@
  * files: those collisions fail assertions that look like real bugs.
  */
 const TAG = Application.Arguments[0] ? `-${Application.Arguments[0]}` : "";
-const TMP = `/tmp/bta-test-ide${TAG}`;
+
+/* **The platform's temporary folder, never a literal `/tmp`.** On Windows
+ * `/tmp/x` is `C:\tmp\x` -- not a temporary folder, and not absolute either:
+ * the IDE kept `\tmp\...` as the project and six assertions about absolute
+ * and recent paths failed there (2026-11-12). */
+const TEMP = Environment.TempDirectory;
+const TMP = File.Join(TEMP, `bta-test-ide${TAG}`);
+
+/* A path compared by its tail, whichever separator the platform wrote. */
+function endsWithPath(path, tail) {
+    return String(path).split("\\").join("/").endsWith(tail);
+}
 
 /*
  * **Every run starts at the window the IDE declares.** `MainForm`'s `Form_Open`
@@ -363,9 +374,9 @@ function* p_welcome(ide) {
     openFresh(ide, "examples/hello");
     eq("opening one turns the window into the workspace", ide.Pages.Current, 1);
     check("a relative project path is made absolute",
-          ide.project.startsWith("/"), ide.project);
+          File.IsAbsolute(ide.project), ide.project);
     check("and still points at the same project",
-          ide.project.endsWith("examples/hello"), ide.project);
+          endsWithPath(ide.project, "examples/hello"), ide.project);
 
     makeChildProject();
     openFresh(ide, TMP);
@@ -376,7 +387,7 @@ function* p_welcome(ide) {
      * something already on the list moves it up instead of repeating it. */
     eq("the project just opened tops the recent list", ide.recent[0], ide.project);
     check("the one before it comes next",
-          ide.recent[1].endsWith("examples/hello"), JSON.stringify(ide.recent));
+          endsWithPath(ide.recent[1], "examples/hello"), JSON.stringify(ide.recent));
     eq("the menu shows one entry per remembered project",
        ide.MnuRecent.Items.length, ide.recent.length);
     check("each labelled with the project's folder",
@@ -395,7 +406,7 @@ function* p_welcome(ide) {
      * the row after it is this project again, which puts it back. */
     ide.WelcomeRecent.Index = 1;
     check("choosing a row on the page opens that project",
-          ide.project.endsWith("examples/hello"), ide.project);
+          endsWithPath(ide.project, "examples/hello"), ide.project);
     eq("and lets go of it, so the same one can be chosen twice",
        ide.WelcomeRecent.Index, -1);
     eq("with the window on the workspace", ide.Pages.Current, 1);
@@ -410,7 +421,7 @@ function* p_welcome(ide) {
      * as its parameter, which is what GTK does when the entry is chosen. */
     ide.MnuRecent.Click(1);
     check("choosing an entry opens that project",
-          ide.project.endsWith("examples/hello"), ide.project);
+          endsWithPath(ide.project, "examples/hello"), ide.project);
     eq("and it moves to the top", ide.recent[0], ide.project);
     eq("without growing the list", ide.recent.length, remembered);
     eq("nor repeating anything", new Set(ide.recent).size, ide.recent.length);
@@ -2264,7 +2275,7 @@ function* p_palette(ide) {
     eq("a library's components are found", gadgets.length, 1);
     eq("...by the name a .form will use", gadgets[0].name, "Dial");
     check("...with an absolute path, so nothing project-relative matches it",
-          gadgets[0].file.startsWith("/"), gadgets[0].file);
+          File.IsAbsolute(gadgets[0].file), gadgets[0].file);
     eq("...and its own declared size", `${gadgets[0].Width}x${gadgets[0].Height}`,
        "140x90");
     check("...and what its class publishes, read from the library's source",
@@ -5627,8 +5638,9 @@ function* p_goto(ide) {
     /* A class the project reaches through `uses`, which lives under lib/ and is
      * in the listing like any other file of the tree. */
     const dial = nav.find("Dial");
+    /* A name inside the project, so `/` everywhere: `File.Relative` writes it so. */
     eq("a class in the project's own lib/ is found too",
-       dial && dial.file, File.Join("lib", "gadgets", "Dial.js"));
+       dial && dial.file, "lib/gadgets/Dial.js");
 
     /* --- a method of the file being edited ---------------------------------- */
     const method = nav.find("greet");
@@ -8655,7 +8667,7 @@ function* p_nested(ide) {
 
 function* p_projects(ide) {
     /* --- creating a project ------------------------------------------------ */
-    const NEWPROJ = "/tmp/bta-test-ide-nuevo";
+    const NEWPROJ = File.Join(TEMP, "bta-test-ide-nuevo");
     removeTree(NEWPROJ);
     Directory.Make(NEWPROJ);
 
@@ -8683,7 +8695,7 @@ function* p_projects(ide) {
 
     /* The folder does not have to exist: the dialog lets one type a new name, and
      * the IDE creates it. */
-    const FRESH = "/tmp/bta-test-ide-fresco";
+    const FRESH = File.Join(TEMP, "bta-test-ide-fresco");
     removeTree(FRESH);      /* a run that failed here would leave one behind */
     check("the target does not exist yet", !File.Exists(FRESH));
     eq("creating a project makes the folder",
@@ -8703,7 +8715,7 @@ function* p_projects(ide) {
      * open what the IDE just wrote, which is the whole promise of creating it
      * through the record.
      */
-    const CONSOLE = "/tmp/bta-test-ide-consola";
+    const CONSOLE = File.Join(TEMP, "bta-test-ide-consola");
     removeTree(CONSOLE);
     eq("creating a console project succeeds",
        ide.startProject(CONSOLE, "", true), true);
@@ -8739,7 +8751,7 @@ function* p_projects(ide) {
           said.some((l) => l.includes("Hello from")), JSON.stringify(said));
 
     /* But if a file already holds that name, it is not overwritten. */
-    const CLASH = "/tmp/bta-test-ide-archivo";
+    const CLASH = File.Join(TEMP, "bta-test-ide-archivo");
     File.Save(CLASH, "not a folder at all");
     eq("an existing file is not turned into a project",
        ide.startProject(CLASH), false);
@@ -8784,7 +8796,7 @@ function* p_projects(ide) {
     np.TxtName.Text = "MiApp";
     /* Showing the path before accepting avoids finding it out afterwards. */
     check("it spells out the path it will create",
-          np.LblHint.Text.includes("/tmp/MiApp"), np.LblHint.Text);
+          np.LblHint.Text.includes(File.Join("/tmp", "MiApp")), np.LblHint.Text);
     eq("and now there is something to create", np.BtnCreate.Enabled, true);
 
     /*
@@ -8868,7 +8880,7 @@ function* p_projects(ide) {
 
     /* The description goes into project.btp, and with no description the key is
      * not written: a project has no reason to carry empty fields. */
-    const DESCED = "/tmp/bta-test-ide-desc";
+    const DESCED = File.Join(TEMP, "bta-test-ide-desc");
     eq("creating with a description works",
        ide.startProject(DESCED, "a test project"), true);
     eq("and it lands in project.btp",
@@ -10677,11 +10689,14 @@ function* p_folders(ide) {
     eq("nor one that is not a class name", ide.createModule("3d"), false);
 
     /* A folder in the name works the way it does everywhere else here -- and the
-     * namespace is named rather than taken from the folder. */
+     * namespace is named rather than taken from the folder. `Extra` and not
+     * `Lib`: this project has a `lib/`, and on a file system that ignores case
+     * (Windows) the two are one folder, so the module landed in `lib/` and the
+     * IDE asked its tree for `Lib/Auxiliar.js` (2026-11-12). */
     eq("a module can be created in a folder",
-       ide.createModule("Lib/Auxiliar", "Auxiliares"), true);
+       ide.createModule("Extra/Auxiliar", "Auxiliares"), true);
     yield;
-    const nsSource = File.Load(File.Join(TMP, "Lib", "Auxiliar.js"));
+    const nsSource = File.Load(File.Join(TMP, "Extra", "Auxiliar.js"));
     check("and joins the namespace it was given, which is not the folder's name",
           nsSource.includes('Namespace("Auxiliares")') &&
           nsSource.includes("Auxiliares.Auxiliar = class Auxiliar {"), nsSource);
@@ -10689,10 +10704,10 @@ function* p_folders(ide) {
 
     ide.closeTabByName(modFile, true);
     File.Delete(File.Join(TMP, modFile));
-    File.Delete(File.Join(TMP, "Lib", "Auxiliar.js"));
-    Directory.Delete(File.Join(TMP, "Lib"));
+    File.Delete(File.Join(TMP, "Extra", "Auxiliar.js"));
+    Directory.Delete(File.Join(TMP, "Extra"));
     ide.dropSource(modFile);
-    ide.dropSource("Lib/Auxiliar.js");
+    ide.dropSource("Extra/Auxiliar.js");
     ide.listFiles();
     yield;
 
@@ -12976,7 +12991,7 @@ function* p_apps(ide) {
      * claims no window class -- its window really is `bintana`'s, and an entry
      * claiming otherwise is one the dock can never match.
      */
-    const slugproj = "/tmp/bta-test-ide-slugproj";
+    const slugproj = File.Join(TEMP, "bta-test-ide-slugproj");
     Apps.install(slugproj, { Name: "My App 2", AppId: "" });
     const slugged = Apps.installed(slugproj);
     check("a project with no id installs under the slug", !!slugged);
@@ -14619,7 +14634,7 @@ function* p_check(ide) {
      */
     /* Outside `TMP`: the IDE's own project is the folder above, and a fixture
      * inside it would be a file the pass then has to have an opinion about. */
-    const imports = `/tmp/bta-test-imports${TAG}`;
+    const imports = File.Join(TEMP, `bta-test-imports${TAG}`);
     if (File.IsDir(imports)) Directory.DeleteTree(imports);
     Directory.Make(imports);
     File.Save(File.Join(imports, "project.btp"), JSON.stringify({
@@ -18635,7 +18650,7 @@ function* p_binding(ide) {
  * the page that prints is the page that was drawn.
  */
 function* p_report(ide) {
-    const DIR = `/tmp/bta-test-ide-report${TAG}`;
+    const DIR = File.Join(TEMP, `bta-test-ide-report${TAG}`);
 
     Directory.Make(DIR);
     wipe(DIR);

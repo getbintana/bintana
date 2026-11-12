@@ -15107,7 +15107,7 @@
           "Params": 2,
           "Signature": "(path, root)",
           "Returns": "string",
-          "Doc": "`path` with `root` taken off; the path unchanged when there is no relative spelling, and `\"\"` for the root itself",
+          "Doc": "`path` with `root` taken off, written with `/` on every platform; the path unchanged when there is no relative spelling, and `\"\"` for the root itself",
           "Native": true
         },
         {

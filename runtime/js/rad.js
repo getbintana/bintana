@@ -2727,8 +2727,11 @@ function runTests(found, filter, json) {
     const queue  = [];
     let passed   = 0, failed = 0;
     const say    = (o) => print(JSON.stringify(o));
+    /* `File.Relative`, not a slice: it writes `/` on every platform, which is
+     * what the IDE keys its tree by -- the slice kept Windows' `\` and the IDE
+     * threw on `tests\InvoiceTest.js` (2026-11-12). */
     const rel    = (f) => File.Within(f, Application.Directory)
-                         ? f.slice(Application.Directory.length).replace(/^[\\/]/, "") : f;
+                         ? File.Relative(f, Application.Directory) : f;
 
     for (const t of found) {
         if (!t.Class) {
