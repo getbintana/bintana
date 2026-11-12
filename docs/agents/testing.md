@@ -408,13 +408,12 @@ save will edit `examples/hello` for real.
   (2026-11-11): `tests/smoke` 171/0, `tests/markdown` 171/0, `tests/qr`
   120/0, `tests/report` 259/0 and `tests/xlsx` 57/0 on that desktop.
   `tests/widgets` runs natively there with `testClipboard`'s round trip
-  skipped (the clipboard SEGV below): 6322 passed, 4 failed on 2026-11-12,
-  from 65 that morning. The four left: `Form.Resize` on a shown
-  `Resizable = false` window does nothing (GDK holds such a surface to its
-  size in the Win32 size messages; see `bta_widget_relayout`), a server
-  restarted on the port it just left is refused for a while (see
-  [`network.md`](network.md)), and `Network.Probe` once answered `Error`
-  where alone it answers `Refused`. `tests/check.sh` is the no-display pass the Windows CI
+  skipped (the clipboard SEGV below): 6322 passed, 3 failed on 2026-11-12,
+  from 65 that morning. What is left is the suite's own crowding, none of it
+  seen alone: `testHttpServer`'s TLS restart on an ephemeral port another
+  socket took, `testNetwork`'s probe of a stopped server answering `Error`
+  (both in [`network.md`](network.md)), and a timing check that comes and
+  goes -- `Http.Stream`'s first line inside 700 ms, or within 1 s. `tests/check.sh` is the no-display pass the Windows CI
   runs; it skips `tests/ide` with a sentence when Git wrote the project's
   `.form` symlinks as text files, which is what a checkout without Developer
   Mode does. The runner does the same now, so `tests/run.sh` continues with the

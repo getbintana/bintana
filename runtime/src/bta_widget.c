@@ -281,6 +281,95 @@ BtaWidget *bta_widget_flagged(BtaWidget *w, bool cancel)
 
 /* --------------------------------------------------------------- geometry */
 
+#ifdef G_OS_WIN32
+/*
+ * A shown window's content box, asked of Win32 directly. `SetWindowPos`
+ * counts the whole window and a form's `Width` and `Height` are its content,
+ * so the title bar and border -- the difference between the two rectangles,
+ * measured on this window -- are added back, in physical pixels.
+ * `SWP_NOACTIVATE` keeps it from stealing the focus.
+ */
+static void win32_set_content_size(GtkWidget *window, int width, int height)
+{
+    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(window));
+    HWND        hwnd    = surface ? gdk_win32_surface_get_handle(surface) : NULL;
+
+    if (!hwnd)
+        return;
+
+    RECT wr, cr;
+    int  scale = gdk_surface_get_scale_factor(surface);
+
+    GetWindowRect(hwnd, &wr);
+    GetClientRect(hwnd, &cr);
+    SetWindowPos(hwnd, NULL, 0, 0,
+                 width * scale + (wr.right - wr.left) - (cr.right - cr.left),
+                 height * scale + (wr.bottom - wr.top) - (cr.bottom - cr.top),
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+/*
+ * **A window the user cannot drag is still one the program can size.** GDK
+ * holds a non-resizable surface to its size in the Win32 size messages, and
+ * takes new limits only when the next frame presents -- so `SetWindowPos`
+ * was refused silently (a shown `Resizable = false` form stayed at 320x200
+ * where a resizable one went to 410x270), and lifting `Resizable` around the
+ * call changed nothing (2026-11-12). Over frames it works: lift it, let a
+ * frame present that, size the window, let a frame present the size, put it
+ * back -- and the size holds. On Linux `set_default_size` alone does it.
+ * One pending record per window, so a second `Resize` inside those frames
+ * only changes the size the first one will ask for.
+ */
+#define FIXED_RESIZE_KEY "bta-fixed-resize"
+
+typedef struct {
+    int width, height;
+    int frame;
+} FixedResize;
+
+static gboolean fixed_resize_tick(GtkWidget *window, GdkFrameClock *clock,
+                                  gpointer data)
+{
+    FixedResize *r = data;
+
+    (void)clock;
+    /* The first tick runs before that frame lays out, so the lifted limits
+     * are presented by it and are in force from the second. */
+    if (++r->frame == 2)
+        win32_set_content_size(window, r->width, r->height);
+    if (r->frame < 3)
+        return G_SOURCE_CONTINUE;
+    gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
+    g_object_set_data(G_OBJECT(window), FIXED_RESIZE_KEY, NULL);
+    return G_SOURCE_REMOVE;
+}
+
+static void win32_resize_shown(GtkWidget *window, int width, int height)
+{
+    FixedResize *pending = g_object_get_data(G_OBJECT(window), FIXED_RESIZE_KEY);
+
+    if (pending) {
+        pending->width  = width;
+        pending->height = height;
+        return;
+    }
+    if (gtk_window_get_resizable(GTK_WINDOW(window))) {
+        win32_set_content_size(window, width, height);
+        return;
+    }
+
+    FixedResize *r = g_new0(FixedResize, 1);
+
+    r->width  = width;
+    r->height = height;
+    /* The record lives as long as the tick: the tick's destroy frees it, and
+     * that runs when the window goes too. */
+    g_object_set_data(G_OBJECT(window), FIXED_RESIZE_KEY, r);
+    gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
+    gtk_widget_add_tick_callback(window, fixed_resize_tick, r, g_free);
+}
+#endif
+
 void bta_widget_relayout(BtaWidget *w)
 {
     if (!w || !w->gtk)
@@ -296,42 +385,12 @@ void bta_widget_relayout(BtaWidget *w)
              * `gtk_window_resize` in GTK4, and on Windows the default-size
              * property is ignored once the surface exists: measured with this
              * very test, a 400x300 form resized to 400x480 kept its 300.  The
-             * Win32 surface still has its HWND, so ask the window directly.
-             * `SWP_NOACTIVATE` keeps it from stealing the focus, and the size
-             * is the form's content box, which is what `Height` means here. */
+             * Win32 surface still has its HWND, so ask the window directly. */
             if (gtk_widget_get_mapped(w->gtk)) {
 #ifdef G_OS_WIN32
-                GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(w->gtk));
-                HWND        hwnd    = surface ? gdk_win32_surface_get_handle(surface)
-                                             : NULL;
-
-                if (hwnd) {
-                    /* `SetWindowPos` counts the whole window; a form's `Width`
-                     * and `Height` are its content.  The title bar and border
-                     * are the difference between the two rectangles, measured
-                     * on this window and added back in physical pixels. */
-                    RECT wr, cr;
-                    int  scale = gdk_surface_get_scale_factor(surface);
-
-                    GetWindowRect(hwnd, &wr);
-                    GetClientRect(hwnd, &cr);
-                    int frame_w = (wr.right - wr.left) - (cr.right - cr.left);
-                    int frame_h = (wr.bottom - wr.top) - (cr.bottom - cr.top);
-                    int width   = w->w > 0 ? w->w : gtk_widget_get_width(w->gtk);
-                    int height  = w->h > 0 ? w->h : gtk_widget_get_height(w->gtk);
-
-                    /* **Not yet for a window the user cannot drag**: GDK holds
-                     * a non-resizable surface to its size in the Win32 size
-                     * messages, so this call is refused silently -- a shown
-                     * `Resizable = false` form stayed at 320x200 where a
-                     * resizable one went to 410x270 (2026-11-12). Lifting
-                     * `Resizable` around the call does not help: GDK takes
-                     * the new limits at the next present, not at once. */
-                    SetWindowPos(hwnd, NULL, 0, 0,
-                                 width * scale + frame_w,
-                                 height * scale + frame_h,
-                                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-                }
+                win32_resize_shown(w->gtk,
+                                   w->w > 0 ? w->w : gtk_widget_get_width(w->gtk),
+                                   w->h > 0 ? w->h : gtk_widget_get_height(w->gtk));
 #endif
             }
         }

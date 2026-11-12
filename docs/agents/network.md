@@ -12,10 +12,19 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   (`on_ws_error`); a protocol error still is. Windows also takes ~2 s to
   report a refused connect to a closed `127.0.0.1` port (it retries the SYN):
   a test that wants `Refused` gives it more than 2000 ms.
-- **On Windows a stopped server's port is not free at once.** `Stop()` then
-  `Start()` on the same port answered "the address is already in use" (the
-  TLS step of `testHttpServer`, now and then); GLib does not set
-  `SO_REUSEADDR` there. Not fixed yet.
+- **A port `Port: 0` gave is not yours after `Stop()`.** It is ephemeral, and
+  on Windows every outgoing connection draws from the same range: inside the
+  suite a restart on it was refused "already in use" now and then. Alone it
+  never was -- straight away, a second later, after a 200, a 401 or a 403
+  (2026-11-12) -- so it is not the runtime holding the port. **Do not "fix"
+  `testHttpServer`'s TLS step with `srv.Port = 0`**: the steps after it ask
+  the old port through `api`'s `BaseUrl`, and the step itself runs `python3`
+  with no `Timeout` -- on Windows that can be the Store's stub, and the path
+  had never run there because the restart always threw first. Tried, and the
+  suite hung. `testNetwork`'s probe of a stopped
+  server once answered `Error` instead of `Refused` in the suite and never in
+  six runs alone, which may be the same port taken by another server; not
+  proven.
 - **A request body with no limit is a hole, and the declared length is the
   cheap half of the answer.** `Http.Server` flattened whatever arrived, so a
   body grew until the process died (R4 of the October audit). `MaxBody` is a
