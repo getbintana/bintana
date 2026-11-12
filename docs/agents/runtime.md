@@ -648,6 +648,20 @@ icon when the theme has one by that name (`gtkapplication.c`).
   reports, which is the only way to end a job whose grandchild cannot be named.
   The cost, documented in `Exec.md`: on Windows a background process a child
   starts is not waited for after the leader exits.
+- **That drain was on the clock and dropped a living child's output.** Reads
+  are main-loop time: a line callback that took 5 ms got 64 of a child's 200
+  lines, 20 ms got 17, nothing said (measured 2026-11-12, a console parent and a
+  200-line child). It now re-arms while lines are delivered or a stream's buffer
+  holds some, and reports after a quiet 250 ms window or 10 s in all. Still
+  unseen from there: an EOF that is owed and late -- every writer gone, the read
+  that would say so not run yet, 250-750 ms inside `tests/widgets`, which is
+  why `testPlugin` and `testLibrary` still read `undefined` there and pass alone.
+  **Never ask the pipe from the main thread**: GLib's Windows pipe handles are
+  synchronous, Windows serialises I/O on such a handle, and `PeekNamedPipe` waits
+  behind the `ReadFile` a GIO worker has in flight -- the main thread blocked
+  29.6 s behind a grandchild's pipe and the debugger's tests fell over. Knowing
+  EOF for certain needs the reads off GIO's thread pool: a reader thread per
+  pipe, as `ExecControl` already has, which sees `ERROR_BROKEN_PIPE` itself.
 - **An option's default was decided by a second reading of the same key, and
   the two readings disagreed about `null`.** `Print`'s reader took `undefined`
   and `null` alike for "not given"; the line that makes `To` default to the

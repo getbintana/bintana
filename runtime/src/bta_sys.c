@@ -1646,6 +1646,9 @@ typedef struct {
      * process group to reach it, so the job is drained for this long and then
      * reported; waiting would be waiting for a process nobody can name. */
     guint             drain;
+    guint             lines_seen;    /* out/err lines delivered, ever */
+    guint             drain_mark;    /* lines_seen when the drain last looked */
+    guint             drain_waited;  /* ms the drain has re-armed for */
 #endif
     int               status;
     /* Ours, not the system's: the handle Exec hands back names the job by this
@@ -1765,10 +1768,46 @@ static gboolean on_exec_linger(gpointer data)
  * name.  POSIX waits: there the group is signalable, and `ExecGrandchild`
  * depends on it. */
 #define EXEC_DRAIN_LINGER 250
+#define EXEC_DRAIN_MAX    10000
 
+/* Bytes already read into a line stream's buffer and not handed out yet. */
+static bool exec_buffered(GDataInputStream *stream, bool done)
+{
+    return !done && stream &&
+           g_buffered_input_stream_get_available(G_BUFFERED_INPUT_STREAM(stream)) > 0;
+}
+
+/*
+ * **The drain gives up on silence, not on the clock.** It used to report the
+ * job 250 ms after the reap whatever was still arriving, and the reads are
+ * main-loop time: a line callback that took 5 ms got 64 of a child's 200
+ * lines, one that took 20 ms got 17, and the rest was dropped without a word
+ * (measured 2026-11-12). So it re-arms while lines are still being delivered
+ * or the stream's buffer still holds some, and ends after a window with
+ * neither -- which is what a grandchild holding the pipe and saying nothing
+ * looks like -- or after `EXEC_DRAIN_MAX`, so one that never stops writing
+ * cannot keep the program alive either.
+ *
+ * What this cannot see is an EOF that is owed and late: every writer gone and
+ * the read that would say so not yet run (seen in the suite, 250-750 ms, which
+ * is still `testPlugin`'s and `testLibrary`'s failures there). **Do not ask the
+ * pipe from here**: GLib's pipe handles are synchronous, Windows serialises I/O
+ * on such a handle, and a `PeekNamedPipe` waits behind the `ReadFile` another
+ * thread has in flight -- measured, the main thread blocked 29.6 s behind a
+ * grandchild's pipe, and the debugger's tests failed with it.
+ */
 static gboolean on_exec_drain(gpointer data)
 {
     ExecJob *job = data;
+
+    if (job->drain_waited < EXEC_DRAIN_MAX &&
+        (job->lines_seen != job->drain_mark ||
+         exec_buffered(job->out, job->eof) ||
+         exec_buffered(job->err, job->err_eof))) {
+        job->drain_mark    = job->lines_seen;
+        job->drain_waited += EXEC_DRAIN_LINGER;
+        return G_SOURCE_CONTINUE;
+    }
 
     job->drain = 0;
     job->eof = job->err_eof = true;
@@ -2243,6 +2282,9 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
         return;
     }
 
+#ifdef G_OS_WIN32
+    job->lines_seen++;   /* progress, for on_exec_drain */
+#endif
     if (JS_IsFunction(ctx, job->on_line)) {
         /* The second argument only exists when the streams were kept apart:
          * with them merged there is no honest answer to "which was this",
@@ -2299,8 +2341,10 @@ static void on_exec_done(GObject *src, GAsyncResult *res, gpointer user_data)
     /* The leader is gone; if its pipes are still open, a grandchild has them
      * and there is no group to reach it.  Drain what is there for a moment and
      * report the job, rather than wait for a process nobody can name. */
-    if ((!job->eof || !job->err_eof) && !job->drain)
+    if ((!job->eof || !job->err_eof) && !job->drain) {
+        job->drain_mark = job->lines_seen;
         job->drain = g_timeout_add(EXEC_DRAIN_LINGER, on_exec_drain, job);
+    }
 #endif
     exec_maybe_finish(job);
 }
