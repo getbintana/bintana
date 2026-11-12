@@ -757,10 +757,12 @@ is 1.7 MB and is loaded only for `check`.
 `lib/greeting`: the script runs it through both hosts and diffs the output, so
 `uses`, the library-first load order and `Application.Arguments` are held to
 the graphical answer. `bare` prints `typeof Widget` and must say `undefined` --
-the console host has no toolkit even for a `main`. `window` declares `startup`
-and is refused with exit 2 and the form's name in the sentence, since dispatch
-to the graphical host is Phase 3. The console run costs **8.7 MB against
-43.3 MB** on the same fixture.
+the console host has no toolkit even for a `main`. `window` declares `startup`:
+the test writes a fake graphical host, points `BINTANA_GUI` at it, and holds
+the dispatch to the words it was given and to the host's own exit status; a
+`main` run with the same fake must not dispatch at all, and a
+`BINTANA_GUI` that does not exist must be a sentence and exit 2. The console
+run costs **8.7 MB against 43.3 MB** on the same fixture.
 
 ## The install, which the suite cannot see either
 

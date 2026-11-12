@@ -1,9 +1,10 @@
 # The headless runtime: Phase 0 measured, Phase 1 spiked
 
 **Status: Phase 0 measured, the Phase 1 spike passed, and Phase 2's console
-host runs `check` and a project's `main` (2026-11-12, Linux).** The remaining
-Phase 2 work is dispatch to a graphical host and the installation; the
-prelude's JavaScript half is now carried as data for `check`. The design is
+host runs `check`, a project's `main`, and dispatches a `startup` project to the
+graphical host (2026-11-12, Linux).** The remaining Phase 2 work is the
+installation; the prelude's JavaScript half is carried as data for `check`.
+The design is
 [`plans/headless-runtime-plan.md`](../plans/headless-runtime-plan.md).
 
 ## What Phase 0 measured
@@ -156,10 +157,11 @@ host whose prelude did not load; it is not the answer the test exercises.
 
 ## Phase 2: the console host, first slice
 
-`bintana-headless` is the first real console runtime: `--version`, `check`, and
-a project's `main`, with no GTK in the link. It is not a test host -- it loads
-`tools/check`, `lib/check`, and an arbitrary console project with the libraries
-its `uses` names -- and it is not installed yet.
+`bintana-headless` is the first real console runtime: `--version`, `check`, a
+project's `main`, and the dispatch of a window project to the graphical host,
+with no GTK in the link. It is not a test host -- it loads `tools/check`,
+`lib/check`, and an arbitrary console project with the libraries its `uses`
+names -- and it is not installed yet.
 
 | command | wall | max RSS | libraries |
 |---|---:|---:|---:|
@@ -199,14 +201,25 @@ files `bta_runtime.c` would have supplied -- `bta_lookup_global`,
 `bintana-meta` is the generator and the test; it is not installed.
 
 **`bintana-headless <project>` runs a `main`.** The words after the project are
-`Application.Arguments`, exactly as the graphical runtime hands them over; a
-project that declares `startup` instead is refused with a sentence that names
-the form and says this host has no display. A `main` that names a widget sees
-no `Widget` at all -- the metadata is a `check` document, not a toolkit -- and
-the language's own `ReferenceError` is the answer, not a stub that pretends.
-`tests/headless/projects/` holds the three fixtures the shell test uses: a
-console project with a library, a window project for the refusal, and one that
-asks `typeof Widget`.
+`Application.Arguments`, exactly as the graphical runtime hands them over. A
+`main` that names a widget sees no `Widget` at all -- the metadata is a `check`
+document, not a toolkit -- and the language's own `ReferenceError` is the
+answer, not a stub that pretends.
+
+**A project that declares `startup` is exec'd as the graphical host**, with
+every word, descriptor and the exit status unchanged. The decision is made from
+the manifest before any QuickJS context exists -- the top-level object is read
+for a string `"main"` -- because a window project must not pay to start the
+language before the toolkit. `$BINTANA_GUI` names the host; otherwise
+`bintana-gui` beside this binary (the installed split) or `bintana` beside it
+(the source tree's single binary) is used. A candidate that resolves to this
+process is skipped, so the dispatch can never exec itself forever.
+
+`tests/headless/projects/` holds the fixtures the shell test uses: a console
+project with a library, a window project, and one that asks `typeof Widget`. The
+window fixture is exec'd against a fake graphical host the test writes, so the
+dispatch is watched without opening a window; a `main` is run with the same
+fake in place and must not dispatch at all.
 
 **What is deliberately a stub.** `Message`, `Dialog`, `Screen`, `Clipboard`,
 `Printer`, `Tray`, `Notification`, `Desktop`, `Popover`, `Keyring`, `Http`,
@@ -225,12 +238,13 @@ in the host over `bta_line_of_utf16`; the rest of `Text` needs Pango and a font
 map and belongs to the graphical host. `File.Info` answers no icon name -- there
 is no theme to ask -- which no check reads.
 
-**What it does not do yet.** There is no dispatch to the graphical host: a
-`startup` project is refused with its form's name, not launched, and the words
-after it are not yet forwarded. The binary is not installed, the Windows target
-does not exist, and the Phase 2 acceptance projects -- `tests/report`'s
-`testDocument`, `tests/media`, and `tests/api` with its `Widget.*` -- are still
-the graphical host's. Those are the rest of Phase 2 and Phase 3.
+**What it does not do yet.** The dispatch lives in `bintana-headless`; the core
+`bintana` that dispatches from one binary is Phase 3's. The console binary is
+not installed, the Windows target does not exist, and the Phase 2 acceptance
+projects -- `tests/report`'s `testDocument`, `tests/media`, and `tests/api` with
+its `Widget.*` -- are still the graphical host's. A `main` refuses `--strict`
+and `--profile` with a sentence: strictness is about widget properties and this
+host has no widgets, and the profiler is not linked yet. `--debug` works.
 
 ## Reproducing
 

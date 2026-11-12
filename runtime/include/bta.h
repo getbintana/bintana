@@ -951,6 +951,11 @@ JSValue bta_symbols(JSContext *ctx, const char *src);
 char *bta_project_dir(const char *path);
 /* `<dir>/project.btp`, or the old `project.json` when it is the only one. */
 char *bta_project_manifest(const char *dir);
+/* Does the manifest declare `"main"`? 1 yes, 0 no (a window project), -1 when
+ * it cannot be read as a JSON object -- the full parser reports that. Reads the
+ * top-level object only, so a startup project can reach the graphical host
+ * without starting the language. */
+int bta_project_has_main(const char *dir);
 /* A string key out of a parsed manifest, or `fallback` when it is absent or
  * is not text. */
 char *bta_project_string(JSContext *ctx, JSValueConst cfg, const char *key,

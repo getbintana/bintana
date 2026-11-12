@@ -24,9 +24,11 @@
 #include "bta.h"
 #include "bta_prelude.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 /* ------------------------------------------------------- the core stubs */
 
@@ -1192,6 +1194,11 @@ static int run_project(int argc, char **argv)
     if (!load_prelude(ctx))
         goto out;
 
+    /* `--debug` was set before the project was read; it installs the protocol
+     * only when somebody asked. Descriptor 3 and stdin arrive from the IDE
+     * untouched, the same way the graphical host's console branch gets them. */
+    bta_debug_start(ctx);
+
     bta_modules_scope(ctx, dir, libs);
 
     /* `sources` already carries every library's files in front of the
@@ -1255,6 +1262,126 @@ out:
     return status;
 }
 
+/* ------------------------------------------------------------- dispatch */
+
+/* The options that take the next word with them. The first bare word is the
+ * project; everything after it belongs to the program, as in `bintana`. */
+static bool option_takes_value(const char *word)
+{
+    return !strcmp(word, "--form")      || !strcmp(word, "--theme") ||
+           !strcmp(word, "--text-scale") || !strcmp(word, "--profile");
+}
+
+/*
+ * The graphical host: `$BINTANA_GUI` when set, otherwise the binary that sits
+ * beside this one. **`bintana-gui` is the installed split and `bintana` is the
+ * source tree's single binary**, which is why both are tried.
+ *
+ * The answer is never this process itself: a name that resolves to the console
+ * host would exec it again, forever, and that includes a `BINTANA_GUI` that
+ * names it by mistake.
+ */
+static char *find_gui_host(void)
+{
+    char *self = bta_exe_path();
+    const char *env = g_getenv("BINTANA_GUI");
+
+    if (env && *env) {
+        char *gui = g_canonicalize_filename(env, NULL);
+
+        if (self && !g_strcmp0(gui, self)) {
+            fprintf(stderr, "bintana-headless: BINTANA_GUI names this console "
+                            "host; it needs the graphical one\n");
+            g_free(gui);
+            g_free(self);
+            return NULL;
+        }
+        g_free(self);
+        return gui;
+    }
+
+    if (self) {
+        char *bin = g_path_get_dirname(self);
+        static const char *const names[] = { "bintana-gui", "bintana" };
+
+        for (size_t i = 0; i < G_N_ELEMENTS(names); i++) {
+            char *gui = g_build_filename(bin, names[i], NULL);
+
+            if (g_file_test(gui, G_FILE_TEST_IS_EXECUTABLE) &&
+                g_strcmp0(gui, self) != 0) {
+                g_free(bin);
+                g_free(self);
+                return gui;
+            }
+            g_free(gui);
+        }
+        g_free(bin);
+    }
+    g_free(self);
+    return NULL;
+}
+
+/* Replace this process with the graphical host, every word and descriptor as
+ * it arrived. The exit status is that host's, which is what a runner reads. */
+static int exec_gui(const char *gui, char **words, int nwords)
+{
+    char **args = g_new0(char *, (gsize)nwords + 2);
+
+    args[0] = (char *)gui;
+    for (int i = 0; i < nwords; i++)
+        args[i + 1] = words[i];
+
+    execv(gui, args);
+    fprintf(stderr, "bintana-headless: cannot run the graphical host %s: %s\n",
+            gui, g_strerror(errno));
+    g_free(args);
+    return 2;
+}
+
+static void usage(void)
+{
+    fputs("usage: bintana-headless [run] <project> [args...]\n"
+          "       bintana-headless check [options] <project>\n"
+          "       bintana-headless --version\n", stderr);
+}
+
+/* What an option before the project means to a `main`. A console project opens
+ * no window, so the look and the form options have nothing to act on; saying
+ * which one is better than ignoring it or loading a toolkit to ignore it. */
+static int main_option(const char *word)
+{
+    if (!strcmp(word, "--debug")) {
+        bta_debug_want();
+        return 0;
+    }
+    if (!strcmp(word, "--strict")) {
+        fprintf(stderr, "bintana-headless: --strict is for widget properties, "
+                        "and this host has no widgets; run it with the "
+                        "graphical bintana\n");
+        return 2;
+    }
+    if (!strcmp(word, "--form")) {
+        fprintf(stderr, "bintana-headless: --form opens a form, and this "
+                        "project declares \"main\": it has none to open\n");
+        return 2;
+    }
+    if (!strcmp(word, "--profile")) {
+        fprintf(stderr, "bintana-headless: --profile is not in the console "
+                        "host yet; run it with the graphical bintana\n");
+        return 2;
+    }
+    if (!strcmp(word, "--theme") || !strcmp(word, "--text-scale") ||
+        !strcmp(word, "--rtl")) {
+        fprintf(stderr, "bintana-headless: %s is a setting of the toolkit, and "
+                        "a project with \"main\" opens no window; run it with "
+                        "the graphical bintana\n", word);
+        return 2;
+    }
+    fprintf(stderr, "bintana-headless: unknown option '%s'\n", word);
+    usage();
+    return 2;
+}
+
 int main(int argc, char **argv)
 {
     if (argc >= 2 && (!strcmp(argv[1], "--version") || !strcmp(argv[1], "-v"))) {
@@ -1262,25 +1389,85 @@ int main(int argc, char **argv)
         return 0;
     }
     if (argc >= 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
-        printf("usage: bintana-headless [run] <project> [args...]\n"
-               "       bintana-headless check [options] <project>\n"
-               "       bintana-headless --version\n");
+        fputs("usage: bintana-headless [run] <project> [args...]\n"
+              "       bintana-headless check [options] <project>\n"
+              "       bintana-headless --version\n", stdout);
         return 0;
     }
     if (argc >= 2 && !strcmp(argv[1], "check"))
         return run_check(argc - 2, argv + 2);
 
-    if (argc >= 2 && !strcmp(argv[1], "run")) {
-        argv++;
-        argc--;
+    /* `run` is a word, not an option, and it says nothing the first bare word
+     * does not: it is dropped before the project is looked for. */
+    int first = 1;
+    if (argc > first && !strcmp(argv[first], "run"))
+        first++;
+    if (first >= argc) {
+        usage();
+        return 2;
     }
 
-    if (argc >= 2 && argv[1][0] != '-')
-        return run_project(argc - 1, argv + 1);
+    char **words  = argv + first;
+    int    nwords = argc - first;
+    int    project = -1;
 
-    fprintf(stderr,
-            "usage: bintana-headless [run] <project> [args...]\n"
-            "       bintana-headless check [options] <project>\n"
-            "       bintana-headless --version\n");
-    return 2;
+    for (int i = 0; i < nwords; i++) {
+        if (words[i][0] != '-') {
+            project = i;
+            break;
+        }
+        if (option_takes_value(words[i])) {
+            if (i + 1 >= nwords) {
+                fprintf(stderr, "bintana-headless: %s needs a value\n", words[i]);
+                return 2;
+            }
+            i++;
+        }
+    }
+    if (project < 0) {
+        usage();
+        return 2;
+    }
+
+    /* The kind of project decides which host runs it, and it is answered from
+     * the manifest without a QuickJS context: a window project must exec the
+     * graphical host, not build the language to find out it has nothing to do
+     * here. */
+    char *dir = bta_project_dir(words[project]);
+    int   has_main = bta_project_has_main(dir);
+
+    if (has_main == 0) {
+        char *gui = find_gui_host();
+
+        if (!gui) {
+            char *name = g_path_get_basename(dir);
+
+            fprintf(stderr, "bintana-headless: '%s' opens a window, and no "
+                            "graphical host is beside this binary. Install "
+                            "bintana-gui there, or set BINTANA_GUI to it.\n",
+                    name);
+            g_free(name);
+            g_free(dir);
+            return 2;
+        }
+        g_free(dir);
+        return exec_gui(gui, words, nwords);
+    }
+
+    g_free(dir);
+
+    if (has_main < 0)
+        /* The full parser's diagnosis is the useful one; no option is worth
+         * reading for a manifest that cannot be read. */
+        return run_project(nwords - project, words + project);
+
+    for (int i = 0; i < project; i++) {
+        int rc = main_option(words[i]);
+
+        if (rc)
+            return rc;
+        if (option_takes_value(words[i]))
+            i++;
+    }
+    return run_project(nwords - project, words + project);
 }

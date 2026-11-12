@@ -157,17 +157,56 @@ else
     fail=1
 fi
 
-"$BINTANA_HEADLESS" tests/headless/projects/window \
-    >"$tmp/window.out" 2>"$tmp/window.err"
-window_status=$?
-if [[ $window_status -eq 2 ]] &&
-   grep -q "startup 'MainForm'" "$tmp/window.err" &&
-   grep -q "no display" "$tmp/window.err"; then
-    echo "the console host refuses a window project, naming the form"
+# A project that declares `startup` belongs to the graphical host: this process
+# execs it, every word and descriptor unchanged, and its exit status is the
+# host's. `BINTANA_GUI` is the seam that lets the test watch the exec without
+# opening a window.
+gui="$tmp/gui-host"
+cat >"$gui" <<'GUI'
+#!/bin/sh
+: > "$BINTANA_TEST_GUI_ARGS"
+for word in "$@"; do printf '%s\n' "$word" >> "$BINTANA_TEST_GUI_ARGS"; done
+exit 7
+GUI
+chmod +x "$gui"
+
+BINTANA_GUI="$gui" BINTANA_TEST_GUI_ARGS="$tmp/gui-args" \
+    "$BINTANA_HEADLESS" run --theme dark tests/headless/projects/window one two \
+    >"$tmp/gui.out" 2>"$tmp/gui.err"
+gui_status=$?
+printf '%s\n' --theme dark tests/headless/projects/window one two \
+    >"$tmp/gui-want"
+
+if [[ $gui_status -eq 7 ]] && diff -u "$tmp/gui-want" "$tmp/gui-args" \
+        >"$tmp/gui.diff"; then
+    echo "a window project is exec'd as the graphical host"
 else
-    echo "the console host did not refuse a window project: exit " \
-         "$window_status" >&2
-    cat "$tmp/window.err" >&2
+    echo "the console host did not exec the graphical host: exit " \
+         "$gui_status" >&2
+    cat "$tmp/gui.diff" "$tmp/gui.err" >&2
+    fail=1
+fi
+
+# The other half of the dispatch: a `main` must not load the toolkit.
+BINTANA_GUI="$gui" BINTANA_TEST_GUI_ARGS="$tmp/gui-args-main" \
+    "$BINTANA_HEADLESS" tests/headless/projects/run \
+    >/dev/null 2>"$tmp/gui-main.err"
+if [[ ! -e "$tmp/gui-args-main" ]]; then
+    echo "a main project does not dispatch"
+else
+    echo "the console host dispatched a main project to the toolkit" >&2
+    fail=1
+fi
+
+if BINTANA_GUI=/nonexistent/host "$BINTANA_HEADLESS" \
+        tests/headless/projects/window >/dev/null 2>"$tmp/gui-fail.err"; then
+    echo "the console host claimed to run a missing graphical host" >&2
+    fail=1
+elif grep -q "cannot run the graphical host" "$tmp/gui-fail.err"; then
+    echo "a missing graphical host is a sentence"
+else
+    echo "a missing graphical host said nothing useful:" >&2
+    cat "$tmp/gui-fail.err" >&2
     fail=1
 fi
 

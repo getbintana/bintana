@@ -535,10 +535,17 @@ project against the graphical one.
   there breaks the console link, and a second copy of the search would let the
   two hosts resolve a library differently. `bta_project_libs` exits 2 on a name
   that is nowhere, so both hosts stop with the same sentence.
-- **The console runner refuses `startup`; it does not open one.** It names the
-  form and says the host has no display, and exits 2. The arguments after the
-  project become `Application.Arguments`, exactly as in the graphical host.
-  Dispatch to the graphical binary is Phase 3; do not fake it with a stub form.
+- **A `startup` project is exec'd, not refused: `execv` gives the graphical
+  host the words, the descriptors and the exit status.** `$BINTANA_GUI` names
+  it; otherwise `bintana-gui` beside this binary (the installed split) or
+  `bintana` beside it (the source tree's single binary). The candidate that
+  would be this process is skipped -- an exec of itself is an infinite loop --
+  and `tests/headless.sh` uses a fake `BINTANA_GUI` script to watch the exec
+  without a window. The type is decided from the manifest's top-level object
+  (`bta_project_has_main`), with no QuickJS context: a window project must not
+  start the language before the toolkit. The arguments after the project become
+  `Application.Arguments`, exactly as in the graphical host. Dispatch from a
+  single `bintana` binary is Phase 3; do not fake it with a stub form.
 - **`BTA_META_ONLY` belongs to `bintana-meta` now, and it is built `-O1`.**
   At `-O2` GCC merges the GObject class structs `G_DEFINE_TYPE` builds into a
   `.data.rel.ro` section the linker cannot split; the vfuncs that point at

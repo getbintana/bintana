@@ -10,7 +10,8 @@ bta_project.c     project.btp, `uses`, the library search path and load order;
                   the boot both hosts share, with no toolkit in it
 bta_util.c        bta_to_number and bta_to_int, needed by every host and by
                   the network and XML globals rather than by the widgets alone
-bta_headless.c    the console host: version, check, and a project's `main`
+bta_headless.c    the console host: version, check, a project's `main`, and
+                  the exec of a `startup` project as the graphical host
 bta_widget.c      the base Widget: geometry, Style and colours, events, drag and
                   drop, the class table machinery, lifetimes
 bta_controls.c    Form, Container, Panel, Label, Button, Image, TextBox,

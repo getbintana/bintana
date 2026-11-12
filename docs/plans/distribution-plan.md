@@ -92,12 +92,12 @@ writes `widgets.json`, `WidgetMeta.js` answers over it, and `bintana-headless`
 loads both only for `check`; the core links no widget file.
 
 **The core `bintana` package still waits for the rest of Phase 2**: the console
-host now runs `check` and a project's `main`, but dispatch from `startup` to the
-graphical host and the installation do not exist yet. Until they do, the package
-that ships is `bintana-desktop`. The staging code is written for the split list
-now, not for one binary. The console binary is 2.9 MB and 17 libraries, the
-check document is 1.7 MB, and `bintana-headless check` already matches the
-graphical check byte for byte.
+host runs `check`, a project's `main`, and dispatches `startup` to the graphical
+host, but the console binary is not installed and the one-binary split is Phase
+3's. Until then, the package that ships is `bintana-desktop`. The staging code
+is written for the split list now, not for one binary. The console binary is
+2.9 MB and 17 libraries, the check document is 1.7 MB, and `bintana-headless
+check` already matches the graphical check byte for byte.
 
 **`Package` stays the Flatpak context.** `Deb`, `Rpm` and `AppImage` are
 separate classes beside `Nsis`, because each one consumes a different tree and

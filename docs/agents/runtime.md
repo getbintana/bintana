@@ -749,6 +749,13 @@ icon when the theme has one by that name (`gtkapplication.c`).
   cannot make widgets*. `bintana-headless` goes further and does not install the
   class at all for a `main`: the metadata document is loaded only for `check`,
   so the answer there is the language's `ReferenceError` and not a stub.
+- **A `startup` project reaches the graphical host by `exec`, and the decision
+  must stay cheap.** `bta_project_has_main` reads the top-level object of
+  `project.btp` for a string `"main"`; a QuickJS context must not exist yet, or
+  a window project pays to start the language before GTK. `$BINTANA_GUI`, then
+  `bintana-gui` beside the binary, then `bintana` beside it; never this process
+  itself, which would exec forever. `execv` carries every word, descriptor and
+  the exit status, which is what a runner reads.
 - **A library is a directory, and the runtime finds it one hop from its own
   binary.** `"uses": ["charts"]` in project.btp resolves over the project's
   `lib/`, `$BINTANA_LIB_PATH`, `~/.local/share/bintana/lib`, `<bin>/../lib` (the

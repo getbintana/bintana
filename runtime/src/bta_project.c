@@ -64,6 +64,149 @@ char *bta_project_string(JSContext *ctx, JSValueConst obj, const char *key,
     return out;
 }
 
+/*
+ * Whether the manifest declares `"main"`: 1 yes, 0 no, -1 when it cannot be
+ * read as a JSON object and the full parser should report it.
+ *
+ * **No QuickJS context, on purpose.** A project that opens a window has to
+ * reach the graphical host without starting the language first -- `bintana
+ * --theme dark app` execs, it does not parse JavaScript to discover there is
+ * no JavaScript to run here. This walks the top-level object of the manifest
+ * and looks for a string `"main"`; `uses`, `sources` and the rest are the full
+ * parser's, in `run_project` and in `bta_app_new`. A nested `"main"` inside a
+ * description is skipped with its value, and an escaped spelling of the key
+ * would only mean the graphical host loads -- never a different program.
+ */
+static const char *project_skip_ws(const char *p)
+{
+    while (*p && g_ascii_isspace(*p))
+        p++;
+    return p;
+}
+
+/* `p` at the opening quote; the first byte after the closing one, or NULL. */
+static const char *project_skip_string(const char *p)
+{
+    p++;
+    while (*p) {
+        if (*p == '\\') {
+            if (!p[1])
+                return NULL;
+            p += 2;
+        } else if (*p == '"') {
+            return p + 1;
+        } else {
+            p++;
+        }
+    }
+    return NULL;
+}
+
+/* A whole object or array, strings and all, starting at its opening bracket. */
+static const char *project_skip_compound(const char *p)
+{
+    int depth = 0;
+
+    while (*p) {
+        if (*p == '"') {
+            p = project_skip_string(p);
+            if (!p)
+                return NULL;
+            continue;
+        }
+        if (*p == '{' || *p == '[')
+            depth++;
+        else if (*p == '}' || *p == ']') {
+            depth--;
+            if (depth == 0)
+                return p + 1;
+        }
+        p++;
+    }
+    return NULL;
+}
+
+/* A value of any kind; for a literal, the first separator or space ends it. */
+static const char *project_skip_value(const char *p)
+{
+    if (*p == '"')
+        return project_skip_string(p);
+    if (*p == '{' || *p == '[')
+        return project_skip_compound(p);
+
+    while (*p && *p != ',' && *p != '}' && *p != ']' && !g_ascii_isspace(*p))
+        p++;
+    return p;
+}
+
+int bta_project_has_main(const char *dir)
+{
+    char *path = bta_project_manifest(dir);
+    char *text = bta_read_file(path, NULL);
+
+    g_free(path);
+    if (!text)
+        return -1;
+
+    const char *p = text;
+
+    if ((guchar)p[0] == 0xEF && (guchar)p[1] == 0xBB && (guchar)p[2] == 0xBF)
+        p += 3;
+    p = project_skip_ws(p);
+    if (*p != '{') {
+        g_free(text);
+        return -1;
+    }
+
+    int has_main = 0;
+
+    p++;
+    for (;;) {
+        p = project_skip_ws(p);
+        if (*p == '}')
+            break;
+        if (*p != '"')
+            goto malformed;
+
+        const char *key     = p + 1;
+        const char *key_end = project_skip_string(p);
+        if (!key_end)
+            goto malformed;
+
+        bool is_main = key_end - key - 1 == 4 && !memcmp(key, "main", 4);
+
+        p = project_skip_ws(key_end);
+        if (*p != ':')
+            goto malformed;
+        p = project_skip_ws(p + 1);
+
+        /* A string is a declaration, the empty one included: `json_str`
+         * answers "" and the run then says the function is not there, which
+         * is the graphical host's own answer. `null` is not a declaration. */
+        if (is_main && *p == '"')
+            has_main = 1;
+
+        const char *value = p;
+
+        p = project_skip_value(p);
+        if (!p || p == value)   /* a value that is not there at all */
+            goto malformed;
+        p = project_skip_ws(p);
+        if (*p == '}')
+            break;
+        if (*p != ',')
+            goto malformed;
+        p++;
+    }
+
+    g_free(text);
+    return has_main;
+
+malformed:
+    g_free(text);
+    return -1;
+}
+
 /* Every .js under a directory, subdirectories included: a project is allowed to
  * organise its classes in folders, and one that lists no sources still means
  * "all of my code". */
