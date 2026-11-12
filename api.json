@@ -13938,7 +13938,7 @@
           "Params": 1,
           "Signature": "(text)",
           "Returns": "",
-          "Doc": "**immediate**: the text is on the clipboard when the call returns",
+          "Doc": "**immediate**: the text is on the clipboard when the call returns. An empty string empties the clipboard on Windows, where GTK cannot serve empty text to another program; `Paste` answers `\"\"` either way.",
           "Native": true
         },
         {

@@ -436,7 +436,12 @@ save will edit `examples/hello` for real.
      `testClipboard` skipped, none did. Hammering `Get-Clipboard` against a
      project that alternates `Copy`/`CopyImage` gives `gdk_clipboard_write_async:
      assertion 'priv->local' failed` and `Clipboard rendering timed out`, and
-     killed the process once in three, so it is a race, not a recipe.
+     killed the process once in three, so it is a race, not a recipe. **The
+     recipe is the empty string**: `Clipboard.Copy("")` plus one
+     `Get-Clipboard` from PowerShell crashed two runs in two (zero bytes
+     written leave the same buffer NULL). `Copy("")` now empties the
+     clipboard on Windows instead (`sys_clip_copy`), three runs in three
+     survive. The image race has no runtime fix short of a patched GTK.
   `GTK_IM_MODULE=none` only removes the first. **It is not the `Exec` chain**:
   a run stopped at `ExecCloseInput` still crashed. Two processes do not help either:
   a fresh tail needs the tests before it (`TimerShorthand`'s timer is read by

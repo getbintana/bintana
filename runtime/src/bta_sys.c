@@ -3943,6 +3943,36 @@ static JSValue sys_clip_copy(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Clipboard.Copy(text) expects a string");
 
     GdkClipboard *clip = clipboard_of();
+#ifdef G_OS_WIN32
+    /*
+     * **An empty string is not offered as text on Windows: the clipboard is
+     * emptied instead.** GDK 4.24.1 promises `CF_UNICODETEXT` and renders it
+     * when another process asks; zero bytes written leave its stream's buffer
+     * NULL, and closing the stream converts that NULL --
+     * `g_utf8_to_utf16: assertion 'str != NULL' failed`, then an access
+     * violation in libgtk. Measured: `Copy("")` and one `Get-Clipboard` from
+     * PowerShell, two crashes in two; `Copy("palabra")`, none. `Paste` answers
+     * `""` for an empty clipboard, so a Bintana reader sees the same thing.
+     *
+     * Releasing GDK's content alone is not emptying: the system clipboard kept
+     * what the previous owner had put there, and a later `Paste` answered that
+     * old text. So the clipboard is emptied as well -- `OpenClipboard(NULL)`
+     * leaves it with no owner -- retried briefly, because GDK's own clipboard
+     * thread may hold it open at that moment. GDK hears the change through its
+     * format listener.
+     */
+    if (clip && !*text) {
+        gdk_clipboard_set_content(clip, NULL);
+        for (int i = 0; i < 20; i++) {
+            if (OpenClipboard(NULL)) {
+                EmptyClipboard();
+                CloseClipboard();
+                break;
+            }
+            Sleep(5);
+        }
+    } else
+#endif
     if (clip)
         gdk_clipboard_set_text(clip, text);
 
@@ -5524,7 +5554,9 @@ void bta_sys_init(JSContext *ctx, JSValue global)
 
     JSValue clipboard = JS_NewObject(ctx);
     /* Copy(text)
-     *   **immediate**: the text is on the clipboard when the call returns
+     *   **immediate**: the text is on the clipboard when the call returns. An
+     *   empty string empties the clipboard on Windows, where GTK cannot serve
+     *   empty text to another program; `Paste` answers `""` either way.
      */
     JS_SetPropertyStr(ctx, clipboard, "Copy",
                       JS_NewCFunction(ctx, sys_clip_copy, "Copy", 1));
