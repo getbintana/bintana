@@ -280,6 +280,7 @@ endif()
 add_executable(bintana
     runtime/src/main.c
     runtime/src/bta_runtime.c
+    runtime/src/bta_util.c
     runtime/src/bta_module.c
     runtime/src/bta_journal.c
     runtime/src/bta_widget.c
@@ -520,6 +521,7 @@ target_compile_options(bintana PRIVATE -Wall -Wextra -Wno-unused-parameter
 # GtkSourceView or VTE.
 set(BTA_META_SOURCES
     runtime/src/bta_meta.c
+    runtime/src/bta_util.c
     runtime/src/bta_widget.c
     runtime/src/bta_controls.c
     runtime/src/bta_layout.c
@@ -587,6 +589,7 @@ endif()
 if(NOT WIN32)
     set(BTA_HEADLESS_SOURCES
         runtime/src/bta_headless.c
+        runtime/src/bta_util.c
         runtime/src/bta_module.c
         runtime/src/bta_debug.c
         runtime/src/bta_sys.c
@@ -599,57 +602,22 @@ if(NOT WIN32)
         runtime/src/bta_bytes.c
         runtime/src/bta_cancellable.c
         ${PRELUDE_H}
-        ${FORMS_H}
     )
-    # The widget files are metadata-only, and that define must not reach the
-    # core files beside them: an object library is the one CMake shape that
-    # compiles the same sources with a definition for this target alone.
-    set(BTA_HEADLESS_META_SOURCES
-        runtime/src/bta_widget.c
-        runtime/src/bta_controls.c
-        runtime/src/bta_layout.c
-        runtime/src/bta_notebook.c
-        runtime/src/bta_switcher.c
-        runtime/src/bta_paint.c
-        runtime/src/bta_text.c
-        runtime/src/bta_editor.c
-        runtime/src/bta_terminal.c
-        runtime/src/bta_menu.c
-        runtime/src/bta_tree.c
-        runtime/src/bta_table.c
-        runtime/src/bta_media.c
-        ${SIGNATURES_H}
+
+    # The widget metadata is a document the console host loads for `check`.
+    # `bintana-meta` is the generator (and the test): it is not installed, and
+    # the core never links the widget files.
+    set(WIDGETS_JSON ${CMAKE_BINARY_DIR}/check/widgets.json)
+    file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/check)
+    add_custom_command(
+        OUTPUT ${WIDGETS_JSON}
+        COMMAND $<TARGET_FILE:bintana-meta> --dump ${WIDGETS_JSON}
+        DEPENDS bintana-meta
+        COMMENT "Dumping widget metadata"
     )
-    add_library(bta-headless-widgets OBJECT ${BTA_HEADLESS_META_SOURCES})
-    target_include_directories(bta-headless-widgets PRIVATE
-        ${CMAKE_SOURCE_DIR}/runtime/include
-        ${CMAKE_BINARY_DIR}/generated
-        ${GTK4_INCLUDE_DIRS}
-        ${GTKSOURCE_INCLUDE_DIRS}
-        ${VTE_INCLUDE_DIRS}
-        ${GSTREAMER_INCLUDE_DIRS}
-    )
-    target_compile_definitions(bta-headless-widgets PRIVATE
-        BTA_META_ONLY
-        BTA_VERSION_STRING="${PROJECT_VERSION}"
-    )
-    if(VTE_FOUND)
-        target_compile_definitions(bta-headless-widgets PRIVATE BTA_HAVE_VTE=1)
-    endif()
-    if(GSTREAMER_FOUND)
-        target_compile_definitions(bta-headless-widgets PRIVATE BTA_HAVE_GST=1)
-    endif()
-    target_compile_options(bta-headless-widgets PRIVATE
-        # See the metadata target: `-O2` merges the GObject class structs and
-        # the linker keeps their GTK vfuncs. This object is only `Widget.*`.
-        -O1
-        -ffunction-sections -fdata-sections
-        -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow
-    )
-    # Object libraries do not propagate a linked target's include paths, and
-    # `bta.h` includes `quickjs.h`; naming it here is the include, and the
-    # executable links the library once.
-    target_link_libraries(bta-headless-widgets PRIVATE quickjs)
+    add_custom_target(bintana-check-data ALL DEPENDS ${WIDGETS_JSON})
+    configure_file(${CMAKE_SOURCE_DIR}/runtime/js/widget-meta.js
+                   ${CMAKE_BINARY_DIR}/check/WidgetMeta.js COPYONLY)
 
     add_executable(bintana-headless ${BTA_HEADLESS_SOURCES})
     target_include_directories(bintana-headless PRIVATE
@@ -675,8 +643,9 @@ if(NOT WIN32)
         target_compile_definitions(bintana-headless PRIVATE BTA_HAVE_LIBXML=1)
         target_link_libraries(bintana-headless PRIVATE PkgConfig::LIBXML)
     endif()
+    add_dependencies(bintana-headless bintana-check-data)
     target_link_libraries(bintana-headless PRIVATE
-        quickjs PkgConfig::GLIBCORE bta-headless-widgets)
+        quickjs PkgConfig::GLIBCORE)
     if(NOT WIN32)
         target_link_libraries(bintana-headless PRIVATE PkgConfig::GIOUNIX)
     endif()
@@ -820,6 +789,14 @@ install(DIRECTORY lib/ DESTINATION ${BTA_DATADIR}/lib
 # IDE does: one hop from the binary, under the data directory.
 install(DIRECTORY tools/check DESTINATION ${BTA_DATADIR}/tools
         PATTERN "*.pot" EXCLUDE)
+
+# The console host's check data: the generated metadata and the script that
+# answers `Widget.*` over it. No binary; `bintana` loads both only for `check`.
+if(NOT WIN32)
+    install(FILES runtime/js/widget-meta.js
+            DESTINATION ${BTA_DATADIR}/check RENAME WidgetMeta.js)
+    install(FILES ${WIDGETS_JSON} DESTINATION ${BTA_DATADIR}/check)
+endif()
 
 # **One header, and that is the whole development surface a plugin needs.** Not
 # `bta.h` and not `quickjs.h`: a plugin links neither the runtime nor the

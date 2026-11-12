@@ -355,10 +355,64 @@ static bool meta_eval(JSContext *ctx, const char *text, const char *name)
     return true;
 }
 
+/*
+ * The metadata, as data for the console host.
+ *
+ * Every answer `Widget.*` gives is dumped for every class -- the C rows, the
+ * prelude's mixins and the generated signatures -- so `bintana` can answer the
+ * check without linking the widget files. `bintana-meta` is the generator and
+ * the test; it is not installed.
+ */
+static const char meta_dump_js[] =
+    "function __widgets() {\n"
+    "    const extra = ['MenuItem', 'Action'];\n"
+    "    const types = Widget.Types();\n"
+    "    const all   = types.concat(extra);\n"
+    "    const out   = { Types: types, Members: {}, Signatures: {},\n"
+    "                    PropertyNames: {}, Methods: {}, EventNames: {},\n"
+    "                    EventSignatures: {}, EventDocs: {}, TextProperties: {},\n"
+    "                    PropertyOptions: {}, DeferredProperties: {},\n"
+    "                    Available: {} };\n"
+    "    for (const t of all) {\n"
+    "        const members = Widget.Members(t) || [];\n"
+    "        const props   = Widget.PropertyNames(t) || [];\n"
+    "        const events  = Widget.EventNames(t) || [];\n"
+    "        out.Members[t]         = members;\n"
+    "        out.PropertyNames[t]   = props;\n"
+    "        out.Methods[t]         = Widget.Methods(t) || [];\n"
+    "        out.EventNames[t]      = events;\n"
+    "        out.TextProperties[t]  = Widget.TextProperties(t) || [];\n"
+    "        out.DeferredProperties[t] = Widget.DeferredProperties(t) || [];\n"
+    "        out.Available[t]       = Widget.Available(t);\n"
+    "        out.Signatures[t]      = {};\n"
+    "        for (const m of members)\n"
+    "            out.Signatures[t][m.Name] = Widget.Signature(t, m.Name);\n"
+    "        out.EventSignatures[t] = {};\n"
+    "        out.EventDocs[t]       = {};\n"
+    "        for (const e of events) {\n"
+    "            out.EventSignatures[t][e] = Widget.EventSignature(t, e);\n"
+    "            out.EventDocs[t][e]       = Widget.EventDoc(t, e);\n"
+    "        }\n"
+    "        out.PropertyOptions[t] = {};\n"
+    "        for (const p of props)\n"
+    "            out.PropertyOptions[t][p] = Widget.PropertyOptions(t, p);\n"
+    "    }\n"
+    "    return JSON.stringify(out);\n"
+    "}\n"
+    "__widgets();\n";
+
 int main(int argc, char **argv)
 {
-    if (argc != 2) {
-        fprintf(stderr, "usage: bintana-meta <script.js>\n");
+    const char *dump   = NULL;
+    const char *script = NULL;
+
+    if (argc == 3 && !strcmp(argv[1], "--dump"))
+        dump = argv[2];
+    else if (argc == 2)
+        script = argv[1];
+    else {
+        fprintf(stderr, "usage: bintana-meta <script.js>\n"
+                        "       bintana-meta --dump <widgets.json>\n");
         return 2;
     }
 
@@ -366,8 +420,8 @@ int main(int argc, char **argv)
     gsize  len  = 0;
     GError *err = NULL;
 
-    if (!g_file_get_contents(argv[1], &text, &len, &err)) {
-        fprintf(stderr, "bintana-meta: %s\n", err ? err->message : argv[1]);
+    if (script && !g_file_get_contents(script, &text, &len, &err)) {
+        fprintf(stderr, "bintana-meta: %s\n", err ? err->message : script);
         g_clear_error(&err);
         return 2;
     }
@@ -408,7 +462,35 @@ int main(int argc, char **argv)
 
     JS_FreeValue(ctx, global);
 
-    JSValue result = JS_Eval(ctx, text, len, argv[1], JS_EVAL_TYPE_GLOBAL);
+    if (dump) {
+        JSValue r = JS_Eval(ctx, meta_dump_js, strlen(meta_dump_js),
+                            "<widgets-dump>", JS_EVAL_TYPE_GLOBAL);
+        if (JS_IsException(r)) {
+            bta_dump_error(ctx);
+            status = 1;
+        } else {
+            const char *json = JS_ToCString(ctx, r);
+            GError     *werr = NULL;
+
+            if (!json || !g_file_set_contents(dump, json, -1, &werr)) {
+                fprintf(stderr, "bintana-meta: cannot write %s: %s\n", dump,
+                        werr ? werr->message : "not text");
+                g_clear_error(&werr);
+                status = 1;
+            }
+            if (json)
+                JS_FreeCString(ctx, json);
+        }
+        JS_FreeValue(ctx, r);
+
+        bta_widgets_cleanup(ctx);
+        JS_FreeContext(ctx);
+        JS_FreeRuntime(rt);
+        g_free(text);
+        return status;
+    }
+
+    JSValue result = JS_Eval(ctx, text, len, script, JS_EVAL_TYPE_GLOBAL);
 
     if (JS_IsException(result)) {
         bta_dump_error(ctx);

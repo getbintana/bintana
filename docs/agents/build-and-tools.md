@@ -523,34 +523,38 @@ toolkit in the link.** It links 17 libraries, and `check ide` answers byte for
 byte what `bintana check ide` answers with half the memory. `tests/headless.sh`
 runs both.
 
-- **`BTA_META_ONLY` is an object library, not a source property.** The widget
-  files are compiled once into `bta-headless-widgets` with the define; a
-  `set_source_files_properties` would also change the sources in `bintana`, and
-  the main binary would build metadata-only props.
-- **The metadata objects are built `-O1`, and that is not a performance
-  choice.** At `-O2` GCC merges the GObject class structs `G_DEFINE_TYPE`
-  builds into a `.data.rel.ro` section the linker cannot split; the vfuncs that
-  point at GtkSourceCompletion are then kept even though their `get_type` is
-  dropped, and a no-GTK link fails on `gtk_source_completion_*`. `-O1` keeps
-  them sectioned; nothing in this target is hot.
-- **`BTA_HEADLESS` is the other define, and it is on the core files.** It leaves
-  `Screen`, `Dialog`, `Clipboard` and `File.Open` out of `bta_sys_init` and the
-  icon lookup out of `File.Info`; the GUI tables are unreferenced and the linker
-  drops them. Without it the link pulls GDK through `File.Info`.
-- **The core tables must stay real.** `Locale`, `Hash`, `Xml`, `Network` and
-  `File` use `JS_CGETSET_DEF`/`JS_CFUNC_DEF`; compiling those files with
-  `BTA_META_ONLY` stubs the properties and `Locale.Text` returns `undefined`.
-  That was the first failure: the check ran but every sentence was
-  `undefined`. `Text.LineOf` is implemented in the host over
-  `bta_line_of_utf16`; the measuring half of `Text` needs Pango and is not here.
+- **The console host links no widget file.** `bintana-meta --dump` writes
+  `check/widgets.json` from the real rows, property tables, both preludes and
+  the generated signatures; `runtime/js/widget-meta.js` answers `Widget.*` over
+  it. The data is 1.7 MB and loads only for `check`; the binary is 2.9 MB.
+  A `main` that never asks for a widget never sees `Widget` at all.
+- **`BTA_META_ONLY` belongs to `bintana-meta` now, and it is built `-O1`.**
+  At `-O2` GCC merges the GObject class structs `G_DEFINE_TYPE` builds into a
+  `.data.rel.ro` section the linker cannot split; the vfuncs that point at
+  GtkSourceCompletion are then kept even though their `get_type` is dropped,
+  and a no-GTK link fails on `gtk_source_completion_*`. `-O1` keeps them
+  sectioned; nothing in the generator is hot. The console host does not compile
+  those files at all.
+- **`BTA_HEADLESS` is on the core files.** It leaves `Screen`, `Dialog`,
+  `Clipboard` and `File.Open` out of `bta_sys_init` and the icon lookup out of
+  `File.Info`; the GUI tables are unreferenced and the linker drops them.
+  Without it the link pulls GDK through `File.Info`.
+- **The core tables are never metadata-only.** `Locale`, `Hash`, `Xml`,
+  `Network` and `File` use `JS_CGETSET_DEF`/`JS_CFUNC_DEF`; stubbing them makes
+  `Locale.Text` answer `undefined`, and a check then says `undefined` for every
+  sentence. The metadata stubs belong to `bintana-meta`, not to the core.
+  `Text.LineOf` is implemented in the host over `bta_line_of_utf16`; the
+  measuring half of `Text` needs Pango and is not here.
 - **`bta_sys_init` is the core object set once the guards are in**, and
   `bta_headless.c` adds `Logger`, `Text` and empty objects for the graphical
   names (`Message`, `Printer`, `Database`, `Http`, ...). The empty objects are
   what keeps `Application.Globals()` honest for `Names.unresolved`; a call to
-  one is a `TypeError` until Phase 3 gives it a sentence.
-- **`bta_modules_scope` goes after `rad.js`/`forms.js`, not before.** It
+  one is a `TypeError` until Phase 3 gives it a sentence. `Widget` and the
+  class names are not here; `widget-meta.js` installs them for `check`.
+- **`bta_modules_scope` goes after `rad.js` and the metadata document.** It
   photographs the runtime's names for `Application.FreeNames`; taken before the
-  prelude, every `Regex` in a project was reported as undeclared.
+  prelude, every `Regex` in a project was reported as undeclared, and taken
+  before `widget-meta.js`, every `Button` was.
 - **`bta_module_run` takes the compiled module** (`JS_EvalFunction` does); freeing
   it again aborts in QuickJS. A script from `bta_compile` goes through
   `JS_EvalFunction`.

@@ -746,9 +746,11 @@ measurements behind the target are in
 **The same script holds the console host.** `bintana-headless --version`,
 `check examples/hello`, and `check --json tests/smoke` are diffed against the
 graphical binary's own answers, and `ldd` is read again. It is the first real
-console runtime, not the test host: it loads `tools/check` and `lib/check`, and
-`check` is byte for byte the graphical pass with **17 libraries against 153**
-and 31.1 MB against 60.2 MB on the IDE's own project.
+console runtime, not the test host: it loads `tools/check`, `lib/check` and the
+generated `widgets.json` through `WidgetMeta.js`, and `check` is byte for byte
+the graphical pass with **17 libraries against 153** and about 33 MB against
+58 MB on the IDE's own project. The binary links no widget file; the document
+is 1.7 MB and is loaded only for `check`.
 
 ## The install, which the suite cannot see either
 

@@ -181,20 +181,23 @@ la Fase 2 hereda esa idea, o mueve el `bta_symbols` real.
 **Objetivo: un target que corre un `main` de verdad sin GTK.**
 
 **Primer slice hecho (2026-11-12): `bintana-headless --version` y `check`.**
-Enlaza 17 bibliotecas (ninguna gráfica), 4,1 MB, y `check ide` da la misma salida
-que el check gráfico con 31,1 MB contra 60,2 MB. Corre `tools/check` y
-`lib/check` como módulos, con las globals core (`File`, `Exec`, `Directory`,
-`Hash`, `Locale`, `Xml`, `Network`, `Text.LineOf`, `Decimal`, `Day`, `Bytes`),
-`Application` con `Symbols`/`FreeNames`/`CheckSource`/`Globals`/`LibraryPath`,
-`rad.js` y `forms.js`. Las clases de widgets son el object library
-`BTA_META_ONLY`; `bta_sys.c` se compila con `BTA_HEADLESS` y deja afuera
-`Screen`/`Dialog`/`Clipboard`/`File.Open`. Los nombres gráficos que faltan
-(`Message`, `Printer`, `Database`, `Http`, ...) son objetos vacíos para que
-`Application.Globals()` no invente "no declarado"; una llamada a uno de ellos
-todavía no tiene su frase de refusal. Lo que falta de esta fase: el runner de un
-`project.btp` arbitrario (`main`), el dispatch a `bintana-gui` para `startup`, y
-la instalación. `tests/headless.sh` corre el meta-host, el check headless y el
-gráfico, y difea las dos respuestas.
+Enlaza 17 bibliotecas (ninguna gráfica), **2,9 MB** (más un `widgets.json` de
+1,7 MB que solo carga para `check`), y `check ide` da la misma salida que el
+check gráfico con 35,5 MB contra 60,2 MB en Debug, **32,8 contra 57,2 MB** en
+`RelWithDebInfo`. Corre `tools/check` y `lib/check` como módulos, con las globals
+core (`File`, `Exec`, `Directory`, `Hash`, `Locale`, `Xml`, `Network`,
+`Text.LineOf`, `Decimal`, `Day`, `Bytes`), `Application` con
+`Symbols`/`FreeNames`/`CheckSource`/`Globals`/`LibraryPath` y `rad.js`. **No
+enlaza ningún archivo de widgets:** `bintana-meta --dump` genera
+`check/widgets.json` de las filas y firmas reales, y `widget-meta.js` responde
+`Widget.*` sobre ese documento solo cuando corre `check`. `bta_sys.c` se compila
+con `BTA_HEADLESS` y deja afuera `Screen`/`Dialog`/`Clipboard`/`File.Open`. Los
+nombres gráficos que faltan (`Message`, `Printer`, `Database`, `Http`, ...) son
+objetos vacíos para que `Application.Globals()` no invente "no declarado"; una
+llamada a uno de ellos todavía no tiene su frase de refusal. Lo que falta de
+esta fase: el runner de un `project.btp` arbitrario (`main`), el dispatch a
+`bintana-gui` para `startup`, y la instalación. `tests/headless.sh` corre el
+meta-host, el check headless y el gráfico, y difea las dos respuestas.
 
 1. **`bta_boot.c` (core):** leer `project.btp`, resolver `sources`, `uses`,
    `main`/`startup`, construir el contexto, cargar módulos y `rad.js`. Sacar de

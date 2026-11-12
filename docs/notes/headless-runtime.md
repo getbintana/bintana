@@ -163,25 +163,30 @@ installed yet.
 | command | wall | max RSS | libraries |
 |---|---:|---:|---:|
 | `bintana-headless --version` | 0.00 s | 5.6 MB | 17 |
-| `bintana-headless check examples/hello` | 0.09 s | 14.0 MB | 17 |
-| `bintana-headless check ide` | 5.40 s | 31.1 MB | 17 |
-| `bintana check ide` | 5.50 s | 60.2 MB | 153 |
+| `bintana-headless check examples/hello` | 0.08 s | 20.8 MB | 17 |
+| `bintana-headless check ide` | 5.83 s | 35.5 MB | 17 |
+| `bintana check ide` | 5.60 s | 60.2 MB | 153 |
 
 The `check ide` rows are the same pass, and their output is byte for byte the
-same (`--json` too); the console host uses half the memory and maps no toolkit.
+same (`--json` too); the console host uses less memory and maps no toolkit.
 Those rows are the Debug build (`build/`). On `RelWithDebInfo` (`build-rwd`)
-the same check is **1.63 s and 28.6 MB** against **1.68 s and 57.1 MB** for the
-graphical binary; `--version` stays at 5.6 MB.
+the same check is **1.48 s and 32.8 MB** against **1.52 s and 58.0 MB** for the
+graphical binary; `--version` stays at 5.6 MB. The binary is **2.9 MB**; the
+metadata document it loads for `check` is **1.7 MB**.
 
-**How it is put together.** The widget files are compiled into an object
-library with `BTA_META_ONLY` (the metadata host's stubs); `bta_sys.c` is compiled
-with `BTA_HEADLESS`, which leaves `Screen`, `Dialog`, `Clipboard` and
-`File.Open` out and keeps `File`, `Directory`, `Exec`, `Hash` and `Environment`.
-`bta_headless.c` is the boot: it installs the core globals, `Application`, rad.js
-and forms.js, then `bta_modules_scope`, then `lib/check` and `tools/check`'s
-`main`. The files `bta_runtime.c` would have supplied -- `bta_lookup_global`,
-`bta_dump_error`, `bta_symbols`, `bta_split_doc`, `bta_read_file`,
-`bta_drain_jobs`, the error text, the library listing -- are in the host.
+**How it is put together.** The console host links **no widget file**. At build
+time `bintana-meta --dump` writes `check/widgets.json` from the real class rows,
+their property tables, both preludes and the generated signatures;
+`runtime/js/widget-meta.js` reads that document and answers `Widget.*` from it.
+`bta_sys.c` is compiled with `BTA_HEADLESS`, which leaves `Screen`, `Dialog`,
+`Clipboard` and the GTK `File.Open` out and keeps `File`, `Directory`, `Exec`,
+`Hash` and `Environment`. `bta_headless.c` is the boot: core globals,
+`Application`, `rad.js`, then -- for `check` only -- the metadata document,
+`bta_modules_scope`, `lib/check` and `tools/check`'s `main`. The files
+`bta_runtime.c` would have supplied -- `bta_lookup_global`, `bta_dump_error`,
+`bta_symbols`, `bta_split_doc`, `bta_read_file`, `bta_drain_jobs`, the error
+text, the library listing -- are in the host. `bintana-meta` is the generator
+and the test; it is not installed.
 
 **What is deliberately a stub.** `Message`, `Dialog`, `Screen`, `Clipboard`,
 `Printer`, `Tray`, `Notification`, `Desktop`, `Popover`, `Keyring`, `Http`,
@@ -191,7 +196,9 @@ answers the same names the graphical host has and a check does not report a
 false "not declared". A project that calls one gets a `TypeError` today; Phase 3
 replaces each with its refusal sentence. `Application.Replacements()` is empty
 for the same reason: this host does not close the hatches, so the names are
-still there.
+still there. The widget classes are not stubs in the binary: they do not exist
+until `check` loads the metadata; then `widget-meta.js` installs names that
+throw on construction and answer the metadata questions.
 
 `Text.LineOf` is the one measuring answer a check reads, and it is implemented
 in the host over `bta_line_of_utf16`; the rest of `Text` needs Pango and a font
@@ -201,7 +208,9 @@ is no theme to ask -- which no check reads.
 **What it does not do yet.** A project's `main` is not the command; the host
 runs `tools/check`, not an arbitrary project. There is no dispatch to the
 graphical host, no `bintana-headless <project>`, no Windows target, and the
-binary is not installed. Those are the rest of Phase 2 and Phase 3.
+binary is not installed. Those are the rest of Phase 2 and Phase 3. A `main`
+that names a widget in this host sees no `Widget` at all: the metadata is loaded
+only for `check`.
 
 ## Reproducing
 

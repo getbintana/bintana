@@ -87,14 +87,17 @@ metadata, `PropertyNames`, `Methods` and `Members` with `Doc`, with `forms.js`
 loaded and no GTK in its link (15 libraries against 153), so the split is the working
 layout and the names above are not placeholders. The staging layer in Stage 1
 takes a list of hosts and a list of data directories, never one hard-coded
-binary.
+binary. **The check data is a document, not a binary:** `bintana-meta --dump`
+writes `widgets.json`, `WidgetMeta.js` answers over it, and `bintana-headless`
+loads both only for `check`; the core links no widget file.
 
 **The core `bintana` package still waits for the rest of Phase 2**, because
 `bintana-headless` today runs `check` and not an arbitrary project's `main`;
 until that runner and the installation exist, the package that ships is
 `bintana-desktop`. The staging code is written for the split list now, not for
-one binary. The console binary is 4.1 MB and 17 libraries, and
-`bintana-headless check` already matches the graphical check byte for byte.
+one binary. The console binary is 2.9 MB and 17 libraries, the check document is
+1.7 MB, and `bintana-headless check` already matches the graphical check byte
+for byte.
 
 **`Package` stays the Flatpak context.** `Deb`, `Rpm` and `AppImage` are
 separate classes beside `Nsis`, because each one consumes a different tree and

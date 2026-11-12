@@ -526,7 +526,10 @@ icon when the theme has one by that name (`gtkapplication.c`).
   validated their range and still let a word through. Twenty-eight setters, one
   helper; `""` and `null` stay `0`, and `Radius`/`Padding`/`Shadow`/`Border` go
   through `sizes_parse` and are untouched. A new numeric property that calls
-  `JS_ToInt32` directly is the regression to watch for.
+  `JS_ToInt32` directly is the regression to watch for. The two live in
+  `runtime/src/bta_util.c`, not in `bta_widget.c`: `bta_network.c` and
+  `bta_xml.c` use them too, and the console host links those and no widget
+  file.
   **And it was never only setters.** An audit found forty-five *method*
   arguments still converting with a bare `JS_ToInt32` -- every list's
   `RemoveRow`/`Select`/`Activate`/`Reveal`, `RemovePage`, the table's

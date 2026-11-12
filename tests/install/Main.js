@@ -153,6 +153,11 @@ function contents(prefix) {
                         * its own binary -- so this path *is* the mechanism. */
                        "share/bintana/lib/charts/Chart.js",
                        "share/bintana/lib/charts/Chart.form",
+                       /* The console host's check data: the metadata
+                        * document and the script that answers `Widget.*`
+                        * over it. No binary of its own. */
+                       "share/bintana/check/WidgetMeta.js",
+                       "share/bintana/check/widgets.json",
                        "share/applications/bintana-ide.desktop",
                        "share/icons/hicolor/scalable/apps/bintana-ide.svg",
                        "share/mime/packages/bintana.xml",

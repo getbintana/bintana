@@ -23,7 +23,6 @@
  */
 #include "bta.h"
 #include "bta_prelude.h"
-#include "bta_forms.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -380,8 +379,10 @@ void bta_prelude_sources(const char **rad, const char **forms)
 {
     if (rad)
         *rad = bta_prelude_js;
+    /* The widget half is not part of the console host; the metadata document
+     * carries its members and their prose. */
     if (forms)
-        *forms = bta_forms_js;
+        *forms = "";
 }
 
 /* ----------------------------------------------------------- Application */
@@ -794,6 +795,40 @@ static const char *const GUI_GLOBALS[] = {
     "Random", "Gzip", "Zip", "Cipher", "Key", "Probe", "Media", "AudioPlayer"
 };
 
+/* The line breaks GTK's buffer uses, which is the model `Text.LineOf` follows:
+ * `\n`, `\r\n` as one, a lone `\r` and U+2029. */
+static int headless_line_break(const char *p)
+{
+    if (*p == '\n')
+        return 1;
+    if (*p == '\r')
+        return p[1] == '\n' ? 2 : 1;
+    if (g_utf8_get_char(p) == 0x2029)
+        return (int)(g_utf8_next_char(p) - p);
+    return 0;
+}
+
+int bta_line_of_utf16(const char *s, int index)
+{
+    const char *p     = s;
+    int         units = 0;
+    int         line  = 1;
+
+    while (*p) {
+        int br = headless_line_break(p);
+        int n  = br ? br : (int)(g_utf8_next_char(p) - p);
+        int u  = br == 2 ? 2 : (g_utf8_get_char(p) > 0xFFFF ? 2 : 1);
+
+        if (units + u > index)
+            break;
+        units += u;
+        p     += n;
+        if (br)
+            line++;
+    }
+    return line;
+}
+
 /* The one `Text` answer `lib/check` reads: the UTF-16 index to its 1-based
  * line, over the same bridge `bta_text.c` gives an editor. The measuring half
  * needs Pango and a font map, and a console check has no line to underline. */
@@ -818,6 +853,19 @@ static JSValue headless_text_line_of(JSContext *ctx, JSValueConst this_val,
     int line = bta_line_of_utf16(text, index);
     JS_FreeCString(ctx, text);
     return JS_NewInt32(ctx, line);
+}
+
+static JSValue headless_strict_seal(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    (void)ctx; (void)this_val; (void)argc; (void)argv;
+    return JS_UNDEFINED;
+}
+
+void bta_strict_init(JSContext *ctx, JSValueConst global)
+{
+    JS_SetPropertyStr(ctx, global, "strictSeal",
+                      JS_NewCFunction(ctx, headless_strict_seal, "strictSeal", 1));
 }
 
 static JSValue headless_log(JSContext *ctx, JSValueConst this_val,
@@ -878,7 +926,6 @@ static bool install_core(JSContext *ctx, JSValueConst global,
     JS_SetPropertyStr(ctx, global, "Text", text);
     bta_locale_init(ctx, global, project, libs);
 
-    bta_widgets_init(ctx, global);
     bta_record_init(ctx, global, project, libs);
     bta_class_of_name_init(ctx, global);
     bta_strict_init(ctx, global);
@@ -888,11 +935,9 @@ static bool install_core(JSContext *ctx, JSValueConst global,
 
 static bool load_prelude(JSContext *ctx)
 {
-    if (!eval_script(ctx, bta_prelude_js, strlen(bta_prelude_js), "<rad.js>"))
-        return false;
-    if (!eval_script(ctx, bta_forms_js, strlen(bta_forms_js), "<forms.js>"))
-        return false;
-    return true;
+    /* The language only. `forms.js` is the widget half, and the console host
+     * does not have widgets until `check` loads the metadata document. */
+    return eval_script(ctx, bta_prelude_js, strlen(bta_prelude_js), "<rad.js>");
 }
 
 /* --------------------------------------------------------------- the CLI */
@@ -924,6 +969,47 @@ static char *find_check_project(void)
     }
     g_ptr_array_unref(tried);
     return found;
+}
+
+typedef struct {
+    char *meta;
+    char *data;
+} CheckData;
+
+static CheckData find_check_data(void)
+{
+    CheckData out = { NULL, NULL };
+    GPtrArray *dirs = g_ptr_array_new_with_free_func(g_free);
+    char      *exe  = bta_exe_path();
+
+    if (exe) {
+        char *bin = g_path_get_dirname(exe);
+        char *up  = g_path_get_dirname(bin);
+        g_ptr_array_add(dirs, g_build_filename(bin, "check", NULL));
+        g_ptr_array_add(dirs, g_build_filename(up, "share", "bintana",
+                                               "check", NULL));
+        g_free(up);
+        g_free(bin);
+        g_free(exe);
+    }
+    g_ptr_array_add(dirs, g_build_filename("/usr", "share", "bintana",
+                                           "check", NULL));
+
+    for (guint i = 0; i < dirs->len && !out.meta; i++) {
+        char *meta = g_build_filename(dirs->pdata[i], "WidgetMeta.js", NULL);
+        char *data = g_build_filename(dirs->pdata[i], "widgets.json", NULL);
+
+        if (g_file_test(meta, G_FILE_TEST_IS_REGULAR) &&
+            g_file_test(data, G_FILE_TEST_IS_REGULAR)) {
+            out.meta = meta;
+            out.data = data;
+        } else {
+            g_free(meta);
+            g_free(data);
+        }
+    }
+    g_ptr_array_unref(dirs);
+    return out;
 }
 
 static int run_check(int argc, char **argv)
@@ -986,9 +1072,43 @@ static int run_check(int argc, char **argv)
         return 1;
     }
 
-    /* After the prelude and before the program's modules: the runtime names
-     * `Application.FreeNames` leaves out are photographed here, and `Regex`
-     * and `Dictionary` are rad.js's, not the C host's. */
+    /*
+     * The widget metadata is a document, not a linked toolkit. It is loaded
+     * here -- only for `check` -- and the class names it installs are what
+     * `lib/check` and `Application.Globals` read.
+     */
+    CheckData data = find_check_data();
+    if (!data.meta) {
+        fprintf(stderr, "bintana-headless: the check metadata is not installed "
+                        "(WidgetMeta.js and widgets.json)\n");
+        JS_FreeContext(ctx);
+        JS_FreeRuntime(rt);
+        g_ptr_array_unref(libs);
+        g_free(tools); g_free(library);
+        return 2;
+    }
+
+    JSValue meta_global = JS_GetGlobalObject(ctx);
+    JS_SetPropertyStr(ctx, meta_global, "WidgetDataPath",
+                      JS_NewString(ctx, data.data));
+    JS_FreeValue(ctx, meta_global);
+    bool meta_ok = eval_file(ctx, data.meta);
+    meta_global = JS_GetGlobalObject(ctx);
+    JS_SetPropertyStr(ctx, meta_global, "WidgetDataPath", JS_UNDEFINED);
+    JS_FreeValue(ctx, meta_global);
+    g_free(data.meta);
+    g_free(data.data);
+    if (!meta_ok) {
+        JS_FreeContext(ctx);
+        JS_FreeRuntime(rt);
+        g_ptr_array_unref(libs);
+        g_free(tools); g_free(library);
+        return 1;
+    }
+
+    /* After the prelude and the metadata, and before the program's modules:
+     * the runtime names `Application.FreeNames` leaves out are photographed
+     * here -- `Regex`, `Dictionary`, `Widget` and the class names. */
     bta_modules_scope(ctx, tools, libs);
 
     GPtrArray *files = bta_library_sources(ctx, library);
@@ -1023,7 +1143,6 @@ static int run_check(int argc, char **argv)
     }
 
     bta_modules_forget(ctx);
-    bta_widgets_cleanup(ctx);
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
     g_ptr_array_unref(libs);
