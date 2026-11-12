@@ -643,25 +643,22 @@ icon when the theme has one by that name (`gtkapplication.c`).
   timeout `GSource` attached after the private context had been iterated once
   was not woken by its deadline. `Exec.Wait` now assigns the child to a **job
   object** and terminates the job at the deadline, and drives the wait with a
-  non-blocking context loop that owns the deadline. The asynchronous spelling
-  has no job: once its leader is reaped it drains the pipes for 250 ms and
-  reports, which is the only way to end a job whose grandchild cannot be named.
-  The cost, documented in `Exec.md`: on Windows a background process a child
-  starts is not waited for after the leader exits.
-- **That drain was on the clock and dropped a living child's output.** Reads
-  are main-loop time: a line callback that took 5 ms got 64 of a child's 200
-  lines, 20 ms got 17, nothing said (measured 2026-11-12, a console parent and a
-  200-line child). It now re-arms while lines are delivered or a stream's buffer
-  holds some, and reports after a quiet 250 ms window or 10 s in all. Still
-  unseen from there: an EOF that is owed and late -- every writer gone, the read
-  that would say so not run yet, 250-750 ms inside `tests/widgets`, which is
-  why `testPlugin` and `testLibrary` still read `undefined` there and pass alone.
-  **Never ask the pipe from the main thread**: GLib's Windows pipe handles are
-  synchronous, Windows serialises I/O on such a handle, and `PeekNamedPipe` waits
-  behind the `ReadFile` a GIO worker has in flight -- the main thread blocked
-  29.6 s behind a grandchild's pipe and the debugger's tests fell over. Knowing
-  EOF for certain needs the reads off GIO's thread pool: a reader thread per
-  pipe, as `ExecControl` already has, which sees `ERROR_BROKEN_PIPE` itself.
+  non-blocking context loop that owns the deadline. **The asynchronous `Exec`
+  has one too now** (`ExecJob.win_job`), and waits for the output like POSIX:
+  `Timeout`, `Stop()` and `Kill()` terminate the job, grandchild included.
+- **It used to give up on a clock instead, and that cut living output.** Once
+  the leader was reaped with a pipe open, the job was reported 250 ms later.
+  Reads are main-loop time and, on Windows, GIO thread-pool time: a line
+  callback taking 5 ms got 64 of a child's 200 lines and one taking 20 ms got
+  17, with nothing said; inside `tests/widgets` an owed EOF late by 250-750 ms
+  made `testPlugin` and `testLibrary` read `undefined` twenty-six times, while
+  they passed alone (measured 2026-11-12). A drain that waited for silence
+  instead of time fixed the first and not the second; the job object fixed
+  both (65 failures to 39, no new ones). **Never ask the pipe from the main
+  thread** to tell a grandchild from a late EOF: GLib's Windows pipe handles
+  are synchronous, Windows serialises I/O on such a handle, and
+  `PeekNamedPipe` waited 29.6 s behind the `ReadFile` a GIO worker had in
+  flight, and the debugger's tests fell over with the frozen loop.
 - **An option's default was decided by a second reading of the same key, and
   the two readings disagreed about `null`.** `Print`'s reader took `undefined`
   and `null` alike for "not given"; the line that makes `To` default to the

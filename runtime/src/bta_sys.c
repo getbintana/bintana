@@ -1642,13 +1642,10 @@ typedef struct {
     bool              ctl_eof;
     guint             linger;
 #ifdef G_OS_WIN32
-    /* The leader is gone and a grandchild still holds a pipe.  Windows has no
-     * process group to reach it, so the job is drained for this long and then
-     * reported; waiting would be waiting for a process nobody can name. */
-    guint             drain;
-    guint             lines_seen;    /* out/err lines delivered, ever */
-    guint             drain_mark;    /* lines_seen when the drain last looked */
-    guint             drain_waited;  /* ms the drain has re-armed for */
+    /* The child's job object: Windows' spelling of its process group, so
+     * `Stop`, `Kill` and `Timeout` reach what it started, the way `killpg`
+     * does on POSIX. NULL when the assignment was refused. */
+    HANDLE            win_job;
 #endif
     int               status;
     /* Ours, not the system's: the handle Exec hands back names the job by this
@@ -1719,8 +1716,10 @@ static void exec_job_free(ExecJob *job)
     if (job->linger)
         g_source_remove(job->linger);
 #ifdef G_OS_WIN32
-    if (job->drain)
-        g_source_remove(job->drain);
+    /* Closing the handle ends nothing (no KILL_ON_JOB_CLOSE): a job reported
+     * is over, and one torn down with the runtime keeps running, as on POSIX. */
+    if (job->win_job)
+        CloseHandle(job->win_job);
 #endif
 
     JS_FreeValue(job->ctx, job->on_line);
@@ -1760,64 +1759,23 @@ static gboolean on_exec_linger(gpointer data)
     return G_SOURCE_REMOVE;
 }
 
-#ifdef G_OS_WIN32
-/* How long a reaped child's still-open pipes are drained before the job is
- * reported anyway.  Windows has no process group, so a grandchild that
- * inherited a pipe cannot be reached or waited for; a short drain keeps what it
- * had already written and refuses to hang the program on a process nobody can
- * name.  POSIX waits: there the group is signalable, and `ExecGrandchild`
- * depends on it. */
-#define EXEC_DRAIN_LINGER 250
-#define EXEC_DRAIN_MAX    10000
-
-/* Bytes already read into a line stream's buffer and not handed out yet. */
-static bool exec_buffered(GDataInputStream *stream, bool done)
-{
-    return !done && stream &&
-           g_buffered_input_stream_get_available(G_BUFFERED_INPUT_STREAM(stream)) > 0;
-}
-
 /*
- * **The drain gives up on silence, not on the clock.** It used to report the
- * job 250 ms after the reap whatever was still arriving, and the reads are
- * main-loop time: a line callback that took 5 ms got 64 of a child's 200
- * lines, one that took 20 ms got 17, and the rest was dropped without a word
- * (measured 2026-11-12). So it re-arms while lines are still being delivered
- * or the stream's buffer still holds some, and ends after a window with
- * neither -- which is what a grandchild holding the pipe and saying nothing
- * looks like -- or after `EXEC_DRAIN_MAX`, so one that never stops writing
- * cannot keep the program alive either.
+ * Finish only once every pipe and the process are done, so no output is
+ * reported after the exit callback.
  *
- * What this cannot see is an EOF that is owed and late: every writer gone and
- * the read that would say so not yet run (seen in the suite, 250-750 ms, which
- * is still `testPlugin`'s and `testLibrary`'s failures there). **Do not ask the
- * pipe from here**: GLib's pipe handles are synchronous, Windows serialises I/O
- * on such a handle, and a `PeekNamedPipe` waits behind the `ReadFile` another
- * thread has in flight -- measured, the main thread blocked 29.6 s behind a
- * grandchild's pipe, and the debugger's tests failed with it.
+ * **On Windows too: a run is over when its output is, not on a clock.** It
+ * used to be reported 250 ms after the reap when a pipe was still open, because
+ * a grandchild holding it could not be reached. Reads are main-loop time and,
+ * on Windows, GIO thread-pool time, so that cut a living child's output: a line
+ * callback taking 5 ms got 64 of 200 lines, and inside `tests/widgets` an owed
+ * EOF late by 250-750 ms left `testPlugin` and `testLibrary` reading
+ * `undefined` (measured 2026-11-12). The grandchild is reachable now -- the
+ * child runs in a job object, see `exec_job_signal` -- so Windows waits like
+ * POSIX, and `Timeout`, `Stop` and `Kill` are what end a run nothing else
+ * ends. Asking the pipe instead (`PeekNamedPipe`) is not an option: GLib's
+ * pipe handles are synchronous, Windows serialises their I/O, and the peek
+ * blocked the main thread 29.6 s behind a worker's `ReadFile`.
  */
-static gboolean on_exec_drain(gpointer data)
-{
-    ExecJob *job = data;
-
-    if (job->drain_waited < EXEC_DRAIN_MAX &&
-        (job->lines_seen != job->drain_mark ||
-         exec_buffered(job->out, job->eof) ||
-         exec_buffered(job->err, job->err_eof))) {
-        job->drain_mark    = job->lines_seen;
-        job->drain_waited += EXEC_DRAIN_LINGER;
-        return G_SOURCE_CONTINUE;
-    }
-
-    job->drain = 0;
-    job->eof = job->err_eof = true;
-    exec_maybe_finish(job);
-    return G_SOURCE_REMOVE;
-}
-#endif
-
-/* Finish only once every pipe and the process are done, so no output is
- * reported after the exit callback. */
 static void exec_maybe_finish(ExecJob *job)
 {
     if (!job->eof || !job->err_eof || !job->reaped)
@@ -2071,13 +2029,12 @@ static bool exec_control_start(ExecControl *control, int job_id)
  * process alone when the group is already gone -- which it can be, with the
  * leader exited and only what it started left.
  *
- * Windows: **there is no asking.** `Stop()` and `Kill()` are both
- * `g_subprocess_force_exit`, because the platform has no SIGTERM for a process
- * that is not looking at a console window, and a program that offers a
- * graceful stop it cannot deliver is worse than one that says it cannot.  The
- * process group is gone too: this reaches the child and not what a wrapper
- * started under it, which is the documented cost and the reason the runner's
- * hang guard is the thing to test Windows with.
+ * Windows: **there is no asking.** `Stop()` and `Kill()` both terminate,
+ * because the platform has no SIGTERM for a process that is not looking at a
+ * console window, and a program that offers a graceful stop it cannot deliver
+ * is worse than one that says it cannot. What is terminated is the child's job
+ * object (`exec_job_signal`), Windows' process group; this function is the
+ * fallback for a child the job assignment refused, and reaches only it.
  */
 static void exec_signal_group(GSubprocess *proc, pid_t pid, bool force)
 {
@@ -2097,10 +2054,12 @@ static void exec_signal_group(GSubprocess *proc, pid_t pid, bool force)
 
 #ifdef G_OS_WIN32
 /*
- * A Windows process group, for the one call that needs to reach what a child
- * started: `Exec.Wait`'s timeout.  A job object is the Windows spelling of a
- * process group: assigning the child to it is what makes `TerminateJobObject`
- * take its children too.  A process already in a job that does not allow
+ * A Windows process group, for what reaches what a child started: `Exec`'s
+ * `Timeout`, `Stop` and `Kill`, and `Exec.Wait`'s timeout.  A job object is the
+ * Windows spelling of a process group: assigning the child to it is what makes
+ * `TerminateJobObject` take its children too.  The child is assigned just after
+ * it starts -- GSubprocess cannot start it suspended -- so a grandchild started
+ * in that instant escapes it.  A process already in a job that does not allow
  * nesting refuses the assignment; the caller keeps its old road then.
  */
 static HANDLE exec_win_job_open(pid_t pid)
@@ -2162,6 +2121,17 @@ static bool exec_job_signal(ExecJob *job, bool force)
 {
     if (job->pid <= 0)
         return false;
+#ifdef G_OS_WIN32
+    /* The job object is the group: terminating it takes the child and
+     * everything it started, before the reap and after it -- a grandchild
+     * holding the pipe is still in the job. Without one (the assignment was
+     * refused) there is only the child to end. */
+    if (job->win_job) {
+        if (job->reaped && job->eof && job->err_eof)
+            return false;             /* over in all but the callback */
+        return exec_win_job_kill(job->win_job);
+    }
+#endif
     if (!job->reaped) {
         exec_signal_group(job->proc, job->pid, force);
         return true;
@@ -2169,7 +2139,7 @@ static bool exec_job_signal(ExecJob *job, bool force)
     if (job->eof && job->err_eof)
         return false;                 /* over in all but the callback */
 #ifdef G_OS_WIN32
-    return false;                     /* no groups to reach: see exec_signal_group */
+    return false;                     /* no job object to reach the grandchild */
 #else
     return killpg(job->pid, force ? SIGKILL : SIGTERM) == 0;
 #endif
@@ -2282,9 +2252,6 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
         return;
     }
 
-#ifdef G_OS_WIN32
-    job->lines_seen++;   /* progress, for on_exec_drain */
-#endif
     if (JS_IsFunction(ctx, job->on_line)) {
         /* The second argument only exists when the streams were kept apart:
          * with them merged there is no honest answer to "which was this",
@@ -2337,15 +2304,6 @@ static void on_exec_done(GObject *src, GAsyncResult *res, gpointer user_data)
     job->status = g_subprocess_get_if_exited(job->proc)
                       ? g_subprocess_get_exit_status(job->proc) : -1;
     job->reaped = true;
-#ifdef G_OS_WIN32
-    /* The leader is gone; if its pipes are still open, a grandchild has them
-     * and there is no group to reach it.  Drain what is there for a moment and
-     * report the job, rather than wait for a process nobody can name. */
-    if ((!job->eof || !job->err_eof) && !job->drain) {
-        job->drain_mark = job->lines_seen;
-        job->drain = g_timeout_add(EXEC_DRAIN_LINGER, on_exec_drain, job);
-    }
-#endif
     exec_maybe_finish(job);
 }
 
@@ -2965,6 +2923,9 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     job->proc    = proc;
     job->id      = exec_next_id++;
     job->pid     = pid;
+#ifdef G_OS_WIN32
+    job->win_job = exec_win_job_open(pid);
+#endif
     job->cancel  = g_cancellable_new();
     job->split   = split;
     job->on_line = argc > cb     ? JS_DupValue(ctx, argv[cb])     : JS_UNDEFINED;

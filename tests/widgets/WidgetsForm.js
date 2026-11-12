@@ -33966,42 +33966,24 @@ class PQ extends Form {
      * keeps the pipe, and the job is not over. `Timeout`, `Stop()` and `Kill()`
      * all stopped at *reaped* and did nothing, so the exit callback never came.
      * Both roads are driven: the guard, and `Stop()` from the line callback.
+     *
+     * The same on Windows, where the group is the child's job object:
+     * `start /b` is the spelling of `sleep 30 &`, and `ping` the `sleep`. It
+     * used to be the one platform where the job was reported 250 ms after the
+     * leader whatever the pipe still held -- which also cut a living child's
+     * output; see `exec_maybe_finish`.
      */
     testExecGrandchild() {
-        if (Environment.OS === "Windows") {
-            /*
-             * A leader that starts a background child and exits: the child is
-             * reaped at once, the background one holds the output pipe, and
-             * there is no group to reach it.  The job drains what is there for
-             * a moment and reports; waiting would wait for a process nobody
-             * can name.  `start /b` is the Windows spelling of `sleep 30 &`.
-             */
-            waiting++;
-            const started = Date.now();
-            const said = [];
-
-            Exec(["cmd", "/c", "start /b ping -n 30 127.0.0.1 & echo up"],
-                 { Timeout: 4000 },
-                 (line) => said.push(line),
-                 (code) => {
-                     waiting--;
-                     check("a leader with a background child still reports",
-                           Date.now() - started < 10000,
-                           `${Date.now() - started} ms`);
-                     eq("...with the leader's status", code, 0);
-                     check("and what it printed before", said.includes("up"),
-                           JSON.stringify(said));
-                 });
-            return;
-        }
-
-        if (!File.Exists("/bin/sh") || !Application.HasCommand("sleep")) return;
+        const win = Environment.OS === "Windows";
+        if (!win && (!File.Exists("/bin/sh") || !Application.HasCommand("sleep"))) return;
+        const behind = win ? ["cmd", "/c", "start /b ping -n 30 127.0.0.1 & echo up"]
+                           : ["/bin/sh", "-c", "sleep 30 & echo up"];
 
         const started = Date.now();
         let   timedOut = null;
 
         waiting++;
-        const guarded = Exec(["/bin/sh", "-c", "sleep 30 & echo up"], { Timeout: 400 },
+        const guarded = Exec(behind, { Timeout: 400 },
             null,
             () => {
                 waiting--;
@@ -34013,8 +33995,8 @@ class PQ extends Form {
 
         let stopped = null;
         waiting++;
-        const asked = Exec(["/bin/sh", "-c", "sleep 30 & echo up"], {},
-            (line) => { if (line === "up") Timer.After(100, () => { stopped = asked.Stop(); }); },
+        const asked = Exec(behind, {},
+            (line) => { if (line.trim() === "up") Timer.After(100, () => { stopped = asked.Stop(); }); },
             () => {
                 waiting--;
                 eq("Stop() on a reaped leader still reaches its group", stopped, true);
