@@ -181,6 +181,7 @@ needed and what it did instead.
 | A word for *do this, then that* | [`docs/plans/async-plan.md`](../plans/async-plan.md) |
 | `Database` publishes `Sqlite` alone | [`docs/plans/postgres-plan.md`](../plans/postgres-plan.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md) |
+| On Windows, text on the clipboard replaced at once by an image can crash the program when another program reads the clipboard -- a GTK 4.24.1 defect | [ISSUE-windows-clipboard-crash](../issues/ISSUE-windows-clipboard-crash.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 
 ## One more thing

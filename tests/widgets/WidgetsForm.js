@@ -13082,6 +13082,17 @@ class Form1 extends Form {
               notImage);
         throws("reading an image needs a callback", () => Clipboard.PasteImage());
 
+        /* **On Windows the round trip below takes the process down** -- not
+         * every run of this test, but every run of the suite: text replaced by
+         * an image at once leaves GDK 4.24.1 promising text it can no longer
+         * write, and when another program on the machine asks for it GTK
+         * converts a NULL buffer. docs/issues/ISSUE-windows-clipboard-crash.md
+         * has the evidence; the refusals above are still asserted. */
+        if (Environment.OS === "Windows") {
+            print("  (skipping the clipboard round trip: GTK's Win32 clipboard crashes, see ISSUE-windows-clipboard-crash)");
+            return;
+        }
+
         /*
          * Three answers, one per callback: text on the clipboard answers `null`
          * to an image, an image answers `""` to text, and the image itself
