@@ -49,11 +49,18 @@ export LANGUAGE=C
 export BINTANA_LIB_PATH="$PWD/lib${BINTANA_LIB_PATH:+:$BINTANA_LIB_PATH}"
 
 BINTANA=${BINTANA:-./build/bintana}
-# On Windows the build is `bintana.exe`; the bare name is what the docs tell a
-# person to run, so the default finds the executable beside it.
-if [[ ! -x $BINTANA && -x $BINTANA.exe ]]; then
-    BINTANA=$BINTANA.exe
-fi
+# On Windows the build is `bintana.exe`, and the bare name is what the docs
+# tell a person to run.  **The `-x` test cannot make that choice**: MSYS2's
+# runtime appends the extension itself, so `-x ./build/bintana` is true because
+# `bintana.exe` exists, and the name stayed bare.  That worked when bash
+# executed it, but the private-desktop helper is a native program: its
+# `CreateProcessW` assumes the extension and failed with `error 2`.  The name
+# carries it here, whatever `BINTANA` was given.
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+        [[ $BINTANA == *.exe ]] || BINTANA=$BINTANA.exe
+        ;;
+esac
 if [[ ! -x $BINTANA ]]; then
     echo "no runtime at $BINTANA -- build first: cmake --build build" >&2
     exit 2

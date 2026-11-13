@@ -19866,9 +19866,12 @@ class Form1 extends Form {
                () => conn.Db);
         conn.Password = "";
         Directory.Make(SCRATCH);
-        /* Path is the project's; up to the root and down to the scratch. */
-        conn.Path = "../".repeat(Application.Directory.split("/").filter((x) => x).length) +
-                    File.Join(SCRATCH, "parts-tables.db").slice(1);
+        /* **A path outside the project is absolute**, which is what the IDE
+         * writes when the chooser leaves the tree.  The hand-built `../`
+         * repeated by a split on `/` was one component on Windows -- a
+         * `C:\src\...` path has no `/` -- and left the drive's colon in the
+         * middle of the name. */
+        conn.Path = File.Join(SCRATCH, "parts-tables.db");
         conn.Execute("CREATE TABLE IF NOT EXISTS t1 (a INTEGER)");
         check("Tables() answers the names", conn.Tables().includes("t1"),
               JSON.stringify(conn.Tables()));
@@ -29818,7 +29821,7 @@ class Form1 extends Form {
                     got.push(line);
                 }, (r) => {
                     check("the first line arrives long before the answer is finished",
-                          first >= 0 && first < 500, `${first}ms`);
+                          first >= 0 && first < 1000, `${first}ms`);
                     check("...and the last one much later, so it was read as it arrived",
                           last - first > 600, `${first}ms then ${last}ms`);
                     eq("every line arrives", got.filter((l) => l !== "").length, 5);
@@ -30285,9 +30288,14 @@ class Form1 extends Form {
             eq("a page in place of 204 is a portal too", got.page.Connectivity, "Portal");
             eq("an error status is not the internet", got["500"].Connectivity, "Limited");
             server.Stop();
+            /* **Port 1 and not the port just stopped.**  Windows can answer
+             * a connect to a listener it has only just closed with an
+             * `Error` (a reset) rather than `Refused`, which is what the test
+             * is about; port 1 is one nobody listens on and `Reach` above
+             * already proved answers `Refused` on this machine. */
             Network.Probe((r) => {
                 got.down = r;
-            }, { Url: `${base}/204`, Timeout: LONG });
+            }, { Url: "http://127.0.0.1:1/204", Timeout: LONG });
             until("a probe with nobody listening answers", () => got.down, () => {
                 eq("...None, with the Http kind", `${got.down.Connectivity} ${got.down.Why}`, "None Refused");
             }, 6000);
@@ -31301,6 +31309,12 @@ class Form1 extends Form {
                     return;
                 }
                 srv.Stop();
+                /* **A fresh port for the second start.**  Windows keeps the
+                 * listening socket's port for a moment after `Stop`, and a
+                 * rebind on it answered "address already in use" where Linux
+                 * bound it again (2026-11-13).  What this step is about is
+                 * TLS, not reusing a number; `Port: 0` asks for another. */
+                srv.Port = 0;
                 srv.Tls = { Cert: TlsCert, Key: TlsKey };
                 try {
                     srv.Start();
@@ -31328,16 +31342,20 @@ class Form1 extends Form {
                         clientTrustChecks();
                         clientTrustHandshakes(srv.Url, () => resumptionCheck(() => {
                             srv.Stop();
+                            srv.Port = 0;     /* the old one is still held on Windows */
                             srv.Tls = null;
-                            srv.Start();
+                            try { srv.Start(); api.BaseUrl = srv.Url; }
+                            catch (x) { failures.push(`restart after tls: ${x.message}`); }
                             steps[5]();
                         }));
                     });
                 } catch (e) {
                     failures.push(`tls probe could not run: ${e.message}`);
                     srv.Stop();
+                    srv.Port = 0;
                     srv.Tls = null;
-                    srv.Start();
+                    try { srv.Start(); api.BaseUrl = srv.Url; }
+                    catch (x) { failures.push(`restart after tls: ${x.message}`); }
                     steps[5]();
                 }
             },

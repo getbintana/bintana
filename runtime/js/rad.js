@@ -785,7 +785,9 @@ formPartTypes.Timer = GLOBAL.Timer;
  *
  * `Driver` is `"Sqlite"` unless told, so every `.form` written before there
  * was a second one still loads: `Path` is the sqlite file, relative to the
- * project. `"Odbc"` takes `ConnectionString` and `User`; **the password is not
+ * project, or absolute for a database outside it -- the spelling the IDE
+ * writes when the chooser leaves the tree. `"Odbc"` takes
+ * `ConnectionString` and `User`; **the password is not
  * a property** -- the serialiser never writes it and the grid does not offer
  * it -- and is set in `Form_Open`, from `Keyring` or the environment, the way
  * `SmtpClient`'s is. A part that gives the other driver's properties is
@@ -827,7 +829,7 @@ class ConnectionPart extends FormPart {
         this.Close();
     }
 
-    /** the sqlite file, relative to the project; `""` when it is not set */
+    /** the sqlite file, relative to the project or absolute; `""` when it is not set */
     get Path() { return this._path; }
     set Path(value) {
         if (typeof value !== "string")
@@ -886,7 +888,10 @@ class ConnectionPart extends FormPart {
                                     "set Driver to Odbc, or give only Path");
                 if (!this._path)
                     throw new Error("Connection: Path is empty");
-                this._db = Database.Sqlite(File.Join(Application.Directory, this._path));
+                this._db = Database.Sqlite(File.IsAbsolute(this._path)
+                                               ? this._path
+                                               : File.Join(Application.Directory,
+                                                           this._path));
             }
         }
         return this._db;

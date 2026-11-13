@@ -127,7 +127,7 @@ export class ConnectionForm extends Form {
         }
 
         const path = this.TxtConnPath.Text.trim();
-        const abs  = File.Join(this.project, path);
+        const abs  = File.IsAbsolute(path) ? path : File.Join(this.project, path);
         const away = File.Within(abs, this.project) ? ""
             : Locale.Text("Outside the project, so it will not travel with it.") + " ";
 
@@ -225,7 +225,8 @@ export class ConnectionForm extends Form {
     TxtConnPath_IconClick() {
         if (this.kind !== "sqlite") return;
         const typed = this.TxtConnPath.Text.trim();
-        const dir   = typed ? File.Directory(File.Join(this.project, typed)) : this.project;
+        const abs   = File.IsAbsolute(typed) ? typed : File.Join(this.project, typed);
+        const dir   = typed ? File.Directory(abs) : this.project;
 
         Dialog.OpenFile(Locale.Text("Choose a database"),
             { Folder: File.IsDir(dir) ? dir : this.project,

@@ -1457,7 +1457,10 @@ function openConn(spec, conn, project) {
                         `this runtime opens -- sqlite or odbc`);
     if (!spec.path)
         throw new Error(`${conn}: a connection says where its database is`);
-    return Database.Sqlite(File.Join(project, spec.path));
+    /* A path outside the project is written absolute by the IDE, and it is
+     * the file it names -- not a child of the project with a drive in it. */
+    return Database.Sqlite(File.IsAbsolute(spec.path) ? spec.path
+                                                      : File.Join(project, spec.path));
 }
 
 /*

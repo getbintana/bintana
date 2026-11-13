@@ -16469,6 +16469,15 @@ function* p_git(ide) {
 
     /* **The diff fills the tab's height**, which is what a page that forgot to
      * expand used to clip. Taller window, taller view. */
+    /* **A maximized or full-screen window cannot grow**, and the session
+     * phase that ran before this one restores whatever the last run left.  A
+     * suite started on one would be asserting about the screen and not about
+     * the tab, so it starts from a window that can take the height. */
+    if (ide.Maximized || ide.FullScreen) {
+        ide.Maximized  = false;
+        ide.FullScreen = false;
+        yield* settled(ide);
+    }
     const diffTall = ide.gitTab.Diff.How.Bounds().Height;
     ide.Height += 160;
     yield* until(() => ide.gitTab.Diff.How.Bounds().Height > diffTall, 60);
@@ -18561,10 +18570,15 @@ function* p_session(ide) {
      * Full screen is a **command** and not a tick, because its state is the
      * window manager's and not ours: `FullScreen` reads back what the desktop
      * did, so a tick would be a guess.  Pressing it here is for the throw it
-     * would be -- a display with no manager (Xvfb) does not honour the request,
-     * and one that does would leave the rest of the run on a real screen.
+     * would be -- a display with no manager (Xvfb) does not honour the request.
+     *
+     * **And it is put back**, because a desktop that *does* honour it would
+     * otherwise leave every phase after this one full screen: Windows' does,
+     * and the git phase's taller-window assertion then had no window to grow.
      */
     ide.MnuViewFullScreen.Click();
+    ide.FullScreen = false;
+    yield* settled(ide);
 
     /*
      * And what is away is furniture of the window, written down with it and
