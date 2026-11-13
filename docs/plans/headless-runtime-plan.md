@@ -251,9 +251,9 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
    `Bitmap`, `Painter`, `Drawing` y las medidas de `Text` son el módulo de dibujo;
    `PdfDocument` y `Probe` quedan en el host gráfico (poppler y GDK). La
    prueba es `tests/headless/projects/globals`, el mismo programa en los dos
-   hosts. Queda una diferencia: `FormPart.Serialize` es de `forms.js`, así que
-   un `main` en el core crea una parte `Connection` pero no la serializa
-   (`tests/odbc.sh` sigue en `bintana-gui` por eso).
+   hosts. `FormPart.Serialize` y `Apply` pasaron de `forms.js` a la clase en
+   `rad.js`, así que un `main` en el core también escribe una parte
+   `Connection`, y `tests/odbc.sh` volvió al core.
    **Pendiente: un solo instalador de consola (marcado el 2026-11-13).** El
    mismo conjunto está escrito tres veces -- `install_globals`
    (`bta_runtime.c`), `install_core` (`bta_headless.c`) y `task_build_worker`

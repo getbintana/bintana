@@ -551,6 +551,60 @@ GLOBAL.FormPart = class FormPart {
     }
     __setDesigning(on) { partDesigning.set(this, !!on); return this; }
 
+    /*
+     * One part as a `.form` node.  The same bargain as a control: what differs
+     * from a freshly made one is what is written, so a file says only what was
+     * chosen.  Here and not in forms.js: a part is not a widget, and a `main`
+     * in the console host -- which has no forms.js -- makes a `Connection` part
+     * and writes it as well as the graphical host does.
+     */
+    /** this part as a `.form` node */
+    Serialize() {
+        const defaults   = defaultsFor(this.constructor);
+        const properties = {};
+
+        for (const key of this.PropertyNames()) {
+            if (key === "Name") continue;
+
+            const value = this[key];
+            if (!savableValue(value)) continue;
+            if (sameValue(value, defaults[key])) continue;
+
+            properties[key] = value;
+        }
+
+        return { type: FormPart.TypeName(this), name: this.Name, properties };
+    }
+
+    /*
+     * The other direction: every property in a node's dictionary, assigned
+     * through the real setter.  `Name` is the node's and not a property -- the
+     * loader has already set it, and a second spelling would be a name the form
+     * does not bind.
+     */
+    /** applies a property dictionary to the part, refusing a name it has not got */
+    Apply(properties) {
+        if (properties === undefined || properties === null) return this;
+        if (typeof properties !== "object" || Array.isArray(properties))
+            throw new TypeError(`${this.constructor.name}.Apply: expected an object`);
+
+        const names = this.PropertyNames();
+        for (const key in properties) {
+            if (key === "Name")
+                throw new TypeError(`${this.constructor.name}.Apply: Name is the node's`);
+            if (!names.includes(key))
+                throw new TypeError(`${this.constructor.name}.Apply: no property '${key}'`);
+        }
+
+        /* In the order the class declares, not the order the file wrote: a
+         * Timer's `Delay` has to be in place before `Enabled` starts it. */
+        for (const key of names) {
+            if (key === "Name" || !hasOwn.call(properties, key)) continue;
+            this[key] = properties[key];
+        }
+        return this;
+    }
+
     /**
      * the names of the part classes this runtime can make, for a palette or a
      * `.form` loader
@@ -3583,6 +3637,25 @@ function plainData(v) {
     if (proto !== objectProto && proto !== null) return false;
     for (const k in v) if (!plainData(v[k])) return false;
     return true;
+}
+
+/*
+ * Whether a property's value is one a `.form` can carry -- the serialiser's
+ * question, for a control (forms.js) and for a part (`FormPart.Serialize`
+ * above). Beside `plainData`, which it is built on.
+ */
+function savableValue(v) {
+    const t = typeof v;
+    /* A `Decimal` is an object and **is** savable: `JSON.stringify` writes it
+     * through its own `toJSON`, so a `.form` carries its machine text and the
+     * setter reads it back.  Without this a decimal property -- a `DecimalBox`'s
+     * `Value` -- was skipped in silence, which is a value the file never had. */
+    if (v instanceof Decimal) return true;
+    /* A plain object or array is data too -- a report's `Sections`, a table's
+     * `Columns` -- and is written as it is.  See `plainData` above for what a
+     * class instance is not. */
+    return t === "string" || t === "number" || t === "boolean" ||
+           (t === "object" && v !== null && plainData(v));
 }
 
 function sameValue(a, b) {

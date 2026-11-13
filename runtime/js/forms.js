@@ -336,20 +336,6 @@ function settableProperties(widget) {
     return out.sort();
 }
 
-function savableValue(v) {
-    const t = typeof v;
-    /* A `Decimal` is an object and **is** savable: `JSON.stringify` writes it
-     * through its own `toJSON`, so a `.form` carries its machine text and the
-     * setter reads it back.  Without this a decimal property -- a `DecimalBox`'s
-     * `Value` -- was skipped in silence, which is a value the file never had. */
-    if (v instanceof Decimal) return true;
-    /* A plain object or array is data too -- a report's `Sections`, a table's
-     * `Columns` -- and is written as it is.  See `plainData` in rad.js for what
-     * a class instance is not. */
-    return t === "string" || t === "number" || t === "boolean" ||
-           (t === "object" && v !== null && plainData(v));
-}
-
 /*
  * What the file said, for a property something has since substituted.
  *
@@ -604,58 +590,6 @@ Form.prototype.SaveForm = function (path) {
  * form by name, and `Form.Components` answers the live list.  A part is a
  * `FormPart`, not a `Widget`: see `rad.js` for the event rule.
  * ---------------------------------------------------------------------- */
-
-/*
- * One part as a `.form` node.  The same bargain as a control: what differs from
- * a freshly made one is what is written, so a file says only what was chosen.
- */
-/** this part as a `.form` node */
-FormPart.prototype.Serialize = function () {
-    const ctor     = this.constructor;
-    const defaults = defaultsFor(ctor);
-    const properties = {};
-
-    for (const key of this.PropertyNames()) {
-        if (key === "Name") continue;
-
-        const value = this[key];
-        if (!savableValue(value)) continue;
-        if (sameValue(value, defaults[key])) continue;
-
-        properties[key] = value;
-    }
-
-    return { type: FormPart.TypeName(this), name: this.Name, properties };
-};
-
-/*
- * The other direction: every property in a node's dictionary, assigned
- * through the real setter.  `Name` is the node's and not a property -- the
- * loader has already set it, and a second spelling would be a name the form
- * does not bind.
- */
-/** applies a property dictionary to the part, refusing a name it has not got */
-FormPart.prototype.Apply = function (properties) {
-    if (properties === undefined || properties === null) return this;
-    if (typeof properties !== "object" || Array.isArray(properties))
-        throw new TypeError(`${this.constructor.name}.Apply: expected an object`);
-
-    const names = this.PropertyNames();
-    for (const key in properties) {
-        if (key === "Name")
-            throw new TypeError(`${this.constructor.name}.Apply: Name is the node's`);
-        if (!names.includes(key))
-            throw new TypeError(`${this.constructor.name}.Apply: no property '${key}'`);
-    }
-
-    /* In the order the class declares, not the order the file wrote: a Timer's
-     * `Delay` has to be in place before `Enabled` starts it. */
-    for (const key of names) {
-        if (key === "Name" || !hasOwn.call(properties, key)) continue;
-        this[key] = properties[key];
-    }
-    return this;
-};
 
 /** removes it from the form it belongs to */
 FormPart.prototype.Delete = function () {

@@ -24,11 +24,7 @@ cd "$(dirname "$0")/.." || exit 2
 
 export LANGUAGE=C
 
-# **The graphical host**, though the project is a `main` and `Database.Odbc` is
-# the core's too: two blocks write a `Connection` part's `.form` properties,
-# and `FormPart.prototype.Serialize` is `forms.js`'s, which the core does not
-# load. Everything else here passes under `bintana`.
-export BINTANA=${BINTANA:-./build/bintana-gui}
+export BINTANA=${BINTANA:-./build/bintana}
 if [[ ! -x $BINTANA ]]; then
     echo "no runtime at $BINTANA -- build first: cmake --build build" >&2
     exit 2

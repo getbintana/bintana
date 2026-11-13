@@ -694,9 +694,10 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `G_SOURCE_REMOVE` and the caller removed the same id after the loop: a
   `GLib-CRITICAL` on every run that waited, unseen while nothing but `Network`
   could make it wait. It answers CONTINUE now, like `console_idle`.
-- **`FormPart`'s `.form` half is `forms.js`'s.** A `main` in the core makes a
-  `Connection` part with `FormPart.New` (rad.js) but cannot `Serialize` it;
-  `tests/odbc.sh` asserts both and so stays on `bintana-gui`.
+- **`FormPart.Serialize` and `Apply` are rad.js's**, in the class, with
+  `savableValue` beside `plainData`. They were assigned in forms.js, so a
+  `main` in the core made a `Connection` part and could not write it;
+  `tests/odbc.sh` asserts both and runs on the core again.
 - **`bta_modules_scope` goes after `rad.js` and the metadata document.** It
   photographs the runtime's names for `Application.FreeNames`; taken before the
   prelude, every `Regex` in a project was reported as undeclared, and taken
