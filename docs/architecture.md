@@ -13,6 +13,8 @@ bta_language.c    the language every host and every Task worker gets: the
                   prelude, and the table of names taken away
 bta_message.c     Message: the catalogue lookup is shared, and each host says
                   how it shows one (an alert, or stderr with no display)
+bta_error.c       the report of an uncaught error: the line, the replacement
+                  hint, `Application.OnError`; each host says how it shows one
 bta_util.c        bta_to_number and bta_to_int, needed by every host and by
                   the network and XML globals rather than by the widgets
                   alone, and the stable sentence for a GError or an errno

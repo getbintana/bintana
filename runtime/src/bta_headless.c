@@ -166,24 +166,18 @@ JSValue bta_lookup_global(JSContext *ctx, const char *name)
  * traceback -- the failure `run_console` fixes with `app->uncaught`. */
 static bool headless_uncaught;
 
-void bta_dump_error(JSContext *ctx)
+/* This host's half of an uncaught error (bta_error.c, which prints it and
+ * calls `Application.OnError`): the run is marked, and there is nothing to
+ * show -- the terminal had it. */
+void bta_host_error_uncaught(void)
 {
     headless_uncaught = true;
+}
 
-    JSValue     exc = JS_GetException(ctx);
-    const char *msg = JS_ToCString(ctx, exc);
-    JSValue     st  = JS_IsObject(exc) ? JS_GetPropertyStr(ctx, exc, "stack")
-                                       : JS_UNDEFINED;
-    const char *stack = JS_IsString(st) ? JS_ToCString(ctx, st) : NULL;
-
-    fprintf(stderr, "%s\n", msg ? msg : "uncaught exception");
-    if (stack && *stack)
-        fprintf(stderr, "%s\n", stack);
-
-    if (stack) JS_FreeCString(ctx, stack);
-    JS_FreeValue(ctx, st);
-    if (msg) JS_FreeCString(ctx, msg);
-    JS_FreeValue(ctx, exc);
+bool bta_host_show_error(JSContext *ctx, const char *msg, const char *stack)
+{
+    (void)ctx; (void)msg; (void)stack;
+    return false;
 }
 
 static JSValue js_class_of_name(JSContext *ctx, JSValueConst this_val, int argc,
@@ -650,6 +644,9 @@ static void install_application(JSContext *ctx, JSValueConst global,
     for (int i = 0; i < nargs; i++)
         JS_SetPropertyUint32(ctx, arguments, i, JS_NewString(ctx, args[i]));
     JS_SetPropertyStr(ctx, application, "Arguments", arguments);
+    JS_SetPropertyStr(ctx, application, "OnError", JS_NULL);
+    /* ...which bta_dump_error (bta_error.c) calls when an error is not caught,
+     * as in the graphical host. Its prose is the graphical host's row. */
 
     JS_SetPropertyStr(ctx, application, "Quit",
                       JS_NewCFunction(ctx, js_application_quit, "Quit", 1));

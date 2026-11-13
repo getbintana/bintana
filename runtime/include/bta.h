@@ -912,6 +912,14 @@ const char *bta_errno_text(int errnum);
 int     bta_eval_file(JSContext *ctx, const char *path);
 int     bta_eval_file_keep(JSContext *ctx, const char *path);
 void    bta_dump_error(JSContext *ctx);
+/* The report is shared (bta_error.c); the host marks the run as failed and
+ * says whether it is still showing the error -- true until it calls
+ * `bta_error_reporting_done`. The two colours are the terminal's, or "". */
+void    bta_host_error_uncaught(void);
+bool    bta_host_show_error(JSContext *ctx, const char *msg, const char *stack);
+void    bta_error_reporting_done(void);
+const char *bta_error_red(void);
+const char *bta_error_plain(void);
 /* The language without any project (bta_language.c): the intrinsics every
  * host and every `Task` worker start from, and the closing that takes the
  * hatches away once the prelude has what it needs. Both hosts link the one

@@ -796,6 +796,12 @@ owed an answer, so the core's loop is what is asked, and a `CRITICAL` on its
 stderr is a failure. With `bta_http_init` taken out of the core the block goes
 red on `Http is not defined`.
 
+**`Application.OnError` takes an uncaught error in both hosts**:
+`tests/headless/projects/onerror` assigns a handler and throws twice from
+`Timer` callbacks, once with a name the language took away. Both hosts must
+hand the handler the same two strings -- the replacement hint included -- and
+end the run with 1. The core used to accept the assignment and never call it.
+
 **A module that throws while it loads is reported**:
 `tests/headless/projects/modthrow` is a `Main.js` with `export` and a `throw`
 at the top level; the core must exit non-zero with the error on stderr. It used

@@ -370,6 +370,32 @@ else
     fail=1
 fi
 
+# `Application.OnError` takes an uncaught error over in both hosts: the same
+# two strings reach the handler, the replacement hint with them, and the run
+# still exits 1. The core used to accept the assignment and never call it.
+"$BINTANA_CORE" tests/headless/projects/onerror \
+    >"$tmp/onerror-core.out" 2>"$tmp/onerror-core.err"
+core_rc=$?
+"$BINTANA" tests/headless/projects/onerror \
+    >"$tmp/onerror-gui.out" 2>"$tmp/onerror-gui.err"
+gui_rc=$?
+if [[ $core_rc -ne 1 || $gui_rc -ne 1 ]]; then
+    echo "an uncaught error did not end the run with 1 (core $core_rc, gui $gui_rc)" >&2
+    fail=1
+elif ! diff -u "$tmp/onerror-gui.out" "$tmp/onerror-core.out" >"$tmp/onerror.diff"; then
+    echo "Application.OnError answers differently in the two hosts:" >&2
+    cat "$tmp/onerror.diff" >&2
+    fail=1
+elif ! grep -q '^handled: Error: from a timer | stack names the file: true$' \
+        "$tmp/onerror-core.out" ||
+     ! grep -q 'setTimeout is not defined: use Timer.After' "$tmp/onerror-core.out"; then
+    echo "the core did not hand the error to Application.OnError:" >&2
+    cat "$tmp/onerror-core.out" "$tmp/onerror-core.err" >&2
+    fail=1
+else
+    echo "Application.OnError takes an uncaught error in both hosts"
+fi
+
 # A source that is a module and throws while it loads. The core used to leave
 # the error pending and exit 1 with nothing on stderr; both hosts load a file
 # through the same `bta_eval_file` now, and the error is the report.

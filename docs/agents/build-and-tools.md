@@ -681,12 +681,15 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `tests/headless/projects/modthrow` holds it. (`bta_module_run` takes the
   compiled module, as `JS_EvalFunction` does; freeing it again aborts in
   QuickJS.)
-- **The core supplies `bta_lookup_global`, `bta_dump_error`, `bta_symbols`,
-  `bta_split_doc`, `bta_read_file`, `bta_drain_jobs`, `bta_current_app`,
-  `bta_log_debug_plain`, `bta_message_show` and `bta_task_worker_host` in
-  `bta_headless.c`; the graphical host's live in `bta_runtime.c`.** The
-  library listing and the project boot are shared, in `bta_project.c`; the
-  language in `bta_language.c`; the error text in `bta_util.c`.
+- **The core supplies `bta_lookup_global`, `bta_symbols`, `bta_split_doc`,
+  `bta_read_file`, `bta_drain_jobs`, `bta_current_app`, `bta_log_debug_plain`,
+  `bta_message_show`, `bta_task_worker_host`, `bta_host_error_uncaught` and
+  `bta_host_show_error` in `bta_headless.c`; the graphical host's live in
+  `bta_runtime.c`.** The library listing and the project boot are shared, in
+  `bta_project.c`; the language in `bta_language.c`; the error text in
+  `bta_util.c`; the report of an uncaught error in `bta_error.c`, which the
+  core used to print bare, without the replacement hint and without calling
+  `Application.OnError` (`tests/headless/projects/onerror`).
   `bta_symbols` and `bta_split_doc` are the same code the graphical host uses,
   not a second reader. The division is the link, not the file: the core must
   not name a GTK symbol.

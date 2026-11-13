@@ -337,6 +337,7 @@ add_executable(${BTA_GUI_TARGET}
     runtime/src/bta_runtime.c
     runtime/src/bta_language.c
     runtime/src/bta_message.c
+    runtime/src/bta_error.c
     runtime/src/bta_project.c
     runtime/src/bta_util.c
     runtime/src/bta_module.c
@@ -630,6 +631,7 @@ if(NOT WIN32)
         runtime/src/bta_headless.c
         runtime/src/bta_language.c
         runtime/src/bta_message.c
+        runtime/src/bta_error.c
         runtime/src/bta_project.c
         runtime/src/bta_util.c
         runtime/src/bta_module.c
