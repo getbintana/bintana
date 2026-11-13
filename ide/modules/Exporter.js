@@ -103,8 +103,15 @@ export class Exporter {
          * a tree over whoever's current directory -- the difference between an
          * archive somebody can open and one that is a small accident.
          */
-        this.ide.log(`> tar -cf ${abs} -C ${parent} ${this.name}\n`);
-        Exec(["tar", "-cf", abs, "-C", parent, this.name],
+        /* A Windows path starts with `C:`, which GNU tar reads as a remote
+         * host unless told otherwise. */
+        const args = ["tar"];
+        if (Environment.OS === "Windows")
+            args.push("--force-local");
+        args.push("-cf", abs, "-C", parent, this.name);
+
+        this.ide.log(`> ${args.join(" ")}\n`);
+        Exec(args,
              (line) => this.ide.log(`${line}\n`),
              (code) => this.finished(code, abs));
     }

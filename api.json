@@ -14371,6 +14371,15 @@
           "Returns": "",
           "Doc": "the module below",
           "Native": true
+        },
+        {
+          "Name": "Shortcut",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the Windows `.lnk` object above; `Available` says whether it is there",
+          "Native": true
         }
       ]
     },
@@ -14438,6 +14447,65 @@
           "Signature": "(path, entry)",
           "Returns": "",
           "Doc": "the same entry and the same checks at a path the caller names, **making the directory** when it is not there. For the entry a package installs, which is not one this user's menu has; answers nothing",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "Desktop.Shortcut",
+      "Members": [
+        {
+          "Name": "Available",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this platform installs a user application as a Start Menu shortcut: `true` on Windows, `false` everywhere else",
+          "Native": true
+        },
+        {
+          "Name": "Directory",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the Start Menu folder the shortcuts live in, or `\"\"` where this is not Windows. The folder is made by `Write`, not at startup",
+          "Native": true
+        },
+        {
+          "Name": "Installed",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "string[]",
+          "Doc": "the ids installed by this object, sorted. A shortcut some other program wrote is not listed",
+          "Native": true
+        },
+        {
+          "Name": "Read",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(id)",
+          "Returns": "",
+          "Doc": "`{ Id, Name, Project, Target, Arguments, Icon, Description, Comment, AppId }` for one installed shortcut, or `null`",
+          "Native": true
+        },
+        {
+          "Name": "Remove",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(id)",
+          "Returns": "boolean",
+          "Doc": "removes the shortcut and its record, answering whether either was there. A file that is there and cannot be removed throws",
+          "Native": true
+        },
+        {
+          "Name": "Write",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(id, entry)",
+          "Returns": "string",
+          "Doc": "writes `Directory/<id>.lnk` with `System.AppUserModel.ID` and answers its path. `entry` is `{ Name, Project, Target, Arguments, Icon, Description, AppId }`: `Name` and `Project` are required, `Target` defaults to this runtime's GUI executable, `Arguments` is an array of strings, and `Icon` is a `.ico` (a `.png` is turned into one by the caller). **Windows only**: elsewhere it refuses, and `Desktop.Entries` is the road",
           "Native": true
         }
       ]

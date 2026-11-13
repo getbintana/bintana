@@ -690,7 +690,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "Direction", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "DesktopShortcut", "Bitmap", "Picture", "Media", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeForced", "LoadQuiet", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Pdf", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
@@ -4818,6 +4818,65 @@ class Form1 extends Form {
         throws("one that is not there is",
                () => File.Open(File.Join(Application.Directory, "no-such-file")));
         throws("and so is asking for nothing", () => File.Open());
+    }
+
+    /* --- the Windows Start Menu entry --------------------------------------
+     *
+     * A user application is a `.desktop` on Linux and a `.lnk` on Windows.
+     * The metadata is a sidecar outside the Start Menu, so the test can point
+     * `APPDATA` at its own scratch tree and neither pollute the developer's
+     * menu nor depend on what is already installed.
+     */
+    testDesktopShortcut() {
+        if (!Desktop.Shortcut.Available) {
+            eq("the shortcut object is not available here",
+               Desktop.Shortcut.Available, false);
+            throws("and writing one refuses",
+                   () => Desktop.Shortcut.Write("bta-test", {}));
+            return;
+        }
+
+        const old = Environment.Get("APPDATA");
+        const dir = File.Join(SCRATCH, "shortcut-appdata");
+        const id  = "bta-shortcut-test";
+
+        Directory.Make(dir);
+        Environment.Set("APPDATA", dir);
+        try {
+            eq("the shortcut object is available", Desktop.Shortcut.Available, true);
+            check("with a directory of its own",
+                  File.IsAbsolute(Desktop.Shortcut.Directory),
+                  Desktop.Shortcut.Directory);
+
+            Desktop.Shortcut.Remove(id);
+            const lnk = Desktop.Shortcut.Write(id, {
+                Name:        "Widgets Shortcut",
+                Project:     Application.Directory,
+                Target:      Application.Executable,
+                Arguments:   ["a b", "c"],
+                Description: "A shortcut the suite made",
+                AppId:       "org.bintana.WidgetsShortcut",
+            });
+
+            check("writing one makes a .lnk", lnk.endsWith(".lnk") && File.Exists(lnk), lnk);
+            eq("the install list has it", Desktop.Shortcut.Installed().includes(id), true);
+
+            const held = Desktop.Shortcut.Read(id);
+            eq("with the name it was given", held.Name, "Widgets Shortcut");
+            eq("the project it points at", held.Project, Application.Directory);
+            eq("the arguments after it", JSON.stringify(held.Arguments), '["a b","c"]');
+            eq("the AppUserModelID", held.AppId, "org.bintana.WidgetsShortcut");
+
+            eq("removing it answers that it was there",
+               Desktop.Shortcut.Remove(id), true);
+            eq("and leaves nothing listed",
+               Desktop.Shortcut.Installed().includes(id), false);
+            eq("or on disk", File.Exists(lnk), false);
+        } finally {
+            if (old === null) Environment.Set("APPDATA", null);
+            else              Environment.Set("APPDATA", old);
+            if (File.IsDir(dir)) Directory.DeleteTree(dir);
+        }
     }
 
     /* --- being told a file changed ----------------------------------------

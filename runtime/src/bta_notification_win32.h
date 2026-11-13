@@ -32,4 +32,12 @@ bool bta_notification_win32_send(JSContext *ctx, const char *aumid,
 void bta_notification_win32_withdraw(const char *id);
 void bta_notification_win32_cleanup(void);
 
+/* One `.lnk` with its `System.AppUserModel.ID`, for a toast's registration and
+ * for `Desktop.Shortcut`.  `arguments` is already a Windows command line,
+ * `icon` may be empty (the target's own icon), and `aumid` may be empty. */
+bool bta_shortcut_win32_write(const char *lnk, const char *target,
+                              const char *arguments, const char *workdir,
+                              const char *icon, const char *description,
+                              const char *aumid);
+
 #endif

@@ -35,6 +35,19 @@ one-page answer to *what is new since the release I have*.
   `project.btp` id is set with `SetCurrentProcessExplicitAppUserModelID`, so the
   taskbar groups the application rather than `bintanaw.exe`; the toast's
   shortcut already uses that id.
+- **Install as user application works on Windows.** The IDE now writes a
+  `.lnk` in the user's Start Menu through `Desktop.Shortcut`, with the project's
+  id as its AppUserModelID, the project as its argument and working directory,
+  and the name/icon the dialog chose; its record lives under
+  `%APPDATA%\Bintana\apps`, not beside the shortcut in the menu. A project PNG
+  becomes the shortcut's `.ico`, and uninstall removes the shortcut and that
+  generated icon. The notification backend no longer overwrites an installed
+  application's shortcut with its generic one.
+- **The IDE's export and its Windows test paths.** `tar` gets
+  `--force-local` on Windows, so a path beginning `C:` is not read as a remote
+  host, and the path comparisons in `tests/ide` accept the native separator.
+  The `apps` prefix now runs 2732/0 there; the full IDE run is 3508/15, with
+  the remaining reds in the terminal, debugger and module-owner phases.
 - **`SerialPort` works on Windows.** `Open` is `CreateFileW` on `COM3` (or
   `\\.\COM3`) and a `DCB` for speed, data bits, parity, stop bits, flow control
   and DTR/RTS. A COM handle is not pollable by GLib, so a reader thread does

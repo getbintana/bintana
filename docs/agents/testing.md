@@ -408,23 +408,25 @@ save will edit `examples/hello` for real.
   (2026-11-11): `tests/smoke` 171/0, `tests/markdown` 171/0, `tests/qr`
   120/0, `tests/report` 259/0 and `tests/xlsx` 57/0 on that desktop.
   `tests/widgets` runs natively there with `testClipboard`'s round trip
-  skipped (the clipboard SEGV below): 6352 assertions, of which the two or
-  three crowding failures below are the red ones (the last run was 6349
-  passed, 3 failed on 2026-11-12; a clean one is 6350/2). What is left is the
-  suite's own crowding, none of it seen alone: `testHttpServer`'s TLS restart
-  on an ephemeral port another socket took, `testNetwork`'s probe of a stopped
-  server answering `Error` (both in [`network.md`](network.md)), and a timing
-  check that comes and goes -- `Http.Stream`'s first line inside 700 ms, or
-  within 1 s, or the lines `Exec` kept before a deadline. `tests/check.sh` is the no-display pass the Windows CI
+  skipped (the clipboard SEGV below): 6363 assertions, of which the two or
+  three crowding failures below are the red ones (the last run was 6361
+  passed, 2 failed on 2026-11-12). What is left is the suite's own crowding,
+  none of it seen alone: `testHttpServer`'s TLS restart on an ephemeral port
+  another socket took, `testNetwork`'s probe of a stopped server answering
+  `Error` (both in [`network.md`](network.md)), and a timing check that comes
+  and goes -- `Http.Stream`'s first line inside 700 ms, or within 1 s, or the
+  lines `Exec` kept before a deadline. `tests/check.sh` is the no-display pass the Windows CI
   runs; it skips `tests/ide` with a sentence when Git wrote the project's
   `.form` symlinks as text files, which is what a checkout without Developer
   Mode does. The runner does the same now, so `tests/run.sh` continues with the
   other six projects instead of failing `ide` before it starts. Enable
   Developer Mode (or `core.symlinks=true` with the privilege) before believing
   anything about `tests/ide` on Windows. With the symlinks materialized it does
-  run: 2691 passed, 9 failed on 2026-11-12, all in path spelling (`po\ru.po`)
-  and the `tar` export (`tar: Cannot connect to C: resolve failed`), not in the
-  loader.
+  run: the `apps` prefix (everything through installing the project) passed
+  2732/0 on 2026-11-12, and the full project 3508/15 -- the reds after `apps`
+  are the terminal's `COMSPEC`/`CreateProcess`, debugger and module-owner paths
+  printed with `\`, and one git branch. The `tar --force-local` and path
+  comparisons that used to fail the export and the earlier phases are fixed.
 - **Windows editors write UTF-8 BOM and UTF-16, and the loader has to meet
   them.** PowerShell 5.1's `Set-Content -Encoding UTF8`/`Out-File`, Notepad's
   older *Unicode* and Visual Studio all write a BOM; a `project.btp` or `.form` saved that way
@@ -440,6 +442,9 @@ save will edit `examples/hello` for real.
   delete is one `Deleted` on both platforms. `SingleInstance` does too: a local
   mutex and a named pipe replace the session bus, and the test starts two real
   processes and reads the arguments and directory back from the first.
+  `DesktopShortcut` points `APPDATA` at a scratch tree and writes, reads and
+  removes a `.lnk` with its AppUserModelID; the IDE's `apps` phase uses the same
+  object and passed 2732/0 through the dialog.
 - **Two SEGVs on Windows, two different causes; read the critical before the
   crash to tell them apart.** A stack with no application frame says where a
   pointer was *used*, not who left it dangling.

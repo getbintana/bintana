@@ -108,11 +108,13 @@ const GRACE = 5000;
 /*
  * Where the projects' `Desktop` goes, which must not be the user's own.
  *
- * `Desktop.Entries` writes menu entries into `$XDG_DATA_HOME/applications`, and
- * the IDE test installs one for real -- so without this a suite run would put a
- * `bta-test-ide.desktop` in the developer's menu, every run, and the icon would
- * outlive the test that made it.  A scratch data home per run, named after the
- * pid like the projects' own directories, keeps the desktop out of it.
+ * `Desktop.Entries` writes menu entries into `$XDG_DATA_HOME/applications` and
+ * `Desktop.Shortcut` into `%APPDATA%`'s Start Menu, and the IDE test installs
+ * one for real -- so without this a suite run would put a `bta-test-ide` entry
+ * in the developer's menu, every run, and the icon would outlive the test that
+ * made it.  A scratch data home per run, named after the pid like the projects'
+ * own directories, keeps the desktop out of it; `APPDATA` covers the Windows
+ * shortcut and is inert on Linux.
  *
  * It is set for the children and not here: the runner is a console project and
  * never touches an entry.  `Application.ConfigDirectory` is deliberately **not**
@@ -218,7 +220,8 @@ function run(projects, wrap, extra, i, failed) {
     if (extra) argv.push(extra);
 
     const job = Exec(argv,
-        { Environment: { ...wrap.env, XDG_DATA_HOME: DATA_HOME },
+        { Environment: { ...wrap.env, XDG_DATA_HOME: DATA_HOME,
+                         APPDATA: DATA_HOME },
           Timeout: TIMEOUT * 1000, KillAfter: GRACE },
         (line) => { if (!NOISE.test(line)) print(line); },
         (code) => {

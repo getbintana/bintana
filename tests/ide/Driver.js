@@ -11541,7 +11541,8 @@ function* p_strings(ide) {
     check("it shows up in the tree", ide.FileTree.Exists("po/ru.po"),
           JSON.stringify(Dictionary.Keys(ide.byKey).filter((k) => k.startsWith("po/"))));
     check("and it opens in the editor, not the template",
-          PoForm.openFiles.includes("po/ru.po"), JSON.stringify(PoForm.openFiles));
+          PoForm.openFiles.map((p) => p.replace(/\\/g, "/")).includes("po/ru.po"),
+          JSON.stringify(PoForm.openFiles));
 
     /* Twice over the same locale is refused rather than silently overwriting a
      * translator's file. */
@@ -11567,9 +11568,11 @@ function* p_strings(ide) {
     eq("a command that is not installed is not chosen",
        Application.HasCommand("no-such-program-xyz"), false);
     check("and one that is, is", Application.HasCommand("sh"));
+    const shell    = Environment.OS === "Windows" ? "cmd" : "/bin/sh";
+    const noShell  = Environment.OS === "Windows" ? "cmd-no-such-thing"
+                                                  : "/bin/no-such-thing";
     check("an absolute path is answered about the file",
-          Application.HasCommand("/bin/sh") &&
-          !Application.HasCommand("/bin/no-such-thing"));
+          Application.HasCommand(shell) && !Application.HasCommand(noShell));
 
     const hadEditor = Settings.Get("translationEditor", "");
     try {
@@ -12112,7 +12115,7 @@ function* p_settings(ide) {
     check("with nothing ticked in a project that uses none",
           boxes.every((b) => !b.Active));
     check("and each says where it is",
-          boxes.every((b) => b.Tooltip.includes("/lib/")),
+          boxes.every((b) => b.Tooltip.replace(/\\/g, "/").includes("/lib/")),
           boxes.map((b) => b.Tooltip).join(" | "));
 
     /* It is a copy until OK, like every other field here. */
@@ -12812,8 +12815,12 @@ function* p_export(ide) {
      */
     const members = [];
     let listed    = null;
-    Exec(["tar", "-tf", out], (line) => members.push(line),
-                              (code) => { listed = code; });
+    const tarArgs = ["tar"];
+    if (Environment.OS === "Windows")
+        tarArgs.push("--force-local");
+    tarArgs.push("-tf", out);
+    Exec(tarArgs, (line) => members.push(line),
+                  (code) => { listed = code; });
     yield* until(() => listed !== null, 200);
     eq("and tar reads it back", listed, 0);
 
@@ -12968,7 +12975,105 @@ function* p_installer(ide) {
  * the first; the second is driven straight through `Apps`, since what
  * changes between them is only which string names the file.
  */
+function* p_appsWindows(ide) {
+    const at = () => Apps.installed(ide.project);
+
+    const old = at();
+    if (old) Apps.uninstall(old.Id);
+    check("this project is not installed yet", at() === null);
+
+    eq("the id is a slug of the name", Apps.idFor("My App 2"), "my-app-2");
+    eq("a name of punctuation still gets one",
+       Apps.idFor("!!!"), "bintana-app");
+
+    const slugproj = File.Join(TEMP, "bta-test-ide-slugproj");
+    Apps.install(slugproj, { Name: "My App 2", AppId: "" });
+    const slugged = Apps.installed(slugproj);
+    check("a project with no id installs under the slug", !!slugged);
+    if (slugged)
+        eq("...with the slug as the file's name", slugged.Id, "my-app-2");
+    Apps.uninstall("my-app-2");
+
+    check("with a project open, installing is on offer", ide.MnuAppInstall.Enabled);
+    ide.MnuAppInstall.Click();
+    yield;
+
+    const dlg = ide.appEditor;
+    check("the item opens the dialog", !!dlg);
+    if (!dlg) return;
+
+    const config = ide.manifest.read();
+    eq("which starts on the project's name", dlg.TxtAppName.Text, config.Name);
+    eq("and on its description", dlg.TxtAppComment.Text, config.Description);
+
+    dlg.TxtAppName.Text = "Bta Suite App";
+    dlg.showState();
+    check("the state line names the .lnk",
+          dlg.LblAppWhere.Text.includes("io.github.getbintana.IdeChild.devel.lnk"),
+          dlg.LblAppWhere.Text);
+
+    dlg.BtnAppInstall.Click();
+    yield;
+
+    const installed = at();
+    check("installing writes a shortcut this project owns", installed !== null);
+    if (!installed) return;
+
+    eq("under the project's own id, as a development entry", installed.Id,
+       "io.github.getbintana.IdeChild.devel");
+    eq("named what was typed", installed.Entry.Name, "Bta Suite App");
+    eq("pointing at this project", installed.Entry.Project, ide.project);
+    check("with the arguments after the executable",
+          (installed.Entry.Arguments || []).includes(ide.project),
+          JSON.stringify(installed.Entry.Arguments));
+    check("and a .lnk in the Start Menu folder",
+          File.Exists(File.Join(Desktop.Shortcut.Directory,
+                                "io.github.getbintana.IdeChild.devel.lnk")));
+    check("the dialog closed when it was done", !dlg.Visible);
+
+    ide.MnuAppInstall.Click();
+    yield;
+
+    const again = ide.appEditor;
+    check("opening it again finds what is installed", !!again);
+    if (!again) return;
+    eq("with the entry's name", again.TxtAppName.Text, "Bta Suite App");
+    check("and something to remove", again.BtnAppUninstall.Visible);
+    check("saying where it is",
+          again.LblAppWhere.Text.includes("io.github.getbintana.IdeChild.devel.lnk"),
+          again.LblAppWhere.Text);
+
+    again.TxtAppName.Text = "Bta Suite App Renamed";
+    again.showState();
+    again.BtnAppInstall.Click();
+    yield;
+
+    const renamed = at();
+    eq("renaming the name keeps the id", renamed && renamed.Id,
+       "io.github.getbintana.IdeChild.devel");
+    eq("and updates what the menu shows", renamed && renamed.Entry.Name,
+       "Bta Suite App Renamed");
+
+    ide.MnuAppInstall.Click();
+    yield;
+    const last = ide.appEditor;
+    check("the dialog opens once more to remove it", !!last);
+    if (!last) return;
+    last.BtnAppUninstall.Click();
+    yield;
+
+    check("uninstalling leaves nothing this project owns", at() === null);
+    check("and the .lnk is gone",
+          !File.Exists(File.Join(Desktop.Shortcut.Directory,
+                                 "io.github.getbintana.IdeChild.devel.lnk")));
+}
+
 function* p_apps(ide) {
+    if (Environment.OS === "Windows") {
+        yield* p_appsWindows(ide);
+        return;
+    }
+
     const at = () => Apps.installed(ide.project);
 
     /* Not a state this phase may inherit: a previous run stopped between the

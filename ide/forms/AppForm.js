@@ -58,13 +58,20 @@ export class AppForm extends Form {
      * so here is cheaper than a complaint after the click.
      */
     showState() {
-        const id = Apps.entryId(this.appId, this.TxtAppName.Text);
-
-        this.LblAppWhere.Text = this.installed
+        const id  = Apps.entryId(this.appId, this.TxtAppName.Text);
+        const win = Apps.isWindows();
+        const dir = win ? Desktop.Shortcut.Directory : Desktop.Entries.Directory;
+        let   where = this.installed
             ? Locale.Text("Installed for this user as {0}.desktop, in {1}",
-                          this.installed, Desktop.Entries.Directory)
+                          this.installed, dir)
             : Locale.Text("Will be installed for this user as {0}.desktop, in {1}",
-                          id, Desktop.Entries.Directory);
+                          id, dir);
+
+        /* The suffix is the only difference, and replacing it keeps the
+         * sentence around it in whatever language the catalogue has. */
+        if (win)
+            where = where.replace(".desktop", ".lnk");
+        this.LblAppWhere.Text = where;
 
         this.BtnAppInstall.Text    = this.installed ? Locale.Text("Update")
                                                     : Locale.Text("Install");

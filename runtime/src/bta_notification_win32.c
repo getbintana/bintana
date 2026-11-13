@@ -133,66 +133,49 @@ static char *win32_utf8(HSTRING h)
 
 /* ------------------------------------------------------------- the shortcut */
 
-static bool ensure_shortcut(const char *aumid, const char *project_dir)
+bool bta_shortcut_win32_write(const char *lnk, const char *target,
+                              const char *arguments, const char *workdir,
+                              const char *icon, const char *description,
+                              const char *aumid)
 {
-    char       *exe = bta_exe_path();
-    char       *exe_dir = NULL;
-    char       *gui = NULL;
-    char       *start_menu = NULL;
-    char       *safe = NULL;
-    char       *lnk = NULL;
-    char       *args = NULL;
-    gunichar2  *gui_w = NULL, *dir_w = NULL, *lnk_w = NULL, *args_w = NULL, *aumid_w = NULL;
+    gunichar2  *target_w = NULL, *args_w = NULL, *dir_w = NULL;
+    gunichar2  *icon_w = NULL, *desc_w = NULL, *lnk_w = NULL, *aumid_w = NULL;
     IShellLinkW *link = NULL;
     IPropertyStore *store = NULL;
     IPersistFile *file = NULL;
     HRESULT     hr = S_OK;
+    HRESULT     com = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     const char *why = "unknown";
     bool        ok = false;
 
-    if (!exe) {
-        why = "no executable path";
+    if (FAILED(com) && com != RPC_E_CHANGED_MODE) {
+        why = "CoInitializeEx";
+        hr = com;
         goto done;
     }
 
-    /* `bintanaw.exe` is the same runtime with a GUI header: a shortcut that
-     * opens a console behind the window is not what a Start Menu entry is
-     * for. */
-    exe_dir = g_path_get_dirname(exe);
-    gui = g_build_filename(exe_dir, "bintanaw.exe", NULL);
-    if (!g_file_test(gui, G_FILE_TEST_EXISTS)) {
-        g_free(gui);
-        gui = g_strdup(exe);
-    }
-
-    const char *roaming = g_getenv("APPDATA");
-
-    if (!roaming || !*roaming)
-        roaming = g_get_user_data_dir();
-    start_menu = g_build_filename(roaming, "Microsoft", "Windows",
-                                  "Start Menu", "Programs", "Bintana", NULL);
-    if (g_mkdir_with_parents(start_menu, 0755) != 0) {
-        why = "mkdir Start Menu/Bintana";
+    target_w = g_utf8_to_utf16(target ? target : "", -1, NULL, NULL, NULL);
+    lnk_w    = g_utf8_to_utf16(lnk ? lnk : "", -1, NULL, NULL, NULL);
+    if (!target_w || !lnk_w) {
+        why = "UTF-16 conversion";
         goto done;
     }
+    if (arguments && *arguments)
+        args_w = g_utf8_to_utf16(arguments, -1, NULL, NULL, NULL);
+    if (workdir && *workdir)
+        dir_w = g_utf8_to_utf16(workdir, -1, NULL, NULL, NULL);
+    if (icon && *icon)
+        icon_w = g_utf8_to_utf16(icon, -1, NULL, NULL, NULL);
+    if (description && *description)
+        desc_w = g_utf8_to_utf16(description, -1, NULL, NULL, NULL);
+    if (aumid && *aumid)
+        aumid_w = g_utf8_to_utf16(aumid, -1, NULL, NULL, NULL);
 
-    safe = g_strdup(aumid);
-    for (char *p = safe; *p; p++) {
-        if (strchr("\\/:*?\"<>|", *p))
-            *p = '_';
-    }
-    char *lnk_name = g_strdup_printf("%s.lnk", safe);
-
-    lnk = g_build_filename(start_menu, lnk_name, NULL);
-    g_free(lnk_name);
-    args = g_strdup_printf("\"%s\"", project_dir ? project_dir : "");
-
-    gui_w   = g_utf8_to_utf16(gui, -1, NULL, NULL, NULL);
-    dir_w   = g_utf8_to_utf16(project_dir ? project_dir : "", -1, NULL, NULL, NULL);
-    lnk_w   = g_utf8_to_utf16(lnk, -1, NULL, NULL, NULL);
-    args_w  = g_utf8_to_utf16(args, -1, NULL, NULL, NULL);
-    aumid_w = g_utf8_to_utf16(aumid, -1, NULL, NULL, NULL);
-    if (!gui_w || !dir_w || !lnk_w || !args_w || !aumid_w) {
+    if ((arguments && *arguments && !args_w) ||
+        (workdir && *workdir && !dir_w) ||
+        (icon && *icon && !icon_w) ||
+        (description && *description && !desc_w) ||
+        (aumid && *aumid && !aumid_w)) {
         why = "UTF-16 conversion";
         goto done;
     }
@@ -204,36 +187,46 @@ static bool ensure_shortcut(const char *aumid, const char *project_dir)
         goto done;
     }
 
-    link->lpVtbl->SetPath(link, (LPCWSTR)gui_w);
-    link->lpVtbl->SetArguments(link, (LPCWSTR)args_w);
-    link->lpVtbl->SetWorkingDirectory(link, (LPCWSTR)dir_w);
-    link->lpVtbl->SetDescription(link, L"Bintana application");
-    link->lpVtbl->SetIconLocation(link, (LPCWSTR)gui_w, 0);
+    link->lpVtbl->SetPath(link, (LPCWSTR)target_w);
+    if (args_w)
+        link->lpVtbl->SetArguments(link, (LPCWSTR)args_w);
+    if (dir_w)
+        link->lpVtbl->SetWorkingDirectory(link, (LPCWSTR)dir_w);
+    if (desc_w)
+        link->lpVtbl->SetDescription(link, (LPCWSTR)desc_w);
+    if (icon_w)
+        link->lpVtbl->SetIconLocation(link, (LPCWSTR)icon_w, 0);
 
-    hr = link->lpVtbl->QueryInterface(link, &iid_property_store,
-                                      (void **)&store);
-    if (FAILED(hr)) {
-        why = "QueryInterface(IPropertyStore)";
-        goto done;
-    }
+    if (aumid_w) {
+        hr = link->lpVtbl->QueryInterface(link, &iid_property_store,
+                                          (void **)&store);
+        if (FAILED(hr)) {
+            why = "QueryInterface(IPropertyStore)";
+            goto done;
+        }
 
-    PROPVARIANT pv = { 0 };
-    size_t      bytes = (wcslen((wchar_t *)aumid_w) + 1) * sizeof(WCHAR);
+        PROPVARIANT pv = { 0 };
+        size_t      bytes = (wcslen((wchar_t *)aumid_w) + 1) * sizeof(WCHAR);
 
-    pv.vt      = VT_LPWSTR;
-    pv.pwszVal = CoTaskMemAlloc(bytes);
-    if (!pv.pwszVal) {
-        why = "CoTaskMemAlloc";
-        goto done;
+        pv.vt      = VT_LPWSTR;
+        pv.pwszVal = CoTaskMemAlloc(bytes);
+        if (!pv.pwszVal) {
+            why = "CoTaskMemAlloc";
+            goto done;
+        }
+        memcpy(pv.pwszVal, aumid_w, bytes);
+        hr = store->lpVtbl->SetValue(store, &pkey_app_id, &pv);
+        PropVariantClear(&pv);
+        if (FAILED(hr)) {
+            why = "IPropertyStore::SetValue";
+            goto done;
+        }
+        hr = store->lpVtbl->Commit(store);
+        if (FAILED(hr)) {
+            why = "IPropertyStore::Commit";
+            goto done;
+        }
     }
-    memcpy(pv.pwszVal, aumid_w, bytes);
-    hr = store->lpVtbl->SetValue(store, &pkey_app_id, &pv);
-    PropVariantClear(&pv);
-    if (FAILED(hr)) {
-        why = "IPropertyStore::SetValue";
-        goto done;
-    }
-    store->lpVtbl->Commit(store);
 
     hr = link->lpVtbl->QueryInterface(link, &iid_persist_file,
                                       (void **)&file);
@@ -251,7 +244,7 @@ static bool ensure_shortcut(const char *aumid, const char *project_dir)
 
 done:
     if (!ok)
-        g_message("notification-win32: shortcut failed: %s (hr=0x%08lx, path=%s)",
+        g_message("shortcut-win32: failed: %s (hr=0x%08lx, path=%s)",
                   why, (unsigned long)hr, lnk ? lnk : "(none)");
     if (file)
         file->lpVtbl->Release(file);
@@ -259,11 +252,75 @@ done:
         store->lpVtbl->Release(store);
     if (link)
         link->lpVtbl->Release(link);
-    g_free(gui_w);
-    g_free(dir_w);
-    g_free(lnk_w);
+    g_free(target_w);
     g_free(args_w);
+    g_free(dir_w);
+    g_free(icon_w);
+    g_free(desc_w);
+    g_free(lnk_w);
     g_free(aumid_w);
+    if (SUCCEEDED(com))
+        CoUninitialize();
+    return ok;
+}
+
+/* The toast's own registration: the first Send writes a Start Menu shortcut
+ * with the project's AUMID.  An entry the IDE installed for this project is
+ * already there with the right id and a chosen name and icon, so it is left
+ * alone. */
+static bool ensure_shortcut(const char *aumid, const char *project_dir)
+{
+    char       *exe = bta_exe_path();
+    char       *exe_dir = NULL;
+    char       *gui = NULL;
+    char       *start_menu = NULL;
+    char       *safe = NULL;
+    char       *lnk = NULL;
+    char       *args = NULL;
+    bool        ok = false;
+
+    if (!exe)
+        return false;
+
+    /* `bintanaw.exe` is the same runtime with a GUI header: a shortcut that
+     * opens a console behind the window is not what a Start Menu entry is
+     * for. */
+    exe_dir = g_path_get_dirname(exe);
+    gui = g_build_filename(exe_dir, "bintanaw.exe", NULL);
+    if (!g_file_test(gui, G_FILE_TEST_EXISTS)) {
+        g_free(gui);
+        gui = g_strdup(exe);
+    }
+
+    const char *roaming = g_getenv("APPDATA");
+
+    if (!roaming || !*roaming)
+        roaming = g_get_user_data_dir();
+    start_menu = g_build_filename(roaming, "Microsoft", "Windows",
+                                  "Start Menu", "Programs", "Bintana", NULL);
+    if (g_mkdir_with_parents(start_menu, 0755) != 0)
+        goto done;
+
+    safe = g_strdup(aumid);
+    for (char *p = safe; *p; p++) {
+        if (strchr("\\/:*?\"<>|", *p))
+            *p = '_';
+    }
+    char *lnk_name = g_strdup_printf("%s.lnk", safe);
+
+    lnk = g_build_filename(start_menu, lnk_name, NULL);
+    g_free(lnk_name);
+
+    if (g_file_test(lnk, G_FILE_TEST_EXISTS)) {
+        ok = true;
+        goto done;
+    }
+
+    args = g_strdup_printf("\"%s\"", project_dir ? project_dir : "");
+    ok = bta_shortcut_win32_write(lnk, gui, args, project_dir, gui,
+                                  "Bintana application", aumid);
+
+done:
     g_free(args);
     g_free(lnk);
     g_free(safe);

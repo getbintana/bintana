@@ -884,6 +884,20 @@ a file wants the window, and the one that does not is not hurt by it.
 **`File.Join(dir, "/abs")` is `dir/abs`**, not `/abs`, which is what the
 documentation's example first got wrong.
 
+**`Desktop.Shortcut` is the Windows user-application install, and the record is
+not beside the shortcut.** `Write` puts a `.lnk` in
+`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Bintana`, with the project's
+id as its `System.AppUserModel.ID` and the target as `bintanaw.exe` when that
+sits beside `bintana.exe`; the Start Menu folder is a menu, so the sidecar that
+`Installed`/`Read` use is `%APPDATA%\Bintana\apps\<id>.shortcut` instead of
+another file in it. `Notification` now leaves an existing `.lnk` alone rather
+than replacing an installed application's chosen name and icon with its own
+generic one. `Apps.install` turns a project PNG into an `.ico` under
+`Application.ConfigDirectory/shortcuts` (a `.svg` or a theme name leaves the
+target's own icon); `Apps.uninstall` removes that generated `.ico`, and only
+that one. `tests/widgets`' `DesktopShortcut` and `tests/ide`'s `apps` phase
+hold the two halves.
+
 ## `ProtectPrototype` and the prototype every object inherits
 
 `Application.ProtectPrototype()` is `JS_PreventExtensions` on `Object.prototype`
