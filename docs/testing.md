@@ -757,6 +757,10 @@ is 1.7 MB and is loaded only for `check`.
 the same loop through the linked `Drawing`. It is a measurement, not an
 assertion on the numbers.
 
+**A UI library named by a `main`** is refused with its name and the missing
+display (`tests/headless/projects/uilibrary`), not with `Component is not
+defined` from inside the class.
+
 **A native plugin loads too**: `tests/headless/projects/plugin` names
 `testplug`, and the script copies the suite's reference `.so` into a scratch
 library directory, so a `main` gets `TestPlug` with no display.

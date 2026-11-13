@@ -345,10 +345,12 @@ dispatch, core sin GTK, `check` sin GTK y suite verde; falta Windows.
   `main` que nombre una librería UI tiene que fallar al cargar con una frase que
   nombre la librería y el display, no con un `ReferenceError` en la primera
   clase. **Estado:** `report` y `charts` separan documento (core) de control
-  (GUI); `xlsx`, `package` y `check` son core; `markdown` es una sola clase que
-  extiende `Component` (documento y control juntos), y `qr`, `pdfview`, `dialog`
-  y `datagrid` son UI. La frase por librería no está todavía: el `main` falla
-  en la primera clase que necesita el toolkit.
+  (GUI); `xlsx`, `package` y `check` son core. **Decidido:** `markdown` queda
+  como una sola clase que extiende `Component` (documento y control juntos), y
+  `qr`, `pdfview`, `dialog` y `datagrid` son UI. **Hecha la frase:** un `main`
+  que carga una de ellas dice `library "markdown" needs the graphical host: a
+  project with "main" has no display`, en vez del `ReferenceError` de la
+  primera clase. El fixture `tests/headless/projects/uilibrary` lo fija.
 - **Docs:** `docs/architecture.md` (boot de dos hosts), `docs/agents/runtime.md`
   (contrato de `main`: mismos nombres, refusals), `docs/agents/build-and-tools.md`
   (targets/CI), `docs/installing.md` (lanzadores de Windows), `docs/testing.md`

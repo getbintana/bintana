@@ -732,7 +732,42 @@ static bool eval_script(JSContext *ctx, const char *text, size_t len,
 
 /* A library file is a module when it says `export`; a project's `Main.js` is a
  * script. `bta_compile` decides the same way the loader does. */
-static bool eval_file(JSContext *ctx, const char *path)
+/* A library whose JavaScript defines a widget class fails on the missing
+ * toolkit name. The sentence names the library and the display, which is the
+ * refusal the plan asks for, instead of a `ReferenceError` three files in. */
+static bool library_needs_display(JSContext *ctx, const char *library)
+{
+    static const char *const NAMES[] = {
+        "Component", "Widget", "Control", "Container", "Form",
+        "DrawingArea", "TextEditor", "SourceEditor",
+    };
+
+    JSValue     exc = JS_GetException(ctx);
+    const char *msg = JS_ToCString(ctx, exc);
+    bool        ui  = false;
+
+    if (msg && strstr(msg, "is not defined"))
+        for (size_t i = 0; i < G_N_ELEMENTS(NAMES); i++)
+            if (strstr(msg, NAMES[i])) {
+                ui = true;
+                break;
+            }
+
+    if (ui)
+        fprintf(stderr, "bintana: library \"%s\" needs the graphical host: "
+                        "a project with \"main\" has no display. Run it with "
+                        "bintana-gui.\n", library);
+    else
+        JS_Throw(ctx, exc);        /* restore it for the normal dump */
+
+    if (msg)
+        JS_FreeCString(ctx, msg);
+    if (ui)
+        JS_FreeValue(ctx, exc);
+    return ui;
+}
+
+static bool eval_file_at(JSContext *ctx, const char *path, const char *library)
 {
     size_t len = 0;
     char  *src = bta_read_file(path, &len);
@@ -746,7 +781,8 @@ static bool eval_file(JSContext *ctx, const char *path)
     g_free(src);
 
     if (JS_IsException(compiled)) {
-        bta_dump_error(ctx);
+        if (!library || !library_needs_display(ctx, library))
+            bta_dump_error(ctx);
         JS_FreeValue(ctx, compiled);
         return false;
     }
@@ -755,15 +791,24 @@ static bool eval_file(JSContext *ctx, const char *path)
     if (is_module) {
         /* `bta_module_run` takes the compiled module: `JS_EvalFunction` does. */
         ok = bta_module_run(ctx, compiled, path) == 0;
+        if (!ok && library && library_needs_display(ctx, library))
+            ok = false;
     } else {
         JSValue r = JS_EvalFunction(ctx, compiled);
         ok = !JS_IsException(r);
-        if (!ok)
-            bta_dump_error(ctx);
+        if (!ok) {
+            if (!library || !library_needs_display(ctx, library))
+                bta_dump_error(ctx);
+        }
         JS_FreeValue(ctx, r);
     }
     bta_drain_jobs(JS_GetRuntime(ctx));
     return ok;
+}
+
+static bool eval_file(JSContext *ctx, const char *path)
+{
+    return eval_file_at(ctx, path, NULL);
 }
 
 /* `Widget` and the metadata rows, before rad.js: rad.js's `FormPart` and the
@@ -1413,7 +1458,7 @@ static int run_project(int argc, char **argv, bool testing, bool json,
      * describes them in the graphical runtime. */
     install_application(ctx, global, dir, name, version, argv + 1, argc - 1);
     libs    = bta_project_libs(ctx, dir, cfg);
-    sources = bta_project_sources(ctx, dir, libs, cfg);
+    sources = bta_project_sources(ctx, dir, NULL, cfg);
     install_core(ctx, global, dir, libs);
 
     if (!load_drawing_module(ctx, global)) {
@@ -1445,9 +1490,24 @@ static int run_project(int argc, char **argv, bool testing, bool json,
 
     bta_modules_scope(ctx, dir, libs);
 
-    /* `sources` already carries every library's files in front of the
-     * project's: that order is `bta_project_sources`'s contract, and loading
-     * the libraries again here would run them twice. */
+    /* A library's sources first, with its name at hand: a library that wants
+     * a widget gets the display sentence rather than the engine's
+     * `Component is not defined` at the class line. Then the project's own. */
+    for (guint i = 0; i < libs->len; i++) {
+        const char *lib   = libs->pdata[i];
+        char       *base  = g_path_get_basename(lib);
+        GPtrArray  *files = bta_library_sources(ctx, lib);
+
+        for (guint j = 0; j < files->len; j++)
+            if (!eval_file_at(ctx, files->pdata[j], base)) {
+                g_ptr_array_unref(files);
+                g_free(base);
+                goto out;
+            }
+        g_ptr_array_unref(files);
+        g_free(base);
+    }
+
     for (guint i = 0; i < sources->len; i++)
         if (!eval_file(ctx, sources->pdata[i]))
             goto out;

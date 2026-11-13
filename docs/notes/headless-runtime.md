@@ -262,6 +262,14 @@ façade for the property/class semantics, Pango text and images, and a decision
 between `uses: ["drawing"]` and load-on-first-use. The linked code stays until
 that exists.
 
+**A UI library in a `main` is refused by name.** Loading `lib/markdown` (or
+`qr`, `pdfview`, `dialog`, `datagrid`) in a host with no widgets fails at the
+first `extends Component`, and the core says `library "markdown" needs the
+graphical host: a project with "main" has no display. Run it with bintana-gui.`
+instead of letting the engine's `ReferenceError` be the whole answer.
+`report` and `charts` do not hit it: their document classes are unconditional
+and their controls are skipped.
+
 **Native plugins are core too.** A project's `uses` resolves a library
 directory and, when it holds `<name>.<suffix>`, the core loads it before
 `rad.js` and before the project's sources, with `host->call` available. The

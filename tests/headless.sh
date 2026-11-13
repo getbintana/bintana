@@ -255,6 +255,21 @@ else
     fail=1
 fi
 
+# A UI library named by a `main` fails with a sentence that names the library
+# and the display, not with `Component is not defined`.
+if "$BINTANA_CORE" tests/headless/projects/uilibrary \
+        >"$tmp/ui.out" 2>"$tmp/ui.err"; then
+    echo "the core ran a main that needs a UI library" >&2
+    fail=1
+elif grep -q 'library "markdown" needs the graphical host' "$tmp/ui.err" &&
+     grep -q 'no display' "$tmp/ui.err"; then
+    echo "a UI library is refused by name and display"
+else
+    echo "a UI library failed without the sentence:" >&2
+    cat "$tmp/ui.out" "$tmp/ui.err" >&2
+    fail=1
+fi
+
 # `Drawing` is the document half of `DrawingArea`: a PNG and a PDF with no
 # control and no display, through Painter, Metrics and Bitmap. Both hosts draw
 # the same document; the fixture prints only what is stable across them.
