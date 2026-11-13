@@ -239,9 +239,12 @@ in the host over `bta_line_of_utf16`; the rest of `Text` needs Pango and a font
 map and belongs to the graphical host. `File.Info` answers no icon name -- there
 is no theme to ask -- which no check reads.
 
-**What it does not do yet.** The dispatch lives in `bintana-headless`; the core
-`bintana` that dispatches from one binary is Phase 3's. The console binary is
-not installed, the Windows target does not exist, and the Phase 2 acceptance
+**What it does not do yet.** The dispatch lives in `bintana-headless`; Phase 3
+installs that core as `bintana` and names the graphical host `bintana-gui`.
+**Two installed binaries are the design -- a core and a graphical host; the
+third binary that is not wanted is one that exists only for `check` and the
+test tools.** CMake installs neither host yet. The Windows target does not
+exist, and the Phase 2 acceptance
 projects -- `tests/report`'s `testDocument`, `tests/media`, and `tests/api` with
 its `Widget.*` -- are still the graphical host's. A `main` refuses `--strict`
 and `--profile` with a sentence: strictness is about widget properties and this

@@ -13,9 +13,11 @@ y `Available`.
 
 **La distribución espera su Fase 1**:
 [`distribution-plan.md`](distribution-plan.md) no fija los nombres ni las
-dependencias de los paquetes hasta que la prueba de metadata diga si `bintana`
-es un host o dos. Este plan separa el runtime en dos hosts: uno
-de consola que **no enlaza ni carga GTK/GtkSourceView/VTE**, y uno gráfico que sí.
+dependencias de los paquetes hasta que la prueba de metadata diga cómo se
+reparte el runtime. **La respuesta es dos hosts, y dos binarios instalados está
+bien:** uno de consola que **no enlaza ni carga GTK/GtkSourceView/VTE**, y uno
+gráfico que sí. **Lo que no se quiere es un tercer binario que exista solo para
+`check` y las herramientas de test**, porque ese es un rol del host de consola.
 El comando `bintana <proyecto>` sigue funcionando para los dos: el host de consola
 lee `project.btp` y, si el proyecto declara `startup`, ejecuta el host gráfico.
 `bintana check`, `--version` y los proyectos `main` corren en el host de consola.
