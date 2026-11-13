@@ -338,7 +338,7 @@ suite's reference plugin is the fixture: `tests/headless/projects/plugin` with
 2, as in the graphical host. That is the road by which `taglib` -- or a
 `drawing` plugin -- can be optional.
 
-**Drawing is a loadable module.** `Painter`, `Metrics`, `Bitmap` and `Drawing`
+**Drawing is a loadable module.** `Painter`, `Bitmap`, `Drawing` and `Text`'s measurements
 are not linked into `bintana`: `bintana-drawing.so` carries cairo, Pango and
 GdkPixbuf and is loaded when a project's resolved `uses` names `drawing`, so
 `--version`, `check` and a `main` that never draws stay at 42 libraries and

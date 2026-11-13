@@ -33,7 +33,7 @@ bta_controls.c    Form, Container, Panel, Label, Button, Image, TextBox,
 bta_layout.c      Split, Frame, Overlay, RowList, Scroller, Flow
 bta_notebook.c    Notebook
 bta_switcher.c    Switcher (GtkStackSwitcher over a GtkStack)
-bta_paint.c       DrawingArea (GtkDrawingArea, GUI only) and Painter, Metrics
+bta_paint.c       DrawingArea (GtkDrawingArea, GUI only) and Painter, Text's measurements
                   and Drawing (cairo + Pango, in bintana-gui and the module)
 bta_bitmap.c      Bitmap: scale, crop, rotate and flip, on GdkPixbuf alone
 bta_drawing_module.c  the loadable drawing half's entry, ABI and init

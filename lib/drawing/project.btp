@@ -1,4 +1,4 @@
 {
   "name": "drawing",
-  "description": "The drawing half: Painter, Drawing, Metrics and Bitmap, carried by the core's module"
+  "description": "The drawing half: Painter, Drawing, Bitmap and Text's measurements, carried by the core's module"
 }

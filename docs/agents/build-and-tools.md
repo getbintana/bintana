@@ -543,7 +543,7 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   A `main` that never asks for a widget never sees `Widget` at all.
 - **`bta_paint.c` is compiled twice: into `bintana-gui` and into
   `bintana-drawing.so`.** The module is built with `BTA_HEADLESS`; the core
-  itself does not link it. `Painter`, `Metrics`, `Drawing` and the PNG/PDF
+  itself does not link it. `Painter`, `Text`'s measurements, `Drawing` and the PNG/PDF
   writers use cairo, Pango and GdkPixbuf; `DrawingArea` (the `Control`),
   `Painter.Render` and the `GtkSettings`/widget font lookups are inside
   `#ifndef BTA_HEADLESS`. A GTK call outside that guard is a module link

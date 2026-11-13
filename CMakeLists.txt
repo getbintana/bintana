@@ -43,7 +43,7 @@ pkg_check_modules(GMODULE REQUIRED IMPORTED_TARGET gmodule-2.0)
 pkg_check_modules(GLIBCORE REQUIRED IMPORTED_TARGET glib-2.0 gobject-2.0 gio-2.0)
 
 # The core's drawing half: cairo, Pango and GdkPixbuf, and not the toolkit.
-# `Drawing`, `Painter`, `Metrics` and `Bitmap` are what a `main` uses to write a
+# `Drawing`, `Painter`, `Bitmap` and `Text`'s measurements are what a `main` uses to write a
 # PDF or measure text with no display, and they name none of GTK.
 pkg_check_modules(CAIRO REQUIRED IMPORTED_TARGET cairo)
 pkg_check_modules(PANGO REQUIRED IMPORTED_TARGET pango pangocairo)

@@ -191,7 +191,7 @@ la misma salida que el check gráfico con 35,3 MB contra 59,9 MB en Debug,
 **32,7 contra 57,6 MB** en `RelWithDebInfo`. **Con las globals de consola
 (2026-11-13)** enlaza 42 (libsoup, GnuTLS y libsecret son casi todas las
 nuevas), 4,6 MB en Debug y 9,7 MB con símbolos, y `check ide` usa 38,4 contra
-56,8 MB; `--version` pasó de 5,3 a 11,5 MB. `Painter`, `Drawing`, `Metrics` y
+56,8 MB; `--version` pasó de 5,3 a 11,5 MB. `Painter`, `Drawing`, las medidas de `Text` y
 `Bitmap` viven en `bintana-drawing.so` (166 KB Debug), que se carga al arrancar
 un proyecto y no para `--version` ni `check`. Corre `tools/check` y `lib/check`
 como módulos, con las globals core (`File`, `Exec`, `Directory`, `Hash`,
@@ -248,7 +248,7 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
    `Message` (`bta_message.c`, compartido; stderr sin display). Las
    dependencias opcionales las enlaza una función de CMake que llaman los dos
    hosts. `Task` pide a su host lo que es del host (`bta_task_worker_host`).
-   `Bitmap`, `Painter`, `Metrics` y `Drawing` son el módulo de dibujo;
+   `Bitmap`, `Painter`, `Drawing` y las medidas de `Text` son el módulo de dibujo;
    `PdfDocument` y `Probe` quedan en el host gráfico (poppler y GDK). La
    prueba es `tests/headless/projects/globals`, el mismo programa en los dos
    hosts. Queda una diferencia: `FormPart.Serialize` es de `forms.js`, así que
@@ -294,7 +294,7 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
   `tests/api` se queda en el host gráfico porque valida `Widget.*` y la API de
   los controles. El meta-host es el generador y el test de metadata.
 - Un `main` mínimo y el `testDocument` de `tests/report` corren sin GTK y
-  escriben el PDF. **Hecho:** `Painter`, `Metrics`, `Bitmap` y `Drawing` están
+  escriben el PDF. **Hecho:** `Painter`, `Bitmap`, `Drawing` y las medidas de `Text` están
   en el core (cairo, Pango y GdkPixbuf), `Drawing.Save`/`ToPng`/`SavePdf`
   funcionan sin display, y `lib/report`/`lib/charts` separan su documento del
   control: `ReportDocument` y `ChartDocument` cargan sin `Component` y escriben

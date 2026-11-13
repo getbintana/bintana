@@ -32,7 +32,7 @@ bool bta_drawing_module_init(JSContext *ctx, JSValue global)
 }
 
 /* A `Task` worker's share: `Bitmap` alone, as a worker in the graphical host
- * gets it. `Painter`, `Metrics` and `Drawing` stay off worker threads in both
+ * gets it. `Painter`, `Text`'s measurements and `Drawing` stay off worker threads in both
  * hosts (docs/notes/task-threads.md). Optional for the loader, so a module
  * built before it existed still loads; the core then gives workers no
  * `Bitmap`. */
