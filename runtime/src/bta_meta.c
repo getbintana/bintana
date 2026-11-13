@@ -56,44 +56,9 @@ static const char meta_prelude_shim[] =
 
 /* ------------------------------------------------------ what the rows reach */
 
-/*
- * The same rule as `bta_lookup_global` in `bta_runtime.c`: a bare name is the
- * global lexical scope before globalThis (a project's `class Timer`), and a
- * dotted name is a walk. The real one also validates the identifier; this one
- * does not, because only the metadata host's own test calls it and the class
- * table answers first for every widget name.
- */
-JSValue bta_lookup_global(JSContext *ctx, const char *name)
-{
-    if (!name)
-        return JS_ThrowTypeError(ctx, "a class lookup needs a name");
-
-    if (!strchr(name, '.'))
-        return JS_Eval(ctx, name, strlen(name), "<class-lookup>",
-                       JS_EVAL_TYPE_GLOBAL);
-
-    char  **parts = g_strsplit(name, ".", -1);
-    JSValue v     = JS_GetGlobalObject(ctx);
-
-    for (int i = 0; parts[i]; i++) {
-        JSValue next = JS_GetPropertyStr(ctx, v, parts[i]);
-        JS_FreeValue(ctx, v);
-
-        if (JS_IsException(next)) {
-            g_strfreev(parts);
-            return next;
-        }
-        if (JS_IsUndefined(next) || JS_IsNull(next)) {
-            JS_FreeValue(ctx, next);
-            v = JS_UNDEFINED;
-            break;
-        }
-        v = next;
-    }
-
-    g_strfreev(parts);
-    return v;
-}
+/* `bta_lookup_global` is bta_language.c's, the one both hosts use. This host
+ * had a copy that skipped the identifier check and handed the name straight
+ * to `JS_Eval`. */
 
 /* `Sources` asks whether a head is the runtime's own; the metadata host has
  * no module loader, and the answer is only used for a class the table does not

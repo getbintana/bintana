@@ -10,7 +10,8 @@ bta_project.c     project.btp, `uses`, the library search path and load order;
                   the boot both hosts share, with no toolkit in it
 bta_language.c    the language every host and every Task worker gets: the
                   context's intrinsics, the closing of the hatches after the
-                  prelude, and the table of names taken away
+                  prelude, and the table of names taken away; how a class
+                  name resolves (bta_lookup_global) and Application.Globals
 bta_source.c      what a source text declares, reads and whether it compiles:
                   the symbol pass, Symbols, FreeNames and CheckSource
 bta_message.c     Message: the catalogue lookup is shared, and each host says

@@ -84,16 +84,6 @@ static char *spec_string(JSContext *ctx, JSValueConst spec, const char *key)
 
 #endif
 
-bool bta_is_identifier(const char *s)
-{
-    if (!s || !*s || (!g_ascii_isalpha(*s) && *s != '_' && *s != '$'))
-        return false;
-    for (const char *p = s; *p; p++)
-        if (!g_ascii_isalnum(*p) && *p != '_' && *p != '$')
-            return false;
-    return true;
-}
-
 /*
  * A string the catalogue has something to say about, or JS_UNDEFINED when it
  * does not.  Arrays go through element by element, which is what `Items` and

@@ -944,6 +944,12 @@ JSValue bta_application_library_path(JSContext *ctx, JSValueConst this_val,
                                      int argc, JSValueConst *argv);
 JSValue bta_application_libraries(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv);
+/* `Application.HasCommand` (bta_sys.c) and `Application.Globals`
+ * (bta_language.c), the same in both hosts. */
+JSValue bta_application_has_command(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv);
+JSValue bta_application_globals(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
 JSValue bta_application_uses(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv);
 /*

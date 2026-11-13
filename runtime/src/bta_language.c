@@ -497,3 +497,157 @@ JSValue bta_application_protect_prototype(JSContext *ctx, JSValueConst this_val,
             "ProtectPrototype: Object.prototype is not an object");
     return JS_TRUE;
 }
+
+/* ------------------------------------------------ names, as the language binds them */
+
+/* Every dot-separated segment an identifier, and at least one segment. */
+static bool is_class_path(const char *s)
+{
+    if (!s || !*s)
+        return false;
+
+    char **parts = g_strsplit(s, ".", -1);
+    bool   ok    = true;
+
+    for (int i = 0; parts[i]; i++)
+        if (!bta_is_identifier(parts[i]))
+            ok = false;
+
+    g_strfreev(parts);
+    return ok;
+}
+
+/*
+ * A class by name, which is how a .form names a type and how project.btp names
+ * the startup form.
+ *
+ * Two ways a class can be reachable, and both have to work:
+ *
+ *   Form1            `class Form1 {}` at the top level of a script binds into
+ *                    the global lexical scope and *not* onto globalThis, so a
+ *                    plain property read misses it.  Evaluating the bare
+ *                    identifier is what makes Gambas-style "every class is
+ *                    visible everywhere, no imports" work.
+ *
+ *   Widgets.Stepper  a namespace is an ordinary object on globalThis, so a
+ *                    qualified name is a walk down properties -- no eval, which
+ *                    is the point: nothing here needs the compiler.
+ */
+JSValue bta_lookup_global(JSContext *ctx, const char *name)
+{
+    if (!is_class_path(name))
+        return JS_ThrowTypeError(ctx, "'%s' is not a valid class name", name);
+
+    /*
+     * **A bare name is evaluated, and that is JavaScript's own order**: the
+     * global lexical scope -- where a project's `class Timer {}` lives -- before
+     * the global object, where the runtime's `Timer` is a property. Reading the
+     * object first made every installed global beat the project's own class:
+     * `startup class 'File' not found` for a C global, and a `TypeError: not a
+     * function` from inside `Form` for a prelude one (`Timer`, `Record`), with
+     * the class there, loaded and evaluated. An identifier that names nothing
+     * at all is a ReferenceError, which is what the fallback below always threw.
+     */
+    if (!strchr(name, '.'))
+        return JS_Eval(ctx, name, strlen(name), "<class-lookup>", JS_EVAL_TYPE_GLOBAL);
+
+    char  **parts = g_strsplit(name, ".", -1);
+    JSValue v     = JS_GetGlobalObject(ctx);
+
+    for (int i = 0; parts[i]; i++) {
+        JSValue next = JS_GetPropertyStr(ctx, v, parts[i]);
+        JS_FreeValue(ctx, v);
+
+        if (JS_IsException(next)) {
+            g_strfreev(parts);
+            return next;
+        }
+        /* A qualified name that goes nowhere is an error and not a miss: there
+         * is no lexical scope to fall back to for `A.B`, and pretending the
+         * class is merely "built in code" would hide the typo. */
+        if (JS_IsUndefined(next) || JS_IsNull(next)) {
+            JS_FreeValue(ctx, next);
+            v = JS_UNDEFINED;
+            break;
+        }
+        v = next;
+    }
+
+    g_strfreev(parts);
+    return v;
+}
+
+/*
+ * The value a bare name resolves to, for `rad.js` and for nothing else.
+ *
+ * A `.record` file names the classes its fields hold, and a name has to resolve
+ * the way the rest of the runtime resolves one -- a project's `class Line`, or
+ * a library's -- which is `bta_lookup_global` above.  JavaScript cannot
+ * evaluate a name itself (`eval` is not part of this language), so the rule is
+ * handed over as this hook; `Record`'s loader captures it and the hatch below
+ * takes the name away.
+ */
+static JSValue js_class_of_name(JSContext *ctx, JSValueConst this_val, int argc,
+                                JSValueConst *argv)
+{
+    if (argc < 1 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx, "the name lookup needs a name");
+
+    const char *name = JS_ToCString(ctx, argv[0]);
+    if (!name)
+        return JS_EXCEPTION;
+
+    JSValue out = bta_lookup_global(ctx, name);
+    JS_FreeCString(ctx, name);
+    return out;
+}
+
+/* Installed by the main thread and by every worker; deleted with the hatches. */
+void bta_class_of_name_init(JSContext *ctx, JSValueConst global)
+{
+    JS_SetPropertyStr(ctx, global, "classOfName",
+                      JS_NewCFunction(ctx, js_class_of_name, "classOfName", 1));
+}
+
+#ifndef BTA_META_ONLY
+/* The global object, as a real property enumeration.
+ *
+ * **The point of it is that nothing else can answer.** The globals are installed
+ * one `JS_SetPropertyStr` at a time across this file and four others, and the
+ * very same shape builds half the runtime's *return values* -- `Exec`'s handle,
+ * `File.Info`'s answer, a table row -- so a list kept beside the installs would
+ * be a second list to drift, and the one that drifts is the one no program runs.
+ * `tests/api/Check.js` reads those same call sites out of the C to hold the
+ * documentation to the same surface; this is the same answer, asked at run time,
+ * for a program that wants to know rather than a check that wants to prove.
+ *
+ * It is deliberately **not** a curated list of the runtime's own names: the answer
+ * is what is on the global object, which is also `Math`, `JSON`, `Date`, `Map`,
+ * `Timer`, `Confirm` and whatever a library installed. A completion engine wants
+ * all of them, and a caller that wanted only the runtime's own can ask
+ * `Application.Libraries()` beside it.
+ */
+JSValue bta_application_globals(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    JSValue     global = JS_GetGlobalObject(ctx);
+    JSPropertyEnum *tab = NULL;
+    uint32_t    len = 0;
+    JSValue     out  = JS_NewArray(ctx);
+    uint32_t    n    = 0;
+
+    if (JS_GetOwnPropertyNames(ctx, &tab, &len, global, JS_GPN_STRING_MASK) == 0) {
+        for (uint32_t i = 0; i < len; i++) {
+            const char *name = JS_AtomToCString(ctx, tab[i].atom);
+            /* `globalThis` went with the hatches, and so did every name they
+             * took: what is left here is what a program may actually write. */
+            if (name && *name && !bta_module_exported(ctx, name))
+                JS_SetPropertyUint32(ctx, out, n++, JS_NewString(ctx, name));
+            if (name) JS_FreeCString(ctx, name);
+        }
+        JS_FreePropertyEnum(ctx, tab, len);
+    }
+    JS_FreeValue(ctx, global);
+    return out;
+}
+#endif /* !BTA_META_ONLY */

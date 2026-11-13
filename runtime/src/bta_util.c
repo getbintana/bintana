@@ -480,3 +480,46 @@ JSValue bta_text_line_of(JSContext *ctx, JSValueConst this_val,
     JS_FreeCString(ctx, s);
     return JS_NewInt32(ctx, line);
 }
+
+/* ------------------------------------------------------- files and jobs */
+
+/* A file's whole contents, or NULL. Both hosts and the metadata host read
+ * their sources through it. */
+char *bta_read_file(const char *path, size_t *len)
+{
+    char  *data = NULL;
+    gsize  n    = 0;
+
+    if (!g_file_get_contents(path, &data, &n, NULL))
+        return NULL;
+    if (len)
+        *len = n;
+    return data;
+}
+
+/* Promise callbacks and other microtasks only run when we pump them. */
+void bta_drain_jobs(JSRuntime *rt)
+{
+    JSContext *cctx;
+    for (;;) {
+        int rc = JS_ExecutePendingJob(rt, &cctx);
+        if (rc <= 0) {
+            if (rc < 0)
+                bta_dump_error(cctx);
+            break;
+        }
+    }
+}
+
+/* An ASCII identifier: what a class path is made of, and what a `.form`
+ * names a control with. Here because every host -- the metadata host too --
+ * validates a class name before it looks one up (bta_language.c). */
+bool bta_is_identifier(const char *s)
+{
+    if (!s || !*s || (!g_ascii_isalpha(*s) && *s != '_' && *s != '$'))
+        return false;
+    for (const char *p = s; *p; p++)
+        if (!g_ascii_isalnum(*p) && *p != '_' && *p != '$')
+            return false;
+    return true;
+}

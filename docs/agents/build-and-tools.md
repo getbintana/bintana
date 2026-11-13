@@ -507,8 +507,9 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 - **`bta_widgets_init` skips `JS_NewClassID`/`JS_NewClass` and uses a stub
   constructor; `bta_widgets_cleanup` still runs.** The table holds `JSValue`
   prototypes and constructors, and `JS_FreeRuntime` aborts on anything left.
-- **`bta_meta.c` is a test host, not a console host.** It copies
-  `bta_lookup_global`, answers `bta_module_runtime_owns` false, and prints an
+- **`bta_meta.c` is a test host, not a console host.** It links
+  `bta_language.c` for `bta_lookup_global` (its own copy skipped the identifier
+  check and passed the name to `JS_Eval`), answers `bta_module_runtime_owns` false, and prints an
   exception with `bta_dump_error`. It evaluates `forms.js` with ten captures of
   `rad.js` and a stub `FormPart`, and its `bta_symbols` is the shared pass
   compiled as a script (`bta_symbols_script`, bta_source.c) so the prelude's
@@ -709,7 +710,9 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `bta_runtime.c`.** The library listing and the project boot are shared, in
   `bta_project.c`, and so are `Application.LibraryPath` and `Libraries` (the
   core's own ignored the running project and listed nothing); the language
-  in `bta_language.c`; `Logger` in `bta_log.c`
+  in `bta_language.c`; so are `bta_lookup_global`, `classOfName` and
+  `Application.Globals`; `HasCommand` in `bta_sys.c`; `bta_read_file`,
+  `bta_drain_jobs` and `bta_is_identifier` in `bta_util.c`; `Logger` in `bta_log.c`
   (the core's own printed every level and had no `Level`, `Target` or
   `Handler`); the error text in `bta_util.c`; the report of an uncaught error in `bta_error.c`, which the
   core used to print bare, without the replacement hint and without calling

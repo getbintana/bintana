@@ -21,20 +21,6 @@ static BtaApp *g_app;
 
 BtaApp *bta_current_app(void) { return g_app; }
 
-/* ------------------------------------------------------------------ utils */
-
-char *bta_read_file(const char *path, size_t *len)
-{
-    char  *data = NULL;
-    gsize  n    = 0;
-
-    if (!g_file_get_contents(path, &data, &n, NULL))
-        return NULL;
-    if (len)
-        *len = n;
-    return data;
-}
-
 /*
  * What an error is shown in is a window of Bintana's own: `showError` in
  * `forms.js`, built out of the same controls an application uses, with the
@@ -215,20 +201,6 @@ void bta_report_fatal(BtaApp *app, const char *message)
 }
 
 
-/* Promise callbacks and other microtasks only run when we pump them. */
-void bta_drain_jobs(JSRuntime *rt)
-{
-    JSContext *cctx;
-    for (;;) {
-        int rc = JS_ExecutePendingJob(rt, &cctx);
-        if (rc <= 0) {
-            if (rc < 0)
-                bta_dump_error(cctx);
-            break;
-        }
-    }
-}
-
 /* in bta.h: a worker thread builds the same language. */
 
 /* The two JavaScript sources baked into the binary, for whoever reads what
@@ -237,115 +209,6 @@ void bta_prelude_sources(const char **rad, const char **forms)
 {
     *rad   = bta_prelude_js;
     *forms = bta_forms_js;
-}
-
-/* Every dot-separated segment an identifier, and at least one segment. */
-static bool is_class_path(const char *s)
-{
-    if (!s || !*s)
-        return false;
-
-    char **parts = g_strsplit(s, ".", -1);
-    bool   ok    = true;
-
-    for (int i = 0; parts[i]; i++)
-        if (!bta_is_identifier(parts[i]))
-            ok = false;
-
-    g_strfreev(parts);
-    return ok;
-}
-
-/*
- * A class by name, which is how a .form names a type and how project.btp names
- * the startup form.
- *
- * Two ways a class can be reachable, and both have to work:
- *
- *   Form1            `class Form1 {}` at the top level of a script binds into
- *                    the global lexical scope and *not* onto globalThis, so a
- *                    plain property read misses it.  Evaluating the bare
- *                    identifier is what makes Gambas-style "every class is
- *                    visible everywhere, no imports" work.
- *
- *   Widgets.Stepper  a namespace is an ordinary object on globalThis, so a
- *                    qualified name is a walk down properties -- no eval, which
- *                    is the point: nothing here needs the compiler.
- */
-JSValue bta_lookup_global(JSContext *ctx, const char *name)
-{
-    if (!is_class_path(name))
-        return JS_ThrowTypeError(ctx, "'%s' is not a valid class name", name);
-
-    /*
-     * **A bare name is evaluated, and that is JavaScript's own order**: the
-     * global lexical scope -- where a project's `class Timer {}` lives -- before
-     * the global object, where the runtime's `Timer` is a property. Reading the
-     * object first made every installed global beat the project's own class:
-     * `startup class 'File' not found` for a C global, and a `TypeError: not a
-     * function` from inside `Form` for a prelude one (`Timer`, `Record`), with
-     * the class there, loaded and evaluated. An identifier that names nothing
-     * at all is a ReferenceError, which is what the fallback below always threw.
-     */
-    if (!strchr(name, '.'))
-        return JS_Eval(ctx, name, strlen(name), "<class-lookup>", JS_EVAL_TYPE_GLOBAL);
-
-    char  **parts = g_strsplit(name, ".", -1);
-    JSValue v     = JS_GetGlobalObject(ctx);
-
-    for (int i = 0; parts[i]; i++) {
-        JSValue next = JS_GetPropertyStr(ctx, v, parts[i]);
-        JS_FreeValue(ctx, v);
-
-        if (JS_IsException(next)) {
-            g_strfreev(parts);
-            return next;
-        }
-        /* A qualified name that goes nowhere is an error and not a miss: there
-         * is no lexical scope to fall back to for `A.B`, and pretending the
-         * class is merely "built in code" would hide the typo. */
-        if (JS_IsUndefined(next) || JS_IsNull(next)) {
-            JS_FreeValue(ctx, next);
-            v = JS_UNDEFINED;
-            break;
-        }
-        v = next;
-    }
-
-    g_strfreev(parts);
-    return v;
-}
-
-/*
- * The value a bare name resolves to, for `rad.js` and for nothing else.
- *
- * A `.record` file names the classes its fields hold, and a name has to resolve
- * the way the rest of the runtime resolves one -- a project's `class Line`, or
- * a library's -- which is `bta_lookup_global` above.  JavaScript cannot
- * evaluate a name itself (`eval` is not part of this language), so the rule is
- * handed over as this hook; `Record`'s loader captures it and the hatch below
- * takes the name away.
- */
-static JSValue js_class_of_name(JSContext *ctx, JSValueConst this_val, int argc,
-                                JSValueConst *argv)
-{
-    if (argc < 1 || !JS_IsString(argv[0]))
-        return JS_ThrowTypeError(ctx, "the name lookup needs a name");
-
-    const char *name = JS_ToCString(ctx, argv[0]);
-    if (!name)
-        return JS_EXCEPTION;
-
-    JSValue out = bta_lookup_global(ctx, name);
-    JS_FreeCString(ctx, name);
-    return out;
-}
-
-/* Installed by the main thread and by every worker; deleted with the hatches. */
-void bta_class_of_name_init(JSContext *ctx, JSValueConst global)
-{
-    JS_SetPropertyStr(ctx, global, "classOfName",
-                      JS_NewCFunction(ctx, js_class_of_name, "classOfName", 1));
 }
 
 /* ---------------------------------------------------------------- globals */
@@ -577,40 +440,6 @@ static JSValue js_inhibit(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
- * Application.HasCommand(name): is there such a program on the PATH?
- *
- * The same question `HasIcon` answers about an icon, and it exists for the same
- * reason: only whoever picks the name can choose a fallback.  An application that
- * hands a file to an external tool has to be able to offer the one that is
- * installed rather than the one it was written against -- and `Exec` **throws**
- * when the program is not there, so without this the only way to find out is to
- * try it and catch, which is an exception used as a question.
- *
- * A path with a separator in it is answered by looking at the file, so a command
- * somebody configured by hand ("/opt/poedit/bin/poedit") is checked too.
- */
-static JSValue js_has_command(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
-{
-    const char *name = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!name)
-        return JS_ThrowTypeError(ctx, "HasCommand(name) expects a name");
-
-    bool has;
-    if (strchr(name, G_DIR_SEPARATOR)) {
-        has = g_file_test(name, G_FILE_TEST_IS_EXECUTABLE) &&
-              !g_file_test(name, G_FILE_TEST_IS_DIR);
-    } else {
-        char *found = g_find_program_in_path(name);
-        has = found != NULL;
-        g_free(found);
-    }
-
-    JS_FreeCString(ctx, name);
-    return JS_NewBool(ctx, has);
-}
-
-/*
  * Application.Icons([contains]): every icon name the search path offers, sorted.
  *
  * HasIcon answers about a name one already has in mind; this is the other
@@ -656,47 +485,6 @@ static JSValue js_icons(JSContext *ctx, JSValueConst this_val,
     JSValue r    = JS_Call(ctx, sort, out, 0, NULL);
     JS_FreeValue(ctx, r);
     JS_FreeValue(ctx, sort);
-    return out;
-}
-
-/* The global object, as a real property enumeration.
- *
- * **The point of it is that nothing else can answer.** The globals are installed
- * one `JS_SetPropertyStr` at a time across this file and four others, and the
- * very same shape builds half the runtime's *return values* -- `Exec`'s handle,
- * `File.Info`'s answer, a table row -- so a list kept beside the installs would
- * be a second list to drift, and the one that drifts is the one no program runs.
- * `tests/api/Check.js` reads those same call sites out of the C to hold the
- * documentation to the same surface; this is the same answer, asked at run time,
- * for a program that wants to know rather than a check that wants to prove.
- *
- * It is deliberately **not** a curated list of the runtime's own names: the answer
- * is what is on the global object, which is also `Math`, `JSON`, `Date`, `Map`,
- * `Timer`, `Confirm` and whatever a library installed. A completion engine wants
- * all of them, and a caller that wanted only the runtime's own can ask
- * `Application.Libraries()` beside it.
- */
-static JSValue js_globals(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv)
-{
-    JSValue     global = JS_GetGlobalObject(ctx);
-    JSPropertyEnum *tab = NULL;
-    uint32_t    len = 0;
-    JSValue     out  = JS_NewArray(ctx);
-    uint32_t    n    = 0;
-
-    if (JS_GetOwnPropertyNames(ctx, &tab, &len, global, JS_GPN_STRING_MASK) == 0) {
-        for (uint32_t i = 0; i < len; i++) {
-            const char *name = JS_AtomToCString(ctx, tab[i].atom);
-            /* `globalThis` went with the hatches, and so did every name they
-             * took: what is left here is what a program may actually write. */
-            if (name && *name && !bta_module_exported(ctx, name))
-                JS_SetPropertyUint32(ctx, out, n++, JS_NewString(ctx, name));
-            if (name) JS_FreeCString(ctx, name);
-        }
-        JS_FreePropertyEnum(ctx, tab, len);
-    }
-    JS_FreeValue(ctx, global);
     return out;
 }
 
@@ -992,7 +780,7 @@ static bool install_globals(BtaApp *app)
      *   throws when the program is not there
      */
     JS_SetPropertyStr(ctx, application, "HasCommand",
-                      JS_NewCFunction(ctx, js_has_command, "HasCommand", 1));
+                      JS_NewCFunction(ctx, bta_application_has_command, "HasCommand", 1));
 
     /* Would this text compile?  The one honest use of `Function` -- an IDE that
      * writes code wants to know before it saves -- published on its own so the
@@ -1139,7 +927,7 @@ static bool install_globals(BtaApp *app)
      *   sixty-four of them
      */
     JS_SetPropertyStr(ctx, application, "Globals",
-                      JS_NewCFunction(ctx, js_globals, "Globals", 0));
+                      JS_NewCFunction(ctx, bta_application_globals, "Globals", 0));
     /* ProtectPrototype()
      *   refuse every new name on `Object.prototype`, so code loaded later
      *   cannot change every `for...in` in the program. Existing members can

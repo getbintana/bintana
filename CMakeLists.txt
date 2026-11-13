@@ -562,6 +562,7 @@ target_compile_options(${BTA_GUI_TARGET} PRIVATE -Wall -Wextra -Wno-unused-param
 # GtkSourceView or VTE.
 set(BTA_META_SOURCES
     runtime/src/bta_meta.c
+    runtime/src/bta_language.c
     runtime/src/bta_source.c
     runtime/src/bta_util.c
     runtime/src/bta_widget.c

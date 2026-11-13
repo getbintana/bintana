@@ -5372,3 +5372,37 @@ void bta_sys_cleanup(void)
         timers = NULL;
     }
 }
+
+/*
+ * Application.HasCommand(name): is there such a program on the PATH?
+ *
+ * The same question `HasIcon` answers about an icon, and it exists for the same
+ * reason: only whoever picks the name can choose a fallback.  An application that
+ * hands a file to an external tool has to be able to offer the one that is
+ * installed rather than the one it was written against -- and `Exec` **throws**
+ * when the program is not there, so without this the only way to find out is to
+ * try it and catch, which is an exception used as a question.
+ *
+ * A path with a separator in it is answered by looking at the file, so a command
+ * somebody configured by hand ("/opt/poedit/bin/poedit") is checked too.
+ */
+JSValue bta_application_has_command(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv)
+{
+    const char *name = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!name)
+        return JS_ThrowTypeError(ctx, "HasCommand(name) expects a name");
+
+    bool has;
+    if (strchr(name, G_DIR_SEPARATOR)) {
+        has = g_file_test(name, G_FILE_TEST_IS_EXECUTABLE) &&
+              !g_file_test(name, G_FILE_TEST_IS_DIR);
+    } else {
+        char *found = g_find_program_in_path(name);
+        has = found != NULL;
+        g_free(found);
+    }
+
+    JS_FreeCString(ctx, name);
+    return JS_NewBool(ctx, has);
+}

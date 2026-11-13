@@ -35,32 +35,6 @@
 
 /* ------------------------------------------------------- the core stubs */
 
-char *bta_read_file(const char *path, size_t *len)
-{
-    char  *text = NULL;
-    gsize  size = 0;
-
-    if (!g_file_get_contents(path, &text, &size, NULL))
-        return NULL;
-    if (len)
-        *len = (size_t)size;
-    return text;
-}
-
-void bta_drain_jobs(JSRuntime *rt)
-{
-    JSContext *cctx;
-
-    for (;;) {
-        int rc = JS_ExecutePendingJob(rt, &cctx);
-        if (rc <= 0) {
-            if (rc < 0)
-                bta_dump_error(cctx);
-            break;
-        }
-    }
-}
-
 /* The boot's application, for the one caller that asks: `bta_plugin.c` reaches
  * the context through it while a plugin's `init` runs. It is NULL everywhere
  * else, which is the answer the other core code expects. */
@@ -98,54 +72,6 @@ void bta_task_worker_host(JSContext *ctx, JSValueConst global)
         drawing_worker_init(ctx, global);
 }
 
-
-/* ---------------------------------------------------------- the language */
-
-static bool is_class_path(const char *name)
-{
-    if (!name || !*name)
-        return false;
-
-    char **parts = g_strsplit(name, ".", -1);
-    bool   ok    = true;
-
-    for (int i = 0; parts[i]; i++)
-        if (!bta_is_identifier(parts[i]))
-            ok = false;
-    g_strfreev(parts);
-    return ok;
-}
-
-JSValue bta_lookup_global(JSContext *ctx, const char *name)
-{
-    if (!is_class_path(name))
-        return JS_ThrowTypeError(ctx, "'%s' is not a valid class name", name);
-
-    if (!strchr(name, '.'))
-        return JS_Eval(ctx, name, strlen(name), "<class-lookup>",
-                       JS_EVAL_TYPE_GLOBAL);
-
-    char  **parts = g_strsplit(name, ".", -1);
-    JSValue v     = JS_GetGlobalObject(ctx);
-
-    for (int i = 0; parts[i]; i++) {
-        JSValue next = JS_GetPropertyStr(ctx, v, parts[i]);
-        JS_FreeValue(ctx, v);
-        if (JS_IsException(next)) {
-            g_strfreev(parts);
-            return next;
-        }
-        if (JS_IsUndefined(next) || JS_IsNull(next)) {
-            JS_FreeValue(ctx, next);
-            v = JS_UNDEFINED;
-            break;
-        }
-        v = next;
-    }
-    g_strfreev(parts);
-    return v;
-}
-
 /* Whether any error was reported. A callback that throws after `main` returned
  * still has to reach the exit status, or a runner reads "it worked" over a
  * traceback -- the failure `run_console` fixes with `app->uncaught`. */
@@ -163,27 +89,6 @@ bool bta_host_show_error(JSContext *ctx, const char *msg, const char *stack)
 {
     (void)ctx; (void)msg; (void)stack;
     return false;
-}
-
-static JSValue js_class_of_name(JSContext *ctx, JSValueConst this_val, int argc,
-                                JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 1 || !JS_IsString(argv[0]))
-        return JS_ThrowTypeError(ctx, "the name lookup needs a name");
-
-    const char *name = JS_ToCString(ctx, argv[0]);
-    if (!name)
-        return JS_EXCEPTION;
-    JSValue out = bta_lookup_global(ctx, name);
-    JS_FreeCString(ctx, name);
-    return out;
-}
-
-void bta_class_of_name_init(JSContext *ctx, JSValueConst global)
-{
-    JS_SetPropertyStr(ctx, global, "classOfName",
-                      JS_NewCFunction(ctx, js_class_of_name, "classOfName", 1));
 }
 
 void bta_prelude_sources(const char **rad, const char **forms)
@@ -253,55 +158,6 @@ static int core_status(void)
     return headless_uncaught ? 1 : 0;
 }
 
-static JSValue js_application_globals(JSContext *ctx, JSValueConst this_val,
-                                      int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-
-    JSValue         global = JS_GetGlobalObject(ctx);
-    JSPropertyEnum *tab    = NULL;
-    uint32_t        len    = 0;
-    JSValue         out    = JS_NewArray(ctx);
-    uint32_t        n      = 0;
-
-    if (JS_GetOwnPropertyNames(ctx, &tab, &len, global, JS_GPN_STRING_MASK) == 0) {
-        for (uint32_t i = 0; i < len; i++) {
-            const char *name = JS_AtomToCString(ctx, tab[i].atom);
-            if (name && *name && !bta_module_exported(ctx, name))
-                JS_SetPropertyUint32(ctx, out, n++, JS_NewString(ctx, name));
-            if (name) JS_FreeCString(ctx, name);
-        }
-        JS_FreePropertyEnum(ctx, tab, len);
-    }
-    JS_FreeValue(ctx, global);
-    return out;
-}
-
-/* `Application.HasCommand(name)`: the core half of the graphical answer, and
- * the reason a console tool can ask before `Exec` throws. A name with a
- * separator is a file to look at; a bare one is the PATH's. */
-static JSValue js_application_has_command(JSContext *ctx, JSValueConst this_val,
-                                          int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    const char *name = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    if (!name)
-        return JS_ThrowTypeError(ctx, "HasCommand(name) expects a name");
-
-    bool has;
-    if (strchr(name, G_DIR_SEPARATOR)) {
-        has = g_file_test(name, G_FILE_TEST_IS_EXECUTABLE) &&
-              !g_file_test(name, G_FILE_TEST_IS_DIR);
-    } else {
-        char *found = g_find_program_in_path(name);
-
-        has = found != NULL;
-        g_free(found);
-    }
-    JS_FreeCString(ctx, name);
-    return JS_NewBool(ctx, has);
-}
-
 static void install_application(JSContext *ctx, JSValueConst global,
                                 const char *directory, const char *name,
                                 const char *version, const char *id,
@@ -348,7 +204,7 @@ static void install_application(JSContext *ctx, JSValueConst global,
                       JS_NewCFunction(ctx, bta_application_free_names,
                                       "FreeNames", 1));
     JS_SetPropertyStr(ctx, application, "Globals",
-                      JS_NewCFunction(ctx, js_application_globals, "Globals", 0));
+                      JS_NewCFunction(ctx, bta_application_globals, "Globals", 0));
     JS_SetPropertyStr(ctx, application, "LibraryPath",
                       JS_NewCFunction(ctx, bta_application_library_path,
                                       "LibraryPath", 2));
@@ -358,7 +214,7 @@ static void install_application(JSContext *ctx, JSValueConst global,
     JS_SetPropertyStr(ctx, application, "Uses",
                       JS_NewCFunction(ctx, bta_application_uses, "Uses", 1));
     JS_SetPropertyStr(ctx, application, "HasCommand",
-                      JS_NewCFunction(ctx, js_application_has_command,
+                      JS_NewCFunction(ctx, bta_application_has_command,
                                       "HasCommand", 1));
     JS_SetPropertyStr(ctx, application, "Replacements",
                       JS_NewCFunction(ctx, bta_application_replacements,
