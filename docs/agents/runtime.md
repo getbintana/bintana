@@ -812,10 +812,14 @@ icon when the theme has one by that name (`gtkapplication.c`).
   something happened to that path, and plenty of programs rewrite a file by
   taking the old one away and putting a new one there -- `git restore` among
   them, which is how discarding a change came to report *ClientsForm.js is no
-  longer on disk* about a file that was sitting right there, restored. The event
-  is a hint; the disk is the answer, and asking is one `File.Exists`. The same
-  shape as every other trap in this list: a flag believed instead of a fact
-  looked at.
+  longer on disk* about a file that was sitting right there, restored. The
+  runtime now holds a deletion for `WATCH_SETTLE_MS` (200 ms): if the path is
+  back by then, the pair is one `Changed`, which is what an atomic save on
+  Windows (`DELETED` then `CHANGED`, or a bare `CREATED`) deserves. A
+  `"Deleted"` that survives the settle still means *at that moment*, not
+  necessarily forever; the disk is the answer, and asking is one
+  `File.Exists`. The same shape as every other trap in this list: a flag
+  believed instead of a fact looked at.
 
 `bta_lookup_global` -- what `startup`, a `.form`'s `type`, `Task.Start`,
 `Widget.New` and the class questions all go through -- read the **global object
@@ -847,13 +851,14 @@ wins now, but a name the runtime publishes is a name a program cannot reach
 while it declares its own, so `grep` the whole tree -- `examples/`, `tests/`,
 `lib/`, not only `runtime/` -- before installing one.
 
-**A second run of a `singleInstance` project is a `GApplication` remote, and
-three details were measured rather than assumed.** The id is the bus name, so
-`"singleInstance": true` without an `"id"` is refused at load (as is a value
-that is not `true` or `false`: `"yes"` read as false is two windows where one
-was asked for). The second process cannot call into the first, so the first
-exports an action, `bta-second-instance` with parameter `(sas)` -- the second's
-working directory and its `Arguments` -- and the second activates it:
+**A second run of a `singleInstance` project is a `GApplication` remote on
+Linux/macOS, and three details were measured rather than assumed.** The id is
+the bus name, so `"singleInstance": true` without an `"id"` is refused at load
+(as is a value that is not `true` or `false`: `"yes"` read as false is two
+windows where one was asked for). The second process cannot call into the
+first, so the first exports an action, `bta-second-instance` with parameter
+`(sas)` -- the second's working directory and its `Arguments` -- and the second
+activates it:
 *(1)* the action has to be added **before** `g_application_register`, which is
 when the bus learns what the application has; *(2)* after sending it, the
 second goes on into `g_application_run` like any application -- on a remote
@@ -862,14 +867,21 @@ the call that unregisters from the bus: unreffing the application by hand
 instead is what GLib answers with *did not unregister from D-Bus before
 destruction*; *(3)* that remote activation reaches the first's `activate`
 signal, which would have built a second startup form, so `on_activate` is
-guarded by `app->activated`. With no session bus `g_application_register`
-succeeds locally and every run is its own instance, as before. The window is
-raised **after** `Application.OnSecondInstance` returns, always: a handler that
-opens a file wants the window, and the one that does not is not hurt by it.
-`tests/widgets`' `SingleInstance` runs two real processes under
-`dbus-run-session` (a bus of its own, so it never touches the desktop's) and is
-red with the action's name misspelt; it is skipped where `dbus-run-session` is
-absent. **`File.Join(dir, "/abs")` is `dir/abs`**, not `/abs`, which is what the
+guarded by `app->activated`.
+
+**Windows has no session bus, so there it is a local mutex and a named pipe.**
+The first run creates `Local\BintanaSingle-<id>` and serves
+`\\.\pipe\bintana-single-<id>` on a thread; a second run sees
+`ERROR_ALREADY_EXISTS`, writes one length-prefixed `GVariant` `(sas)` and exits
+`0`. The server marshals it to the main loop and calls the same
+`Application.OnSecondInstance`, so the program sees one API. It is a form
+application's property, as it is on Linux: a `main` project has no window to
+raise and keeps every run separate. `tests/widgets`' `SingleInstance` runs two
+real processes under `dbus-run-session` on Linux and a real first/second pair
+on Windows; it is skipped only where neither exists. The window is raised
+**after** `Application.OnSecondInstance` returns, always: a handler that opens
+a file wants the window, and the one that does not is not hurt by it.
+**`File.Join(dir, "/abs")` is `dir/abs`**, not `/abs`, which is what the
 documentation's example first got wrong.
 
 ## `ProtectPrototype` and the prototype every object inherits

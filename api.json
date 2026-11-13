@@ -13404,7 +13404,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "from `project.btp`: the application's identity in reverse DNS — `io.github.you.App`. It is **one name in three places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, and the Flatpak app id. `\"\"` when the project declares none, which is an ordinary project classed by the program's name; a value that is not an application id **stops the program when the project loads**, because every one of those three is something nobody looks at until a dock shows the wrong icon",
+          "Doc": "from `project.btp`: the application's identity in reverse DNS — `io.github.you.App`. It is **one name in four places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, the Flatpak app id, and on Windows the process's AppUserModelID -- what the taskbar groups by and what a toast belongs to. `\"\"` when the project declares none, which is an ordinary project classed by the program's name; a value that is not an application id **stops the program when the project loads**, because every one of those names is something nobody looks at until a dock shows the wrong icon",
           "Native": true
         },
         {
@@ -13458,7 +13458,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "assign `(args, directory) => …`: called in the **first** instance of a project that declares `\"singleInstance\": true` when it is started again. `args` is what followed the project directory on the second command line, as `Arguments` is, and `directory` is where that run was started. The second process then exits `0`, and **the first's window is brought forward after the handler returns**, whether or not one was assigned. `null` until assigned",
+          "Doc": "assign `(args, directory) => …`: called in the **first** instance of a project that declares `\"singleInstance\": true` when it is started again. `args` is what followed the project directory on the second command line, as `Arguments` is, and `directory` is where that run was started. The second process then exits `0`, and **the first's window is brought forward after the handler returns**, whether or not one was assigned. On Windows a local mutex and a named pipe carry the same message, so no session bus is needed. `null` until assigned",
           "Native": true
         },
         {
@@ -15053,7 +15053,7 @@
           "Params": 2,
           "Signature": "(path, [cancellable])",
           "Returns": "string",
-          "Doc": "the whole file as a string. **Throws if it cannot be read**, and the message names the file: there is no `null` to test for and no silent empty string. A `Cancellable` last ends a read that is stuck",
+          "Doc": "the whole file as a string. **Throws if it cannot be read**, and the message names the file: there is no `null` to test for and no silent empty string. A **UTF-8 BOM is dropped** and a **UTF-16LE/BE or UTF-32LE/BE BOM is decoded**, so a `.btp`, `.form` or source file written by Notepad or PowerShell reads as the text it is; bytes with no BOM are returned unchanged. `LoadBytes` is the byte-for-byte road. A `Cancellable` last ends a read that is stuck",
           "Native": true
         },
         {
@@ -15071,7 +15071,7 @@
           "Params": 1,
           "Signature": "(path)",
           "Returns": "",
-          "Doc": "the file, parsed. **The error names the file**, which is the whole reason to use it over `JSON.parse(File.Load(p))` — a syntax error in *something* is not an answer",
+          "Doc": "the file, parsed. **The error names the file**, which is the whole reason to use it over `JSON.parse(File.Load(p))` — a syntax error in *something* is not an answer. A UTF-8 BOM, or a UTF-16LE/BE file a Windows editor wrote, arrives as the text it looks like: `File.Load` normalizes it before this parses it",
           "Native": false
         },
         {
@@ -15170,7 +15170,7 @@
           "Params": 2,
           "Signature": "(path, cb)",
           "Returns": "{ Stop }",
-          "Doc": "`cb(event, path)` — `\"Changed\"`, `\"Created\"`, `\"Deleted\"` — and answers something with a `Stop()`",
+          "Doc": "`cb(event, path)` — `\"Changed\"`, `\"Created\"`, `\"Deleted\"` — and answers something with a `Stop()`. A save is reported once as `\"Changed\"`: a deletion the monitor reports before a replacement is held for a moment and becomes that one change -- as does a `Created` for a path that was already there -- while a path still gone is `\"Deleted\"` after the moment",
           "Native": true
         },
         {

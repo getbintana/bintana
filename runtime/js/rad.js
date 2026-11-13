@@ -140,7 +140,8 @@ defineProperty(String.prototype, "localeCompare", {
 /**
  * the file, parsed. **The error names the file**, which is the whole reason to
  * use it over `JSON.parse(File.Load(p))` — a syntax error in *something* is not
- * an answer
+ * an answer. A UTF-8 BOM, or a UTF-16LE/BE file a Windows editor wrote, arrives
+ * as the text it looks like: `File.Load` normalizes it before this parses it
  */
 File.LoadJson = function (path) {
     const text = File.Load(path);

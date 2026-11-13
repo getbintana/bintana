@@ -408,18 +408,38 @@ save will edit `examples/hello` for real.
   (2026-11-11): `tests/smoke` 171/0, `tests/markdown` 171/0, `tests/qr`
   120/0, `tests/report` 259/0 and `tests/xlsx` 57/0 on that desktop.
   `tests/widgets` runs natively there with `testClipboard`'s round trip
-  skipped (the clipboard SEGV below): 6322 passed, 3 failed on 2026-11-12,
-  from 65 that morning. What is left is the suite's own crowding, none of it
-  seen alone: `testHttpServer`'s TLS restart on an ephemeral port another
-  socket took, `testNetwork`'s probe of a stopped server answering `Error`
-  (both in [`network.md`](network.md)), and a timing check that comes and
-  goes -- `Http.Stream`'s first line inside 700 ms, or within 1 s. `tests/check.sh` is the no-display pass the Windows CI
+  skipped (the clipboard SEGV below): 6352 assertions, of which the two or
+  three crowding failures below are the red ones (the last run was 6349
+  passed, 3 failed on 2026-11-12; a clean one is 6350/2). What is left is the
+  suite's own crowding, none of it seen alone: `testHttpServer`'s TLS restart
+  on an ephemeral port another socket took, `testNetwork`'s probe of a stopped
+  server answering `Error` (both in [`network.md`](network.md)), and a timing
+  check that comes and goes -- `Http.Stream`'s first line inside 700 ms, or
+  within 1 s, or the lines `Exec` kept before a deadline. `tests/check.sh` is the no-display pass the Windows CI
   runs; it skips `tests/ide` with a sentence when Git wrote the project's
   `.form` symlinks as text files, which is what a checkout without Developer
   Mode does. The runner does the same now, so `tests/run.sh` continues with the
   other six projects instead of failing `ide` before it starts. Enable
   Developer Mode (or `core.symlinks=true` with the privilege) before believing
-  anything about `tests/ide` on Windows.
+  anything about `tests/ide` on Windows. With the symlinks materialized it does
+  run: 2691 passed, 9 failed on 2026-11-12, all in path spelling (`po\ru.po`)
+  and the `tar` export (`tar: Cannot connect to C: resolve failed`), not in the
+  loader.
+- **Windows editors write UTF-8 BOM and UTF-16, and the loader has to meet
+  them.** PowerShell 5.1's `Set-Content -Encoding UTF8`/`Out-File`, Notepad's
+  older *Unicode* and Visual Studio all write a BOM; a `project.btp` or `.form` saved that way
+  failed with `Unexpected token '\ufeff'`, and a UTF-16LE `.js` with
+  `unexpected character`. `bta_text_from_bytes` now drops a UTF-8 BOM and
+  decodes UTF-16LE/BE (and UTF-32) with one, and `bta_read_file` and `File.Load`
+  both go through it; bytes with no BOM are copied untouched, so the Latin-1
+  foreign file and `File.LoadBytes` keep their bytes. `tests/widgets`'
+  `TextEncodings` writes a project whose `.btp`, `.form` and `.js` use those
+  encodings and runs a child, and asks `File.Load`/`File.LoadJson` for both
+  UTF-16 byte orders. `FileWatch` now runs on Windows too: the deletion
+  `File.Save` reports is held for 200 ms, so a save is one `Changed` and a real
+  delete is one `Deleted` on both platforms. `SingleInstance` does too: a local
+  mutex and a named pipe replace the session bus, and the test starts two real
+  processes and reads the arguments and directory back from the first.
 - **Two SEGVs on Windows, two different causes; read the critical before the
   crash to tell them apart.** A stack with no application frame says where a
   pointer was *used*, not who left it dangling.

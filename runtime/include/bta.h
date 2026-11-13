@@ -775,6 +775,10 @@ void    bta_app_free(BtaApp *app);
 int     bta_app_run(BtaApp *app, int argc, char **argv);
 
 char   *bta_read_file(const char *path, size_t *len);
+/* The same bytes as UTF-8 text: a UTF-8 BOM is dropped and a UTF-16/32 BOM is
+ * decoded, because that is what a Windows editor writes.  A file with no BOM is
+ * copied byte for byte.  Answers a newly allocated, NUL-terminated string. */
+char   *bta_text_from_bytes(const char *data, gsize len, gsize *out_len);
 /* A `GError` as a stable sentence of ours, out of its domain and code -- never
  * `err->message`, which GLib translates on each desktop.  See bta_runtime.c. */
 const char *bta_gerror_text(const GError *err);

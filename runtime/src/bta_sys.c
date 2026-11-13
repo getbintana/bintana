@@ -125,10 +125,24 @@ static JSValue sys_file_load_in(JSContext *ctx, JSValueConst this_val,
         return e;
     }
     g_object_unref(file);
+
+    /* The same promise `bta_read_file` makes: a BOM is a text marker, not
+     * content.  Bytes with none are copied unchanged, which is what keeps a
+     * Latin-1 source file's bytes and `LoadBytes`'s byte-for-byte road. */
+    gsize   text_len = 0;
+    char   *text     = bta_text_from_bytes(data, len, &text_len);
+
+    g_free(data);
+    if (!text) {
+        JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: out of memory", path);
+
+        JS_FreeCString(ctx, path);
+        return e;
+    }
     JS_FreeCString(ctx, path);
 
-    JSValue v = JS_NewStringLen(ctx, data, len);
-    g_free(data);
+    JSValue v = JS_NewStringLen(ctx, text, text_len);
+    g_free(text);
     return v;
 }
 BTA_CANCEL_SCOPED(sys_file_load, "File.Load")
@@ -929,12 +943,32 @@ static JSValue sys_file_open(JSContext *ctx, JSValueConst this_val,
  * many editors do not write in place at all: they write a temporary file and
  * rename it over the target, which arrives as a rename or a move rather than as
  * a change. Both roads end in one "Changed".
+ *
+ * **A deletion waits for the replacement that may follow it.** Windows reports
+ * an atomic save as DELETED and then CHANGED -- or as a bare CREATED for a path
+ * that was already there -- and a caller that acted on the first would close
+ * the file it was just told to reload. The deletion is held for
+ * `WATCH_SETTLE_MS`; if the path is back by then, the pair is one "Changed".
+ * A path that is still gone is "Deleted", `WATCH_SETTLE_MS` later than before
+ * -- a delay no caller of this API can observe as wrong, and the one that
+ * makes the two platforms agree.
  */
+#define WATCH_SETTLE_MS 200
+
 typedef struct {
     JSContext    *ctx;
     JSValue       cb;
     GFileMonitor *monitor;
     int           id;
+
+    /* A "Deleted" waiting to see whether an atomic replace follows it. */
+    guint         settle_id;
+    char         *pending_path;
+
+    /* Whether the path was there when the watch started, or since.  A
+     * "Created" for a path that was already there is an atomic replace, not a
+     * new file: Windows reports one that way. */
+    bool          existed;
 
     /*
      * Whether this watch is inside its own callback, and whether it was stopped
@@ -966,6 +1000,11 @@ static void watch_job_free(WatchJob *job)
         g_file_monitor_cancel(job->monitor);
         g_object_unref(job->monitor);
     }
+    if (job->settle_id) {
+        g_source_remove(job->settle_id);
+        job->settle_id = 0;
+    }
+    g_free(job->pending_path);
     JS_FreeValue(job->ctx, job->cb);
     g_free(job);
 }
@@ -983,23 +1022,15 @@ static const char *watch_event_name(GFileMonitorEvent event)
     }
 }
 
-static void on_file_changed(GFileMonitor *monitor, GFile *file, GFile *other,
-                            GFileMonitorEvent event, gpointer user_data)
+/*
+ * What the callback is told, and the one place a stopped watch is freed.
+ *
+ * The context is taken *before* the call and used after it, and the job is not
+ * touched again once `dead` has been read: everything below the call has to
+ * keep working for a watch that stopped itself half a frame ago.
+ */
+static void watch_emit(WatchJob *job, const char *name, const char *path)
 {
-    WatchJob   *job  = user_data;
-    const char *name = watch_event_name(event);
-    if (!name)
-        return;
-
-    /* The file it ends up being: a rename reports where it went. */
-    char *path = g_file_get_path(other && event == G_FILE_MONITOR_EVENT_RENAMED
-                                     ? other : file);
-
-    /*
-     * The context is taken *before* the call and used after it, and the job is
-     * not touched again once `dead` has been read: everything below this line
-     * has to keep working for a watch that stopped itself half a frame ago.
-     */
     JSContext *ctx = job->ctx;
 
     JSValue argv[2] = { JS_NewString(ctx, name),
@@ -1019,6 +1050,81 @@ static void on_file_changed(GFileMonitor *monitor, GFile *file, GFile *other,
     job->calling = false;
     if (job->dead)
         watch_job_free(job);
+}
+
+/*
+ * The held "Deleted" has waited long enough.
+ *
+ * If the path is back, the deletion was the first half of an atomic replace
+ * and the second half is the event the caller wants: one "Changed".  If it is
+ * still gone, it was a real deletion.  `settle_id` is cleared before the call,
+ * so a watch stopped inside its own callback does not remove the source that
+ * is already running.
+ */
+static gboolean watch_settle(gpointer data)
+{
+    WatchJob *job  = data;
+    char     *path;
+
+    job->settle_id = 0;
+    path = job->pending_path;
+    job->pending_path = NULL;
+
+    if (!job->dead) {
+        if (path && g_file_test(path, G_FILE_TEST_EXISTS)) {
+            job->existed = true;
+            watch_emit(job, "Changed", path);
+        } else {
+            job->existed = false;
+            watch_emit(job, "Deleted", path);
+        }
+    }
+
+    g_free(path);
+    return G_SOURCE_REMOVE;
+}
+
+static void on_file_changed(GFileMonitor *monitor, GFile *file, GFile *other,
+                            GFileMonitorEvent event, gpointer user_data)
+{
+    WatchJob   *job  = user_data;
+    const char *name = watch_event_name(event);
+    if (!name)
+        return;
+
+    /* The file it ends up being: a rename reports where it went. */
+    char *path = g_file_get_path(other && event == G_FILE_MONITOR_EVENT_RENAMED
+                                     ? other : file);
+
+    if (g_str_equal(name, "Deleted")) {
+        /* An atomic save is DELETED and then CHANGED.  Hold the deletion for
+         * a moment; `watch_settle` decides which of the two it was. */
+        if (job->settle_id)
+            g_source_remove(job->settle_id);
+        g_free(job->pending_path);
+        job->pending_path = g_strdup(path ? path : "");
+        job->settle_id = g_timeout_add(WATCH_SETTLE_MS, watch_settle, job);
+    } else if (job->settle_id) {
+        /* The path is back: one replacement, one "Changed". */
+        g_source_remove(job->settle_id);
+        job->settle_id = 0;
+        g_free(job->pending_path);
+        job->pending_path = NULL;
+        job->existed = true;
+        watch_emit(job, "Changed", path);
+    } else if (g_str_equal(name, "Created") && job->existed) {
+        /* Windows can report an atomic replace as CREATED as well: the path
+         * was already there, so this is a change rather than a new file. */
+        watch_emit(job, "Changed", path);
+    } else if (g_str_equal(name, "Changed") && !job->existed) {
+        /* And a file that was not there when the watch started has appeared,
+         * even if the monitor called it CHANGED rather than CREATED. */
+        job->existed = true;
+        watch_emit(job, "Created", path);
+    } else {
+        job->existed = true;
+        watch_emit(job, name, path);
+    }
 
     g_free(path);
 }
@@ -1085,6 +1191,7 @@ static JSValue sys_file_watch(JSContext *ctx, JSValueConst this_val,
     job->cb      = JS_DupValue(ctx, argv[1]);
     job->monitor = monitor;
     job->id      = watch_next_id++;
+    job->existed = g_file_test(path, G_FILE_TEST_EXISTS);
     watch_jobs   = g_list_prepend(watch_jobs, job);
 
     g_signal_connect(monitor, "changed", G_CALLBACK(on_file_changed), job);
@@ -5234,7 +5341,11 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     /* Load(path, [cancellable]) -> string
      *   the whole file as a string. **Throws if it cannot be read**, and the
      *   message names the file: there is no `null` to test for and no silent
-     *   empty string. A `Cancellable` last ends a read that is stuck
+     *   empty string. A **UTF-8 BOM is dropped** and a **UTF-16LE/BE or
+     *   UTF-32LE/BE BOM is decoded**, so a `.btp`, `.form` or source file
+     *   written by Notepad or PowerShell reads as the text it is; bytes with no
+     *   BOM are returned unchanged. `LoadBytes` is the byte-for-byte road. A
+     *   `Cancellable` last ends a read that is stuck
      */
     JS_SetPropertyStr(ctx, file, "Load",   JS_NewCFunction(ctx, sys_file_load, "Load", 2));
     /* Save(path, text)
@@ -5277,7 +5388,11 @@ void bta_sys_init(JSContext *ctx, JSValue global)
                       JS_NewCFunction(ctx, sys_file_info, "Info", 2));
     /* Watch(path, cb) -> { Stop }
      *   `cb(event, path)` — `"Changed"`, `"Created"`, `"Deleted"` — and
-     *   answers something with a `Stop()`
+     *   answers something with a `Stop()`. A save is reported once as
+     *   `"Changed"`: a deletion the monitor reports before a replacement is
+     *   held for a moment and becomes that one change -- as does a `Created`
+     *   for a path that was already there -- while a path still gone is
+     *   `"Deleted"` after the moment
      */
     JS_SetPropertyStr(ctx, file, "Watch",
                       JS_NewCFunction(ctx, sys_file_watch, "Watch", 2));

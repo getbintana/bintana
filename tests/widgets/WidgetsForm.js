@@ -601,6 +601,11 @@ const TESTS = [
      * before the next is written. Like the three above, it runs before
      * anything has armed a deadline. */
     "FormShape",
+    /* Blocking too: two children whose `.btp`, `.form` and `.js` arrived with
+     * the encodings Windows editors write -- a UTF-8 BOM, UTF-16LE and
+     * UTF-16BE -- so the loader's normalization is proved before anything has
+     * armed a deadline. */
+    "TextEncodings",
     /* Blocking too: two children, to see that Today follows the time zone. */
     "Day",
     /* Blocking as well -- `desktop-file-validate` and `gio launch` are children
@@ -4815,14 +4820,14 @@ class Form1 extends Form {
         throws("and so is asking for nothing", () => File.Open());
     }
 
-    /* --- being told a file changed ---------------------------------------- */
+    /* --- being told a file changed ----------------------------------------
+     *
+     * Windows reports an atomic `File.Save` as a deletion followed by a
+     * change; the runtime holds the deletion for `WATCH_SETTLE_MS` and reports
+     * one `Changed` when the path comes back.  So the test is the same on both
+     * platforms, and what it asserts is the API, not the monitor's order.
+     */
     testFileWatch() {
-        if (Environment.OS === "Windows") {
-            print("  (skipping File.Watch: its event order and count are the desktop's, "
-                  + "and Windows' monitor reports a save and a delete differently)");
-            return;
-        }
-
         Directory.Make(SCRATCH);
         const path = File.Join(SCRATCH, "watched.txt");
         if (File.Exists(path)) File.Delete(path);
@@ -15499,6 +15504,121 @@ class Form1 extends Form {
         const dashed = run('{"menus": [{"name": "M-1", "text": "x", ' +
                            '"children": [{"name": "S1", "text": "s"}]}]}');
         eq("a menu name with a hyphen loads", dashed.ExitCode, 0);
+
+        Directory.DeleteTree(dir);
+    }
+
+    /* --- the encodings a Windows editor writes -----------------------------
+     *
+     * Notepad, PowerShell 5.1 and Visual Studio all offer a UTF-8 BOM, and the
+     * older ones write UTF-16LE with one.  A `.btp`, a `.form` or a `.js` that
+     * arrived that way is still the text it looks like -- and before the
+     * loader learned this, the first failed with `Unexpected token '\ufeff'`
+     * and the last with `unexpected character`.
+     *
+     * `File.Load` is the shared road: it normalizes the bytes, and
+     * `File.LoadJson` parses what it returns.  The three runtime files go
+     * through `bta_read_file` instead, so a child is the only proof that the
+     * project, form and module loaders agree.
+     */
+    testTextEncodings() {
+        const dir = File.Join(SCRATCH, "text-encodings");
+
+        if (File.IsDir(dir))
+            Directory.DeleteTree(dir);
+        Directory.Make(dir);
+
+        const utf8Bom = (text) =>
+            new Bytes([0xEF, 0xBB, 0xBF]).Concat(new Bytes(text));
+
+        const utf16 = (text, little) => {
+            const out = little ? [0xFF, 0xFE] : [0xFE, 0xFF];
+
+            for (let i = 0; i < text.length; i++) {
+                const c = text.charCodeAt(i);
+
+                if (little)
+                    out.push(c & 0xFF, (c >>> 8) & 0xFF);
+                else
+                    out.push((c >>> 8) & 0xFF, c & 0xFF);
+            }
+            return new Bytes(out);
+        };
+
+        /* Only BMP text here: a UTF-32 code point is one unit, while
+         * `charCodeAt` would give a surrogate pair for anything above it. */
+        const utf32 = (text, little) => {
+            const out = little ? [0xFF, 0xFE, 0, 0] : [0, 0, 0xFE, 0xFF];
+
+            for (let i = 0; i < text.length; i++) {
+                const c = text.charCodeAt(i);
+
+                if (little)
+                    out.push(c & 0xFF, (c >>> 8) & 0xFF, 0, 0);
+                else
+                    out.push(0, 0, (c >>> 8) & 0xFF, c & 0xFF);
+            }
+            return new Bytes(out);
+        };
+
+        const jsonPath = File.Join(dir, "enc.json");
+        const jsonText = '{"name":"café 😀"}';
+
+        File.SaveBytes(jsonPath, utf8Bom(jsonText));
+        eq("File.Load drops a UTF-8 BOM", File.Load(jsonPath), jsonText);
+        eq("...and File.LoadJson reads it", File.LoadJson(jsonPath).name, "café 😀");
+
+        File.SaveBytes(jsonPath, utf16(jsonText, true));
+        eq("File.Load reads UTF-16LE", File.Load(jsonPath), jsonText);
+        eq("...and File.LoadJson does", File.LoadJson(jsonPath).name, "café 😀");
+
+        File.SaveBytes(jsonPath, utf16(jsonText, false));
+        eq("File.Load reads UTF-16BE", File.Load(jsonPath), jsonText);
+        eq("...and File.LoadJson does", File.LoadJson(jsonPath).name, "café 😀");
+
+        const bmpText = '{"name":"café"}';
+
+        File.SaveBytes(jsonPath, utf32(bmpText, true));
+        eq("File.Load reads UTF-32LE", File.Load(jsonPath), bmpText);
+
+        File.SaveBytes(jsonPath, utf32(bmpText, false));
+        eq("File.Load reads UTF-32BE", File.Load(jsonPath), bmpText);
+
+        eq("LoadBytes keeps the bytes it was given",
+           File.LoadBytes(jsonPath).At(0), 0x00);
+
+        const project = JSON.stringify({ name: "encodings", startup: "F",
+                                         sources: ["F.js"] });
+        const form = JSON.stringify({ format: "bintana-form/1", class: "F",
+                                      properties: { Width: 200, Height: 100,
+                                                    Text: "café" },
+                                      children: [{ type: "Button", name: "B" }] });
+        const js = "class F extends Form {\n" +
+                   "    Form_Open() { print('OPEN ' + this.Controls.length + ' ' + this.Text); Application.Quit(0); }\n" +
+                   "}\n";
+
+        const run = () => Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        const says = "OPEN 1 café";
+
+        File.SaveBytes(File.Join(dir, "project.btp"), utf8Bom(project));
+        File.SaveBytes(File.Join(dir, "F.form"), utf16(form, true));
+        File.SaveBytes(File.Join(dir, "F.js"), utf16(js, false));
+
+        const first = run();
+        eq("a UTF-8 BOM .btp, UTF-16LE .form and UTF-16BE .js load",
+           first.ExitCode, 0, first.Output);
+        check("...and the form runs with its text", first.Output.includes(says),
+              first.Output);
+
+        File.SaveBytes(File.Join(dir, "project.btp"), utf16(project, true));
+        File.SaveBytes(File.Join(dir, "F.form"), utf8Bom(form));
+        File.SaveBytes(File.Join(dir, "F.js"), utf16(js, true));
+
+        const second = run();
+        eq("a UTF-16LE .btp, UTF-8 BOM .form and UTF-16LE .js load",
+           second.ExitCode, 0, second.Output);
+        check("...and the form runs with its text", second.Output.includes(says),
+              second.Output);
 
         Directory.DeleteTree(dir);
     }
@@ -27092,12 +27212,15 @@ class Form1 extends Form {
         File.Save(File.Join(proj, "Form1.js"),
                   "class Form1 extends Form {\n" +
                   "    Form_Open() {\n" +
-                  "        File.Save(Application.Directory + '/started', '1');\n" +
                   "        Application.OnSecondInstance = (args, dir) => {\n" +
                   "            File.Save(Application.Directory + '/second',\n" +
                   "                      JSON.stringify([args, dir]));\n" +
                   "            Application.Quit(0);\n" +
                   "        };\n" +
+                  /* Written after the handler, so its presence is the test's
+                   * "ready for the second run" -- not a marker a second run can
+                   * beat by a millisecond. */
+                  "        File.Save(Application.Directory + '/started', '1');\n" +
                   "    }\n" +
                   "}\n");
 
@@ -27114,6 +27237,41 @@ class Form1 extends Form {
                         main: "Main", sources: [] });
         eq("and so does a value that is not true or false",
            Exec.Wait([Application.Executable, bare], { Timeout: 30000 }).ExitCode, 2);
+
+        /*
+         * Windows has no session bus; the runtime's own pair is a local mutex
+         * and a named pipe.  The first instance stays alive with a timer, the
+         * second hands its arguments over and exits, and the first records
+         * what `Application.OnSecondInstance` was told.
+         */
+        if (Environment.OS === "Windows") {
+            let firstExit = null;
+
+            Exec([Application.Executable, proj], { Timeout: 60000 },
+                 () => {},
+                 (code) => { firstExit = code; });
+
+            until("the first instance came up",
+                  () => File.Exists(File.Join(proj, "started")), () => {
+                const second = Exec.Wait(
+                    [Application.Executable, proj, "hello", "wor ld"],
+                    { Directory: proj, Timeout: 30000 });
+
+                eq("the second run exits 0", second.ExitCode, 0, second.Output);
+
+                until("and the first heard it and quit",
+                      () => firstExit !== null, () => {
+                    eq("the first exits 0", firstExit, 0);
+                    check("the handoff was recorded",
+                          File.Exists(File.Join(proj, "second")),
+                          "no second file");
+                    eq("with the arguments after the project, and the directory it ran in",
+                       File.Load(File.Join(proj, "second")),
+                       JSON.stringify([["hello", "wor ld"], proj]));
+                }, 15000);
+            }, 15000);
+            return;
+        }
 
         if (!Application.HasCommand("dbus-run-session")) {
             print("  (skipping single instance: it needs dbus-run-session for a bus of its own)");

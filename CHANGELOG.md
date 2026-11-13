@@ -8,6 +8,33 @@ one-page answer to *what is new since the release I have*.
 
 ### Runtime and IDE
 
+- **A text file saved the way Windows editors save it now loads.** Notepad,
+  PowerShell 5.1 and Visual Studio can all save a UTF-8 BOM, and PowerShell
+  5.1's `Out-File` and Notepad's older *Unicode* write UTF-16LE with one. A
+  `project.btp` or `.form` that arrived that way stopped at
+  `Unexpected token '\ufeff'` while a UTF-16 `.js` said `unexpected character`.
+  `File.Load` now drops a UTF-8 BOM and decodes UTF-16LE/BE and UTF-32LE/BE
+  with one, and the project, `.form`, module and `.po` loaders do the same
+  through `bta_read_file`. Bytes with no BOM are still returned unchanged, so a
+  Latin-1 source file and `File.LoadBytes` keep their bytes.
+  `tests/widgets`' `TextEncodings` holds it with a child project whose `.btp`,
+  `.form` and `.js` use those encodings.
+- **`File.Watch` reports an atomic save once.** Windows' monitor answers a
+  `File.Save` with a deletion followed by a change -- or with a bare `Created`
+  for a path that was already there -- so a listener could close the file it
+  was just told to reload. A deletion is now held for 200 ms: if the path is
+  back, the pair is one `Changed`; if it is still gone, it is one `Deleted`, a
+  moment later. A new file still reports `Created`, and the test runs on both
+  platforms now.
+- **`singleInstance` works on Windows, and a project's id becomes its
+  AppUserModelID.** There is no session bus on a normal Windows machine, so
+  GLib's `GApplication` left every run its own instance. The first run now owns
+  `Local\BintanaSingle-<id>` and serves a named pipe; a second run writes its
+  working directory and `Arguments` as one `(sas)` message, exits `0`, and the
+  first calls `Application.OnSecondInstance` and raises its window. The same
+  `project.btp` id is set with `SetCurrentProcessExplicitAppUserModelID`, so the
+  taskbar groups the application rather than `bintanaw.exe`; the toast's
+  shortcut already uses that id.
 - **`SerialPort` works on Windows.** `Open` is `CreateFileW` on `COM3` (or
   `\\.\COM3`) and a `DCB` for speed, data bits, parity, stop bits, flow control
   and DTR/RTS. A COM handle is not pollable by GLib, so a reader thread does
