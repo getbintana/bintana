@@ -3,8 +3,8 @@
  *
  * The runtime's own logging is stdout and stderr, which every system has.  A
  * platform that offers something better plugs in here: this file is the systemd
- * one, and another operating system's would be another file answering the same
- * two questions -- is it available, and take this message at this level.
+ * one, and `bta_eventlog.c` is the Windows one -- the same name and the same
+ * two questions, answered by whichever is built.
  *
  * Optional at build time.  Without libsystemd the stubs below compile, the
  * runtime still logs to the terminal, and asking for a journal that is not
@@ -16,12 +16,22 @@
 
 #include <systemd/sd-journal.h>
 
-bool bta_journal_available(void)
+const char *bta_platform_log_name(void)
+{
+    return "Journal";
+}
+
+bool bta_platform_log_available(void)
 {
     return true;
 }
 
-bool bta_journal_send(int level, const char *text)
+const char *bta_platform_log_why(void)
+{
+    return "";
+}
+
+bool bta_platform_log_send(int level, const char *text)
 {
     /*
      * A level is a syslog priority with another name, which is the whole reason
@@ -40,12 +50,22 @@ bool bta_journal_send(int level, const char *text)
 
 #else   /* built without libsystemd, or not on a systemd system */
 
-bool bta_journal_available(void)
+const char *bta_platform_log_name(void)
+{
+    return "Journal";
+}
+
+bool bta_platform_log_available(void)
 {
     return false;
 }
 
-bool bta_journal_send(int level, const char *text)
+const char *bta_platform_log_why(void)
+{
+    return "this build has no journal";
+}
+
+bool bta_platform_log_send(int level, const char *text)
 {
     (void)level;
     (void)text;

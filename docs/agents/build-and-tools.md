@@ -349,6 +349,17 @@ disagree.
   Windows runner, so the evidence is by hand: a scratch copy of `Rows.js` given the
   backslashed keys the walk really returns reports the same 31 pages with the
   fix removed.
+- **The Windows Event Log's message table is generated, not checked in.**
+  `runtime/src/bintana-events.mc` is the source; CMake finds `windmc` and
+  `windres`, writes `generated/events/MSG00001.bin`, and links the resource
+  object into `bintana.exe` (`bintanaw.exe` is a copy and carries it too). Both
+  tools come with mingw-w64 and both are optional: without them the build is
+  green and events have no description. A `.mc` with `Severity=` gets the
+  severity folded into the id's high bits (`0x40001000`) and the viewer cannot
+  find the message, so the file has none -- see
+  [`runtime.md`](runtime.md#the-platform-log). A clean configure and build is
+  the way to check the custom commands; an incremental one can hide a missing
+  dependency.
 - **`add_executable(bintana …)` lists its sources by hand while the signature
   extractor globs `runtime/src/*.c`.** A new `.c` that is not in the list builds
   green up to the link and then fails as *undefined reference to `bta_x_init`* --

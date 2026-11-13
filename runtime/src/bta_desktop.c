@@ -1249,7 +1249,7 @@ void bta_desktop_init(JSContext *ctx, JSValue global)
      */
     JS_SetPropertyStr(ctx, desktop, "Entries", entries);
     /* Shortcut
-     *   the Windows `.lnk` object above; `Available` says whether it is there
+     *   the Windows `.lnk` object below; `Available` says whether it is there
      */
     JS_SetPropertyStr(ctx, desktop, "Shortcut", shortcut);
     JS_SetPropertyStr(ctx, global, "Desktop", desktop);

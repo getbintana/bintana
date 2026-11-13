@@ -18227,6 +18227,18 @@ class Form1 extends Form {
            Logger.Target, took ? "Journal" : "Terminal");
         Logger.Target = "Terminal";
 
+        /*
+         * And the Windows Event Log is the same bargain, with one difference:
+         * writing needs no administrator, and what the elevated registration
+         * buys is a description the viewer can read.  On Linux the word is
+         * refused rather than taken as a file named `EventLog`.
+         */
+        let events = true;
+        try { Logger.Target = "EventLog"; } catch (e) { events = false; }
+        eq("the Event Log is either there or says it is not",
+           Logger.Target, events ? "EventLog" : "Terminal");
+        Logger.Target = "Terminal";
+
         /* And the thing it replaced is gone. */
         eq("console is not part of the language", typeof console, "undefined");
     }

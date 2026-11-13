@@ -58,6 +58,13 @@ static void usage(void)
           "0 when every test passed and 1 when one did not.\n"
           "  --json    one JSON line per test, and one at the end.\n",
           stderr);
+#ifdef G_OS_WIN32
+    fputs("  --register-event-source  register the `Bintana` source in the\n"
+          "            Application log, with this executable as its message\n"
+          "            file, so the viewer describes the events.  Needs an\n"
+          "            elevated prompt; writing works without it, with the\n"
+          "            data but no description.\n", stderr);
+#endif
 }
 
 /*
@@ -264,6 +271,22 @@ int main(int argc, char **argv)
     /* A word of its own, before the project/options parser: none of those
      * options belongs to the check's run, and the target is not this process's
      * project. */
+#ifdef G_OS_WIN32
+    if (argc > 1 && !strcmp(argv[1], "--register-event-source")) {
+        if (bta_eventlog_register()) {
+            puts("bintana: the Bintana event source is registered");
+            return 0;
+        }
+        fprintf(stderr, "bintana: %s\n", bta_platform_log_why());
+        return 1;
+    }
+#else
+    if (argc > 1 && !strcmp(argv[1], "--register-event-source")) {
+        fputs("bintana: the event log is Windows'\n", stderr);
+        return 2;
+    }
+#endif
+
     if (argc > 1 && !strcmp(argv[1], "check"))
         return run_check(argc, argv);
 

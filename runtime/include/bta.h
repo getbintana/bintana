@@ -1815,8 +1815,21 @@ void bta_class_of_name_init(JSContext *ctx, JSValueConst global);
  * these are what a system that has something better offers instead, and a build
  * without one answers false and is none the worse for it.  Levels are the
  * runtime's own order: 0 Debug, 1 Info, 2 Warning, 3 Error.
+ *
+ * One name and one pair of questions, answered by one file per system:
+ * `bta_journal.c` is systemd's journal, `bta_eventlog.c` is the Windows Event
+ * Log.  `why` is a sentence for the refusal when `available` is false.
  */
-bool bta_journal_available(void);
-bool bta_journal_send(int level, const char *text);
+const char *bta_platform_log_name(void);
+bool        bta_platform_log_available(void);
+const char *bta_platform_log_why(void);
+bool        bta_platform_log_send(int level, const char *text);
+
+#ifdef G_OS_WIN32
+/* Writes the `Bintana` event source into HKLM, with this executable as its
+ * message file: what `bintana --register-event-source` runs.  Needs an
+ * administrator; false with `bta_platform_log_why()` set otherwise. */
+bool bta_eventlog_register(void);
+#endif
 
 #endif /* BTA_H */

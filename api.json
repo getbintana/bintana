@@ -14378,7 +14378,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the Windows `.lnk` object above; `Available` says whether it is there",
+          "Doc": "the Windows `.lnk` object below; `Available` says whether it is there",
           "Native": true
         }
       ]
@@ -15985,7 +15985,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "where the lines are written: `\"Terminal\"` (the default, and stdout/stderr under it), `\"Journal\"` where the build has one, or **a file path** — opened in append mode and flushed per line, and it reads back as the path",
+          "Doc": "where the lines are written: `\"Terminal\"` (the default, and stdout/stderr under it), `\"Journal\"` on Linux or `\"EventLog\"` on Windows where the platform has one, or **a file path** — opened in append mode and flushed per line, and it reads back as the path. Writing to the Event Log needs no administrator; run `bintana --register-event-source` once from an elevated prompt so the viewer can describe the events instead of showing their raw data",
           "Native": true
         },
         {

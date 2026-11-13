@@ -251,21 +251,24 @@ if(WIN32)
     set(BTA_TRAY_SOURCE runtime/src/bta_tray_win32.c)
     set(BTA_NOTIFICATION_SOURCE runtime/src/bta_notification_win32.c)
     set(BTA_SERIAL_SOURCE runtime/src/bta_serial_win32.c)
+    set(BTA_LOG_SOURCE runtime/src/bta_eventlog.c)
 elseif(APPLE)
     set(BTA_TRAY_SOURCE runtime/src/bta_tray_cocoa.c)
     set(BTA_NOTIFICATION_SOURCE)
     set(BTA_SERIAL_SOURCE)
+    set(BTA_LOG_SOURCE runtime/src/bta_journal.c)
 else()
     set(BTA_TRAY_SOURCE runtime/src/bta_tray_linux.c)
     set(BTA_NOTIFICATION_SOURCE)
     set(BTA_SERIAL_SOURCE)
+    set(BTA_LOG_SOURCE runtime/src/bta_journal.c)
 endif()
 
 add_executable(bintana
     runtime/src/main.c
     runtime/src/bta_runtime.c
     runtime/src/bta_module.c
-    runtime/src/bta_journal.c
+    ${BTA_LOG_SOURCE}
     runtime/src/bta_widget.c
     runtime/src/bta_fixed.c
     runtime/src/bta_controls.c
@@ -324,6 +327,48 @@ add_executable(bintana
     ${BASE_CSS_H}
     ${SIGNATURES_H}
 )
+
+# **The Event Log's message table**, compiled into the executable: without it
+# the viewer records the event and says the description cannot be found.  The
+# `.mc` is the source; `windmc` turns it into a neutral message table and
+# `windres` wraps it as a resource object.  Both are MinGW tools and both are
+# optional: a build without them still writes events, with the generic text.
+if(WIN32)
+    find_program(WINDMC_EXECUTABLE windmc)
+    find_program(WINDRES_EXECUTABLE windres)
+    if(WINDMC_EXECUTABLE AND WINDRES_EXECUTABLE)
+        set(BTA_EVENT_DIR ${CMAKE_BINARY_DIR}/generated/events)
+        add_custom_command(
+            OUTPUT ${BTA_EVENT_DIR}/MSG00001.bin
+                   ${BTA_EVENT_DIR}/bintana-events.h
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${BTA_EVENT_DIR}
+            COMMAND ${WINDMC_EXECUTABLE}
+                    -h ${BTA_EVENT_DIR} -r ${BTA_EVENT_DIR} -x ${BTA_EVENT_DIR}
+                    ${CMAKE_SOURCE_DIR}/runtime/src/bintana-events.mc
+            BYPRODUCTS ${BTA_EVENT_DIR}/bintana-events.rc
+                       ${BTA_EVENT_DIR}/bintana-events.dbg
+            DEPENDS ${CMAKE_SOURCE_DIR}/runtime/src/bintana-events.mc
+            COMMENT "Compiling the Event Log messages"
+        )
+        add_custom_command(
+            OUTPUT ${BTA_EVENT_DIR}/bintana-events.o
+            COMMAND ${WINDRES_EXECUTABLE} -I ${BTA_EVENT_DIR} -O coff
+                    -o ${BTA_EVENT_DIR}/bintana-events.o
+                    ${CMAKE_SOURCE_DIR}/runtime/src/bintana-events.rc
+            DEPENDS ${BTA_EVENT_DIR}/MSG00001.bin
+                    ${CMAKE_SOURCE_DIR}/runtime/src/bintana-events.rc
+            COMMENT "Compiling the Event Log message table"
+        )
+        set_source_files_properties(${BTA_EVENT_DIR}/bintana-events.o
+            PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
+        target_sources(bintana PRIVATE ${BTA_EVENT_DIR}/bintana-events.o)
+        message(STATUS "Event Log message table: windmc and windres found")
+    else()
+        message(STATUS "Event Log message table: no windmc/windres -- "
+                       "events will have no description")
+    endif()
+endif()
+
 target_include_directories(bintana PRIVATE
     ${CMAKE_SOURCE_DIR}/runtime/include
     ${CMAKE_BINARY_DIR}/generated

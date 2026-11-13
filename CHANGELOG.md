@@ -43,6 +43,16 @@ one-page answer to *what is new since the release I have*.
   becomes the shortcut's `.ico`, and uninstall removes the shortcut and that
   generated icon. The notification backend no longer overwrites an installed
   application's shortcut with its generic one.
+- **`Logger.Target = "EventLog"` on Windows.** `Logger` now writes to the
+  Application log that `eventvwr.exe` shows: `Debug` and `Info` as Information,
+  `Warning` as Warning and `Error` as Error, with the line as the message.
+  Writing needs no administrator. `bintana --register-event-source` from an
+  elevated prompt registers the `Bintana` source with this executable as its
+  message file, so the viewer describes the event; without it the event is still
+  recorded with its data and no description. The message table is compiled into
+  the executable from `runtime/src/bintana-events.mc`. On Linux the word is
+  refused, as `"Journal"` is on Windows, instead of becoming a file named
+  `EventLog`.
 - **The IDE's export and its Windows paths.** `tar` gets
   `--force-local` on Windows, so a path beginning `C:` is not read as a remote
   host, and the path comparisons in `tests/ide` accept the native separator.

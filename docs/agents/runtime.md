@@ -192,6 +192,30 @@ icon when the theme has one by that name (`gtkapplication.c`).
   registry; a file that declares something else is handed to `runTests` as a
   failure with the reason, never dropped.
 
+### The platform log
+
+- **One pair of functions, one file per system.** `bta_runtime.c` calls
+  `bta_platform_log_name/available/why/send`; `bta_journal.c` answers systemd's
+  journal and `bta_eventlog.c` answers the Windows Event Log. The name is what
+  `Logger.Target` accepts, and the other platform's word is refused instead of
+  becoming a file called `EventLog` (which it did before the pair existed).
+- **Writing to the Windows Event Log needs no administrator; its description
+  does.** `RegisterEventSourceW` succeeds for a source that is not in the
+  registry -- measured on Windows 11: an event with the provider name, the
+  level and the data, and no registry key created. Without an
+  `EventMessageFile` the viewer cannot look the event id up and says the
+  description cannot be found. `bintana --register-event-source` is the one
+  elevated step: HKLM, under
+  `SYSTEM\CurrentControlSet\Services\EventLog\Application\Bintana`, with this
+  executable as the message file.
+- **The message table lives in the executable**, generated from
+  `runtime/src/bintana-events.mc` by `windmc` and wrapped by `windres`; the ids
+  match `BTA_EVENT_*_ID` in `bta_eventlog.c`. **No `Severity=` line in the
+  `.mc`**: windmc folds the severity and the Application facility into the high
+  bits (`0x40001000`), and the viewer looks the event id up exactly, so
+  `FormatMessage` answered `ERROR_MR_MID_NOT_FOUND` until the line went. The
+  `.rc` is neutral so every locale falls back to the one table.
+
 ## Plugins
 
 - **A plugin is a table and not a link, and every corner of that decision was
