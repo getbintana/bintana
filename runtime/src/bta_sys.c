@@ -125,13 +125,62 @@ static JSValue sys_file_load_in(JSContext *ctx, JSValueConst this_val,
         return e;
     }
     g_object_unref(file);
+
+    /* The same promise `bta_read_file` makes: a BOM is a text marker, not
+     * content.  Bytes with none are copied unchanged, which is what keeps a
+     * Latin-1 source file's bytes and `LoadBytes`'s byte-for-byte road. */
+    gsize   text_len = 0;
+    char   *text     = bta_text_from_bytes(data, len, &text_len);
+
+    g_free(data);
+    if (!text) {
+        JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: out of memory", path);
+
+        JS_FreeCString(ctx, path);
+        return e;
+    }
     JS_FreeCString(ctx, path);
 
-    JSValue v = JS_NewStringLen(ctx, data, len);
-    g_free(data);
+    JSValue v = JS_NewStringLen(ctx, text, text_len);
+    g_free(text);
     return v;
 }
 BTA_CANCEL_SCOPED(sys_file_load, "File.Load")
+
+/*
+ * `g_file_set_contents`, which `File.Save` and `File.SaveBytes` are: a
+ * temporary beside the file, renamed over it.
+ *
+ * **On Windows a refused rename is often only a moment long.** The rename
+ * fails with access denied while another process holds the target open
+ * without `FILE_SHARE_DELETE` -- the scanner or the indexer looking at what was
+ * just written is the usual one. Four tasks saving one file under a `Lock`
+ * each failed that way inside `tests/widgets` (the book stopped at 105 of
+ * 160), while the same 800 saves alone never did (2026-11-12). Linux has no
+ * such moment, so the call that succeeds there is retried briefly here,
+ * 315 ms in all, and only for that error -- which a file that really is
+ * read-only also answers, a third of a second later than it used to.
+ */
+static bool bta_save_contents(const char *path, const char *data, gssize len,
+                              GError **err)
+{
+#ifdef G_OS_WIN32
+    for (int wait = 5; ; wait *= 2) {
+        GError *e = NULL;
+
+        if (g_file_set_contents(path, data, len, &e))
+            return true;
+        if (wait > 160 || !g_error_matches(e, G_FILE_ERROR, G_FILE_ERROR_ACCES)) {
+            g_propagate_error(err, e);
+            return false;
+        }
+        g_clear_error(&e);
+        g_usleep((gulong)wait * 1000);
+    }
+#else
+    return g_file_set_contents(path, data, len, err);
+#endif
+}
 
 static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
@@ -162,7 +211,7 @@ static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
     GError *err = NULL;
     /* A JS string lives in memory, so it cannot outgrow G_MAXSSIZE; the cast
      * is for the signedness of the length the write takes. */
-    bool ok = g_file_set_contents(path, text, (gssize)len, &err);
+    bool ok = bta_save_contents(path, text, (gssize)len, &err);
 
     JS_FreeCString(ctx, text);
     if (!ok) {
@@ -275,6 +324,29 @@ static JSValue sys_file_absolute(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * Whether a path stands on its own, which is a question the **platform**
+ * answers and a leading slash does not: `/x` is absolute on POSIX and so is
+ * `\x` on Windows, but `C:\x` is absolute there and starts with a letter.  The
+ * answer is `g_path_is_absolute`'s -- `C:\x`, `C:/x` and a UNC share are
+ * absolute on Windows; `C:` and `C:x` are drive-relative, and `/x` is rooted
+ * on the current drive but still absolute by this rule.
+ *
+ * Purely lexical, like `Absolute`: nothing is asked of the disk, so a path that
+ * does not exist yet answers like any other.
+ */
+static JSValue sys_file_is_absolute(JSContext *ctx, JSValueConst this_val,
+                                    int argc, JSValueConst *argv)
+{
+    const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "File.IsAbsolute") : NULL;
+    if (!path)
+        return JS_ThrowTypeError(ctx, "File.IsAbsolute(path) needs a path");
+
+    bool abs = g_path_is_absolute(path);
+    JS_FreeCString(ctx, path);
+    return JS_NewBool(ctx, abs);
+}
+
+/*
  * Path parts, and the names are prefixed for a reason worth keeping: this file
  * includes `windows.h` on Windows, which is a macro minefield -- `PP_NAME` is
  * `4` there (`wincrypt.h`), so a plain `enum { PP_NAME, PP_DIR, ... }` is
@@ -295,7 +367,14 @@ enum { BTA_PATH_NAME, BTA_PATH_DIR, BTA_PATH_EXT, BTA_PATH_BASENAME };
 static const char *path_extension(const char *path)
 {
     const char *dot = strrchr(path, '.');
-    const char *sep = strrchr(path, G_DIR_SEPARATOR);
+    const char *sep = NULL;
+
+    /* Both separators are separators on Windows, and a name is data: a `.` in
+     * a directory called `x.y` is not an extension just because the path was
+     * spelled with forward slashes. */
+    for (const char *p = path; *p; p++)
+        if (G_IS_DIR_SEPARATOR(*p))
+            sep = p;
 
     return (dot && (!sep || dot > sep)) ? dot + 1 : "";
 }
@@ -393,6 +472,16 @@ static JSValue sys_file_relative(JSContext *ctx, JSValueConst this_val,
     GFile *r   = g_file_new_for_path(root);
     GFile *p   = g_file_new_for_path(path);
     char  *rel = g_file_get_relative_path(r, p);
+
+#ifdef G_OS_WIN32
+    /* **A relative spelling is a name inside a tree, and it uses `/` on every
+     * platform**: it is what a project writes in `sources`, what a tree keys
+     * its rows by and what a message names, and Windows takes `/` in any path.
+     * The native `\` made the IDE ask its tree for `tests\InvoiceTest.js`, a
+     * row keyed `tests/InvoiceTest.js`, and throw (2026-11-12). */
+    if (rel)
+        g_strdelimit(rel, "\\", '/');
+#endif
 
     /* No relative spelling, and not the root itself: the path it was given. */
     const char *out = rel ? rel : (g_file_equal(r, p) ? "" : path);
@@ -621,6 +710,38 @@ BTA_CANCEL_SCOPED(sys_file_copy, "File.Copy")
  * question one asks of it (is this newer than what I read?) is a comparison
  * `Date` already does.
  */
+static const char *mime_for_extension(const char *path)
+{
+    static const struct { const char *ext, *type; } types[] = {
+        { "pdf",  "application/pdf" },
+        { "png",  "image/png" },
+        { "jpg",  "image/jpeg" },
+        { "jpeg", "image/jpeg" },
+        { "gif",  "image/gif" },
+        { "svg",  "image/svg+xml" },
+        { "webp", "image/webp" },
+        { "js",   "text/javascript" },
+        { "mjs",  "text/javascript" },
+        { "json", "application/json" },
+        { "txt",  "text/plain" },
+        { "css",  "text/css" },
+        { "html", "text/html" },
+        { "htm",  "text/html" },
+        { "xml",  "application/xml" },
+        { "md",   "text/markdown" },
+        { "csv",  "text/csv" },
+        { NULL, NULL },
+    };
+    const char *ext = path_extension(path);
+
+    if (!*ext)
+        return NULL;
+    for (int i = 0; types[i].ext; i++)
+        if (!g_ascii_strcasecmp(ext, types[i].ext))
+            return types[i].type;
+    return NULL;
+}
+
 static JSValue sys_file_info_in(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv, GCancellable *cancel)
 {
@@ -637,13 +758,13 @@ static JSValue sys_file_info_in(JSContext *ctx, JSValueConst this_val,
         G_FILE_QUERY_INFO_NONE, cancel, &err);
 
     g_object_unref(file);
-    JS_FreeCString(ctx, path);
 
     /* Absent is an ordinary state and not a fault: asking about a file that is
      * not there is how one finds out that it is not there.  A cancelled query
      * is not absent, though, and saying null would turn a stop into a missing
      * file the caller might report as one. */
     if (!info) {
+        JS_FreeCString(ctx, path);
         if (err && g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
             g_clear_error(&err);
             return JS_ThrowPlainError(ctx, "File.Info: cancelled");
@@ -651,6 +772,20 @@ static JSValue sys_file_info_in(JSContext *ctx, JSValueConst this_val,
         g_clear_error(&err);
         return JS_NULL;
     }
+
+    /*
+     * **A platform without a shared MIME database answers the extension.**
+     * Windows' `GFileInfo` reports `.pdf` and `.png` when there is no MIME
+     * database to consult; a program asking *what is this* deserves the type
+     * a PDF has, not a second spelling of its suffix.  The fallback is only
+     * for the common media types and only when the platform answered with a
+     * dot; a real content type is never overruled.
+     */
+    const char *type = g_file_info_get_content_type(info);
+    const char *fallback = (!type || !*type || type[0] == '.')
+                               ? mime_for_extension(path) : NULL;
+
+    JS_FreeCString(ctx, path);
 
     JSValue out = JS_NewObject(ctx);
 
@@ -660,8 +795,10 @@ static JSValue sys_file_info_in(JSContext *ctx, JSValueConst this_val,
                       JS_NewBool(ctx, g_file_info_get_file_type(info)
                                           == G_FILE_TYPE_DIRECTORY));
 
-    const char *type = g_file_info_get_content_type(info);
-    JS_SetPropertyStr(ctx, out, "Type", JS_NewString(ctx, type ? type : ""));
+    const char *shown = (type && *type && type[0] != '.') ? type
+                        : fallback ? fallback
+                        : type ? type : "";
+    JS_SetPropertyStr(ctx, out, "Type", JS_NewString(ctx, shown));
 
     /*
      * To the millisecond, which is what a Date is.  Truncating to the second --
@@ -684,6 +821,7 @@ static JSValue sys_file_info_in(JSContext *ctx, JSValueConst this_val,
      * really draws, by the same rule everything else here follows.
      */
     const char *icon_name = NULL;
+    char       *derived   = NULL;
 #ifndef BTA_HEADLESS
     GIcon      *icon      = g_file_info_get_icon(info);
 
@@ -693,11 +831,34 @@ static JSValue sys_file_info_in(JSContext *ctx, JSValueConst this_val,
             if (bta_icon_available(NULL, names[i]))
                 icon_name = names[i];
     }
+
+    /*
+     * **And a type the platform did not name has the icon its type names.**
+     * Windows hands back no themed icon a theme draws for `.png`, so a PNG
+     * said `image/png` and had no icon at all (2026-11-12). The freedesktop
+     * names are derived from the type -- `image-png`, then `image-x-generic`
+     * -- and the first one the theme really draws is the answer, as above.
+     */
+    if (!icon_name && *shown && strchr(shown, '/')) {
+        const char *slash = strchr(shown, '/');
+        char *candidates[2] = {
+            g_strdelimit(g_strdup(shown), "/", '-'),
+            g_strdup_printf("%.*s-x-generic", (int)(slash - shown), shown),
+        };
+        for (int i = 0; i < 2; i++) {
+            if (!derived && bta_icon_available(NULL, candidates[i]))
+                derived = candidates[i];
+            else
+                g_free(candidates[i]);
+        }
+        icon_name = derived;
+    }
 #else
     /* No theme to ask, and a console tool reads the type, not the picture. */
     (void)icon_name;
 #endif
     JS_SetPropertyStr(ctx, out, "Icon", JS_NewString(ctx, icon_name ? icon_name : ""));
+    g_free(derived);
 
     g_object_unref(info);
     return out;
@@ -797,12 +958,32 @@ static JSValue sys_file_open(JSContext *ctx, JSValueConst this_val,
  * many editors do not write in place at all: they write a temporary file and
  * rename it over the target, which arrives as a rename or a move rather than as
  * a change. Both roads end in one "Changed".
+ *
+ * **A deletion waits for the replacement that may follow it.** Windows reports
+ * an atomic save as DELETED and then CHANGED -- or as a bare CREATED for a path
+ * that was already there -- and a caller that acted on the first would close
+ * the file it was just told to reload. The deletion is held for
+ * `WATCH_SETTLE_MS`; if the path is back by then, the pair is one "Changed".
+ * A path that is still gone is "Deleted", `WATCH_SETTLE_MS` later than before
+ * -- a delay no caller of this API can observe as wrong, and the one that
+ * makes the two platforms agree.
  */
+#define WATCH_SETTLE_MS 200
+
 typedef struct {
     JSContext    *ctx;
     JSValue       cb;
     GFileMonitor *monitor;
     int           id;
+
+    /* A "Deleted" waiting to see whether an atomic replace follows it. */
+    guint         settle_id;
+    char         *pending_path;
+
+    /* Whether the path was there when the watch started, or since.  A
+     * "Created" for a path that was already there is an atomic replace, not a
+     * new file: Windows reports one that way. */
+    bool          existed;
 
     /*
      * Whether this watch is inside its own callback, and whether it was stopped
@@ -834,6 +1015,11 @@ static void watch_job_free(WatchJob *job)
         g_file_monitor_cancel(job->monitor);
         g_object_unref(job->monitor);
     }
+    if (job->settle_id) {
+        g_source_remove(job->settle_id);
+        job->settle_id = 0;
+    }
+    g_free(job->pending_path);
     JS_FreeValue(job->ctx, job->cb);
     g_free(job);
 }
@@ -851,23 +1037,15 @@ static const char *watch_event_name(GFileMonitorEvent event)
     }
 }
 
-static void on_file_changed(GFileMonitor *monitor, GFile *file, GFile *other,
-                            GFileMonitorEvent event, gpointer user_data)
+/*
+ * What the callback is told, and the one place a stopped watch is freed.
+ *
+ * The context is taken *before* the call and used after it, and the job is not
+ * touched again once `dead` has been read: everything below the call has to
+ * keep working for a watch that stopped itself half a frame ago.
+ */
+static void watch_emit(WatchJob *job, const char *name, const char *path)
 {
-    WatchJob   *job  = user_data;
-    const char *name = watch_event_name(event);
-    if (!name)
-        return;
-
-    /* The file it ends up being: a rename reports where it went. */
-    char *path = g_file_get_path(other && event == G_FILE_MONITOR_EVENT_RENAMED
-                                     ? other : file);
-
-    /*
-     * The context is taken *before* the call and used after it, and the job is
-     * not touched again once `dead` has been read: everything below this line
-     * has to keep working for a watch that stopped itself half a frame ago.
-     */
     JSContext *ctx = job->ctx;
 
     JSValue argv[2] = { JS_NewString(ctx, name),
@@ -887,6 +1065,81 @@ static void on_file_changed(GFileMonitor *monitor, GFile *file, GFile *other,
     job->calling = false;
     if (job->dead)
         watch_job_free(job);
+}
+
+/*
+ * The held "Deleted" has waited long enough.
+ *
+ * If the path is back, the deletion was the first half of an atomic replace
+ * and the second half is the event the caller wants: one "Changed".  If it is
+ * still gone, it was a real deletion.  `settle_id` is cleared before the call,
+ * so a watch stopped inside its own callback does not remove the source that
+ * is already running.
+ */
+static gboolean watch_settle(gpointer data)
+{
+    WatchJob *job  = data;
+    char     *path;
+
+    job->settle_id = 0;
+    path = job->pending_path;
+    job->pending_path = NULL;
+
+    if (!job->dead) {
+        if (path && g_file_test(path, G_FILE_TEST_EXISTS)) {
+            job->existed = true;
+            watch_emit(job, "Changed", path);
+        } else {
+            job->existed = false;
+            watch_emit(job, "Deleted", path);
+        }
+    }
+
+    g_free(path);
+    return G_SOURCE_REMOVE;
+}
+
+static void on_file_changed(GFileMonitor *monitor, GFile *file, GFile *other,
+                            GFileMonitorEvent event, gpointer user_data)
+{
+    WatchJob   *job  = user_data;
+    const char *name = watch_event_name(event);
+    if (!name)
+        return;
+
+    /* The file it ends up being: a rename reports where it went. */
+    char *path = g_file_get_path(other && event == G_FILE_MONITOR_EVENT_RENAMED
+                                     ? other : file);
+
+    if (g_str_equal(name, "Deleted")) {
+        /* An atomic save is DELETED and then CHANGED.  Hold the deletion for
+         * a moment; `watch_settle` decides which of the two it was. */
+        if (job->settle_id)
+            g_source_remove(job->settle_id);
+        g_free(job->pending_path);
+        job->pending_path = g_strdup(path ? path : "");
+        job->settle_id = g_timeout_add(WATCH_SETTLE_MS, watch_settle, job);
+    } else if (job->settle_id) {
+        /* The path is back: one replacement, one "Changed". */
+        g_source_remove(job->settle_id);
+        job->settle_id = 0;
+        g_free(job->pending_path);
+        job->pending_path = NULL;
+        job->existed = true;
+        watch_emit(job, "Changed", path);
+    } else if (g_str_equal(name, "Created") && job->existed) {
+        /* Windows can report an atomic replace as CREATED as well: the path
+         * was already there, so this is a change rather than a new file. */
+        watch_emit(job, "Changed", path);
+    } else if (g_str_equal(name, "Changed") && !job->existed) {
+        /* And a file that was not there when the watch started has appeared,
+         * even if the monitor called it CHANGED rather than CREATED. */
+        job->existed = true;
+        watch_emit(job, "Created", path);
+    } else {
+        job->existed = true;
+        watch_emit(job, name, path);
+    }
 
     g_free(path);
 }
@@ -953,6 +1206,7 @@ static JSValue sys_file_watch(JSContext *ctx, JSValueConst this_val,
     job->cb      = JS_DupValue(ctx, argv[1]);
     job->monitor = monitor;
     job->id      = watch_next_id++;
+    job->existed = g_file_test(path, G_FILE_TEST_EXISTS);
     watch_jobs   = g_list_prepend(watch_jobs, job);
 
     g_signal_connect(monitor, "changed", G_CALLBACK(on_file_changed), job);
@@ -1545,9 +1799,11 @@ typedef struct {
     JSValue           handle;
     GSubprocess      *proc;
     GDataInputStream *out;
-    /* NULL unless the caller asked for the two streams apart; stderr is folded
-     * into stdout otherwise, which is what keeps the order. */
+    /* NULL unless stderr is its own pipe.  On Windows it is always a pipe --
+     * GLib's STDERR_MERGE loses it there -- so `split` says whether the lines
+     * are told apart; `err` being non-NULL only says a pipe was made. */
     GDataInputStream *err;
+    bool              split;
     /*
      * The third stream, and the way back.
      *
@@ -1576,6 +1832,12 @@ typedef struct {
      */
     bool              ctl_eof;
     guint             linger;
+#ifdef G_OS_WIN32
+    /* The child's job object: Windows' spelling of its process group, so
+     * `Stop`, `Kill` and `Timeout` reach what it started, the way `killpg`
+     * does on POSIX. NULL when the assignment was refused. */
+    HANDLE            win_job;
+#endif
     int               status;
     /* Ours, not the system's: the handle Exec hands back names the job by this
      * and never by the pid, so a Kill after the child is gone finds nothing
@@ -1606,6 +1868,8 @@ typedef struct {
 static GList *exec_jobs;   /* ExecJob*, live children */
 static int    exec_next_id = 1;
 
+#ifdef G_OS_WIN32
+/* Only the Windows control thread asks for a job by id. */
 static ExecJob *exec_find(int id)
 {
     for (GList *l = exec_jobs; l; l = l->next) {
@@ -1617,7 +1881,6 @@ static ExecJob *exec_find(int id)
     return NULL;
 }
 
-#ifdef G_OS_WIN32
 static void exec_control_close(ExecControl *control);
 static void exec_control_unref(ExecControl *control);
 #endif
@@ -1644,6 +1907,12 @@ static void exec_job_free(ExecJob *job)
         g_source_remove(job->force);
     if (job->linger)
         g_source_remove(job->linger);
+#ifdef G_OS_WIN32
+    /* Closing the handle ends nothing (no KILL_ON_JOB_CLOSE): a job reported
+     * is over, and one torn down with the runtime keeps running, as on POSIX. */
+    if (job->win_job)
+        CloseHandle(job->win_job);
+#endif
 
     JS_FreeValue(job->ctx, job->on_line);
     JS_FreeValue(job->ctx, job->on_control);
@@ -1682,8 +1951,23 @@ static gboolean on_exec_linger(gpointer data)
     return G_SOURCE_REMOVE;
 }
 
-/* Finish only once every pipe and the process are done, so no output is
- * reported after the exit callback. */
+/*
+ * Finish only once every pipe and the process are done, so no output is
+ * reported after the exit callback.
+ *
+ * **On Windows too: a run is over when its output is, not on a clock.** It
+ * used to be reported 250 ms after the reap when a pipe was still open, because
+ * a grandchild holding it could not be reached. Reads are main-loop time and,
+ * on Windows, GIO thread-pool time, so that cut a living child's output: a line
+ * callback taking 5 ms got 64 of 200 lines, and inside `tests/widgets` an owed
+ * EOF late by 250-750 ms left `testPlugin` and `testLibrary` reading
+ * `undefined` (measured 2026-11-12). The grandchild is reachable now -- the
+ * child runs in a job object, see `exec_job_signal` -- so Windows waits like
+ * POSIX, and `Timeout`, `Stop` and `Kill` are what end a run nothing else
+ * ends. Asking the pipe instead (`PeekNamedPipe`) is not an option: GLib's
+ * pipe handles are synchronous, Windows serialises their I/O, and the peek
+ * blocked the main thread 29.6 s behind a worker's `ReadFile`.
+ */
 static void exec_maybe_finish(ExecJob *job)
 {
     if (!job->eof || !job->err_eof || !job->reaped)
@@ -1937,13 +2221,12 @@ static bool exec_control_start(ExecControl *control, int job_id)
  * process alone when the group is already gone -- which it can be, with the
  * leader exited and only what it started left.
  *
- * Windows: **there is no asking.** `Stop()` and `Kill()` are both
- * `g_subprocess_force_exit`, because the platform has no SIGTERM for a process
- * that is not looking at a console window, and a program that offers a
- * graceful stop it cannot deliver is worse than one that says it cannot.  The
- * process group is gone too: this reaches the child and not what a wrapper
- * started under it, which is the documented cost and the reason the runner's
- * hang guard is the thing to test Windows with.
+ * Windows: **there is no asking.** `Stop()` and `Kill()` both terminate,
+ * because the platform has no SIGTERM for a process that is not looking at a
+ * console window, and a program that offers a graceful stop it cannot deliver
+ * is worse than one that says it cannot. What is terminated is the child's job
+ * object (`exec_job_signal`), Windows' process group; this function is the
+ * fallback for a child the job assignment refused, and reaches only it.
  */
 static void exec_signal_group(GSubprocess *proc, pid_t pid, bool force)
 {
@@ -1960,6 +2243,48 @@ static void exec_signal_group(GSubprocess *proc, pid_t pid, bool force)
         kill(pid, sig);
 #endif
 }
+
+#ifdef G_OS_WIN32
+/*
+ * A Windows process group, for what reaches what a child started: `Exec`'s
+ * `Timeout`, `Stop` and `Kill`, and `Exec.Wait`'s timeout.  A job object is the
+ * Windows spelling of a process group: assigning the child to it is what makes
+ * `TerminateJobObject` take its children too.  The child is assigned just after
+ * it starts -- GSubprocess cannot start it suspended -- so a grandchild started
+ * in that instant escapes it.  A process already in a job that does not allow
+ * nesting refuses the assignment; the caller keeps its old road then.
+ */
+static HANDLE exec_win_job_open(pid_t pid)
+{
+    if (pid <= 0)
+        return NULL;
+
+    HANDLE job = CreateJobObjectW(NULL, NULL);
+    if (!job)
+        return NULL;
+
+    HANDLE proc = OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, FALSE,
+                              (DWORD)pid);
+    if (!proc) {
+        CloseHandle(job);
+        return NULL;
+    }
+    if (!AssignProcessToJobObject(job, proc)) {
+        CloseHandle(proc);
+        CloseHandle(job);
+        return NULL;
+    }
+    CloseHandle(proc);
+    return job;
+}
+
+static bool exec_win_job_kill(HANDLE job)
+{
+    if (!job)
+        return false;
+    return TerminateJobObject(job, 1) != 0;
+}
+#endif
 
 /*
  * The second stage: what nothing can decline.  The group and not the process,
@@ -1988,6 +2313,17 @@ static bool exec_job_signal(ExecJob *job, bool force)
 {
     if (job->pid <= 0)
         return false;
+#ifdef G_OS_WIN32
+    /* The job object is the group: terminating it takes the child and
+     * everything it started, before the reap and after it -- a grandchild
+     * holding the pipe is still in the job. Without one (the assignment was
+     * refused) there is only the child to end. */
+    if (job->win_job) {
+        if (job->reaped && job->eof && job->err_eof)
+            return false;             /* over in all but the callback */
+        return exec_win_job_kill(job->win_job);
+    }
+#endif
     if (!job->reaped) {
         exec_signal_group(job->proc, job->pid, force);
         return true;
@@ -1995,7 +2331,7 @@ static bool exec_job_signal(ExecJob *job, bool force)
     if (job->eof && job->err_eof)
         return false;                 /* over in all but the callback */
 #ifdef G_OS_WIN32
-    return false;                     /* no groups to reach: see exec_signal_group */
+    return false;                     /* no job object to reach the grandchild */
 #else
     return killpg(job->pid, force ? SIGKILL : SIGTERM) == 0;
 #endif
@@ -2067,8 +2403,9 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
     /* Which pipe answered.  The stream itself says so, which is why nothing has
      * to be allocated to carry it: the two reads are told apart by the object
      * the callback is already given. */
-    bool       is_err = job->err && stream == job->err;
-    bool       is_ctl = job->control && stream == job->control;
+    bool       is_err_pipe = job->err && stream == job->err;
+    bool       is_err      = job->split && is_err_pipe;
+    bool       is_ctl      = job->control && stream == job->control;
     JSContext *ctx    = job->ctx;   /* outlives the job, which a handler may end */
 
     if (!line) {
@@ -2080,7 +2417,7 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
             exec_maybe_finish(job);
             return;
         }
-        if (is_err)
+        if (is_err_pipe)
             job->err_eof = true;
         else
             job->eof = true;
@@ -2110,13 +2447,15 @@ static void on_exec_line(GObject *src, GAsyncResult *res, gpointer user_data)
     if (JS_IsFunction(ctx, job->on_line)) {
         /* The second argument only exists when the streams were kept apart:
          * with them merged there is no honest answer to "which was this",
-         * and inventing "out" for a line that came from stderr would be one. */
-        JSValue argv[2] = { JS_NewString(ctx, line),
-                            job->err ? JS_NewString(ctx, is_err ? "err" : "out")
-                                     : JS_UNDEFINED };
+         * and inventing "out" for a line that came from stderr would be one.
+         * On Windows both pipes exist even when merged, so `split` and not
+         * `err` is what decides. */
+        JSValue argv[2] = { JS_NewString(ctx, line), JS_UNDEFINED };
+        if (job->split)
+            argv[1] = JS_NewString(ctx, is_err ? "err" : "out");
         JSValue fn = JS_DupValue(ctx, job->on_line);
         JSValue r  = JS_Call(ctx, fn, JS_UNDEFINED,
-                             job->err ? 2 : 1, (JSValueConst *)argv);
+                             job->split ? 2 : 1, (JSValueConst *)argv);
         if (JS_IsException(r))
             bta_dump_error(ctx);
         JS_FreeValue(ctx, r);
@@ -2650,9 +2989,21 @@ static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
      * child that reads stdin and is written nothing waits, which is what it did
      * before this too.
      */
-    GSubprocessLauncher *launcher = g_subprocess_launcher_new(
-        G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDIN_PIPE |
-        (split ? G_SUBPROCESS_FLAGS_STDERR_PIPE : G_SUBPROCESS_FLAGS_STDERR_MERGE));
+    GSubprocessFlags flags = G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+                             G_SUBPROCESS_FLAGS_STDIN_PIPE;
+
+#ifdef G_OS_WIN32
+    /* **STDERR_MERGE loses the child's stderr on Windows.** Measured with a
+     * console child: the `Bintana error:` line was absent from `Output` with
+     * the default and present in `Errors` with `Stderr: "separate"`.  Pipe
+     * both streams and merge them in `on_exec_line` and `Exec.Wait` instead. */
+    flags |= G_SUBPROCESS_FLAGS_STDERR_PIPE;
+#else
+    flags |= split ? G_SUBPROCESS_FLAGS_STDERR_PIPE
+                   : G_SUBPROCESS_FLAGS_STDERR_MERGE;
+#endif
+
+    GSubprocessLauncher *launcher = g_subprocess_launcher_new(flags);
 
 #ifndef G_OS_WIN32
     g_subprocess_launcher_set_child_setup(launcher, exec_child_setup, NULL, NULL);
@@ -2764,7 +3115,11 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     job->proc    = proc;
     job->id      = exec_next_id++;
     job->pid     = pid;
+#ifdef G_OS_WIN32
+    job->win_job = exec_win_job_open(pid);
+#endif
     job->cancel  = g_cancellable_new();
+    job->split   = split;
     job->on_line = argc > cb     ? JS_DupValue(ctx, argv[cb])     : JS_UNDEFINED;
     job->on_exit = argc > cb + 1 ? JS_DupValue(ctx, argv[cb + 1]) : JS_UNDEFINED;
     job->out     = g_data_input_stream_new(g_subprocess_get_stdout_pipe(proc));
@@ -2773,12 +3128,14 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
      * the text answer on both systems -- LF, CRLF or a lone CR end a line. */
     g_data_input_stream_set_newline_type(job->out,
                                          G_DATA_STREAM_NEWLINE_TYPE_ANY);
-    job->err     = split ? g_data_input_stream_new(g_subprocess_get_stderr_pipe(proc))
-                         : NULL;
+    /* The pipe is there on Windows even when the streams are merged, because
+     * GLib's merge loses it; on POSIX a merged job has no second pipe. */
+    GInputStream *err_pipe = g_subprocess_get_stderr_pipe(proc);
+    job->err = err_pipe ? g_data_input_stream_new(err_pipe) : NULL;
     if (job->err)
         g_data_input_stream_set_newline_type(job->err,
                                              G_DATA_STREAM_NEWLINE_TYPE_ANY);
-    job->err_eof = !split;   /* no second pipe is a second pipe already drained */
+    job->err_eof = job->err == NULL;
     job->in      = g_subprocess_get_stdin_pipe(proc);
     job->on_control = JS_UNDEFINED;
 #ifdef G_OS_WIN32
@@ -2888,6 +3245,23 @@ static void on_exec_wait_done(GObject *src, GAsyncResult *res, gpointer data)
     w->done = true;
 }
 
+/* The two captured streams as one, for a child whose stderr was piped only so
+ * that it would not be lost (Windows).  On POSIX a merged child has no second
+ * pipe and this is never asked. */
+static GBytes *exec_join_streams(GBytes *out, GBytes *errs)
+{
+    gsize         a = 0, b = 0;
+    const guint8 *pa = out ? g_bytes_get_data(out, &a) : NULL;
+    const guint8 *pb = errs ? g_bytes_get_data(errs, &b) : NULL;
+    GByteArray   *ba = g_byte_array_sized_new(a + b);
+
+    if (a)
+        g_byte_array_append(ba, pa, a);
+    if (b)
+        g_byte_array_append(ba, pb, b);
+    return g_byte_array_free_to_bytes(ba);
+}
+
 /* A captured stream as a string, NULs and all. */
 static JSValue exec_captured(JSContext *ctx, GBytes *bytes)
 {
@@ -2895,15 +3269,6 @@ static JSValue exec_captured(JSContext *ctx, GBytes *bytes)
     const char *data = bytes ? g_bytes_get_data(bytes, &len) : NULL;
 
     return JS_NewStringLen(ctx, data ? data : "", data ? len : 0);
-}
-
-/* A deadline on a private context, as a flag going true.  No JS runs from here
- * -- the wait itself decides what to do about it -- which is what keeps this
- * loop from being an event loop. */
-static gboolean on_exec_wait_late(gpointer data)
-{
-    *(bool *)data = true;
-    return G_SOURCE_REMOVE;
 }
 
 /*
@@ -2956,23 +3321,26 @@ static bool exec_wait_input(JSContext *ctx, JSValueConst opts, GBytes **out)
     return true;
 }
 
-static GSource *exec_wait_guard(GMainContext *where, unsigned ms, bool *flag)
+/*
+ * Iterate the private context until the communicate finishes or `ms` passes
+ * (0 means no deadline).  **A loop with its own deadline, not a timeout
+ * GSource**: on Windows a source attached after the context's first iteration
+ * was not woken by its deadline -- a grace of five seconds waited until the
+ * child's pipe closed thirty seconds later -- so the grace the caller asked for
+ * did not exist.  `FALSE` and a millisecond of sleep is enough for a context
+ * that only carries this one operation; no JavaScript runs from here.
+ */
+static bool exec_wait_until(GMainContext *where, bool *done, unsigned ms)
 {
-    if (ms == 0)
-        return NULL;   /* no deadline asked for, or none left to wait */
+    gint64 deadline = ms ? g_get_monotonic_time() + (gint64)ms * 1000 : 0;
 
-    GSource *src = g_timeout_source_new(ms);
-    g_source_set_callback(src, on_exec_wait_late, flag, NULL);
-    g_source_attach(src, where);
-    return src;
-}
-
-static void exec_wait_guard_free(GSource *src)
-{
-    if (!src)
-        return;
-    g_source_destroy(src);
-    g_source_unref(src);
+    while (!*done) {
+        if (deadline && g_get_monotonic_time() >= deadline)
+            return false;
+        g_main_context_iteration(where, FALSE);
+        g_usleep(1000);
+    }
+    return true;
 }
 
 /*
@@ -3119,6 +3487,11 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
      * moment the child is. */
     const char *ident = g_subprocess_get_identifier(proc);
     pid_t       pid   = ident ? (pid_t)g_ascii_strtoll(ident, NULL, 10) : 0;
+#ifdef G_OS_WIN32
+    /* The process group `Exec.Wait`'s timeout needs; NULL when this process is
+     * already in a job that refuses nesting, and the old road still applies. */
+    HANDLE win_job = exec_win_job_open(pid);
+#endif
 
     /*
      * communicate writes nothing to stdin, drains both pipes and waits.
@@ -3149,37 +3522,77 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
                                    on_exec_wait_done, &w);
     g_bytes_unref(stdin_bytes);
 
-    bool     late  = false;
-    GSource *guard = exec_wait_guard(priv, timeout, &late);
-
-    while (!w.done && !late)
-        g_main_context_iteration(priv, TRUE);
+    /*
+     * The deadline is this loop's own, not a GSource: a source attached after
+     * the context had been iterated once was not woken by its deadline on
+     * Windows, which is why the grace below never happened and a five-second
+     * `KillAfter` waited for the child's own thirty seconds.
+     */
+    bool late = !exec_wait_until(priv, &w.done, timeout);
 
     /* The two stages, the same ones the callback spelling arms on timers: asked
      * to end, then made to.  To the group, since the child leads one. */
     if (late) {
+#ifdef G_OS_WIN32
+        if (win_job)
+            exec_win_job_kill(win_job);
+        else
+            exec_signal_group(proc, pid, false);
+#else
         exec_signal_group(proc, pid, false);
+#endif
 
-        bool     harder = kill_after == 0;
-        GSource *force  = exec_wait_guard(priv, kill_after, &harder);
+        if (kill_after > 0)
+            exec_wait_until(priv, &w.done, kill_after);
 
-        while (!w.done && !harder)
-            g_main_context_iteration(priv, TRUE);
-
-        if (!w.done)
+        if (!w.done) {
+#ifdef G_OS_WIN32
+            if (win_job)
+                exec_win_job_kill(win_job);
+            else
+                exec_signal_group(proc, pid, true);
+#else
             exec_signal_group(proc, pid, true);
-        while (!w.done)
-            g_main_context_iteration(priv, TRUE);
-
-        exec_wait_guard_free(force);
+#endif
+        }
+#ifdef G_OS_WIN32
+        /* The job is the way to reach a grandchild; when it could not be
+         * assigned, stopping the read is the last resort, and what was read
+         * before it is all the caller gets. */
+        if (!w.done) {
+            g_cancellable_cancel(canc);
+            exec_wait_until(priv, &w.done, 0);
+        }
+#else
+        exec_wait_until(priv, &w.done, 0);
+#endif
     }
-    exec_wait_guard_free(guard);
 
     /* A cancelled task has no `late` flag: the cancellable made communicate
      * return `G_IO_ERROR_CANCELLED`, and the child is still running.  It is
-     * ours to end, or a stopped task leaves `sleep 10` behind. */
-    if (w.err && g_error_matches(w.err, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        exec_signal_group(proc, pid, true);
+     * ours to end, or a stopped task leaves `sleep 10` behind.  The one
+     * exception is the Windows guard above, which cancels its own read after
+     * the deadline: that is a timeout, not a stop, and it has a `TimedOut`
+     * answer of its own. */
+    if (w.err && g_error_matches(w.err, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+        if (late) {
+            g_clear_error(&w.err);
+        } else {
+#ifdef G_OS_WIN32
+            if (win_job)
+                exec_win_job_kill(win_job);
+            else
+                exec_signal_group(proc, pid, true);
+#else
+            exec_signal_group(proc, pid, true);
+#endif
+        }
+    }
+
+#ifdef G_OS_WIN32
+    if (win_job)
+        CloseHandle(win_job);
+#endif
 
     if (opt_link)
         g_cancellable_disconnect(opt_cancel, opt_link);
@@ -3209,6 +3622,19 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
      * answer rather than a status nobody can tell apart. */
     int status = g_subprocess_get_if_exited(proc)
                      ? g_subprocess_get_exit_status(proc) : -1;
+
+    /* On Windows stderr was piped even when the caller asked for it merged;
+     * fold it into the answer here, in the order the pipes were drained.  On
+     * POSIX a merged child has no `errs` and this is a no-op. */
+    if (!split && errs) {
+        GBytes *joined = exec_join_streams(out, errs);
+
+        if (out)
+            g_bytes_unref(out);
+        g_bytes_unref(errs);
+        out  = joined;
+        errs = NULL;
+    }
 
     JSValue result = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, result, "ExitCode", JS_NewInt32(ctx, status));
@@ -3716,6 +4142,36 @@ static JSValue sys_clip_copy(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "Clipboard.Copy(text) expects a string");
 
     GdkClipboard *clip = clipboard_of();
+#ifdef G_OS_WIN32
+    /*
+     * **An empty string is not offered as text on Windows: the clipboard is
+     * emptied instead.** GDK 4.24.1 promises `CF_UNICODETEXT` and renders it
+     * when another process asks; zero bytes written leave its stream's buffer
+     * NULL, and closing the stream converts that NULL --
+     * `g_utf8_to_utf16: assertion 'str != NULL' failed`, then an access
+     * violation in libgtk. Measured: `Copy("")` and one `Get-Clipboard` from
+     * PowerShell, two crashes in two; `Copy("palabra")`, none. `Paste` answers
+     * `""` for an empty clipboard, so a Bintana reader sees the same thing.
+     *
+     * Releasing GDK's content alone is not emptying: the system clipboard kept
+     * what the previous owner had put there, and a later `Paste` answered that
+     * old text. So the clipboard is emptied as well -- `OpenClipboard(NULL)`
+     * leaves it with no owner -- retried briefly, because GDK's own clipboard
+     * thread may hold it open at that moment. GDK hears the change through its
+     * format listener.
+     */
+    if (clip && !*text) {
+        gdk_clipboard_set_content(clip, NULL);
+        for (int i = 0; i < 20; i++) {
+            if (OpenClipboard(NULL)) {
+                EmptyClipboard();
+                CloseClipboard();
+                break;
+            }
+            Sleep(5);
+        }
+    } else
+#endif
     if (clip)
         gdk_clipboard_set_text(clip, text);
 
@@ -4470,7 +4926,7 @@ static JSValue sys_file_save_bytes(JSContext *ctx, JSValueConst this_val,
     }
 
     GError *err = NULL;
-    bool    ok  = g_file_set_contents(path, (const char *)bytes, (gssize)len, &err);
+    bool    ok  = bta_save_contents(path, (const char *)bytes, (gssize)len, &err);
 
     if (!ok) {
         JSValue e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
@@ -4903,7 +5359,11 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     /* Load(path, [cancellable]) -> string
      *   the whole file as a string. **Throws if it cannot be read**, and the
      *   message names the file: there is no `null` to test for and no silent
-     *   empty string. A `Cancellable` last ends a read that is stuck
+     *   empty string. A **UTF-8 BOM is dropped** and a **UTF-16LE/BE or
+     *   UTF-32LE/BE BOM is decoded**, so a `.btp`, `.form` or source file
+     *   written by Notepad or PowerShell reads as the text it is; bytes with no
+     *   BOM are returned unchanged. `LoadBytes` is the byte-for-byte road. A
+     *   `Cancellable` last ends a read that is stuck
      */
     JS_SetPropertyStr(ctx, file, "Load",   JS_NewCFunction(ctx, sys_file_load, "Load", 2));
     /* Save(path, text)
@@ -4937,14 +5397,20 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   `{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a
      *   content type you can test (`"image/png"`), `.Icon` is the name the
      *   desktop draws for that kind of file, and `.Modified` is a real
-     *   `Date`, to the millisecond. A `Cancellable` last ends a query that
+     *   `Date`, to the millisecond. Where the platform has no shared MIME
+     *   database, the common media types are answered from the extension
+     *   instead of a bare `.pdf`. A `Cancellable` last ends a query that
      *   is stuck, and throws rather than answering `null`
      */
     JS_SetPropertyStr(ctx, file, "Info",
                       JS_NewCFunction(ctx, sys_file_info, "Info", 2));
     /* Watch(path, cb) -> { Stop }
      *   `cb(event, path)` — `"Changed"`, `"Created"`, `"Deleted"` — and
-     *   answers something with a `Stop()`
+     *   answers something with a `Stop()`. A save is reported once as
+     *   `"Changed"`: a deletion the monitor reports before a replacement is
+     *   held for a moment and becomes that one change -- as does a `Created`
+     *   for a path that was already there -- while a path still gone is
+     *   `"Deleted"` after the moment
      */
     JS_SetPropertyStr(ctx, file, "Watch",
                       JS_NewCFunction(ctx, sys_file_watch, "Watch", 2));
@@ -4989,9 +5455,11 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   normalised**: `.` and `..` are worked out by the letters, so
      *   `Join(root, "../../etc/x")` answers `/etc/x` -- a name that is data
      *   cannot hide where it leads. Whether it is still inside is
-     *   `Within(path, root)`. A relative path keeps the `..` it cannot climb
-     *   out of; nothing is asked of the disk, so `..` after a link goes back
-     *   up the name
+     *   `Within(path, root)`. It **concatenates**: a piece that is itself
+     *   absolute does not replace the ones before it, so ask
+     *   `IsAbsolute(path)` when a path may already stand on its own. A
+     *   relative path keeps the `..` it cannot climb out of; nothing is asked
+     *   of the disk, so `..` after a link goes back up the name
      */
     JS_SetPropertyStr(ctx, file, "Join",   JS_NewCFunction(ctx, sys_file_join, "Join", 2));
     /* Absolute(path) -> string
@@ -4999,6 +5467,14 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      */
     JS_SetPropertyStr(ctx, file, "Absolute",
                       JS_NewCFunction(ctx, sys_file_absolute, "Absolute", 1));
+    /* IsAbsolute(path) -> boolean
+     *   whether the path stands on its own, by the **platform's** rule and not
+     *   by a leading slash: `/x` on POSIX; `C:\x`, `C:/x` and a UNC share on
+     *   Windows, where `C:` and `C:x` are drive-relative. Purely lexical, so a
+     *   path that does not exist yet answers like any other
+     */
+    JS_SetPropertyStr(ctx, file, "IsAbsolute",
+                      JS_NewCFunction(ctx, sys_file_is_absolute, "IsAbsolute", 1));
     /* Within(path, root) -> boolean
      *   whether `path` is `root` or under it, by whole path components —
      *   `/a/proj2` is **not** inside `/a/proj`
@@ -5006,8 +5482,9 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, file, "Within",
                       JS_NewCFunction(ctx, sys_file_within, "Within", 2));
     /* Relative(path, root) -> string
-     *   `path` with `root` taken off; the path unchanged when there is no
-     *   relative spelling, and `""` for the root itself
+     *   `path` with `root` taken off, written with `/` on every platform; the
+     *   path unchanged when there is no relative spelling, and `""` for the
+     *   root itself
      */
     JS_SetPropertyStr(ctx, file, "Relative",
                       JS_NewCFunction(ctx, sys_file_relative, "Relative", 2));
@@ -5290,7 +5767,9 @@ void bta_sys_init(JSContext *ctx, JSValue global)
 #ifndef BTA_HEADLESS
     JSValue clipboard = JS_NewObject(ctx);
     /* Copy(text)
-     *   **immediate**: the text is on the clipboard when the call returns
+     *   **immediate**: the text is on the clipboard when the call returns. An
+     *   empty string empties the clipboard on Windows, where GTK cannot serve
+     *   empty text to another program; `Paste` answers `""` either way.
      */
     JS_SetPropertyStr(ctx, clipboard, "Copy",
                       JS_NewCFunction(ctx, sys_clip_copy, "Copy", 1));

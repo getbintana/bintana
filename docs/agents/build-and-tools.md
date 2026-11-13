@@ -353,6 +353,17 @@ disagree.
   Windows runner, so the evidence is by hand: a scratch copy of `Rows.js` given the
   backslashed keys the walk really returns reports the same 31 pages with the
   fix removed.
+- **The Windows Event Log's message table is generated, not checked in.**
+  `runtime/src/bintana-events.mc` is the source; CMake finds `windmc` and
+  `windres`, writes `generated/events/MSG00001.bin`, and links the resource
+  object into `bintana.exe` (`bintanaw.exe` is a copy and carries it too). Both
+  tools come with mingw-w64 and both are optional: without them the build is
+  green and events have no description. A `.mc` with `Severity=` gets the
+  severity folded into the id's high bits (`0x40001000`) and the viewer cannot
+  find the message, so the file has none -- see
+  [`runtime.md`](runtime.md#the-platform-log). A clean configure and build is
+  the way to check the custom commands; an incremental one can hide a missing
+  dependency.
 - **`add_executable` lists its sources by hand -- two lists now, `bintana`
   (core) and `${BTA_GUI_TARGET}` (`bintana-gui`, or `bintana` on Windows) --
   while the signature extractor globs `runtime/src/*.c`.** A new `.c` that is
@@ -361,10 +372,13 @@ disagree.
   `generated/bta_signatures.h`, so it looks half registered. A file that
   touches GTK belongs only in the GUI list; one both hosts need belongs in
   both, and `ldd` on the core is what catches a stray GTK reference.
-  A new global is five places: the `.c`, its `CMakeLists.txt` line, its init in
-  `bta.h`, and the two `install` roads, `bta_runtime.c` **and** `bta_task.c`
-  (a global missing from the worker is *not a function* at call time, which
-  `testTask`'s `entropy` step now asserts).
+  A new global is up to seven places: the `.c`, its line in each `CMakeLists.txt`
+  list it belongs in, its init in `bta.h`, and the three `install` roads,
+  `bta_runtime.c`, `bta_headless.c` (`install_core`, for a global a `main` has)
+  **and** `bta_task.c` (a global missing from the worker is *not a function* at
+  call time, which `testTask`'s `entropy` step now asserts). `Privilege` came
+  from a branch that predated the core and linked `bta_task.c` against a
+  symbol only the graphical list had: the core failed at link.
 
 **`tests/run.sh widgets <name>` selects by name, ignoring case, and takes every
 test whose name contains it** (`hash` runs `Hash`), plus what `NEEDS` adds; a

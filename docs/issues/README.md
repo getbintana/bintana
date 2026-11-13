@@ -13,6 +13,7 @@ in the same form.
 | Issue | The missing capability |
 |---|---|
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
+| [ISSUE-windows-clipboard-crash.md](ISSUE-windows-clipboard-crash.md) | On Windows, replacing text on the clipboard can crash the program (GTK 4.24.1) |
 
 Seventeen of them came out of the October audit
 ([`audit-2026-10.md`](../audit-2026-10.md)), which found the gaps in the

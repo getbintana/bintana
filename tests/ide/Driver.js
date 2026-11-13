@@ -6,7 +6,7 @@
  * toolbar buttons.  MainForm.form is a symlink to the IDE's own, so the two
  * cannot drift apart.
  *
- * The project it opens is generated in /tmp and quits by itself, so pressing
+ * The project it opens is generated in the temporary folder and quits by itself, so pressing
  * Run terminates instead of leaving a window open forever.
  */
 "use strict";
@@ -17,7 +17,18 @@
  * files: those collisions fail assertions that look like real bugs.
  */
 const TAG = Application.Arguments[0] ? `-${Application.Arguments[0]}` : "";
-const TMP = `/tmp/bta-test-ide${TAG}`;
+
+/* **The platform's temporary folder, never a literal `/tmp`.** On Windows
+ * `/tmp/x` is `C:\tmp\x` -- not a temporary folder, and not absolute either:
+ * the IDE kept `\tmp\...` as the project and six assertions about absolute
+ * and recent paths failed there (2026-11-12). */
+const TEMP = Environment.TempDirectory;
+const TMP = File.Join(TEMP, `bta-test-ide${TAG}`);
+
+/* A path compared by its tail, whichever separator the platform wrote. */
+function endsWithPath(path, tail) {
+    return String(path).split("\\").join("/").endsWith(tail);
+}
 
 /*
  * **Every run starts at the window the IDE declares.** `MainForm`'s `Form_Open`
@@ -363,9 +374,9 @@ function* p_welcome(ide) {
     openFresh(ide, "examples/hello");
     eq("opening one turns the window into the workspace", ide.Pages.Current, 1);
     check("a relative project path is made absolute",
-          ide.project.startsWith("/"), ide.project);
+          File.IsAbsolute(ide.project), ide.project);
     check("and still points at the same project",
-          ide.project.endsWith("examples/hello"), ide.project);
+          endsWithPath(ide.project, "examples/hello"), ide.project);
 
     makeChildProject();
     openFresh(ide, TMP);
@@ -376,7 +387,7 @@ function* p_welcome(ide) {
      * something already on the list moves it up instead of repeating it. */
     eq("the project just opened tops the recent list", ide.recent[0], ide.project);
     check("the one before it comes next",
-          ide.recent[1].endsWith("examples/hello"), JSON.stringify(ide.recent));
+          endsWithPath(ide.recent[1], "examples/hello"), JSON.stringify(ide.recent));
     eq("the menu shows one entry per remembered project",
        ide.MnuRecent.Items.length, ide.recent.length);
     check("each labelled with the project's folder",
@@ -395,7 +406,7 @@ function* p_welcome(ide) {
      * the row after it is this project again, which puts it back. */
     ide.WelcomeRecent.Index = 1;
     check("choosing a row on the page opens that project",
-          ide.project.endsWith("examples/hello"), ide.project);
+          endsWithPath(ide.project, "examples/hello"), ide.project);
     eq("and lets go of it, so the same one can be chosen twice",
        ide.WelcomeRecent.Index, -1);
     eq("with the window on the workspace", ide.Pages.Current, 1);
@@ -410,7 +421,7 @@ function* p_welcome(ide) {
      * as its parameter, which is what GTK does when the entry is chosen. */
     ide.MnuRecent.Click(1);
     check("choosing an entry opens that project",
-          ide.project.endsWith("examples/hello"), ide.project);
+          endsWithPath(ide.project, "examples/hello"), ide.project);
     eq("and it moves to the top", ide.recent[0], ide.project);
     eq("without growing the list", ide.recent.length, remembered);
     eq("nor repeating anything", new Set(ide.recent).size, ide.recent.length);
@@ -2264,7 +2275,7 @@ function* p_palette(ide) {
     eq("a library's components are found", gadgets.length, 1);
     eq("...by the name a .form will use", gadgets[0].name, "Dial");
     check("...with an absolute path, so nothing project-relative matches it",
-          gadgets[0].file.startsWith("/"), gadgets[0].file);
+          File.IsAbsolute(gadgets[0].file), gadgets[0].file);
     eq("...and its own declared size", `${gadgets[0].Width}x${gadgets[0].Height}`,
        "140x90");
     check("...and what its class publishes, read from the library's source",
@@ -5627,8 +5638,9 @@ function* p_goto(ide) {
     /* A class the project reaches through `uses`, which lives under lib/ and is
      * in the listing like any other file of the tree. */
     const dial = nav.find("Dial");
+    /* A name inside the project, so `/` everywhere: `File.Relative` writes it so. */
     eq("a class in the project's own lib/ is found too",
-       dial && dial.file, File.Join("lib", "gadgets", "Dial.js"));
+       dial && dial.file, "lib/gadgets/Dial.js");
 
     /* --- a method of the file being edited ---------------------------------- */
     const method = nav.find("greet");
@@ -8656,7 +8668,7 @@ function* p_nested(ide) {
 
 function* p_projects(ide) {
     /* --- creating a project ------------------------------------------------ */
-    const NEWPROJ = "/tmp/bta-test-ide-nuevo";
+    const NEWPROJ = File.Join(TEMP, "bta-test-ide-nuevo");
     removeTree(NEWPROJ);
     Directory.Make(NEWPROJ);
 
@@ -8684,7 +8696,7 @@ function* p_projects(ide) {
 
     /* The folder does not have to exist: the dialog lets one type a new name, and
      * the IDE creates it. */
-    const FRESH = "/tmp/bta-test-ide-fresco";
+    const FRESH = File.Join(TEMP, "bta-test-ide-fresco");
     removeTree(FRESH);      /* a run that failed here would leave one behind */
     check("the target does not exist yet", !File.Exists(FRESH));
     eq("creating a project makes the folder",
@@ -8704,7 +8716,7 @@ function* p_projects(ide) {
      * open what the IDE just wrote, which is the whole promise of creating it
      * through the record.
      */
-    const CONSOLE = "/tmp/bta-test-ide-consola";
+    const CONSOLE = File.Join(TEMP, "bta-test-ide-consola");
     removeTree(CONSOLE);
     eq("creating a console project succeeds",
        ide.startProject(CONSOLE, "", true), true);
@@ -8740,7 +8752,7 @@ function* p_projects(ide) {
           said.some((l) => l.includes("Hello from")), JSON.stringify(said));
 
     /* But if a file already holds that name, it is not overwritten. */
-    const CLASH = "/tmp/bta-test-ide-archivo";
+    const CLASH = File.Join(TEMP, "bta-test-ide-archivo");
     File.Save(CLASH, "not a folder at all");
     eq("an existing file is not turned into a project",
        ide.startProject(CLASH), false);
@@ -8785,7 +8797,7 @@ function* p_projects(ide) {
     np.TxtName.Text = "MiApp";
     /* Showing the path before accepting avoids finding it out afterwards. */
     check("it spells out the path it will create",
-          np.LblHint.Text.includes("/tmp/MiApp"), np.LblHint.Text);
+          np.LblHint.Text.includes(File.Join("/tmp", "MiApp")), np.LblHint.Text);
     eq("and now there is something to create", np.BtnCreate.Enabled, true);
 
     /*
@@ -8869,7 +8881,7 @@ function* p_projects(ide) {
 
     /* The description goes into project.btp, and with no description the key is
      * not written: a project has no reason to carry empty fields. */
-    const DESCED = "/tmp/bta-test-ide-desc";
+    const DESCED = File.Join(TEMP, "bta-test-ide-desc");
     eq("creating with a description works",
        ide.startProject(DESCED, "a test project"), true);
     eq("and it lands in project.btp",
@@ -10678,11 +10690,14 @@ function* p_folders(ide) {
     eq("nor one that is not a class name", ide.createModule("3d"), false);
 
     /* A folder in the name works the way it does everywhere else here -- and the
-     * namespace is named rather than taken from the folder. */
+     * namespace is named rather than taken from the folder. `Extra` and not
+     * `Lib`: this project has a `lib/`, and on a file system that ignores case
+     * (Windows) the two are one folder, so the module landed in `lib/` and the
+     * IDE asked its tree for `Lib/Auxiliar.js` (2026-11-12). */
     eq("a module can be created in a folder",
-       ide.createModule("Lib/Auxiliar", "Auxiliares"), true);
+       ide.createModule("Extra/Auxiliar", "Auxiliares"), true);
     yield;
-    const nsSource = File.Load(File.Join(TMP, "Lib", "Auxiliar.js"));
+    const nsSource = File.Load(File.Join(TMP, "Extra", "Auxiliar.js"));
     check("and joins the namespace it was given, which is not the folder's name",
           nsSource.includes('Namespace("Auxiliares")') &&
           nsSource.includes("Auxiliares.Auxiliar = class Auxiliar {"), nsSource);
@@ -10690,10 +10705,10 @@ function* p_folders(ide) {
 
     ide.closeTabByName(modFile, true);
     File.Delete(File.Join(TMP, modFile));
-    File.Delete(File.Join(TMP, "Lib", "Auxiliar.js"));
-    Directory.Delete(File.Join(TMP, "Lib"));
+    File.Delete(File.Join(TMP, "Extra", "Auxiliar.js"));
+    Directory.Delete(File.Join(TMP, "Extra"));
     ide.dropSource(modFile);
-    ide.dropSource("Lib/Auxiliar.js");
+    ide.dropSource("Extra/Auxiliar.js");
     ide.listFiles();
     yield;
 
@@ -11527,7 +11542,8 @@ function* p_strings(ide) {
     check("it shows up in the tree", ide.FileTree.Exists("po/ru.po"),
           JSON.stringify(Dictionary.Keys(ide.byKey).filter((k) => k.startsWith("po/"))));
     check("and it opens in the editor, not the template",
-          PoForm.openFiles.includes("po/ru.po"), JSON.stringify(PoForm.openFiles));
+          PoForm.openFiles.map((p) => p.replace(/\\/g, "/")).includes("po/ru.po"),
+          JSON.stringify(PoForm.openFiles));
 
     /* Twice over the same locale is refused rather than silently overwriting a
      * translator's file. */
@@ -11553,9 +11569,11 @@ function* p_strings(ide) {
     eq("a command that is not installed is not chosen",
        Application.HasCommand("no-such-program-xyz"), false);
     check("and one that is, is", Application.HasCommand("sh"));
+    const shell    = Environment.OS === "Windows" ? "cmd" : "/bin/sh";
+    const noShell  = Environment.OS === "Windows" ? "cmd-no-such-thing"
+                                                  : "/bin/no-such-thing";
     check("an absolute path is answered about the file",
-          Application.HasCommand("/bin/sh") &&
-          !Application.HasCommand("/bin/no-such-thing"));
+          Application.HasCommand(shell) && !Application.HasCommand(noShell));
 
     const hadEditor = Settings.Get("translationEditor", "");
     try {
@@ -12098,7 +12116,7 @@ function* p_settings(ide) {
     check("with nothing ticked in a project that uses none",
           boxes.every((b) => !b.Active));
     check("and each says where it is",
-          boxes.every((b) => b.Tooltip.includes("/lib/")),
+          boxes.every((b) => b.Tooltip.replace(/\\/g, "/").includes("/lib/")),
           boxes.map((b) => b.Tooltip).join(" | "));
 
     /* It is a copy until OK, like every other field here. */
@@ -12939,8 +12957,12 @@ function* p_export(ide) {
      */
     const members = [];
     let listed    = null;
-    Exec(["tar", "-tf", out], (line) => members.push(line),
-                              (code) => { listed = code; });
+    const tarArgs = ["tar"];
+    if (Environment.OS === "Windows")
+        tarArgs.push("--force-local");
+    tarArgs.push("-tf", out);
+    Exec(tarArgs, (line) => members.push(line),
+                  (code) => { listed = code; });
     yield* until(() => listed !== null, 200);
     eq("and tar reads it back", listed, 0);
 
@@ -13095,7 +13117,105 @@ function* p_installer(ide) {
  * the first; the second is driven straight through `Apps`, since what
  * changes between them is only which string names the file.
  */
+function* p_appsWindows(ide) {
+    const at = () => Apps.installed(ide.project);
+
+    const old = at();
+    if (old) Apps.uninstall(old.Id);
+    check("this project is not installed yet", at() === null);
+
+    eq("the id is a slug of the name", Apps.idFor("My App 2"), "my-app-2");
+    eq("a name of punctuation still gets one",
+       Apps.idFor("!!!"), "bintana-app");
+
+    const slugproj = File.Join(TEMP, "bta-test-ide-slugproj");
+    Apps.install(slugproj, { Name: "My App 2", AppId: "" });
+    const slugged = Apps.installed(slugproj);
+    check("a project with no id installs under the slug", !!slugged);
+    if (slugged)
+        eq("...with the slug as the file's name", slugged.Id, "my-app-2");
+    Apps.uninstall("my-app-2");
+
+    check("with a project open, installing is on offer", ide.MnuAppInstall.Enabled);
+    ide.MnuAppInstall.Click();
+    yield;
+
+    const dlg = ide.appEditor;
+    check("the item opens the dialog", !!dlg);
+    if (!dlg) return;
+
+    const config = ide.manifest.read();
+    eq("which starts on the project's name", dlg.TxtAppName.Text, config.Name);
+    eq("and on its description", dlg.TxtAppComment.Text, config.Description);
+
+    dlg.TxtAppName.Text = "Bta Suite App";
+    dlg.showState();
+    check("the state line names the .lnk",
+          dlg.LblAppWhere.Text.includes("io.github.getbintana.IdeChild.devel.lnk"),
+          dlg.LblAppWhere.Text);
+
+    dlg.BtnAppInstall.Click();
+    yield;
+
+    const installed = at();
+    check("installing writes a shortcut this project owns", installed !== null);
+    if (!installed) return;
+
+    eq("under the project's own id, as a development entry", installed.Id,
+       "io.github.getbintana.IdeChild.devel");
+    eq("named what was typed", installed.Entry.Name, "Bta Suite App");
+    eq("pointing at this project", installed.Entry.Project, ide.project);
+    check("with the arguments after the executable",
+          (installed.Entry.Arguments || []).includes(ide.project),
+          JSON.stringify(installed.Entry.Arguments));
+    check("and a .lnk in the Start Menu folder",
+          File.Exists(File.Join(Desktop.Shortcut.Directory,
+                                "io.github.getbintana.IdeChild.devel.lnk")));
+    check("the dialog closed when it was done", !dlg.Visible);
+
+    ide.MnuAppInstall.Click();
+    yield;
+
+    const again = ide.appEditor;
+    check("opening it again finds what is installed", !!again);
+    if (!again) return;
+    eq("with the entry's name", again.TxtAppName.Text, "Bta Suite App");
+    check("and something to remove", again.BtnAppUninstall.Visible);
+    check("saying where it is",
+          again.LblAppWhere.Text.includes("io.github.getbintana.IdeChild.devel.lnk"),
+          again.LblAppWhere.Text);
+
+    again.TxtAppName.Text = "Bta Suite App Renamed";
+    again.showState();
+    again.BtnAppInstall.Click();
+    yield;
+
+    const renamed = at();
+    eq("renaming the name keeps the id", renamed && renamed.Id,
+       "io.github.getbintana.IdeChild.devel");
+    eq("and updates what the menu shows", renamed && renamed.Entry.Name,
+       "Bta Suite App Renamed");
+
+    ide.MnuAppInstall.Click();
+    yield;
+    const last = ide.appEditor;
+    check("the dialog opens once more to remove it", !!last);
+    if (!last) return;
+    last.BtnAppUninstall.Click();
+    yield;
+
+    check("uninstalling leaves nothing this project owns", at() === null);
+    check("and the .lnk is gone",
+          !File.Exists(File.Join(Desktop.Shortcut.Directory,
+                                 "io.github.getbintana.IdeChild.devel.lnk")));
+}
+
 function* p_apps(ide) {
+    if (Environment.OS === "Windows") {
+        yield* p_appsWindows(ide);
+        return;
+    }
+
     const at = () => Apps.installed(ide.project);
 
     /* Not a state this phase may inherit: a previous run stopped between the
@@ -13118,7 +13238,7 @@ function* p_apps(ide) {
      * claims no window class -- its window really is `bintana`'s, and an entry
      * claiming otherwise is one the dock can never match.
      */
-    const slugproj = "/tmp/bta-test-ide-slugproj";
+    const slugproj = File.Join(TEMP, "bta-test-ide-slugproj");
     Apps.install(slugproj, { Name: "My App 2", AppId: "" });
     const slugged = Apps.installed(slugproj);
     check("a project with no id installs under the slug", !!slugged);
@@ -13311,45 +13431,78 @@ function* p_errors(ide) {
          */
         const hadShell = Environment.Get("SHELL");
 
-        Environment.Set("SHELL", "/bin/pwd");
-        ide.ConsoleBox.Current = ide.shellPage;
-        yield* until(() => ide.Shell.Text.includes(TMP), 200);
-        check("the terminal starts in the project's directory",
-              ide.Shell.Text.includes(TMP), JSON.stringify(ide.Shell.Text));
+        if (Environment.OS === "Windows") {
+            /* `cmd.exe` prints its full directory in the prompt; there is no
+             * `/bin/pwd` to run and exit, so the prompt is the answer. */
+            const hadPrompt = Environment.Get("PROMPT");
+            const shell = Environment.Get("COMSPEC") ||
+                          "C:\\Windows\\System32\\cmd.exe";
 
-        /*
-         * **Waited for on its own**, because it is a second thing arriving down
-         * the same pty: `/bin/pwd` prints the directory and *then* exits, and
-         * what the IDE writes when it exits is a line of its own. Waiting only
-         * for the first and reading the second was a race that the ordinary
-         * build won and `tests/asan.sh` -- four times slower -- lost.
-         */
-        yield* until(() => ide.Shell.Text.includes("shell"), 200);
-        check("...and says when the shell ended",
-              ide.Shell.Text.includes("shell"), JSON.stringify(ide.Shell.Text));
+            Environment.Set("SHELL", shell);
+            Environment.Set("PROMPT", "$P$G");
+            ide.ConsoleBox.Current = ide.shellPage;
+            yield* until(() => ide.Shell.Text.includes(TMP), 200);
+            check("the terminal starts in the project's directory",
+                  ide.Shell.Text.includes(TMP), JSON.stringify(ide.Shell.Text));
 
-        /*
-         * And the child is this process's, so leaving asks it to end.
-         *
-         * `cat` and not a shell, because what this can assert is that the
-         * SIGTERM arrives -- an interactive bash *ignores* it, and what ends
-         * one is the pty being closed (the kernel hangs up the foreground
-         * group, which VTE does when the widget goes). That half is not
-         * answerable from here and was measured by hand: no shell is left
-         * behind after the IDE quits.
-         */
-        Environment.Set("SHELL", "/bin/cat");
-        ide.ConsoleBox.Current = 0;
-        ide.ConsoleBox.Current = ide.shellPage;
-        yield* until(() => ide.Shell.Running, 200);
-        check("looking at the page again starts another", ide.Shell.Running);
+            /* An interactive `cmd` is not ended by the console interrupt the
+             * IDE's Stop sends; the test is about the page, so it uses the
+             * verb that is guaranteed to end it. */
+            ide.Shell.Kill();
+            yield* until(() => !ide.Shell.Running, 200);
+            check("and leaving asks the child to end", !ide.Shell.Running);
 
-        ide.stopShell();
-        yield* until(() => !ide.Shell.Running, 200);
-        check("and leaving asks the child to end", !ide.Shell.Running);
+            ide.ConsoleBox.Current = 0;
+            ide.ConsoleBox.Current = ide.shellPage;
+            yield* until(() => ide.Shell.Running, 200);
+            check("looking at the page again starts another", ide.Shell.Running);
+            ide.Shell.Kill();
+            yield* until(() => !ide.Shell.Running, 200);
 
-        ide.ConsoleBox.Current = 0;
-        if (hadShell) Environment.Set("SHELL", hadShell);
+            ide.ConsoleBox.Current = 0;
+            Environment.Set("SHELL", hadShell || null);
+            Environment.Set("PROMPT", hadPrompt || null);
+        } else {
+            Environment.Set("SHELL", "/bin/pwd");
+            ide.ConsoleBox.Current = ide.shellPage;
+            yield* until(() => ide.Shell.Text.includes(TMP), 200);
+            check("the terminal starts in the project's directory",
+                  ide.Shell.Text.includes(TMP), JSON.stringify(ide.Shell.Text));
+
+            /*
+             * **Waited for on its own**, because it is a second thing arriving down
+             * the same pty: `/bin/pwd` prints the directory and *then* exits, and
+             * what the IDE writes when it exits is a line of its own. Waiting only
+             * for the first and reading the second was a race that the ordinary
+             * build won and `tests/asan.sh` -- four times slower -- lost.
+             */
+            yield* until(() => ide.Shell.Text.includes("shell"), 200);
+            check("...and says when the shell ended",
+                  ide.Shell.Text.includes("shell"), JSON.stringify(ide.Shell.Text));
+
+            /*
+             * And the child is this process's, so leaving asks it to end.
+             *
+             * `cat` and not a shell, because what this can assert is that the
+             * SIGTERM arrives -- an interactive bash *ignores* it, and what ends
+             * one is the pty being closed (the kernel hangs up the foreground
+             * group, which VTE does when the widget goes). That half is not
+             * answerable from here and was measured by hand: no shell is left
+             * behind after the IDE quits.
+             */
+            Environment.Set("SHELL", "/bin/cat");
+            ide.ConsoleBox.Current = 0;
+            ide.ConsoleBox.Current = ide.shellPage;
+            yield* until(() => ide.Shell.Running, 200);
+            check("looking at the page again starts another", ide.Shell.Running);
+
+            ide.stopShell();
+            yield* until(() => !ide.Shell.Running, 200);
+            check("and leaving asks the child to end", !ide.Shell.Running);
+
+            ide.ConsoleBox.Current = 0;
+            if (hadShell) Environment.Set("SHELL", hadShell);
+        }
     }
 
     /* --- from the error to the line ----------------------------------------
@@ -13364,13 +13517,16 @@ function* p_errors(ide) {
      * `LinkPattern` matched inside the terminal and handed the text over, so
      * there was nothing to assert but that the pattern had been assigned.
      */
-    const TRACE_LINE = `    at Form_Open (${TMP}/Main.js:42:9)`;
+    /* The reader normalizes a traceback to `/`, so a click on a Windows path
+     * is one token; the expected names are normalized the same way. */
+    const TRACE = TMP.replace(/\\/g, "/");
+    const TRACE_LINE = `    at Form_Open (${TRACE}/Main.js:42:9)`;
 
     eq("a click on a place in the log names it",
-       ide.runner.linkAt(1, 20, TRACE_LINE), `${TMP}/Main.js:42`);
+       ide.runner.linkAt(1, 20, TRACE_LINE), `${TRACE}/Main.js:42`);
     eq("...from either end of it",
        ide.runner.linkAt(1, TRACE_LINE.indexOf(":42"), TRACE_LINE),
-       `${TMP}/Main.js:42`);
+       `${TRACE}/Main.js:42`);
     eq("a click on the words before it names nothing",
        ide.runner.linkAt(1, 8, TRACE_LINE), "");
     /* The cursor clamps to the end of the line, so this is the one case a
@@ -13380,10 +13536,10 @@ function* p_errors(ide) {
        ide.runner.linkAt(1, TRACE_LINE.length + 20, TRACE_LINE), "");
     /* ...while the space *inside* a line still points at the word before it,
      * which is where a click one pixel wide of a place lands. */
-    const trailing = `${TMP}/Main.js:42 y`;
+    const trailing = `${TRACE}/Main.js:42 y`;
     eq("a click just past a place still names it",
        ide.runner.linkAt(1, trailing.indexOf(" y") + 1, trailing),
-       `${TMP}/Main.js:42`);
+       `${TRACE}/Main.js:42`);
     eq("a line with no place in it has none",
        ide.runner.linkAt(1, 4, "hello from tabs"), "");
     eq("nor does a line that is not there",
@@ -13391,17 +13547,17 @@ function* p_errors(ide) {
     /* The right *line* of several, which is the half a column alone cannot do. */
     eq("the place read is the one on the line clicked",
        ide.runner.linkAt(2, 20, `nothing here\n${TRACE_LINE}`),
-       `${TMP}/Main.js:42`);
+       `${TRACE}/Main.js:42`);
 
     const traceback =
         "Bintana error: Error: boom\n" +
         "    at Deep (/usr/lib/bintana/other.js:9:1)\n" +
-        `    at Form_Open (${TMP}/Main.js:2:9)\n` +
+        `    at Form_Open (${TRACE}/Main.js:2:9)\n` +
         "    at Show (native)\n";
 
     const spot = ide.errorLocation(traceback);
     check("a traceback names a place", spot !== null, JSON.stringify(spot));
-    eq("and the frame taken is the project's own", spot.path, `${TMP}/Main.js`);
+    eq("and the frame taken is the project's own", spot.path, `${TRACE}/Main.js`);
     eq("at the line it says",                      spot.line, 2);
 
     eq("a traceback with nothing of ours in it names nowhere",
@@ -13411,7 +13567,7 @@ function* p_errors(ide) {
 
     /* Two of them: the one worth going to is the one that just happened. */
     eq("the last traceback is the one read",
-       ide.errorLocation(`Bintana error: first\n    at A (${TMP}/project.btp:1:1)\n` +
+       ide.errorLocation(`Bintana error: first\n    at A (${TRACE}/project.btp:1:1)\n` +
                          traceback).line, 2);
 
     /*
@@ -13459,11 +13615,11 @@ function* p_errors(ide) {
     /* A traceback writes an absolute path; everything in this IDE speaks the
      * name a tab is keyed by. */
     eq("a path of the project is made relative",
-       ide.runner.relative(`${TMP}/Main.js`), "Main.js");
+       ide.runner.relative(`${TRACE}/Main.js`), "Main.js");
     eq("...and one that is not is left as it stands",
        ide.runner.relative("/usr/lib/bintana/other.js"), "/usr/lib/bintana/other.js");
 
-    check("clicking a place goes there", ide.runner.clicked(`${TMP}/Main.js:2`));
+    check("clicking a place goes there", ide.runner.clicked(`${TRACE}/Main.js:2`));
     eq("...opening that file",           ide.activeFile, "Main.js");
     eq("...at that line",                ide.Editor.Line, 2);
 
@@ -14761,7 +14917,7 @@ function* p_check(ide) {
      */
     /* Outside `TMP`: the IDE's own project is the folder above, and a fixture
      * inside it would be a file the pass then has to have an opinion about. */
-    const imports = `/tmp/bta-test-imports${TAG}`;
+    const imports = File.Join(TEMP, `bta-test-imports${TAG}`);
     if (File.IsDir(imports)) Directory.DeleteTree(imports);
     Directory.Make(imports);
     File.Save(File.Join(imports, "project.btp"), JSON.stringify({
@@ -16508,8 +16664,11 @@ function* p_git(ide) {
     check("the answer starts the push", git.job !== null);
     yield* until(() => git.job === null, 300);
     yield* settled(ide);
+    /* `@{u}` is not a string Git for Windows passes through the MSYS runtime
+     * intact; the ref's own upstream field is. */
     eq("to the remote that was chosen",
-       run("rev-parse", "--abbrev-ref", "rama@{u}").Output.trim(), "backup/rama");
+       run("for-each-ref", "--format=%(upstream:short)",
+           "refs/heads/rama").Output.trim(), "backup/rama");
 
     const heardFrom = ide.LogView.Text.length;
     eq("a branch that follows one pushes without asking", git.push(() => ide.refreshGit()), true);
@@ -18851,7 +19010,7 @@ function* p_binding(ide) {
  * the page that prints is the page that was drawn.
  */
 function* p_report(ide) {
-    const DIR = `/tmp/bta-test-ide-report${TAG}`;
+    const DIR = File.Join(TEMP, `bta-test-ide-report${TAG}`);
 
     Directory.Make(DIR);
     wipe(DIR);

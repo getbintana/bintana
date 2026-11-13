@@ -24,10 +24,11 @@
  *   seventy names.
  * - **Globals** are `Application.Globals()` minus the widget classes and minus
  *   everything that has no members, which is every builtin of the language and
- *   every helper the prelude installs. `Desktop.Entries` is the one nested
- *   owner and it is declared below, because finding it would mean reading a
- *   property -- and a property may run code: `Printer.Names` enumerates
- *   printers through GTK, which a project with a `main` does not have.
+ *   every helper the prelude installs. `Desktop.Entries` and
+ *   `Desktop.Shortcut` are the nested owners and they are declared below,
+ *   because finding them would mean reading a property -- and a property may
+ *   run code: `Printer.Names` enumerates printers through GTK, which a project
+ *   with a `main` does not have.
  * - **Libraries** are read out of the repository's own `lib/`, through
  *   `Sources`, so the manifest does not depend on which libraries a machine
  *   happens to have installed. Their events come from the code that raises
@@ -37,7 +38,7 @@
 /* The nested owners, by their full name. **Not discovered by asking**: the
  * same reason `Application.Globals()` answers names and not values -- and
  * `tests/api` holds this list to the dotted names `GLOBAL_VARS` knows. */
-const NESTED_OWNERS = ["Desktop.Entries"];
+const NESTED_OWNERS = ["Desktop.Entries", "Desktop.Shortcut"];
 
 /* A builtin of the language that has a capital member, and so is not dropped
  * by having none: `Date.UTC`. It is QuickJS's, documented with the language

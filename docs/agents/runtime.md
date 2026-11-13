@@ -192,6 +192,73 @@ icon when the theme has one by that name (`gtkapplication.c`).
   registry; a file that declares something else is handed to `runTests` as a
   failure with the reason, never dropped.
 
+### The platform log
+
+- **One pair of functions, one file per system.** `bta_runtime.c` calls
+  `bta_platform_log_name/available/why/send`; `bta_journal.c` answers systemd's
+  journal and `bta_eventlog.c` answers the Windows Event Log. The name is what
+  `Logger.Target` accepts, and the other platform's word is refused instead of
+  becoming a file called `EventLog` (which it did before the pair existed).
+- **Writing to the Windows Event Log needs no administrator; its description
+  does.** `RegisterEventSourceW` succeeds for a source that is not in the
+  registry -- measured on Windows 11: an event with the provider name, the
+  level and the data, and no registry key created. Without an
+  `EventMessageFile` the viewer cannot look the event id up and says the
+  description cannot be found. `bintana --register-event-source` is the one
+  elevated step: HKLM, under
+  `SYSTEM\CurrentControlSet\Services\EventLog\Application\Bintana`, with this
+  executable as the message file.
+- **The message table lives in the executable**, generated from
+  `runtime/src/bintana-events.mc` by `windmc` and wrapped by `windres`; the ids
+  match `BTA_EVENT_*_ID` in `bta_eventlog.c`. **No `Severity=` line in the
+  `.mc`**: windmc folds the severity and the Application facility into the high
+  bits (`0x40001000`), and the viewer looks the event id up exactly, so
+  `FormatMessage` answered `ERROR_MR_MID_NOT_FOUND` until the line went. The
+  `.rc` is neutral so every locale falls back to the one table.
+
+### A privileged task is a helper, not a window
+
+- **Polkit and UAC elevate a process, never a callback.** `Privilege.Run`
+  launches a `main` project through `pkexec` (Linux) or the runtime's
+  `--elevate` mode (Windows, `ShellExecuteEx("runas")`), and answers the `Exec`
+  job. The window stays unelevated; the helper is headless, which `main` already
+  means.
+- **The manifest is a typo guard, the OS prompt is the boundary.** `Run`
+  accepts only a project in `project.btp`'s `"privileged"` list, inside the
+  application, and reads its `project.btp` for `main` before launching. A
+  `startup` helper is refused there; the helper's `--privileged` mode checks the
+  elevation too, so a direct unelevated run says `must be run elevated`.
+- **Both hosts install `Privilege`, and on Linux the helper runs in the core.**
+  A helper is a `main`, so `bta_privilege.c` is in the core's list too, the
+  core reads `"privileged"` through the same `bta_project_privileged` the
+  graphical host does, and it takes `--privileged` with the same elevation
+  check. `pkexec` is pointed at the `bintana` beside `bintana-gui` when there
+  is one, so a process running as root never maps GTK; without the core the
+  graphical host still runs the helper.
+- **A nested project is not one of the parent's sources.** `bta_collect_js` and
+  `lib/check`'s `ProjectFiles` skip a directory with its own `project.btp`; the
+  `privileged` helper is one, so its `Main.js` is not loaded by the application
+  and is not reported as an unlisted source. The helper is checked as its own
+  project (`bintana check tools/install`), and `ProjectFile` knows the
+  `"privileged"` key so the manifest check does not call it a key nothing
+  reads.
+- **Windows has no console in `bintanaw.exe`.** The launcher is the sibling
+  `bintana.exe`; it creates a temp file, starts `bintanaw.exe --privileged
+  --out <file>` with UAC, waits, copies the file to its stdout and exits with
+  the helper's code. The parent's `Exec` therefore hears the helper's output
+  when it exits, not while it runs. `--elevate` is Windows-only; on Linux
+  `pkexec` forwards stdout as it goes.
+- **`pkexec` runs the helper as root with `HOME=/root`.** `Privilege.Invoker`
+  reads `PKEXEC_UID` (or `SUDO_UID`) and looks the account up, so a helper that
+  writes into the person's home has the right path and still has to restore the
+  owner. `CanElevate` is false in a Flatpak, where the portal is the road.
+- **No Task asks.** A worker has no display for the OS dialog and no main loop
+  for its answer; `Privilege.Run`/`Wait` there throw. The facts (`Elevated`,
+  `Invoker`) are still installed.
+- **The positive path cannot be in the suite.** UAC and polkit need a person;
+  `tests/widgets` proves the refusals and the child's guard, and the consent
+  dialog is a by-hand check.
+
 ## Plugins
 
 - **A plugin is a table and not a link, and every corner of that decision was
@@ -639,6 +706,29 @@ icon when the theme has one by that name (`gtkapplication.c`).
   zero, and a per-call `{ Timeout: 0 }` outranks it. `tests/widgets` holds the
   opt-out -- the half minute itself is the constant, and waiting it out in the
   suite would cost more than it says.
+- **Windows has no process group, and both `Exec` spellings felt it.** A child
+  that exits while a grandchild holds the pipe kept the job -- or the blocking
+  wait -- alive forever: `sh -c "sleep 30"` with `Timeout: 150` took the whole
+  thirty seconds, and `{ KillAfter: 5000 }` waited that long too because a
+  timeout `GSource` attached after the private context had been iterated once
+  was not woken by its deadline. `Exec.Wait` now assigns the child to a **job
+  object** and terminates the job at the deadline, and drives the wait with a
+  non-blocking context loop that owns the deadline. **The asynchronous `Exec`
+  has one too now** (`ExecJob.win_job`), and waits for the output like POSIX:
+  `Timeout`, `Stop()` and `Kill()` terminate the job, grandchild included.
+- **It used to give up on a clock instead, and that cut living output.** Once
+  the leader was reaped with a pipe open, the job was reported 250 ms later.
+  Reads are main-loop time and, on Windows, GIO thread-pool time: a line
+  callback taking 5 ms got 64 of a child's 200 lines and one taking 20 ms got
+  17, with nothing said; inside `tests/widgets` an owed EOF late by 250-750 ms
+  made `testPlugin` and `testLibrary` read `undefined` twenty-six times, while
+  they passed alone (measured 2026-11-12). A drain that waited for silence
+  instead of time fixed the first and not the second; the job object fixed
+  both (65 failures to 39, no new ones). **Never ask the pipe from the main
+  thread** to tell a grandchild from a late EOF: GLib's Windows pipe handles
+  are synchronous, Windows serialises I/O on such a handle, and
+  `PeekNamedPipe` waited 29.6 s behind the `ReadFile` a GIO worker had in
+  flight, and the debugger's tests fell over with the frozen loop.
 - **An option's default was decided by a second reading of the same key, and
   the two readings disagreed about `null`.** `Print`'s reader took `undefined`
   and `null` alike for "not given"; the line that makes `To` default to the
@@ -804,10 +894,14 @@ icon when the theme has one by that name (`gtkapplication.c`).
   something happened to that path, and plenty of programs rewrite a file by
   taking the old one away and putting a new one there -- `git restore` among
   them, which is how discarding a change came to report *ClientsForm.js is no
-  longer on disk* about a file that was sitting right there, restored. The event
-  is a hint; the disk is the answer, and asking is one `File.Exists`. The same
-  shape as every other trap in this list: a flag believed instead of a fact
-  looked at.
+  longer on disk* about a file that was sitting right there, restored. The
+  runtime now holds a deletion for `WATCH_SETTLE_MS` (200 ms): if the path is
+  back by then, the pair is one `Changed`, which is what an atomic save on
+  Windows (`DELETED` then `CHANGED`, or a bare `CREATED`) deserves. A
+  `"Deleted"` that survives the settle still means *at that moment*, not
+  necessarily forever; the disk is the answer, and asking is one
+  `File.Exists`. The same shape as every other trap in this list: a flag
+  believed instead of a fact looked at.
 
 `bta_lookup_global` -- what `startup`, a `.form`'s `type`, `Task.Start`,
 `Widget.New` and the class questions all go through -- read the **global object
@@ -839,13 +933,14 @@ wins now, but a name the runtime publishes is a name a program cannot reach
 while it declares its own, so `grep` the whole tree -- `examples/`, `tests/`,
 `lib/`, not only `runtime/` -- before installing one.
 
-**A second run of a `singleInstance` project is a `GApplication` remote, and
-three details were measured rather than assumed.** The id is the bus name, so
-`"singleInstance": true` without an `"id"` is refused at load (as is a value
-that is not `true` or `false`: `"yes"` read as false is two windows where one
-was asked for). The second process cannot call into the first, so the first
-exports an action, `bta-second-instance` with parameter `(sas)` -- the second's
-working directory and its `Arguments` -- and the second activates it:
+**A second run of a `singleInstance` project is a `GApplication` remote on
+Linux/macOS, and three details were measured rather than assumed.** The id is
+the bus name, so `"singleInstance": true` without an `"id"` is refused at load
+(as is a value that is not `true` or `false`: `"yes"` read as false is two
+windows where one was asked for). The second process cannot call into the
+first, so the first exports an action, `bta-second-instance` with parameter
+`(sas)` -- the second's working directory and its `Arguments` -- and the second
+activates it:
 *(1)* the action has to be added **before** `g_application_register`, which is
 when the bus learns what the application has; *(2)* after sending it, the
 second goes on into `g_application_run` like any application -- on a remote
@@ -854,15 +949,36 @@ the call that unregisters from the bus: unreffing the application by hand
 instead is what GLib answers with *did not unregister from D-Bus before
 destruction*; *(3)* that remote activation reaches the first's `activate`
 signal, which would have built a second startup form, so `on_activate` is
-guarded by `app->activated`. With no session bus `g_application_register`
-succeeds locally and every run is its own instance, as before. The window is
-raised **after** `Application.OnSecondInstance` returns, always: a handler that
-opens a file wants the window, and the one that does not is not hurt by it.
-`tests/widgets`' `SingleInstance` runs two real processes under
-`dbus-run-session` (a bus of its own, so it never touches the desktop's) and is
-red with the action's name misspelt; it is skipped where `dbus-run-session` is
-absent. **`File.Join(dir, "/abs")` is `dir/abs`**, not `/abs`, which is what the
+guarded by `app->activated`.
+
+**Windows has no session bus, so there it is a local mutex and a named pipe.**
+The first run creates `Local\BintanaSingle-<id>` and serves
+`\\.\pipe\bintana-single-<id>` on a thread; a second run sees
+`ERROR_ALREADY_EXISTS`, writes one length-prefixed `GVariant` `(sas)` and exits
+`0`. The server marshals it to the main loop and calls the same
+`Application.OnSecondInstance`, so the program sees one API. It is a form
+application's property, as it is on Linux: a `main` project has no window to
+raise and keeps every run separate. `tests/widgets`' `SingleInstance` runs two
+real processes under `dbus-run-session` on Linux and a real first/second pair
+on Windows; it is skipped only where neither exists. The window is raised
+**after** `Application.OnSecondInstance` returns, always: a handler that opens
+a file wants the window, and the one that does not is not hurt by it.
+**`File.Join(dir, "/abs")` is `dir/abs`**, not `/abs`, which is what the
 documentation's example first got wrong.
+
+**`Desktop.Shortcut` is the Windows user-application install, and the record is
+not beside the shortcut.** `Write` puts a `.lnk` in
+`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Bintana`, with the project's
+id as its `System.AppUserModel.ID` and the target as `bintanaw.exe` when that
+sits beside `bintana.exe`; the Start Menu folder is a menu, so the sidecar that
+`Installed`/`Read` use is `%APPDATA%\Bintana\apps\<id>.shortcut` instead of
+another file in it. `Notification` now leaves an existing `.lnk` alone rather
+than replacing an installed application's chosen name and icon with its own
+generic one. `Apps.install` turns a project PNG into an `.ico` under
+`Application.ConfigDirectory/shortcuts` (a `.svg` or a theme name leaves the
+target's own icon); `Apps.uninstall` removes that generated `.ico`, and only
+that one. `tests/widgets`' `DesktopShortcut` and `tests/ide`'s `apps` phase
+hold the two halves.
 
 ## `ProtectPrototype` and the prototype every object inherits
 

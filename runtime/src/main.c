@@ -58,6 +58,13 @@ static void usage(void)
           "0 when every test passed and 1 when one did not.\n"
           "  --json    one JSON line per test, and one at the end.\n",
           stderr);
+#ifdef G_OS_WIN32
+    fputs("  --register-event-source  register the `Bintana` source in the\n"
+          "            Application log, with this executable as its message\n"
+          "            file, so the viewer describes the events.  Needs an\n"
+          "            elevated prompt; writing works without it, with the\n"
+          "            data but no description.\n", stderr);
+#endif
 }
 
 /*
@@ -204,6 +211,38 @@ static int run_check(int argc, char **argv)
     return rc;
 }
 
+/*
+ * The helper's `--out`: a Windows helper is `bintanaw.exe`, which has no
+ * console for `print`, so the launcher hands it a file and this makes that
+ * file its stdout and stderr.  Binary, because the lines are UTF-8 and a CRLF
+ * translation would add a byte nobody wrote.
+ */
+static bool privileged_redirect(const char *path)
+{
+#ifdef G_OS_WIN32
+    wchar_t *wide = g_utf8_to_utf16(path, -1, NULL, NULL, NULL);
+    bool     ok   = false;
+
+    if (wide) {
+        ok = _wfreopen(wide, L"wb", stdout) != NULL;
+        if (ok) {
+            _wfreopen(wide, L"ab", stderr);
+            setvbuf(stdout, NULL, _IONBF, 0);
+            setvbuf(stderr, NULL, _IONBF, 0);
+        }
+        g_free(wide);
+    }
+    return ok;
+#else
+    if (!freopen(path, "wb", stdout))
+        return false;
+    freopen(path, "ab", stderr);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    return true;
+#endif
+}
+
 int main(int argc, char **argv)
 {
     /*
@@ -221,6 +260,23 @@ int main(int argc, char **argv)
      * reason.  See the note above `Locale.Number` in bta_locale.c.
      */
     setlocale(LC_ALL, "");
+#ifdef G_OS_WIN32
+    /*
+     * **UCRT's `setlocale(LC_ALL, "")` ignores `LC_ALL`/`LANG`.**  A child
+     * started with `LC_ALL=C` -- the one locale every POSIX machine has, and
+     * what a script or a test uses to pin machine-readable text -- kept the
+     * user's Spanish separators and two-digit date under Windows.  Honour the
+     * two spellings this platform can actually mean; anything else stays the
+     * desktop's, which is what `""` already does.
+     */
+    const char *lc_all = g_getenv("LC_ALL");
+    const char *lang   = g_getenv("LANG");
+    const char *want   = (lc_all && *lc_all) ? lc_all : lang;
+
+    if (want && (!g_ascii_strcasecmp(want, "C") ||
+                 !g_ascii_strcasecmp(want, "POSIX")))
+        setlocale(LC_ALL, "C");
+#endif
 
     /*
      * The console host marks the environment before it execs this one
@@ -254,9 +310,35 @@ int main(int argc, char **argv)
     g_setenv("GTK_CSD", "0", FALSE);
 #endif
 
+#ifdef G_OS_WIN32
+    if (argc > 1 && !strcmp(argv[1], "--elevate"))
+        return bta_privilege_elevate(argc, argv);
+#else
+    if (argc > 1 && !strcmp(argv[1], "--elevate")) {
+        fputs("bintana: --elevate is Windows'\n", stderr);
+        return 2;
+    }
+#endif
+
     /* A word of its own, before the project/options parser: none of those
      * options belongs to the check's run, and the target is not this process's
      * project. */
+#ifdef G_OS_WIN32
+    if (argc > 1 && !strcmp(argv[1], "--register-event-source")) {
+        if (bta_eventlog_register()) {
+            puts("bintana: the Bintana event source is registered");
+            return 0;
+        }
+        fprintf(stderr, "bintana: %s\n", bta_platform_log_why());
+        return 1;
+    }
+#else
+    if (argc > 1 && !strcmp(argv[1], "--register-event-source")) {
+        fputs("bintana: the event log is Windows'\n", stderr);
+        return 2;
+    }
+#endif
+
     if (argc > 1 && !strcmp(argv[1], "check"))
         return run_check(argc, argv);
 
@@ -265,6 +347,8 @@ int main(int argc, char **argv)
     const char *form = NULL;
     bool        testing = false;
     bool        json = false;
+    bool        privileged = false;
+    const char *privileged_out = NULL;
     const char *theme = NULL;
     double      text_scale = 0;
     bool        rtl = false;
@@ -312,6 +396,25 @@ int main(int argc, char **argv)
          */
         if (!dir && !strcmp(argv[i], "--strict")) {
             bta_strict_want();
+            continue;
+        }
+        /*
+         * The helper side of `Privilege.Run`: the launcher starts this same
+         * runtime with `--privileged` and, on Windows, `--out <file>` so the
+         * console-less helper has somewhere to print.  Both are internal and
+         * are not in the usage text.
+         */
+        if (!dir && !strcmp(argv[i], "--privileged")) {
+            privileged = true;
+            continue;
+        }
+        if (!dir && privileged && !strcmp(argv[i], "--out")) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "bintana: --out needs a file\n");
+                g_ptr_array_unref(rest);
+                return 2;
+            }
+            privileged_out = argv[++i];
             continue;
         }
         /*
@@ -404,6 +507,20 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    if (privileged) {
+        if (!bta_privilege_elevated()) {
+            fputs("bintana: --privileged must be run elevated\n", stderr);
+            g_ptr_array_unref(rest);
+            return 2;
+        }
+        if (privileged_out && !privileged_redirect(privileged_out)) {
+            fprintf(stderr, "bintana: cannot write the helper's output to "
+                            "'%s'\n", privileged_out);
+            g_ptr_array_unref(rest);
+            return 1;
+        }
+    }
+
     if (!bta_profile_start(profile)) {
         g_ptr_array_unref(rest);
         return 2;
@@ -416,6 +533,15 @@ int main(int argc, char **argv)
         return 2;
     }
     app->args = (char **)rest->pdata;
+
+    if (privileged && !app->entry) {
+        fputs("bintana: a privileged helper must declare \"main\": a startup "
+              "form would open a window as root\n", stderr);
+        bta_app_free(app);
+        bta_profile_finish();
+        g_ptr_array_unref(rest);
+        return 2;
+    }
 
     if (form) {
         if (app->entry) {

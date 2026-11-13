@@ -494,6 +494,13 @@ struct BtaApp {
     char           *entry;
     GPtrArray      *sources;  /* absolute paths of .js files, in load order */
     /*
+     * project.btp's "privileged": the helper projects this application may ask
+     * the OS to run elevated, resolved to absolute directories.  Empty when it
+     * declares none.  `Privilege.Run` accepts nothing outside this list, and a
+     * helper must be a `main` project -- see `runtime/src/bta_privilege.c`.
+     */
+    GPtrArray      *privileged;
+    /*
      * The libraries `project.btp`'s "uses" named, resolved to absolute
      * directories in the order they were declared.  A library is a directory of
      * `.js` and `.form` files and nothing else: its sources load before the
@@ -907,6 +914,10 @@ void    bta_app_free(BtaApp *app);
 int     bta_app_run(BtaApp *app, int argc, char **argv);
 
 char   *bta_read_file(const char *path, size_t *len);
+/* The same bytes as UTF-8 text: a UTF-8 BOM is dropped and a UTF-16/32 BOM is
+ * decoded, because that is what a Windows editor writes.  A file with no BOM is
+ * copied byte for byte.  Answers a newly allocated, NUL-terminated string. */
+char   *bta_text_from_bytes(const char *data, gsize len, gsize *out_len);
 /* A `GError` as a stable sentence of ours, out of its domain and code -- never
  * `err->message`, which GLib translates on each desktop.  See bta_util.c. */
 const char *bta_gerror_text(const GError *err);
@@ -1060,6 +1071,12 @@ GPtrArray *bta_library_display_files(JSContext *ctx, const char *dir);
 /* The project's files in load order, a library's sources in front of them. */
 GPtrArray *bta_project_sources(JSContext *ctx, const char *dir, GPtrArray *libs,
                                JSValueConst cfg);
+/* `path` lies inside the directory `root`, lexically. */
+bool bta_path_inside(const char *path, const char *root);
+/* The helper projects `"privileged"` names, canonical and inside `dir`; NULL
+ * after saying why on stderr when the list is malformed. */
+GPtrArray *bta_project_privileged(JSContext *ctx, const char *dir,
+                                  JSValueConst cfg);
 
 /* --- modules (bta_module.c, docs/plans/modules-plan.md) ------------------- */
 /* Compiles `src` as a script, or as a module when only that compiles -- the
@@ -2061,8 +2078,36 @@ void bta_class_of_name_init(JSContext *ctx, JSValueConst global);
  * these are what a system that has something better offers instead, and a build
  * without one answers false and is none the worse for it.  Levels are the
  * runtime's own order: 0 Debug, 1 Info, 2 Warning, 3 Error.
+ *
+ * One name and one pair of questions, answered by one file per system:
+ * `bta_journal.c` is systemd's journal, `bta_eventlog.c` is the Windows Event
+ * Log.  `why` is a sentence for the refusal when `available` is false.
  */
-bool bta_journal_available(void);
-bool bta_journal_send(int level, const char *text);
+const char *bta_platform_log_name(void);
+bool        bta_platform_log_available(void);
+const char *bta_platform_log_why(void);
+bool        bta_platform_log_send(int level, const char *text);
+
+/*
+ * `Privilege`, the launcher for a helper project run elevated.  The runtime
+ * never handles the password and never elevates itself: `Run` starts a
+ * `main` project through pkexec on Linux or through the `--elevate` launcher
+ * on Windows, and the OS shows its own consent dialog.
+ */
+void bta_privilege_init(JSContext *ctx, JSValueConst global, bool worker);
+bool bta_privilege_elevated(void);
+bool bta_privilege_can_elevate(void);
+#ifdef G_OS_WIN32
+/* The internal `--elevate` mode: ShellExecuteEx("runas") on the helper, with
+ * its output in a temporary file that this process forwards. */
+int bta_privilege_elevate(int argc, char **argv);
+#endif
+
+#ifdef G_OS_WIN32
+/* Writes the `Bintana` event source into HKLM, with this executable as its
+ * message file: what `bintana --register-event-source` runs.  Needs an
+ * administrator; false with `bta_platform_log_why()` set otherwise. */
+bool bta_eventlog_register(void);
+#endif
 
 #endif /* BTA_H */

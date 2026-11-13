@@ -653,6 +653,37 @@ for host in gui-link gui-script; do
 done
 [[ $loop_ok == 1 ]] && echo "the dispatch never runs the console host again"
 
+# --- Privilege, in the core -------------------------------------------------
+#
+# A privileged helper is a `main`, so `Privilege` is a global of the core as of
+# the graphical host, `"privileged"` is read by both, and a helper directory
+# with its own project.btp is never one of the application's sources -- at the
+# first level too, where the walk once loaded it. Both hosts answer the same,
+# and an unelevated `--privileged` is refused by the core as by the GUI.
+priv_ok=1
+for host in "$BINTANA_CORE" "$BINTANA"; do
+    if ! "$host" tests/headless/projects/privilege >"$tmp/priv.out" 2>"$tmp/priv.err" ||
+       ! diff -u tests/headless/projects/privilege/expected.txt "$tmp/priv.out" \
+            >"$tmp/priv.diff"; then
+        echo "Privilege under $host does not answer as expected:" >&2
+        cat "$tmp/priv.diff" "$tmp/priv.err" >&2
+        priv_ok=0
+        fail=1
+    fi
+done
+if [[ $(id -u) -ne 0 ]]; then
+    "$BINTANA_CORE" --privileged tests/headless/projects/privilege/helper \
+        >"$tmp/priv-door.out" 2>"$tmp/priv-door.err"
+    rc=$?
+    if [[ $rc -ne 2 ]] || ! grep -q "must be run elevated" "$tmp/priv-door.err"; then
+        echo "the core ran --privileged unelevated (exit $rc):" >&2
+        cat "$tmp/priv-door.out" "$tmp/priv-door.err" >&2
+        priv_ok=0
+        fail=1
+    fi
+fi
+[[ $priv_ok == 1 ]] && echo "Privilege is the same in both hosts, and a helper is not a source"
+
 if command -v ldd >/dev/null; then
     if ldd "$BINTANA_CORE" | grep -Eiq 'libgtk|libgtksource|libvte'; then
         echo "the core host links a toolkit:" >&2

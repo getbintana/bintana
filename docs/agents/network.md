@@ -4,6 +4,27 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 ## Http
 
+- **On Windows a closing WebSocket often ends in a reset, not an EOF.** After a
+  client's own `Close()` and after a server's `Stop()`, libsoup raised
+  "Error receiving data: Se ha anulado una conexión..." into `OnError`;
+  `testWebSocket` was red four runs in four there and green on Linux. An I/O
+  error once a close frame has gone or come is the close and is not raised
+  (`on_ws_error`); a protocol error still is. Windows also takes ~2 s to
+  report a refused connect to a closed `127.0.0.1` port (it retries the SYN):
+  a test that wants `Refused` gives it more than 2000 ms.
+- **A port `Port: 0` gave is not yours after `Stop()`.** It is ephemeral, and
+  on Windows every outgoing connection draws from the same range: inside the
+  suite a restart on it was refused "already in use" now and then. Alone it
+  never was -- straight away, a second later, after a 200, a 401 or a 403
+  (2026-11-12) -- so it is not the runtime holding the port. **Do not "fix"
+  `testHttpServer`'s TLS step with `srv.Port = 0`**: the steps after it ask
+  the old port through `api`'s `BaseUrl`, and the step itself runs `python3`
+  with no `Timeout` -- on Windows that can be the Store's stub, and the path
+  had never run there because the restart always threw first. Tried, and the
+  suite hung. `testNetwork`'s probe of a stopped
+  server once answered `Error` instead of `Refused` in the suite and never in
+  six runs alone, which may be the same port taken by another server; not
+  proven.
 - **A request body with no limit is a hole, and the declared length is the
   cheap half of the answer.** `Http.Server` flattened whatever arrived, so a
   body grew until the process died (R4 of the October audit). `MaxBody` is a

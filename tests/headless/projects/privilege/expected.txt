@@ -1,0 +1,4 @@
+elevated is a boolean: true
+can elevate is a boolean: true
+../outside: refused
+undeclared: refused

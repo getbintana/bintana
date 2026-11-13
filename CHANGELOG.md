@@ -102,6 +102,69 @@ one-page answer to *what is new since the release I have*.
 
 ### Platform and parts
 
+- **A text file saved the way Windows editors save it now loads.** Notepad,
+  PowerShell 5.1 and Visual Studio can all save a UTF-8 BOM, and PowerShell
+  5.1's `Out-File` and Notepad's older *Unicode* write UTF-16LE with one. A
+  `project.btp` or `.form` that arrived that way stopped at
+  `Unexpected token '\ufeff'` while a UTF-16 `.js` said `unexpected character`.
+  `File.Load` now drops a UTF-8 BOM and decodes UTF-16LE/BE and UTF-32LE/BE
+  with one, and the project, `.form`, module and `.po` loaders do the same
+  through `bta_read_file`. Bytes with no BOM are still returned unchanged, so a
+  Latin-1 source file and `File.LoadBytes` keep their bytes.
+  `tests/widgets`' `TextEncodings` holds it with a child project whose `.btp`,
+  `.form` and `.js` use those encodings.
+- **`File.Watch` reports an atomic save once.** Windows' monitor answers a
+  `File.Save` with a deletion followed by a change -- or with a bare `Created`
+  for a path that was already there -- so a listener could close the file it
+  was just told to reload. A deletion is now held for 200 ms: if the path is
+  back, the pair is one `Changed`; if it is still gone, it is one `Deleted`, a
+  moment later. A new file still reports `Created`, and the test runs on both
+  platforms now.
+- **`singleInstance` works on Windows, and a project's id becomes its
+  AppUserModelID.** There is no session bus on a normal Windows machine, so
+  GLib's `GApplication` left every run its own instance. The first run now owns
+  `Local\BintanaSingle-<id>` and serves a named pipe; a second run writes its
+  working directory and `Arguments` as one `(sas)` message, exits `0`, and the
+  first calls `Application.OnSecondInstance` and raises its window. The same
+  `project.btp` id is set with `SetCurrentProcessExplicitAppUserModelID`, so the
+  taskbar groups the application rather than `bintanaw.exe`; the toast's
+  shortcut already uses that id.
+- **Install as user application works on Windows.** The IDE now writes a
+  `.lnk` in the user's Start Menu through `Desktop.Shortcut`, with the project's
+  id as its AppUserModelID, the project as its argument and working directory,
+  and the name/icon the dialog chose; its record lives under
+  `%APPDATA%\Bintana\apps`, not beside the shortcut in the menu. A project PNG
+  becomes the shortcut's `.ico`, and uninstall removes the shortcut and that
+  generated icon. The notification backend no longer overwrites an installed
+  application's shortcut with its generic one.
+- **A privileged task is a helper project, not a root window.** `Privilege.Run`
+  and `Privilege.Wait` start a `main` project declared in `project.btp`'s
+  `"privileged"` array with the operating system's consent: `pkexec` and
+  polkit's agent on Linux, UAC through an unelevated launcher on Windows. The
+  application's own window is never elevated; the helper answers through the
+  same `Exec` job (`Stop`, `Kill`, `onLine`, `onExit`) and reads
+  `Privilege.Elevated`, `CanElevate` and `Invoker`. A helper that declares
+  `startup` is refused before the dialog, and a `Task` cannot ask. A directory
+  with its own `project.btp` is a project of its own: the application does not
+  load the helper's sources, and `bintana check` knows the `"privileged"` key.
+- **`Logger.Target = "EventLog"` on Windows.** `Logger` now writes to the
+  Application log that `eventvwr.exe` shows: `Debug` and `Info` as Information,
+  `Warning` as Warning and `Error` as Error, with the line as the message.
+  Writing needs no administrator. `bintana --register-event-source` from an
+  elevated prompt registers the `Bintana` source with this executable as its
+  message file, so the viewer describes the event; without it the event is still
+  recorded with its data and no description. The message table is compiled into
+  the executable from `runtime/src/bintana-events.mc`. On Linux the word is
+  refused, as `"Journal"` is on Windows, instead of becoming a file named
+  `EventLog`.
+- **The IDE's export and its Windows paths.** `tar` gets
+  `--force-local` on Windows, so a path beginning `C:` is not read as a remote
+  host, and the path comparisons in `tests/ide` accept the native separator.
+  The terminal test drives `cmd.exe` and reads its prompt; the debugger matches
+  a breakpoint's file one component at a time, with `/` and `\` the same on
+  Windows; and a branch's upstream comes from `git status --porcelain=v2
+  --branch`, since `@{u}` does not survive Git for Windows' MSYS layer. The
+  `apps` prefix runs 2732/0 there and the full project 3804/0.
 - **`SerialPort` works on Windows.** `Open` is `CreateFileW` on `COM3` (or
   `\\.\COM3`) and a `DCB` for speed, data bits, parity, stop bits, flow control
   and DTR/RTS. A COM handle is not pollable by GLib, so a reader thread does

@@ -227,6 +227,19 @@ void bta_collect_js(GPtrArray *out, const char *dir, bool root)
 
         char *path = g_build_filename(dir, name, NULL);
         if (g_file_test(path, G_FILE_TEST_IS_DIR)) {
+            /* A folder with its own manifest is a project of its own -- the
+             * `privileged` helper is one -- and not a folder of this one's
+             * sources, at any depth: windows-suite asked only below the first
+             * level, and a helper at `helper/` was loaded as a source, its
+             * `Main` replacing the application's. */
+            char *manifest = g_build_filename(path, "project.btp", NULL);
+            bool  project  = g_file_test(manifest, G_FILE_TEST_IS_REGULAR);
+
+            g_free(manifest);
+            if (project) {
+                g_free(path);
+                continue;
+            }
             bta_collect_js(out, path, false);
             g_free(path);
         } else if (g_str_has_suffix(name, ".js")) {
@@ -640,6 +653,83 @@ GPtrArray *bta_project_sources(JSContext *ctx, const char *dir,
 
     g_ptr_array_free(out, TRUE);
     return first;
+}
+
+/* ------------------------------------------------ the privileged helpers */
+
+/* `path` is inside the directory `root` -- a helper project may not be the
+ * application itself, nor a `..` that climbed out of it.  Lexical, like
+ * `File.Within`: an application's own manifest is not a security boundary, and
+ * the OS prompt is. */
+bool bta_path_inside(const char *path, const char *root)
+{
+    size_t n = strlen(root);
+
+#ifdef G_OS_WIN32
+    if (g_ascii_strncasecmp(path, root, n))
+        return false;
+#else
+    if (strncmp(path, root, n))
+        return false;
+#endif
+    return path[n] == '/' || path[n] == '\\' ||
+           (n && (root[n - 1] == '/' || root[n - 1] == '\\'));
+}
+
+/*
+ * `"privileged": ["tools/install"]`: the helper projects this application may
+ * ask the OS to run elevated.  Resolved once, when the project loads, so
+ * `Privilege.Run` compares canonical paths and a `..` cannot name something
+ * outside the project.  Both hosts read it here: a `main` may ask too.
+ */
+GPtrArray *bta_project_privileged(JSContext *ctx, const char *dir,
+                                  JSValueConst cfg)
+{
+    GPtrArray *out = g_ptr_array_new_with_free_func(g_free);
+    JSValue    pv  = JS_GetPropertyStr(ctx, cfg, "privileged");
+
+    if (JS_IsUndefined(pv))
+        return out;
+    if (!JS_IsArray(pv)) {
+        fprintf(stderr, "bintana: project.btp privileged is not an array of "
+                        "project directories\n");
+        goto refused;
+    }
+
+    JSValue  lv = JS_GetPropertyStr(ctx, pv, "length");
+    uint32_t n  = 0;
+
+    JS_ToUint32(ctx, &n, lv);
+    JS_FreeValue(ctx, lv);
+    for (uint32_t i = 0; i < n; i++) {
+        JSValue     ev  = JS_GetPropertyUint32(ctx, pv, i);
+        const char *rel = JS_IsString(ev) ? JS_ToCString(ctx, ev) : NULL;
+
+        if (!rel) {
+            JS_FreeValue(ctx, ev);
+            fprintf(stderr, "bintana: project.btp privileged entry %u is not "
+                            "a path\n", i);
+            goto refused;
+        }
+        char *abs = g_canonicalize_filename(rel, dir);
+
+        JS_FreeCString(ctx, rel);
+        JS_FreeValue(ctx, ev);
+        if (!bta_path_inside(abs, dir)) {
+            fprintf(stderr, "bintana: project.btp privileged entry \"%s\" is "
+                            "not a directory inside the project\n", abs);
+            g_free(abs);
+            goto refused;
+        }
+        g_ptr_array_add(out, abs);
+    }
+    JS_FreeValue(ctx, pv);
+    return out;
+
+refused:
+    JS_FreeValue(ctx, pv);
+    g_ptr_array_unref(out);
+    return NULL;
 }
 
 /* ------------------------------------------- Application's library questions */

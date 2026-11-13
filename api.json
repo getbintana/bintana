@@ -13413,7 +13413,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "from `project.btp`: the application's identity in reverse DNS — `io.github.you.App`. It is **one name in three places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, and the Flatpak app id. `\"\"` when the project declares none, which is an ordinary project classed by the program's name; a value that is not an application id **stops the program when the project loads**, because every one of those three is something nobody looks at until a dock shows the wrong icon",
+          "Doc": "from `project.btp`: the application's identity in reverse DNS — `io.github.you.App`. It is **one name in four places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, the Flatpak app id, and on Windows the process's AppUserModelID -- what the taskbar groups by and what a toast belongs to. `\"\"` when the project declares none, which is an ordinary project classed by the program's name; a value that is not an application id **stops the program when the project loads**, because every one of those names is something nobody looks at until a dock shows the wrong icon",
           "Native": true
         },
         {
@@ -13467,7 +13467,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "assign `(args, directory) => …`: called in the **first** instance of a project that declares `\"singleInstance\": true` when it is started again. `args` is what followed the project directory on the second command line, as `Arguments` is, and `directory` is where that run was started. The second process then exits `0`, and **the first's window is brought forward after the handler returns**, whether or not one was assigned. `null` until assigned",
+          "Doc": "assign `(args, directory) => …`: called in the **first** instance of a project that declares `\"singleInstance\": true` when it is started again. `args` is what followed the project directory on the second command line, as `Arguments` is, and `directory` is where that run was started. The second process then exits `0`, and **the first's window is brought forward after the handler returns**, whether or not one was assigned. On Windows a local mutex and a named pipe carry the same message, so no session bus is needed. `null` until assigned",
           "Native": true
         },
         {
@@ -13956,7 +13956,7 @@
           "Params": 1,
           "Signature": "(text)",
           "Returns": "",
-          "Doc": "**immediate**: the text is on the clipboard when the call returns",
+          "Doc": "**immediate**: the text is on the clipboard when the call returns. An empty string empties the clipboard on Windows, where GTK cannot serve empty text to another program; `Paste` answers `\"\"` either way.",
           "Native": true
         },
         {
@@ -14398,6 +14398,15 @@
           "Returns": "",
           "Doc": "the module below",
           "Native": true
+        },
+        {
+          "Name": "Shortcut",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the Windows `.lnk` object below; `Available` says whether it is there",
+          "Native": true
         }
       ]
     },
@@ -14465,6 +14474,65 @@
           "Signature": "(path, entry)",
           "Returns": "",
           "Doc": "the same entry and the same checks at a path the caller names, **making the directory** when it is not there. For the entry a package installs, which is not one this user's menu has; answers nothing",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "Desktop.Shortcut",
+      "Members": [
+        {
+          "Name": "Available",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this platform installs a user application as a Start Menu shortcut: `true` on Windows, `false` everywhere else",
+          "Native": true
+        },
+        {
+          "Name": "Directory",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "the Start Menu folder the shortcuts live in, or `\"\"` where this is not Windows. The folder is made by `Write`, not at startup",
+          "Native": true
+        },
+        {
+          "Name": "Installed",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "string[]",
+          "Doc": "the ids installed by this object, sorted. A shortcut some other program wrote is not listed",
+          "Native": true
+        },
+        {
+          "Name": "Read",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(id)",
+          "Returns": "",
+          "Doc": "`{ Id, Name, Project, Target, Arguments, Icon, Description, Comment, AppId }` for one installed shortcut, or `null`",
+          "Native": true
+        },
+        {
+          "Name": "Remove",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(id)",
+          "Returns": "boolean",
+          "Doc": "removes the shortcut and its record, answering whether either was there. A file that is there and cannot be removed throws",
+          "Native": true
+        },
+        {
+          "Name": "Write",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(id, entry)",
+          "Returns": "string",
+          "Doc": "writes `Directory/<id>.lnk` with `System.AppUserModel.ID` and answers its path. `entry` is `{ Name, Project, Target, Arguments, Icon, Description, AppId }`: `Name` and `Project` are required, `Target` defaults to this runtime's GUI executable, `Arguments` is an array of strings, and `Icon` is a `.ico` (a `.png` is turned into one by the caller). **Windows only**: elsewhere it refuses, and `Desktop.Entries` is the road",
           "Native": true
         }
       ]
@@ -15035,7 +15103,16 @@
           "Params": 2,
           "Signature": "(path, [cancellable])",
           "Returns": "{ Size, Modified, Type, Icon, IsDir }",
-          "Doc": "`{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a content type you can test (`\"image/png\"`), `.Icon` is the name the desktop draws for that kind of file, and `.Modified` is a real `Date`, to the millisecond. A `Cancellable` last ends a query that is stuck, and throws rather than answering `null`",
+          "Doc": "`{ Size, Modified, Type, Icon, IsDir }`, or `null`. `.Type` is a content type you can test (`\"image/png\"`), `.Icon` is the name the desktop draws for that kind of file, and `.Modified` is a real `Date`, to the millisecond. Where the platform has no shared MIME database, the common media types are answered from the extension instead of a bare `.pdf`. A `Cancellable` last ends a query that is stuck, and throws rather than answering `null`",
+          "Native": true
+        },
+        {
+          "Name": "IsAbsolute",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(path)",
+          "Returns": "boolean",
+          "Doc": "whether the path stands on its own, by the **platform's** rule and not by a leading slash: `/x` on POSIX; `C:\\x`, `C:/x` and a UNC share on Windows, where `C:` and `C:x` are drive-relative. Purely lexical, so a path that does not exist yet answers like any other",
           "Native": true
         },
         {
@@ -15062,7 +15139,7 @@
           "Params": 2,
           "Signature": "(...parts)",
           "Returns": "string",
-          "Doc": "one path out of pieces, with the separator the platform uses, **and normalised**: `.` and `..` are worked out by the letters, so `Join(root, \"../../etc/x\")` answers `/etc/x` -- a name that is data cannot hide where it leads. Whether it is still inside is `Within(path, root)`. A relative path keeps the `..` it cannot climb out of; nothing is asked of the disk, so `..` after a link goes back up the name",
+          "Doc": "one path out of pieces, with the separator the platform uses, **and normalised**: `.` and `..` are worked out by the letters, so `Join(root, \"../../etc/x\")` answers `/etc/x` -- a name that is data cannot hide where it leads. Whether it is still inside is `Within(path, root)`. It **concatenates**: a piece that is itself absolute does not replace the ones before it, so ask `IsAbsolute(path)` when a path may already stand on its own. A relative path keeps the `..` it cannot climb out of; nothing is asked of the disk, so `..` after a link goes back up the name",
           "Native": true
         },
         {
@@ -15071,7 +15148,7 @@
           "Params": 2,
           "Signature": "(path, [cancellable])",
           "Returns": "string",
-          "Doc": "the whole file as a string. **Throws if it cannot be read**, and the message names the file: there is no `null` to test for and no silent empty string. A `Cancellable` last ends a read that is stuck",
+          "Doc": "the whole file as a string. **Throws if it cannot be read**, and the message names the file: there is no `null` to test for and no silent empty string. A **UTF-8 BOM is dropped** and a **UTF-16LE/BE or UTF-32LE/BE BOM is decoded**, so a `.btp`, `.form` or source file written by Notepad or PowerShell reads as the text it is; bytes with no BOM are returned unchanged. `LoadBytes` is the byte-for-byte road. A `Cancellable` last ends a read that is stuck",
           "Native": true
         },
         {
@@ -15089,7 +15166,7 @@
           "Params": 1,
           "Signature": "(path)",
           "Returns": "",
-          "Doc": "the file, parsed. **The error names the file**, which is the whole reason to use it over `JSON.parse(File.Load(p))` — a syntax error in *something* is not an answer",
+          "Doc": "the file, parsed. **The error names the file**, which is the whole reason to use it over `JSON.parse(File.Load(p))` — a syntax error in *something* is not an answer. A UTF-8 BOM, or a UTF-16LE/BE file a Windows editor wrote, arrives as the text it looks like: `File.Load` normalizes it before this parses it",
           "Native": false
         },
         {
@@ -15125,7 +15202,7 @@
           "Params": 2,
           "Signature": "(path, root)",
           "Returns": "string",
-          "Doc": "`path` with `root` taken off; the path unchanged when there is no relative spelling, and `\"\"` for the root itself",
+          "Doc": "`path` with `root` taken off, written with `/` on every platform; the path unchanged when there is no relative spelling, and `\"\"` for the root itself",
           "Native": true
         },
         {
@@ -15188,7 +15265,7 @@
           "Params": 2,
           "Signature": "(path, cb)",
           "Returns": "{ Stop }",
-          "Doc": "`cb(event, path)` — `\"Changed\"`, `\"Created\"`, `\"Deleted\"` — and answers something with a `Stop()`",
+          "Doc": "`cb(event, path)` — `\"Changed\"`, `\"Created\"`, `\"Deleted\"` — and answers something with a `Stop()`. A save is reported once as `\"Changed\"`: a deletion the monitor reports before a replacement is held for a moment and becomes that one change -- as does a `Created` for a path that was already there -- while a path still gone is `\"Deleted\"` after the moment",
           "Native": true
         },
         {
@@ -15935,7 +16012,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "where the lines are written: `\"Terminal\"` (the default, and stdout/stderr under it), `\"Journal\"` where the build has one, or **a file path** — opened in append mode and flushed per line, and it reads back as the path",
+          "Doc": "where the lines are written: `\"Terminal\"` (the default, and stdout/stderr under it), `\"Journal\"` on Linux or `\"EventLog\"` on Windows where the platform has one, or **a file path** — opened in append mode and flushed per line, and it reads back as the path. Writing to the Event Log needs no administrator; run `bintana --register-event-source` once from an elevated prompt so the viewer can describe the events instead of showing their raw data",
           "Native": true
         },
         {
@@ -16746,6 +16823,56 @@
           "Signature": "(area, path, [setup])",
           "Returns": "",
           "Doc": "the same sheets as one PDF, with **no dialog**; → how many pages it wrote. `Copies` is refused here, because a file has none",
+          "Native": true
+        }
+      ]
+    },
+    {
+      "Name": "Privilege",
+      "Members": [
+        {
+          "Name": "CanElevate",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the OS can ask: `pkexec` on Linux, UAC on Windows, and false in a sandbox or a Task.  `Run` still works when `Elevated` is true, since there is nobody left to ask",
+          "Native": true
+        },
+        {
+          "Name": "Elevated",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this process already has root/administrator rights: true in a helper, false in the application that asked for one",
+          "Native": true
+        },
+        {
+          "Name": "Invoker",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`{ Id, Name, Home }` of the user who asked for the helper.  Inside a helper this is the person at the desktop, not `root`: on Linux it comes from `PKEXEC_UID`/`SUDO_UID`, and on Windows it is the same user with an elevated token",
+          "Native": true
+        },
+        {
+          "Name": "Run",
+          "Kind": "Method",
+          "Params": 5,
+          "Signature": "(helper, [args], [options], [onLine], [onExit])",
+          "Returns": "Exec",
+          "Doc": "runs a helper project declared in `project.btp`'s `\"privileged\"` list, with the platform's consent dialog.  `helper` is a project directory with a `main`; `args` are its `Application.Arguments`; `options` are `Exec`'s (`Timeout`, `Env`, `Dir`).  Answers the same job handle `Exec` does, so `Stop`/`Kill` and the callbacks are the ones the language already has.  On Windows the helper's output arrives when it exits, because the unelevated launcher forwards the file UAC let it write",
+          "Native": true
+        },
+        {
+          "Name": "Wait",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(helper, [args], [options])",
+          "Returns": "{ ExitCode, Output }",
+          "Doc": "the same, run to the end.  It blocks the main loop: use `Run` from a window, and `Wait` from a console project or a place that can wait",
           "Native": true
         }
       ]

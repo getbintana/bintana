@@ -11,6 +11,19 @@
 
 class TaskWork extends Task {
 
+    /* The two children the modes block on and read, in each platform's words:
+     * `ping` is Windows' `sleep 10` (eleven echoes, a second apart), and the
+     * child's job object is what Stop, Timeout and a token reach. `echo` ends
+     * its line with CRLF there, which the assertions trim. */
+    static get Sleep10() {
+        return Environment.OS === "Windows" ? ["ping", "-n", "11", "127.0.0.1"]
+                                            : ["/bin/sh", "-c", "sleep 10"];
+    }
+    static say(word) {
+        return Environment.OS === "Windows" ? ["cmd", "/c", `echo ${word}`]
+                                            : ["/bin/sh", "-c", `printf ${word}`];
+    }
+
     Run(msg) {
         if (msg.mode === "echo")
             return { n: msg.n, list: msg.list, total: msg.total };
@@ -346,7 +359,7 @@ class TaskWork extends Task {
             let   said = "";
 
             c.Cancel();
-            try { Exec.Wait(["/bin/sh", "-c", "sleep 10"], c); }
+            try { Exec.Wait(TaskWork.Sleep10, c); }
             catch (e) { said = e.message; }
             return { said: said };
         }
@@ -364,13 +377,13 @@ class TaskWork extends Task {
          * a Timeout, KillAfter -- can reach it, and it must. */
         if (msg.mode === "block-plain") {
             this.Report({ ready: true });
-            Exec.Wait(["/bin/sh", "-c", "sleep 10"], { Timeout: 0 });
+            Exec.Wait(TaskWork.Sleep10, { Timeout: 0 });
             return { done: true };
         }
 
         /* A child that would outlive the task unless Stop cancels it. */
         if (msg.mode === "block") {
-            Exec.Wait(["/bin/sh", "-c", "sleep 10"], this.Cancellable);
+            Exec.Wait(TaskWork.Sleep10, this.Cancellable);
             return { done: true };
         }
 
@@ -387,7 +400,7 @@ class TaskWork extends Task {
                 Load:  () => File.Load(File.Join(msg.dir, "note")),
                 Info:  () => File.Info(File.Join(msg.dir, "note")).Size,
                 List:  () => Directory.List(msg.dir).join(","),
-                Exec:  () => Exec.Wait(["/bin/sh", "-c", "printf wound"]).Output,
+                Exec:  () => Exec.Wait(TaskWork.say("wound")).Output.trimEnd(),
                 Given: () => File.Load(File.Join(msg.dir, "note"), this.Cancellable),
             };
             for (const name of ["Load", "Info", "List", "Exec", "Given"]) {
@@ -400,7 +413,7 @@ class TaskWork extends Task {
 
         /* The blocking child only: callbacks belong to the main loop. */
         if (msg.mode === "exec") {
-            const r = Exec.Wait(["/bin/sh", "-c", "printf hi"]);
+            const r = Exec.Wait(TaskWork.say("hi"));
             let   async = "";
 
             try { Exec(["/bin/true"]); }

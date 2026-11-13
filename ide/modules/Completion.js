@@ -1017,14 +1017,14 @@ export class Completion {
             for (const n of cached.spaces)  known.add(n);
             for (const n of cached.held) {
                 if (!kept.has(n)) kept.set(n, []);
-                kept.get(n).push(path);
+                if (!kept.get(n).includes(path)) kept.get(n).push(path);
             }
             /* Who exports each name, so a name two modules export can be said
              * to be ambiguous where it is used (`Names.ambiguous`). */
             if (cached.module)
                 for (const t of cached.own) {
                     if (!owners.has(t)) owners.set(t, []);
-                    owners.get(t).push(path);
+                    if (!owners.get(t).includes(path)) owners.get(t).push(path);
                 }
         }
 
@@ -1061,7 +1061,11 @@ export class Completion {
         const sources = new Map();
         const forms   = new Map();
         const root    = this.ide.project;
-        const rel     = (p) => root && p.startsWith(root + "/") ? p.slice(root.length + 1) : p;
+        const rel     = (p) => {
+            if (!root || !File.Within(p, root))
+                return p.replace(/\\/g, "/");
+            return File.Relative(p, root).replace(/\\/g, "/");
+        };
         const walk    = (dir, into) => {
             for (const f of Directory.List(dir)) {
                 if (f.startsWith(".")) continue;

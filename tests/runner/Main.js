@@ -117,11 +117,13 @@ const GRACE = 5000;
 /*
  * Where the projects' `Desktop` goes, which must not be the user's own.
  *
- * `Desktop.Entries` writes menu entries into `$XDG_DATA_HOME/applications`, and
- * the IDE test installs one for real -- so without this a suite run would put a
- * `bta-test-ide.desktop` in the developer's menu, every run, and the icon would
- * outlive the test that made it.  A scratch data home per run, named after the
- * pid like the projects' own directories, keeps the desktop out of it.
+ * `Desktop.Entries` writes menu entries into `$XDG_DATA_HOME/applications` and
+ * `Desktop.Shortcut` into `%APPDATA%`'s Start Menu, and the IDE test installs
+ * one for real -- so without this a suite run would put a `bta-test-ide` entry
+ * in the developer's menu, every run, and the icon would outlive the test that
+ * made it.  A scratch data home per run, named after the pid like the projects'
+ * own directories, keeps the desktop out of it; `APPDATA` covers the Windows
+ * shortcut and is inert on Linux.
  *
  * It is set for the children and not here: the runner is a console project and
  * never touches an entry.  `Application.ConfigDirectory` is deliberately **not**
@@ -227,7 +229,8 @@ function run(projects, wrap, extra, i, failed) {
     if (extra) argv.push(extra);
 
     const job = Exec(argv,
-        { Environment: { ...wrap.env, XDG_DATA_HOME: DATA_HOME },
+        { Environment: { ...wrap.env, XDG_DATA_HOME: DATA_HOME,
+                         APPDATA: DATA_HOME },
           Timeout: TIMEOUT * 1000, KillAfter: GRACE },
         (line) => { if (!NOISE.test(line)) print(line); },
         (code) => {
@@ -282,6 +285,37 @@ function chosen(only) {
 }
 
 /*
+ * **The IDE project is a set of symlinks to the IDE's own forms.**  A Windows
+ * checkout without Developer Mode stores the link as a text file holding its
+ * target; the project then has forms that are not forms and every test in it
+ * fails before it starts.  `tests/check.sh` already skips it in that state;
+ * the runner says so once and runs the rest, because the other six projects
+ * still say what they were built to say.
+ */
+let ideUsable;
+
+function ideFormsAreReal() {
+    if (ideUsable !== undefined)
+        return ideUsable;
+
+    const sample = File.Join(TESTS, "ide", "MainForm.form");
+    if (!File.Exists(sample)) {
+        ideUsable = false;
+        return ideUsable;
+    }
+
+    try {
+        ideUsable = File.Load(sample).trim().startsWith("{");
+    } catch (e) {
+        ideUsable = false;
+    }
+    if (!ideUsable)
+        Logger.Warning("tests/ide skipped: its .form files are symlinks stored "
+                       + "as text; enable Developer Mode or clone with symlinks");
+    return ideUsable;
+}
+
+/*
  * A directory with a manifest, and that manifest declaring a form.
  *
  * The second half is what keeps this project from running itself, and it is the
@@ -292,6 +326,9 @@ function chosen(only) {
 function isTestProject(name) {
     const manifest = File.Join(TESTS, name, "project.btp");
     if (!File.Exists(manifest)) return false;
+
+    if (name === "ide" && !ideFormsAreReal())
+        return false;
 
     try {
         return !File.LoadJson(manifest).main;

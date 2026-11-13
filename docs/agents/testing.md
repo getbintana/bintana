@@ -387,16 +387,119 @@ save will edit `examples/hello` for real.
   the install costs to do, and the half hour spent on them is the half hour
   this note exists to save. `sudo dnf install xorg-x11-server-Xvfb xdotool` is
   the whole of it here.
-- **Windows has no Xvfb, and its checkout may not have the symlinks.**
-  `run.sh` leaves `HEADLESS` empty there, so the suite uses the session's own
-  display; `HEADLESS=1` cannot be honored. Measured on Windows 11
-  (2026-11-10): `tests/smoke` ran **171 passed, 0 failed** after the one path
-  assertion learned `\` and its Unix-only `sleep`/`pgrep`/`pkill` teardown
-  learned to skip itself. `tests/check.sh` is the no-display pass the Windows
-  CI runs; it skips `tests/ide` with a sentence when Git wrote the project's
+- **A path pasted into a child's source is a JavaScript literal: write it with
+  `JSON.stringify`.** `File.Join("${SCRATCH}", ...)` inside a template is fine
+  on Linux and on Windows turns `C:\src\...\tmp\bta-test-widgets` into a string
+  with a tab and a backspace in it: the chart child could not save its PNG and
+  eighteen assertions read `undefined`. `${JSON.stringify(SCRATCH)}` is right
+  on both. Assertions about paths count either separator.
+- **The suite's own servers are asked with `LOOPBACK` (a minute).** Tests
+  overlap and a later test's `*Wait` blocks the loop; a timeout and an answer
+  due during the block are dispatched timeout first. On Windows the blocks are
+  longer, and five server tests read `timeout` at 5 s in the whole run while
+  passing alone. `testNetwork`'s `LONG` is the same lesson, learned first.
+- **Windows has no Xvfb; `run.sh` gives it a private desktop.**  The helper is
+  `tests/win-desktop.c`, built into `build/win-desktop.exe` by `run.sh` with the
+  MSYS2 compiler; it creates a `CreateDesktop` desktop and starts the runner on
+  it, so the default is virtual there too. `HEADLESS=` (empty) is the way to the
+  real screen, exactly as on Linux, and a machine without `cc` falls back to it
+  with a sentence. The child still sees a display, so `tests/runner` takes its
+  ordinary path rather than looking for `xvfb-run`. Measured on Windows 11
+  (2026-11-11): `tests/smoke` 171/0, `tests/markdown` 171/0, `tests/qr`
+  120/0, `tests/report` 259/0 and `tests/xlsx` 57/0 on that desktop.
+  `tests/widgets` runs natively there with `testClipboard`'s round trip
+  skipped (the clipboard SEGV below): 6372 assertions, of which the two or
+  three crowding failures below are the red ones (the last run was 6370
+  passed, 2 failed on 2026-11-13). What is left is the suite's own crowding,
+  none of it seen alone: `testHttpServer`'s TLS restart on an ephemeral port
+  another socket took, `testNetwork`'s probe of a stopped server answering
+  `Error` (both in [`network.md`](network.md)), and a timing check that comes
+  and goes -- `Http.Stream`'s first line inside 700 ms, or within 1 s, or the
+  lines `Exec` kept before a deadline. `tests/check.sh` is the no-display pass the Windows CI
+  runs; it skips `tests/ide` with a sentence when Git wrote the project's
   `.form` symlinks as text files, which is what a checkout without Developer
-  Mode does. Enable Developer Mode (or `core.symlinks=true` with the
-  privilege) before believing anything about `tests/ide` on Windows.
+  Mode does. The runner does the same now, so `tests/run.sh` continues with the
+  other six projects instead of failing `ide` before it starts. Enable
+  Developer Mode (or `core.symlinks=true` with the privilege) before believing
+  anything about `tests/ide` on Windows. With the symlinks materialized it does
+  run: the `apps` prefix (everything through installing the project) passed
+  2732/0 on 2026-11-12, and the full project 3804/0 on 2026-11-13. What had been
+  red there is fixed: `tar --force-local` for a `C:` path, path comparisons on
+  either separator, the terminal's `COMSPEC` and prompt, the debugger matching
+  a file component by component, and the branch's upstream read from porcelain
+  v2 (`@{u}` does not survive the MSYS layer).
+- **Windows editors write UTF-8 BOM and UTF-16, and the loader has to meet
+  them.** PowerShell 5.1's `Set-Content -Encoding UTF8`/`Out-File`, Notepad's
+  older *Unicode* and Visual Studio all write a BOM; a `project.btp` or `.form` saved that way
+  failed with `Unexpected token '\ufeff'`, and a UTF-16LE `.js` with
+  `unexpected character`. `bta_text_from_bytes` now drops a UTF-8 BOM and
+  decodes UTF-16LE/BE (and UTF-32) with one, and `bta_read_file` and `File.Load`
+  both go through it; bytes with no BOM are copied untouched, so the Latin-1
+  foreign file and `File.LoadBytes` keep their bytes. **Copied by length, not
+  with `g_strndup`**, which stops at the first NUL: the first version did, and
+  `File.Load` of a binary file came back cut short -- the Sysprof capture
+  `testProfile` and `tests/ide` read for its strings, five red lines on Linux
+  only, since Windows has no capture (2026-11-13). `tests/widgets`'
+  `TextEncodings` writes a project whose `.btp`, `.form` and `.js` use those
+  encodings and runs a child, and asks `File.Load`/`File.LoadJson` for both
+  UTF-16 byte orders. `FileWatch` now runs on Windows too: the deletion
+  `File.Save` reports is held for 200 ms, so a save is one `Changed` and a real
+  delete is one `Deleted` on both platforms. `SingleInstance` does too: a local
+  mutex and a named pipe replace the session bus, and the test starts two real
+  processes and reads the arguments and directory back from the first.
+  `DesktopShortcut` points `APPDATA` at a scratch tree and writes, reads and
+  removes a `.lnk` with its AppUserModelID; the IDE's `apps` phase uses the same
+  object and passed 2732/0 through the dialog.
+- **Two SEGVs on Windows, two different causes; read the critical before the
+  crash to tell them apart.** A stack with no application frame says where a
+  pointer was *used*, not who left it dangling.
+  1. `gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME
+     (data)' failed`, then a SIGSEGV reached from `SendMessageW` (seen under
+     gdb, 2026-11-11). **Ours:** the Windows `Terminal` never took its IM
+     context off its area, and GTK's IME context only removes its display
+     filter in a `focus_out` that still finds a surface -- see the terminal
+     entry in [`widgets.md`](widgets.md). Fixed 2026-11-12; not seen since,
+     though it was never on demand.
+  2. `g_utf8_to_utf16: assertion 'str != NULL' failed`, then a SIGSEGV. **GTK's
+     (4.24.1), set off by `testClipboard`.** It is *not* a window message: a
+     native stack taken at the critical (`RtlCaptureStackBackTrace` in a
+     `g_log_set_handler` for "GLib", then module+offset) is the main loop
+     completing a `GTask` -> GDK's Win32 clipboard render
+     (`clipboard_render_hdata_ready`) -> `g_output_stream_close` on a
+     `GdkWin32HDataOutputStream` -> `transmute_utf8_string_to_cf_unicodetext`.
+     A render request for text comes while the content GDK writes cannot be
+     written as text (the test copies a string and replaces it with an image at
+     once). The write fails, the failure branch still closes the stream, and
+     `close()` converts a buffer that was never allocated. `g_utf8_to_utf16(NULL)`
+     returns NULL with no `GError`, and the converter reads `wcptr[0]`. The
+     request comes from *another process*: the clipboard belongs to the window
+     station, so the private desktop does not isolate it, and clipboard history
+     or any clipboard reader on the machine asks. That is why the moment varies
+     and gdb hides it. Measured: three native runs out of three crashed; with
+     `testClipboard` skipped, none did. Hammering `Get-Clipboard` against a
+     project that alternates `Copy`/`CopyImage` gives `gdk_clipboard_write_async:
+     assertion 'priv->local' failed` and `Clipboard rendering timed out`, and
+     killed the process once in three, so it is a race, not a recipe. **The
+     recipe is the empty string**: `Clipboard.Copy("")` plus one
+     `Get-Clipboard` from PowerShell crashed two runs in two (zero bytes
+     written leave the same buffer NULL). `Copy("")` now empties the
+     clipboard on Windows instead (`sys_clip_copy`), three runs in three
+     survive. The image race has no runtime fix short of a patched GTK, so
+     `testClipboard` skips its round trip on Windows;
+     [`ISSUE-windows-clipboard-crash`](../issues/ISSUE-windows-clipboard-crash.md)
+     keeps the gap.
+  `GTK_IM_MODULE=none` only removes the first. **It is not the `Exec` chain**:
+  a run stopped at `ExecCloseInput` still crashed. Two processes do not help either:
+  a fresh tail needs the tests before it (`TimerShorthand`'s timer is read by
+  `checkTimers`). The suite on Windows also writes to the user's real clipboard.
+- **A modal dialog left open sits on the next test.** `testFileDialog` already
+  refuses to open one for that reason; `Dialog.Color`'s two got away with it on
+  Linux and the font chooser is one more GTK/Win32 surface nobody can close
+  from JS. The colour chooser is skipped on Windows and only its refusals are
+  asserted. The font chooser runs there again: it had been skipped as the
+  `g_utf8_to_utf16` crash, which was the clipboard's (above). On its own it
+  survived four runs in four, and the suite with it ran without a crash
+  (2026-11-12).
 - **A test that walks a focus order has to own every stop in it.** `Fixed1` in
   `tests/widgets` had five children by the time `testTabOrder` ran — a scroller
   another test left in it, focusable — so "past the last one the focus leaves"

@@ -483,6 +483,136 @@ JSValue bta_text_line_of(JSContext *ctx, JSValueConst this_val,
 
 /* ------------------------------------------------------- files and jobs */
 
+/*
+ * UTF-16/32 to UTF-8, with the byte order the BOM named.
+ *
+ * The code units are assembled by hand instead of casting the buffer: a BOM
+ * says how the bytes are ordered, while `gunichar2` and `gunichar` are in the
+ * host's order, and a file written on Windows may be read on either.  A length
+ * that is not a whole number of units is not decoded here; the caller falls
+ * back to the bytes, which is what a text parser can complain about.
+ */
+static char *text_from_utf16(const guint8 *data, gsize len, bool little,
+                             gsize *out_len)
+{
+    if (len % 2 != 0)
+        return NULL;
+
+    gsize      units = len / 2;
+    gunichar2 *u     = g_new(gunichar2, units > 0 ? units : 1);
+
+    for (gsize i = 0; i < units; i++) {
+        guint8 a = data[2 * i], b = data[2 * i + 1];
+
+        u[i] = (gunichar2)(little ? (a | (b << 8)) : ((a << 8) | b));
+    }
+
+    glong    written = 0;
+    GError  *error   = NULL;
+    char    *out     = g_utf16_to_utf8(u, (glong)units, NULL, &written, &error);
+
+    g_free(u);
+    g_clear_error(&error);
+
+    if (!out)
+        return NULL;
+    if (out_len)
+        *out_len = (gsize)written;
+    return out;
+}
+
+static char *text_from_utf32(const guint8 *data, gsize len, bool little,
+                             gsize *out_len)
+{
+    if (len % 4 != 0)
+        return NULL;
+
+    gsize     units = len / 4;
+    gunichar *u     = g_new(gunichar, units > 0 ? units : 1);
+
+    for (gsize i = 0; i < units; i++) {
+        guint8 a = data[4 * i], b = data[4 * i + 1];
+        guint8 c = data[4 * i + 2], d = data[4 * i + 3];
+
+        u[i] = little
+                   ? ((guint32)a | ((guint32)b << 8) |
+                      ((guint32)c << 16) | ((guint32)d << 24))
+                   : (((guint32)a << 24) | ((guint32)b << 16) |
+                      ((guint32)c << 8) | (guint32)d);
+    }
+
+    glong    written = 0;
+    GError  *error   = NULL;
+    char    *out     = g_ucs4_to_utf8(u, (glong)units, NULL, &written, &error);
+
+    g_free(u);
+    g_clear_error(&error);
+
+    if (!out)
+        return NULL;
+    if (out_len)
+        *out_len = (gsize)written;
+    return out;
+}
+
+/* `len` bytes and a terminator.  Not `g_strndup`, which stops at the first NUL:
+ * `File.Load` hands back every byte it read, and a binary file -- a Sysprof
+ * capture the suite reads for its strings -- came back cut short. */
+static char *bytes_copy(const char *data, gsize len)
+{
+    char *out = g_malloc(len + 1);
+
+    memcpy(out, data, len);
+    out[len] = '\0';
+    return out;
+}
+
+/*
+ * The text a file holds, whatever encoding the Windows tool that wrote it
+ * chose.  Notepad, PowerShell 5.1 and Visual Studio all offer a UTF-8 BOM, and
+ * older Windows writes UTF-16LE with one; a `.btp`, a `.form` or a source file
+ * that arrives that way is still the text it looks like, and refusing it with
+ * `Unexpected token '\ufeff'` says nothing a person can act on.
+ *
+ * **Only a BOM is a promise.**  Bytes with no BOM are copied untouched, so a
+ * Latin-1 source file keeps its bytes (the IDE's foreign-file test depends on
+ * that) and a binary file read as text still reaches the parser as itself.  A
+ * UTF-16/32 file whose units do not decode falls back to its bytes for the same
+ * reason: the parser's complaint names the file, where a silent empty string
+ * would not.
+ */
+char *bta_text_from_bytes(const char *data, gsize len, gsize *out_len)
+{
+    const guint8 *b = (const guint8 *)data;
+    char         *out = NULL;
+
+    if (!data)
+        return NULL;
+
+    /* UTF-32's BOMs come first: FF FE 00 00 would otherwise read as UTF-16LE
+     * whose first character is U+0000. */
+    if (len >= 4 && b[0] == 0xFF && b[1] == 0xFE && b[2] == 0x00 && b[3] == 0x00)
+        out = text_from_utf32(b + 4, len - 4, TRUE, out_len);
+    else if (len >= 4 && b[0] == 0x00 && b[1] == 0x00 &&
+             b[2] == 0xFE && b[3] == 0xFF)
+        out = text_from_utf32(b + 4, len - 4, FALSE, out_len);
+    else if (len >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF) {
+        if (out_len)
+            *out_len = len - 3;
+        return bytes_copy(data + 3, len - 3);
+    } else if (len >= 2 && b[0] == 0xFF && b[1] == 0xFE)
+        out = text_from_utf16(b + 2, len - 2, TRUE, out_len);
+    else if (len >= 2 && b[0] == 0xFE && b[1] == 0xFF)
+        out = text_from_utf16(b + 2, len - 2, FALSE, out_len);
+
+    if (out)
+        return out;
+
+    if (out_len)
+        *out_len = len;
+    return bytes_copy(data, len);
+}
+
 /* A file's whole contents, or NULL. Both hosts and the metadata host read
  * their sources through it. */
 char *bta_read_file(const char *path, size_t *len)
@@ -492,9 +622,17 @@ char *bta_read_file(const char *path, size_t *len)
 
     if (!g_file_get_contents(path, &data, &n, NULL))
         return NULL;
+
+    /* Text is what every caller of this wants: a `.btp`, a `.form`, a source
+     * file, a `.po`.  `File.LoadBytes` is the road for bytes. */
+    char *text = bta_text_from_bytes(data, n, &n);
+
+    g_free(data);
+    if (!text)
+        return NULL;
     if (len)
         *len = n;
-    return data;
+    return text;
 }
 
 /* Promise callbacks and other microtasks only run when we pump them. */

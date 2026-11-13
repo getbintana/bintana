@@ -1,0 +1,7 @@
+{
+  "name": "Sysnote",
+  "id": "io.github.getbintana.Sysnote",
+  "startup": "MainForm",
+  "sources": ["MainForm.js"],
+  "privileged": ["tools/write-note"]
+}

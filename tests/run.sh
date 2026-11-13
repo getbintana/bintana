@@ -11,18 +11,10 @@
 # starts, one `<project>.syscap` under that directory (the runner reads it and
 # turns it into `--profile` on each child, since it builds their command lines).
 #
-# **The virtual display is the default on Linux**, and `HEADLESS=` -- empty,
-# not 0 -- is the way back to a real screen for the questions that need one (an
-# icon, a theme). It used to be the other way round: the runner falls back to
-# `xvfb-run` only when there is no `DISPLAY`, which is the CI case and never the
-# desktop case, so the bare command opened the whole suite over whatever the
-# user was doing and took the keyboard for a minute. That happened five times,
-# always by somebody who knew the rule, which is what makes it a default and not
-# a rule. `asan.sh` had reached the same conclusion first.
-#
-# **Windows has no Xvfb.** Its only display is the session's own, so the default
-# there is the desktop and `HEADLESS=1` cannot be honored; that is said once,
-# below, rather than left to the runner's "install Xvfb" sentence.
+# **Windows has no Xvfb, and its answer is a desktop**: the helper built below
+# creates a private one and runs the suite on it, so the default there is a
+# virtual screen too.  `HEADLESS=` (empty) is the way back to the real one,
+# exactly as on Linux; it is the only way to see an icon or a theme.
 #
 # **The suite itself is `tests/runner`, written in Bintana**, and this is the
 # ten lines that cannot be: finding the binary and saying so when there is none
@@ -33,13 +25,12 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 # Exported and not passed, because the runner reads it out of the environment --
-# and with `-` rather than `:-`, or an explicitly empty one would be replaced
-# here and the way back to a real screen would not work. On Windows there is no
-# virtual display to force: the session's own is the only one.
-case "$(uname -s)" in
-    MINGW*|MSYS*|CYGWIN*) export HEADLESS=${HEADLESS-} ;;
-    *)                    export HEADLESS=${HEADLESS-1} ;;
-esac
+# and with `+x` rather than `:-`, or an explicitly empty one would be replaced
+# here and the way back to a real screen would not work.  Unset means the
+# private screen on both platforms; `HEADLESS=` means this one.
+if [[ -z ${HEADLESS+x} ]]; then
+    export HEADLESS=1
+fi
 
 # **The suite's assertions are English, and a library may ship a catalogue.**
 # `lib/check` now does, and a developer whose desktop is Spanish saw its
@@ -58,10 +49,48 @@ export LANGUAGE=C
 export BINTANA_LIB_PATH="$PWD/lib${BINTANA_LIB_PATH:+:$BINTANA_LIB_PATH}"
 
 BINTANA=${BINTANA:-./build/bintana}
+# On Windows the build is `bintana.exe`; the bare name is what the docs tell a
+# person to run, so the default finds the executable beside it.
+if [[ ! -x $BINTANA && -x $BINTANA.exe ]]; then
+    BINTANA=$BINTANA.exe
+fi
 if [[ ! -x $BINTANA ]]; then
     echo "no runtime at $BINTANA -- build first: cmake --build build" >&2
     exit 2
 fi
+
+# **Windows gets a desktop of its own.** The helper is a test tool built here,
+# beside the binary, from `tests/win-desktop.c`; it creates a desktop, starts
+# the runner on it and waits.  The runner then sees an ordinary session and
+# takes its normal path -- the private desktop is already the one the child
+# owns.  A machine without a compiler falls back to this screen with a
+# sentence, because a suite that refuses to start is worse than a visible one.
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+        # GTK 4's Win32 IME filter crashes when a window message reaches a
+        # context that was already destroyed -- a SIGSEGV in libgtk-4-1.dll
+        # measured with gdb, minutes into tests/widgets.  The suite types no
+        # IME text on Windows, so it runs without one; this is a GTK bug and
+        # not a runtime setting.  `GTK_IM_MODULE=` (empty) opts back in.
+        export GTK_IM_MODULE=${GTK_IM_MODULE-none}
+        if [[ -n ${HEADLESS:-} ]]; then
+            helper=build/win-desktop.exe
+            if [[ ! -x $helper || tests/win-desktop.c -nt $helper ]]; then
+                if command -v cc >/dev/null 2>&1; then
+                    cc -O2 -municode -o "$helper" tests/win-desktop.c || helper=
+                else
+                    helper=
+                fi
+            fi
+            if [[ -n ${helper:-} ]]; then
+                export HEADLESS=
+                exec "$helper" "$BINTANA" tests/runner "$@"
+            fi
+            echo "no C compiler for the private desktop: this run uses the real screen" >&2
+            export HEADLESS=
+        fi
+        ;;
+esac
 
 # exec, so the runner's exit status is this script's, and the chosen binary is
 # the one the runner reports as its own (Application.Executable): there is no path to

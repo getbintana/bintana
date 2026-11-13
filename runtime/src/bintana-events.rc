@@ -1,0 +1,7 @@
+// The message-table resource compiled into the runtime, referenced by the
+// EventMessageFile value `bintana --register-event-source` writes.  Neutral on
+// purpose: the table has one language and every locale falls back to it, so a
+// Spanish Windows and an English one read the same line.
+#include <windows.h>
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+1 MESSAGETABLE "MSG00001.bin"

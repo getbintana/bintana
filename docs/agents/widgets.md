@@ -1225,6 +1225,19 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   `ClosePseudoConsole` waits for conhost and conhost can be blocked writing its
   final frame. The shutdown path terminates the job first, cancels the reader's
   synchronous read, and waits for both threads before closing the handles.
+- **The terminal's IM context belongs to the area only while the area is
+  realized.** GTK's Windows IME context (4.24.1, read in `gtkimcontextime.c`)
+  adds a display message filter in `focus_in`, with itself as data, and removes
+  it only in `focus_out`, which returns early once the client widget has no
+  surface. Neither its dispose nor `GtkIMMulticontext`'s teardown calls
+  `focus_out`. The multicontext also keeps a `notify::gtk-im-module` handler on
+  the client's settings until it is told the client is gone. The terminal
+  set its client once at build time and never cleared it, so a terminal deleted
+  while focused left a filter pointing at a freed context:
+  `gtk_im_context_ime_message_filter: assertion 'GTK_IS_IM_CONTEXT_IME (data)'
+  failed`, then an access violation. The client is now set on `realize` and
+  taken away on `unrealize`, after a `focus_out`, as `GtkText` does. Any C that
+  owns a `GtkIMContext` does the same.
 - **The job object is what leaves no grandchildren behind.** A `KILL_ON_JOB_CLOSE`
   job per terminal plus `ClosePseudoConsole` is the Windows spelling of the pty
   hangup; `Kill()` terminates the job, and a runtime that exits does too.

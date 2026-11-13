@@ -308,6 +308,7 @@ static bool install_core(JSContext *ctx, JSValueConst global,
 {
     bta_profile_init(ctx, global);
     bta_sys_init(ctx, global);
+    bta_privilege_init(ctx, global, false);
 
     bta_logger_init(ctx, global);   /* bta_log.c, as in the graphical host */
     bta_message_init(ctx, global);
@@ -1121,6 +1122,12 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     install_application(ctx, global, dir, name, version, id, argv + 1, argc - 1);
     libs    = bta_project_libs(ctx, dir, cfg);
     sources = bta_project_sources(ctx, dir, NULL, cfg);
+    /* The helpers `Privilege.Run` may start: a `main` may ask too. */
+    app.privileged = bta_project_privileged(ctx, dir, cfg);
+    if (!app.privileged) {
+        status = 2;
+        goto out;
+    }
 
     /* A library that declares `"display": true` is a window project's, and
      * this host has no display: refused by name before a line of it runs,
@@ -1282,6 +1289,8 @@ out:
     /* The contract says a plugin's cleanup runs after the context is gone and
      * must not call the host; the loader's list is C only. */
     bta_plugins_cleanup(&app);
+    if (app.privileged)
+        g_ptr_array_unref(app.privileged);
     headless_app = NULL;
     g_free(app.args);
     g_free(text);
@@ -1590,6 +1599,14 @@ int main(int argc, char **argv)
         } else if (!strcmp(words[i], "--strict")) {
             /* No widgets, so there is nothing to make strict. The graphical
              * console path accepts it for the same reason. */
+        } else if (!strcmp(words[i], "--privileged")) {
+            /* The helper side of `Privilege.Run`: pkexec started this host
+             * with it. Refused unless the process really is elevated, as the
+             * graphical host refuses it (main.c). */
+            if (!bta_privilege_elevated()) {
+                fputs("bintana: --privileged must be run elevated\n", stderr);
+                return 2;
+            }
         } else if (!strcmp(words[i], "--profile")) {
             if (i + 1 >= project) {
                 fprintf(stderr, "bintana: --profile needs a file\n");

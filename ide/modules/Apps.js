@@ -1,9 +1,10 @@
 /*
  * Installing the open project as a user application.
  *
- * A user application is one `.desktop` file in the directory
- * `Desktop.Entries.Directory` names, and the runtime reads and writes that
- * format -- `docs/llm/library.md`.  What is left is the IDE's own three
+ * A user application is one menu entry: a `.desktop` file in the directory
+ * `Desktop.Entries.Directory` names on Linux, a `.lnk` in the Start Menu folder
+ * `Desktop.Shortcut.Directory` names on Windows.  The runtime reads and writes
+ * both formats -- `docs/llm/library.md`.  What is left is the IDE's own three
  * decisions, and they are the whole of this module: **what the entry says**,
  * **where it points**, and **how it is found again**.
  *
@@ -36,6 +37,12 @@
 "use strict";
 
 export class Apps {
+
+    /* Windows installs a Start Menu `.lnk`; Linux a `.desktop` entry.  The
+     * rest of this module is the same three decisions over either shape. */
+    static isWindows() {
+        return Environment.OS === "Windows";
+    }
 
     /*
      * The id an entry is installed under when the project declares none: the
@@ -76,13 +83,28 @@ export class Apps {
     }
 
     /*
-     * The entry, as `Desktop.Entries.Install` takes it.
+     * The entry, as the platform's installer takes it: a `.desktop` shape on
+     * Linux, and a target plus an argv array on Windows.
      *
      * The two optional keys are left out when they were left empty rather than
      * written with nothing in them: a `Comment=` of `""` is a menu tooltip that
      * is an empty box, which is worse than no tooltip.
      */
     static entry(project, fields) {
+        if (Apps.isWindows()) {
+            const entry = {
+                Name:       fields.Name,
+                Project:    project,
+                Target:     Application.Executable,
+                Arguments:  [project],
+                AppId:      fields.AppId || "",
+            };
+
+            if (fields.Comment) entry.Description = fields.Comment;
+            if (fields.Icon)    entry.Icon        = fields.Icon;
+            return entry;
+        }
+
         const entry = {
             Type:               "Application",
             Name:               fields.Name,
@@ -111,6 +133,15 @@ export class Apps {
      * is the path it carries, not the name it was installed under.
      */
     static installed(project) {
+        if (Apps.isWindows()) {
+            for (const id of Desktop.Shortcut.Installed()) {
+                const held = Desktop.Shortcut.Read(id);
+                if (held && held.Project === project)
+                    return { Id: id, Entry: held };
+            }
+            return null;
+        }
+
         for (const id of Desktop.Entries.Installed()) {
             const data = Desktop.Entries.Read(id);
             const held = data && data["Desktop Entry"];
@@ -129,6 +160,15 @@ export class Apps {
         const id  = Apps.entryId(fields.AppId, fields.Name);
         const was = Apps.installed(project);
 
+        if (Apps.isWindows()) {
+            if (was && was.Id !== id)
+                Apps.uninstall(was.Id);
+
+            const entry = Apps.entry(project, fields);
+            entry.Icon  = Apps.windowsIcon(entry.Icon, id);
+            return Desktop.Shortcut.Write(id, entry);
+        }
+
         if (was && was.Id !== id)
             Desktop.Entries.Uninstall(was.Id);
 
@@ -136,7 +176,52 @@ export class Apps {
     }
 
     static uninstall(id) {
-        return Desktop.Entries.Uninstall(id);
+        if (!Apps.isWindows())
+            return Desktop.Entries.Uninstall(id);
+
+        const held = Desktop.Shortcut.Read(id);
+        const icon = held && held.Icon;
+        const out  = Desktop.Shortcut.Remove(id);
+
+        /* Only the `.ico` this module made, in its own folder: a project's
+         * own drawing is the project's file. */
+        if (icon && icon.startsWith(File.Join(Application.ConfigDirectory,
+                                              "shortcuts"))) {
+            try {
+                if (File.Exists(icon)) File.Delete(icon);
+            } catch (e) {
+                /* A leftover icon is smaller than a failure to uninstall. */
+            }
+        }
+        return out;
+    }
+
+    /*
+     * The icon a `.lnk` can wear: `.ico`, or an executable/dll.  A project's
+     * PNG is wrapped as an ICO in the shortcut folder; an SVG or a theme name
+     * has no file Windows can point at, so the target's own icon is left.
+     */
+    static windowsIcon(icon, id) {
+        if (!icon || !File.Exists(icon))
+            return "";
+
+        const ext = File.Extension(icon).toLowerCase();
+        if (ext === "ico" || ext === "exe" || ext === "dll")
+            return icon;
+        if (ext !== "png")
+            return "";
+
+        try {
+            /* Not the Start Menu: the shortcut folder is a menu, and an `.ico`
+             * beside the `.lnk` is a second, unexplained file in it. */
+            const dir = File.Join(Application.ConfigDirectory, "shortcuts");
+            Directory.Make(dir);
+            const out = File.Join(dir, `${id}.ico`);
+            File.SaveBytes(out, Nsis.Ico(icon));
+            return out;
+        } catch (e) {
+            return "";
+        }
     }
 
     /*

@@ -453,11 +453,18 @@ export class Git {
      * the status bar behind a round trip.
      */
     aheadBehind() {
-        const r = this.run(["rev-list", "--left-right", "--count", "@{u}...HEAD"]);
+        /* `@{u}` is not a string Git for Windows passes through the MSYS
+         * runtime intact -- it arrives as `@u`.  The porcelain v2 branch header
+         * is the same two numbers without a ref syntax to mangle, and the
+         * pathspec keeps it to this project when the repository holds more. */
+        const r = this.run(["status", "--porcelain=v2", "--branch", "--", "."]);
         if (!r.ok) return null;
 
-        const [behind, ahead] = r.out.trim().split(/\s+/).map(Number);
-        return { ahead: ahead || 0, behind: behind || 0 };
+        for (const line of r.out.split("\n")) {
+            const m = /^# branch\.ab \+(\d+) -(\d+)$/.exec(line);
+            if (m) return { ahead: Number(m[1]), behind: Number(m[2]) };
+        }
+        return null;
     }
 
     /*

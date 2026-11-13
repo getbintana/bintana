@@ -1,6 +1,11 @@
 /*
  * Interpreter setup, project loading and the GTK main loop.
  */
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#endif
+
 #include "bta.h"
 #include "bta_prelude.h"
 #include "bta_forms.h"
@@ -16,6 +21,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifdef G_OS_WIN32
+#include <windows.h>
+#include <shobjidl.h>
+#endif
 
 static BtaApp *g_app;
 
@@ -701,13 +711,15 @@ static bool install_globals(BtaApp *app)
      */
     /* Id
      *   from `project.btp`: the application's identity in reverse DNS —
-     *   `io.github.you.App`. It is **one name in three places**: the window's
+     *   `io.github.you.App`. It is **one name in four places**: the window's
      *   own class (the runtime hands it to `GtkApplication` for Wayland and
      *   to the program name for X11's `WM_CLASS`), the `<id>` of the
-     *   project's metainfo, and the Flatpak app id. `""` when the project
+     *   project's metainfo, the Flatpak app id, and on Windows the process's
+     *   AppUserModelID -- what the taskbar groups by and what a toast belongs
+     *   to. `""` when the project
      *   declares none, which is an ordinary project classed by the program's
      *   name; a value that is not an application id **stops the program when
-     *   the project loads**, because every one of those three is something
+     *   the project loads**, because every one of those names is something
      *   nobody looks at until a dock shows the wrong icon
      */
     JS_SetPropertyStr(ctx, application, "Id", JS_NewString(ctx, app->id));
@@ -1021,7 +1033,8 @@ static bool install_globals(BtaApp *app)
      *   command line, as `Arguments` is, and `directory` is where that run was
      *   started. The second process then exits `0`, and **the first's window
      *   is brought forward after the handler returns**, whether or not one
-     *   was assigned. `null` until assigned
+     *   was assigned. On Windows a local mutex and a named pipe carry the same
+     *   message, so no session bus is needed. `null` until assigned
      */
     JS_SetPropertyStr(ctx, application, "OnSecondInstance", JS_NULL);
     /* OnError
@@ -1074,6 +1087,7 @@ static bool install_globals(BtaApp *app)
     bta_widgets_init(ctx, global);
     bta_menu_init(ctx);
     bta_sys_init(ctx, global);
+    bta_privilege_init(ctx, global, false);
     bta_cancellable_init(ctx, global);
     bta_task_init(ctx, global);
     bta_lock_init(ctx, global);
@@ -1269,6 +1283,11 @@ BtaApp *bta_app_new(const char *project_dir)
             app->entry   = bta_project_string(app->ctx, cfg, "main", NULL);
             app->libs    = bta_project_libs(app->ctx, app->dir, cfg);
             app->sources = bta_project_sources(app->ctx, app->dir, app->libs, cfg);
+
+            /* The helper projects `Privilege.Run` may start (bta_project.c). */
+            app->privileged = bta_project_privileged(app->ctx, app->dir, cfg);
+            if (!app->privileged)
+                exit(2);
         }
         JS_FreeValue(app->ctx, cfg);
         g_free(cfg_src);
@@ -1320,6 +1339,8 @@ void bta_app_free(BtaApp *app)
         return;
     if (app->sources)
         g_ptr_array_unref(app->sources);
+    if (app->privileged)
+        g_ptr_array_unref(app->privileged);
     if (app->forms)
         g_hash_table_unref(app->forms);
     /* First: workers hold values of this context and run on their own threads,
@@ -1879,17 +1900,12 @@ static void on_activate(GtkApplication *gapp, gpointer user_data)
  * which is the one thing every application wants and the one thing a handler
  * could not do before the window was asked for.
  */
-static void on_second_instance(GSimpleAction *action, GVariant *param, gpointer data)
+static void app_second_instance(BtaApp *app, const char *cwd, char **args)
 {
-    BtaApp    *app = data;
     JSContext *ctx = app->ctx;
-    const char *cwd  = "";
-    const char **argv = NULL;
 
-    if (!app->activated)
+    if (app->gapp && !app->activated)
         return;     /* the first window is not up: nothing to hand it to */
-
-    g_variant_get(param, "(&s^a&s)", &cwd, &argv);
 
     JSValue global = JS_GetGlobalObject(ctx);
     JSValue jsapp  = JS_GetPropertyStr(ctx, global, "Application");
@@ -1897,9 +1913,9 @@ static void on_second_instance(GSimpleAction *action, GVariant *param, gpointer 
 
     if (JS_IsFunction(ctx, fn)) {
         JSValue list = JS_NewArray(ctx);
-        for (uint32_t i = 0; argv && argv[i]; i++)
-            JS_SetPropertyUint32(ctx, list, i, JS_NewString(ctx, argv[i]));
-        JSValue av[2] = { list, JS_NewString(ctx, cwd) };
+        for (uint32_t i = 0; args && args[i]; i++)
+            JS_SetPropertyUint32(ctx, list, i, JS_NewString(ctx, args[i]));
+        JSValue av[2] = { list, JS_NewString(ctx, cwd ? cwd : "") };
         JSValue r = JS_Call(ctx, fn, jsapp, 2, (JSValueConst *)av);
 
         if (JS_IsException(r))
@@ -1912,22 +1928,384 @@ static void on_second_instance(GSimpleAction *action, GVariant *param, gpointer 
     JS_FreeValue(ctx, fn);
     JS_FreeValue(ctx, jsapp);
     JS_FreeValue(ctx, global);
-    g_free(argv);
 
-    GtkWindow *win = gtk_application_get_active_window(app->gapp);
-    if (win)
-        gtk_window_present(win);
+    if (app->gapp) {
+        GtkWindow *win = gtk_application_get_active_window(app->gapp);
+        if (win)
+            gtk_window_present(win);
+    }
 }
+
+#ifndef G_OS_WIN32
+static void on_second_instance(GSimpleAction *action, GVariant *param, gpointer data)
+{
+    BtaApp     *app  = data;
+    const char *cwd  = "";
+    const char **argv = NULL;
+
+    g_variant_get(param, "(&s^a&s)", &cwd, &argv);
+    app_second_instance(app, cwd, (char **)argv);
+    g_free(argv);
+}
+#endif
+
+#ifdef G_OS_WIN32
+/*
+ * The Windows answer to "a second run hands its arguments to the first".
+ *
+ * There is no session bus on a normal Windows machine, so GLib's
+ * `GApplication` registers locally and every run is its own instance.  The
+ * platform's own answer is two kernel objects named after the project's id:
+ *
+ *  - a local mutex, which says whether this is the first run;
+ *  - a named pipe, which carries the second run's directory and arguments.
+ *
+ * The first process owns the mutex for its lifetime and serves the pipe on a
+ * thread.  A second process sees `ERROR_ALREADY_EXISTS`, sends one
+ * length-prefixed `GVariant` `(sas)` -- the same shape the D-Bus action takes
+ * -- and exits.  The server marshals it to the main loop, where
+ * `Application.OnSecondInstance` runs exactly as it does on Linux.
+ */
+#define WIN_SINGLE_MAX (4u * 1024u * 1024u)
+
+typedef struct {
+    BtaApp  *app;          /* borrowed: the application owns the process */
+    HANDLE   mutex;
+    HANDLE   thread;
+    wchar_t *mutex_name;
+    wchar_t *pipe_name;
+    volatile LONG stop;
+} WinSingle;
+
+typedef struct {
+    BtaApp *app;
+    char   *cwd;
+    char  **args;
+} WinSingleMsg;
+
+static WinSingle *win_single;
+
+static wchar_t *win_wide(const char *text)
+{
+    return (wchar_t *)g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
+}
+
+/* The id is already validated; a very long one is shortened to a stable hash
+ * so a mutex or pipe name cannot reach its own limit. */
+static char *win_single_key(const char *id)
+{
+    if (strlen(id) <= 100)
+        return g_strdup(id);
+
+    char *sum = g_compute_checksum_for_string(G_CHECKSUM_SHA256, id, -1);
+    char *key = g_strdup_printf("%.32s", sum);
+
+    g_free(sum);
+    return key;
+}
+
+static bool win_read_exact(HANDLE pipe, void *buffer, DWORD length)
+{
+    guint8 *at = buffer;
+    DWORD   got = 0;
+
+    while (got < length) {
+        DWORD now = 0;
+
+        if (!ReadFile(pipe, at + got, length - got, &now, NULL) || now == 0)
+            return false;
+        got += now;
+    }
+    return true;
+}
+
+static bool win_write_exact(HANDLE pipe, const void *buffer, DWORD length)
+{
+    const guint8 *at = buffer;
+    DWORD         put = 0;
+
+    while (put < length) {
+        DWORD now = 0;
+
+        if (!WriteFile(pipe, at + put, length - put, &now, NULL) || now == 0)
+            return false;
+        put += now;
+    }
+    return true;
+}
+
+static gboolean win_single_deliver(gpointer data)
+{
+    WinSingleMsg *msg = data;
+
+    app_second_instance(msg->app, msg->cwd, msg->args);
+    g_free(msg->cwd);
+    g_strfreev(msg->args);
+    g_free(msg);
+    return G_SOURCE_REMOVE;
+}
+
+static DWORD WINAPI win_single_thread(LPVOID data)
+{
+    WinSingle *single = data;
+
+    while (InterlockedCompareExchange(&single->stop, 0, 0) == 0) {
+        HANDLE pipe = CreateNamedPipeW(
+            single->pipe_name,
+            PIPE_ACCESS_INBOUND,
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT |
+                PIPE_REJECT_REMOTE_CLIENTS,
+            1, 0, 65536, 0, NULL);
+
+        if (pipe == INVALID_HANDLE_VALUE)
+            break;
+
+        BOOL connected = ConnectNamedPipe(pipe, NULL);
+
+        if (connected || GetLastError() == ERROR_PIPE_CONNECTED) {
+            guint32 net_length = 0;
+
+            if (win_read_exact(pipe, &net_length, sizeof net_length)) {
+                guint32 length = GUINT32_FROM_LE(net_length);
+
+                if (length <= WIN_SINGLE_MAX) {
+                    char *bytes = g_malloc((gsize)length + 1);
+
+                    if (win_read_exact(pipe, bytes, length)) {
+                        bytes[length] = '\0';
+
+                        GVariant *msg = g_variant_new_from_data(
+                            G_VARIANT_TYPE("(sas)"), bytes, length, TRUE,
+                            g_free, bytes);
+
+                        if (!msg) {
+                            g_free(bytes);
+                        } else {
+                            if (g_variant_is_normal_form(msg) &&
+                                g_variant_is_of_type(msg, G_VARIANT_TYPE("(sas)"))) {
+                                const char  *cwd  = NULL;
+                                const char **args = NULL;
+
+                                g_variant_get(msg, "(&s^a&s)", &cwd, &args);
+
+                                WinSingleMsg *job = g_new0(WinSingleMsg, 1);
+
+                                job->app  = single->app;
+                                job->cwd  = g_strdup(cwd ? cwd : "");
+                                job->args = args ? g_strdupv((char **)args)
+                                                 : g_new0(char *, 1);
+                                g_free(args);
+                                g_main_context_invoke(NULL, win_single_deliver, job);
+                            }
+                            g_variant_unref(msg);
+                        }
+                    } else {
+                        g_free(bytes);
+                    }
+                }
+            }
+        }
+
+        FlushFileBuffers(pipe);
+        DisconnectNamedPipe(pipe);
+        CloseHandle(pipe);
+    }
+    return 0;
+}
+
+static bool win_single_send(BtaApp *app, LPCWSTR pipe_name)
+{
+    HANDLE pipe = INVALID_HANDLE_VALUE;
+
+    for (int i = 0; i < 50; i++) {
+        pipe = CreateFileW(pipe_name, GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
+                           0, NULL);
+        if (pipe != INVALID_HANDLE_VALUE)
+            break;
+
+        DWORD error = GetLastError();
+
+        if (error != ERROR_PIPE_BUSY && error != ERROR_FILE_NOT_FOUND)
+            break;
+        if (!WaitNamedPipeW(pipe_name, 200))
+            Sleep(50);
+    }
+
+    if (pipe == INVALID_HANDLE_VALUE) {
+        fprintf(stderr, "bintana: cannot reach the running instance: "
+                        "Windows error %lu\n", (unsigned long)GetLastError());
+        return false;
+    }
+
+    char  *cwd = g_get_current_dir();
+    const char *empty[] = { NULL };
+    const char *const *args = app->args ? (const char *const *)app->args : empty;
+    GVariant *msg = g_variant_new("(s^as)", cwd ? cwd : "", args);
+    gsize     size = g_variant_get_size(msg);
+    bool      ok = false;
+
+    if (size <= WIN_SINGLE_MAX) {
+        guint32 net_length = GUINT32_TO_LE((guint32)size);
+        gconstpointer bytes = g_variant_get_data(msg);
+
+        ok = win_write_exact(pipe, &net_length, sizeof net_length) &&
+             win_write_exact(pipe, bytes, (DWORD)size);
+    }
+
+    g_variant_unref(msg);
+    g_free(cwd);
+    CloseHandle(pipe);
+    return ok;
+}
+
+static int win_single_join(BtaApp *app)
+{
+    if (win_single)
+        return -1;
+
+    char *key   = win_single_key(app->id);
+    char *mutex = g_strdup_printf("Local\\BintanaSingle-%s", key);
+    char *pipe  = g_strdup_printf("\\\\.\\pipe\\bintana-single-%s", key);
+
+    g_free(key);
+
+    wchar_t *mutex_name = win_wide(mutex);
+    wchar_t *pipe_name  = win_wide(pipe);
+
+    g_free(mutex);
+    g_free(pipe);
+
+    if (!mutex_name || !pipe_name) {
+        g_free(mutex_name);
+        g_free(pipe_name);
+        return -1;
+    }
+
+    SetLastError(ERROR_SUCCESS);
+    HANDLE handle = CreateMutexW(NULL, TRUE, (LPCWSTR)mutex_name);
+
+    if (!handle) {
+        fprintf(stderr, "bintana: cannot create the single-instance mutex: "
+                        "Windows error %lu\n", (unsigned long)GetLastError());
+        g_free(mutex_name);
+        g_free(pipe_name);
+        return -1;
+    }
+
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        CloseHandle(handle);
+
+        bool sent = win_single_send(app, (LPCWSTR)pipe_name);
+
+        g_free(mutex_name);
+        g_free(pipe_name);
+        return sent ? 1 : -1;
+    }
+
+    WinSingle *single = g_new0(WinSingle, 1);
+
+    single->app        = app;
+    single->mutex      = handle;
+    single->mutex_name = mutex_name;
+    single->pipe_name  = pipe_name;
+    win_single         = single;
+
+    single->thread = CreateThread(NULL, 0, win_single_thread, single, 0, NULL);
+    if (!single->thread) {
+        fprintf(stderr, "bintana: cannot start the single-instance pipe: "
+                        "Windows error %lu\n", (unsigned long)GetLastError());
+        win_single = NULL;
+        CloseHandle(single->mutex);
+        g_free(single->mutex_name);
+        g_free(single->pipe_name);
+        g_free(single);
+        return -1;
+    }
+    return 0;
+}
+
+static void win_single_stop(void)
+{
+    WinSingle *single = win_single;
+
+    if (!single)
+        return;
+    win_single = NULL;
+    InterlockedExchange(&single->stop, 1);
+
+    /* Wake a thread blocked in ConnectNamedPipe: the client it accepts reads
+     * end of file, sees the flag, and leaves. */
+    if (single->pipe_name) {
+        HANDLE dummy = CreateFileW(single->pipe_name, GENERIC_WRITE, 0, NULL,
+                                   OPEN_EXISTING, 0, NULL);
+
+        if (dummy != INVALID_HANDLE_VALUE)
+            CloseHandle(dummy);
+    }
+
+    if (single->thread) {
+        CancelSynchronousIo(single->thread);
+        WaitForSingleObject(single->thread, 5000);
+        CloseHandle(single->thread);
+    }
+    if (single->mutex)
+        CloseHandle(single->mutex);
+    g_free(single->mutex_name);
+    g_free(single->pipe_name);
+    g_free(single);
+}
+
+static void win_set_app_id(const char *id)
+{
+    wchar_t *wide = win_wide(id);
+
+    if (!wide)
+        return;
+
+    HRESULT hr = SetCurrentProcessExplicitAppUserModelID((PCWSTR)wide);
+
+    if (FAILED(hr))
+        g_debug("bintana: AppUserModelID '%s' refused (hr=0x%08lx)", id,
+                (unsigned long)hr);
+    g_free(wide);
+}
+#endif /* G_OS_WIN32 */
 
 int bta_app_run(BtaApp *app, int argc, char **argv)
 {
+#ifdef G_OS_WIN32
+    /* The taskbar, the toast and the jump list all group a process by its
+     * AppUserModelID; without this every Bintana application is the runtime's
+     * `bintanaw.exe`.  Set before the first window exists. */
+    if (app->id[0])
+        win_set_app_id(app->id);
+#endif
+
     /* A project that declares `main` never opens a display: no GtkApplication,
      * no activate, no GTK. */
     if (app->entry) {
         int rc = run_console(app);
+
         bta_debug_stopping(app->ctx, rc);
         return rc;
     }
+
+#ifdef G_OS_WIN32
+    if (app->single) {
+        int single = win_single_join(app);
+
+        if (single == 1) {
+            /* A second run handed its arguments to the first and has no
+             * window, no project code and no loop of its own. */
+            bta_debug_stopping(app->ctx, 0);
+            return 0;
+        }
+        if (single < 0) {
+            bta_debug_stopping(app->ctx, 1);
+            return 1;
+        }
+    }
+#endif
 
     /*
      * **The window's identity is the application's, on both backends, and it
@@ -1950,11 +2328,19 @@ int bta_app_run(BtaApp *app, int argc, char **argv)
     if (app->id[0])
         g_set_prgname(app->id);
 
-    app->gapp = gtk_application_new(app->id[0] ? app->id : NULL,
-                                    app->single ? G_APPLICATION_DEFAULT_FLAGS
-                                                : G_APPLICATION_NON_UNIQUE);
+#ifdef G_OS_WIN32
+    /* The single-instance pair of kernel objects above is the platform's
+     * answer; GLib's would look for a session bus that is not there. */
+    GApplicationFlags flags = G_APPLICATION_NON_UNIQUE;
+#else
+    GApplicationFlags flags = app->single ? G_APPLICATION_DEFAULT_FLAGS
+                                          : G_APPLICATION_NON_UNIQUE;
+#endif
+
+    app->gapp = gtk_application_new(app->id[0] ? app->id : NULL, flags);
     g_signal_connect(app->gapp, "activate", G_CALLBACK(on_activate), app);
 
+#ifndef G_OS_WIN32
     if (app->single) {
         /* Exported before the application registers, which is when the bus
          * learns what it has.  The first instance is the one that registers
@@ -2001,8 +2387,13 @@ int bta_app_run(BtaApp *app, int argc, char **argv)
         }
         g_clear_error(&err);
     }
+#endif /* !G_OS_WIN32 */
 
     int rc = g_application_run(G_APPLICATION(app->gapp), argc, argv);
+
+#ifdef G_OS_WIN32
+    win_single_stop();
+#endif
 
     if (!JS_IsUndefined(app->startup_form)) {
         JS_FreeValue(app->ctx, app->startup_form);

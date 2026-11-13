@@ -5,8 +5,8 @@
  * printed every line, `Debug` included, with no `Level`, no `Target` and no
  * `Logger.Handler` -- so a `main` that set `Logger.Level = "Warning"` got a
  * property that changed nothing under `bintana`, and its `Debug` lines on the
- * terminal anyway. One file, linked by both, with the journal where the build
- * has one (bta_journal.c).
+ * terminal anyway. One file, linked by both, with the platform's log where the
+ * build has one (bta_journal.c on Linux, bta_eventlog.c on Windows).
  */
 #include "bta.h"
 
@@ -25,8 +25,8 @@
  * they read the same in code as in a .form.
  *
  * The base is stdout and stderr, which every system has.  Anything better is an
- * extension: bta_journal.c is the systemd one, and another operating system's
- * would be another file answering the same two questions.
+ * extension: `bta_journal.c` is the systemd one and `bta_eventlog.c` the
+ * Windows Event Log one, answering the same questions.
  */
 enum { BTA_LOG_DEBUG, BTA_LOG_INFO, BTA_LOG_WARNING, BTA_LOG_ERROR,
        BTA_LOG_NONE };
@@ -92,7 +92,7 @@ static bool log_handled_by_app(JSContext *ctx, int level, const char *text)
  *
  * stdout and stderr are the base and every system has them; a platform backend
  * is asked first and is allowed to decline, in which case the terminal still
- * gets it.  Nothing here knows what a journal is -- see bta_journal.c.
+ * gets it.  Nothing here knows what a journal or an event log is.
  */
 static void log_write(int level, const char *text)
 {
@@ -103,7 +103,7 @@ static void log_write(int level, const char *text)
         return;
     }
 
-    if (log_to_platform && bta_journal_send(level, text))
+    if (log_to_platform && bta_platform_log_send(level, text))
         return;
 
     /* Warnings and errors to stderr, which is where a program's complaints
@@ -210,7 +210,8 @@ static JSValue js_log_get_target(JSContext *ctx, JSValueConst this_val)
 {
     if (log_file_path)
         return JS_NewString(ctx, log_file_path);
-    return JS_NewString(ctx, log_to_platform ? "Journal" : "Terminal");
+    return JS_NewString(ctx, log_to_platform ? bta_platform_log_name()
+                                             : "Terminal");
 }
 
 static JSValue js_log_set_target(JSContext *ctx, JSValueConst this_val,
@@ -224,15 +225,23 @@ static JSValue js_log_set_target(JSContext *ctx, JSValueConst this_val,
     if (!g_ascii_strcasecmp(name, "Terminal")) {
         log_to_platform = false;
         log_close_file();
-    } else if (!g_ascii_strcasecmp(name, "Journal")) {
+    } else if (!g_ascii_strcasecmp(name, bta_platform_log_name())) {
         /* Refused rather than ignored: an application that asked to log to the
-         * journal and got the terminal would never find out. */
-        if (!bta_journal_available()) {
-            e = JS_ThrowRangeError(ctx, "Logger.Target: this build has no journal");
+         * system's log and got the terminal would never find out. */
+        if (!bta_platform_log_available()) {
+            e = JS_ThrowRangeError(ctx, "Logger.Target: %s",
+                                   bta_platform_log_why());
         } else {
             log_to_platform = true;
             log_close_file();
         }
+    } else if (!g_ascii_strcasecmp(name, "Journal") ||
+               !g_ascii_strcasecmp(name, "EventLog")) {
+        /* The other platform's word is not a file name: without this,
+         * `Target = "EventLog"` on Linux created a file called that in the
+         * working directory.  It is refused where it means nothing. */
+        e = JS_ThrowRangeError(ctx, "Logger.Target: this platform's log is '%s'",
+                               bta_platform_log_name());
     } else {
         /*
          * **Anything else is a file to append to.** A log line by line was the
@@ -282,9 +291,12 @@ static const JSCFunctionListEntry log_props[] = {
     JS_CGETSET_DEF("Level",  js_log_get_level,  js_log_set_level),
     /* Target
      *   where the lines are written: `"Terminal"` (the default, and
-     *   stdout/stderr under it), `"Journal"` where the build has one, or **a
-     *   file path** — opened in append mode and flushed per line, and it
-     *   reads back as the path
+     *   stdout/stderr under it), `"Journal"` on Linux or `"EventLog"` on
+     *   Windows where the platform has one, or **a file path** — opened in
+     *   append mode and flushed per line, and it reads back as the path.
+     *   Writing to the Event Log needs no administrator; run
+     *   `bintana --register-event-source` once from an elevated prompt so the
+     *   viewer can describe the events instead of showing their raw data
      */
     JS_CGETSET_DEF("Target", js_log_get_target, js_log_set_target),
 };
