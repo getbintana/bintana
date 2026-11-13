@@ -1454,7 +1454,6 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      * thread cannot move the words under a running task.
      */
     bta_bytes_init(ctx, global);
-    bta_bitmap_init(ctx, global);
     bta_decimal_init(ctx, global);
     bta_day_init(ctx, global);
     bta_database_init(ctx, global);
@@ -1471,7 +1470,6 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     /* The two names exist and refuse: a socket needs the main loop's events. */
     bta_socket_init_worker(ctx, global);
     bta_serial_init_worker(ctx, global);
-    bta_tray_init_worker(ctx, global);
     /* A worker computing on a thread is what a capture wants attributed most:
      * `Profile.Begin` here marks the same collector the main thread does (per
      * thread, so it is safe) and the same capture file (under its own lock). */
@@ -1492,10 +1490,11 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     bta_cipher_init(ctx, global);
     /* Reading an archive off the main thread is what a worker is for. */
     bta_zip_init(ctx, global);
-    /* A header read and a dictionary: a report sizing a logo on a thread, which
-     * is the caller a widget could not have served anyway. */
-    bta_probe_init(ctx, global);
-    bta_pdf_init(ctx, global);
+    /* What the host that started this worker owns: the graphical host's
+     * `Bitmap`, `Probe` and `PdfDocument` (a header read and a dictionary: a
+     * report sizing a logo on a thread) and the names `Tray` refuses with; the
+     * core's `Bitmap` when its drawing module is loaded. */
+    bta_task_worker_host(ctx, global);
     /* The whole catalogue, built on this thread from the language the
      * application had at `Start`.  A worker that sorts ten thousand names and
      * one that writes a translated report both get what they asked for, and

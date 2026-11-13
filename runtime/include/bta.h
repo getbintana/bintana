@@ -903,17 +903,24 @@ int     bta_app_run(BtaApp *app, int argc, char **argv);
 
 char   *bta_read_file(const char *path, size_t *len);
 /* A `GError` as a stable sentence of ours, out of its domain and code -- never
- * `err->message`, which GLib translates on each desktop.  See bta_runtime.c. */
+ * `err->message`, which GLib translates on each desktop.  See bta_util.c. */
 const char *bta_gerror_text(const GError *err);
 /* And `errno`'s: `g_strerror` is translated too. */
 const char *bta_errno_text(int errnum);
 int     bta_eval_file(JSContext *ctx, const char *path);
 void    bta_dump_error(JSContext *ctx);
-/* The language without any project: the intrinsics build_context installs,
- * exposed so a worker thread starts from the same language. Paired with
- * bta_close_hatches below, which is the same closing. */
+/* The language without any project (bta_language.c): the intrinsics every
+ * host and every `Task` worker start from, and the closing that takes the
+ * hatches away once the prelude has what it needs. Both hosts link the one
+ * file, so a `main` under `bintana` and under `bintana-gui` is one language. */
 JSContext *bta_new_context(JSRuntime *rt);
 void       bta_close_hatches(JSContext *ctx);
+/* What to write instead of a name the language took away: `""` when nothing
+ * replaces it, NULL for a name that was never taken. */
+const char *bta_replacement_for(const char *name);
+/* `Application.Replacements()`, off the same rows, for either host to install. */
+JSValue bta_application_replacements(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
 /*
  * A fatal error raised from C, before any project code has run: it always goes
  * to stderr, and -- when there is a display and an application to own it -- into
@@ -927,6 +934,18 @@ void       bta_close_hatches(JSContext *ctx);
  * already is.
  */
 void    bta_report_fatal(BtaApp *app, const char *message);
+
+/* `Message` (bta_message.c), and the host's half of it: show `text` (kind 0
+ * Info, 1 Warning, 2 Error) and answer true, or answer false when there is no
+ * display and the shared half prints it to stderr. */
+void    bta_message_init(JSContext *ctx, JSValueConst global);
+bool    bta_message_show(int kind, const char *text);
+
+/* The globals a `Task` worker gets that belong to the host that started it,
+ * installed by `bta_task.c` after the shared ones: the graphical host's
+ * `Bitmap`, `Probe`, `PdfDocument` and `Tray`'s refusals, and in the core
+ * `Bitmap` only when the drawing module is loaded. */
+void    bta_task_worker_host(JSContext *ctx, JSValueConst global);
 void    bta_drain_jobs(JSRuntime *rt);   /* run pending promise callbacks */
 
 /* A Debug line from C, where there is no argv to join: threshold, Handler,

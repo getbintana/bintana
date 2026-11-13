@@ -284,6 +284,46 @@ else()
     set(BTA_SERIAL_SOURCE)
 endif()
 
+# **The optional libraries both hosts link**, declared once: what a console
+# program is written with -- `Database.Sqlite`, `Database.Odbc`, `Http`,
+# `Cipher`/`Key`, `Keyring` -- names no toolkit, so the core links exactly what
+# the graphical host does for them, and a missing one is the same refusal in
+# both. The STATUS lines that say what was found are printed once, below.
+function(bta_link_console_libraries target)
+    if(SQLITE3_FOUND)
+        target_link_libraries(${target} PRIVATE PkgConfig::SQLITE3)
+        target_compile_definitions(${target} PRIVATE BTA_HAVE_SQLITE=1)
+    endif()
+    if(WIN32)
+        target_link_libraries(${target} PRIVATE odbc32)
+        target_compile_definitions(${target} PRIVATE BTA_HAVE_ODBC=1)
+    elseif(ODBC_FOUND)
+        target_link_libraries(${target} PRIVATE PkgConfig::ODBC)
+        target_compile_definitions(${target} PRIVATE BTA_HAVE_ODBC=1)
+    endif()
+    if(SOUP_FOUND)
+        target_link_libraries(${target} PRIVATE PkgConfig::SOUP)
+        target_compile_definitions(${target} PRIVATE BTA_HAVE_SOUP=1)
+    endif()
+    if(GNUTLS_FOUND)
+        target_link_libraries(${target} PRIVATE PkgConfig::GNUTLS)
+        target_compile_definitions(${target} PRIVATE BTA_HAVE_GNUTLS=1)
+    endif()
+    if(SECRET_FOUND)
+        target_link_libraries(${target} PRIVATE PkgConfig::SECRET)
+        target_compile_definitions(${target} PRIVATE BTA_HAVE_LIBSECRET=1)
+    endif()
+    if(APPLE)
+        # Keychain, for `Keyring`'s macOS provider.
+        find_library(SECURITY_FRAMEWORK Security)
+        if(NOT SECURITY_FRAMEWORK)
+            message(FATAL_ERROR "no Security framework: Keyring's macOS provider "
+                                "needs it")
+        endif()
+        target_link_libraries(${target} PRIVATE ${SECURITY_FRAMEWORK})
+    endif()
+endfunction()
+
 # **Two hosts, two binaries.** On Linux the core is `bintana` and the
 # graphical host is `bintana-gui`; Windows still ships the single graphical
 # `bintana.exe` plus `bintanaw.exe` until its console host exists (Phase 3).
@@ -295,6 +335,8 @@ endif()
 add_executable(${BTA_GUI_TARGET}
     runtime/src/main.c
     runtime/src/bta_runtime.c
+    runtime/src/bta_language.c
+    runtime/src/bta_message.c
     runtime/src/bta_project.c
     runtime/src/bta_util.c
     runtime/src/bta_module.c
@@ -373,15 +415,7 @@ if(WIN32)
     target_link_libraries(${BTA_GUI_TARGET} PRIVATE shell32 user32 gdi32 runtimeobject ole32 advapi32 winspool)
 endif()
 
-if(APPLE)
-    # Keychain, for `Keyring`'s macOS provider.
-    find_library(SECURITY_FRAMEWORK Security)
-    if(NOT SECURITY_FRAMEWORK)
-        message(FATAL_ERROR "no Security framework: Keyring's macOS provider "
-                            "needs it")
-    endif()
-    target_link_libraries(${BTA_GUI_TARGET} PRIVATE ${SECURITY_FRAMEWORK})
-endif()
+bta_link_console_libraries(${BTA_GUI_TARGET})
 if(GIOUNIX_FOUND)
     target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::GIOUNIX)
 endif()
@@ -424,20 +458,14 @@ else()
 endif()
 
 if(SQLITE3_FOUND)
-    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::SQLITE3)
-    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_SQLITE=1)
     message(STATUS "sqlite3 ${SQLITE3_VERSION}: Database.Sqlite is available")
 else()
     message(STATUS "no sqlite3: Database.Sqlite will say so when called")
 endif()
 
 if(WIN32)
-    target_link_libraries(${BTA_GUI_TARGET} PRIVATE odbc32)
-    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_ODBC=1)
     message(STATUS "odbc32: Database.Odbc is available")
 elseif(ODBC_FOUND)
-    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::ODBC)
-    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_ODBC=1)
     message(STATUS "unixODBC ${ODBC_VERSION}: Database.Odbc is available")
 else()
     message(STATUS "no unixODBC: Database.Odbc will say so when called")
@@ -457,16 +485,12 @@ if(SYSTEMD_FOUND)
 endif()
 
 if(SOUP_FOUND)
-    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::SOUP)
-    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_SOUP=1)
     message(STATUS "libsoup ${SOUP_VERSION}: Http is available")
 else()
     message(STATUS "no libsoup: Http will say so when called")
 endif()
 
 if(GNUTLS_FOUND)
-    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::GNUTLS)
-    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_GNUTLS=1)
     message(STATUS "gnutls ${GNUTLS_VERSION}: Cipher and Key are available")
 else()
     message(STATUS "no gnutls: Cipher and Key exist and refuse")
@@ -489,8 +513,6 @@ else()
 endif()
 
 if(SECRET_FOUND)
-    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::SECRET)
-    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_LIBSECRET=1)
     message(STATUS "libsecret ${SECRET_VERSION}: Keyring uses the Secret Service")
 elseif(WIN32)
     message(STATUS "no libsecret: Keyring uses the Credential Manager")
@@ -596,15 +618,18 @@ if(NOT WIN32)
 endif()
 
 # ----------------------------------------------------------- console host ---
-# The console core: `bintana --version`, `check`, a project's `main` and the
-# core globals and the metadata rows, and no toolkit in the link.  The widget
-# files are the same `BTA_META_ONLY` ones; `bta_sys.c` leaves out the desktop
-# objects under `BTA_HEADLESS`; `bta_headless.c` supplies the few symbols that
-# live in `bta_runtime.c` today.  Not installed yet: the package split is
-# Stage 1 of docs/plans/distribution-plan.md.
+# The console core: `bintana --version`, `check`, a project's `main` and
+# its tests, with no toolkit in the link.  It links the same files the
+# graphical host does for everything a console program is written with --
+# `File`, `Exec`, `Http`, `Database`, `Task`, `Zip`, `Random` and the rest
+# -- and `bta_language.c`, so a `main` is one language in both hosts.
+# `bta_sys.c` leaves out the desktop objects under `BTA_HEADLESS`, and
+# `bta_headless.c` supplies the few symbols that live in `bta_runtime.c`.
 if(NOT WIN32)
     set(BTA_HEADLESS_SOURCES
         runtime/src/bta_headless.c
+        runtime/src/bta_language.c
+        runtime/src/bta_message.c
         runtime/src/bta_project.c
         runtime/src/bta_util.c
         runtime/src/bta_module.c
@@ -620,6 +645,22 @@ if(NOT WIN32)
         runtime/src/bta_day.c
         runtime/src/bta_bytes.c
         runtime/src/bta_cancellable.c
+        runtime/src/bta_task.c
+        runtime/src/bta_lock.c
+        runtime/src/bta_random.c
+        runtime/src/bta_gzip.c
+        runtime/src/bta_zip.c
+        runtime/src/bta_database.c
+        runtime/src/bta_sqlite.c
+        runtime/src/bta_odbc.c
+        runtime/src/bta_http.c
+        runtime/src/bta_socket.c
+        runtime/src/bta_serial.c
+        ${BTA_SERIAL_SOURCE}
+        runtime/src/bta_cipher.c
+        runtime/src/bta_key.c
+        runtime/src/bta_keyring.c
+        runtime/src/bta_desktop.c
         ${PRELUDE_H}
     )
 
@@ -674,6 +715,7 @@ if(NOT WIN32)
     # bintana` alone says the document is not installed, which is true.
     target_link_libraries(bintana PRIVATE
         quickjs PkgConfig::GLIBCORE PkgConfig::GMODULE)
+    bta_link_console_libraries(bintana)
     if(NOT WIN32)
         target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)
     endif()

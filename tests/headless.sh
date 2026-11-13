@@ -321,6 +321,39 @@ else
     fail=1
 fi
 
+# What a console program is written with -- Http, Database, Task, Zip, Gzip,
+# Random, Lock, Message -- is the real thing in the core, out of the files the
+# graphical host links, and the language is the same one: the hatches are
+# closed and a removed name says what replaces it. Both hosts run the fixture
+# and their stdout must be the same; the run ends by itself once the server,
+# the request and the task have nothing left to answer, so the core's loop is
+# what is being asked. A GLib warning on the core's stderr is a failure too:
+# the loop's own source used to be removed twice.
+if "$BINTANA_CORE" tests/headless/projects/globals one two \
+        >"$tmp/globals-core.out" 2>"$tmp/globals-core.err" &&
+   "$BINTANA" tests/headless/projects/globals one two \
+        >"$tmp/globals-gui.out" 2>"$tmp/globals-gui.err"; then
+    if ! diff -u "$tmp/globals-gui.out" "$tmp/globals-core.out" >"$tmp/globals.diff"; then
+        echo "the core's console globals and the graphical host's disagree:" >&2
+        cat "$tmp/globals.diff" >&2
+        fail=1
+    elif ! grep -q '^Task: 144 \[one|two\]$' "$tmp/globals-core.out"; then
+        echo "the core's run ended before its task answered:" >&2
+        cat "$tmp/globals-core.out" >&2
+        fail=1
+    elif grep -Eq 'CRITICAL|WARNING' "$tmp/globals-core.err"; then
+        echo "the core's run warned:" >&2
+        cat "$tmp/globals-core.err" >&2
+        fail=1
+    else
+        echo "Http, Database, Task, Zip and Random are the same in both hosts"
+    fi
+else
+    echo "one of the hosts failed the console globals fixture:" >&2
+    cat "$tmp/globals-core.err" "$tmp/globals-gui.err" >&2 2>/dev/null
+    fail=1
+fi
+
 # The binary links no widget file, and the metadata document is loaded only for
 # `check`: a `main` gets the language's own answer for `Widget`.
 if out=$("$BINTANA_CORE" tests/headless/projects/bare 2>"$tmp/bare.err") &&

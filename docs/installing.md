@@ -157,7 +157,12 @@ xdg-mime default bintana-ide.desktop application/x-bintana-project
 **Two binaries, two roles.** `bintana` is the core and never loads GTK: it
 answers `--version` and `check`, runs a `main`, and execs `bintana-gui` for a
 project that declares `startup`. `bintana-gui` is the only one that opens a
-window. `bintana-ide` starts the graphical host on the IDE project.
+window. `bintana-ide` starts the graphical host on the IDE project. **The
+optional libraries a console program uses -- sqlite, unixODBC, libsoup, GnuTLS,
+libsecret -- are linked by both binaries when CMake finds them**, so a `main`
+that calls `Http` or `Database.Sqlite` answers the same under either; a missing
+one is the same sentence in both, naming the package. GTK, GtkSourceView, VTE,
+GStreamer and poppler stay the graphical host's.
 
 `bintana check` is the same project pass the IDE runs, from a shell: it reads
 the project and opens no window, so a CI job or a git hook can ask it. The exit

@@ -36,279 +36,6 @@ char *bta_read_file(const char *path, size_t *len)
 }
 
 /*
- * A `GError` said in words of ours.
- *
- * **GLib's own sentence is translated**, so an error a program catches says
- * "No existe el fichero o el directorio" on a Spanish desktop and "No such file
- * or directory" on an English one: it reads differently on each machine, cannot
- * be matched by a program, and does not paste into a report.  The domain and
- * the code do not move, so they are what a sentence is built from -- the pairs
- * below are the ones the runtime's own verbs meet.
- *
- * `NULL` -- no error at all, which the call sites used to answer by hand -- is
- * "unknown error".  A pair that is not in the table is named by its domain and
- * its code, which is still stable and still quotable.  That fallback lives in
- * one buffer per thread -- a `Task` worker can reach `File` too -- and every use
- * formats it into the sentence it belongs to before anything else runs.
- */
-const char *bta_gerror_text(const GError *err)
-{
-    static _Thread_local char other[80];
-
-    if (!err)
-        return "unknown error";
-
-    if (err->domain == G_FILE_ERROR) {
-        switch ((GFileError)err->code) {
-        case G_FILE_ERROR_EXIST:       return "it is already there";
-        case G_FILE_ERROR_ISDIR:       return "it is a directory";
-        case G_FILE_ERROR_ACCES:       return "permission denied";
-        case G_FILE_ERROR_NAMETOOLONG: return "the name is too long";
-        case G_FILE_ERROR_NOENT:       return "no such file or directory";
-        case G_FILE_ERROR_NOTDIR:      return "a directory in the path is not one";
-        case G_FILE_ERROR_NXIO:        return "the device is not there";
-        case G_FILE_ERROR_NODEV:       return "it is not a device";
-        case G_FILE_ERROR_ROFS:        return "the filesystem is read-only";
-        case G_FILE_ERROR_TXTBSY:      return "it is in use as text";
-        case G_FILE_ERROR_FAULT:       return "the address is not valid";
-        case G_FILE_ERROR_LOOP:        return "too many symbolic links";
-        case G_FILE_ERROR_NOSPC:       return "no space left";
-        case G_FILE_ERROR_NOMEM:       return "there is not enough memory";
-        case G_FILE_ERROR_MFILE:       return "the process holds too many files";
-        case G_FILE_ERROR_NFILE:       return "too many open files";
-        case G_FILE_ERROR_BADF:        return "the descriptor is not valid";
-        case G_FILE_ERROR_INVAL:       return "invalid argument";
-        case G_FILE_ERROR_PIPE:        return "the pipe is broken";
-        case G_FILE_ERROR_AGAIN:       return "it would have waited";
-        case G_FILE_ERROR_INTR:        return "the call was interrupted";
-        case G_FILE_ERROR_IO:          return "the device failed";
-        case G_FILE_ERROR_PERM:        return "permission denied";
-        case G_FILE_ERROR_NOSYS:       return "it is not implemented";
-        case G_FILE_ERROR_FAILED:      return "it failed";
-        default: break;
-        }
-    } else if (err->domain == G_IO_ERROR) {
-        switch ((GIOErrorEnum)err->code) {
-        case G_IO_ERROR_FAILED:              return "it failed";
-        case G_IO_ERROR_NOT_FOUND:           return "no such file or directory";
-        case G_IO_ERROR_EXISTS:              return "it is already there";
-        case G_IO_ERROR_IS_DIRECTORY:        return "it is a directory";
-        case G_IO_ERROR_NOT_DIRECTORY:       return "it is not a directory";
-        case G_IO_ERROR_NOT_EMPTY:           return "it is not empty";
-        case G_IO_ERROR_NOT_REGULAR_FILE:    return "it is not a regular file";
-        case G_IO_ERROR_NOT_SYMBOLIC_LINK:   return "it is not a symbolic link";
-        case G_IO_ERROR_NOT_MOUNTABLE_FILE:  return "it cannot be mounted";
-        case G_IO_ERROR_FILENAME_TOO_LONG:   return "the name is too long";
-        case G_IO_ERROR_INVALID_FILENAME:    return "the name is not valid";
-        case G_IO_ERROR_TOO_MANY_LINKS:      return "too many symbolic links";
-        case G_IO_ERROR_NO_SPACE:            return "no space left";
-        case G_IO_ERROR_INVALID_ARGUMENT:    return "invalid argument";
-        case G_IO_ERROR_PERMISSION_DENIED:   return "permission denied";
-        case G_IO_ERROR_NOT_SUPPORTED:       return "it is not supported here";
-        case G_IO_ERROR_NOT_MOUNTED:         return "it is not mounted";
-        case G_IO_ERROR_ALREADY_MOUNTED:     return "it is already mounted";
-        case G_IO_ERROR_CLOSED:              return "it is closed";
-        case G_IO_ERROR_CANCELLED:           return "the operation was cancelled";
-        case G_IO_ERROR_PENDING:             return "another operation is still pending";
-        case G_IO_ERROR_READ_ONLY:           return "it is read-only";
-        case G_IO_ERROR_CANT_CREATE_BACKUP:  return "the backup could not be made";
-        case G_IO_ERROR_WRONG_ETAG:          return "it changed while it was read";
-        case G_IO_ERROR_TIMED_OUT:           return "it took too long";
-        case G_IO_ERROR_WOULD_RECURSE:       return "it would recurse";
-        case G_IO_ERROR_BUSY:                return "it is busy";
-        case G_IO_ERROR_WOULD_BLOCK:         return "it would have waited";
-        case G_IO_ERROR_HOST_NOT_FOUND:      return "the host was not found";
-        case G_IO_ERROR_WOULD_MERGE:         return "it would merge";
-        case G_IO_ERROR_TOO_MANY_OPEN_FILES: return "too many open files";
-        case G_IO_ERROR_NOT_INITIALIZED:     return "it was not started";
-        case G_IO_ERROR_ADDRESS_IN_USE:      return "the address is already in use";
-        case G_IO_ERROR_PARTIAL_INPUT:       return "the input ended in the middle";
-        case G_IO_ERROR_INVALID_DATA:        return "the data is not what it claims";
-        case G_IO_ERROR_DBUS_ERROR:          return "the other service failed";
-        case G_IO_ERROR_HOST_UNREACHABLE:    return "the host is unreachable";
-        case G_IO_ERROR_NETWORK_UNREACHABLE: return "the network is unreachable";
-        case G_IO_ERROR_CONNECTION_REFUSED:  return "the connection was refused";
-        case G_IO_ERROR_PROXY_FAILED:        return "the proxy failed";
-        case G_IO_ERROR_PROXY_AUTH_FAILED:   return "the proxy refused the credentials";
-        case G_IO_ERROR_PROXY_NEED_AUTH:     return "the proxy wants credentials";
-        case G_IO_ERROR_PROXY_NOT_ALLOWED:   return "the proxy is not allowed";
-        case G_IO_ERROR_MESSAGE_TOO_LARGE:   return "the message is too large";
-        case G_IO_ERROR_NO_SUCH_DEVICE:      return "the device is not there";
-        case G_IO_ERROR_DESTINATION_UNSET:   return "the destination was not set";
-        default: break;
-        }
-    } else if (err->domain == G_SPAWN_ERROR) {
-        switch ((GSpawnError)err->code) {
-        case G_SPAWN_ERROR_FORK:        return "the fork failed";
-        case G_SPAWN_ERROR_READ:        return "the pipe could not be read";
-        case G_SPAWN_ERROR_CHDIR:       return "the working directory cannot be entered";
-        case G_SPAWN_ERROR_ACCES:       return "permission denied";
-        case G_SPAWN_ERROR_PERM:        return "permission denied";
-        case G_SPAWN_ERROR_TOO_BIG:     return "the arguments do not fit";
-        case G_SPAWN_ERROR_NOEXEC:      return "it is not executable";
-        case G_SPAWN_ERROR_NAMETOOLONG: return "the name is too long";
-        case G_SPAWN_ERROR_NOENT:       return "no such file or directory";
-        case G_SPAWN_ERROR_NOMEM:       return "there is not enough memory";
-        case G_SPAWN_ERROR_NOTDIR:      return "a directory in the path is not one";
-        case G_SPAWN_ERROR_LOOP:        return "too many symbolic links";
-        case G_SPAWN_ERROR_TXTBUSY:     return "it is in use as text";
-        case G_SPAWN_ERROR_IO:          return "the device failed";
-        case G_SPAWN_ERROR_NFILE:       return "too many open files";
-        case G_SPAWN_ERROR_MFILE:       return "the process holds too many files";
-        case G_SPAWN_ERROR_INVAL:       return "invalid argument";
-        case G_SPAWN_ERROR_ISDIR:       return "it is a directory";
-        case G_SPAWN_ERROR_LIBBAD:      return "a library it needs is damaged";
-        case G_SPAWN_ERROR_FAILED:      return "it could not be started";
-        default: break;
-        }
-    } else if (err->domain == G_CONVERT_ERROR) {
-        switch ((GConvertError)err->code) {
-        case G_CONVERT_ERROR_NO_CONVERSION:     return "there is no such conversion";
-        case G_CONVERT_ERROR_ILLEGAL_SEQUENCE:  return "the text is not valid for it";
-        case G_CONVERT_ERROR_FAILED:            return "the conversion failed";
-        case G_CONVERT_ERROR_PARTIAL_INPUT:     return "the input ended in the middle";
-        case G_CONVERT_ERROR_BAD_URI:           return "the URI is not usable";
-        case G_CONVERT_ERROR_NOT_ABSOLUTE_PATH: return "the path is not absolute";
-        case G_CONVERT_ERROR_NO_MEMORY:         return "there is not enough memory";
-        case G_CONVERT_ERROR_EMBEDDED_NUL:      return "the text has a NUL in it";
-        default: break;
-        }
-    } else if (err->domain == G_TLS_ERROR) {
-        switch ((GTlsError)err->code) {
-        case G_TLS_ERROR_UNAVAILABLE:              return "TLS is not available";
-        case G_TLS_ERROR_MISC:                     return "TLS failed";
-        case G_TLS_ERROR_BAD_CERTIFICATE:          return "the certificate is not valid";
-        case G_TLS_ERROR_NOT_TLS:                  return "the other side does not speak TLS";
-        case G_TLS_ERROR_HANDSHAKE:                return "the handshake failed";
-        case G_TLS_ERROR_CERTIFICATE_REQUIRED:     return "a certificate is required";
-        case G_TLS_ERROR_EOF:                      return "the other side closed without saying goodbye";
-        case G_TLS_ERROR_INAPPROPRIATE_FALLBACK:   return "the fallback was refused";
-        case G_TLS_ERROR_BAD_CERTIFICATE_PASSWORD: return "the certificate's password is wrong";
-        default: break;
-        }
-    } else if (err->domain == G_KEY_FILE_ERROR) {
-        switch ((GKeyFileError)err->code) {
-        case G_KEY_FILE_ERROR_UNKNOWN_ENCODING: return "it is not valid UTF-8";
-        case G_KEY_FILE_ERROR_PARSE:            return "it is not a settings file";
-        case G_KEY_FILE_ERROR_NOT_FOUND:        return "it was not found";
-        case G_KEY_FILE_ERROR_KEY_NOT_FOUND:    return "there is no such key";
-        case G_KEY_FILE_ERROR_GROUP_NOT_FOUND:  return "there is no such group";
-        case G_KEY_FILE_ERROR_INVALID_VALUE:    return "the value is not valid";
-        default: break;
-        }
-    } else if (err->domain == G_MARKUP_ERROR) {
-        switch ((GMarkupError)err->code) {
-        case G_MARKUP_ERROR_BAD_UTF8:          return "it is not valid UTF-8";
-        case G_MARKUP_ERROR_EMPTY:             return "it is empty";
-        case G_MARKUP_ERROR_PARSE:             return "it is not markup";
-        case G_MARKUP_ERROR_UNKNOWN_ELEMENT:   return "it names an element that does not exist";
-        case G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE: return "it names an attribute that does not exist";
-        case G_MARKUP_ERROR_INVALID_CONTENT:   return "an element holds what it cannot";
-        case G_MARKUP_ERROR_MISSING_ATTRIBUTE: return "an element is missing an attribute it needs";
-        default: break;
-        }
-    } else if (err->domain == G_RESOLVER_ERROR) {
-        switch ((GResolverError)err->code) {
-        case G_RESOLVER_ERROR_NOT_FOUND:         return "the host was not found";
-        case G_RESOLVER_ERROR_TEMPORARY_FAILURE: return "the host could not be looked up now";
-        case G_RESOLVER_ERROR_INTERNAL:          return "the lookup failed";
-        default: break;
-        }
-    } else if (err->domain == G_REGEX_ERROR) {
-        /* The match and the replacement have codes of their own; every
-         * other code is one way a pattern fails to compile. */
-        switch (err->code) {
-        case G_REGEX_ERROR_REPLACE: return "the replacement is not valid";
-        case G_REGEX_ERROR_MATCH:   return "the match failed";
-        case G_REGEX_ERROR_INTERNAL: return "the pattern engine failed";
-        default:                    return "the pattern is not a valid regular expression";
-        }
-    } else if (err->domain == GDK_TEXTURE_ERROR) {
-        switch ((GdkTextureError)err->code) {
-        case GDK_TEXTURE_ERROR_TOO_LARGE:           return "the image is too large";
-        case GDK_TEXTURE_ERROR_CORRUPT_IMAGE:       return "the image is damaged";
-        case GDK_TEXTURE_ERROR_UNSUPPORTED_CONTENT: return "the image holds what cannot be shown";
-        case GDK_TEXTURE_ERROR_UNSUPPORTED_FORMAT:  return "the image format is not supported";
-        default: break;
-        }
-    } else if (!strcmp(g_quark_to_string(err->domain), "soup-session-error-quark")) {
-        /* Named, not included: this file builds without libsoup. The codes
-         * are SoupSessionError's, in its order. */
-        switch (err->code) {
-        case 0: return "the response could not be parsed";
-        case 1: return "the response's encoding is not understood";
-        case 2: return "there were too many redirects";
-        case 3: return "the request was restarted too many times";
-        case 4: return "a redirect named no location";
-        case 5: return "a redirect named an address that is not valid";
-        case 6: return "the request is already being sent";
-        default: break;
-        }
-    }
-
-    g_snprintf(other, sizeof other, "%s %d", g_quark_to_string(err->domain),
-               err->code);
-    return other;
-}
-
-/*
- * And the same for `errno`, because `g_strerror` is the C library's and it is
- * translated on each desktop too.  The numbers do not move, and these phrases
- * are word for word the ones the table above uses for the same conditions --
- * one wording whether a failure arrived as a `GError` or as a failed call.
- * An errno nobody here knows is `"errno N"`: still stable, still quotable.
- */
-const char *bta_errno_text(int errnum)
-{
-    static _Thread_local char other[32];
-
-    switch (errnum) {
-    case EPERM:        return "permission denied";
-    case ENOENT:       return "no such file or directory";
-    case EINTR:        return "the call was interrupted";
-    case EIO:          return "the device failed";
-    case ENXIO:        return "the device is not there";
-    case E2BIG:        return "the arguments do not fit";
-    case ENOEXEC:      return "it is not executable";
-    case EBADF:        return "the descriptor is not valid";
-    case EAGAIN:       return "it would have waited";
-    case ENOMEM:       return "there is not enough memory";
-    case EACCES:       return "permission denied";
-    case EFAULT:       return "the address is not valid";
-    case EBUSY:        return "it is busy";
-    case EEXIST:       return "it is already there";
-    case EXDEV:        return "it would cross filesystems";
-    case ENODEV:       return "it is not a device";
-    case ENOTDIR:      return "a directory in the path is not one";
-    case EISDIR:       return "it is a directory";
-    case EINVAL:       return "invalid argument";
-    case ENFILE:       return "too many open files";
-    case EMFILE:       return "the process holds too many files";
-    case EFBIG:        return "the file is too large";
-    case ENOSPC:       return "no space left";
-    case ESPIPE:       return "it cannot seek";
-    case EROFS:        return "the filesystem is read-only";
-    case EMLINK:       return "too many links";
-    case EPIPE:        return "the pipe is broken";
-    case ENAMETOOLONG: return "the name is too long";
-    case ENOSYS:       return "it is not implemented";
-    case ENOTEMPTY:    return "it is not empty";
-    case ELOOP:        return "too many symbolic links";
-    case ETXTBSY:      return "it is in use as text";
-#ifdef ENOTSUP
-    case ENOTSUP:      return "it is not supported here";
-#endif
-    case EADDRINUSE:   return "the address is already in use";
-    case ENETUNREACH:  return "the network is unreachable";
-    case ECONNREFUSED: return "the connection was refused";
-    default: break;
-    }
-
-    g_snprintf(other, sizeof other, "errno %d", errnum);
-    return other;
-}
-
-/*
  * An error nobody caught.
  *
  * It goes to the terminal, as it always did -- that is the record.  But an
@@ -429,161 +156,6 @@ static bool error_handled_by_app(JSContext *ctx, const char *msg, const char *st
     JS_FreeValue(ctx, app);
     JS_FreeValue(ctx, global);
     return took;
-}
-
-/*
- * **The names this language took away, and what to write instead.**
- *
- * It used to be a list of names and a paragraph of prose above it, which meant
- * the whole of what a beginner got out of typing `setTimeout` was
- * `ReferenceError: setTimeout is not defined` -- while the replacement was
- * written out in full, a screen away in a comment nobody opens. `rad.js` already
- * refuses `localeCompare` by name, naming `Locale.Compare` in the sentence, and
- * the QuickJS patch in `vendor/` makes a refused property say which property it
- * was. This is the same bargain for the names themselves, and the same bargain
- * `close_hatches` was already paying for at the other end: the *deletion* has to
- * be refused out loud because the silent version is the expensive one.
- *
- * **One table, read by two.** `bta_close_hatches` deletes from it and
- * `Application.Replacements` publishes it, so a name that is taken and a name
- * that says what to use instead cannot disagree -- there is no second list to
- * keep in step, which is the whole of why this is a table and not a list plus a
- * getter with the same entries typed again.
- *
- * A `""` replacement is deliberate and says something: **there is no word for
- * that thing in this language**, which is more use to a reader than being
- * pointed at a neighbour that does a different job. Every entry that has a
- * replacement has one that exists -- `Timer` and `Stopwatch` are in `rad.js`,
- * `Namespace` and `CheckSource` and `Regex` are installed here -- and no entry
- * points at a thing this runtime has never heard of.
- */
-/* A name that was taken away, and the sentence that says what to use instead.
- * The two halves are one row because the deletion and the sentence must not be
- * able to disagree: `bta_close_hatches` walks this, `reference_hint` reads it
- * when the engine reports a `ReferenceError`, and `Application.Replacements`
- * hands it out. */
-typedef struct { const char *name; const char *use; } BtaReplacement;
-
-/* The globals, and the raw scheduling primitives with them. */
-static const BtaReplacement bta_replacements[] = {
-    { "eval",  "Application.CheckSource(text) answers whether text would compile" },
-    { "Function", "" },     /* the other way to turn a string into code */
-    { "globalThis", "Namespace(\"Name\") publishes into the global scope" },
-    { "Reflect", "" },      /* metaprogramming this language has no use for */
-    { "Symbol", "" },       /* see the note in bta_close_hatches: no replacement
-                             * can be reached without the name it needs */
-    { "RegExp", "Regex(text, [options]) builds a pattern out of a string" },
-    /* Timer is the published way to schedule: it has a name, a switch and hands
-     * itself back, and these are the same thing said worse.  rad.js built Timer
-     * out of them and holds what it needs. */
-    { "setTimeout",    "Timer.After(delay, tick) — the delay comes first" },
-    { "setInterval",   "Timer.Every(delay, tick) — the delay comes first" },
-    { "clearTimeout",  "Timer.Stop()" },
-    { "clearInterval", "Timer.Stop()" },
-    /* And the forward-only clock, for the same reason one step further: a
-     * reading of it is meaningless alone, so Stopwatch is not a convenience over
-     * it but the only shape in which it says anything. */
-    { "monotonic", "new Stopwatch().Start(), and .Elapsed for the answer" },
-    /*
-     * queueMicrotask goes with setTimeout and for the same sentence: it is
-     * scheduling with no name of ours, no switch and no handle.  It does work --
-     * bta_drain_jobs runs the queue after every event handler, and it was
-     * measured running -- which is exactly what made it worth removing rather
-     * than leaving: a second way to defer, undocumented, that nothing in this
-     * tree ever asked for.  `Timer.After(0, fn)` is the published word, and the
-     * day a program needs *before the next frame* rather than *on the next turn*
-     * it gets a name instead of this one.
-     */
-    { "queueMicrotask", "Timer.After(0, tick) — the delay comes first" },
-    /*
-     * Annex B, and not even that any more: `escape` is a URL encoding no
-     * standard recommends, with no caller anywhere here.  `Text.Escape` is markup
-     * and `Http` builds its own query strings, so the name is free to mislead and
-     * nothing else.
-     */
-    { "escape",   "" },
-    { "unescape", "" },
-};
-
-/*
- * What `Object` gave up, keyed as `Object.name` so the two tables cannot collide
- * on a bare word -- `keys` on its own would say nothing about which object it
- * went from.
- *
- * **Only the ones a person plausibly reaches for.** The rest of the statics are
- * in `bta_close_hatches`' own list with the reasoning; a row saying `""` for
- * every one of them would be a list of names nobody wanted rather than a
- * sentence anybody used. `Object.assign` is here because it is the first thing a
- * JavaScript-trained hand types in this language -- and its absence has cost this
- * repository a silent bug of its own (`examples/clients` built an object with it
- * and the `TypeError` landed in a dialog, on a headless run, with nothing on the
- * terminal).
- */
-static const BtaReplacement bta_object_replacements[] = {
-    { "Object.keys",     "Dictionary.Keys(bag)" },
-    { "Object.values",   "Dictionary.Values(bag)" },
-    { "Object.entries",  "Dictionary.Entries(bag), as [{ Key, Value }, …]" },
-    { "Object.hasOwn",   "Dictionary.Has(bag, key)" },
-    { "Object.fromEntries", "a Map, which Dictionary reads the same way" },
-    { "Object.assign",   "{ ...a, ...b }" },
-    { "Object.defineProperty", "a get/set pair declared in a class" },
-    /* Nothing in this language can be locked, and saying so is the answer:
-     * there are no imports, so the only code that could write to
-     * Object.prototype is the project's own and its libraries'. */
-    { "Object.freeze",            "" },
-    { "Object.seal",              "" },
-    { "Object.preventExtensions", "" },
-    { "Object.isFrozen",          "" },
-    { "Object.isSealed",          "" },
-    { "Object.isExtensible",      "" },
-};
-
-/*
- * The suffix a `ReferenceError` carries for a name this language took away.
- *
- * The engine asks it while it builds the error, so a `catch` that shows
- * `e.message` gets the sentence that used to arrive only on the terminal. The
- * table is the same one `Application.Replacements` publishes and
- * `bta_close_hatches` deletes from -- a name and what to write instead cannot
- * disagree. A `""` use is a deliberate answer, not a gap.
- */
-static bool bta_reference_hint(JSContext *ctx, const char *name,
-                               char *buf, size_t len, void *opaque)
-{
-    (void)ctx;
-    (void)opaque;
-
-    for (size_t i = 0; i < G_N_ELEMENTS(bta_replacements); i++) {
-        const BtaReplacement *r = &bta_replacements[i];
-        if (strcmp(name, r->name))
-            continue;
-
-        if (*r->use)
-            g_snprintf(buf, len, ": use %s", r->use);
-        else
-            g_snprintf(buf, len, ", and nothing here replaces it");
-        return true;
-    }
-    return false;
-}
-
-/* The bag `Application.Replacements` answers with, built from the two tables.
- * A **verb** and not a read-only property, and it is the shape every "give me
- * the list this runtime has" answer already has -- `Application.Globals()`,
- * `Application.Libraries()`, `Widget.Types()`, `Widget.EventNames()`. */
-static JSValue js_application_replacements(JSContext *ctx, JSValueConst this_val,
-                                           int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    JSValue out = JS_NewObject(ctx);
-
-    for (size_t i = 0; i < G_N_ELEMENTS(bta_replacements); i++)
-        JS_SetPropertyStr(ctx, out, bta_replacements[i].name,
-                          JS_NewString(ctx, bta_replacements[i].use));
-    for (size_t i = 0; i < G_N_ELEMENTS(bta_object_replacements); i++)
-        JS_SetPropertyStr(ctx, out, bta_object_replacements[i].name,
-                          JS_NewString(ctx, bta_object_replacements[i].use));
-    return out;
 }
 
 /* Asks `forms.js` for its window.  False when there is none or it threw, and
@@ -786,22 +358,19 @@ static char *reference_hint(JSContext *ctx, JSValueConst exc, const char *msg)
      * still there, so it read correctly and was wrong all the same.
      */
     char *hint = NULL;
-    if (is_ref) {
-        for (size_t i = 0; i < G_N_ELEMENTS(bta_replacements); i++) {
-            const BtaReplacement *r = &bta_replacements[i];
-            /* The suffix is the whole of the parse, and the prefix has to be
-             * the whole name: a prefix match alone would enrich a message
-             * about something that merely starts with the same letters. */
-            if (g_str_has_prefix(text, r->name) &&
-                !strcmp(text + strlen(r->name), " is not defined")) {
-                hint = g_strdup_printf("%s is not part of this language%s%s",
-                                       r->name,
-                                       *r->use ? ": use "
-                                               : ", and nothing here replaces it",
-                                       r->use);
-                break;
-            }
-        }
+    if (is_ref && g_str_has_suffix(text, " is not defined")) {
+        /* The suffix is the whole of the parse, and what is in front of it has
+         * to be the whole name: a prefix match alone would enrich a message
+         * about something that merely starts with the same letters. */
+        char       *name = g_strndup(text, strlen(text) - strlen(" is not defined"));
+        const char *use  = bta_replacement_for(name);
+
+        if (use)
+            hint = g_strdup_printf("%s is not part of this language%s%s", name,
+                                   *use ? ": use "
+                                        : ", and nothing here replaces it",
+                                   use);
+        g_free(name);
     }
 
     JS_FreeCString(ctx, text);
@@ -1856,66 +1425,41 @@ static JSValue js_quit(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
- * Message.Info / .Warning / .Error -- GTK4 alert dialogs are fire-and-forget,
- * so these show and return rather than blocking like VB's MsgBox.
- *
- * **The first argument is a declared position for prose**, so it goes through
- * the catalogue and takes `{0}`-style arguments of its own:
- *
- *     Message.Info("Saved");
- *     Message.Error("Cannot open {0}: {1}", path, e.message);
- *
- * Which is why a message needs no `Locale.Text` around it.  The idea is the same
- * one `BtaClass.texts` carries for properties -- *this position holds text a
- * person reads* -- and a position is a position whether it is a property or an
- * argument.  Interpolating here rather than at the call site is what keeps the
- * msgid a literal an extractor can find; a template literal would have arrived
- * already filled in, and no catalogue could ever match it.
- *
- * The residual risk, stated rather than hidden: a string is a string at
- * runtime, so `Message.Error(e.message)` is looked up too, and would be
- * translated if an exception's text happened to equal a UI label exactly.  That
- * is a far smaller population than the one flowing through a Label's Text --
- * which is why a *setter* doing this was refused and an argument doing it was
- * not.
+ * How this host shows a `Message` (bta_message.c): a GTK alert, which is
+ * fire-and-forget, so `Message.Info` shows and returns rather than blocking
+ * like VB's MsgBox. With no display -- a `main`, or before the application
+ * is up -- it answers false and the shared half prints to stderr.
  */
-static JSValue js_message(JSContext *ctx, JSValueConst this_val,
-                          int argc, JSValueConst *argv, int magic)
+bool bta_message_show(int kind, const char *text)
 {
-    char *text = NULL;
+    static const char *headings[] = { NULL, "Warning", "Error" };
+    BtaApp            *app = bta_current_app();
+    GtkAlertDialog    *d;
 
-    if (argc > 0) {
-        const char *msgid = JS_ToCString(ctx, argv[0]);
-        if (!msgid)
-            return JS_EXCEPTION;
+    if (!app || !app->gapp)
+        return false;
 
-        const char *found = bta_locale_lookup(NULL, msgid);
-        text = bta_locale_format(ctx, found ? found : msgid,
-                                 argc - 1, argv + 1);
-        JS_FreeCString(ctx, msgid);
-        if (!text)
-            return JS_EXCEPTION;       /* an argument could not become text */
-    }
-    BtaApp *app = bta_current_app();
-
-    if (app && app->gapp) {
-        static const char *headings[] = { NULL, "Warning", "Error" };
-        GtkAlertDialog *d;
-
-        if (headings[magic]) {
-            d = gtk_alert_dialog_new("%s", headings[magic]);
-            gtk_alert_dialog_set_detail(d, text ? text : "");
-        } else {
-            d = gtk_alert_dialog_new("%s", text ? text : "");
-        }
-        gtk_alert_dialog_set_modal(d, TRUE);
-        gtk_alert_dialog_show(d, gtk_application_get_active_window(app->gapp));
-        g_object_unref(d);
+    if (kind > 0 && kind < 3) {
+        d = gtk_alert_dialog_new("%s", headings[kind]);
+        gtk_alert_dialog_set_detail(d, text);
     } else {
-        fprintf(stderr, "message: %s\n", text ? text : "");
+        d = gtk_alert_dialog_new("%s", text);
     }
-    g_free(text);
-    return JS_UNDEFINED;
+    gtk_alert_dialog_set_modal(d, TRUE);
+    gtk_alert_dialog_show(d, gtk_application_get_active_window(app->gapp));
+    g_object_unref(d);
+    return true;
+}
+
+/* A `Task` worker's share of this host (bta_task.c): GdkPixbuf's `Bitmap`,
+ * `Probe` and `PdfDocument`, which read and answer and hold no callback, and
+ * `Tray`'s names, which exist and refuse off the main thread. */
+void bta_task_worker_host(JSContext *ctx, JSValueConst global)
+{
+    bta_bitmap_init(ctx, global);
+    bta_tray_init_worker(ctx, global);
+    bta_probe_init(ctx, global);
+    bta_pdf_init(ctx, global);
 }
 
 /* Application.HasIcon(name): does anything in the icon search path answer to
@@ -2692,7 +2236,7 @@ static bool install_globals(BtaApp *app)
      *   table while it builds the error
      */
     JS_SetPropertyStr(ctx, application, "Replacements",
-                      JS_NewCFunction(ctx, js_application_replacements,
+                      JS_NewCFunction(ctx, bta_application_replacements,
                                       "Replacements", 0));
 
     /* Where the runtime binary lives, so a project can re-invoke it. */
@@ -2736,32 +2280,7 @@ static bool install_globals(BtaApp *app)
 
     JS_SetPropertyStr(ctx, global, "Application", application);
 
-    /* One line each and not a loop over the names, because the signature
-     * comment above a line is what `Widget.Members` answers with -- a loop
-     * leaves nowhere to write one. The magic is the index `js_message` reads. */
-    JSValue message = JS_NewObject(ctx);
-    /* Info(text, ...args)
-     *   something happened. **It shows and returns**: it does not block and
-     *   there is no answer. The text goes through the catalogue with `{0}`
-     *   holes filled from the arguments -- never a template literal -- and
-     *   with no display it prints to stderr
-     */
-    JS_SetPropertyStr(ctx, message, "Info",
-                      JS_NewCFunctionMagic(ctx, js_message, "Info", 1,
-                                           JS_CFUNC_generic_magic, 0));
-    /* Warning(text, ...args)
-     *   something is not right; the same as `Info` in every other respect
-     */
-    JS_SetPropertyStr(ctx, message, "Warning",
-                      JS_NewCFunctionMagic(ctx, js_message, "Warning", 1,
-                                           JS_CFUNC_generic_magic, 1));
-    /* Error(text, ...args)
-     *   something failed; the same as `Info` in every other respect
-     */
-    JS_SetPropertyStr(ctx, message, "Error",
-                      JS_NewCFunctionMagic(ctx, js_message, "Error", 1,
-                                           JS_CFUNC_generic_magic, 2));
-    JS_SetPropertyStr(ctx, global, "Message", message);
+    bta_message_init(ctx, global);
 
     /*
      * Before the widgets, and so before any .form is loaded: the loader looks
@@ -2865,229 +2384,6 @@ static bool install_globals(BtaApp *app)
     return true;
 }
 
-/*
- * The ways back into the raw language, closed once rad.js has what it needs.
- *
- * Deleting a global does not take away what it reached -- a project's classes
- * are still there, Namespace still publishes, and rad.js still schedules -- it
- * takes away the *name*.  Whatever needs one of these captured it in a closure
- * while it still existed, which is why this runs after the prelude and before
- * the first line of any project.
- *
- * What goes, and why:
- *
- *   eval, Function   the two ways to turn a string into code.  Nothing in
- *                    Bintana does that; Application.CheckSource covers the one
- *                    honest use, which is asking whether text would compile.
- *                    Function.prototype.constructor is the same function by
- *                    another road, so it goes too.
- *   globalThis       the language's own back door to everything at once.  A
- *                    project publishes with Namespace(), which is the name for
- *                    that here.
- *   Reflect          metaprogramming this language has no use for, and the
- *                    remaining way to poke at objects by name.
- *   setTimeout &c    the raw scheduling primitives, replaced by Timer --
- *                    Timer.After and Timer.Every say the same in one line and
- *                    hand back something that can still be stopped.
- *   monotonic        the forward-only clock, replaced by Stopwatch.  A single
- *                    reading of it counts from the machine's boot and means
- *                    nothing on its own; leaving the name would invite it being
- *                    printed or stored as if it were a time.
- *
- * The compiler itself stays: JS_Eval() is how a project is loaded at all.
- * This is curation of the surface, not a sandbox -- a project still holds every
- * capability the runtime gave it, and Terminal.Run is Exec by another name.
- */
-/*
- * A refusal is said out loud, because the silent version is the expensive one.
- * `delete` answers true for a name that was never there, so the only way this
- * comes back false is an engine that made one of these non-configurable -- at
- * which point `close_hatches` is theatre, the hatch is open, and the only
- * alarm left is a list in `tests/widgets` somebody has to keep in step by hand.
- */
-static void delete_named(JSContext *ctx, JSValueConst obj, const char *name)
-{
-    JSAtom atom = JS_NewAtom(ctx, name);
-    int    gone = JS_DeleteProperty(ctx, obj, atom, 0);
-
-    JS_FreeAtom(ctx, atom);
-    if (gone <= 0) {
-        fprintf(stderr, "bintana: '%s' would not be deleted -- the hatch is "
-                        "still open\n", name);
-        if (gone < 0)
-            JS_FreeValue(ctx, JS_GetException(ctx));
-    }
-}
-
-void bta_close_hatches(JSContext *ctx)
-{
-    JSValue global = JS_GetGlobalObject(ctx);
-
-    JSValue fn = JS_GetPropertyStr(ctx, global, "Function");
-    if (JS_IsObject(fn)) {
-        JSValue proto = JS_GetPropertyStr(ctx, fn, "prototype");
-        delete_named(ctx, proto, "constructor");
-        JS_FreeValue(ctx, proto);
-    }
-    JS_FreeValue(ctx, fn);
-
-    /*
-     * GeneratorFunction is the same hatch by a side door: it has no global name,
-     * but every generator's prototype carries it and it compiles strings just as
-     * Function does.  (AsyncFunction needs Promise, which is not installed.)
-     *
-     * That parenthesis is true and answers only half of what the same absence
-     * decides.  JS_AddIntrinsicPromise builds the AsyncFunction constructor --
-     * so there is no hatch here -- **and** is the only thing that registers the
-     * engine's async classes, without which an async function object can never
-     * be collected and JS_FreeRuntime aborts at exit.  That is why `async` is
-     * refused in the parser now; see patch 5 in AGENTS.md.
-     */
-    JSValue gen = JS_Eval(ctx, "(function* () {})", 17, "<hatches>",
-                          JS_EVAL_TYPE_GLOBAL);
-    if (!JS_IsException(gen)) {
-        JSValue proto = JS_GetPrototype(ctx, gen);
-        delete_named(ctx, proto, "constructor");
-        JS_FreeValue(ctx, proto);
-    }
-    JS_FreeValue(ctx, gen);
-
-    /*
-     * Object, emptied.
-     *
-     * What a control can be asked for is answered by Widget.PropertyNames(),
-     * what a plain object holds by Dictionary, and a property is written by
-     * declaring `get`/`set` in a class -- so every static here either has a word
-     * of its own in this language or is machinery rad.js is built out of, and
-     * rad.js captured what it needs before this runs.
-     *
-     * **Emptied and not trimmed, because trimming it was wrong twice.** The
-     * singulars were taken and the *plurals* left behind: `defineProperties`
-     * wrote the accessors `defineProperty` was removed to withhold, and
-     * `getOwnPropertyDescriptors` read what its singular could not -- enough to
-     * replace the setter on a Record's field with one that validates nothing.
-     * A list of what to keep is a list somebody has to get right again every
-     * time the engine grows a member, and quickjs-ng grew `groupBy` and `hasOwn`
-     * after that list was written.  So the rule runs the other way: nothing
-     * here, and an equivalent is published when something actually needs one.
-     * Nothing in this repository called any of these but `keys`.
-     *
-     * `prototype` is absent from the list because it cannot be taken: it is
-     * non-configurable, and rad.js walks the chain up to it.
-     */
-    JSValue object = JS_GetPropertyStr(ctx, global, "Object");
-    static const char *statics[] = {
-        /* Choosing or reading a prototype. */
-        "create", "getPrototypeOf", "setPrototypeOf",
-        /* Writing properties: what Record does, and only Record. */
-        "defineProperty", "defineProperties",
-        /* Reading them back, which PropertyNames() answers. */
-        "getOwnPropertyNames", "getOwnPropertyDescriptor",
-        "getOwnPropertyDescriptors", "getOwnPropertySymbols",
-        /* Reading a dictionary, which is Dictionary. */
-        "keys", "values", "entries", "hasOwn", "fromEntries", "assign",
-        /* And the rest, which nothing here has ever asked for.  When something
-         * does, it gets a name in this language rather than this one back. */
-        "groupBy", "is", "freeze", "isFrozen", "seal", "isSealed",
-        "preventExtensions", "isExtensible",
-    };
-    for (size_t i = 0; i < G_N_ELEMENTS(statics); i++)
-        delete_named(ctx, object, statics[i]);
-
-    /*
-     * And the same two capabilities spelled on the prototype, where every object
-     * in the program carries them: `__defineGetter__` is defineProperty and
-     * `__lookupGetter__` is getOwnPropertyDescriptor walking the chain, so
-     * `c.__lookupGetter__("Name")` handed out a Record's own accessor and
-     * `__defineSetter__` replaced it.  Leaving these while taking the statics
-     * would be theatre -- they reach the same prototype -- which is the reason
-     * __proto__ went with getPrototypeOf in the first place.
-     *
-     * hasOwnProperty, isPrototypeOf, propertyIsEnumerable, toString and valueOf
-     * stay: they ask about an object rather than rewriting it, and the last two
-     * are how a value becomes a string at all.
-     */
-    JSValue object_proto = JS_GetPropertyStr(ctx, object, "prototype");
-    static const char *proto_hatches[] = {
-        "__proto__",
-        "__defineGetter__", "__defineSetter__",
-        "__lookupGetter__", "__lookupSetter__",
-    };
-    for (size_t i = 0; i < G_N_ELEMENTS(proto_hatches); i++)
-        delete_named(ctx, object_proto, proto_hatches[i]);
-    JS_FreeValue(ctx, object_proto);
-    JS_FreeValue(ctx, object);
-
-    /*
-     * `Array.fromAsync`, which is an async function the engine builds lazily on
-     * first read -- and patch 5's reason, arriving by a door the parser cannot
-     * guard. Without `JS_AddIntrinsicPromise` the async classes are never
-     * registered, so the object that read builds can never be collected: one
-     * `typeof Array.fromAsync` (which answered "object") was enough to make
-     * `JS_FreeRuntime` abort at exit, 134, after the program had done its work.
-     * Found through `Widget.Members("Array")`, which reads every own property
-     * of the constructor. It cannot work without promises anyway, so it goes.
-     * The async classes are registered now (see bta_new_context), so it would
-     * be collected -- and it answers a promise, which is reason enough.
-     */
-    /*
-     * `Promise`, whose intrinsic is installed for one reason -- a module is
-     * evaluated through a promise -- and whose name is not part of the
-     * language.  Nothing a program writes can reach one: patches 5 and 13
-     * refuse `async`, `await` and `import()`, which are the only syntax that
-     * makes or hands back a promise.
-     */
-    delete_named(ctx, global, "Promise");
-
-    JSValue array = JS_GetPropertyStr(ctx, global, "Array");
-    if (JS_IsObject(array))
-        delete_named(ctx, array, "fromAsync");
-    JS_FreeValue(ctx, array);
-
-    /*
-     * RegExp, whose name goes the way Function's did -- and this is the half of
-     * the bargain Timer's removal needed.  `/x/g` is syntax and still produces
-     * one, which is why taking the name was once judged to buy little: what
-     * goes is `new RegExp(p, flags)`, so a pattern **built from strings** has
-     * exactly one spelling now and it is `Regex` (rad.js captured the
-     * constructor before this runs, and `Regex` is built on it).
-     *
-     * The prototype's own `constructor` goes first, the same side door
-     * GeneratorFunction arrived by: `(/(?:)/).constructor` hands the function
-     * straight back, and leaving it while deleting the global would be theatre.
-     * Nothing here reads it -- `instanceof` walks the prototype chain and does
-     * not ask.
-     */
-    JSValue regexp = JS_GetPropertyStr(ctx, global, "RegExp");
-    if (JS_IsObject(regexp)) {
-        JSValue proto = JS_GetPropertyStr(ctx, regexp, "prototype");
-        delete_named(ctx, proto, "constructor");
-        JS_FreeValue(ctx, proto);
-    }
-    JS_FreeValue(ctx, regexp);
-
-    /*
-     * The list the table above replaced, walked for the deletion itself. The
-     * second column is not read here: it is published by
-     * `Application.Replacements`, off the same rows.
-     */
-    for (size_t i = 0; i < G_N_ELEMENTS(bta_replacements); i++)
-        delete_named(ctx, global, bta_replacements[i].name);
-
-    /*
-     * And the two hooks `rad.js` captured, which were never language names and
-     * so have no row in the table above: where a class's `.record` shape is
-     * declared, and what a bare name resolves to.  Gone from here on, which is
-     * what keeps them out of `Application.Globals()` and out of the published
-     * surface.
-     */
-    delete_named(ctx, global, "recordFile");
-    delete_named(ctx, global, "classOfName");
-    delete_named(ctx, global, "strictSeal");
-
-    JS_FreeValue(ctx, global);
-}
-
 /* ---------------------------------------------------------------- project */
 
 static JSValue js_library_path(JSContext *ctx, JSValueConst this_val,
@@ -3184,54 +2480,6 @@ static JSValue js_libraries(JSContext *ctx, JSValueConst this_val,
     JS_FreeValue(ctx, r);
     JS_FreeValue(ctx, sort);
     return out;
-}
-
-/*
- * The JavaScript a Bintana project gets.
- *
- * JS_NewContext() installs the whole standard library; this installs what the
- * language actually uses, which is not the same thing.  Measured on the largest
- * Bintana program there is -- the IDE, its dialogs, its designer and the test
- * projects -- Proxy, Reflect, the typed arrays, Promise, WeakRef, atob/btoa and
- * performance are used exactly zero times.  A smaller language is easier to
- * learn and easier to keep promises about; what is not there cannot drift.
- *
- * Promise is the deliberate one: this is a RAD language with events, not
- * continuations, and leaving it out makes that a fact rather than advice.
- * **Its intrinsic is installed all the same, and the name deleted after boot**
- * (bta_close_hatches): a module is evaluated through a promise, and the
- * intrinsic is the only thing that registers the engine's async classes --
- * without which an object of one of them is never collected and
- * JS_FreeRuntime aborts at exit, the mechanism behind patch 5 and audit D1.
- * The language still has no promise: `async`, `await` and `import()` are
- * refused by the parser (patches 5 and 13), so nothing a program writes can
- * make or receive one.
- *
- * Eval is *not* optional, and not for the reason it looks.  JS_AddIntrinsicEval
- * does not install the global `eval` -- base objects does that -- it sets the
- * compiler that JS_Eval() itself runs on, so without it the runtime could not
- * load a single project file.  The global one is deleted after boot instead;
- * see bta_close_hatches().
- */
-JSContext *bta_new_context(JSRuntime *rt)
-{
-    JSContext *ctx = JS_NewContextRaw(rt);
-    if (!ctx)
-        return NULL;
-
-    JS_SetReferenceHintHandler(rt, bta_reference_hint, NULL);
-
-    if (JS_AddIntrinsicBaseObjects(ctx) ||
-        JS_AddIntrinsicEval(ctx) ||        /* the compiler, not the global */
-        JS_AddIntrinsicDate(ctx) ||
-        JS_AddIntrinsicRegExp(ctx) ||      /* renaming a control is a regexp */
-        JS_AddIntrinsicJSON(ctx) ||        /* a .form is JSON */
-        JS_AddIntrinsicMapSet(ctx) ||
-        JS_AddIntrinsicPromise(ctx)) {     /* modules; the name goes, see above */
-        JS_FreeContext(ctx);
-        return NULL;
-    }
-    return ctx;
 }
 
 BtaApp *bta_app_new(const char *project_dir)

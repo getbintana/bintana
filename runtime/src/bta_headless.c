@@ -1,25 +1,28 @@
 /*
- * The console host: `bintana --version` and `check`, with no toolkit.
+ * The console host, `bintana`: `--version`, `check`, a project's `main` and
+ * its tests, with no toolkit in the link. A project that declares `startup`
+ * is exec'd as the graphical host (`bintana-gui`) with every word unchanged.
+ * See `docs/plans/headless-runtime-plan.md` and
+ * `docs/notes/headless-runtime.md`.
  *
- * This is the Phase 2 first slice of
- * `docs/plans/headless-runtime-plan.md`. It is deliberately a **console
- * project runner**: it reads `tools/check` and its `lib/check` modules, installs
- * the core globals, and calls the project's `main`. It does not dispatch to a
- * graphical host and it does not build a widget; a project that declares
- * `startup` is refused with a sentence.
+ * **The language and the console globals are the graphical host's own
+ * files.** The context comes from `bta_new_context` and is finished by
+ * `bta_close_hatches` (bta_language.c), and `install_core` installs `File`,
+ * `Exec`, `Http`, `Database`, `Task`, `Zip`, `Random`, `Message`, `Desktop`
+ * and the rest out of the files `bintana-gui` links -- so a `main` is one
+ * program under either binary. What stays out is what needs a display,
+ * GStreamer or poppler (`GUI_GLOBALS`), and the drawing half, which is
+ * `bintana-drawing.so`, loaded when a project's `uses` names `drawing`.
  *
- * **The classes come from the metadata host.** `BTA_META_ONLY` makes the widget
- * rows carry no `build`/`probe` and every property a stub; `bta_widgets_init`
- * makes the prototypes `Widget.*` reads, and `forms.js` gets its ten captures
- * from the real `rad.js` this host evaluates.
+ * **The widget classes are a document here**, not code: `check` loads the
+ * `widgets.json` that `bintana-meta --dump` writes, and a `main` sees no
+ * `Widget` at all.
  *
- * **What is stubbed and why.** `bta_runtime.c` owns the boot of the graphical
- * application and is where `Application`'s non-visual answers live; linking it
- * would pull GTK. The few functions the core files still name are supplied
- * here, and every one is a sentence in the plan's audit: the class lookup, the
- * error dump, the file read, the job drain, the error text, the application
- * pointer, the library listing. Phase 3 moves them into `bta_core.c` and leaves
- * this file as the host.
+ * **What this file supplies.** `bta_runtime.c` owns the boot of the graphical
+ * application; linking it would pull GTK. The few functions the shared files
+ * name and a host answers -- the class lookup, the error dump, the file read,
+ * the job drain, the application pointer, how a `Message` is shown, what a
+ * `Task` worker gets beyond the shared globals -- are defined here.
  */
 #include "bta.h"
 #include "bta_prelude.h"
@@ -84,42 +87,32 @@ void bta_log_debug(JSContext *ctx, const char *text)
     fprintf(stderr, "%s\n", text ? text : "");
 }
 
-bool bta_task_is_worker(JSContext *ctx)
+/* `Http`'s traffic from inside a blocking call, where JS must not run: the
+ * same line `Logger.Debug` would print, straight to stderr. */
+void bta_log_debug_plain(const char *text)
 {
-    (void)ctx;
+    fprintf(stderr, "Debug: %s\n", text ? text : "");
+}
+
+/* A console has no alert to raise; `Message` prints to stderr, as the
+ * graphical host does when it has no display. */
+bool bta_message_show(int kind, const char *text)
+{
+    (void)kind; (void)text;
     return false;
 }
 
-/* `Task`'s hard-cancel signal is the thread's, and the console host has no
- * task thread. A blocking call handed no token behaves as the main thread's. */
-GCancellable *bta_task_hard_cancellable(JSContext *ctx)
+/* The drawing module's half of a `Task` worker: `Bitmap`, when a project
+ * loaded the module (`uses: ["drawing"]`). Set once, before any task can
+ * start, and read from worker threads after. */
+static bool (*drawing_worker_init)(JSContext *, JSValue);
+
+void bta_task_worker_host(JSContext *ctx, JSValueConst global)
 {
-    (void)ctx;
-    return NULL;
+    if (drawing_worker_init)
+        drawing_worker_init(ctx, global);
 }
 
-/* A GError in words of ours. The graphical host has the long table; a console
- * tool's errors are paths and I/O, and the domain and code are enough to say
- * what happened without quoting a translated GLib sentence. */
-const char *bta_gerror_text(const GError *err)
-{
-    static _Thread_local char text[256];
-
-    if (!err)
-        return "unknown error";
-    g_snprintf(text, sizeof text, "%s (%d)",
-               err->domain ? g_quark_to_string(err->domain) : "error",
-               err->code);
-    return text;
-}
-
-const char *bta_errno_text(int errnum)
-{
-    static _Thread_local char text[256];
-
-    g_snprintf(text, sizeof text, "%s (%d)", g_strerror(errnum), errnum);
-    return text;
-}
 
 /* ---------------------------------------------------------- the language */
 
@@ -575,16 +568,6 @@ static JSValue js_application_globals(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
-static JSValue js_application_replacements(JSContext *ctx, JSValueConst this_val,
-                                           int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    /* A console host does not close the hatches, so the names are still there
-     * and a replacement table would describe a state this process is not in.
-     * The object is empty and `Names` reads it as "nothing was taken away". */
-    return JS_NewObject(ctx);
-}
-
 static JSValue js_application_library_path(JSContext *ctx, JSValueConst this_val,
                                            int argc, JSValueConst *argv)
 {
@@ -690,37 +673,17 @@ static void install_application(JSContext *ctx, JSValueConst global,
                       JS_NewCFunction(ctx, js_application_has_command,
                                       "HasCommand", 1));
     JS_SetPropertyStr(ctx, application, "Replacements",
-                      JS_NewCFunction(ctx, js_application_replacements,
+                      JS_NewCFunction(ctx, bta_application_replacements,
                                       "Replacements", 0));
 
     JS_SetPropertyStr(ctx, global, "Application", application);
 }
 
-/* ------------------------------------------------------------ the context */
-
-static JSContext *headless_context(JSRuntime *rt)
-{
-    JSContext *ctx = JS_NewContextRaw(rt);
-    if (!ctx)
-        return NULL;
-
-    if (JS_AddIntrinsicBaseObjects(ctx) ||
-        JS_AddIntrinsicEval(ctx) ||
-        JS_AddIntrinsicDate(ctx) ||
-        JS_AddIntrinsicRegExp(ctx) ||
-        JS_AddIntrinsicJSON(ctx) ||
-        JS_AddIntrinsicMapSet(ctx) ||
-        JS_AddIntrinsicPromise(ctx)) {
-        JS_FreeContext(ctx);
-        return NULL;
-    }
-    return ctx;
-}
-
 static bool eval_script(JSContext *ctx, const char *text, size_t len,
                         const char *name)
 {
-    JSValue r = JS_Eval(ctx, text, len, name, JS_EVAL_TYPE_GLOBAL);
+    JSValue r = JS_Eval(ctx, text, len, name,
+                        JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT);
     if (JS_IsException(r)) {
         bta_dump_error(ctx);
         JS_FreeValue(ctx, r);
@@ -817,24 +780,24 @@ static bool eval_file(JSContext *ctx, const char *path)
  * The names the graphical host installs and this one does not.
  *
  * `lib/check` asks `Application.Globals()` what a program may write. A project
- * that calls `Message.Info` or names `Printer` must not be told the name does
- * not exist because the console host has no window: the names are the same
- * surface, and the verb behind one is what refuses. Empty objects are enough
- * for the name pass; Phase 3 replaces each with the sentence its call refuses
- * with.
+ * that names `Printer` must not be told the name does not exist because the
+ * console host has no window: the names are the same surface, and the verb
+ * behind one is what refuses. Empty objects are enough for the name pass;
+ * Phase 3 replaces each with the sentence its call refuses with.
+ *
+ * **Only what needs a display, GStreamer or poppler is here.** `Http`,
+ * `Database`, `Task`, `Zip`, `Random`, `Desktop` and the rest of what a
+ * console program is written with are the real ones (`install_core`), the
+ * same files the graphical host links.
  */
 static const char *const GUI_GLOBALS[] = {
-    "Message", "Dialog", "Screen", "Clipboard", "Printer", "Tray",
-    "Notification", "Desktop", "Popover", "Keyring", "Http", "Socket",
-    "ServerSocket", "UdpSocket", "SerialPort", "WebSocket", "SmtpClient",
-    "Database", "Sqlite", "Odbc", "Task", "Lock", "Cancellable", "Profile",
-    "Random", "Gzip", "Zip", "Cipher", "Key", "Probe", "Media", "AudioPlayer",
-    /* The drawing and document globals, and the two the network/database
-     * classes reach through. The check reads names, so a project that draws a
-     * chart must not be told `Painter` does not exist because this host has no
-     * cairo surface to hand it. */
-    "Bitmap", "Drawing", "Painter", "PdfDocument", "Multipart", "Video",
-    "Connection"
+    "Dialog", "Screen", "Clipboard", "Printer", "Tray", "Notification",
+    "Popover", "Probe", "Media", "AudioPlayer", "Video",
+    /* The drawing and document globals. The check reads names, so a project
+     * that draws a chart must not be told `Painter` does not exist because
+     * this host has no cairo surface to hand it; the drawing module replaces
+     * them when a project names `drawing`. */
+    "Bitmap", "Drawing", "Painter", "PdfDocument",
 };
 
 /* The one `Text` answer `lib/check` reads: the UTF-16 index to its 1-based
@@ -897,16 +860,6 @@ static JSValue headless_log(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
-/* A global the console host does not have. Calling it says so; the check only
- * needs the name. */
-static JSValue headless_missing_global(JSContext *ctx, JSValueConst this_val,
-                                       int argc, JSValueConst *argv, int magic)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return JS_ThrowTypeError(ctx, "%s needs the graphical host",
-                             GUI_GLOBALS[magic]);
-}
-
 static JSValue headless_needs_drawing(JSContext *ctx, JSValueConst this_val,
                                      int argc, JSValueConst *argv)
 {
@@ -956,25 +909,13 @@ static void install_gui_stubs(JSContext *ctx, JSValueConst global)
         if (present)
             continue;
 
-        /* **`Connection` is a constructor rad.js patches**, and it asks
-         * `if (GLOBAL.Connection)` before touching `.prototype`: an empty
-         * object there makes the prelude throw while it loads. The rest are
-         * names a check reads, not objects a program uses. */
+        /* The rest are names a check reads, not objects a program uses. */
         if (!strcmp(GUI_GLOBALS[i], "Drawing")) {
             JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i],
                               headless_drawing_stub(ctx));
         } else if (!strcmp(GUI_GLOBALS[i], "Bitmap")) {
             JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i],
                               headless_bitmap_stub(ctx));
-        } else if (!strcmp(GUI_GLOBALS[i], "Connection")) {
-            JSValue ctor = JS_NewCFunctionMagic(ctx, headless_missing_global,
-                                                GUI_GLOBALS[i], 0,
-                                                JS_CFUNC_generic_magic, (int)i);
-
-            /* A C function has no `.prototype` until one is set, and rad.js
-             * hangs `Table` and `Cursor` on it while the prelude loads. */
-            JS_SetPropertyStr(ctx, ctor, "prototype", JS_NewObject(ctx));
-            JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i], ctor);
         } else {
             JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i], JS_NewObject(ctx));
         }
@@ -984,6 +925,7 @@ static void install_gui_stubs(JSContext *ctx, JSValueConst global)
 static bool install_core(JSContext *ctx, JSValueConst global,
                          const char *project, GPtrArray *libs)
 {
+    bta_profile_init(ctx, global);
     bta_sys_init(ctx, global);
 
     JSValue logger = JS_NewObject(ctx);
@@ -993,10 +935,33 @@ static bool install_core(JSContext *ctx, JSValueConst global,
                           JS_NewCFunctionMagic(ctx, headless_log, levels[i], 1,
                                                JS_CFUNC_generic_magic, i));
     JS_SetPropertyStr(ctx, global, "Logger", logger);
+    bta_message_init(ctx, global);
     bta_bytes_init(ctx, global);
     bta_decimal_init(ctx, global);
     bta_day_init(ctx, global);
+
+    /* What a console program is written with, in the graphical host's order
+     * and out of the same files: none of them names the toolkit. An optional
+     * library that is missing (sqlite, libsoup, GnuTLS, libsecret, unixODBC)
+     * leaves its global in place, refusing with the package's name -- the
+     * same bargain the graphical host makes. */
+    bta_database_init(ctx, global);
+    bta_sqlite_init(ctx, global);
+    bta_odbc_init(ctx, global);
+    bta_http_init(ctx, global);
+    bta_socket_init(ctx, global);
+    bta_serial_init(ctx, global);
+    bta_cancellable_init(ctx, global);
+    bta_task_init(ctx, global);
+    bta_lock_init(ctx, global);
+    bta_random_init(ctx, global);
+    bta_gzip_init(ctx, global);
+    bta_cipher_init(ctx, global);
+    bta_zip_init(ctx, global);
+    bta_key_init(ctx, global);
     bta_xml_init(ctx, global);
+    bta_keyring_init(ctx, global);
+    bta_desktop_init(ctx, global);
     bta_network_init(ctx, global);
 
     /* The drawing module adds Width, Height, Bounds and the rest to this
@@ -1094,6 +1059,9 @@ static CheckData find_check_data(void)
     return out;
 }
 
+/* Defined below, beside the console loop; `check` lets go the same way. */
+static void core_cleanup(void);
+
 static int run_check(int argc, char **argv)
 {
     if (argc < 1) {
@@ -1132,7 +1100,7 @@ static int run_check(int argc, char **argv)
     }
     JS_SetMaxStackSize(rt, 2 * 1024 * 1024);
 
-    JSContext *ctx = headless_context(rt);
+    JSContext *ctx = bta_new_context(rt);
     if (!ctx) {
         JS_FreeRuntime(rt);
         g_ptr_array_unref(libs);
@@ -1191,6 +1159,10 @@ static int run_check(int argc, char **argv)
         return 1;
     }
 
+    /* The metadata is this host's `forms.js`, and the hatches close after it
+     * exactly as they do after the graphical host's prelude. */
+    bta_close_hatches(ctx);
+
     /* After the prelude and the metadata, and before the program's modules:
      * the runtime names `Application.FreeNames` leaves out are photographed
      * here -- `Regex`, `Dictionary`, `Widget` and the class names. */
@@ -1229,6 +1201,7 @@ static int run_check(int argc, char **argv)
         JS_FreeValue(ctx, main);
     }
 
+    core_cleanup();
     bta_modules_forget(ctx);
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
@@ -1313,23 +1286,56 @@ static bool load_drawing_module(JSContext *ctx, JSValue global, bool required)
         return false;
     }
 
+    /* A `Task` worker gets `Bitmap` from the same module. Set before any
+     * task can start, and the module is never closed, so a worker thread
+     * reading the pointer later sees it. */
+    gpointer worker_sym = NULL;
+    if (g_module_symbol(m, "bta_drawing_module_worker_init", &worker_sym))
+        drawing_worker_init = (init_fn)worker_sym;
+
     g_free(path);
     return true;
 }
 
+/* What is still owed an answer: the same sum `run_console` adds up in the
+ * graphical host, minus `Media`, which this host does not link. A `main` that
+ * starts an `Http` request, a `Task` or a `Network.Reach` must not exit before
+ * the answer arrives and its callback runs. */
+static int core_pending(void)
+{
+    return bta_sys_pending() + bta_http_pending() + bta_socket_pending() +
+           bta_serial_pending() + bta_task_pending() + bta_keyring_pending() +
+           bta_network_pending();
+}
+
+/* The services this host links, let go before the context, in the graphical
+ * host's order: workers first, since they hold values of this context and run
+ * on their own threads. */
+static void core_cleanup(void)
+{
+    bta_task_cleanup();
+    bta_sys_cleanup();
+    bta_http_cleanup();
+    bta_keyring_cleanup();
+    bta_network_cleanup();
+    bta_socket_cleanup();
+    bta_serial_cleanup();
+}
+
 /* The console loop's own tick: stop once the services that answer later have
- * nothing left. It is the check `run_console` makes, for the services this host
- * links -- a `main` that starts a `Network.Reach` must not exit before the
- * answer arrives and its callback runs. */
+ * nothing left. **It never removes itself**: the caller removes the source
+ * after the loop returns, and a source that had already gone was a
+ * `GLib-CRITICAL` on every run that waited -- the same reason `console_idle`
+ * in the graphical host answers CONTINUE. */
 static gboolean project_idle(gpointer data)
 {
     GMainLoop *loop = data;
 
-    if (bta_sys_pending() + bta_network_pending() > 0)
+    if (core_pending() > 0)
         return G_SOURCE_CONTINUE;
 
     g_main_loop_quit(loop);
-    return G_SOURCE_REMOVE;
+    return G_SOURCE_CONTINUE;
 }
 
 /*
@@ -1459,7 +1465,7 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     }
     JS_SetMaxStackSize(rt, 2 * 1024 * 1024);
 
-    JSContext *ctx = headless_context(rt);
+    JSContext *ctx = bta_new_context(rt);
     if (!ctx) {
         JS_FreeRuntime(rt);
         g_free(text); g_free(manifest); g_free(dir);
@@ -1531,6 +1537,12 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     app.name    = name;
     app.version = version;
     app.libs    = libs;
+    /* NULL-terminated, as `BtaApp.args` is: a `Task` hands the worker the
+     * same `Application.Arguments` the main thread has. The strings are
+     * argv's; only the array is ours. */
+    app.args    = g_new0(char *, argc > 0 ? argc : 1);
+    for (int i = 1; i < argc; i++)
+        app.args[i - 1] = argv[i];
     headless_app = &app;
     if (!bta_plugins_load(&app, ctx, global)) {
         status = 2;
@@ -1539,6 +1551,10 @@ static int run_project(int argc, char **argv, bool testing, bool json,
 
     if (!load_prelude(ctx))
         goto out;
+
+    /* Last, and only after rad.js: it captured what it needs. The same
+     * closing the graphical host makes, so a `main` is one language in both. */
+    bta_close_hatches(ctx);
 
     /* `--debug` was set before the project was read; it installs the protocol
      * only when somebody asked. Descriptor 3 and stdin arrive from the IDE
@@ -1582,7 +1598,7 @@ static int run_project(int argc, char **argv, bool testing, bool json,
         /* `runTests` schedules the next test with `Timer.After(0, ...)` and
          * ends with `Application.Quit`, so the loop is what lets a test run at
          * all; a run that reaches `Quit` never comes back here. */
-        if (bta_sys_pending() + bta_network_pending() > 0) {
+        if (core_pending() > 0) {
             GMainLoop *loop = g_main_loop_new(NULL, FALSE);
             guint tick = g_timeout_add(20, project_idle, loop);
 
@@ -1614,7 +1630,7 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     JS_FreeValue(ctx, r);
     bta_drain_jobs(rt);
 
-    if (bta_sys_pending() + bta_network_pending() > 0) {
+    if (core_pending() > 0) {
         GMainLoop *loop = g_main_loop_new(NULL, FALSE);
 
         guint tick = g_timeout_add(20, project_idle, loop);
@@ -1625,6 +1641,9 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     status = headless_uncaught ? 1 : 0;
 
 out:
+    /* Before anything they could touch goes: a worker holds values of this
+     * context, and an `Http` answer still queued holds its callback. */
+    core_cleanup();
     if (libs)    g_ptr_array_unref(libs);
     if (sources) g_ptr_array_unref(sources);
     g_free(name);
@@ -1641,6 +1660,7 @@ out:
      * must not call the host; the loader's list is C only. */
     bta_plugins_cleanup(&app);
     headless_app = NULL;
+    g_free(app.args);
     g_free(text);
     g_free(manifest);
     g_free(dir);

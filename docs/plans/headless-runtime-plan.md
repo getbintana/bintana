@@ -188,7 +188,10 @@ la Fase 2 hereda esa idea, o mueve el `bta_symbols` real.
 Debug** (7,7 MB con los símbolos de `RelWithDebInfo`; un paquete los strippea)
 más un `widgets.json` de 1,7 MB que solo carga para `check`, y `check ide` da
 la misma salida que el check gráfico con 35,3 MB contra 59,9 MB en Debug,
-**32,7 contra 57,6 MB** en `RelWithDebInfo`. `Painter`, `Drawing`, `Metrics` y
+**32,7 contra 57,6 MB** en `RelWithDebInfo`. **Con las globals de consola
+(2026-11-13)** enlaza 42 (libsoup, GnuTLS y libsecret son casi todas las
+nuevas), 4,6 MB en Debug y 9,7 MB con símbolos, y `check ide` usa 38,4 contra
+56,8 MB; `--version` pasó de 5,3 a 11,5 MB. `Painter`, `Drawing`, `Metrics` y
 `Bitmap` viven en `bintana-drawing.so` (166 KB Debug), que se carga al arrancar
 un proyecto y no para `--version` ni `check`. Corre `tools/check` y `lib/check`
 como módulos, con las globals core (`File`, `Exec`, `Directory`, `Hash`,
@@ -200,9 +203,12 @@ proyecto.
 `check/widgets.json` de las filas y firmas reales, y `widget-meta.js` responde
 `Widget.*` sobre ese documento solo cuando corre `check`. `bta_sys.c` se compila
 con `BTA_HEADLESS` y deja afuera `Screen`/`Dialog`/`Clipboard`/`File.Open`. Los
-nombres gráficos que faltan (`Message`, `Printer`, `Database`, `Http`, ...) son
-objetos vacíos para que `Application.Globals()` no invente "no declarado"; una
-llamada a uno de ellos todavía no tiene su frase de refusal. **El boot de
+nombres que necesitan display, GStreamer o poppler (`Printer`, `Dialog`,
+`Video`, `PdfDocument`, ...) son objetos vacíos para que `Application.Globals()`
+no invente "no declarado"; una llamada a uno de ellos todavía no tiene su frase
+de refusal. **`Http`, `Database`, `Task`, `Zip`, `Random`, `Message`, `Desktop`
+y el resto de lo que usa un programa de consola son los de verdad
+(2026-11-13)**, de los mismos archivos que enlaza el host gráfico; ver el ítem 2. **El boot de
 proyecto es compartido:** `bta_project.c` lee `project.btp`, resuelve `uses` y
 ordena las fuentes para los dos hosts, así que una librería se busca igual en
 consola y en gráfico. `bintana <proyecto>` corre el `main` (con los
@@ -221,8 +227,12 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
    `main`/`startup`, construir el contexto, cargar módulos y `rad.js`. Sacar de
    `bta_runtime.c` lo que no toca GTK. `bta_app_new`/`bta_app_free` quedan acá.
    **En curso:** `bta_project.c` ya tiene el manifiesto, `uses`, la búsqueda de
-   librerías y el orden de fuentes, compartidos por los dos hosts; falta mover
-   el contexto y `bta_app_new`/`bta_app_free`.
+   librerías y el orden de fuentes, compartidos por los dos hosts. **El
+   contexto también (2026-11-13):** `bta_language.c` tiene `bta_new_context`,
+   `bta_close_hatches` y la tabla de reemplazos, y los dos hosts y sus workers
+   lo usan; el core antes armaba un contexto propio y nunca cerraba los hatches
+   (un `main` en `bintana` veía `Object.keys` y `eval`). Falta mover
+   `bta_app_new`/`bta_app_free`.
 2. **`bta_core_globals.c`:** la mitad core de `install_globals`: `print`,
    `Logger`, `Application` (sin iconos/decorations), `Message` (stderr sin
    display), `Locale`, `File`, `Exec`, `Environment`, `Http`, `Socket`, `Serial`,
@@ -231,6 +241,36 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
    `Cipher`, `Zip`, `Random`, `Task`, `Lock`, `Cancellable`, `Profile`,
    `Record`, `FormPart`, `Timer`, `Settings`. Verificar cada una contra la
    auditoría de Fase 0.
+   **Hecho, sin un archivo nuevo (2026-11-13):** el core enlaza los mismos
+   archivos que el host gráfico e `install_core` instala `Http`, `Socket`,
+   `SerialPort`, `Database`/`Sqlite`/`Odbc`, `Task`, `Lock`, `Cancellable`,
+   `Random`, `Gzip`, `Zip`, `Cipher`, `Key`, `Keyring`, `Desktop`, `Profile` y
+   `Message` (`bta_message.c`, compartido; stderr sin display). Las
+   dependencias opcionales las enlaza una función de CMake que llaman los dos
+   hosts. `Task` pide a su host lo que es del host (`bta_task_worker_host`).
+   `Bitmap`, `Painter`, `Metrics` y `Drawing` son el módulo de dibujo;
+   `PdfDocument` y `Probe` quedan en el host gráfico (poppler y GDK). La
+   prueba es `tests/headless/projects/globals`, el mismo programa en los dos
+   hosts. Queda una diferencia: `FormPart.Serialize` es de `forms.js`, así que
+   un `main` en el core crea una parte `Connection` pero no la serializa
+   (`tests/odbc.sh` sigue en `bintana-gui` por eso).
+   **Pendiente: un solo instalador de consola (marcado el 2026-11-13).** El
+   mismo conjunto está escrito tres veces -- `install_globals`
+   (`bta_runtime.c`), `install_core` (`bta_headless.c`) y `task_build_worker`
+   (`bta_task.c`) -- y ya divergió: el worker no tiene `Key`, `Keyring`,
+   `Desktop` ni `Network`, y un `Desktop.Entries.Write` en un `Task` es un
+   `ReferenceError` en vez de una frase. La propuesta es
+   `bta_console_install(ctx, global, modo)` en un archivo compartido: en modo
+   principal instala lo que hoy instala `install_core`; en modo worker usa las
+   variantes que ya existen (`bta_http_init_worker`, `bta_socket_init_worker`,
+   `bta_serial_init_worker`, `Environment` de solo lectura, `Exec` solo
+   `Wait`) y lo que necesita el bucle principal se niega con una frase. Cada
+   host agrega lo suyo encima (`bta_task_worker_host` ya es esa forma para el
+   worker). Decidir por cada uno de los cuatro que faltan si es deliberado, y
+   sumar al fixture `globals` lo que ve un `Task` en los dos hosts. **No** un
+   proceso `bintana` por tarea: `Lock` es una tabla del proceso, la
+   cancelación dura interrumpe el intérprete en el mismo proceso, y cada
+   tarea pagaría el arranque del core.
 3. **`bta_ui_globals.c`:** la otra mitad: `Widget`/`Form`, `Dialog`,
    `Clipboard`, `Screen`, `Notification`, `Tray`, `Printer`, `Popover`,
    `Desktop`, `Video`, `Terminal`, `SourceEditor`, y `forms.js`. Cada global

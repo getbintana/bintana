@@ -191,6 +191,33 @@ with `RelWithDebInfo`'s symbols -- a packager strips them; the drawing module
 is 166 KB Debug and 261 KB with symbols, and the metadata document it loads
 for `check` is **1.7 MB**.
 
+**With the console globals (2026-11-13)** the core is the table below; the rows
+above are the first slice, before `Http`, `Database`, `Task` and the rest were
+linked.
+
+| command (`RelWithDebInfo`, 2026-11-13) | max RSS | libraries |
+|---|---:|---:|
+| `bintana --version` | 11.5 MB | 42 |
+| `bintana check examples/hello` | 26.3 MB | 42 |
+| `bintana check ide` | 38.4 MB | 42 |
+| `bintana-gui check ide` | 56.8 MB | 153 |
+| `bintana tests/headless/projects/run` (a `main`) | 16.0 MB | 42 |
+| `bintana-gui tests/headless/projects/run` | 42.5 MB | 153 |
+| `bintana tests/headless/projects/draw` (`Drawing`) | 33.0 MB | 42 |
+| `bintana-gui tests/headless/projects/draw` | 56.0 MB | 153 |
+| `bintana tests/headless/projects/globals` (`Http`, `Task`, sqlite...) | 24.0 MB | 42 |
+| `bintana-gui tests/headless/projects/globals` | 46.6 MB | 153 |
+
+Linking `Http`, `Database`, `Cipher`, `Keyring` and the rest cost the core 25
+libraries (libsoup 16 of them, GnuTLS 8, libsecret 9, sharing some) and about
+6 MB of resident memory on every run, `--version` included: 5.3 MB became
+11.5 MB, and the binary 7.7 MB became 9.7 MB with symbols (3.3 to 4.6 MB
+Debug). It is still none of the toolkit, and a `main` costs well under half the
+graphical host's memory. Loading libsoup, GnuTLS and libsecret on first use, as
+the drawing module is loaded, is what would buy those 6 MB back. The wall
+times were taken under load and are not quoted; `check ide` was 1.49 s against
+1.56 s.
+
 **How it is put together.** The core `bintana` links **no widget file**. At build
 time `bintana-meta --dump` writes `check/widgets.json` from the real class rows,
 their property tables, both preludes and the generated signatures;
@@ -208,7 +235,9 @@ drawing half is `bintana-drawing.so`**, loaded by `run_project` and never by
 `--version` or `check`, so the core's link carries no cairo, Pango or
 GdkPixbuf. The files `bta_runtime.c` would have supplied -- `bta_lookup_global`,
 `bta_dump_error`, `bta_symbols`, `bta_split_doc`, `bta_read_file`,
-`bta_drain_jobs` and the error text -- are in the host.
+`bta_drain_jobs`, how a `Message` is shown and what a `Task` worker gets from
+its host -- are in the host; the language (`bta_language.c`), `Message`
+(`bta_message.c`) and the error text (`bta_util.c`) are shared.
 `bintana-meta` is the generator and the test; it is not installed.
 
 **`bintana <project>` runs a `main`.** The words after the project are
@@ -236,17 +265,33 @@ window fixture is exec'd against a fake graphical host the test writes, so the
 dispatch is watched without opening a window; a `main` is run with the same
 fake in place and must not dispatch at all.
 
-**What is deliberately a stub.** `Message`, `Dialog`, `Screen`, `Clipboard`,
-`Printer`, `Tray`, `Notification`, `Desktop`, `Popover`, `Keyring`, `Http`,
-`Socket`, `SerialPort`, `Database`, `Task`, `Media` and the rest of the
-graphical/optional surface are **empty objects**, so `Application.Globals()`
-answers the same names the graphical host has and a check does not report a
-false "not declared". A project that calls one gets a `TypeError` today; Phase 3
-replaces each with its refusal sentence. `Application.Replacements()` is empty
-for the same reason: this host does not close the hatches, so the names are
-still there. The widget classes are not stubs in the binary: they do not exist
-until `check` loads the metadata; then `widget-meta.js` installs names that
-throw on construction and answer the metadata questions.
+**What is deliberately a stub.** `Dialog`, `Screen`, `Clipboard`, `Printer`,
+`Tray`, `Notification`, `Popover`, `Probe`, `Media`, `AudioPlayer`, `Video`,
+`PdfDocument` and -- until the drawing module loads -- `Bitmap`, `Drawing` and
+`Painter` are **empty objects**, so `Application.Globals()` answers the same
+names the graphical host has and a check does not report a false "not
+declared". A project that calls one gets a `TypeError` today; Phase 3 replaces
+each with its refusal sentence. The widget classes are not stubs in the binary:
+they do not exist until `check` loads the metadata; then `widget-meta.js`
+installs names that throw on construction and answer the metadata questions.
+
+**The console globals are not stubs (2026-11-13).** The first slice also left
+`Message`, `Http`, `Socket`, `SerialPort`, `Database`, `Task`, `Zip`, `Gzip`,
+`Random`, `Cipher`, `Keyring`, `Desktop`, `Lock`, `Cancellable` and `Profile`
+as empty objects, and the suite stayed green only because every `main` that
+used one had been moved to `bintana-gui`. None of those files names GTK; the
+core now links the same files, with the same optional libraries
+(`bta_link_console_libraries` in CMake), and `Message` prints to stderr as the
+graphical host does with no display. A `Task` worker asks its host for what
+belongs to the host (`bta_task_worker_host`): `Bitmap`, `Probe`, `PdfDocument`
+and `Tray`'s refusals in `bintana-gui`, and `Bitmap` from the drawing module in
+the core when a project loaded it. **The core is also the same language now**:
+it made a context of its own and never closed the hatches, so a `main` under
+`bintana` had `Object.keys`, `eval` and `globalThis`, and an empty
+`Application.Replacements()`. `bta_language.c` is the context, the closing
+and the table for both hosts and their workers.
+`tests/headless/projects/globals` runs the same program under both and diffs
+it.
 
 **The drawing plugin spike (2026-11-13).** `tests/headless/drawing_plugin.c`
 is a real plugin built with cc and cairo, loaded by `uses: ["drawing"]`, that
@@ -291,8 +336,8 @@ suite's reference plugin is the fixture: `tests/headless/projects/plugin` with
 **Drawing is a loadable module.** `Painter`, `Metrics`, `Bitmap` and `Drawing`
 are not linked into `bintana`: `bintana-drawing.so` carries cairo, Pango and
 GdkPixbuf and is loaded when a project's resolved `uses` names `drawing`, so
-`--version`, `check` and a `main` that never draws stay at 17 libraries and
-5.8 MB. A `main` still writes a PNG or a PDF and measures text
+`--version`, `check` and a `main` that never draws stay at 42 libraries and
+11.5 MB, none of them cairo, Pango or GdkPixbuf. A `main` still writes a PNG or a PDF and measures text
 with no display; `DrawingArea`, which needs a widget, is the GUI's. **The report's document half is core too:** `lib/report` and
 `lib/charts` define `ReportDocument`/`ChartDocument` always, and their
 `Report`/`Chart` controls only when `Component` exists, so a `main` lays out and

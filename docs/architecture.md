@@ -8,10 +8,17 @@ bta_runtime.c     interpreter setup, the graphical globals, the GTK main loop
                   -- and the console one, for a project that declares `main`
 bta_project.c     project.btp, `uses`, the library search path and load order;
                   the boot both hosts share, with no toolkit in it
+bta_language.c    the language every host and every Task worker gets: the
+                  context's intrinsics, the closing of the hatches after the
+                  prelude, and the table of names taken away
+bta_message.c     Message: the catalogue lookup is shared, and each host says
+                  how it shows one (an alert, or stderr with no display)
 bta_util.c        bta_to_number and bta_to_int, needed by every host and by
-                  the network and XML globals rather than by the widgets alone
+                  the network and XML globals rather than by the widgets
+                  alone, and the stable sentence for a GError or an errno
 bta_headless.c    the core host (`bintana`): version, check, a project's
-                  `main`, the exec of a `startup` as `bintana-gui`, and the
+                  `main` with the console globals the graphical host links,
+                  the exec of a `startup` as `bintana-gui`, and the
                   `bintana-drawing.so` load when a project runs
 bta_widget.c      the base Widget: geometry, Style and colours, events, drag and
                   drop, the class table machinery, lifetimes

@@ -748,8 +748,8 @@ measurements behind the target are in
 `bintana-gui` answers, and `ldd` is read again. It is the first real
 console runtime, not the test host: it loads `tools/check`, `lib/check` and the
 generated `widgets.json` through `WidgetMeta.js`, and `check` is byte for byte
-the graphical pass with **17 libraries against 153** and about 33 MB against
-58 MB on the IDE's own project. The binary links no widget file; the document
+the graphical pass with **42 libraries against 153** and 38 MB against
+57 MB on the IDE's own project. The binary links no widget file; the document
 is 1.7 MB and is loaded only for `check`.
 
 **The drawing plugin spike** is built and run in the same script: a temporary
@@ -781,6 +781,19 @@ library directory, so a `main` gets `TestPlug` with no display.
 in the core (they do in `bintana-gui`). `lib/report` keeps its paper table
 locally, so the document does not need `Printer`, which is GTK's.
 
+**The console globals are the graphical host's own**:
+`tests/headless/projects/globals` is a `main` that asks `typeof` of `Http`,
+`Database`, `Task`, `Zip`, `Gzip`, `Random`, `Cipher`, `Socket`, `Keyring`,
+`Lock`, `Cancellable`, `Profile`, `Message` and `Desktop`; that the hatches are
+closed (`Object.keys` and `eval` gone, `setTimeout` naming `Timer.After`);
+that a missing file says `no such file or directory`; then compresses, zips,
+queries an in-memory sqlite, serves and fetches over a local `Http.Server`,
+and runs a `Task` that reads `Application.Arguments` on its thread. Both hosts
+run it and their stdout must match; the run ends by itself when nothing is
+owed an answer, so the core's loop is what is asked, and a `CRITICAL` on its
+stderr is a failure. With `bta_http_init` taken out of the core the block goes
+red on `Http is not defined`.
+
 **It runs a project's tests too**: `bintana test` on a `main` project reads
 `tests/*Test.js` with `runTests` and no toolkit; a `startup` project's tests are
 exec'd as `bintana-gui test`, which the fixture holds with the fake host.
@@ -795,8 +808,8 @@ the test writes a fake graphical host, points `BINTANA_GUI` at it, and holds
 the dispatch to the words it was given and to the host's own exit status; a
 `main` run with the same fake must not dispatch at all, and a
 `BINTANA_GUI` that does not exist must be a sentence and exit 2. The console
-run costs **13.4 MB against 43.3 MB** on the same fixture, and the
-`Drawing` one **27.2 MB against 56.9 MB**.
+run costs **16.0 MB against 42.5 MB** on the same fixture, and the
+`Drawing` one **33.0 MB against 56.0 MB** (`RelWithDebInfo`, 2026-11-13).
 
 ## The install, which the suite cannot see either
 

@@ -524,9 +524,10 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 
 **`bintana` is the core host: `--version`, `check`, a project's `main` and
 tests, and the dispatch of `startup` to `bintana-gui`, with no toolkit in the
-link.** It links 17 libraries, and `bintana check ide` answers byte for byte what
-`bintana-gui check ide` answers with less memory (32.7 MB against 57.6 MB on
-`RelWithDebInfo`). `tests/headless.sh` runs
+link.** It links 42 libraries (17 before the console globals; libsoup, GnuTLS
+and libsecret are most of the rest), and `bintana check ide` answers byte for
+byte what `bintana-gui check ide` answers with less memory (38.4 MB against
+56.8 MB on `RelWithDebInfo`, 2026-11-13). `tests/headless.sh` runs
 both, and diffs the core run of a fixture project against the graphical one.
 Both binaries are installed; `bintana-meta` is the generator and is not.
 
@@ -623,12 +624,50 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   sentence. The metadata stubs belong to `bintana-meta`, not to the core.
   `Text.LineOf` is implemented in the host over `bta_line_of_utf16`; the
   measuring half of `Text` needs Pango and is not here.
-- **`bta_sys_init` is the core object set once the guards are in**, and
-  `bta_headless.c` adds `Logger`, `Text` and empty objects for the graphical
-  names (`Message`, `Printer`, `Database`, `Http`, ...). The empty objects are
-  what keeps `Application.Globals()` honest for `Names.unresolved`; a call to
-  one is a `TypeError` until Phase 3 gives it a sentence. `Widget` and the
-  class names are not here; `widget-meta.js` installs them for `check`.
+- **The console globals are the graphical host's files, linked into the
+  core.** `install_core` installs `File`/`Exec` (`bta_sys_init`), `Http`,
+  `Socket`, `SerialPort`, `Database`/`Sqlite`/`Odbc`, `Task`, `Lock`,
+  `Cancellable`, `Random`, `Gzip`, `Zip`, `Cipher`, `Key`, `Keyring`,
+  `Desktop`, `Profile` and `Message` (bta_message.c, stderr here) in the
+  graphical host's order. Their optional libraries are linked by one CMake
+  function, `bta_link_console_libraries`, that both hosts call -- so sqlite,
+  libsoup, GnuTLS, libsecret and unixODBC are the same yes-or-no in both. **Only
+  what needs a display, GStreamer or poppler is an empty object
+  (`GUI_GLOBALS`)**: `Dialog`, `Screen`, `Clipboard`, `Printer`, `Tray`,
+  `Notification`, `Popover`, `Probe`, `Media`, `AudioPlayer`, `Video`, and the
+  drawing names until the module loads. They keep `Application.Globals()`
+  honest for `Names.unresolved`; a call to one is a `TypeError` until Phase 3
+  gives it a sentence. `Widget` and the class names are not here;
+  `widget-meta.js` installs them for `check`.
+- **The first slice left `Http`, `Database`, `Task`, `Zip` and `Random` as
+  empty objects too, and nothing failed.** The suite ran green because every
+  `main` that used them had been moved to `bintana-gui` (`pack.sh`, `odbc.sh`,
+  `keyring.sh`, `tools/pack.sh`), so `bintana examples/http` answered
+  `TypeError: not a function` and no test said so. None of those files names
+  GTK: `nm -u` on their objects against the core's definitions found one
+  missing symbol for `Http` (`bta_log_debug_plain`) and, for `Task`, only the
+  worker's context and the graphical host's `Bitmap`/`Probe`/`PdfDocument`/
+  `Tray` inits -- now a host hook, `bta_task_worker_host`. That check is the
+  question to ask before deciding a global "needs the graphical host".
+  `tests/headless/projects/globals` holds it now.
+- **The core made its own context and never closed the hatches.** A `main`
+  under `bintana` had `Object.keys`, `eval` and `globalThis`, evaluated rad.js
+  without strict mode, and its `Application.Replacements()` was empty. The
+  context, the closing and the replacement table are `bta_language.c` now,
+  linked by both hosts and used by a `Task` worker in either; the core closes
+  after rad.js for a run and after `widget-meta.js` for `check`, as the
+  graphical host does after `forms.js`.
+- **`bta_gerror_text` had a second, shorter copy in the core** that answered
+  `g-io-error-quark (1)` where the graphical host says `no such file or
+  directory`. It is in `bta_util.c` once; the `GDK_TEXTURE_ERROR` branch is
+  compiled only where GDK is linked.
+- **The core's loop source must not remove itself.** `project_idle` answered
+  `G_SOURCE_REMOVE` and the caller removed the same id after the loop: a
+  `GLib-CRITICAL` on every run that waited, unseen while nothing but `Network`
+  could make it wait. It answers CONTINUE now, like `console_idle`.
+- **`FormPart`'s `.form` half is `forms.js`'s.** A `main` in the core makes a
+  `Connection` part with `FormPart.New` (rad.js) but cannot `Serialize` it;
+  `tests/odbc.sh` asserts both and so stays on `bintana-gui`.
 - **`bta_modules_scope` goes after `rad.js` and the metadata document.** It
   photographs the runtime's names for `Application.FreeNames`; taken before the
   prelude, every `Regex` in a project was reported as undeclared, and taken
@@ -637,10 +676,11 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   it again aborts in QuickJS. A script from `bta_compile` goes through
   `JS_EvalFunction`.
 - **The core supplies `bta_lookup_global`, `bta_dump_error`, `bta_symbols`,
-  `bta_split_doc`, `bta_read_file`, `bta_drain_jobs`, `bta_gerror_text`,
-  `bta_errno_text`, `bta_current_app` and `bta_task_hard_cancellable` in
+  `bta_split_doc`, `bta_read_file`, `bta_drain_jobs`, `bta_current_app`,
+  `bta_log_debug_plain`, `bta_message_show` and `bta_task_worker_host` in
   `bta_headless.c`; the graphical host's live in `bta_runtime.c`.** The
-  library listing and the project boot are shared, in `bta_project.c`.
+  library listing and the project boot are shared, in `bta_project.c`; the
+  language in `bta_language.c`; the error text in `bta_util.c`.
   `bta_symbols` and `bta_split_doc` are the same code the graphical host uses,
   not a second reader. The division is the link, not the file: the core must
   not name a GTK symbol.
