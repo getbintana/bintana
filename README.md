@@ -26,6 +26,7 @@ cd bintana
 cmake -S . -B build && cmake --build build -j
 ./build/bintana ide examples/hello    # the IDE, opening an example project
 ./build/bintana check examples/hello  # what is wrong with a project, no window
+./build/bintana examples/ledger /tmp/expenses.pdf   # CSV to a chart and a PDF, no display
 ./tests/run.sh                        # the suite, on a virtual display
 ```
 

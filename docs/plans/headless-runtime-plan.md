@@ -262,6 +262,10 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
   `tests/headless/projects/{draw,report}` lo difean contra el host gráfico. El
   `testDocument` entero sigue siendo del host gráfico porque compara contra
   `DrawingArea` y el control, no por el documento.
+- **Ejemplo CLI hecho:** `examples/ledger` lee un CSV, agrupa importes
+  `Decimal`, dibuja un `ChartDocument` en bytes y arma el PDF con
+  `ReportDocument`; corre como `bintana examples/ledger out.pdf` sin display y
+  `tests/headless.sh` lo verifica. Es el uso que justifica la separación.
 - **Spike del plugin `drawing` (hecho el 2026-11-13):** un plugin real con
   cairo dibuja un PDF de 20.000 líneas en 35,2 ms contra 51,3 ms del `Drawing`
   enlazado; la comparación no es pura (el nativo anota cada llamada para

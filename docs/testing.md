@@ -757,6 +757,11 @@ is 1.7 MB and is loaded only for `check`.
 the same loop through the linked `Drawing`. It is a measurement, not an
 assertion on the numbers.
 
+**The ledger example** (`examples/ledger`) is the CLI the core exists for: it
+reads the bundled CSV, groups `Decimal` amounts, draws a `ChartDocument` and
+writes a PDF with `ReportDocument`. The script runs it with no display and
+checks the PDF's magic and, when `pdftotext` is present, its rows.
+
 **A UI library named by a `main`** is refused with its name and the missing
 display (`tests/headless/projects/uilibrary`), not with `Component is not
 defined` from inside the class.

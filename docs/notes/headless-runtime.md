@@ -301,6 +301,13 @@ its `Widget.*` -- are still the graphical host's. A `main` accepts `--strict`
 the core; `--debug` works. The look options and `--form` go to `bintana-gui`,
 which is where `Application.Theme` and the form refusal live.
 
+**The ledger example is the case that ties it together.** `examples/ledger`
+reads `data/expenses.csv`, groups `Decimal` amounts, draws a `ChartDocument`
+into `Bytes`, puts that image and the detail rows in a `ReportDocument`, and
+writes a PDF. It runs as `bintana examples/ledger out.pdf` with no display; the
+command is in `tests/headless.sh` and checks the PDF's text when `pdftotext` is
+there. It is the shape a cron job or a CI artifact takes.
+
 ## Reproducing
 
 ```sh

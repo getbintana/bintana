@@ -1,0 +1,8 @@
+{
+  "name": "ledger",
+  "main": "Main",
+  "uses": ["report", "charts"],
+  "sources": ["Main.js"],
+  "version": "1.0",
+  "description": "A console report from a CSV: grouped totals, a chart and a PDF, with no display"
+}

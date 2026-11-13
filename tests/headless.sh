@@ -270,6 +270,24 @@ else
     fail=1
 fi
 
+# The example that uses all of it: CSV in, chart, report and PDF out, with no
+# display. It is the CLI the core exists for.
+ledger="$tmp/ledger.pdf"
+if BINTANA_LIB_PATH="$PWD/lib" "$BINTANA_CORE" examples/ledger "$ledger" \
+        >"$tmp/ledger.out" 2>"$tmp/ledger.err" &&
+   [[ -s $ledger ]] && [[ $(head -c 4 "$ledger") == "%PDF" ]]; then
+    if command -v pdftotext >/dev/null &&
+       pdftotext "$ledger" - 2>/dev/null | grep -q "Train to Rosario"; then
+        echo "the ledger example writes a PDF with the rows in it"
+    else
+        echo "the ledger example wrote a PDF, but its text was not read"
+    fi
+else
+    echo "the ledger example did not write a PDF:" >&2
+    cat "$tmp/ledger.out" "$tmp/ledger.err" >&2
+    fail=1
+fi
+
 # `Drawing` is the document half of `DrawingArea`: a PNG and a PDF with no
 # control and no display, through Painter, Metrics and Bitmap. Both hosts draw
 # the same document; the fixture prints only what is stable across them.
