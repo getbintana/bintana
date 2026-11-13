@@ -685,6 +685,11 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   and an install to a scratch prefix. `tests/install` now runs the installed
   core on the installed ledger. The ABI version is one constant in `bta.h`;
   the loader had a literal `1`.
+- **The core calls `setlocale(LC_ALL, "")` first, as `main.c` does.** It did
+  not, so every `main` ran in the C locale -- `Locale.Number` without the
+  desktop's separators, English month names, `Locale.Compare` by byte -- and
+  `bintana check` listed a project's files in another order than the
+  graphical check. Found by comparing the two checks over every project.
 - **The core's loop source must not remove itself.** `project_idle` answered
   `G_SOURCE_REMOVE` and the caller removed the same id after the loop: a
   `GLib-CRITICAL` on every run that waited, unseen while nothing but `Network`

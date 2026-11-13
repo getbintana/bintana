@@ -823,6 +823,12 @@ so the answer holds on any machine. Both hosts are diffed against
 `expected.txt`, which is what GDK answered (GTK 4.20) before both hosts used
 `bta_color_parse`; the core's previous parser is thirty lines off.
 
+**A `main` reads the desktop's locale in both hosts**:
+`tests/headless/projects/locale` prints a number, a month and a sorted list
+under `LANG=es_AR.UTF-8`, and the two hosts must print the same; where the
+machine has `es_AR`, the core must write `1.234,50`. The core never called
+`setlocale` and answered `1234.50`, `August` and byte order.
+
 **`Application.OnError` takes an uncaught error in both hosts**:
 `tests/headless/projects/onerror` assigns a handler and throws twice from
 `Timer` callbacks, once with a name the language took away. Both hosts must

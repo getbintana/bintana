@@ -426,6 +426,28 @@ for host in "$BINTANA_CORE" "$BINTANA"; do
 done
 [[ $colors_ok == 1 ]] && echo "Painter.Color reads the same colours in both hosts"
 
+# The desktop's locale reaches a `main` in both hosts. The core never called
+# setlocale, so a Spanish desktop got `1234.50`, an English month and names
+# sorted by byte from `bintana` and `1.234,50`, `agosto` and the language's
+# order from `bintana-gui`. The hosts must agree under any locale; the comma
+# is asserted only where this machine has es_AR to give it.
+LANG=es_AR.UTF-8 LC_ALL= "$BINTANA_CORE" tests/headless/projects/locale \
+    >"$tmp/locale-core.out" 2>&1
+LANG=es_AR.UTF-8 LC_ALL= "$BINTANA" tests/headless/projects/locale \
+    >"$tmp/locale-gui.out" 2>&1
+if ! diff -u "$tmp/locale-gui.out" "$tmp/locale-core.out" >"$tmp/locale.diff"; then
+    echo "the two hosts read the desktop's locale differently:" >&2
+    cat "$tmp/locale.diff" >&2
+    fail=1
+elif locale -a 2>/dev/null | grep -qi '^es_AR\.utf-\?8$' &&
+     ! grep -q '^Number: 1\.234,50$' "$tmp/locale-core.out"; then
+    echo "the core did not read es_AR from the environment:" >&2
+    cat "$tmp/locale-core.out" >&2
+    fail=1
+else
+    echo "a main reads the desktop's locale in both hosts"
+fi
+
 # `Application.OnError` takes an uncaught error over in both hosts: the same
 # two strings reach the handler, the replacement hint with them, and the run
 # still exits 1. The core used to accept the assignment and never call it.

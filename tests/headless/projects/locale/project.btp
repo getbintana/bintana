@@ -1,0 +1,6 @@
+{
+  "name": "headless-locale",
+  "main": "Main",
+  "description": "The desktop's locale reaches a main in both hosts: numbers, month names and the order of names",
+  "sources": ["Main.js"]
+}

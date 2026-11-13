@@ -28,6 +28,7 @@
 #include "bta_prelude.h"
 
 #include <errno.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1384,6 +1385,17 @@ static bool is_look_option(const char *word)
 
 int main(int argc, char **argv)
 {
+    /*
+     * The desktop's locale, as the graphical host asks for it first thing
+     * (main.c). The console host never did, so every `main` ran in the C
+     * locale: `Locale.Number(1234.5, 2)` was `1234.50` on a Spanish desktop
+     * where `bintana-gui` said `1.234,50`, and `Locale.Compare` sorted by
+     * byte -- which is also why `bintana check` listed a project's files in
+     * another order than the graphical check. Machine text does not
+     * depend on it: CSS, JSON and numbers for C go through `g_ascii_*`.
+     */
+    setlocale(LC_ALL, "");
+
     if (argc >= 2 && (!strcmp(argv[1], "--version") || !strcmp(argv[1], "-v"))) {
         printf("bintana %s\n", BTA_VERSION_STRING);
         return 0;
