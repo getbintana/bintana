@@ -408,6 +408,7 @@ static JSValue js_application_quit(JSContext *ctx, JSValueConst this_val,
     int32_t code = 0;
     if (argc > 0 && JS_ToInt32(ctx, &code, argv[0]))
         code = 1;
+    bta_profile_finish();
     exit(code);
     return JS_UNDEFINED;
 }
@@ -1677,42 +1678,16 @@ static void usage(void)
           "       bintana --version\n", stderr);
 }
 
-/* What an option before the project means to a `main`. A console project opens
- * no window, so the look and the form options have nothing to act on; saying
- * which one is better than ignoring it or loading a toolkit to ignore it. */
-static int main_option(const char *word)
+/* What an option before the project means to a `main`. `--debug`, `--strict`
+ * and `--profile` are the run's; the look and the form options are the
+ * graphical host's and are forwarded there, as the plan says. */
+static bool is_look_option(const char *word)
 {
-    if (!strcmp(word, "--debug")) {
-        bta_debug_want();
-        return 0;
-    }
-    if (!strcmp(word, "--strict")) {
-        fprintf(stderr, "bintana: --strict is for widget properties, "
-                        "and this host has no widgets; run it with the "
-                        "graphical bintana\n");
-        return 2;
-    }
-    if (!strcmp(word, "--form")) {
-        fprintf(stderr, "bintana: --form opens a form, and this "
-                        "project declares \"main\": it has none to open\n");
-        return 2;
-    }
-    if (!strcmp(word, "--profile")) {
-        fprintf(stderr, "bintana: --profile is not in the console "
-                        "host yet; run it with the graphical bintana\n");
-        return 2;
-    }
-    if (!strcmp(word, "--theme") || !strcmp(word, "--text-scale") ||
-        !strcmp(word, "--rtl")) {
-        fprintf(stderr, "bintana: %s is a setting of the toolkit, and "
-                        "a project with \"main\" opens no window; run it with "
-                        "the graphical bintana\n", word);
-        return 2;
-    }
-    fprintf(stderr, "bintana: unknown option '%s'\n", word);
-    usage();
-    return 2;
+    return !strcmp(word, "--form") || !strcmp(word, "--theme") ||
+           !strcmp(word, "--text-scale") || !strcmp(word, "--rtl");
 }
+
+
 
 int main(int argc, char **argv)
 {
@@ -1796,13 +1771,51 @@ int main(int argc, char **argv)
          * reading for a manifest that cannot be read. */
         return run_project(nwords - project, words + project, false, false, NULL);
 
-    for (int i = 0; i < project; i++) {
-        int rc = main_option(words[i]);
+    /* The graphical host owns the look and the form options, even for a
+     * `main`: `--theme` is `Application.Theme` there, and `--form` is its own
+     * refusal. A profile, strictness and the debugger belong to this run. */
+    const char *profile = NULL;
+    bool        look    = false;
 
-        if (rc)
-            return rc;
-        if (option_takes_value(words[i]))
-            i++;
+    for (int i = 0; i < project; i++) {
+        if (!strcmp(words[i], "--debug")) {
+            bta_debug_want();
+        } else if (!strcmp(words[i], "--strict")) {
+            /* No widgets, so there is nothing to make strict. The graphical
+             * console path accepts it for the same reason. */
+        } else if (!strcmp(words[i], "--profile")) {
+            if (i + 1 >= project) {
+                fprintf(stderr, "bintana: --profile needs a file\n");
+                return 2;
+            }
+            profile = words[++i];
+        } else if (is_look_option(words[i])) {
+            look = true;
+            break;
+        } else {
+            fprintf(stderr, "bintana: unknown option '%s'\n", words[i]);
+            usage();
+            return 2;
+        }
     }
-    return run_project(nwords - project, words + project, false, false, NULL);
+
+    if (look) {
+        char *gui = find_gui_host();
+
+        if (!gui) {
+            fprintf(stderr, "bintana: this run needs the graphical host, and "
+                            "none is beside this binary. Install bintana-gui "
+                            "there, or set BINTANA_GUI to it.\n");
+            return 2;
+        }
+        return exec_gui(gui, words, nwords);
+    }
+
+    if (profile && !bta_profile_start(profile))
+        return 2;
+
+    int rc = run_project(nwords - project, words + project, false, false, NULL);
+
+    bta_profile_finish();
+    return rc;
 }

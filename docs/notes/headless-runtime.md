@@ -288,9 +288,10 @@ the design -- a core and a graphical host; the third binary that is not wanted
 is one that exists only for `check` and the test tools.** The Windows split
 does not exist yet, and the Phase 2 acceptance
 projects -- `tests/report`'s `testDocument`, `tests/media`, and `tests/api` with
-its `Widget.*` -- are still the graphical host's. A `main` refuses `--strict`
-and `--profile` with a sentence: strictness is about widget properties and this
-host has no widgets, and the profiler is not linked yet. `--debug` works.
+its `Widget.*` -- are still the graphical host's. A `main` accepts `--strict`
+(there are no widgets to make strict) and `--profile` writes its capture from
+the core; `--debug` works. The look options and `--form` go to `bintana-gui`,
+which is where `Application.Theme` and the form refusal live.
 
 ## Reproducing
 

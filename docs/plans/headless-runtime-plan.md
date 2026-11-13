@@ -249,7 +249,10 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
 
 **Aceptación de Fase 2:**
 
-- `bintana-meta` corre `tests/api` y `tests/icons`/`tests/styles`.
+- ~~`bintana-meta` corre `tests/api` y `tests/icons`/`tests/styles`.~~
+  **Superseded:** la metadata es un documento que `check` carga en el core, y
+  `tests/api` se queda en el host gráfico porque valida `Widget.*` y la API de
+  los controles. El meta-host es el generador y el test de metadata.
 - Un `main` mínimo y el `testDocument` de `tests/report` corren sin GTK y
   escriben el PDF. **Hecho:** `Painter`, `Metrics`, `Bitmap` y `Drawing` están
   en el core (cairo, Pango y GdkPixbuf), `Drawing.Save`/`ToPng`/`SavePdf`
@@ -272,9 +275,11 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
   eventual `drawing` -- sean opcionales, en vez de enlazar cairo/Pango/Pixbuf
   en el core.
 - `tests/media` corre en core si GStreamer queda core; si no, se documenta por
-  qué va al host gráfico.
+  qué va al host gráfico. **Decidido:** `Media`, `Video` y `AudioPlayer` son
+  controles con GStreamer; el core no enlaza GStreamer, así que `tests/media`
+  corre en `bintana-gui`.
 - El worker de `Task` sigue pasando sus tests; su instalador y el core no se
-  duplican.
+  duplican. **Hecho:** la suite completa pasa con el core como runner.
 - `tests/run.sh` completo sigue verde con el binario actual.
 
 ## Fase 3 — dos hosts y dispatch (1 semana)
@@ -300,9 +305,10 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
      `main`/`startup`) y ser barato.
    - **Hecho en el core `bintana`:** el dispatch executa el host con todo tal
      como llegó, se niega a execurarse a sí mismo, y `--debug` instala el
-     protocolo en el core. `--strict` y `--profile` de un `main` se rechazan con
-     una frase hasta que el modo estricto y el profiler sean core; en un
-     `startup` se reenvían al host gráfico como cualquier otra opción.
+     protocolo en el core. `--strict` se acepta (no hay widgets que hacer
+     estrictos), `--profile` escribe la captura desde el core, y `--form`,
+     `--theme`, `--text-scale` y `--rtl` de un `main` se reenvían al host
+     gráfico, igual que en un `startup`.
 3. **Windows:** `bintana.exe` es consola de verdad; `bintanaw.exe` es el host
    gráfico con subsistema GUI. El `objcopy` actual se mueve al target gráfico o
    se reemplaza por `-mwindows`; verificar con `objdump -p` que `bintanaw` dice
@@ -329,7 +335,8 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
 
 **Aceptación de Fase 3:** `bintana <startup>` abre la ventana; `bintana <main>`
 no carga GTK; `bintana check` no carga GTK; la suite entera pasa; el zip de
-Windows arranca la IDE desde `bintanaw`.
+Windows arranca la IDE desde `bintanaw`. **En Linux está:** ventana por
+dispatch, core sin GTK, `check` sin GTK y suite verde; falta Windows.
 
 ## Fase 4 — librerías, docs y limpieza (3-5 días)
 
@@ -337,7 +344,11 @@ Windows arranca la IDE desde `bintanaw`.
   `dialog`, `markdown` (verificar) y todo lo que instancie widgets en UI. Un
   `main` que nombre una librería UI tiene que fallar al cargar con una frase que
   nombre la librería y el display, no con un `ReferenceError` en la primera
-  clase.
+  clase. **Estado:** `report` y `charts` separan documento (core) de control
+  (GUI); `xlsx`, `package` y `check` son core; `markdown` es una sola clase que
+  extiende `Component` (documento y control juntos), y `qr`, `pdfview`, `dialog`
+  y `datagrid` son UI. La frase por librería no está todavía: el `main` falla
+  en la primera clase que necesita el toolkit.
 - **Docs:** `docs/architecture.md` (boot de dos hosts), `docs/agents/runtime.md`
   (contrato de `main`: mismos nombres, refusals), `docs/agents/build-and-tools.md`
   (targets/CI), `docs/installing.md` (lanzadores de Windows), `docs/testing.md`
