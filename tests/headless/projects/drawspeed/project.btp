@@ -1,0 +1,6 @@
+{
+  "name": "headless-drawspeed",
+  "main": "Main",
+  "description": "The same loop as the drawing plugin, through the linked Drawing",
+  "sources": ["Main.js"]
+}

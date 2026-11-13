@@ -245,6 +245,20 @@ still there. The widget classes are not stubs in the binary: they do not exist
 until `check` loads the metadata; then `widget-meta.js` installs names that
 throw on construction and answer the metadata questions.
 
+**The drawing plugin spike (2026-11-13).** `tests/headless/drawing_plugin.c`
+is a real plugin built with cc and cairo, loaded by `uses: ["drawing"]`, that
+offers a subset of `Drawing.SavePdf` and `Painter` as methods. The fixture
+`tests/headless/projects/drawplugin` draws 20,000 line pairs in **35.2 ms**;
+the same loop through the linked `Drawing` (`drawspeed`) takes **51.3 ms**.
+That is **not** pure ABI overhead: the native painter records every call for
+`Dump()` and validates its arguments, and the spike does neither. What it does
+show is that cairo can live in a plugin, that the core can drive a painter
+through `host->call`, and that the boundary is not the hot-path catastrophe it
+looked like. A real `lib/drawing` would still need the full API, a JavaScript
+façade for the property/class semantics, Pango text and images, and a decision
+between `uses: ["drawing"]` and load-on-first-use. The linked code stays until
+that exists.
+
 **Native plugins are core too.** A project's `uses` resolves a library
 directory and, when it holds `<name>.<suffix>`, the core loads it before
 `rad.js` and before the project's sources, with `host->call` available. The

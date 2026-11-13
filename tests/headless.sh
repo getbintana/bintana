@@ -215,6 +215,46 @@ else
     fail=1
 fi
 
+# --- the drawing plugin spike ----------------------------------------------
+#
+# The same loop through a native plugin and through the linked `Drawing`. The
+# plugin is built here, into a temporary library directory, and carries cairo
+# itself; this is the measurement that says whether a `lib/drawing` plugin is
+# worth extracting. The times are printed, not asserted.
+drawlib="$tmp/lib/drawing"
+mkdir -p "$drawlib"
+if cc -shared -fPIC -O2 -I runtime/include -o "$drawlib/drawing.so" \
+        tests/headless/drawing_plugin.c $(pkg-config --cflags --libs cairo) \
+        >"$tmp/drawing-cc.out" 2>"$tmp/drawing-cc.err"; then
+    if BINTANA_LIB_PATH="$tmp/lib" "$BINTANA_CORE" \
+            tests/headless/projects/drawplugin >"$tmp/plugin-draw.out" \
+            2>"$tmp/plugin-draw.err" &&
+       grep -qx "plugin-ok" "$tmp/plugin-draw.out" &&
+       grep -qx "pdf application/pdf" "$tmp/plugin-draw.out"; then
+        plugin_ms=$(sed -n 's/^plugin-ms //p' "$tmp/plugin-draw.out")
+        echo "a Drawing plugin draws a PDF (${plugin_ms} ms)"
+    else
+        echo "the drawing plugin did not draw a PDF:" >&2
+        cat "$tmp/plugin-draw.out" "$tmp/plugin-draw.err" >&2
+        fail=1
+    fi
+else
+    echo "the drawing plugin did not compile:" >&2
+    cat "$tmp/drawing-cc.err" >&2
+    fail=1
+fi
+
+if "$BINTANA_CORE" tests/headless/projects/drawspeed \
+        >"$tmp/native-draw.out" 2>"$tmp/native-draw.err" &&
+   grep -qx "native-ok" "$tmp/native-draw.out"; then
+    native_ms=$(sed -n 's/^native-ms //p' "$tmp/native-draw.out")
+    echo "linked Drawing baseline: ${native_ms} ms"
+else
+    echo "the linked Drawing baseline failed:" >&2
+    cat "$tmp/native-draw.out" "$tmp/native-draw.err" >&2
+    fail=1
+fi
+
 # `Drawing` is the document half of `DrawingArea`: a PNG and a PDF with no
 # control and no display, through Painter, Metrics and Bitmap. Both hosts draw
 # the same document; the fixture prints only what is stable across them.

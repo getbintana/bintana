@@ -752,6 +752,11 @@ the graphical pass with **44 libraries against 153** and about 37 MB against
 58 MB on the IDE's own project. The binary links no widget file; the document
 is 1.7 MB and is loaded only for `check`.
 
+**The drawing plugin spike** is built and run in the same script: a temporary
+`drawing.so` carrying cairo draws a PDF, and the script prints its time beside
+the same loop through the linked `Drawing`. It is a measurement, not an
+assertion on the numbers.
+
 **A native plugin loads too**: `tests/headless/projects/plugin` names
 `testplug`, and the script copies the suite's reference `.so` into a scratch
 library directory, so a `main` gets `TestPlug` with no display.

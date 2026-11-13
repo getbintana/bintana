@@ -256,6 +256,13 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
   `tests/headless/projects/{draw,report}` lo difean contra el host gráfico. El
   `testDocument` entero sigue siendo del host gráfico porque compara contra
   `DrawingArea` y el control, no por el documento.
+- **Spike del plugin `drawing` (hecho el 2026-11-13):** un plugin real con
+  cairo dibuja un PDF de 20.000 líneas en 35,2 ms contra 51,3 ms del `Drawing`
+  enlazado; la comparación no es pura (el nativo anota cada llamada para
+  `Dump()`), pero prueba que el ABI no es un cuello de botella y que el core
+  puede manejarlo. Falta la API completa, la fachada JS de propiedades/clases,
+  Pango e imágenes, y decidir `uses` explícito o carga al primer uso. **No se
+  instaló**; el código enlazado se queda hasta entonces.
 - **Plugins nativos en el core (hecho):** `uses` resuelve `<name>/<name>.so` y
   lo carga antes de `rad.js`, con `host->call`; el plugin de referencia del
   suite corre en `tests/headless.sh`. Es la vía para que `taglib` -- o un
