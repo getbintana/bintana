@@ -1,7 +1,8 @@
 /*
  * The metadata host: what `Widget.*` answers with no toolkit in the link.
  *
- * This is the Phase 1 spike of `docs/plans/headless-runtime-plan.md`, and it
+ * It began as the spike that proved the split
+ * (`docs/notes/headless-runtime.md`), and it
  * is deliberately small. It builds no widget and opens no window. It creates a
  * QuickJS context, asks the class rows to make their prototypes -- with every
  * property entry a stub, and every class row without its `build` or `probe` --

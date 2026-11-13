@@ -2,8 +2,8 @@
  * The console host, `bintana`: `--version`, `check`, a project's `main` and
  * its tests, with no toolkit in the link. A project that declares `startup`
  * is exec'd as the graphical host (`bintana-gui`) with every word unchanged.
- * See `docs/plans/headless-runtime-plan.md` and
- * `docs/notes/headless-runtime.md`.
+ * See `docs/notes/headless-runtime.md`, and `docs/plans/console-host-plan.md`
+ * for what is left.
  *
  * **The language and the console globals are the graphical host's own
  * files.** The context comes from `bta_new_context` and is finished by

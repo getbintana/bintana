@@ -484,8 +484,8 @@ earns are in `CHANGELOG.md`; the generated release notes are the fallback.
 
 ## The metadata target
 
-**`bintana-meta` is the Phase 1 spike of
-[`plans/headless-runtime-plan.md`](../plans/headless-runtime-plan.md), and its
+**`bintana-meta` is the metadata host
+([`notes/headless-runtime.md`](../notes/headless-runtime.md)), and its
 proof is a link line, not an answer.** It compiles fourteen widget files with
 `BTA_META_ONLY`, links `quickjs` and GLib/GIO, and nothing graphical.
 `tests/headless.sh` diffs its `Widget.*` answers against the running runtime and

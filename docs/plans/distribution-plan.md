@@ -133,27 +133,51 @@ and a Debian control file needs one, so an application package takes
 `--maintainer "Name <email>"` and refuses without it. The runtime package uses
 the release owner's constant. Nothing invents an address.
 
-## Sequencing with the headless host
+## The two hosts, and Windows
 
-`headless-runtime-plan.md` is the gate for the package boundary, not for the
-whole distribution. Its Phase 0 measures the closure and its Phase 1 proves
-that `Widget.*` and `bintana check` can answer without GTK; together they are
-about a week, and Phase 1 is the technical risk. Run them before Stage 1 here,
-and do not publish a package whose name or dependency list would have to move
-afterwards.
+**The package boundary is settled (2026-11-13).** The headless work is done on
+Linux and its plan is closed; how it was built and measured is
+[`notes/headless-runtime.md`](../notes/headless-runtime.md), and what it left
+open on Linux is [`console-host-plan.md`](console-host-plan.md). `bintana` is
+the core: `--version`, `check`, a project's `main` and its tests, and the exec
+of a `startup` project as `bintana-gui`. It links no GTK, GtkSourceView or VTE
+-- 42 libraries with every optional one, 17 with none -- and loads
+`bintana-drawing.so` (cairo, Pango, GdkPixbuf) the first time a program draws.
+`bintana-gui` is the graphical host and the only one that opens a window. Both
+install, beside `bintana-ide`; there is no third binary for checks. So a
+`.deb`/`.rpm` can carry the core without GTK and the graphical host with it,
+and the staging code in Stage 1 takes `Hosts` and `Data` lists for exactly
+that.
 
-Stage 0 here -- the `.deb` in a container and the AppImage spike -- can run
-alongside Phase 0/1: it measures the installed tree, the external tools and
-the clean-container run, none of which depends on how many hosts the tree has.
-The staging code in Stage 1 takes `Hosts` and `Data` lists, so the same code
-builds the one-package layout and the split one.
+**Windows still ships one graphical `bintana.exe` plus `bintanaw.exe`**, the
+same file with its PE subsystem set to GUI (`objcopy`). The split is this
+plan's to finish, because an installer is what needs it:
 
-If Phase 1 says no, the one `bintana` package is the answer and distribution
-continues as written. If it says yes, freeze the `bintana`/`bintana-gui`/
-`bintana-ide` names after the phase, and let Phase 2/3 of the headless plan
-land while Stage 2/3 here build the packages; the package split is then a
-question of which files and dependencies go in which package, not a second
-design.
+- `bintana.exe` a real console host, built from the core sources; `bintanaw.exe`
+  the graphical host, with the GUI subsystem (`-mwindows`, or the `objcopy` moved
+  to that target). `objdump -p` must say `Windows CUI` for one and `Windows GUI`
+  for the other.
+- `tools/windows-portable.sh`: `bintana-ide.cmd` starts `bintanaw.exe`; the zip
+  carries both closures, the core's and GTK's -- one zip or two is a decision
+  to make. The NSIS installer carries both, and `lib/package/Nsis.js` already
+  uses `bintanaw.exe` for shortcuts and needs `bintana.exe` for the `.cmd`
+  launchers. `bta_notification_win32.c` already looks for `bintanaw.exe` beside
+  itself.
+- `windows/ci/build.yml`: the file lists, `objdump`, and a smoke run of each
+  host. The fixtures under `tests/headless/projects/` are console projects
+  and run there as they are; `tests/headless.sh` around them is bash.
+- **`gspawn` has a helper per subsystem** (`tools/windows-portable.sh`): the
+  console host uses `gspawn-win64-helper-console.exe`, the graphical one the
+  other. Ship both.
+- **A `.cmd` in the zip always opens a console.** That is a hole of its own;
+  do not promise the `.cmd` launcher does not. The installer uses `bintanaw.exe`
+  directly.
+- Acceptance: `bintana --version` and `bintana check` on a staged tree with only
+  the core's closure, and the zip starting the IDE from `bintanaw.exe` on a
+  real desktop.
+
+Stage 0 here -- the `.deb` in a container and the AppImage spike -- does not
+depend on Windows and can run now.
 
 ## Stages
 

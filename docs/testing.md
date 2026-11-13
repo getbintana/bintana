@@ -723,9 +723,9 @@ The vocabulary it prints, and the node table to read it against, are in
 
 ## The metadata host, which opens no display
 
-`tests/headless.sh` holds the Phase 1 spike of
-[plans/headless-runtime-plan.md](plans/headless-runtime-plan.md) to the runtime
-it describes. The same `tests/headless/Main.js` runs twice: once as a `main`
+`tests/headless.sh` holds the console host and the metadata host
+([notes/headless-runtime.md](notes/headless-runtime.md)) to the runtime they
+describe. The same `tests/headless/Main.js` runs twice: once as a `main`
 project under `bintana-gui`, whose class prototypes are the real ones, and once
 under `bintana-meta`, which compiles the class rows with stubs and links no
 GTK. The two outputs are diffed, and `ldd` is read for a toolkit.

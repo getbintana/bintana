@@ -551,7 +551,7 @@ target_compile_options(${BTA_GUI_TARGET} PRIVATE -Wall -Wextra -Wno-unused-param
                                           -Wshadow -Wnull-dereference -Wformat=2)
 
 # ----------------------------------------------------------- metadata host ---
-# Phase 1 of docs/plans/headless-runtime-plan.md: the class rows and their
+# The metadata host (docs/notes/headless-runtime.md): the class rows and their
 # property tables, with no toolkit in the link.  `BTA_META_ONLY` turns every
 # property entry into a stub and drops `build`/`probe` from each row; the
 # functions those rows named are then unreferenced, and the linker's GC drops

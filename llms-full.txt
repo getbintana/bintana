@@ -826,7 +826,11 @@ one turns on are in [`docs/installing.md`](../installing.md)**, which is also
 where the `Xvfb`/`xdotool`/`python3`/`openssl` the suites want are listed. **Build both ways before touching anything under
 an `#ifdef`**: a wrapper `pkg-config` that exits 1 for one module name and
 delegates the rest is the whole of it
-(`cmake -S . -B build-x -DPKG_CONFIG_EXECUTABLE=<wrapper>`), and
+(`cmake -S . -B build-x -DPKG_CONFIG_EXECUTABLE=<wrapper>`) -- **in a new
+directory**: `pkg_check_modules` caches what it found (`SYSTEMD_FOUND`,
+`__pkg_config_checked_SYSTEMD`), so a wrapper that starts refusing one more
+module over an existing build tree changes nothing, and the "without" build
+quietly has it (measured 2026-11-13 with libsystemd) -- and
 `BINTANA=<path> BINTANA_LIB_PATH=$PWD/lib ./tests/run.sh` runs the
 suite against it -- the library path because `lib/` is found relative to the
 *executable*, so a build in another directory fails twelve chart assertions for
@@ -1116,8 +1120,8 @@ earns are in `CHANGELOG.md`; the generated release notes are the fallback.
 
 ## The metadata target
 
-**`bintana-meta` is the Phase 1 spike of
-[`plans/headless-runtime-plan.md`](../plans/headless-runtime-plan.md), and its
+**`bintana-meta` is the metadata host
+([`notes/headless-runtime.md`](../notes/headless-runtime.md)), and its
 proof is a link line, not an answer.** It compiles fourteen widget files with
 `BTA_META_ONLY`, links `quickjs` and GLib/GIO, and nothing graphical.
 `tests/headless.sh` diffs its `Widget.*` answers against the running runtime and
@@ -1139,18 +1143,20 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 - **`bta_widgets_init` skips `JS_NewClassID`/`JS_NewClass` and uses a stub
   constructor; `bta_widgets_cleanup` still runs.** The table holds `JSValue`
   prototypes and constructors, and `JS_FreeRuntime` aborts on anything left.
-- **`bta_meta.c` is a test host, not a console host.** It copies
-  `bta_lookup_global`, answers `bta_module_runtime_owns` false, and prints an
+- **`bta_meta.c` is a test host, not a console host.** It links
+  `bta_language.c` for `bta_lookup_global` (its own copy skipped the identifier
+  check and passed the name to `JS_Eval`), answers `bta_module_runtime_owns` false, and prints an
   exception with `bta_dump_error`. It evaluates `forms.js` with ten captures of
-  `rad.js` and a stub `FormPart`, and it carries a `bta_symbols` without the
-  module machinery so the prelude's JSDoc reaches `Members`; that is what gives
+  `rad.js` and a stub `FormPart`, and its `bta_symbols` is the shared pass
+  compiled as a script (`bta_symbols_script`, bta_source.c) so the prelude's
+  JSDoc reaches `Members`; that is what gives
   it `DataField`, `Serialize`, `Doc` and the rest of the prelude's members.
   Phase 2 owns the real boot and globals.
 - **`PropertyNames` now uses the real walk in `forms.js`.** The C walk in
   `bta_widget.c` is the fallback for a host whose prelude did not load, and it
   is the one without `DataField`. `Members` matches in full, `Doc` included:
-  `bta_meta.c` carries a version of `bta_symbols` without the module machinery
-  and runs it over both generated prelude sources. `SourceEditor.Language` and
+  `bta_meta.c` runs the shared pass (`bta_symbols_script`) over both generated
+  prelude sources; it used to carry a third copy of the pass. `SourceEditor.Language` and
   `.Theme` are GtkSourceView's lists and answer `NULL` here;
   `Video.Available` uses the row's `available`, not the machine's probe.
 - **`tests/api.sh` does not see the stubs.** They are `static inline` in the
@@ -1160,9 +1166,10 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 
 **`bintana` is the core host: `--version`, `check`, a project's `main` and
 tests, and the dispatch of `startup` to `bintana-gui`, with no toolkit in the
-link.** It links 17 libraries, and `bintana check ide` answers byte for byte what
-`bintana-gui check ide` answers with less memory (32.7 MB against 57.6 MB on
-`RelWithDebInfo`). `tests/headless.sh` runs
+link.** It links 42 libraries (17 before the console globals; libsoup, GnuTLS
+and libsecret are most of the rest), and `bintana check ide` answers byte for
+byte what `bintana-gui check ide` answers with less memory (38.4 MB against
+56.8 MB on `RelWithDebInfo`, 2026-11-13). `tests/headless.sh` runs
 both, and diffs the core run of a fixture project against the graphical one.
 Both binaries are installed; `bintana-meta` is the generator and is not.
 
@@ -1174,7 +1181,7 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   A `main` that never asks for a widget never sees `Widget` at all.
 - **`bta_paint.c` is compiled twice: into `bintana-gui` and into
   `bintana-drawing.so`.** The module is built with `BTA_HEADLESS`; the core
-  itself does not link it. `Painter`, `Metrics`, `Drawing` and the PNG/PDF
+  itself does not link it. `Painter`, `Text`'s measurements, `Drawing` and the PNG/PDF
   writers use cairo, Pango and GdkPixbuf; `DrawingArea` (the `Control`),
   `Painter.Render` and the `GtkSettings`/widget font lookups are inside
   `#ifndef BTA_HEADLESS`. A GTK call outside that guard is a module link
@@ -1192,17 +1199,19 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   the core link keeps `--export-dynamic`; it is not the public `bta_plugin.h`
   contract, which cannot carry `Painter`'s class and properties without a second
   implementation.
-- **A library that defines a widget class guards it with `typeof Component`.**
-  `lib/report` and `lib/charts` define `ReportDocument`/`ChartDocument`
-  unconditionally, and `let Report;` followed by `Report = class Report extends
-  Component` inside `if (typeof Component !== "undefined")`. In the core the
-  component is absent, so the control is skipped and the document loads.
-  **`let`, not `var`**: a top-level `var` is a property of the global object,
-  and a completion that reads the global names then offers `Report` to a project
-  that never used the library -- the IDE test caught exactly that. **And not
-  `globalThis`**, which is not in the language (rad.js says so when it is used).
-  A library that needs a GTK table it cannot have (`Printer.Papers` for paper
-  sizes) keeps a local table for its document half instead.
+- **A library with a document half and a control is two modules, and its
+  manifest says which file needs a display.** `lib/charts` is
+  `ChartDocument.js` and `Chart.js`, `lib/report` `ReportDocument.js` and
+  `Report.js`, each with `"display": ["Chart.js"]` (or `Report.js`): the core
+  loads the document and skips the control, and `"display": true` is the form
+  for a library that is controls only. They were one script each, the control
+  declared behind `if (typeof Component !== "undefined")` with a `let`, and
+  their private constants shared the program's global scope -- which is why
+  they had been renamed `CHART_PALETTE` and `PAPER_SIZES`. As modules they
+  are private; what the control needs of the document it reads from it
+  (`ChartDocument.Options`). `tests/api.sh` counted 43 top-level names in
+  `lib/` before and 27 after. `"worker": []` because a document needs
+  `Painter`, which a worker does not have.
 - **Native plugins work in the core, and `bta_form.c` is guarded like
   `bta_paint.c`.** `bta_plugin.c` is in the core, `uses` loads
   `<name>/<name>.<suffix>` before `rad.js`, and the loader reaches the context
@@ -1259,26 +1268,103 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   sentence. The metadata stubs belong to `bintana-meta`, not to the core.
   `Text.LineOf` is implemented in the host over `bta_line_of_utf16`; the
   measuring half of `Text` needs Pango and is not here.
-- **`bta_sys_init` is the core object set once the guards are in**, and
-  `bta_headless.c` adds `Logger`, `Text` and empty objects for the graphical
-  names (`Message`, `Printer`, `Database`, `Http`, ...). The empty objects are
-  what keeps `Application.Globals()` honest for `Names.unresolved`; a call to
-  one is a `TypeError` until Phase 3 gives it a sentence. `Widget` and the
-  class names are not here; `widget-meta.js` installs them for `check`.
+- **The console globals are the graphical host's files, linked into the
+  core.** `install_core` installs `File`/`Exec` (`bta_sys_init`), `Http`,
+  `Socket`, `SerialPort`, `Database`/`Sqlite`/`Odbc`, `Task`, `Lock`,
+  `Cancellable`, `Random`, `Gzip`, `Zip`, `Cipher`, `Key`, `Keyring`,
+  `Desktop`, `Profile` and `Message` (bta_message.c, stderr here) in the
+  graphical host's order. Their optional libraries are linked by one CMake
+  function, `bta_link_console_libraries`, that both hosts call -- so sqlite,
+  libsoup, GnuTLS, libsecret and unixODBC are the same yes-or-no in both. **Only
+  what needs a display, GStreamer or poppler is an empty object
+  (`GUI_GLOBALS`)**: `Dialog`, `Screen`, `Clipboard`, `Printer`, `Tray`,
+  `Notification`, `Popover`, `Probe`, `Media`, `AudioPlayer`, `Video`, and the
+  drawing names until the module loads. They keep `Application.Globals()`
+  honest for `Names.unresolved`; a call to one is a `TypeError` until Phase 3
+  gives it a sentence. `Widget` and the class names are not here;
+  `widget-meta.js` installs them for `check`.
+- **The first slice left `Http`, `Database`, `Task`, `Zip` and `Random` as
+  empty objects too, and nothing failed.** The suite ran green because every
+  `main` that used them had been moved to `bintana-gui` (`pack.sh`, `odbc.sh`,
+  `keyring.sh`, `tools/pack.sh`), so `bintana examples/http` answered
+  `TypeError: not a function` and no test said so. None of those files names
+  GTK: `nm -u` on their objects against the core's definitions found one
+  missing symbol for `Http` (`bta_log_debug_plain`) and, for `Task`, only the
+  worker's context and the graphical host's `Bitmap`/`Probe`/`PdfDocument`/
+  `Tray` inits -- now a host hook, `bta_task_worker_host`. That check is the
+  question to ask before deciding a global "needs the graphical host".
+  `tests/headless/projects/globals` holds it now.
+- **The core made its own context and never closed the hatches.** A `main`
+  under `bintana` had `Object.keys`, `eval` and `globalThis`, evaluated rad.js
+  without strict mode, and its `Application.Replacements()` was empty. The
+  context, the closing and the replacement table are `bta_language.c` now,
+  linked by both hosts and used by a `Task` worker in either; the core closes
+  after rad.js for a run and after `widget-meta.js` for `check`, as the
+  graphical host does after `forms.js`.
+- **`bta_gerror_text` had a second, shorter copy in the core** that answered
+  `g-io-error-quark (1)` where the graphical host says `no such file or
+  directory`. It is in `bta_util.c` once; the `GDK_TEXTURE_ERROR` branch is
+  compiled only where GDK is linked.
+- **`Application.Quit` ends a core run by its own road.** It used to
+  `exit()` on the spot -- no worker joined, no context freed -- and read
+  `Quit("fail")` as 0. It keeps the code and stops the loop, as the graphical
+  host's `run_console` does; the status is `Quit`'s when one was said, else 1
+  for an uncaught error (`core_status`). `check` and `bintana test` end through
+  it too. `Text.LineOf` was a copy in the core with the same bare
+  `JS_ToInt32` as the graphical one; it is `bta_text_line_of` in `bta_util.c`
+  for both, through `bta_to_int`.
+- **The drawing module is found where this build installed it, and only
+  there**: beside the binary (the build tree) and `BTA_BIN_TO_MODULES`, the hop
+  from bindir to `${CMAKE_INSTALL_LIBDIR}/bintana` that CMake computes with
+  `file(RELATIVE_PATH)`, as the launcher's hop to the IDE is. The loader
+  guessed `lib`, `lib64` and `/usr/lib`; Debian and Ubuntu install to
+  `lib/x86_64-linux-gnu`, and every `main` that drew stopped with "not
+  installed" -- reproduced with `-DCMAKE_INSTALL_LIBDIR=lib/x86_64-linux-gnu`
+  and an install to a scratch prefix. `tests/install` now runs the installed
+  core on the installed ledger. The ABI version is one constant in `bta.h`;
+  the loader had a literal `1`.
+- **The core calls `setlocale(LC_ALL, "")` first, as `main.c` does.** It did
+  not, so every `main` ran in the C locale -- `Locale.Number` without the
+  desktop's separators, English month names, `Locale.Compare` by byte -- and
+  `bintana check` listed a project's files in another order than the
+  graphical check. Found by comparing the two checks over every project.
+- **The core's loop source must not remove itself.** `project_idle` answered
+  `G_SOURCE_REMOVE` and the caller removed the same id after the loop: a
+  `GLib-CRITICAL` on every run that waited, unseen while nothing but `Network`
+  could make it wait. It answers CONTINUE now, like `console_idle`.
+- **`FormPart.Serialize` and `Apply` are rad.js's**, in the class, with
+  `savableValue` beside `plainData`. They were assigned in forms.js, so a
+  `main` in the core made a `Connection` part and could not write it;
+  `tests/odbc.sh` asserts both and runs on the core again.
 - **`bta_modules_scope` goes after `rad.js` and the metadata document.** It
   photographs the runtime's names for `Application.FreeNames`; taken before the
   prelude, every `Regex` in a project was reported as undeclared, and taken
   before `widget-meta.js`, every `Button` was.
-- **`bta_module_run` takes the compiled module** (`JS_EvalFunction` does); freeing
-  it again aborts in QuickJS. A script from `bta_compile` goes through
-  `JS_EvalFunction`.
-- **The core supplies `bta_lookup_global`, `bta_dump_error`, `bta_symbols`,
-  `bta_split_doc`, `bta_read_file`, `bta_drain_jobs`, `bta_gerror_text`,
-  `bta_errno_text`, `bta_current_app` and `bta_task_hard_cancellable` in
-  `bta_headless.c`; the graphical host's live in `bta_runtime.c`.** The
-  library listing and the project boot are shared, in `bta_project.c`.
-  `bta_symbols` and `bta_split_doc` are the same code the graphical host uses,
-  not a second reader. The division is the link, not the file: the core must
+- **Both hosts load a file with `bta_eval_file` (bta_module.c).** The core had
+  a shorter copy that never reported a module's error -- a `Main.js` with
+  `export` that threw while loading exited 1 with nothing on stderr -- and
+  skipped `bta_module_done`, the debugger's view of the compiled file and the
+  profiler span. `bta_eval_file_keep` leaves the error pending for a host that
+  has something to add: the core's UI-library sentence.
+  `tests/headless/projects/modthrow` holds it. (`bta_module_run` takes the
+  compiled module, as `JS_EvalFunction` does; freeing it again aborts in
+  QuickJS.)
+- **The core supplies `bta_lookup_global`, `bta_read_file`, `bta_drain_jobs`, `bta_current_app`, `bta_message_show`, `bta_task_worker_host`, `bta_host_error_uncaught` and
+  `bta_host_show_error` in `bta_headless.c`; the graphical host's live in
+  `bta_runtime.c`.** The library listing and the project boot are shared, in
+  `bta_project.c`, and so are `Application.LibraryPath` and `Libraries` (the
+  core's own ignored the running project and listed nothing); the language
+  in `bta_language.c`; so are `bta_lookup_global`, `classOfName` and
+  `Application.Globals`; `HasCommand` in `bta_sys.c`; `bta_read_file`,
+  `bta_drain_jobs` and `bta_is_identifier` in `bta_util.c`; `Logger` in `bta_log.c`
+  (the core's own printed every level and had no `Level`, `Target` or
+  `Handler`); the error text in `bta_util.c`; the report of an uncaught error in `bta_error.c`, which the
+  core used to print bare, without the replacement hint and without calling
+  `Application.OnError` (`tests/headless/projects/onerror`).
+  The symbol pass and `Application.Symbols`, `FreeNames` and `CheckSource` are
+  `bta_source.c`, for all three hosts: the core's `CheckSource` had not
+  guarded `Error.prepareStackTrace` and answered `0:0` for a program that set
+  one. The division is the link, not the file: the core must
   not name a GTK symbol.
 
 ## To review later
@@ -2186,6 +2272,19 @@ before any line runs -- no error, no warning. A `sameValue` added for
 default; the failures surfaced in `report` and `widgets`, far from the change.
 `tests/api.sh` now counts the prelude's top-level names and refuses one
 declared twice. Name a helper for what it compares, not for comparing.
+
+**forms.js is one block now** (2026-11-13), so its helpers are its own: a
+`function` in a strict block is the block's, and thirty-one names --
+`mixIn`, `applyNode`, `showError` and the rest -- stopped being globals a
+program could call, replace or be offered by completion. `rad.js` is still one
+scope with the program. What forms.js publishes it publishes by assignment;
+the three functions C calls (`showError`, `showPrintPreview`,
+`rememberWindow`) reach C through `formsHooks`, a hatch `bta_close_hatches`
+deletes, and C asks `bta_forms_hook(ctx, name)`. **A new helper C must call
+goes in that object**, not on the global object. The symbol pass still reads
+the block's classes and prototype assignments, so `Widget.Members` keeps
+their `Doc`; it no longer reports the block's plain functions, which are
+not members.
 
 ---
 
@@ -3680,6 +3779,23 @@ another class's `this.total` alone.
   slice**: read the C, and do not treat a clean `asan.sh` as evidence. A
   *large* `JSValue` string -- past the arena's threshold -- does reach `free()`
   and is caught, so the family is invisible exactly where a short name puts you.
+
+## Class ids: per runtime, kept in one variable
+
+`JS_NewClassID(rt, &id)` in quickjs-ng numbers a class by **the runtime that
+asks first** (`rt->class_count`) and writes it into `id`, which in this tree
+is a `static` shared by every runtime in the process -- the main one and each
+`Task` worker's. The invariant the code relies on without saying so: **the
+main runtime registers every class first**, and a worker reuses its number.
+The graphical host meets it by registering everything at boot. The console
+host loads its drawing module on first use (2026-11-13), and a `Task` that
+touched `Bitmap` before the main thread had drawn registered it first: the
+worker's runtime has fewer classes, so `Bitmap` got a low number, the main
+runtime later registered it over a class it had already given that number,
+and the next collection asserted in `gc_decref_child`. The core now loads the
+module on the main thread when a task starts (`bta_task_starting`). **A class
+that may be registered lazily must be registered by the main runtime before a
+worker can exist** -- not "eventually", and not from the worker.
 
 ---
 
@@ -8095,7 +8211,9 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   the controls an application uses -- a generic title, a header with the
   message, the backtrace apart in a monospace `TextEditor`, **Copy** (which
   copies the message and the stack and says *Copied*) beside **Close**, which is
-  also Escape -- and `show_error_window` in `bta_runtime.c` calls it by name.
+  also Escape -- and `show_error_window` in `bta_runtime.c` calls it through
+  `bta_forms_hook`: forms.js hands it over with `formsHooks`, and it is no
+  longer a global name.
   Two things hold it together. **It is one at a time in JavaScript**
   (`errorWindowOpen`, put down by the form's `Close`), because `reporting_error`
   in C is down again the moment the call returns; a handler that throws on a
@@ -9984,6 +10102,19 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `gdk_rgba_parse` refused it from inside a `Draw`. The alpha goes through
   `g_ascii_formatd`, and `tests/widgets` matches the **whole** string now -- the
   prefix test it had accepted the comma.
+- **`Painter.Color` reads its own syntax, not GDK's** (`bta_color_parse` in
+  `bta_paint.c`). The graphical host asked `gdk_rgba_parse` and the core had a
+  parser of its own, and they disagreed on eleven of forty strings: the core
+  took `#ff0000zz`, `rgb(255,0,0) x`, `" #ff0000"`, `transparent` and a
+  percentage alpha, and refused every `hsl()`. The syntax is written down as
+  GDK answered it on GTK 4.20 (2026-11-13) -- including its surprises: no
+  `transparent`, no percentage alpha, `rgba (` with a space taken,
+  saturation and lightness with or without `%`, 9- and 12-digit hex through
+  Pango -- and both hosts read it, so a palette does not move with the GTK
+  version either. `tests/headless/projects/colors` draws seventy-eight
+  strings and prints which earlier sample drew the same pixels; its
+  `expected.txt` was captured from GDK before the switch. Widget colours
+  (`Background`, `Style`) are still GTK's CSS.
 
 ## Printing
 
@@ -10001,7 +10132,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   *Preview* handed a temporary PDF to Evince or Papers, and on a machine with
   neither the failed launch took the run down with a cairo assertion in GTK's
   cleanup. `Printer.Preview(area, [setup], [cb])` is a window of `forms.js`
-  (`showPrintPreview`, looked up by name as `showError` is) that draws each
+  (`showPrintPreview`, handed to C through `formsHooks` as `showError` is) that draws each
   page with `Painter.Render` -- the control's own `DrawPage`, the code that
   prints it -- with the pages its `Paginate` answers on the printable area GTK
   works out (`gtk_page_setup_get_page_width`: A4 is 559 x 784 pt inside the
@@ -12485,10 +12616,24 @@ bta_runtime.c     interpreter setup, the graphical globals, the GTK main loop
                   -- and the console one, for a project that declares `main`
 bta_project.c     project.btp, `uses`, the library search path and load order;
                   the boot both hosts share, with no toolkit in it
+bta_language.c    the language every host and every Task worker gets: the
+                  context's intrinsics, the closing of the hatches after the
+                  prelude, and the table of names taken away; how a class
+                  name resolves (bta_lookup_global) and Application.Globals
+bta_source.c      what a source text declares, reads and whether it compiles:
+                  the symbol pass, Symbols, FreeNames and CheckSource
+bta_message.c     Message: the catalogue lookup is shared, and each host says
+                  how it shows one (an alert, or stderr with no display)
+bta_error.c       the report of an uncaught error: the line, the replacement
+                  hint, `Application.OnError`; each host says how it shows one
+bta_log.c         Logger: levels, Target (terminal, journal or a file) and
+                  Handler, the same in both hosts
 bta_util.c        bta_to_number and bta_to_int, needed by every host and by
-                  the network and XML globals rather than by the widgets alone
+                  the network and XML globals rather than by the widgets
+                  alone, and the stable sentence for a GError or an errno
 bta_headless.c    the core host (`bintana`): version, check, a project's
-                  `main`, the exec of a `startup` as `bintana-gui`, and the
+                  `main` with the console globals the graphical host links,
+                  the exec of a `startup` as `bintana-gui`, and the
                   `bintana-drawing.so` load when a project runs
 bta_widget.c      the base Widget: geometry, Style and colours, events, drag and
                   drop, the class table machinery, lifetimes
@@ -12499,7 +12644,7 @@ bta_controls.c    Form, Container, Panel, Label, Button, Image, TextBox,
 bta_layout.c      Split, Frame, Overlay, RowList, Scroller, Flow
 bta_notebook.c    Notebook
 bta_switcher.c    Switcher (GtkStackSwitcher over a GtkStack)
-bta_paint.c       DrawingArea (GtkDrawingArea, GUI only) and Painter, Metrics
+bta_paint.c       DrawingArea (GtkDrawingArea, GUI only) and Painter, Text's measurements
                   and Drawing (cairo + Pango, in bintana-gui and the module)
 bta_bitmap.c      Bitmap: scale, crop, rotate and flip, on GdkPixbuf alone
 bta_drawing_module.c  the loadable drawing half's entry, ABI and init
@@ -14075,6 +14220,7 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/bin/bintana` | the core runtime: `--version`, `check`, a project's `main` and tests, and dispatch of `startup` |
 | `<prefix>/bin/bintana-gui` | the graphical host: windows, widgets, `forms.js` |
 | `<prefix>/bin/bintana-ide` | a one-line launcher for the IDE, under a name a menu entry can carry |
+| `<prefix>/<libdir>/bintana/bintana-drawing.so` | the drawing half the core loads for a project whose `uses` reaches `drawing`; `<libdir>` is `CMAKE_INSTALL_LIBDIR` (`lib64`, `lib/x86_64-linux-gnu`, ...), and the core looks there and nowhere else, by the hop from `bin` CMake works out |
 | `<prefix>/share/bintana/ide/` | the IDE as the project directory it is |
 | `<prefix>/share/bintana/examples/` | the examples, to open and copy |
 | `<prefix>/share/bintana/lib/` | the shipped libraries, `check` among them |
@@ -14119,7 +14265,12 @@ xdg-mime default bintana-ide.desktop application/x-bintana-project
 **Two binaries, two roles.** `bintana` is the core and never loads GTK: it
 answers `--version` and `check`, runs a `main`, and execs `bintana-gui` for a
 project that declares `startup`. `bintana-gui` is the only one that opens a
-window. `bintana-ide` starts the graphical host on the IDE project.
+window. `bintana-ide` starts the graphical host on the IDE project. **The
+optional libraries a console program uses -- sqlite, unixODBC, libsoup, GnuTLS,
+libsecret -- are linked by both binaries when CMake finds them**, so a `main`
+that calls `Http` or `Database.Sqlite` answers the same under either; a missing
+one is the same sentence in both, naming the package. GTK, GtkSourceView, VTE,
+GStreamer and poppler stay the graphical host's.
 
 `bintana check` is the same project pass the IDE runs, from a shell: it reads
 the project and opens no window, so a CI job or a git hook can ask it. The exit
@@ -15203,9 +15354,9 @@ The vocabulary it prints, and the node table to read it against, are in
 
 ## The metadata host, which opens no display
 
-`tests/headless.sh` holds the Phase 1 spike of
-[plans/headless-runtime-plan.md](plans/headless-runtime-plan.md) to the runtime
-it describes. The same `tests/headless/Main.js` runs twice: once as a `main`
+`tests/headless.sh` holds the console host and the metadata host
+([notes/headless-runtime.md](notes/headless-runtime.md)) to the runtime they
+describe. The same `tests/headless/Main.js` runs twice: once as a `main`
 project under `bintana-gui`, whose class prototypes are the real ones, and once
 under `bintana-meta`, which compiles the class rows with stubs and links no
 GTK. The two outputs are diffed, and `ldd` is read for a toolkit.
@@ -15225,11 +15376,14 @@ measurements behind the target are in
 
 **The same script holds the core host.** `bintana --version`,
 `check examples/hello`, and `check --json tests/smoke` are diffed against the
-`bintana-gui` answers, and `ldd` is read again. It is the first real
+`bintana-gui` answers, and `ldd` is read again. **And every project `tests/check.sh`
+checks -- 68 today -- is checked by both hosts**, whose output and exit status
+must match: that comparison found `forms.js`'s global helpers and the core's
+missing `setlocale`, which two projects had not. It is the first real
 console runtime, not the test host: it loads `tools/check`, `lib/check` and the
 generated `widgets.json` through `WidgetMeta.js`, and `check` is byte for byte
-the graphical pass with **17 libraries against 153** and about 33 MB against
-58 MB on the IDE's own project. The binary links no widget file; the document
+the graphical pass with **42 libraries against 153** and 38 MB against
+57 MB on the IDE's own project. The binary links no widget file; the document
 is 1.7 MB and is loaded only for `check`.
 
 **The drawing plugin spike** is built and run in the same script: a temporary
@@ -15242,14 +15396,38 @@ reads the bundled CSV, groups `Decimal` amounts, draws a `ChartDocument` and
 writes a PDF with `ReportDocument`. The script runs it with no display and
 checks the PDF's magic and, when `pdftotext` is present, its rows.
 
+**`bintana check` and the IDE's palette see what a run loads**:
+`tests/headless/projects/transitive` names only `report` and writes
+`ChartDocument`, which `charts` brings because `report` names it. Both hosts'
+`check` must report nothing, and `Application.Uses()` must answer `drawing
+charts report`, in load order. In `tests/ide`, ticking only `report` puts
+`charts`' components on the palette. Both read `Application.Uses` -- the run's
+walk -- and both stopped at the project's own list before.
+
+**A name is one library per program**: `tests/headless/projects/libshadow`
+carries its own `inner` and uses a shared `outer` (from
+`tests/headless/libpath`, through `BINTANA_LIB_PATH`) that names `inner` too.
+Both hosts must load the project's copy only; resolving `outer`'s `uses` from
+`outer`'s own directory loaded both and failed on a redeclaration.
+
 **Library dependencies** are held by the report fixture: it now names only
 `uses: ["report"]`, and `report`'s manifest pulls `charts` and `drawing`, so the
-PDF still works. `tests/headless/projects/nodraw` names no `drawing` and checks
-the sentence a `Drawing` call gives.
+PDF still works. `tests/headless/projects/lazydraw` names no `drawing` and draws
+all the same: `/proc/self/maps` has no cairo at the start and has it after; a
+`Task` loads a `Bitmap` before the main thread draws; and the names standing in
+for the module before it loads must be `Text`'s as the graphical host's
+`Widget.Members` lists them (`textnames`).
 
 **A UI library named by a `main`** is refused with its name and the missing
-display (`tests/headless/projects/uilibrary`), not with `Component is not
-defined` from inside the class.
+display (`tests/headless/projects/uilibrary`), before it loads, because its
+`project.btp` declares `"display": true`. `tests/headless/projects/libtypo` has
+a console library that calls an undeclared `FormatRow`, and the report must be
+that `ReferenceError`, not the display sentence. **`tests/run.sh` exports it too**, for the same reason and with more at
+stake: every graphical suite resolved `report`, `charts`, `markdown` and the
+rest from a user's install when there was one. **The script exports
+`BINTANA_LIB_PATH` to this tree's `lib/`**: a copy installed for the user is
+searched before the one beside the binary, and an older `markdown` there
+answered for the repository's.
 
 **A native plugin loads too**: `tests/headless/projects/plugin` names
 `testplug`, and the script copies the suite's reference `.so` into a scratch
@@ -15258,8 +15436,53 @@ library directory, so a `main` gets `TestPlug` with no display.
 **A report without its control** is the other document fixture:
 `tests/headless/projects/report` uses `lib/report` and `lib/charts`, builds a
 `ReportDocument`, writes a PDF and asserts that `Report`/`Chart` do not exist
-in the core (they do in `bintana-gui`). `lib/report` keeps its paper table
-locally, so the document does not need `Printer`, which is GTK's.
+in the core (they do in `bintana-gui`). `lib/report` reads `Printer.Papers`,
+which both hosts answer out of one table (bta_util.c): the core's `Printer`
+has `Papers` and nothing else, and the globals fixture holds both hosts to
+GTK's 595x842, 612x792 and 420x595.
+
+**The console globals are the graphical host's own**:
+`tests/headless/projects/globals` is a `main` that asks `typeof` of `Http`,
+`Database`, `Task`, `Zip`, `Gzip`, `Random`, `Cipher`, `Socket`, `Keyring`,
+`Lock`, `Cancellable`, `Profile`, `Message` and `Desktop`; what `Logger`
+answers for `Level`, `Target` and a `Handler`; `Application.Id` and
+`Application.ProtectPrototype()`, after which `Object.prototype` refuses a new
+name; that `Application.Quit("fail")` and `Text.LineOf(text, "two")` refuse
+the word instead of reading 0; that `CheckSource` answers the right line and
+column while the program has its own `Error.prepareStackTrace` (the core's copy
+answered `0:0`); that the hatches are
+closed (`Object.keys` and `eval` gone, `setTimeout` naming `Timer.After`);
+that a missing file says `no such file or directory`; then compresses, zips,
+queries an in-memory sqlite, serves and fetches over a local `Http.Server`,
+and runs a `Task` that reads `Application.Arguments` on its thread. Both hosts
+run it and their stdout must match; the run ends by itself when nothing is
+owed an answer, so the core's loop is what is asked, and a `CRITICAL` on its
+stderr is a failure. With `bta_http_init` taken out of the core the block goes
+red on `Http is not defined`.
+
+**`Painter.Color` reads the same colours in both hosts**:
+`tests/headless/projects/colors` assigns seventy-eight strings, draws each that
+is taken, and prints which earlier sample drew the same pixels -- an equality,
+so the answer holds on any machine. Both hosts are diffed against
+`expected.txt`, which is what GDK answered (GTK 4.20) before both hosts used
+`bta_color_parse`; the core's previous parser is thirty lines off.
+
+**A `main` reads the desktop's locale in both hosts**:
+`tests/headless/projects/locale` prints a number, a month and a sorted list
+under `LANG=es_AR.UTF-8`, and the two hosts must print the same; where the
+machine has `es_AR`, the core must write `1.234,50`. The core never called
+`setlocale` and answered `1234.50`, `August` and byte order.
+
+**`Application.OnError` takes an uncaught error in both hosts**:
+`tests/headless/projects/onerror` assigns a handler and throws twice from
+`Timer` callbacks, once with a name the language took away. Both hosts must
+hand the handler the same two strings -- the replacement hint included -- and
+end the run with 1. The core used to accept the assignment and never call it.
+
+**A module that throws while it loads is reported**:
+`tests/headless/projects/modthrow` is a `Main.js` with `export` and a `throw`
+at the top level; the core must exit non-zero with the error on stderr. It used
+to exit 1 in silence, because the core's own loader forgot a module's error.
 
 **It runs a project's tests too**: `bintana test` on a `main` project reads
 `tests/*Test.js` with `runTests` and no toolkit; a `startup` project's tests are
@@ -15269,14 +15492,19 @@ exec'd as `bintana-gui test`, which the fixture holds with the fake host.
 `tests/headless/projects/`.** `run` is a console project with a library in
 `lib/greeting`: the script runs it through both hosts and diffs the output, so
 `uses`, the library-first load order and `Application.Arguments` are held to
-the graphical answer. `bare` prints `typeof Widget` and must say `undefined` --
+the graphical answer. So are `Application.LibraryPath` -- the project's own
+`lib/` first, with no project named or an `undefined` one -- and
+`Application.Libraries()`, which the core used to answer `""` and `[]` for. `bare` prints `typeof Widget` and must say `undefined` --
 the core host has no toolkit even for a `main`. `window` declares `startup`:
 the test writes a fake graphical host, points `BINTANA_GUI` at it, and holds
 the dispatch to the words it was given and to the host's own exit status; a
 `main` run with the same fake must not dispatch at all, and a
-`BINTANA_GUI` that does not exist must be a sentence and exit 2. The console
-run costs **13.4 MB against 43.3 MB** on the same fixture, and the
-`Drawing` one **27.2 MB against 56.9 MB**.
+`BINTANA_GUI` that does not exist must be a sentence and exit 2. A
+`BINTANA_GUI` that is the core again -- a symbolic link to it, or a script that
+runs it -- must stop with 2 and a sentence within ten seconds; both used to
+loop forever. The console
+run costs **16.0 MB against 42.5 MB** on the same fixture, and the
+`Drawing` one **33.0 MB against 56.0 MB** (`RelWithDebInfo`, 2026-11-13).
 
 ## The install, which the suite cannot see either
 
@@ -15294,7 +15522,10 @@ It installs the build into a staging prefix under `/tmp` (`cmake --install
 by a path written down at configure time), checks that both project trees came
 out whole -- and that the installed `bintana check` finds its own console project
 and library one hop from the binary, fails a broken project with 1, answers the
-same findings as JSON, and leaves a clean one at 0 with no output -- and then
+same findings as JSON, and leaves a clean one at 0 with no output; that the
+installed core loads the installed drawing module and writes the installed
+ledger example's PDF, which is what proves the module is where this build's
+libdir put it -- and then
 **starts the installed IDE through the installed launcher** and asks the display
 what appeared.
 

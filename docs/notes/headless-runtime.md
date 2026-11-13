@@ -1,11 +1,13 @@
-# The headless runtime: Phase 0 measured, Phase 1 spiked
+# The headless runtime: two hosts
 
-**Status: Phase 0 measured, the Phase 1 spike passed, and Phase 2's console
-host runs `check`, a project's `main`, and dispatches a `startup` project to the
-graphical host (2026-11-12, Linux).** The remaining Phase 2 work is the
-installation; the prelude's JavaScript half is carried as data for `check`.
-The design is
-[`plans/headless-runtime-plan.md`](../plans/headless-runtime-plan.md).
+**Status: done on Linux (2026-11-13), and the plan that drove it is closed.**
+`bintana` is the console host -- `--version`, `check`, a project's `main` and
+its tests, with no toolkit in the link -- and execs `bintana-gui` for a project
+that declares `startup`. This note is how it was built, what was measured and
+why each decision went the way it did; the phases below are the order it
+happened in. What is left is
+[`plans/console-host-plan.md`](../plans/console-host-plan.md), and the Windows
+split is in [`plans/distribution-plan.md`](../plans/distribution-plan.md).
 
 ## What Phase 0 measured
 
