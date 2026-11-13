@@ -1045,6 +1045,8 @@ GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg);
 /* The same walk, answering NULL and the sentence instead of stopping. */
 GPtrArray *bta_project_libs_or_error(JSContext *ctx, const char *dir,
                                      JSValueConst cfg, char **error);
+/* Whether a library's own project.btp says `"display": true`. */
+bool bta_library_needs_display(JSContext *ctx, const char *dir);
 /* The project's files in load order, a library's sources in front of them. */
 GPtrArray *bta_project_sources(JSContext *ctx, const char *dir, GPtrArray *libs,
                                JSValueConst cfg);

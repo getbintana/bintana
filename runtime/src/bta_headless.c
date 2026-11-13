@@ -241,90 +241,11 @@ static bool eval_script(JSContext *ctx, const char *text, size_t len,
     return true;
 }
 
-/* The identifier a `ReferenceError` is about, or NULL. The engine's message is
- * `"<name> is not defined"`, and a name the language took away carries a hint
- * after it (bta_language.c), so the name is what stands before the first
- * " is not defined". Freed by the caller. */
-static char *reference_error_name(JSContext *ctx, JSValueConst exc)
-{
-    if (!JS_IsError(exc))
-        return NULL;
-
-    JSValue     kind_v = JS_GetPropertyStr(ctx, exc, "name");
-    JSValue     text_v = JS_GetPropertyStr(ctx, exc, "message");
-    const char *kind   = JS_ToCString(ctx, kind_v);
-    const char *text   = JS_ToCString(ctx, text_v);
-    char       *name   = NULL;
-
-    if (!kind || !text)
-        JS_FreeValue(ctx, JS_GetException(ctx));
-    if (kind && text && !strcmp(kind, "ReferenceError")) {
-        const char *end = strstr(text, " is not defined");
-        if (end && end > text)
-            name = g_strndup(text, (gsize)(end - text));
-    }
-    JS_FreeCString(ctx, kind);
-    JS_FreeCString(ctx, text);
-    JS_FreeValue(ctx, kind_v);
-    JS_FreeValue(ctx, text_v);
-    return name;
-}
-
-/* A library whose JavaScript defines a widget class fails on the missing
- * toolkit name. The sentence names the library and the display, which is the
- * refusal the plan asks for, instead of a `ReferenceError` three files in.
- *
- * **The name is compared whole.** It used to be found anywhere in the
- * message, so `FormatRow is not defined` -- a typo in a console library --
- * was reported as a library that needs a display, and the real error was
- * never printed. */
-static bool library_needs_display(JSContext *ctx, const char *library)
-{
-    static const char *const NAMES[] = {
-        "Component", "Widget", "Control", "Container", "Form",
-        "DrawingArea", "TextEditor", "SourceEditor",
-    };
-
-    JSValue  exc  = JS_GetException(ctx);
-    char    *name = reference_error_name(ctx, exc);
-    bool     ui   = false;
-
-    if (name)
-        for (size_t i = 0; i < G_N_ELEMENTS(NAMES); i++)
-            if (!strcmp(name, NAMES[i])) {
-                ui = true;
-                break;
-            }
-    g_free(name);
-
-    if (ui)
-        fprintf(stderr, "bintana: library \"%s\" needs the graphical host: "
-                        "a project with \"main\" has no display. Run it with "
-                        "bintana-gui.\n", library);
-    else
-        JS_Throw(ctx, exc);        /* restore it for the normal dump */
-
-    if (ui)
-        JS_FreeValue(ctx, exc);
-    return ui;
-}
-
 /* A file of the project or of a library, through the loader both hosts share
- * (bta_module.c). Only the report is this host's: a library that reaches for a
- * widget gets the display sentence instead of the engine's error. */
-static bool eval_file_at(JSContext *ctx, const char *path, const char *library)
-{
-    if (bta_eval_file_keep(ctx, path) == 0)
-        return true;
-    if (JS_HasException(ctx) &&
-        !(library && library_needs_display(ctx, library)))
-        bta_dump_error(ctx);
-    return false;
-}
-
+ * (bta_module.c), which reports what goes wrong. */
 static bool eval_file(JSContext *ctx, const char *path)
 {
-    return eval_file_at(ctx, path, NULL);
+    return bta_eval_file(ctx, path) == 0;
 }
 
 /* `Widget` and the metadata rows, before rad.js: rad.js's `FormPart` and the
@@ -1046,6 +967,22 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     install_application(ctx, global, dir, name, version, id, argv + 1, argc - 1);
     libs    = bta_project_libs(ctx, dir, cfg);
     sources = bta_project_sources(ctx, dir, NULL, cfg);
+
+    /* A library that declares `"display": true` is a window project's, and
+     * this host has no display: refused by name before a line of it runs,
+     * directly named or reached through another library's `uses`. */
+    for (guint i = 0; i < libs->len; i++) {
+        if (!bta_library_needs_display(ctx, libs->pdata[i]))
+            continue;
+        char *lib = g_path_get_basename(libs->pdata[i]);
+
+        fprintf(stderr, "bintana: library \"%s\" needs the graphical host: "
+                        "a project with \"main\" has no display. Run it with "
+                        "bintana-gui.\n", lib);
+        g_free(lib);
+        status = 2;
+        goto out;
+    }
     install_core(ctx, global, dir, libs);
 
     /* The module is what `uses: ["drawing"]` buys -- directly or through a
@@ -1097,22 +1034,16 @@ static int run_project(int argc, char **argv, bool testing, bool json,
 
     bta_modules_scope(ctx, dir, libs);
 
-    /* A library's sources first, with its name at hand: a library that wants
-     * a widget gets the display sentence rather than the engine's
-     * `Component is not defined` at the class line. Then the project's own. */
+    /* A library's sources first, then the project's own. */
     for (guint i = 0; i < libs->len; i++) {
-        const char *lib   = libs->pdata[i];
-        char       *base  = g_path_get_basename(lib);
-        GPtrArray  *files = bta_library_sources(ctx, lib);
+        GPtrArray *files = bta_library_sources(ctx, libs->pdata[i]);
 
         for (guint j = 0; j < files->len; j++)
-            if (!eval_file_at(ctx, files->pdata[j], base)) {
+            if (!eval_file(ctx, files->pdata[j])) {
                 g_ptr_array_unref(files);
-                g_free(base);
                 goto out;
             }
         g_ptr_array_unref(files);
-        g_free(base);
     }
 
     for (guint i = 0; i < sources->len; i++)

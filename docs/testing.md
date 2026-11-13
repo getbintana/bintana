@@ -785,10 +785,13 @@ PDF still works. `tests/headless/projects/nodraw` names no `drawing` and checks
 the sentence a `Drawing` call gives.
 
 **A UI library named by a `main`** is refused with its name and the missing
-display (`tests/headless/projects/uilibrary`), not with `Component is not
-defined` from inside the class. The name is compared whole: `tests/headless/projects/libtypo` has a
-console library that calls an undeclared `FormatRow`, and the report must be
-that `ReferenceError`, not the display sentence.
+display (`tests/headless/projects/uilibrary`), before it loads, because its
+`project.btp` declares `"display": true`. `tests/headless/projects/libtypo` has
+a console library that calls an undeclared `FormatRow`, and the report must be
+that `ReferenceError`, not the display sentence. **The script exports
+`BINTANA_LIB_PATH` to this tree's `lib/`**: a copy installed for the user is
+searched before the one beside the binary, and an older `markdown` there
+answered for the repository's.
 
 **A native plugin loads too**: `tests/headless/projects/plugin` names
 `testplug`, and the script copies the suite's reference `.so` into a scratch

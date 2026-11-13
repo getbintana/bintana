@@ -818,3 +818,36 @@ JSValue bta_application_uses(JSContext *ctx, JSValueConst this_val,
     g_ptr_array_unref(libs);
     return out;
 }
+
+/*
+ * Whether the library at `dir` declares `"display": true` in its own
+ * `project.btp`: its classes are controls or forms, so it is a window
+ * project's and a `main` has no use for it. The console host refuses such a
+ * library by name before evaluating a line of it. It used to wait for the
+ * load to fail and read the `ReferenceError` -- a guess about the message,
+ * where this is what the library says about itself.
+ */
+bool bta_library_needs_display(JSContext *ctx, const char *dir)
+{
+    char *manifest = bta_project_manifest(dir);
+    char *text     = g_file_test(manifest, G_FILE_TEST_IS_REGULAR)
+                   ? bta_read_file(manifest, NULL) : NULL;
+    bool  display  = false;
+
+    g_free(manifest);
+    if (!text)
+        return false;
+
+    JSValue cfg = JS_ParseJSON(ctx, text, strlen(text), "library");
+    g_free(text);
+    if (JS_IsException(cfg)) {
+        /* An unreadable manifest is the walk's to report; it loads by path. */
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return false;
+    }
+    JSValue v = JS_GetPropertyStr(ctx, cfg, "display");
+    display = JS_IsBool(v) && JS_ToBool(ctx, v);
+    JS_FreeValue(ctx, v);
+    JS_FreeValue(ctx, cfg);
+    return display;
+}

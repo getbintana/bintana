@@ -1,4 +1,5 @@
 {
   "name": "pdfview",
+  "display": true,
   "uses": ["drawing"]
 }

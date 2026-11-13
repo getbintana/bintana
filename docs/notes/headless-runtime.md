@@ -316,13 +316,16 @@ library that names it -- and a `main` without it never maps cairo. The public
 plugin remains a spike for implementations that can live behind the plugin ABI;
 the linked code is now the module, not core.
 
-**A UI library in a `main` is refused by name.** Loading `lib/markdown` (or
-`qr`, `pdfview`, `dialog`, `datagrid`) in a host with no widgets fails at the
-first `extends Component`, and the core says `library "markdown" needs the
-graphical host: a project with "main" has no display. Run it with bintana-gui.`
-instead of letting the engine's `ReferenceError` be the whole answer. The
-identifier the `ReferenceError` names is compared whole against the toolkit
-names: a typo such as `FormatRow` in a console library is its own error.
+**A UI library in a `main` is refused by name, because it says so.** A
+library whose classes are controls declares `"display": true` in its own
+`project.btp` -- `markdown`, `qr`, `pdfview`, `dialog`, `datagrid`,
+`propertygrid` -- and the core refuses it, named directly or reached through
+another library's `uses`, before a line of it runs: `library "markdown" needs
+the graphical host: a project with "main" has no display. Run it with
+bintana-gui.`, exit 2. It used to wait for the load to fail and read the
+`ReferenceError` -- first by substring, which sent a `FormatRow` typo to the
+wrong host, then by the whole name; the manifest is what the library says
+about itself, and `check`, the IDE or a packager can read it too.
 `report` and `charts` do not hit it: their document classes are unconditional
 and their controls are skipped.
 

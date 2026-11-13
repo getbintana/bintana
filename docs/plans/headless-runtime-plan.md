@@ -398,6 +398,10 @@ dispatch, core sin GTK, `check` sin GTK y suite verde; falta Windows.
   que carga una de ellas dice `library "markdown" needs the graphical host: a
   project with "main" has no display`, en vez del `ReferenceError` de la
   primera clase. El fixture `tests/headless/projects/uilibrary` lo fija.
+  **Desde el 2026-11-13 lo declara la librería**: `"display": true` en su
+  `project.btp` (`markdown`, `qr`, `pdfview`, `dialog`, `datagrid`,
+  `propertygrid`), y el core la rechaza antes de evaluarla, en vez de leer el
+  `ReferenceError`.
 - **Docs:** `docs/architecture.md` (boot de dos hosts), `docs/agents/runtime.md`
   (contrato de `main`: mismos nombres, refusals), `docs/agents/build-and-tools.md`
   (targets/CI), `docs/installing.md` (lanzadores de Windows), `docs/testing.md`

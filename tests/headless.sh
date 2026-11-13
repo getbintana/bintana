@@ -34,6 +34,13 @@ if [[ ! -x $BINTANA_CORE ]]; then
     exit 2
 fi
 
+# The libraries under test are this tree's. A copy installed for the user
+# (`~/.local/share/bintana/lib`) is searched before the one beside the binary,
+# and an older one there answered for `markdown` -- without the `"display"`
+# its manifest says now. `BINTANA_LIB_PATH` comes before both; a fixture that
+# sets its own still replaces it.
+export BINTANA_LIB_PATH="$PWD/lib${BINTANA_LIB_PATH:+:$BINTANA_LIB_PATH}"
+
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/bta-headless-XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 

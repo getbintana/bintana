@@ -1,5 +1,6 @@
 {
   "name": "markdown",
+  "display": true,
   "uses": ["drawing"],
   "worker": []
 }

@@ -1,4 +1,5 @@
 {
   "name": "qr",
+  "display": true,
   "uses": ["drawing"]
 }
