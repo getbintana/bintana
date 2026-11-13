@@ -6,6 +6,67 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+### Two hosts: `bintana` and `bintana-gui`
+
+- **`bintana` is the core, and it links no GTK.** It answers `--version` and
+  `check`, runs a project's `main` and `bintana test` for it, and execs
+  `bintana-gui` for a project that declares `startup` -- and for that
+  project's tests -- with the whole command line. `bintana-gui` is the host
+  that opens windows, and `bintana-ide` execs it. A command that worked before
+  works the same way through the dispatch: `bintana examples/hello` still opens
+  the window, and `--form`, `--theme`, `--text-scale` and `--rtl` go to the
+  graphical host. A `main` maps 17 libraries instead of 153. On Windows there
+  is still one graphical `bintana.exe`; the split there is not done.
+- **The core is the same language as the graphical host.** It closes the same
+  names, runs `rad.js` the same way and links the same console globals --
+  `Http`, `Database`, `Task`, `Zip`, sockets, `SerialPort`, `Keyring`,
+  `Message`, `Logger` with `Level`/`Target`/`Handler` -- with
+  `Application.OnError`, `Id`, `ProtectPrototype`, `LibraryPath`,
+  `Libraries`, the desktop's locale and the same report for an uncaught error.
+  `Application.Quit` sets the exit status, and `--profile` works on a `main`.
+- **Drawing with no display.** `Painter`, `Drawing`, `Bitmap` and `Text`'s
+  measurements live in `bintana-drawing.so`, installed in `<libdir>/bintana`.
+  The core loads it the first time one of them is used, or at the start when
+  `uses` names `drawing`, so a `main` that never draws loads no cairo or Pango.
+  `Drawing.Save`, `ToPng` and `SavePdf` write a picture or a PDF with no window.
+  `Painter.Color` reads one written colour syntax in both hosts and on any GTK
+  (`hsl()` included) instead of whatever GDK's parser answered.
+- **`ReportDocument` and `ChartDocument` run in a `main`.** `lib/report` and
+  `lib/charts` are each a document module and a control module, and the core
+  loads the document without the control. `Printer.Papers` answers in both
+  hosts (A4, Letter and A5, in points). `examples/ledger` reads a CSV, draws a
+  chart and writes a PDF report -- `bintana examples/ledger out.pdf`, with no
+  display.
+- **A library's `project.btp` may name `uses` too.** The list resolves
+  transitively, dependencies first, and always from the project, so a project
+  that carries its own copy of a library gets exactly one copy per name.
+  `uses: ["report"]` brings `charts` and `drawing`. `Application.Uses([project])`
+  answers the resolved list, and `bintana check` and the IDE's palette follow
+  it. A library marks itself graphical with `"display": true`, or lists the
+  files that are graphical; the core refuses such a library by name before any
+  of it runs, where it used to fail later with a `ReferenceError`.
+- **Native plugins load in the core**, before `rad.js`, with the same host
+  table the graphical host hands them. A `main` can use `TagLib` with no
+  display, and a plugin that cannot load is a sentence and exit 2.
+
+### Changes that can break a program or a package
+
+- **A package installs two binaries and a module**: `bin/bintana`,
+  `bin/bintana-gui` and `<libdir>/bintana/bintana-drawing.so`. A package that
+  ships only `bin/bintana` runs `check` and `main` projects and cannot open a
+  window. `cmake --install` lays all three down.
+- **`Keyring.Available` is gone**; `Keyring.Provider` says which store a build
+  uses (see below).
+- **`lib/report` and `lib/charts` are modules.** They export `Report`,
+  `ReportDocument`, `Chart` and `ChartDocument`. The constants 0.3.0 left in
+  the global scope (`PALETTE`, `KINDS`, `FORMATS`, `ALIGNS` and the rest) are
+  private now.
+- **The helpers in `forms.js` are no longer globals.** `mixIn`, `applyNode`,
+  `savableValue`, `showError`, `rememberWindow` and the rest were
+  undocumented, but a program could call or replace them.
+- **`File.Relative` answers with `/` on Windows**, as on every other platform:
+  the answer names something inside a tree, and Windows accepts `/`.
+
 ### Language and IDE
 
 - **The project manifest is `project.btp`.** `project.json` becomes
@@ -99,6 +160,8 @@ one-page answer to *what is new since the release I have*.
   `Hover`/`HoverRow`, `ScrollX`, `ColumnWidths`, `Headers`, `ColumnResize`, Tab
   leaving the grid, and `AddRows`/`NodeToggle`.
 - **`lib/propertygrid`** edits an object's properties as rows.
+- A control removed or freed by its own event handler no longer leaves
+  `bta_emit` reading freed memory after the handler returns.
 
 ### Platform and parts
 
