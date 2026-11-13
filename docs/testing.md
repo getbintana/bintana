@@ -791,7 +791,9 @@ for the module before it loads must be `Text`'s as the graphical host's
 display (`tests/headless/projects/uilibrary`), before it loads, because its
 `project.btp` declares `"display": true`. `tests/headless/projects/libtypo` has
 a console library that calls an undeclared `FormatRow`, and the report must be
-that `ReferenceError`, not the display sentence. **The script exports
+that `ReferenceError`, not the display sentence. **`tests/run.sh` exports it too**, for the same reason and with more at
+stake: every graphical suite resolved `report`, `charts`, `markdown` and the
+rest from a user's install when there was one. **The script exports
 `BINTANA_LIB_PATH` to this tree's `lib/`**: a copy installed for the user is
 searched before the one beside the binary, and an older `markdown` there
 answered for the repository's.

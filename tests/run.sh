@@ -49,6 +49,14 @@ esac
 # machine's answer.
 export LANGUAGE=C
 
+# **The libraries under test are this tree's, not the ones installed for the
+# user.** `~/.local/share/bintana/lib` is searched before the copy beside the
+# binary, so a machine with an older install ran every suite against *those*
+# libraries -- a change to `lib/report` was tested with the installed
+# Report.js, and passed. `BINTANA_LIB_PATH` comes before both; a test that
+# sets its own still replaces it.
+export BINTANA_LIB_PATH="$PWD/lib${BINTANA_LIB_PATH:+:$BINTANA_LIB_PATH}"
+
 BINTANA=${BINTANA:-./build/bintana}
 if [[ ! -x $BINTANA ]]; then
     echo "no runtime at $BINTANA -- build first: cmake --build build" >&2
