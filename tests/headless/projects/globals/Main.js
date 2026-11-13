@@ -31,6 +31,13 @@ function language() {
     } catch (e) {
         print(`File.Load: ${e.message.replace(dir, "<dir>")}`);
     }
+    print(`Application: ${Application.Id} ${Application.ProtectPrototype()}`);
+    try {
+        Object.prototype.leak = 1;
+        print("Object.prototype took a new name");
+    } catch (e) {
+        print(`Object.prototype is closed: ${e.name}`);
+    }
 }
 
 function data() {

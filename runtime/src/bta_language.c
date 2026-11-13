@@ -452,3 +452,48 @@ JSContext *bta_new_context(JSRuntime *rt)
     }
     return ctx;
 }
+
+/*
+ * ProtectPrototype(): close `Object.prototype` to new names.
+ *
+ * `for...in` recites the prototype chain, so a plugin that polyfills
+ * `Object.prototype.currency` changes every enumeration in the host -- the
+ * total of an invoice among them. The language has no `Object.preventExtensions`
+ * (it went with the rest of `Object`), so the defence is a runtime verb: after
+ * this, an assignment or a `defineProperty` that would add a name to
+ * `Object.prototype` is refused, and the program's own `for...in` loops are
+ * stable again.
+ *
+ * **Existing members can still be replaced**: this is `preventExtensions`, not
+ * `freeze`. A host that wants the stronger promise can say so later; a plugin
+ * that patches `toString` is a different problem from one that adds a key.
+ * Calling it twice is harmless, and it answers `true` both times.
+ */
+JSValue bta_application_protect_prototype(JSContext *ctx, JSValueConst this_val,
+                                         int argc, JSValueConst *argv)
+{
+    (void)this_val;
+    (void)argc;
+    (void)argv;
+
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue object = JS_GetPropertyStr(ctx, global, "Object");
+    JS_FreeValue(ctx, global);
+
+    if (JS_IsException(object))
+        return object;
+
+    JSValue proto = JS_GetPropertyStr(ctx, object, "prototype");
+    JS_FreeValue(ctx, object);
+
+    if (JS_IsException(proto))
+        return proto;
+
+    int ok = JS_PreventExtensions(ctx, proto);
+    JS_FreeValue(ctx, proto);
+
+    if (!ok)
+        return JS_ThrowPlainError(ctx,
+            "ProtectPrototype: Object.prototype is not an object");
+    return JS_TRUE;
+}

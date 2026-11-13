@@ -1,6 +1,7 @@
 {
   "name": "headless-globals",
   "version": "1.0",
+  "id": "io.github.getbintana.HeadlessGlobals",
   "main": "Main",
   "description": "What a console program is written with, in both hosts: Http, Database, Task, Zip, Gzip, Random, Lock, Message and the language's closed hatches",
   "sources": ["Square.js", "Main.js"]

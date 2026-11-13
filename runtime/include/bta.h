@@ -932,6 +932,9 @@ const char *bta_replacement_for(const char *name);
 /* `Application.Replacements()`, off the same rows, for either host to install. */
 JSValue bta_application_replacements(JSContext *ctx, JSValueConst this_val,
                                      int argc, JSValueConst *argv);
+/* `Application.ProtectPrototype()`, the same verb in either host. */
+JSValue bta_application_protect_prototype(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv);
 /*
  * A fatal error raised from C, before any project code has run: it always goes
  * to stderr, and -- when there is a display and an application to own it -- into

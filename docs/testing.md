@@ -787,7 +787,9 @@ locally, so the document does not need `Printer`, which is GTK's.
 `tests/headless/projects/globals` is a `main` that asks `typeof` of `Http`,
 `Database`, `Task`, `Zip`, `Gzip`, `Random`, `Cipher`, `Socket`, `Keyring`,
 `Lock`, `Cancellable`, `Profile`, `Message` and `Desktop`; what `Logger`
-answers for `Level`, `Target` and a `Handler`; that the hatches are
+answers for `Level`, `Target` and a `Handler`; `Application.Id` and
+`Application.ProtectPrototype()`, after which `Object.prototype` refuses a new
+name; that the hatches are
 closed (`Object.keys` and `eval` gone, `setTimeout` naming `Timer.After`);
 that a missing file says `no such file or directory`; then compresses, zips,
 queries an in-memory sqlite, serves and fetches over a local `Http.Server`,

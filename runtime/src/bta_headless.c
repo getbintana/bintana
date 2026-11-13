@@ -603,9 +603,12 @@ static JSValue js_application_has_command(JSContext *ctx, JSValueConst this_val,
 
 static void install_application(JSContext *ctx, JSValueConst global,
                                 const char *directory, const char *name,
-                                const char *version, char **args, int nargs)
+                                const char *version, const char *id,
+                                char **args, int nargs)
 {
     JSValue application = JS_NewObject(ctx);
+
+    JS_SetPropertyStr(ctx, application, "Id", JS_NewString(ctx, id ? id : ""));
 
     JS_SetPropertyStr(ctx, application, "Directory",
                       JS_NewString(ctx, directory ? directory : ""));
@@ -657,6 +660,9 @@ static void install_application(JSContext *ctx, JSValueConst global,
     JS_SetPropertyStr(ctx, application, "Replacements",
                       JS_NewCFunction(ctx, bta_application_replacements,
                                       "Replacements", 0));
+    JS_SetPropertyStr(ctx, application, "ProtectPrototype",
+                      JS_NewCFunction(ctx, bta_application_protect_prototype,
+                                      "ProtectPrototype", 0));
 
     JS_SetPropertyStr(ctx, global, "Application", application);
 }
@@ -1073,7 +1079,7 @@ static int run_check(int argc, char **argv)
                       JS_NewCFunction(ctx, headless_print, "print", 1));
     JS_SetPropertyStr(ctx, global, "BTA_VERSION",
                       JS_NewString(ctx, BTA_VERSION_STRING));
-    install_application(ctx, global, tools, "check", "1.0", argv, argc);
+    install_application(ctx, global, tools, "check", "1.0", "", argv, argc);
     install_core(ctx, global, tools, libs);
     JS_FreeValue(ctx, global);
 
@@ -1439,6 +1445,7 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     JSValue  entry  = JS_UNDEFINED;
     GPtrArray *libs = NULL, *sources = NULL;
     char    *name = NULL, *version = NULL, *startup = NULL, *entry_name = NULL;
+    char    *id = NULL;
 
     JS_SetPropertyStr(ctx, global, "print",
                       JS_NewCFunction(ctx, headless_print, "print", 1));
@@ -1457,6 +1464,18 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     startup       = bta_project_string(ctx, cfg, "startup", "Form1");
     entry_name    = bta_project_string(ctx, cfg, "main", NULL);
     g_free(base);
+    id            = bta_project_string(ctx, cfg, "id", "");
+
+    /* The graphical host's rule, and its sentence: an id that is not an
+     * application id stops the program when the project loads, in either
+     * host, rather than becoming a wrong name somewhere nobody looks. */
+    if (id[0] && !g_application_id_is_valid(id)) {
+        fprintf(stderr,
+                "bintana: project.btp id \"%s\" is not an application id "
+                "(a reverse-DNS name like org.example.App)\n", id);
+        status = 2;
+        goto out;
+    }
 
     if (!entry_name && !testing) {
         fprintf(stderr,
@@ -1469,7 +1488,7 @@ static int run_project(int argc, char **argv, bool testing, bool json,
 
     /* The words after the project are the program's, as `Application.Arguments`
      * describes them in the graphical runtime. */
-    install_application(ctx, global, dir, name, version, argv + 1, argc - 1);
+    install_application(ctx, global, dir, name, version, id, argv + 1, argc - 1);
     libs    = bta_project_libs(ctx, dir, cfg);
     sources = bta_project_sources(ctx, dir, NULL, cfg);
     install_core(ctx, global, dir, libs);
@@ -1610,6 +1629,7 @@ out:
     g_free(version);
     g_free(startup);
     g_free(entry_name);
+    g_free(id);
     JS_FreeValue(ctx, entry);
     JS_FreeValue(ctx, cfg);
     JS_FreeValue(ctx, global);
