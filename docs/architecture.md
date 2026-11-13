@@ -21,7 +21,9 @@ bta_controls.c    Form, Container, Panel, Label, Button, Image, TextBox,
 bta_layout.c      Split, Frame, Overlay, RowList, Scroller, Flow
 bta_notebook.c    Notebook
 bta_switcher.c    Switcher (GtkStackSwitcher over a GtkStack)
-bta_paint.c       DrawingArea (GtkDrawingArea) and Painter (cairo)
+bta_paint.c       DrawingArea (GtkDrawingArea, GUI only) and Painter, Metrics
+                  and Drawing (cairo + Pango, in both hosts)
+bta_bitmap.c      Bitmap: scale, crop, rotate and flip, on GdkPixbuf alone
 bta_text.c        Editor (abstract) and TextEditor (GtkTextView)
 bta_editor.c      SourceEditor (GtkSourceView), on top of Editor
 bta_terminal.c    Terminal (VTE on Linux, ConPTY + libvterm on Windows;

@@ -524,18 +524,26 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 
 **`bintana` is the core host: `--version`, `check`, a project's `main` and
 tests, and the dispatch of `startup` to `bintana-gui`, with no toolkit in the
-link.** It
-links 17 libraries, and `bintana check ide` answers byte for byte what
-`bintana-gui check ide` answers with half the memory. `tests/headless.sh` runs
+link.** It links 44 libraries, and `bintana check ide` answers byte for byte what
+`bintana-gui check ide` answers with less memory (36.7 MB against 57.6 MB on
+`RelWithDebInfo`). `tests/headless.sh` runs
 both, and diffs the core run of a fixture project against the graphical one.
 Both binaries are installed; `bintana-meta` is the generator and is not.
 
 - **The core links no widget file.** `bintana-meta --dump` writes
   `check/widgets.json` from the real rows, property tables, both preludes and
   the generated signatures; `runtime/js/widget-meta.js` answers `Widget.*` over
-  it. The data is 1.7 MB and loads only for `check`; the binary is 2.9 MB in
-  Debug and 7.4 MB with `RelWithDebInfo`'s symbols, which a packager strips.
+  it. The data is 1.7 MB and loads only for `check`; the binary is 3.4 MB in
+  Debug and 7.9 MB with `RelWithDebInfo`'s symbols, which a packager strips.
   A `main` that never asks for a widget never sees `Widget` at all.
+- **`bta_paint.c` is compiled into both hosts, and only its toolkit half is
+  guarded.** `Painter`, `Metrics`, `Drawing` and the PNG/PDF writers use cairo,
+  Pango and GdkPixbuf; `DrawingArea` (the `Control`), `Painter.Render` and the
+  `GtkSettings`/widget font lookups are inside `#ifndef BTA_HEADLESS`. A GTK
+  call outside that guard is a core link failure. Where the two differ inside
+  the shared half: the GUI uses `GdkTexture` and `gdk_rgba_parse`, the core
+  GdkPixbuf and its own CSS-colour parser; `Bitmap.Rotate` likewise converts the
+  cairo surface itself instead of calling `gdk_pixbuf_get_from_surface`.
 - **`bta_project.c` is the boot both hosts share, and it must stay toolkit-free.**
   It holds `project.btp`, `uses`, the six-place library search and the source
   order; `bta_runtime.c` and `bta_headless.c` both link it. A GTK call added

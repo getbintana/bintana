@@ -200,8 +200,12 @@ static double arg_num(JSContext *ctx, JSValueConst v, const char *where, bool *b
 static void painter_ink(BtaPainter *p, GdkRGBA *rgba)
 {
     *rgba = (GdkRGBA){ 0, 0, 0, 1 };
+#ifndef BTA_HEADLESS
     if (p->w && p->w->inner)
         gtk_widget_get_color(bta_style_root(p->w->inner), rgba);
+#else
+    (void)p;
+#endif
 }
 
 static char *rgba_text(const GdkRGBA *c)
@@ -248,7 +252,12 @@ static JSValue painter_get_dark(JSContext *ctx, JSValueConst this_val)
      * about which way the desktop is -- and through the same *resolution* of
      * which widget to ask, or a control in no window would say "light ink" and
      * the drawing would pick a palette for paper. */
+#ifndef BTA_HEADLESS
     return JS_NewBool(ctx, bta_widget_dark(p->w ? bta_style_root(p->w->inner) : NULL));
+#else
+    (void)ctx;
+    return JS_FALSE;
+#endif
 }
 
 /* ----------------------------------------------------------------- Color */
@@ -264,6 +273,91 @@ static JSValue painter_get_color(JSContext *ctx, JSValueConst this_val)
     return painter_get_foreground(ctx, this_val);
 }
 
+#ifdef BTA_HEADLESS
+/* The core's colour syntax: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, the
+ * `rgb()`/`rgba()` forms and Pango's names. GDK's own parser is the graphical
+ * host's; a report's palette must set the same colours with no toolkit. */
+static bool core_rgba_parse(GdkRGBA *c, const char *s)
+{
+    while (g_ascii_isspace(*s))
+        s++;
+
+    if (*s == '#') {
+        const char *hex = s + 1;
+        size_t      n   = 0;
+
+        while (g_ascii_isxdigit(hex[n]))
+            n++;
+        if (n != 3 && n != 4 && n != 6 && n != 8)
+            return false;
+
+        guint v[4] = { 0, 0, 0, 255 };
+        if (n <= 4) {
+            for (size_t i = 0; i < n; i++) {
+                char one[2] = { hex[i], 0 };
+                v[i] = (guint)g_ascii_strtoull(one, NULL, 16) * 17;
+            }
+        } else {
+            for (size_t i = 0; i < n / 2; i++) {
+                char two[3] = { hex[i * 2], hex[i * 2 + 1], 0 };
+                v[i] = (guint)g_ascii_strtoull(two, NULL, 16);
+            }
+        }
+        c->red = v[0] / 255.0; c->green = v[1] / 255.0;
+        c->blue = v[2] / 255.0; c->alpha = v[3] / 255.0;
+        return true;
+    }
+
+    if (g_str_has_prefix(s, "rgb(") || g_str_has_prefix(s, "rgba(")) {
+        bool   alpha = s[3] == 'a';
+        double v[4]  = { 0, 0, 0, 1 };
+        int    count = alpha ? 4 : 3;
+
+        s += alpha ? 5 : 4;
+        for (int i = 0; i < count; i++) {
+            while (g_ascii_isspace(*s))
+                s++;
+            char *end = NULL;
+            v[i] = g_ascii_strtod(s, &end);
+            if (end == s)
+                return false;
+            s = end;
+            if (*s == '%') {
+                v[i] = i < 3 ? v[i] * 2.55 : v[i] / 100.0;
+                s++;
+            }
+            while (g_ascii_isspace(*s))
+                s++;
+            if (i < count - 1) {
+                if (*s != ',')
+                    return false;
+                s++;
+            }
+        }
+        if (*s != ')')
+            return false;
+        for (int i = 0; i < 3; i++)
+            v[i] = CLAMP(v[i], 0, 255);
+        c->red = v[0] / 255.0; c->green = v[1] / 255.0;
+        c->blue = v[2] / 255.0;
+        c->alpha = alpha ? CLAMP(v[3], 0, 1) : 1;
+        return true;
+    }
+
+    if (!g_ascii_strcasecmp(s, "transparent")) {
+        *c = (GdkRGBA){ 0, 0, 0, 0 };
+        return true;
+    }
+
+    PangoColor pc;
+    if (!pango_color_parse(&pc, s))
+        return false;
+    c->red = pc.red / 65535.0; c->green = pc.green / 65535.0;
+    c->blue = pc.blue / 65535.0; c->alpha = 1;
+    return true;
+}
+#endif
+
 static JSValue painter_set_color(JSContext *ctx, JSValueConst this_val,
                                  JSValueConst val)
 {
@@ -276,7 +370,11 @@ static JSValue painter_set_color(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
 
     GdkRGBA c;
+#ifdef BTA_HEADLESS
+    if (!core_rgba_parse(&c, s)) {
+#else
     if (!gdk_rgba_parse(&c, s)) {
+#endif
         JSValue e = JS_ThrowRangeError(ctx, "Color: '%s' is not a colour", s);
         JS_FreeCString(ctx, s);
         return e;
@@ -656,12 +754,15 @@ static PangoLayout *painter_layout(BtaPainter *p)
         p->layout = pango_cairo_create_layout(p->cr);
         /* The widget's own font, so a drawing follows the desktop's font and its
          * text scale the way every control does. */
+#ifndef BTA_HEADLESS
         if (p->w && p->w->inner) {
             PangoContext *pc = gtk_widget_get_pango_context(p->w->inner);
             if (pc)
                 pango_layout_set_font_description(
                     p->layout, pango_context_get_font_description(pc));
-        } else {
+        } else
+#endif
+        {
             /* A painter `Drawing` made has no widget, so it draws with what
              * `Text` measures with -- the same default font and the same
              * resolution -- or a report measured by one is drawn by the other
@@ -870,6 +971,91 @@ static bool image_stat(const char *path, gint64 *mtime, gint64 *size)
  */
 #define IMAGE_CACHE_MAX 32
 
+#ifdef BTA_HEADLESS
+/*
+ * The core's picture: GdkPixbuf rows are straight RGBA, cairo's ARGB32 is
+ * premultiplied. Converting here is what lets `Drawing` and `Painter.Image`
+ * paint a logo without GDK, which is a toolkit this host does not link.
+ */
+static cairo_surface_t *surface_of_pixbuf(JSContext *ctx, GdkPixbuf *pb,
+                                          const char *what)
+{
+    GdkPixbuf *alpha = NULL;
+
+    if (!gdk_pixbuf_get_has_alpha(pb)) {
+        alpha = gdk_pixbuf_add_alpha(pb, FALSE, 0, 0, 0);
+        if (!alpha) {
+            JS_ThrowPlainError(ctx, "Image: cannot read %s", what);
+            return NULL;
+        }
+        pb = alpha;
+    }
+
+    int w = gdk_pixbuf_get_width(pb);
+    int h = gdk_pixbuf_get_height(pb);
+    cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+
+    if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS) {
+        JS_ThrowRangeError(ctx, "Image: %s is %dx%d, which is too big to draw (%s)",
+                           what, w, h,
+                           cairo_status_to_string(cairo_surface_status(surface)));
+        cairo_surface_destroy(surface);
+        if (alpha)
+            g_object_unref(alpha);
+        return NULL;
+    }
+
+    unsigned char *dst = cairo_image_surface_get_data(surface);
+    int            dstride = cairo_image_surface_get_stride(surface);
+    int            sstride = gdk_pixbuf_get_rowstride(pb);
+    const guchar  *src     = gdk_pixbuf_get_pixels(pb);
+
+    for (int y = 0; y < h; y++) {
+        guint32       *row = (guint32 *)(dst + y * dstride);
+        const guchar  *p   = src + y * sstride;
+
+        for (int x = 0; x < w; x++, p += 4) {
+            guint a = p[3];
+            guint r = (p[0] * a + 127) / 255;
+            guint g = (p[1] * a + 127) / 255;
+            guint b = (p[2] * a + 127) / 255;
+
+            row[x] = (a << 24) | (r << 16) | (g << 8) | b;
+        }
+    }
+    cairo_surface_mark_dirty(surface);
+    if (alpha)
+        g_object_unref(alpha);
+    return surface;
+}
+
+static GdkPixbuf *pixbuf_from_bytes(JSContext *ctx, JSValueConst val,
+                                    const char *what)
+{
+    size_t         len  = 0;
+    const uint8_t *data = bta_bytes_get(val, &len);
+    GError        *error = NULL;
+    GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
+    GdkPixbuf     *pb    = NULL;
+
+    if (!gdk_pixbuf_loader_write(loader, data, len, &error) ||
+        !gdk_pixbuf_loader_close(loader, &error)) {
+        JS_ThrowTypeError(ctx, "Image: cannot read %s: %s", what,
+                          error ? bta_gerror_text(error) : "not an image");
+        g_clear_error(&error);
+        g_object_unref(loader);
+        return NULL;
+    }
+    pb = gdk_pixbuf_loader_get_pixbuf(loader);
+    if (pb)
+        g_object_ref(pb);
+    g_object_unref(loader);
+    if (!pb)
+        JS_ThrowTypeError(ctx, "Image: cannot read %s: not an image", what);
+    return pb;
+}
+#endif
+
 /*
  * A texture, downloaded into a cairo surface cairo can paint from.
  *
@@ -878,6 +1064,7 @@ static bool image_stat(const char *path, gint64 *mtime, gint64 *size)
  * apply to the second without being written twice. `what` only names the thing
  * in the complaint: a file name, or how many bytes there were.
  */
+#ifndef BTA_HEADLESS
 static cairo_surface_t *surface_of_texture(JSContext *ctx, GdkTexture *texture,
                                            const char *what)
 {
@@ -904,6 +1091,7 @@ static cairo_surface_t *surface_of_texture(JSContext *ctx, GdkTexture *texture,
     cairo_surface_mark_dirty(surface);
     return surface;
 }
+#endif
 
 static cairo_surface_t *image_surface(JSContext *ctx, const char *path)
 {
@@ -919,7 +1107,21 @@ static cairo_surface_t *image_surface(JSContext *ctx, const char *path)
     if (have && known && have->mtime == mtime && have->size == size)
         return have->surface;
 
-    GError     *error   = NULL;
+    GError *error = NULL;
+    cairo_surface_t *surface = NULL;
+
+#ifdef BTA_HEADLESS
+    GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file(path, &error);
+
+    if (!pixbuf) {
+        JS_ThrowTypeError(ctx, "Image: cannot read %s: %s", path,
+                          error ? bta_gerror_text(error) : "not an image");
+        g_clear_error(&error);
+        return NULL;
+    }
+    surface = surface_of_pixbuf(ctx, pixbuf, path);
+    g_object_unref(pixbuf);
+#else
     GdkTexture *texture = gdk_texture_new_from_filename(path, &error);
 
     if (!texture) {
@@ -928,9 +1130,9 @@ static cairo_surface_t *image_surface(JSContext *ctx, const char *path)
         g_clear_error(&error);
         return NULL;
     }
-
-    cairo_surface_t *surface = surface_of_texture(ctx, texture, path);
+    surface = surface_of_texture(ctx, texture, path);
     g_object_unref(texture);
+#endif
     if (!surface)
         return NULL;
 
@@ -991,24 +1193,37 @@ static JSValue painter_image(JSContext *ctx, JSValueConst this_val,
 
     GdkPixbuf *bitmap = bta_bitmap_pixbuf(argv[0]);
     if (bitmap) {
+#ifdef BTA_HEADLESS
+        owned = img = surface_of_pixbuf(ctx, bitmap, "Bitmap");
+#else
         G_GNUC_BEGIN_IGNORE_DEPRECATIONS
         GdkTexture *texture = gdk_texture_new_for_pixbuf(bitmap);
         G_GNUC_END_IGNORE_DEPRECATIONS
         owned = img = surface_of_texture(ctx, texture, "Bitmap");
         g_object_unref(texture);
+#endif
         named_bitmap = true;
         if (!img)
             return JS_EXCEPTION;
     } else if (bta_bytes_get(argv[0], &blen)) {
-        char        named[32];
+        char bnamed[32];
+
+        g_snprintf(bnamed, sizeof bnamed, "%zu bytes", blen);
+#ifdef BTA_HEADLESS
+        GdkPixbuf *pb = pixbuf_from_bytes(ctx, argv[0], bnamed);
+
+        if (!pb)
+            return JS_EXCEPTION;
+        owned = img = surface_of_pixbuf(ctx, pb, bnamed);
+        g_object_unref(pb);
+#else
         GdkTexture *texture = bta_texture_from_bytes(ctx, argv[0], "Image");
 
         if (!texture)
             return JS_EXCEPTION;
-
-        g_snprintf(named, sizeof named, "%zu bytes", blen);
-        owned = img = surface_of_texture(ctx, texture, named);
+        owned = img = surface_of_texture(ctx, texture, bnamed);
         g_object_unref(texture);
+#endif
         if (!img)
             return JS_EXCEPTION;
     } else {
@@ -1112,6 +1327,7 @@ static void metrics_resolution(PangoLayout *layout)
 {
     /* Asked every time rather than once: the text scale can change while the
      * program runs, and a cached resolution would answer for the old one. */
+#ifndef BTA_HEADLESS
     GtkSettings *settings = gtk_settings_get_default();
     if (settings) {
         int dpi = -1;
@@ -1126,6 +1342,9 @@ static void metrics_resolution(PangoLayout *layout)
             pango_layout_context_changed(layout);
         }
     }
+#else
+    (void)layout;                  /* Pango's 96 dpi is the console's answer */
+#endif
 }
 
 /*
@@ -1142,6 +1361,9 @@ static void metrics_resolution(PangoLayout *layout)
 
 static char *metrics_default_font(void)
 {
+#ifdef BTA_HEADLESS
+    return g_strdup(BTA_FALLBACK_FONT);
+#else
     GtkSettings *settings = gtk_settings_get_default();
     char        *name     = NULL;
 
@@ -1152,6 +1374,7 @@ static char *metrics_default_font(void)
         name = g_strdup(BTA_FALLBACK_FONT);
     }
     return name;
+#endif
 }
 
 /* The layout, loaded with the text, the font and the wrap width -- or NULL with
@@ -1859,6 +2082,7 @@ static JSValue painter_state(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+#ifndef BTA_HEADLESS
 static bool    paint_frame_page(BtaWidget *w, cairo_t *cr, int width, int height,
                                 int page);
 static JSValue area_painter(JSContext *ctx, BtaWidget *w, BtaPainter **out);
@@ -1925,6 +2149,7 @@ static JSValue painter_render(JSContext *ctx, JSValueConst this_val,
     cairo_restore(p->cr);
     return ok ? JS_UNDEFINED : JS_EXCEPTION;
 }
+#endif
 
 enum { XFORM_TRANSLATE, XFORM_SCALE, XFORM_ROTATE };
 
@@ -2124,6 +2349,7 @@ static const JSCFunctionListEntry painter_props[] = {
      *   degrees, like `Arc`
      */
     JS_CFUNC_MAGIC_DEF("Rotate",    1, painter_transform, XFORM_ROTATE),
+#ifndef BTA_HEADLESS
     /* Render(area, page, width, height)
      *   another control's page drawn here, at `width` by `height`, through
      *   its own `DrawPage` -- or `Draw` for page 0, or for a control that
@@ -2131,6 +2357,7 @@ static const JSCFunctionListEntry painter_props[] = {
      *   transform, so `Scale` first makes a preview or a thumbnail
      */
     JS_CFUNC_DEF("Render", 4, painter_render),
+#endif
 };
 
 /* A painter comes from a `Draw`, and there is nothing a constructor could make:
@@ -2161,6 +2388,176 @@ void bta_painter_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, global, "Painter", ctor);
 }
 
+typedef bool (*BtaFrameFn)(void *data, cairo_t *cr, int width, int height, int page);
+
+/* A picture of that size, drawn -- or NULL with an exception pending. The sizes
+ * are the caller's, checked here, so a widget and `Drawing` refuse alike. */
+static cairo_surface_t *image_frame(JSContext *ctx, const char *who,
+                                    int32_t width, int32_t height,
+                                    BtaFrameFn frame, void *data)
+{
+    if (width <= 0 || height <= 0) {
+        JS_ThrowRangeError(ctx, "%s: %dx%d is not a size -- a surface that has "
+                                "not been drawn yet has none, so pass one",
+                           who, width, height);
+        return NULL;
+    }
+    /* Refused rather than attempted: cairo's own ceiling is 32767 a side, and a
+     * transposed digit would otherwise ask the allocator for gigabytes before
+     * failing. 16384 square is a 1 GB surface, which is already past anything a
+     * chart in a report is. */
+    if (width > 16384 || height > 16384) {
+        JS_ThrowRangeError(ctx, "%s: %dx%d is too big to draw (16384 a side)",
+                           who, width, height);
+        return NULL;
+    }
+
+    cairo_surface_t *surface =
+        cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
+    cairo_t *cr = cairo_create(surface);
+
+    int64_t prof  = bta_profile_begin();
+    bool    drawn = frame(data, cr, width, height, 0);
+    if (prof)
+        bta_profile_end(prof, "Bintana", who, "");
+
+    cairo_destroy(cr);
+    cairo_surface_flush(surface);
+
+    if (!drawn) {
+        cairo_surface_destroy(surface);
+        return NULL;        /* the drawing's exception is the one to report */
+    }
+    return surface;
+}
+
+/* The surface as a PNG file, or a throw naming it. */
+static bool png_write(JSContext *ctx, const char *who, cairo_surface_t *surface,
+                      const char *path)
+{
+    cairo_status_t status = cairo_surface_write_to_png(surface, path);
+
+    if (status != CAIRO_STATUS_SUCCESS) {
+        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
+                           who, path, cairo_status_to_string(status));
+        return false;
+    }
+    return true;
+}
+
+/* Where `ToPng` puts the bytes cairo hands it, one chunk at a time. */
+static cairo_status_t png_chunk(void *closure, const unsigned char *data,
+                                unsigned int length)
+{
+    g_byte_array_append(closure, data, length);
+    return CAIRO_STATUS_SUCCESS;
+}
+
+/* The surface as PNG `Bytes`, or a throw. */
+static JSValue png_bytes(JSContext *ctx, const char *who, cairo_surface_t *surface)
+{
+    GByteArray    *out    = g_byte_array_new();
+    cairo_status_t status = cairo_surface_write_to_png_stream(surface, png_chunk, out);
+
+    if (status != CAIRO_STATUS_SUCCESS) {
+        g_byte_array_unref(out);
+        return JS_ThrowPlainError(ctx, "%s: %s", who,
+                                  cairo_status_to_string(status));
+    }
+
+    JSValue bytes = bta_bytes_new(ctx, out->data, out->len);
+    g_byte_array_unref(out);
+    return bytes;
+}
+
+/*
+ * A document of `pages` sheets, each one frame -- what `DrawingArea.SavePdf` and
+ * `Drawing.SavePdf` both are once their arguments are read. False with an
+ * exception pending, and then **no file**.
+ */
+static bool pdf_write(JSContext *ctx, const char *who, const char *path,
+                      int32_t width, int32_t height, int32_t pages,
+                      JSValueConst before, BtaFrameFn frame, void *data)
+{
+    if (width <= 0 || height <= 0) {
+        JS_ThrowRangeError(ctx, "%s: %dx%d is not a page -- the size is in "
+                                "points, 72 to the inch (A4 is 595x842)",
+                           who, width, height);
+        return false;
+    }
+    /* PDF's own ceiling is 200 inches a side, and cairo silently clamps past
+     * it -- a document that came out the wrong size with no error is worse than
+     * one that was refused. */
+    if (width > 14400 || height > 14400) {
+        JS_ThrowRangeError(ctx, "%s: %dx%d points is past PDF's 200 inches a "
+                                "side", who, width, height);
+        return false;
+    }
+    if (pages < 1 || pages > 10000) {
+        JS_ThrowRangeError(ctx, "%s: %d pages is not a document (1 to 10000)",
+                           who, pages);
+        return false;
+    }
+
+    cairo_surface_t *surface = cairo_pdf_surface_create(path, width, height);
+    cairo_status_t   status  = cairo_surface_status(surface);
+
+    if (status != CAIRO_STATUS_SUCCESS) {
+        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
+                           who, path, cairo_status_to_string(status));
+        cairo_surface_destroy(surface);
+        return false;
+    }
+
+    cairo_t *cr = cairo_create(surface);
+    bool     ok = true;
+
+    int64_t prof = bta_profile_begin();
+
+    for (int32_t page = 1; page <= pages && ok; page++) {
+        if (JS_IsFunction(ctx, before)) {
+            JSValueConst args[1] = { JS_NewInt32(ctx, page) };
+            JSValue      r       = JS_Call(ctx, before, JS_UNDEFINED, 1, args);
+
+            ok = !JS_IsException(r);
+            JS_FreeValue(ctx, r);
+        }
+        if (ok)
+            ok = frame(data, cr, width, height, page);
+        if (ok)
+            cairo_show_page(cr);
+    }
+
+    /* The whole document, from the first page to the last: `who` is
+     * `SavePdf`, and the per-page `DrawPage` spans sit inside it. */
+    if (prof)
+        bta_profile_end(prof, "Bintana", who, "");
+
+    cairo_destroy(cr);
+    cairo_surface_finish(surface);
+    if (status == CAIRO_STATUS_SUCCESS)
+        status = cairo_surface_status(surface);
+    cairo_surface_destroy(surface);
+
+    /*
+     * A page that threw is not a document. Cairo has already written part of
+     * the file by then -- it streams as it goes -- so the half of it that exists
+     * is removed rather than left looking like an export that worked, which is
+     * the same bargain `Save` makes about a PNG it did not finish.
+     */
+    if (!ok) {
+        g_unlink(path);
+        return false;
+    }
+    if (status != CAIRO_STATUS_SUCCESS) {
+        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
+                           who, path, cairo_status_to_string(status));
+        return false;
+    }
+    return true;
+}
+
+#ifndef BTA_HEADLESS
 /* ------------------------------------------------------------ DrawingArea */
 
 /*
@@ -2445,52 +2842,9 @@ static JSValue area_dump(JSContext *ctx, JSValueConst this_val,
  * 1-based sheet for a document. False with an exception pending when the
  * drawing threw.
  */
-typedef bool (*BtaFrameFn)(void *data, cairo_t *cr, int width, int height, int page);
-
 static bool area_frame_fn(void *data, cairo_t *cr, int width, int height, int page)
 {
     return paint_frame_page(data, cr, width, height, page);
-}
-
-/* A picture of that size, drawn -- or NULL with an exception pending. The sizes
- * are the caller's, checked here, so a widget and `Drawing` refuse alike. */
-static cairo_surface_t *image_frame(JSContext *ctx, const char *who,
-                                    int32_t width, int32_t height,
-                                    BtaFrameFn frame, void *data)
-{
-    if (width <= 0 || height <= 0) {
-        JS_ThrowRangeError(ctx, "%s: %dx%d is not a size -- a surface that has "
-                                "not been drawn yet has none, so pass one",
-                           who, width, height);
-        return NULL;
-    }
-    /* Refused rather than attempted: cairo's own ceiling is 32767 a side, and a
-     * transposed digit would otherwise ask the allocator for gigabytes before
-     * failing. 16384 square is a 1 GB surface, which is already past anything a
-     * chart in a report is. */
-    if (width > 16384 || height > 16384) {
-        JS_ThrowRangeError(ctx, "%s: %dx%d is too big to draw (16384 a side)",
-                           who, width, height);
-        return NULL;
-    }
-
-    cairo_surface_t *surface =
-        cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
-    cairo_t *cr = cairo_create(surface);
-
-    int64_t prof  = bta_profile_begin();
-    bool    drawn = frame(data, cr, width, height, 0);
-    if (prof)
-        bta_profile_end(prof, "Bintana", who, "");
-
-    cairo_destroy(cr);
-    cairo_surface_flush(surface);
-
-    if (!drawn) {
-        cairo_surface_destroy(surface);
-        return NULL;        /* the drawing's exception is the one to report */
-    }
-    return surface;
 }
 
 static cairo_surface_t *area_frame(JSContext *ctx, BtaWidget *w, const char *who,
@@ -2506,20 +2860,6 @@ static cairo_surface_t *area_frame(JSContext *ctx, BtaWidget *w, const char *who
         return NULL;
 
     return image_frame(ctx, who, width, height, area_frame_fn, w);
-}
-
-/* The surface as a PNG file, or a throw naming it. */
-static bool png_write(JSContext *ctx, const char *who, cairo_surface_t *surface,
-                      const char *path)
-{
-    cairo_status_t status = cairo_surface_write_to_png(surface, path);
-
-    if (status != CAIRO_STATUS_SUCCESS) {
-        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
-                           who, path, cairo_status_to_string(status));
-        return false;
-    }
-    return true;
 }
 
 static JSValue area_save(JSContext *ctx, JSValueConst this_val,
@@ -2545,31 +2885,6 @@ static JSValue area_save(JSContext *ctx, JSValueConst this_val,
     cairo_surface_destroy(surface);
     JS_FreeCString(ctx, path);
     return ok ? JS_UNDEFINED : JS_EXCEPTION;
-}
-
-/* Where `ToPng` puts the bytes cairo hands it, one chunk at a time. */
-static cairo_status_t png_chunk(void *closure, const unsigned char *data,
-                                unsigned int length)
-{
-    g_byte_array_append(closure, data, length);
-    return CAIRO_STATUS_SUCCESS;
-}
-
-/* The surface as PNG `Bytes`, or a throw. */
-static JSValue png_bytes(JSContext *ctx, const char *who, cairo_surface_t *surface)
-{
-    GByteArray    *out    = g_byte_array_new();
-    cairo_status_t status = cairo_surface_write_to_png_stream(surface, png_chunk, out);
-
-    if (status != CAIRO_STATUS_SUCCESS) {
-        g_byte_array_unref(out);
-        return JS_ThrowPlainError(ctx, "%s: %s", who,
-                                  cairo_status_to_string(status));
-    }
-
-    JSValue bytes = bta_bytes_new(ctx, out->data, out->len);
-    g_byte_array_unref(out);
-    return bytes;
 }
 
 /*
@@ -2625,93 +2940,6 @@ static JSValue area_to_png(JSContext *ctx, JSValueConst this_val,
  * with the page number, is the same information without touching the event. It
  * is what `Report.SavePdf` uses to move its own page along.
  */
-/*
- * A document of `pages` sheets, each one frame -- what `DrawingArea.SavePdf` and
- * `Drawing.SavePdf` both are once their arguments are read. False with an
- * exception pending, and then **no file**.
- */
-static bool pdf_write(JSContext *ctx, const char *who, const char *path,
-                      int32_t width, int32_t height, int32_t pages,
-                      JSValueConst before, BtaFrameFn frame, void *data)
-{
-    if (width <= 0 || height <= 0) {
-        JS_ThrowRangeError(ctx, "%s: %dx%d is not a page -- the size is in "
-                                "points, 72 to the inch (A4 is 595x842)",
-                           who, width, height);
-        return false;
-    }
-    /* PDF's own ceiling is 200 inches a side, and cairo silently clamps past
-     * it -- a document that came out the wrong size with no error is worse than
-     * one that was refused. */
-    if (width > 14400 || height > 14400) {
-        JS_ThrowRangeError(ctx, "%s: %dx%d points is past PDF's 200 inches a "
-                                "side", who, width, height);
-        return false;
-    }
-    if (pages < 1 || pages > 10000) {
-        JS_ThrowRangeError(ctx, "%s: %d pages is not a document (1 to 10000)",
-                           who, pages);
-        return false;
-    }
-
-    cairo_surface_t *surface = cairo_pdf_surface_create(path, width, height);
-    cairo_status_t   status  = cairo_surface_status(surface);
-
-    if (status != CAIRO_STATUS_SUCCESS) {
-        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
-                           who, path, cairo_status_to_string(status));
-        cairo_surface_destroy(surface);
-        return false;
-    }
-
-    cairo_t *cr = cairo_create(surface);
-    bool     ok = true;
-
-    int64_t prof = bta_profile_begin();
-
-    for (int32_t page = 1; page <= pages && ok; page++) {
-        if (JS_IsFunction(ctx, before)) {
-            JSValueConst args[1] = { JS_NewInt32(ctx, page) };
-            JSValue      r       = JS_Call(ctx, before, JS_UNDEFINED, 1, args);
-
-            ok = !JS_IsException(r);
-            JS_FreeValue(ctx, r);
-        }
-        if (ok)
-            ok = frame(data, cr, width, height, page);
-        if (ok)
-            cairo_show_page(cr);
-    }
-
-    /* The whole document, from the first page to the last: `who` is
-     * `SavePdf`, and the per-page `DrawPage` spans sit inside it. */
-    if (prof)
-        bta_profile_end(prof, "Bintana", who, "");
-
-    cairo_destroy(cr);
-    cairo_surface_finish(surface);
-    if (status == CAIRO_STATUS_SUCCESS)
-        status = cairo_surface_status(surface);
-    cairo_surface_destroy(surface);
-
-    /*
-     * A page that threw is not a document. Cairo has already written part of
-     * the file by then -- it streams as it goes -- so the half of it that exists
-     * is removed rather than left looking like an export that worked, which is
-     * the same bargain `Save` makes about a PNG it did not finish.
-     */
-    if (!ok) {
-        g_unlink(path);
-        return false;
-    }
-    if (status != CAIRO_STATUS_SUCCESS) {
-        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
-                           who, path, cairo_status_to_string(status));
-        return false;
-    }
-    return true;
-}
-
 static JSValue area_save_pdf(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -2823,6 +3051,8 @@ void bta_paint_register(void)
     };
     bta_register_classes(rows, (int)G_N_ELEMENTS(rows));
 }
+
+#endif
 
 /* ---------------------------------------------------------------- Drawing */
 

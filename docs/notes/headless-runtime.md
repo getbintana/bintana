@@ -169,22 +169,25 @@ hosts install.
 
 | command | wall | max RSS | libraries |
 |---|---:|---:|---:|
-| `bintana --version` | 0.00 s | 5.6 MB | 17 |
-| `bintana check examples/hello` | 0.08 s | 20.8 MB | 17 |
-| `bintana check ide` | 5.83 s | 35.5 MB | 17 |
-| `bintana-gui check ide` | 5.60 s | 60.2 MB | 153 |
-| `bintana tests/headless/projects/run` (a `main`) | 0.01 s | 8.7 MB | 17 |
+| `bintana --version` | 0.00 s | 9.8 MB | 44 |
+| `bintana check examples/hello` | 0.09 s | 24.1 MB | 44 |
+| `bintana check ide` | 5.49 s | 38.6 MB | 44 |
+| `bintana-gui check ide` | 5.58 s | 60.3 MB | 153 |
+| `bintana tests/headless/projects/run` (a `main`) | 0.02 s | 13.4 MB | 44 |
 | `bintana-gui tests/headless/projects/run` | 0.04 s | 43.3 MB | 153 |
+| `bintana tests/headless/projects/draw` (`Drawing`) | 0.05 s | 27.5 MB | 44 |
+| `bintana-gui tests/headless/projects/draw` | 0.13 s | 56.9 MB | 153 |
 
 The `check ide` rows are the same pass, and their output is byte for byte the
 same (`--json` too); the core uses less memory and maps no toolkit.
 The `check` rows are the Debug build (`build/`). On `RelWithDebInfo`
-(`build-rwd`) the same check is **1.48 s and 32.8 MB** against **1.52 s and
-58.0 MB** for the graphical binary; `--version` stays at 5.6 MB. The two
-project rows are `RelWithDebInfo`, and a `main` over a tiny library costs the
-console host **8.7 MB against 43.3 MB** -- the toolkit is mapped before the
-graphical runtime's `main` even reads `project.btp`. The binary is **2.9 MB**
-in the Debug build and **7.4 MB** with `RelWithDebInfo`'s symbols -- a packager
+(`build-rwd`) the same check is **1.57 s and 36.7 MB** against **1.62 s and
+57.6 MB** for the graphical binary; `--version` is 9.8 MB. The project rows are
+`RelWithDebInfo`: a `main` over a tiny library costs the core **13.4 MB against
+43.3 MB**, and a `Drawing` document with a logo **27.5 MB against 56.9 MB** --
+the toolkit is mapped before the graphical runtime's `main` even reads
+`project.btp`. The binary is **3.4 MB**
+in the Debug build and **7.9 MB** with `RelWithDebInfo`'s symbols -- a packager
 strips them; the metadata document it loads for `check` is **1.7 MB**.
 
 **How it is put together.** The core `bintana` links **no widget file**. At build
@@ -242,10 +245,13 @@ still there. The widget classes are not stubs in the binary: they do not exist
 until `check` loads the metadata; then `widget-meta.js` installs names that
 throw on construction and answer the metadata questions.
 
-`Text.LineOf` is the one measuring answer a check reads, and it is implemented
-in the host over `bta_line_of_utf16`; the rest of `Text` needs Pango and a font
-map and belongs to the graphical host. `File.Info` answers no icon name -- there
-is no theme to ask -- which no check reads.
+**Drawing is core.** `Painter`, `Metrics`, `Bitmap` and `Drawing` are in the
+host -- cairo, Pango and GdkPixbuf, none of GTK -- so a `main` writes a PNG or a
+PDF and measures text with no display. `DrawingArea`, which needs a widget, is
+the GUI's. `PdfDocument` is still a stub (poppler and PoDoFo are not linked
+here), so a report's form fields remain the graphical host's until the core
+globals are split. `File.Info` answers no icon name -- there is no theme to ask
+-- which no check reads.
 
 **What it does not do yet.** The dispatch lives in the core; both hosts
 install, and the graphical one is `bintana-gui`. **Two installed binaries are

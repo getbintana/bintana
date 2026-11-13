@@ -42,6 +42,13 @@ pkg_check_modules(GMODULE REQUIRED IMPORTED_TARGET gmodule-2.0)
 # -- but the link is what this target proves can be without it.
 pkg_check_modules(GLIBCORE REQUIRED IMPORTED_TARGET glib-2.0 gobject-2.0 gio-2.0)
 
+# The core's drawing half: cairo, Pango and GdkPixbuf, and not the toolkit.
+# `Drawing`, `Painter`, `Metrics` and `Bitmap` are what a `main` uses to write a
+# PDF or measure text with no display, and they name none of GTK.
+pkg_check_modules(CAIRO REQUIRED IMPORTED_TARGET cairo)
+pkg_check_modules(PANGO REQUIRED IMPORTED_TARGET pango pangocairo)
+pkg_check_modules(GDKPIXBUF REQUIRED IMPORTED_TARGET gdk-pixbuf-2.0)
+
 # Optional: VTE is the pty behind `Terminal`, and it is the only dependency
 # with no Windows port -- which is why it stopped being required. Without it
 # the class is still there, a .form naming one still loads and every property
@@ -604,6 +611,9 @@ if(NOT WIN32)
         runtime/src/bta_debug.c
         runtime/src/bta_sys.c
         runtime/src/bta_form.c
+        runtime/src/bta_paint.c
+        runtime/src/bta_bitmap.c
+        runtime/src/bta_profile.c
         runtime/src/bta_locale.c
         runtime/src/bta_xml.c
         runtime/src/bta_network.c
@@ -653,9 +663,14 @@ if(NOT WIN32)
         target_compile_definitions(bintana PRIVATE BTA_HAVE_LIBXML=1)
         target_link_libraries(bintana PRIVATE PkgConfig::LIBXML)
     endif()
+    if(SYSPROF_FOUND)
+        target_compile_definitions(bintana PRIVATE BTA_HAVE_SYSPROF=1)
+        target_link_libraries(bintana PRIVATE PkgConfig::SYSPROF)
+    endif()
     add_dependencies(bintana bintana-check-data)
     target_link_libraries(bintana PRIVATE
-        quickjs PkgConfig::GLIBCORE)
+        quickjs PkgConfig::GLIBCORE PkgConfig::CAIRO PkgConfig::PANGO
+        PkgConfig::GDKPIXBUF)
     if(NOT WIN32)
         target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)
     endif()

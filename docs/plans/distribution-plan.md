@@ -92,9 +92,9 @@ both only for `check`; the core links no widget file.
 **The core `bintana` package's runtime side is now installable**: one prefix
 carries `bin/bintana` (core), `bin/bintana-gui` (graphical host), the launcher,
 the libraries and the check document. The packaging work itself -- `.deb`,
-`.rpm`, AppImage -- is Stage 1 and unchanged. The core binary is 2.9 MB in
-Debug and 7.4 MB with `RelWithDebInfo`'s symbols (a packager strips them), with
-17 libraries; the check document is 1.7 MB, and `bintana check` matches the
+`.rpm`, AppImage -- is Stage 1 and unchanged. The core binary is 3.4 MB in
+Debug and 7.9 MB with `RelWithDebInfo`'s symbols (a packager strips them), with
+44 libraries; the check document is 1.7 MB, and `bintana check` matches the
 graphical check byte for byte.
 
 **`Package` stays the Flatpak context.** `Deb`, `Rpm` and `AppImage` are

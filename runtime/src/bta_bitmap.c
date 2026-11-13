@@ -33,6 +33,51 @@
 #include <math.h>
 #include <string.h>
 
+#ifdef BTA_HEADLESS
+/* A cairo ARGB32 surface back into a GdkPixbuf. The pixels cairo hands back are
+ * premultiplied and GdkPixbuf's are not, so every channel is divided by alpha.
+ * `gdk_pixbuf_get_from_surface` is the graphical host's and needs GDK; this
+ * keeps `Bitmap.Rotate`'s arbitrary angle working in the core. */
+static GdkPixbuf *pixbuf_from_surface(cairo_surface_t *surface)
+{
+    if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS)
+        return NULL;
+
+    int w = cairo_image_surface_get_width(surface);
+    int h = cairo_image_surface_get_height(surface);
+    GdkPixbuf *pb = gdk_pixbuf_new(GDK_COLORSPACE_RGB, TRUE, 8, w, h);
+    if (!pb)
+        return NULL;
+
+    guchar       *dst     = gdk_pixbuf_get_pixels(pb);
+    int           dstride = gdk_pixbuf_get_rowstride(pb);
+    const guint32 *src    = (const guint32 *)cairo_image_surface_get_data(surface);
+    int           sstride = cairo_image_surface_get_stride(surface) / 4;
+
+    for (int y = 0; y < h; y++) {
+        guchar *row = dst + y * dstride;
+        for (int x = 0; x < w; x++) {
+            guint32 v = src[y * sstride + x];
+            guint   a = v >> 24;
+            guint   r = (v >> 16) & 0xFF;
+            guint   g = (v >> 8) & 0xFF;
+            guint   b = v & 0xFF;
+
+            if (a && a != 255) {
+                r = (r * 255 + a / 2) / a;
+                g = (g * 255 + a / 2) / a;
+                b = (b * 255 + a / 2) / a;
+            }
+            row[x * 4 + 0] = (guchar)MIN(r, 255);
+            row[x * 4 + 1] = (guchar)MIN(g, 255);
+            row[x * 4 + 2] = (guchar)MIN(b, 255);
+            row[x * 4 + 3] = (guchar)a;
+        }
+    }
+    return pb;
+}
+#endif
+
 typedef struct {
     GdkPixbuf *pixbuf;
 } BtaBitmap;
@@ -403,9 +448,13 @@ static JSValue bitmap_rotate(JSContext *ctx, JSValueConst this_val,
     cairo_surface_destroy(flat);
     g_free(png);
 
+#ifdef BTA_HEADLESS
+    GdkPixbuf *out = pixbuf_from_surface(turned);
+#else
     G_GNUC_BEGIN_IGNORE_DEPRECATIONS
     GdkPixbuf *out = gdk_pixbuf_get_from_surface(turned, 0, 0, out_w, out_h);
     G_GNUC_END_IGNORE_DEPRECATIONS
+#endif
     cairo_surface_destroy(turned);
 
     if (!out)

@@ -770,40 +770,6 @@ static const char *const GUI_GLOBALS[] = {
     "Connection"
 };
 
-/* The line breaks GTK's buffer uses, which is the model `Text.LineOf` follows:
- * `\n`, `\r\n` as one, a lone `\r` and U+2029. */
-static int headless_line_break(const char *p)
-{
-    if (*p == '\n')
-        return 1;
-    if (*p == '\r')
-        return p[1] == '\n' ? 2 : 1;
-    if (g_utf8_get_char(p) == 0x2029)
-        return (int)(g_utf8_next_char(p) - p);
-    return 0;
-}
-
-int bta_line_of_utf16(const char *s, int index)
-{
-    const char *p     = s;
-    int         units = 0;
-    int         line  = 1;
-
-    while (*p) {
-        int br = headless_line_break(p);
-        int n  = br ? br : (int)(g_utf8_next_char(p) - p);
-        int u  = br == 2 ? 2 : (g_utf8_get_char(p) > 0xFFFF ? 2 : 1);
-
-        if (units + u > index)
-            break;
-        units += u;
-        p     += n;
-        if (br)
-            line++;
-    }
-    return line;
-}
-
 /* The one `Text` answer `lib/check` reads: the UTF-16 index to its 1-based
  * line, over the same bridge `bta_text.c` gives an editor. The measuring half
  * needs Pango and a font map, and a console check has no line to underline. */
@@ -918,14 +884,22 @@ static bool install_core(JSContext *ctx, JSValueConst global,
                                                JS_CFUNC_generic_magic, i));
     JS_SetPropertyStr(ctx, global, "Logger", logger);
     bta_bytes_init(ctx, global);
+    bta_bitmap_init(ctx, global);
+    bta_painter_init(ctx, global);
+    bta_drawing_init(ctx, global);
     bta_decimal_init(ctx, global);
     bta_day_init(ctx, global);
     bta_xml_init(ctx, global);
     bta_network_init(ctx, global);
-    JSValue text = JS_NewObject(ctx);
+
+    /* `bta_metrics_init` is what makes `Text`, with Width, Height, Bounds and
+     * the rest; the one editor answer `lib/check` reads is added to the same
+     * object, so neither replaces the other. */
+    bta_metrics_init(ctx, global);
+    JSValue text = JS_GetPropertyStr(ctx, global, "Text");
     JS_SetPropertyStr(ctx, text, "LineOf",
                       JS_NewCFunction(ctx, headless_text_line_of, "LineOf", 2));
-    JS_SetPropertyStr(ctx, global, "Text", text);
+    JS_FreeValue(ctx, text);
     bta_locale_init(ctx, global, project, libs);
 
     bta_record_init(ctx, global, project, libs);

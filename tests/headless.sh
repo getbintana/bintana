@@ -169,6 +169,26 @@ else
     fail=1
 fi
 
+# `Drawing` is the document half of `DrawingArea`: a PNG and a PDF with no
+# control and no display, through Painter, Metrics and Bitmap. Both hosts draw
+# the same document; the fixture prints only what is stable across them.
+if "$BINTANA_CORE" tests/headless/projects/draw \
+        >"$tmp/draw-core.out" 2>"$tmp/draw-core.err" &&
+   "$BINTANA" tests/headless/projects/draw \
+        >"$tmp/draw-gui.out" 2>"$tmp/draw-gui.err"; then
+    if diff -u "$tmp/draw-gui.out" "$tmp/draw-core.out" >"$tmp/draw.diff"; then
+        echo "a Drawing document is the same with and without the toolkit"
+    else
+        echo "the core's Drawing and the graphical one disagree:" >&2
+        cat "$tmp/draw.diff" >&2
+        fail=1
+    fi
+else
+    echo "one of the hosts failed the Drawing fixture:" >&2
+    cat "$tmp/draw-core.err" "$tmp/draw-gui.err" >&2
+    fail=1
+fi
+
 # The binary links no widget file, and the metadata document is loaded only for
 # `check`: a `main` gets the language's own answer for `Widget`.
 if out=$("$BINTANA_CORE" tests/headless/projects/bare 2>"$tmp/bare.err") &&
