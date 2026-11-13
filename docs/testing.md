@@ -825,7 +825,9 @@ exec'd as `bintana-gui test`, which the fixture holds with the fake host.
 `tests/headless/projects/`.** `run` is a console project with a library in
 `lib/greeting`: the script runs it through both hosts and diffs the output, so
 `uses`, the library-first load order and `Application.Arguments` are held to
-the graphical answer. `bare` prints `typeof Widget` and must say `undefined` --
+the graphical answer. So are `Application.LibraryPath` -- the project's own
+`lib/` first, with no project named or an `undefined` one -- and
+`Application.Libraries()`, which the core used to answer `""` and `[]` for. `bare` prints `typeof Widget` and must say `undefined` --
 the core host has no toolkit even for a `main`. `window` declares `startup`:
 the test writes a fake graphical host, points `BINTANA_GUI` at it, and holds
 the dispatch to the words it was given and to the host's own exit status; a

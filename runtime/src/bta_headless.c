@@ -547,35 +547,6 @@ static JSValue js_application_globals(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
-static JSValue js_application_library_path(JSContext *ctx, JSValueConst this_val,
-                                           int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    const char *name = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
-    const char *project = argc > 1 ? JS_ToCString(ctx, argv[1]) : NULL;
-    if (!name) {
-        if (project) JS_FreeCString(ctx, project);
-        return JS_ThrowTypeError(ctx, "Application.LibraryPath(name) needs a name");
-    }
-
-    char  *found = bta_library_resolve(project, name, NULL);
-    JSValue out  = JS_NewString(ctx, found ? found : "");
-
-    g_free(found);
-    JS_FreeCString(ctx, name);
-    if (project) JS_FreeCString(ctx, project);
-    return out;
-}
-
-static JSValue js_application_libraries(JSContext *ctx, JSValueConst this_val,
-                                        int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    /* The other direction of the lookup is a dialogue's business; the check
-     * asks for one name at a time. */
-    return JS_NewArray(ctx);
-}
-
 /* `Application.HasCommand(name)`: the core half of the graphical answer, and
  * the reason a console tool can ask before `Exec` throws. A name with a
  * separator is a file to look at; a bare one is the PATH's. */
@@ -649,10 +620,10 @@ static void install_application(JSContext *ctx, JSValueConst global,
     JS_SetPropertyStr(ctx, application, "Globals",
                       JS_NewCFunction(ctx, js_application_globals, "Globals", 0));
     JS_SetPropertyStr(ctx, application, "LibraryPath",
-                      JS_NewCFunction(ctx, js_application_library_path,
+                      JS_NewCFunction(ctx, bta_application_library_path,
                                       "LibraryPath", 2));
     JS_SetPropertyStr(ctx, application, "Libraries",
-                      JS_NewCFunction(ctx, js_application_libraries,
+                      JS_NewCFunction(ctx, bta_application_libraries,
                                       "Libraries", 1));
     JS_SetPropertyStr(ctx, application, "HasCommand",
                       JS_NewCFunction(ctx, js_application_has_command,

@@ -602,3 +602,112 @@ GPtrArray *bta_project_sources(JSContext *ctx, const char *dir,
     g_ptr_array_free(out, TRUE);
     return first;
 }
+
+/* ------------------------------------------- Application's library questions */
+
+/*
+ * `Application.LibraryPath` and `Application.Libraries`, which both hosts
+ * install, over the one search `uses` resolves with. With no project named,
+ * the running project's `lib/` is the first place. They lived in
+ * bta_runtime.c, and the console host answered `LibraryPath` without the
+ * running project -- and with `./undefined/lib/...` for an `undefined`
+ * project -- and `Libraries()` with an empty list.
+ */
+JSValue bta_application_library_path(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv)
+{
+    const char *name = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!name)
+        return JS_ThrowTypeError(ctx, "LibraryPath expects (name, [project])");
+
+    const char *project = NULL;
+    if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
+        project = JS_ToCString(ctx, argv[1]);
+        if (!project) {
+            JS_FreeCString(ctx, name);
+            return JS_EXCEPTION;       /* it threw on the way; that stands */
+        }
+    }
+
+    BtaApp *app = bta_current_app();
+    char   *dir = bta_library_resolve(
+        project ? project : (app ? app->dir : NULL), name, NULL);
+    JSValue out = JS_NewString(ctx, dir ? dir : "");
+
+    g_free(dir);
+    if (project)
+        JS_FreeCString(ctx, project);
+    JS_FreeCString(ctx, name);
+    return out;
+}
+
+/*
+ * Every library a project could name, out of the same six places.
+ *
+ * **A directory is a library**, which is exactly what
+ * `bta_library_resolve` decides with: anything stricter here -- "it must hold a
+ * `.js`" -- would be a second opinion about what a library is, and the two
+ * would disagree about some directory on somebody's machine. A name found twice is listed once and means
+ * the first one, because that is the one `uses` would load.
+ *
+ * Sorted, for the reason `Icons` is sorted: whoever asks is about to show them
+ * in a list, and the order they came off the disk in is not one. That the list
+ * no longer says where each came from is not a loss -- `LibraryPath` answers
+ * that for any name, with the same search, which is the point of there being
+ * only one.
+ */
+JSValue bta_application_libraries(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv)
+{
+    const char *project = NULL;
+    if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+        project = JS_ToCString(ctx, argv[0]);
+        if (!project)
+            return JS_EXCEPTION;       /* it threw on the way; that stands */
+    }
+
+    BtaApp    *app   = bta_current_app();
+    GPtrArray *where = g_ptr_array_new_with_free_func(g_free);
+
+    bta_library_candidates(project ? project : (app ? app->dir : NULL), where);
+
+    JSValue     out  = JS_NewArray(ctx);
+    /* Owning the keys, so the names outlive the `GDir` they were read from. */
+    GHashTable *seen = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+    uint32_t    n    = 0;
+
+    for (guint i = 0; i < where->len; i++) {
+        const char *place = g_ptr_array_index(where, i);
+        GDir       *dir   = g_dir_open(place, 0, NULL);
+
+        /* A place that is not there is most of them, on most machines. */
+        if (!dir)
+            continue;
+
+        const char *entry;
+        while ((entry = g_dir_read_name(dir))) {
+            /* A name beginning with a dot is not one anybody wrote in `uses`. */
+            if (*entry == '.' || g_hash_table_contains(seen, entry))
+                continue;
+
+            char *path = g_build_filename(place, entry, NULL);
+            if (g_file_test(path, G_FILE_TEST_IS_DIR)) {
+                g_hash_table_add(seen, g_strdup(entry));
+                JS_SetPropertyUint32(ctx, out, n++, JS_NewString(ctx, entry));
+            }
+            g_free(path);
+        }
+        g_dir_close(dir);
+    }
+
+    g_hash_table_destroy(seen);
+    g_ptr_array_free(where, TRUE);
+    if (project)
+        JS_FreeCString(ctx, project);
+
+    JSValue sort = JS_GetPropertyStr(ctx, out, "sort");
+    JSValue r    = JS_Call(ctx, sort, out, 0, NULL);
+    JS_FreeValue(ctx, r);
+    JS_FreeValue(ctx, sort);
+    return out;
+}

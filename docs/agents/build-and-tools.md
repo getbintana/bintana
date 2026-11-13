@@ -689,7 +689,9 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `bta_read_file`, `bta_drain_jobs`, `bta_current_app`, `bta_message_show`, `bta_task_worker_host`, `bta_host_error_uncaught` and
   `bta_host_show_error` in `bta_headless.c`; the graphical host's live in
   `bta_runtime.c`.** The library listing and the project boot are shared, in
-  `bta_project.c`; the language in `bta_language.c`; `Logger` in `bta_log.c`
+  `bta_project.c`, and so are `Application.LibraryPath` and `Libraries` (the
+  core's own ignored the running project and listed nothing); the language
+  in `bta_language.c`; `Logger` in `bta_log.c`
   (the core's own printed every level and had no `Level`, `Target` or
   `Handler`); the error text in `bta_util.c`; the report of an uncaught error in `bta_error.c`, which the
   core used to print bare, without the replacement hint and without calling

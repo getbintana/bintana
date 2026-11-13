@@ -935,6 +935,12 @@ JSValue bta_application_replacements(JSContext *ctx, JSValueConst this_val,
 /* `Application.ProtectPrototype()`, the same verb in either host. */
 JSValue bta_application_protect_prototype(JSContext *ctx, JSValueConst this_val,
                                           int argc, JSValueConst *argv);
+/* `Application.LibraryPath` and `Application.Libraries` (bta_project.c): the
+ * search `uses` resolves with, from the running project when none is named. */
+JSValue bta_application_library_path(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
+JSValue bta_application_libraries(JSContext *ctx, JSValueConst this_val,
+                                  int argc, JSValueConst *argv);
 /*
  * A fatal error raised from C, before any project code has run: it always goes
  * to stderr, and -- when there is a display and an application to own it -- into
