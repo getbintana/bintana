@@ -15,6 +15,12 @@ function language() {
                      Keyring, Lock, Cancellable, Profile, Message, Desktop]
                     .map((g) => typeof g).join(" ")}`);
     print(`hatches: Object.keys ${typeof Object.keys}, eval ${typeof eval}`);
+    const logged = [];
+    Logger.Handler = (level, text) => { logged.push(`${level}:${text}`); return true; };
+    Logger.Debug("below the floor");
+    Logger.Info("at the floor");
+    Logger.Handler = null;
+    print(`Logger: ${Logger.Level} ${Logger.Target} [${logged.join(" ")}]`);
     try {
         setTimeout(() => 0, 1);
     } catch (e) {

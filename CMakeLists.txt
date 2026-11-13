@@ -285,11 +285,16 @@ else()
 endif()
 
 # **The optional libraries both hosts link**, declared once: what a console
-# program is written with -- `Database.Sqlite`, `Database.Odbc`, `Http`,
-# `Cipher`/`Key`, `Keyring` -- names no toolkit, so the core links exactly what
-# the graphical host does for them, and a missing one is the same refusal in
-# both. The STATUS lines that say what was found are printed once, below.
+# program is written with -- `Logger`'s journal, `Database.Sqlite`,
+# `Database.Odbc`, `Http`, `Cipher`/`Key`, `Keyring` -- names no toolkit, so
+# the core links exactly what the graphical host does for them, and a missing
+# one is the same refusal in both. The STATUS lines that say what was found
+# are printed once, below.
 function(bta_link_console_libraries target)
+    if(SYSTEMD_FOUND)
+        target_link_libraries(${target} PRIVATE PkgConfig::SYSTEMD)
+        target_compile_definitions(${target} PRIVATE BTA_HAVE_JOURNAL=1)
+    endif()
     if(SQLITE3_FOUND)
         target_link_libraries(${target} PRIVATE PkgConfig::SQLITE3)
         target_compile_definitions(${target} PRIVATE BTA_HAVE_SQLITE=1)
@@ -338,6 +343,7 @@ add_executable(${BTA_GUI_TARGET}
     runtime/src/bta_language.c
     runtime/src/bta_message.c
     runtime/src/bta_error.c
+    runtime/src/bta_log.c
     runtime/src/bta_project.c
     runtime/src/bta_util.c
     runtime/src/bta_module.c
@@ -478,11 +484,6 @@ if(UNIXPRINT_FOUND)
     message(STATUS "gtk4-unix-print ${UNIXPRINT_VERSION}: Printer.Names and Printer.Default can answer")
 else()
     message(STATUS "no gtk4-unix-print: Printer.Names and Printer.Default will say so; printing itself is unaffected")
-endif()
-
-if(SYSTEMD_FOUND)
-    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::SYSTEMD)
-    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_JOURNAL=1)
 endif()
 
 if(SOUP_FOUND)
@@ -632,6 +633,8 @@ if(NOT WIN32)
         runtime/src/bta_language.c
         runtime/src/bta_message.c
         runtime/src/bta_error.c
+        runtime/src/bta_log.c
+        runtime/src/bta_journal.c
         runtime/src/bta_project.c
         runtime/src/bta_util.c
         runtime/src/bta_module.c

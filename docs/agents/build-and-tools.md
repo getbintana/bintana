@@ -190,7 +190,11 @@ one turns on are in [`docs/installing.md`](../installing.md)**, which is also
 where the `Xvfb`/`xdotool`/`python3`/`openssl` the suites want are listed. **Build both ways before touching anything under
 an `#ifdef`**: a wrapper `pkg-config` that exits 1 for one module name and
 delegates the rest is the whole of it
-(`cmake -S . -B build-x -DPKG_CONFIG_EXECUTABLE=<wrapper>`), and
+(`cmake -S . -B build-x -DPKG_CONFIG_EXECUTABLE=<wrapper>`) -- **in a new
+directory**: `pkg_check_modules` caches what it found (`SYSTEMD_FOUND`,
+`__pkg_config_checked_SYSTEMD`), so a wrapper that starts refusing one more
+module over an existing build tree changes nothing, and the "without" build
+quietly has it (measured 2026-11-13 with libsystemd) -- and
 `BINTANA=<path> BINTANA_LIB_PATH=$PWD/lib ./tests/run.sh` runs the
 suite against it -- the library path because `lib/` is found relative to the
 *executable*, so a build in another directory fails twelve chart assertions for
@@ -682,12 +686,12 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   compiled module, as `JS_EvalFunction` does; freeing it again aborts in
   QuickJS.)
 - **The core supplies `bta_lookup_global`, `bta_symbols`, `bta_split_doc`,
-  `bta_read_file`, `bta_drain_jobs`, `bta_current_app`, `bta_log_debug_plain`,
-  `bta_message_show`, `bta_task_worker_host`, `bta_host_error_uncaught` and
+  `bta_read_file`, `bta_drain_jobs`, `bta_current_app`, `bta_message_show`, `bta_task_worker_host`, `bta_host_error_uncaught` and
   `bta_host_show_error` in `bta_headless.c`; the graphical host's live in
   `bta_runtime.c`.** The library listing and the project boot are shared, in
-  `bta_project.c`; the language in `bta_language.c`; the error text in
-  `bta_util.c`; the report of an uncaught error in `bta_error.c`, which the
+  `bta_project.c`; the language in `bta_language.c`; `Logger` in `bta_log.c`
+  (the core's own printed every level and had no `Level`, `Target` or
+  `Handler`); the error text in `bta_util.c`; the report of an uncaught error in `bta_error.c`, which the
   core used to print bare, without the replacement hint and without calling
   `Application.OnError` (`tests/headless/projects/onerror`).
   `bta_symbols` and `bta_split_doc` are the same code the graphical host uses,

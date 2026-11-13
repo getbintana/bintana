@@ -965,6 +965,8 @@ void    bta_drain_jobs(JSRuntime *rt);   /* run pending promise callbacks */
  * whose caller is blocked mid-call). */
 void    bta_log_debug(JSContext *ctx, const char *text);
 void    bta_log_debug_plain(const char *text);
+/* Installs `Logger` (bta_log.c); both hosts call it. */
+void    bta_logger_init(JSContext *ctx, JSValueConst global);
 
 /* Resolves a top-level class by name, including `class X {}` bindings that
  * live in the global lexical scope rather than on globalThis. */

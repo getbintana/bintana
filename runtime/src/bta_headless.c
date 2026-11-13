@@ -79,21 +79,6 @@ void bta_report_fatal(BtaApp *app, const char *message)
     fprintf(stderr, "bintana: %s\n", message);
 }
 
-/* `host->log` from a plugin: the core's Logger is a JS object, and a plugin's
- * Debug line is not worth re-entering it before `rad.js` has run. */
-void bta_log_debug(JSContext *ctx, const char *text)
-{
-    (void)ctx;
-    fprintf(stderr, "%s\n", text ? text : "");
-}
-
-/* `Http`'s traffic from inside a blocking call, where JS must not run: the
- * same line `Logger.Debug` would print, straight to stderr. */
-void bta_log_debug_plain(const char *text)
-{
-    fprintf(stderr, "Debug: %s\n", text ? text : "");
-}
-
 /* A console has no alert to raise; `Message` prints to stderr, as the
  * graphical host does when it has no display. */
 bool bta_message_show(int kind, const char *text)
@@ -841,27 +826,6 @@ void bta_strict_init(JSContext *ctx, JSValueConst global)
                       JS_NewCFunction(ctx, headless_strict_seal, "strictSeal", 1));
 }
 
-static JSValue headless_log(JSContext *ctx, JSValueConst this_val,
-                            int argc, JSValueConst *argv, int magic)
-{
-    (void)this_val;
-    static const char *const levels[] = { "Debug", "Info", "Warning", "Error" };
-
-    if (magic >= 0 && magic < 4)
-        fprintf(stderr, "%s: ", levels[magic]);
-    for (int i = 0; i < argc; i++) {
-        const char *text = JS_ToCString(ctx, argv[i]);
-        if (!text)
-            return JS_EXCEPTION;
-        if (i)
-            fputc(' ', stderr);
-        fputs(text, stderr);
-        JS_FreeCString(ctx, text);
-    }
-    fputc('\n', stderr);
-    return JS_UNDEFINED;
-}
-
 static JSValue headless_needs_drawing(JSContext *ctx, JSValueConst this_val,
                                      int argc, JSValueConst *argv)
 {
@@ -930,13 +894,7 @@ static bool install_core(JSContext *ctx, JSValueConst global,
     bta_profile_init(ctx, global);
     bta_sys_init(ctx, global);
 
-    JSValue logger = JS_NewObject(ctx);
-    static const char *const levels[] = { "Debug", "Info", "Warning", "Error" };
-    for (int i = 0; i < 4; i++)
-        JS_SetPropertyStr(ctx, logger, levels[i],
-                          JS_NewCFunctionMagic(ctx, headless_log, levels[i], 1,
-                                               JS_CFUNC_generic_magic, i));
-    JS_SetPropertyStr(ctx, global, "Logger", logger);
+    bta_logger_init(ctx, global);   /* bta_log.c, as in the graphical host */
     bta_message_init(ctx, global);
     bta_bytes_init(ctx, global);
     bta_decimal_init(ctx, global);
