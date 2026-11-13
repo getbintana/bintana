@@ -257,7 +257,12 @@ the manifest before any QuickJS context exists -- the top-level object is read
 for a string `"main"` -- because a window project must not pay to start the
 language before the toolkit. `$BINTANA_GUI` names the host; otherwise
 `bintana-gui` beside this binary is used. A candidate that resolves to this
-process is skipped, so the dispatch can never exec itself forever.
+process -- with its symbolic links followed (`realpath`), which the first
+version did not do, so a `bintana-gui` linked to `bintana` looped -- is
+skipped, and **the dispatched process carries `BINTANA_DISPATCHED`**, which
+only the graphical host clears as it starts: a "graphical host" that is a
+script around `bintana` reaches the core again with the mark set, and the core
+stops with a sentence instead of exec'ing once more.
 
 `tests/headless/projects/` holds the fixtures the shell test uses: a console
 project with a library, a window project, and one that asks `typeof Widget`. The

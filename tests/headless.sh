@@ -559,6 +559,29 @@ else
     fail=1
 fi
 
+# A "graphical host" that is the console host again must stop, not exec itself
+# forever: a symbolic link to `bintana` (the paths are compared resolved) and a
+# script that runs `bintana` (the dispatched process carries a mark, and only
+# the real graphical host clears it). Both used to hang; `timeout` is what
+# turns a hang into a red line here.
+core_abs="$(cd "$(dirname "$BINTANA_CORE")" && pwd)/$(basename "$BINTANA_CORE")"
+ln -s "$core_abs" "$tmp/gui-link"
+printf '#!/bin/sh\nexec "%s" "$@"\n' "$core_abs" >"$tmp/gui-script"
+chmod +x "$tmp/gui-script"
+loop_ok=1
+for host in gui-link gui-script; do
+    BINTANA_GUI="$tmp/$host" timeout 10 "$BINTANA_CORE" \
+        tests/headless/projects/window >/dev/null 2>"$tmp/$host.err"
+    rc=$?
+    if [[ $rc -ne 2 ]] || ! grep -q "console host" "$tmp/$host.err"; then
+        echo "a graphical host that is the core again ($host) did not stop (exit $rc):" >&2
+        cat "$tmp/$host.err" >&2
+        loop_ok=0
+        fail=1
+    fi
+done
+[[ $loop_ok == 1 ]] && echo "the dispatch never runs the console host again"
+
 if command -v ldd >/dev/null; then
     if ldd "$BINTANA_CORE" | grep -Eiq 'libgtk|libgtksource|libvte'; then
         echo "the core host links a toolkit:" >&2

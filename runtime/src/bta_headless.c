@@ -1645,15 +1645,32 @@ static bool option_takes_value(const char *word)
  * host would exec it again, forever, and that includes a `BINTANA_GUI` that
  * names it by mistake.
  */
+/* A path with its symbolic links followed, as `/proc/self/exe` answers this
+ * process's own; the path as given when it cannot be resolved (a host that is
+ * not there is `exec`'s sentence to say). `g_canonicalize_filename` tidies a
+ * path and follows no link, so a `bintana-gui` that is a link to `bintana`
+ * compared unequal and was exec'd -- this process again, forever. */
+static char *resolved(const char *path)
+{
+    char *real = realpath(path, NULL);
+    char *out  = g_strdup(real ? real : path);
+
+    free(real);
+    return out;
+}
+
 static char *find_gui_host(void)
 {
     char *self = bta_exe_path();
     const char *env = g_getenv("BINTANA_GUI");
 
     if (env && *env) {
-        char *gui = g_canonicalize_filename(env, NULL);
+        char *gui  = g_canonicalize_filename(env, NULL);
+        char *real = resolved(gui);
+        bool  same = self && !g_strcmp0(real, self);
 
-        if (self && !g_strcmp0(gui, self)) {
+        g_free(real);
+        if (same) {
             fprintf(stderr, "bintana: BINTANA_GUI names this console "
                             "host; it needs the graphical one\n");
             g_free(gui);
@@ -1666,10 +1683,12 @@ static char *find_gui_host(void)
 
     if (self) {
         char *bin = g_path_get_dirname(self);
-        char *gui = g_build_filename(bin, "bintana-gui", NULL);
+        char *gui  = g_build_filename(bin, "bintana-gui", NULL);
+        char *real = resolved(gui);
+        bool  same = !g_strcmp0(real, self);
 
-        if (g_file_test(gui, G_FILE_TEST_IS_EXECUTABLE) &&
-            g_strcmp0(gui, self) != 0) {
+        g_free(real);
+        if (g_file_test(gui, G_FILE_TEST_IS_EXECUTABLE) && !same) {
             g_free(bin);
             g_free(self);
             return gui;
@@ -1697,7 +1716,24 @@ static int exec_gui_lead(const char *gui, const char *lead,
     for (int i = 0; i < nwords; i++)
         args[1 + extra + i] = words[i];
 
+    /*
+     * **A dispatched process carries a mark**, and the graphical host clears
+     * it as it starts (main.c). Arriving here with the mark still set means
+     * the "graphical host" ran this console host again -- a script around
+     * `bintana`, which no path comparison can see through -- and the next
+     * `exec` would be the same loop, forever. It stops with a sentence.
+     */
+    if (g_getenv("BINTANA_DISPATCHED")) {
+        fprintf(stderr, "bintana: the graphical host %s started the console "
+                        "host again; BINTANA_GUI, or bintana-gui beside this "
+                        "binary, must be the graphical host\n", gui);
+        g_free(args);
+        return 2;
+    }
+    g_setenv("BINTANA_DISPATCHED", "1", TRUE);
+
     execv(gui, args);
+    g_unsetenv("BINTANA_DISPATCHED");
     fprintf(stderr, "bintana: cannot run the graphical host %s: %s\n",
             gui, g_strerror(errno));
     g_free(args);

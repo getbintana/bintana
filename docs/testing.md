@@ -847,7 +847,10 @@ the core host has no toolkit even for a `main`. `window` declares `startup`:
 the test writes a fake graphical host, points `BINTANA_GUI` at it, and holds
 the dispatch to the words it was given and to the host's own exit status; a
 `main` run with the same fake must not dispatch at all, and a
-`BINTANA_GUI` that does not exist must be a sentence and exit 2. The console
+`BINTANA_GUI` that does not exist must be a sentence and exit 2. A
+`BINTANA_GUI` that is the core again -- a symbolic link to it, or a script that
+runs it -- must stop with 2 and a sentence within ten seconds; both used to
+loop forever. The console
 run costs **16.0 MB against 42.5 MB** on the same fixture, and the
 `Drawing` one **33.0 MB against 56.0 MB** (`RelWithDebInfo`, 2026-11-13).
 

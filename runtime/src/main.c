@@ -222,6 +222,16 @@ int main(int argc, char **argv)
      */
     setlocale(LC_ALL, "");
 
+    /*
+     * The console host marks the environment before it execs this one
+     * (bta_headless.c), and refuses to dispatch again while the mark is set:
+     * that is how a "graphical host" that is really `bintana` again stops
+     * instead of looping. Arriving here means the dispatch worked, so the mark
+     * goes -- or a project this host runs, or the IDE, starting `bintana`
+     * with `Exec` would be refused for a loop that is not there.
+     */
+    g_unsetenv("BINTANA_DISPATCHED");
+
 #ifdef G_OS_WIN32
     /*
      * And the console's own code page, which is not UTF-8 by default: without
