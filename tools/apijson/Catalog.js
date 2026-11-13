@@ -176,7 +176,7 @@ function apiWidgets(root) {
  *
  * **A name with no members is not part of the surface**: the language's own
  * builtins (`Math`, `JSON`, `Map`) and the helpers the prelude installs
- * (`defaultsFor`, `applyNode`) are names on the global object with nothing a
+ * (`defaultsFor`) are names on the global object with nothing a
  * caller may write, and the scalar globals (`BTA_VERSION`) are not objects at
  * all.  What is left is what an application can call, and `tests/api` asks the
  * same question of the same list.

@@ -21,6 +21,20 @@
  * and decimals.
  */
 "use strict";
+
+/*
+ * **The whole file is one block**, and that is what keeps its helpers to
+ * itself. In strict code a `function`, `const`, `let` or `class` inside a
+ * block is the block's: `mixIn`, `applyNode`, `showError` and thirty others
+ * used to be global names a program could call and the IDE offered to
+ * complete -- the graphical host's `Application.Globals()` listed them and the
+ * console host's `check` did not know them. What this file publishes it
+ * publishes by assignment (`Widget.prototype.Serialize = ...`), and the three
+ * functions C calls by name are handed to C at the end (`formsHooks`). The
+ * body is not indented one level for the block: it would rewrite every line's
+ * history for a brace.
+ */
+{
 /*
  * A control's own bookkeeping, kept **off** the control.
  *
@@ -2035,4 +2049,14 @@ function rememberWindow(form, what, width, height) {
         if (any) saved.splits = splits;
         Settings.Set(key, saved);
     }
+}
+
+/*
+ * The three functions C calls by name -- the error window, the print preview
+ * and the window a form remembers -- handed over once, here, instead of left
+ * on the global object for anybody to call or replace. `formsHooks` is a
+ * hatch the runtime installs before this file and deletes with the others
+ * (`bta_close_hatches`).
+ */
+formsHooks({ showError, showPrintPreview, rememberWindow });
 }

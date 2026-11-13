@@ -115,9 +115,8 @@ static void form_remember(BtaWidget *w, const char *what, int cw, int ch)
     if (!form_remembers(w))
         return;
 
-    JSContext *ctx    = w->ctx;
-    JSValue    global = JS_GetGlobalObject(ctx);
-    JSValue    fn     = JS_GetPropertyStr(ctx, global, "rememberWindow");
+    JSContext *ctx = w->ctx;
+    JSValue    fn  = bta_forms_hook(ctx, "rememberWindow");
 
     if (JS_IsFunction(ctx, fn)) {
         JSValue argv[4] = { JS_DupValue(ctx, w->self), JS_NewString(ctx, what),
@@ -139,7 +138,6 @@ static void form_remember(BtaWidget *w, const char *what, int cw, int ch)
             JS_FreeValue(ctx, argv[i]);
     }
     JS_FreeValue(ctx, fn);
-    JS_FreeValue(ctx, global);
 }
 
 /* `Application.Quit` closes nothing, so the windows still up are written down

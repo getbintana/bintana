@@ -730,7 +730,9 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   the controls an application uses -- a generic title, a header with the
   message, the backtrace apart in a monospace `TextEditor`, **Copy** (which
   copies the message and the stack and says *Copied*) beside **Close**, which is
-  also Escape -- and `show_error_window` in `bta_runtime.c` calls it by name.
+  also Escape -- and `show_error_window` in `bta_runtime.c` calls it through
+  `bta_forms_hook`: forms.js hands it over with `formsHooks`, and it is no
+  longer a global name.
   Two things hold it together. **It is one at a time in JavaScript**
   (`errorWindowOpen`, put down by the form's `Close`), because `reporting_error`
   in C is down again the moment the call returns; a handler that throws on a

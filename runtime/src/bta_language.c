@@ -396,11 +396,14 @@ void bta_close_hatches(JSContext *ctx)
      * so have no row in the table above: where a class's `.record` shape is
      * declared, and what a bare name resolves to.  Gone from here on, which is
      * what keeps them out of `Application.Globals()` and out of the published
-     * surface.
+     * surface. `formsHooks` is the graphical host's: the door forms.js hands C
+     * its three hooks through, and a host that has no forms.js deletes a name
+     * that is not there, which is not an error.
      */
     delete_named(ctx, global, "recordFile");
     delete_named(ctx, global, "classOfName");
     delete_named(ctx, global, "strictSeal");
+    delete_named(ctx, global, "formsHooks");
 
     JS_FreeValue(ctx, global);
 }

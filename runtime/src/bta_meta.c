@@ -52,7 +52,8 @@ static const char meta_prelude_shim[] =
     "class FormPart {}\n"
     "function defaultsFor() { return {}; }\n"
     "function sameValue(a, b) { return a === b; }\n"
-    "function plainData() { return true; }\n";
+    "function plainData() { return true; }\n"
+    "function formsHooks() {}\n";
 
 /* ------------------------------------------------------ what the rows reach */
 

@@ -888,3 +888,16 @@ before any line runs -- no error, no warning. A `sameValue` added for
 default; the failures surfaced in `report` and `widgets`, far from the change.
 `tests/api.sh` now counts the prelude's top-level names and refuses one
 declared twice. Name a helper for what it compares, not for comparing.
+
+**forms.js is one block now** (2026-11-13), so its helpers are its own: a
+`function` in a strict block is the block's, and thirty-one names --
+`mixIn`, `applyNode`, `showError` and the rest -- stopped being globals a
+program could call, replace or be offered by completion. `rad.js` is still one
+scope with the program. What forms.js publishes it publishes by assignment;
+the three functions C calls (`showError`, `showPrintPreview`,
+`rememberWindow`) reach C through `formsHooks`, a hatch `bta_close_hatches`
+deletes, and C asks `bta_forms_hook(ctx, name)`. **A new helper C must call
+goes in that object**, not on the global object. The symbol pass still reads
+the block's classes and prototype assignments, so `Widget.Members` keeps
+their `Doc`; it no longer reports the block's plain functions, which are
+not members.

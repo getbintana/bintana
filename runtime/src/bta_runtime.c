@@ -86,13 +86,50 @@ static void on_error_dismissed(GObject *src, GAsyncResult *res, gpointer data)
 }
 
 
+/*
+ * The functions forms.js hands C, because C calls them by name: the error
+ * window, the print preview and the window a form remembers. They used to be
+ * looked up on the global object, which is why they had to be global -- and
+ * so did thirty other helpers forms.js declared beside them. forms.js is one
+ * block now and passes these three through `formsHooks`, which the hatches
+ * delete; the object is held here until the context goes (`bta_app_free`).
+ */
+static JSValue forms_hooks;
+static bool    forms_hooked;
+
+static JSValue js_forms_hooks(JSContext *ctx, JSValueConst this_val,
+                              int argc, JSValueConst *argv)
+{
+    (void)this_val;
+    if (argc < 1 || !JS_IsObject(argv[0]))
+        return JS_ThrowTypeError(ctx, "formsHooks expects an object");
+    if (forms_hooked)
+        JS_FreeValue(ctx, forms_hooks);
+    forms_hooks  = JS_DupValue(ctx, argv[0]);
+    forms_hooked = true;
+    return JS_UNDEFINED;
+}
+
+JSValue bta_forms_hook(JSContext *ctx, const char *name)
+{
+    if (!forms_hooked)
+        return JS_UNDEFINED;
+    return JS_GetPropertyStr(ctx, forms_hooks, name);
+}
+
+static void forms_hooks_cleanup(JSContext *ctx)
+{
+    if (forms_hooked)
+        JS_FreeValue(ctx, forms_hooks);
+    forms_hooked = false;
+}
+
 /* Asks `forms.js` for its window.  False when there is none or it threw, and
  * the throw is consumed -- the alert below is the answer then, and an error in
  * the error window must not become a second one. */
 static bool show_error_window(JSContext *ctx, const char *msg, const char *stack)
 {
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue fn     = JS_GetPropertyStr(ctx, global, "showError");
+    JSValue fn     = bta_forms_hook(ctx, "showError");
     bool    shown  = false;
 
     if (JS_IsFunction(ctx, fn)) {
@@ -117,7 +154,6 @@ static bool show_error_window(JSContext *ctx, const char *msg, const char *stack
         JS_FreeValue(ctx, argv[1]);
     }
     JS_FreeValue(ctx, fn);
-    JS_FreeValue(ctx, global);
     return shown;
 }
 
@@ -1079,6 +1115,11 @@ static bool install_globals(BtaApp *app)
         bta_dump_error(ctx);
     JS_FreeValue(ctx, r);
 
+    /* forms.js keeps its helpers in a block and hands C the three it calls by
+     * name through this hatch, which `bta_close_hatches` takes away. */
+    JS_SetPropertyStr(ctx, global, "formsHooks",
+                      JS_NewCFunction(ctx, js_forms_hooks, "formsHooks", 1));
+
     r = JS_Eval(ctx, bta_forms_js, strlen(bta_forms_js),
                 "<forms.js>", JS_EVAL_TYPE_GLOBAL | JS_EVAL_FLAG_STRICT);
     if (JS_IsException(r))
@@ -1291,6 +1332,7 @@ void bta_app_free(BtaApp *app)
      * before the context goes, or JS_FreeRuntime asserts. */
     bta_popover_cleanup();
     bta_forms_cleanup();
+    forms_hooks_cleanup(app->ctx);
     bta_locale_cleanup();
     bta_widgets_cleanup(app->ctx);
     JS_FreeContext(app->ctx);

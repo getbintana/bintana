@@ -290,7 +290,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   *Preview* handed a temporary PDF to Evince or Papers, and on a machine with
   neither the failed launch took the run down with a cairo assertion in GTK's
   cleanup. `Printer.Preview(area, [setup], [cb])` is a window of `forms.js`
-  (`showPrintPreview`, looked up by name as `showError` is) that draws each
+  (`showPrintPreview`, handed to C through `formsHooks` as `showError` is) that draws each
   page with `Painter.Render` -- the control's own `DrawPage`, the code that
   prints it -- with the pages its `Paginate` answers on the printable area GTK
   works out (`gtk_page_setup_get_page_width`: A4 is 559 x 784 pt inside the

@@ -6379,19 +6379,22 @@ class Form1 extends Form {
         const second = c.PropertyNames().join(",");
         eq("and the second answer is the same", second, first);
 
-        /* **A prototype that changes is not served from the cache.**  The
-         * runtime's own way of changing one is a class of accessors mixed
-         * into it -- which is what the prelude does at load time, and the
-         * only way a prototype changes while the program runs. */
-        class CacheExtra {
-            get Beta() { return this.__beta; }
-            set Beta(v) { this.__beta = v; }
-        }
-        mixIn(CacheExtra, CacheProbe);
+        /* **A prototype that changes is not served from the cache**, which
+         * is validated by how many names the prototype has. The prelude adds
+         * accessors at load time; a program cannot (`Object.defineProperty`
+         * is gone, and forms.js's `mixIn` is its own since forms.js is one
+         * block), so what a program can do is add a plain name -- which
+         * moves the count, rebuilds the entry, and must leave the answer
+         * right: the new name is no property, and the old ones are still
+         * there. */
+        CacheProbe.prototype.Gamma = 1;
 
-        check("a member mixed into a prototype is seen at once",
-              c.PropertyNames().includes("Beta"),
+        check("a name added to a prototype rebuilds the answer, not breaks it",
+              c.PropertyNames().includes("Alpha") &&
+              !c.PropertyNames().includes("Gamma"),
               JSON.stringify(c.PropertyNames()));
+        check("and the prelude's helpers are not names a program can call",
+              typeof mixIn === "undefined" && typeof showError === "undefined");
     }
 
     testDataBinding() {

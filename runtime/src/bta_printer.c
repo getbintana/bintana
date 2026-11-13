@@ -656,8 +656,8 @@ static GtkPrintOperation *print_prepare(JSContext *ctx, JSValueConst area,
  * writes a PDF and opens Evince or Papers, and on a machine with neither the
  * launch failed and took the program down with a cairo assertion in GTK's
  * cleanup (`docs/agents/drawing.md`). So the preview is this runtime's: a
- * window of `forms.js` (`showPrintPreview`, looked up by name as `showError`
- * is) that draws each page with `Painter.Render` -- the control's own
+ * window of `forms.js` (`showPrintPreview`, which forms.js hands C through
+ * `formsHooks`, as it does `showError`) that draws each page with `Painter.Render` -- the control's own
  * `DrawPage`, the code that prints it -- with the pages, a zoom and *Print…*.
  *
  * Two ways in, one window: `Printer.Preview(area, [setup], [cb])` from a
@@ -707,10 +707,8 @@ static JSValue preview_open(JSContext *ctx, BtaWidget *w, JSValueConst area,
                                            "threw");
     }
 
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue fn     = JS_GetPropertyStr(ctx, global, "showPrintPreview");
+    JSValue fn = bta_forms_hook(ctx, "showPrintPreview");
 
-    JS_FreeValue(ctx, global);
     if (!JS_IsFunction(ctx, fn)) {
         JS_FreeValue(ctx, fn);
         return JS_ThrowPlainError(ctx, "Printer.Preview: the preview window is "

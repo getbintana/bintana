@@ -950,6 +950,9 @@ JSValue bta_application_has_command(JSContext *ctx, JSValueConst this_val,
                                     int argc, JSValueConst *argv);
 JSValue bta_application_globals(JSContext *ctx, JSValueConst this_val,
                                 int argc, JSValueConst *argv);
+/* A function forms.js handed C through `formsHooks` (`showError`,
+ * `showPrintPreview`, `rememberWindow`), or undefined. bta_runtime.c. */
+JSValue bta_forms_hook(JSContext *ctx, const char *name);
 JSValue bta_application_uses(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv);
 /*
