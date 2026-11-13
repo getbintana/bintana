@@ -1,0 +1,7 @@
+{
+  "name": "headless-transitive",
+  "main": "Main",
+  "description": "Names only report, and uses ChartDocument, which report's own uses brings: the check must see it as the run does",
+  "uses": ["report"],
+  "sources": ["Main.js"]
+}

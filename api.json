@@ -13516,6 +13516,15 @@
           "Native": true
         },
         {
+          "Name": "Uses",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "([project])",
+          "Returns": "string[]",
+          "Doc": "the libraries a run of that project loads, as directories, dependencies first -- what `uses` resolves to, **a library's own `uses` included**, out of the same walk the run makes. With no project, the running one; `[]` for a project that uses nothing. A library that is not installed, or a cycle, throws the sentence the run would stop with",
+          "Native": true
+        },
+        {
           "Name": "Version",
           "Kind": "Property",
           "Params": -1,

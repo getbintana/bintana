@@ -1576,6 +1576,16 @@ static bool install_globals(BtaApp *app)
      */
     JS_SetPropertyStr(ctx, application, "Libraries",
                       JS_NewCFunction(ctx, bta_application_libraries, "Libraries", 1));
+    /* Uses([project]) -> string[]
+     *   the libraries a run of that project loads, as directories,
+     *   dependencies first -- what `uses` resolves to, **a library's own
+     *   `uses` included**, out of the same walk the run makes. With no
+     *   project, the running one; `[]` for a project that uses nothing. A
+     *   library that is not installed, or a cycle, throws the sentence the
+     *   run would stop with
+     */
+    JS_SetPropertyStr(ctx, application, "Uses",
+                      JS_NewCFunction(ctx, bta_application_uses, "Uses", 1));
     /* Globals() -> string[]
      *   every name on the global object: the runtime's own, the ones a
      *   library installed, and the JavaScript builtins -- `Math`, `JSON`,

@@ -828,15 +828,30 @@ export class Classes {
      * the program and prints every path it tried, which is a better place to say
      * it than a palette with one tab missing.
      */
+    /*
+     * **Every library a run loads**, a library's own `uses` included:
+     * `Application.Uses` is the run's own walk. Reading the project's list
+     * here stopped at the first level, so a project that names `report` had
+     * no `Chart` in its palette though `charts` is loaded with it. A library
+     * that is not installed makes the walk throw; then the names that do
+     * resolve are offered, as before.
+     */
     resolveLibraries() {
-        const config = this.ide.manifest.read();
-        const out    = [];
+        const project = this.ide.project;
 
-        for (const name of (config ? config.Uses : []) || []) {
-            const dir = Application.LibraryPath(name, this.ide.project);
-            if (dir) out.push({ name, dir });
+        try {
+            return Application.Uses(project)
+                       .map((dir) => ({ name: File.Name(dir), dir }));
+        } catch (e) {
+            const config = this.ide.manifest.read();
+            const out    = [];
+
+            for (const name of (config ? config.Uses : []) || []) {
+                const dir = Application.LibraryPath(name, project);
+                if (dir) out.push({ name, dir });
+            }
+            return out;
         }
-        return out;
     }
 
     /* Whether a project-relative file is inside one of them. */

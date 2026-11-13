@@ -944,6 +944,8 @@ JSValue bta_application_library_path(JSContext *ctx, JSValueConst this_val,
                                      int argc, JSValueConst *argv);
 JSValue bta_application_libraries(JSContext *ctx, JSValueConst this_val,
                                   int argc, JSValueConst *argv);
+JSValue bta_application_uses(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv);
 /*
  * A fatal error raised from C, before any project code has run: it always goes
  * to stderr, and -- when there is a display and an application to own it -- into
@@ -1014,6 +1016,9 @@ void bta_library_candidates(const char *project, GPtrArray *out);
 char *bta_library_resolve(const char *project, const char *name, GString *tried);
 /* What `uses` named, resolved; a name that is nowhere stops the program. */
 GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg);
+/* The same walk, answering NULL and the sentence instead of stopping. */
+GPtrArray *bta_project_libs_or_error(JSContext *ctx, const char *dir,
+                                     JSValueConst cfg, char **error);
 /* The project's files in load order, a library's sources in front of them. */
 GPtrArray *bta_project_sources(JSContext *ctx, const char *dir, GPtrArray *libs,
                                JSValueConst cfg);

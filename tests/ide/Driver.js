@@ -12123,6 +12123,28 @@ function* p_settings(ide) {
           ide.components.some((c) => c.library === "charts"),
           ide.components.map((c) => `${c.library}:${c.name}`).join(","));
 
+    /* A library's own `uses` reaches the palette too, because the palette asks
+     * `Application.Uses` -- the run's walk -- and not the manifest's list:
+     * `report` names `charts`, so a project that ticks only `report` gets
+     * `Chart` as well. It used to stop at the first level. */
+    ide.MnuProjectSettings.Click();
+    const pdR = ide.projectEditor;
+    pdR.useBoxes.find((b) => b.Text === "charts").Active = false;
+    pdR.useBoxes.find((b) => b.Text === "report").Active = true;
+    pdR.BtnPrOk_Click();
+    yield* settled(ide);
+    check("a library a used library uses is on the palette too",
+          ide.components.some((c) => c.library === "report") &&
+          ide.components.some((c) => c.library === "charts"),
+          ide.components.map((c) => `${c.library}:${c.name}`).join(","));
+
+    ide.MnuProjectSettings.Click();
+    const pdC = ide.projectEditor;
+    pdC.useBoxes.find((b) => b.Text === "report").Active = false;
+    pdC.useBoxes.find((b) => b.Text === "charts").Active = true;
+    pdC.BtnPrOk_Click();
+    yield* settled(ide);
+
     /*
      * A project that names a library nothing here has. It is shown, ticked, and
      * says it is missing -- the same argument the startup drop-down makes for a

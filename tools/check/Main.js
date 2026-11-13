@@ -118,11 +118,22 @@ function main() {
             .filter((s) => typeof s === "string" && File.IsExtension(s, "js"))
             .map((s) => File.Absolute(File.Join(root, s)))
             .filter((p) => !File.Within(p, root) && File.Exists(p)));
-    if (Array.isArray(manifest.uses))
-        for (const lib of manifest.uses) {
-            const dir = typeof lib === "string" ? Application.LibraryPath(lib, root) : "";
-            if (dir) readAll(Directory.Files(dir, { Pattern: "*.js", Recursive: true }));
-        }
+    /* The libraries a run loads, a library's own `uses` included -- the
+     * runtime's walk, not a second one here. This read only the project's
+     * own list, so `uses: ["report"]` and a `ChartDocument` (from `charts`,
+     * which `report` names) was "not declared" for a program that runs. A
+     * library that is not installed makes the walk throw; that is the
+     * manifest check's finding, and the check then reads what does resolve. */
+    let libraries;
+    try {
+        libraries = Application.Uses(root);
+    } catch (e) {
+        libraries = (Array.isArray(manifest.uses) ? manifest.uses : [])
+            .map((lib) => typeof lib === "string" ? Application.LibraryPath(lib, root) : "")
+            .filter((dir) => dir);
+    }
+    for (const dir of libraries)
+        readAll(Directory.Files(dir, { Pattern: "*.js", Recursive: true }));
     const answers = Owners.answers(program);
 
     const names   = new Names({

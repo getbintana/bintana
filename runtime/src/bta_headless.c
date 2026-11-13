@@ -651,6 +651,8 @@ static void install_application(JSContext *ctx, JSValueConst global,
     JS_SetPropertyStr(ctx, application, "Libraries",
                       JS_NewCFunction(ctx, bta_application_libraries,
                                       "Libraries", 1));
+    JS_SetPropertyStr(ctx, application, "Uses",
+                      JS_NewCFunction(ctx, bta_application_uses, "Uses", 1));
     JS_SetPropertyStr(ctx, application, "HasCommand",
                       JS_NewCFunction(ctx, js_application_has_command,
                                       "HasCommand", 1));

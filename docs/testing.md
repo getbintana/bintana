@@ -762,6 +762,14 @@ reads the bundled CSV, groups `Decimal` amounts, draws a `ChartDocument` and
 writes a PDF with `ReportDocument`. The script runs it with no display and
 checks the PDF's magic and, when `pdftotext` is present, its rows.
 
+**`bintana check` and the IDE's palette see what a run loads**:
+`tests/headless/projects/transitive` names only `report` and writes
+`ChartDocument`, which `charts` brings because `report` names it. Both hosts'
+`check` must report nothing, and `Application.Uses()` must answer `drawing
+charts report`, in load order. In `tests/ide`, ticking only `report` puts
+`charts`' components on the palette. Both read `Application.Uses` -- the run's
+walk -- and both stopped at the project's own list before.
+
 **A name is one library per program**: `tests/headless/projects/libshadow`
 carries its own `inner` and uses a shared `outer` (from
 `tests/headless/libpath`, through `BINTANA_LIB_PATH`) that names `inner` too.

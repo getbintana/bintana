@@ -348,19 +348,23 @@ typedef struct {
     GPtrArray  *out;
     GHashTable *seen;
     GHashTable *visiting;
+    char       *error;      /* the first refusal; the walk stops at it */
 } LibWalk;
 
 static void lib_walk(JSContext *ctx, const char *base, const char *name,
                      LibWalk *walk)
 {
+    if (walk->error)
+        return;
+
     GString *tried = g_string_new(NULL);
     char    *lib   = bta_library_resolve(base, name, tried);
 
     if (!lib) {
-        fprintf(stderr, "bintana: project.btp uses \"%s\", which is not "
-                        "in any of:%s\n", name, tried->str);
+        walk->error = g_strdup_printf("project.btp uses \"%s\", which is not "
+                                      "in any of:%s", name, tried->str);
         g_string_free(tried, TRUE);
-        exit(2);
+        return;
     }
     g_string_free(tried, TRUE);
 
@@ -372,10 +376,10 @@ static void lib_walk(JSContext *ctx, const char *base, const char *name,
         return;
     }
     if (g_hash_table_contains(walk->visiting, canon)) {
-        fprintf(stderr, "bintana: library \"%s\" is part of a uses cycle "
-                        "(it reaches itself again)\n", canon);
+        walk->error = g_strdup_printf("library \"%s\" is part of a uses cycle "
+                                      "(it reaches itself again)", canon);
         g_free(canon);
-        exit(2);
+        return;
     }
 
     /* Its own manifest may name more libraries. Parsed here rather than
@@ -427,11 +431,20 @@ static void lib_walk(JSContext *ctx, const char *base, const char *name,
     g_free(canon);
 }
 
-GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg)
+/*
+ * The libraries a run of the project at `dir` loads, dependencies first, or
+ * NULL with `*error` set (freed by the caller) for a name that is not
+ * installed or a cycle. `bta_project_libs` is the run's: it says the sentence
+ * and stops the program, since a library half the forms refer to is not
+ * something to carry on without. `Application.Uses` throws it instead.
+ */
+GPtrArray *bta_project_libs_or_error(JSContext *ctx, const char *dir,
+                                     JSValueConst cfg, char **error)
 {
     GPtrArray *out = g_ptr_array_new_with_free_func(g_free);
     JSValue    arr = JS_GetPropertyStr(ctx, cfg, "uses");
 
+    *error = NULL;
     if (!JS_IsArray(arr)) {
         JS_FreeValue(ctx, arr);
         return out;
@@ -461,7 +474,25 @@ GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg)
     JS_FreeValue(ctx, arr);
     g_hash_table_unref(walk.seen);
     g_hash_table_unref(walk.visiting);
+    if (walk.error) {
+        g_ptr_array_unref(out);
+        *error = walk.error;
+        return NULL;
+    }
     return out;
+}
+
+GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg)
+{
+    char      *error = NULL;
+    GPtrArray *libs  = bta_project_libs_or_error(ctx, dir, cfg, &error);
+
+    if (!libs) {
+        fprintf(stderr, "bintana: %s\n", error);
+        g_free(error);
+        exit(2);
+    }
+    return libs;
 }
 
 /*
@@ -717,5 +748,73 @@ JSValue bta_application_libraries(JSContext *ctx, JSValueConst this_val,
     JSValue r    = JS_Call(ctx, sort, out, 0, NULL);
     JS_FreeValue(ctx, r);
     JS_FreeValue(ctx, sort);
+    return out;
+}
+
+/*
+ * `Application.Uses([project])`: the libraries a run of that project loads,
+ * as directories, dependencies first -- the list `uses` resolves to, out of
+ * the same walk the run makes, a library's own `uses` included.
+ *
+ * It exists because `bintana check` and the IDE's palette read a project's
+ * `uses` themselves and stopped at the first level, while a run loads the
+ * whole graph: a project that names only `report` got `ChartDocument` from
+ * `charts` at run time and "not declared" from the check. A second walk in
+ * JavaScript would be a second answer; this is the one the run gives.
+ *
+ * With no project, the running one. A project with no `project.btp`, or no
+ * `uses`, answers `[]`; a library that is not installed and a cycle are the
+ * run's own sentences, thrown rather than printed.
+ */
+JSValue bta_application_uses(JSContext *ctx, JSValueConst this_val,
+                             int argc, JSValueConst *argv)
+{
+    (void)this_val;
+    char *dir = NULL;
+
+    if (argc > 0 && !JS_IsUndefined(argv[0]) && !JS_IsNull(argv[0])) {
+        const char *path = bta_file_path(ctx, argv[0], "Application.Uses");
+        if (!path)
+            return JS_EXCEPTION;
+        dir = bta_project_dir(path);
+        JS_FreeCString(ctx, path);
+    } else {
+        BtaApp *app = bta_current_app();
+        if (!app || !app->dir)
+            return JS_ThrowTypeError(ctx, "Application.Uses() needs a project "
+                                          "when no project is running");
+        dir = g_strdup(app->dir);
+    }
+
+    char *manifest = bta_project_manifest(dir);
+    char *text     = g_file_test(manifest, G_FILE_TEST_IS_REGULAR)
+                   ? bta_read_file(manifest, NULL) : NULL;
+    g_free(manifest);
+    if (!text) {
+        g_free(dir);
+        return JS_NewArray(ctx);
+    }
+
+    JSValue cfg = JS_ParseJSON(ctx, text, strlen(text), "project.btp");
+    g_free(text);
+    if (JS_IsException(cfg)) {
+        g_free(dir);
+        return JS_EXCEPTION;
+    }
+
+    char      *error = NULL;
+    GPtrArray *libs  = bta_project_libs_or_error(ctx, dir, cfg, &error);
+    JS_FreeValue(ctx, cfg);
+    g_free(dir);
+    if (!libs) {
+        JSValue e = bta_throw_text(ctx, "Application.Uses: %s", error);
+        g_free(error);
+        return e;
+    }
+
+    JSValue out = JS_NewArray(ctx);
+    for (guint i = 0; i < libs->len; i++)
+        JS_SetPropertyUint32(ctx, out, i, JS_NewString(ctx, libs->pdata[i]));
+    g_ptr_array_unref(libs);
     return out;
 }

@@ -387,6 +387,27 @@ for host in "$BINTANA_CORE" "$BINTANA"; do
 done
 [[ $shadow_ok == 1 ]] && echo "a library's uses finds the project's own copy"
 
+# `bintana check` sees the libraries a run loads, through `Application.Uses`:
+# a project that names only `report` and writes `ChartDocument` (from
+# `charts`, which `report` names) runs, and its check must not say the name is
+# undeclared. It read the project's own list and stopped at the first level.
+transitive_ok=1
+for host in "$BINTANA_CORE" "$BINTANA"; do
+    if ! out=$("$host" check tests/headless/projects/transitive 2>&1) ||
+       [[ -n $out ]]; then
+        echo "$host's check disagrees with the run about a library's uses:" >&2
+        echo "$out" >&2
+        transitive_ok=0
+        fail=1
+    fi
+done
+if [[ $("$BINTANA_CORE" tests/headless/projects/transitive 2>&1) != "Bar drawing charts report" ]]; then
+    echo "Application.Uses did not answer the run's libraries in order" >&2
+    transitive_ok=0
+    fail=1
+fi
+[[ $transitive_ok == 1 ]] && echo "check and Application.Uses follow a library's own uses"
+
 # `Painter.Color`'s syntax is the runtime's, the same in both hosts and on any
 # GTK: seventy-eight strings, each taken or refused and drawn, printed as which
 # earlier sample drew the same pixels. `expected.txt` is GDK's answer on
