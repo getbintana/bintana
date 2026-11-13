@@ -867,7 +867,10 @@ It installs the build into a staging prefix under `/tmp` (`cmake --install
 by a path written down at configure time), checks that both project trees came
 out whole -- and that the installed `bintana check` finds its own console project
 and library one hop from the binary, fails a broken project with 1, answers the
-same findings as JSON, and leaves a clean one at 0 with no output -- and then
+same findings as JSON, and leaves a clean one at 0 with no output; that the
+installed core loads the installed drawing module and writes the installed
+ledger example's PDF, which is what proves the module is where this build's
+libdir put it -- and then
 **starts the installed IDE through the installed launcher** and asks the display
 what appeared.
 

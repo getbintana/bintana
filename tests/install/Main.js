@@ -108,6 +108,7 @@ function Main() {
 
     contents(prefix);
     checkTool(prefix, work);
+    drawsInstalled(prefix, work);
     pluginDev(prefix, work);
     launcher(prefix);
     entry(prefix);
@@ -253,6 +254,30 @@ function checkTool(prefix, work) {
                          { Timeout: 60000, Stderr: "separate" });
     eq("the installed check passes a clean project", ok.ExitCode, 0);
     eq("...and prints nothing", ok.Output.trim(), "");
+}
+
+/* -------------------------------------------------------------- drawing
+ *
+ * The drawing module is found where this build installed it -- the hop from
+ * bindir to the configured libdir, which CMake works out -- and nowhere it
+ * guesses. Finding the file in the tree (`contents`) does not prove the core
+ * loads it: a Debian package put it in `lib/x86_64-linux-gnu/bintana`, where
+ * the loader never looked, and every `main` that drew stopped. So the
+ * installed core runs the installed ledger example, which draws a chart into
+ * a PDF, and the PDF must be there.
+ */
+function drawsInstalled(prefix, work) {
+    const pdf = File.Join(work, "ledger.pdf");
+    const r   = Exec.Wait([File.Join(prefix, "bin", "bintana"),
+                           File.Join(prefix, "share", "bintana", "examples", "ledger"),
+                           pdf],
+                          { Timeout: 60000, Stderr: "separate" });
+
+    check("the installed core loads the installed drawing module",
+          r.ExitCode === 0, r.Errors || r.Output);
+    check("...and the ledger it draws is a PDF",
+          File.Exists(pdf) && File.LoadBytes(pdf).Slice(0, 4).ToText() === "%PDF",
+          File.Exists(pdf) ? "not a PDF" : "no file");
 }
 
 /* -------------------------------------------------------------- plugins

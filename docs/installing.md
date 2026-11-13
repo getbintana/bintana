@@ -113,6 +113,7 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/bin/bintana` | the core runtime: `--version`, `check`, a project's `main` and tests, and dispatch of `startup` |
 | `<prefix>/bin/bintana-gui` | the graphical host: windows, widgets, `forms.js` |
 | `<prefix>/bin/bintana-ide` | a one-line launcher for the IDE, under a name a menu entry can carry |
+| `<prefix>/<libdir>/bintana/bintana-drawing.so` | the drawing half the core loads for a project whose `uses` reaches `drawing`; `<libdir>` is `CMAKE_INSTALL_LIBDIR` (`lib64`, `lib/x86_64-linux-gnu`, ...), and the core looks there and nowhere else, by the hop from `bin` CMake works out |
 | `<prefix>/share/bintana/ide/` | the IDE as the project directory it is |
 | `<prefix>/share/bintana/examples/` | the examples, to open and copy |
 | `<prefix>/share/bintana/lib/` | the shipped libraries, `check` among them |

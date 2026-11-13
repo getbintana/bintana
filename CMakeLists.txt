@@ -851,6 +851,16 @@ configure_file(tools/bintana-ide.in ${CMAKE_BINARY_DIR}/bintana-ide @ONLY)
 
 install(TARGETS ${BTA_GUI_TARGET} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 if(NOT WIN32)
+    # Where the core finds the drawing module once installed: the same hop
+    # from bindir the launcher walks to the IDE, so it survives `--prefix` and
+    # DESTDIR, and it is **the libdir this build was configured with** --
+    # `lib64` on Fedora, `lib/x86_64-linux-gnu` on Debian and Ubuntu. The
+    # loader guessed `lib`, `lib64` and `/usr/lib` before, and a Debian
+    # package's module was in none of them.
+    file(RELATIVE_PATH BTA_BIN_TO_MODULES
+         ${CMAKE_INSTALL_FULL_BINDIR} ${CMAKE_INSTALL_FULL_LIBDIR}/bintana)
+    target_compile_definitions(bintana PRIVATE
+        BTA_BIN_TO_MODULES="${BTA_BIN_TO_MODULES}")
     install(TARGETS bintana RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     install(TARGETS bintana-drawing
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/bintana)

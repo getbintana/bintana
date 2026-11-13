@@ -673,6 +673,16 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   it too. `Text.LineOf` was a copy in the core with the same bare
   `JS_ToInt32` as the graphical one; it is `bta_text_line_of` in `bta_util.c`
   for both, through `bta_to_int`.
+- **The drawing module is found where this build installed it, and only
+  there**: beside the binary (the build tree) and `BTA_BIN_TO_MODULES`, the hop
+  from bindir to `${CMAKE_INSTALL_LIBDIR}/bintana` that CMake computes with
+  `file(RELATIVE_PATH)`, as the launcher's hop to the IDE is. The loader
+  guessed `lib`, `lib64` and `/usr/lib`; Debian and Ubuntu install to
+  `lib/x86_64-linux-gnu`, and every `main` that drew stopped with "not
+  installed" -- reproduced with `-DCMAKE_INSTALL_LIBDIR=lib/x86_64-linux-gnu`
+  and an install to a scratch prefix. `tests/install` now runs the installed
+  core on the installed ledger. The ABI version is one constant in `bta.h`;
+  the loader had a literal `1`.
 - **The core's loop source must not remove itself.** `project_idle` answered
   `G_SOURCE_REMOVE` and the caller removed the same id after the loop: a
   `GLib-CRITICAL` on every run that waited, unseen while nothing but `Network`

@@ -1151,9 +1151,10 @@ static int run_check(int argc, char **argv)
 
 /* --------------------------------------------------------- drawing module */
 
-/* The `.so` that carries cairo, Pango and GdkPixbuf. It is found beside the
- * binary in the build tree, or under the installed `lib` directory. A missing module
- * is not an error: `Drawing` stays the stub the check reads, and a project that
+/* The `.so` that carries cairo, Pango and GdkPixbuf. It is found in two
+ * places and no others: beside the binary (the build tree), and where this
+ * build installs it -- `BTA_BIN_TO_MODULES`, the hop from bindir to the
+ * configured libdir, which CMake works out. A missing module is not an error: `Drawing` stays the stub the check reads, and a project that
  * needs it says so when it uses it. A module that is there but cannot load, or
  * speaks another ABI, is an error. */
 static bool load_drawing_module(JSContext *ctx, JSValue global, bool required)
@@ -1163,32 +1164,35 @@ static bool load_drawing_module(JSContext *ctx, JSValue global, bool required)
 
     if (exe) {
         char *bin = g_path_get_dirname(exe);
-        char *up  = g_path_get_dirname(bin);
 
         g_ptr_array_add(tried, g_build_filename(bin, "bintana-drawing." G_MODULE_SUFFIX, NULL));
-        g_ptr_array_add(tried, g_build_filename(up, "lib", "bintana",
-                                                "bintana-drawing." G_MODULE_SUFFIX, NULL));
-        g_ptr_array_add(tried, g_build_filename(up, "lib64", "bintana",
-                                                "bintana-drawing." G_MODULE_SUFFIX, NULL));
-        g_free(up);
+#ifdef BTA_BIN_TO_MODULES
+        char *dir = g_build_filename(bin, BTA_BIN_TO_MODULES, NULL);
+
+        g_ptr_array_add(tried, g_canonicalize_filename(
+            "bintana-drawing." G_MODULE_SUFFIX, dir));
+        g_free(dir);
+#endif
         g_free(bin);
         g_free(exe);
     }
-    g_ptr_array_add(tried, g_build_filename("/usr", "lib", "bintana",
-                                            "bintana-drawing." G_MODULE_SUFFIX, NULL));
 
     char *path = NULL;
     for (guint i = 0; i < tried->len && !path; i++)
         if (g_file_test(tried->pdata[i], G_FILE_TEST_IS_REGULAR))
             path = g_strdup(tried->pdata[i]);
-    g_ptr_array_unref(tried);
 
     if (!path) {
-        if (required)
+        if (required) {
             fprintf(stderr, "bintana: this project uses \"drawing\", but "
-                            "bintana-drawing.%s is not installed\n", G_MODULE_SUFFIX);
+                            "bintana-drawing.%s is not in any of:\n", G_MODULE_SUFFIX);
+            for (guint i = 0; i < tried->len; i++)
+                fprintf(stderr, "  %s\n", (char *)tried->pdata[i]);
+        }
+        g_ptr_array_unref(tried);
         return !required;
     }
+    g_ptr_array_unref(tried);
 
     GModule *m = g_module_open(path, G_MODULE_BIND_LOCAL);
     if (!m) {
@@ -1211,9 +1215,10 @@ static bool load_drawing_module(JSContext *ctx, JSValue global, bool required)
         return false;
     }
     int abi = ((abi_fn)abi_sym)();
-    if (abi != 1) {
-        fprintf(stderr, "bintana: %s speaks drawing ABI %d, this runtime 1 -- "
-                        "rebuild it with this runtime\n", path, abi);
+    if (abi != BTA_DRAWING_MODULE_ABI) {
+        fprintf(stderr, "bintana: %s speaks drawing ABI %d, this runtime %d -- "
+                        "rebuild it with this runtime\n", path, abi,
+                BTA_DRAWING_MODULE_ABI);
         g_module_close(m);
         g_free(path);
         return false;

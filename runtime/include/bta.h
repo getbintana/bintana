@@ -971,6 +971,12 @@ bool    bta_message_show(int kind, const char *text);
  * `Bitmap`, `Probe`, `PdfDocument` and `Tray`'s refusals, and in the core
  * `Bitmap` only when the drawing module is loaded. */
 void    bta_task_worker_host(JSContext *ctx, JSValueConst global);
+
+/* The drawing module's version (bta_drawing_module.c answers it, the core's
+ * loader compares it). One constant, so moving it cannot leave the two
+ * disagreeing: the loader had its own literal `1`. Move it when the surface
+ * between the core and the module changes incompatibly. */
+#define BTA_DRAWING_MODULE_ABI 1
 void    bta_drain_jobs(JSRuntime *rt);   /* run pending promise callbacks */
 
 /* A Debug line from C, where there is no argv to join: threshold, Handler,

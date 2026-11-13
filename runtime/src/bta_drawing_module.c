@@ -14,9 +14,6 @@
  */
 #include "bta.h"
 
-/* Move it when the surface below changes incompatibly. */
-#define BTA_DRAWING_MODULE_ABI 1
-
 int bta_drawing_module_abi(void)
 {
     return BTA_DRAWING_MODULE_ABI;
