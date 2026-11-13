@@ -819,6 +819,61 @@ JSValue bta_application_uses(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/* A library's parsed project.btp, or JS_UNDEFINED when it has none or it is
+ * not JSON (the walk reports that one). */
+static JSValue library_manifest(JSContext *ctx, const char *dir)
+{
+    char *manifest = bta_project_manifest(dir);
+    char *text     = g_file_test(manifest, G_FILE_TEST_IS_REGULAR)
+                   ? bta_read_file(manifest, NULL) : NULL;
+
+    g_free(manifest);
+    if (!text)
+        return JS_UNDEFINED;
+
+    JSValue cfg = JS_ParseJSON(ctx, text, strlen(text), "library");
+    g_free(text);
+    if (JS_IsException(cfg)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        return JS_UNDEFINED;
+    }
+    return cfg;
+}
+
+/*
+ * The files of the library at `dir` that need a display: `"display"` as a
+ * list of file names, for a library whose document half is everybody's and
+ * whose control is a window project's (`charts`: `["Chart.js"]`). The
+ * console host loads the rest and skips these. Empty when there is no list.
+ */
+GPtrArray *bta_library_display_files(JSContext *ctx, const char *dir)
+{
+    GPtrArray *out = g_ptr_array_new_with_free_func(g_free);
+    JSValue    cfg = library_manifest(ctx, dir);
+    JSValue    v   = JS_IsObject(cfg) ? JS_GetPropertyStr(ctx, cfg, "display")
+                                       : JS_UNDEFINED;
+
+    if (JS_IsArray(v)) {
+        JSValue  lenv = JS_GetPropertyStr(ctx, v, "length");
+        uint32_t n    = 0;
+
+        JS_ToUint32(ctx, &n, lenv);
+        JS_FreeValue(ctx, lenv);
+        for (uint32_t i = 0; i < n; i++) {
+            JSValue     e = JS_GetPropertyUint32(ctx, v, i);
+            const char *s = JS_IsString(e) ? JS_ToCString(ctx, e) : NULL;
+
+            if (s && *s)
+                g_ptr_array_add(out, g_strdup(s));
+            JS_FreeCString(ctx, s);
+            JS_FreeValue(ctx, e);
+        }
+    }
+    JS_FreeValue(ctx, v);
+    JS_FreeValue(ctx, cfg);
+    return out;
+}
+
 /*
  * Whether the library at `dir` declares `"display": true` in its own
  * `project.btp`: its classes are controls or forms, so it is a window
@@ -829,24 +884,11 @@ JSValue bta_application_uses(JSContext *ctx, JSValueConst this_val,
  */
 bool bta_library_needs_display(JSContext *ctx, const char *dir)
 {
-    char *manifest = bta_project_manifest(dir);
-    char *text     = g_file_test(manifest, G_FILE_TEST_IS_REGULAR)
-                   ? bta_read_file(manifest, NULL) : NULL;
-    bool  display  = false;
+    JSValue cfg     = library_manifest(ctx, dir);
+    JSValue v       = JS_IsObject(cfg) ? JS_GetPropertyStr(ctx, cfg, "display")
+                                       : JS_UNDEFINED;
+    bool    display = JS_IsBool(v) && JS_ToBool(ctx, v);
 
-    g_free(manifest);
-    if (!text)
-        return false;
-
-    JSValue cfg = JS_ParseJSON(ctx, text, strlen(text), "library");
-    g_free(text);
-    if (JS_IsException(cfg)) {
-        /* An unreadable manifest is the walk's to report; it loads by path. */
-        JS_FreeValue(ctx, JS_GetException(ctx));
-        return false;
-    }
-    JSValue v = JS_GetPropertyStr(ctx, cfg, "display");
-    display = JS_IsBool(v) && JS_ToBool(ctx, v);
     JS_FreeValue(ctx, v);
     JS_FreeValue(ctx, cfg);
     return display;

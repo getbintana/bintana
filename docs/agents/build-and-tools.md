@@ -563,17 +563,19 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   the core link keeps `--export-dynamic`; it is not the public `bta_plugin.h`
   contract, which cannot carry `Painter`'s class and properties without a second
   implementation.
-- **A library that defines a widget class guards it with `typeof Component`.**
-  `lib/report` and `lib/charts` define `ReportDocument`/`ChartDocument`
-  unconditionally, and `let Report;` followed by `Report = class Report extends
-  Component` inside `if (typeof Component !== "undefined")`. In the core the
-  component is absent, so the control is skipped and the document loads.
-  **`let`, not `var`**: a top-level `var` is a property of the global object,
-  and a completion that reads the global names then offers `Report` to a project
-  that never used the library -- the IDE test caught exactly that. **And not
-  `globalThis`**, which is not in the language (rad.js says so when it is used).
-  A library that needs a GTK table it cannot have (`Printer.Papers` for paper
-  sizes) keeps a local table for its document half instead.
+- **A library with a document half and a control is two modules, and its
+  manifest says which file needs a display.** `lib/charts` is
+  `ChartDocument.js` and `Chart.js`, `lib/report` `ReportDocument.js` and
+  `Report.js`, each with `"display": ["Chart.js"]` (or `Report.js`): the core
+  loads the document and skips the control, and `"display": true` is the form
+  for a library that is controls only. They were one script each, the control
+  declared behind `if (typeof Component !== "undefined")` with a `let`, and
+  their private constants shared the program's global scope -- which is why
+  they had been renamed `CHART_PALETTE` and `PAPER_SIZES`. As modules they
+  are private; what the control needs of the document it reads from it
+  (`ChartDocument.Options`). `tests/api.sh` counted 43 top-level names in
+  `lib/` before and 27 after. `"worker": []` because a document needs
+  `Painter`, which a worker does not have.
 - **Native plugins work in the core, and `bta_form.c` is guarded like
   `bta_paint.c`.** `bta_plugin.c` is in the core, `uses` loads
   `<name>/<name>.<suffix>` before `rad.js`, and the loader reaches the context

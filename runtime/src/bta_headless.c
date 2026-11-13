@@ -1193,15 +1193,27 @@ static int run_project(int argc, char **argv, bool testing, bool json,
 
     bta_modules_scope(ctx, dir, libs);
 
-    /* A library's sources first, then the project's own. */
+    /* A library's sources first, then the project's own -- less the files a
+     * library lists under `"display"`: its controls, which extend `Component`
+     * and are a window project's (`Chart.js` beside `ChartDocument.js`). */
     for (guint i = 0; i < libs->len; i++) {
         GPtrArray *files = bta_library_sources(ctx, libs->pdata[i]);
+        GPtrArray *skip  = bta_library_display_files(ctx, libs->pdata[i]);
 
-        for (guint j = 0; j < files->len; j++)
-            if (!eval_file(ctx, files->pdata[j])) {
+        for (guint j = 0; j < files->len; j++) {
+            char *base = g_path_get_basename(files->pdata[j]);
+            bool  ui   = false;
+
+            for (guint k = 0; k < skip->len && !ui; k++)
+                ui = !strcmp(base, skip->pdata[k]);
+            g_free(base);
+            if (!ui && !eval_file(ctx, files->pdata[j])) {
+                g_ptr_array_unref(skip);
                 g_ptr_array_unref(files);
                 goto out;
             }
+        }
+        g_ptr_array_unref(skip);
         g_ptr_array_unref(files);
     }
 

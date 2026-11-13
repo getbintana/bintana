@@ -1,4 +1,7 @@
 {
   "name": "report",
-  "uses": ["charts", "drawing"]
+  "uses": ["charts", "drawing"],
+  "sources": ["ReportDocument.js", "Report.js"],
+  "display": ["Report.js"],
+  "worker": []
 }

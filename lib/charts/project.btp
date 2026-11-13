@@ -1,4 +1,7 @@
 {
   "name": "charts",
-  "uses": ["drawing"]
+  "uses": ["drawing"],
+  "sources": ["ChartDocument.js", "Chart.js"],
+  "display": ["Chart.js"],
+  "worker": []
 }

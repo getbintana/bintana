@@ -363,9 +363,9 @@ in one process-wide variable, so a worker registering `Bitmap` first took a
 number the main runtime had given another class -- a GC assertion, found by
 the fixture. A worker then gets `Bitmap` as it does in the graphical host. A `main` still writes a PNG or a PDF and measures text
 with no display; `DrawingArea`, which needs a widget, is the GUI's. **The report's document half is core too:** `lib/report` and
-`lib/charts` define `ReportDocument`/`ChartDocument` always, and their
-`Report`/`Chart` controls only when `Component` exists, so a `main` lays out and
-writes a report with `uses: ["report"]` and no display: `report`'s own manifest
+`lib/charts` are two modules each -- `ReportDocument.js` and `Report.js`,
+`ChartDocument.js` and `Chart.js` -- and their manifests list the control under
+`"display"`, which the core skips, so a `main` lays out and writes a report with `uses: ["report"]` and no display: `report`'s own manifest
 names `charts` and `drawing`, and a library's `uses` resolves transitively. `PdfDocument`
 is still a stub (poppler and PoDoFo are not linked here), so a report's form
 fields remain the graphical host's until the core globals are split. `File.Info` answers no icon name -- there is no theme to ask
