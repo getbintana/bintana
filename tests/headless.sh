@@ -147,6 +147,28 @@ else
     fail=1
 fi
 
+# A `main` project's tests run in the core, with no toolkit: `bintana test`
+# is `runTests` over the project's `tests/` directory, as in `bintana-gui`.
+if "$BINTANA_CORE" test tests/headless/projects/tested \
+        >"$tmp/tested.out" 2>"$tmp/tested.err" &&
+   grep -q "tests: 1 passed, 0 failed" "$tmp/tested.out"; then
+    echo "the core host runs a console project's tests"
+else
+    echo "the core host failed a console project's tests:" >&2
+    cat "$tmp/tested.out" "$tmp/tested.err" >&2
+    fail=1
+fi
+
+if "$BINTANA_CORE" test --json tests/headless/projects/tested \
+        >"$tmp/tested.json" 2>"$tmp/tested-json.err" &&
+   grep -q '"Event":"Done","Passed":1,"Failed":0' "$tmp/tested.json"; then
+    echo "and answers --json"
+else
+    echo "the core host's test --json is not the line the IDE reads:" >&2
+    cat "$tmp/tested.json" "$tmp/tested-json.err" >&2
+    fail=1
+fi
+
 # The binary links no widget file, and the metadata document is loaded only for
 # `check`: a `main` gets the language's own answer for `Widget`.
 if out=$("$BINTANA_CORE" tests/headless/projects/bare 2>"$tmp/bare.err") &&
@@ -196,6 +218,34 @@ if [[ ! -e "$tmp/gui-args-main" ]]; then
     echo "a main project does not dispatch"
 else
     echo "the core host dispatched a main project to the toolkit" >&2
+    fail=1
+fi
+
+# `test` takes the same road: a `startup` project's tests belong to the host
+# that can build its widgets, and the words (including `test`) travel whole.
+BINTANA_GUI="$gui" BINTANA_TEST_GUI_ARGS="$tmp/gui-test-args" \
+    "$BINTANA_CORE" test --json tests/headless/projects/window \
+    >/dev/null 2>"$tmp/gui-test.err"
+test_status=$?
+printf '%s\n' test --json tests/headless/projects/window \
+    >"$tmp/gui-test-want"
+
+if [[ $test_status -eq 7 ]] && diff -u "$tmp/gui-test-want" \
+        "$tmp/gui-test-args" >"$tmp/gui-test.diff"; then
+    echo "a window project's tests are exec'd as the graphical host"
+else
+    echo "the core did not dispatch a window project's tests: exit " \
+         "$test_status" >&2
+    cat "$tmp/gui-test.diff" "$tmp/gui-test.err" >&2
+    fail=1
+fi
+
+if BINTANA_GUI="$gui" BINTANA_TEST_GUI_ARGS="$tmp/gui-test-main" \
+        "$BINTANA_CORE" test tests/headless/projects/tested >/dev/null 2>&1 &&
+   [[ ! -e "$tmp/gui-test-main" ]]; then
+    echo "a console project's tests do not dispatch"
+else
+    echo "the core dispatched a console project's tests" >&2
     fail=1
 fi
 

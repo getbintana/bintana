@@ -110,7 +110,7 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 
 | lands | what it is |
 |---|---|
-| `<prefix>/bin/bintana` | the core runtime: `--version`, `check`, a project's `main`, and dispatch of `startup` |
+| `<prefix>/bin/bintana` | the core runtime: `--version`, `check`, a project's `main` and tests, and dispatch of `startup` |
 | `<prefix>/bin/bintana-gui` | the graphical host: windows, widgets, `forms.js` |
 | `<prefix>/bin/bintana-ide` | a one-line launcher for the IDE, under a name a menu entry can carry |
 | `<prefix>/share/bintana/ide/` | the IDE as the project directory it is |

@@ -1173,7 +1173,94 @@ static gboolean project_idle(gpointer data)
 }
 
 /*
- * `bintana [run] <project> [args...]`: the project's own `main`.
+ * `bintana test`'s own half, for a project whose tests need no window: the
+ * files the graphical host's `run_tests` reads, and `runTests` from rad.js.
+ * The test classes are the project's, loaded after its sources, exactly as in
+ * the graphical host.
+ */
+static bool run_tests_here(JSContext *ctx, const char *dir,
+                           const char *filter, bool json)
+{
+    char      *where = g_build_filename(dir, "tests", NULL);
+    GPtrArray *files = g_ptr_array_new_with_free_func(g_free);
+    GDir      *d     = g_dir_open(where, 0, NULL);
+
+    if (d) {
+        const char *entry;
+        while ((entry = g_dir_read_name(d)))
+            if (g_str_has_suffix(entry, "Test.js"))
+                g_ptr_array_add(files, g_build_filename(where, entry, NULL));
+        g_dir_close(d);
+    }
+    g_ptr_array_sort_values(files, (GCompareFunc)g_strcmp0);
+    g_free(where);
+
+    JSValue found = JS_NewArray(ctx);
+
+    for (guint i = 0; i < files->len; i++) {
+        const char *path = files->pdata[i];
+        char       *base = g_path_get_basename(path);
+
+        base[strlen(base) - 3] = '\0';              /* QuoteTest.js -> QuoteTest */
+
+        JSValue t = JS_NewObject(ctx);
+        JS_SetPropertyStr(ctx, t, "Name", JS_NewString(ctx, base));
+        JS_SetPropertyStr(ctx, t, "File", JS_NewString(ctx, path));
+
+        if (!eval_file(ctx, path)) {
+            JS_SetPropertyStr(ctx, t, "Error",
+                              JS_NewString(ctx, "the file did not load; the error is above"));
+        } else {
+            JSValue klass = bta_lookup_global(ctx, base);
+
+            if (JS_IsException(klass)) {
+                JS_FreeValue(ctx, JS_GetException(ctx));
+                klass = JS_UNDEFINED;
+            }
+            if (JS_IsFunction(ctx, klass)) {
+                JS_SetPropertyStr(ctx, t, "Class", klass);
+            } else {
+                JS_FreeValue(ctx, klass);
+                char *why = g_strdup_printf("the file declares no class %s", base);
+                JS_SetPropertyStr(ctx, t, "Error", JS_NewString(ctx, why));
+                g_free(why);
+            }
+        }
+        JS_SetPropertyUint32(ctx, found, i, t);
+        g_free(base);
+    }
+    g_ptr_array_free(files, TRUE);
+
+    JSValue global = JS_GetGlobalObject(ctx);
+    JSValue fn     = JS_GetPropertyStr(ctx, global, "runTests");
+
+    bool ok = JS_IsFunction(ctx, fn);
+    if (ok) {
+        JSValue argv[3] = {
+            found,
+            JS_NewString(ctx, filter ? filter : ""),
+            JS_NewBool(ctx, json),
+        };
+        JSValue r = JS_Call(ctx, fn, JS_UNDEFINED, 3, (JSValueConst *)argv);
+
+        if (JS_IsException(r)) {
+            bta_dump_error(ctx);
+            ok = false;
+        }
+        JS_FreeValue(ctx, r);
+        JS_FreeValue(ctx, argv[1]);
+    } else {
+        fprintf(stderr, "bintana: runTests is not in the language\n");
+    }
+    JS_FreeValue(ctx, found);
+    JS_FreeValue(ctx, fn);
+    JS_FreeValue(ctx, global);
+    bta_drain_jobs(JS_GetRuntime(ctx));
+    return ok;
+}
+
+/*
+ * `bintana [run] <project> [args...]`: the project's own `main`, or its tests.
  *
  * A project that declares `startup` is dispatched before this is reached; the
  * refusal below is the fallback for a manifest that could not be read as one
@@ -1185,7 +1272,8 @@ static gboolean project_idle(gpointer data)
  * it gets the language's own "not defined", which is the truth about this
  * binary.
  */
-static int run_project(int argc, char **argv)
+static int run_project(int argc, char **argv, bool testing, bool json,
+                       const char *filter)
 {
     if (argc < 1) {
         fprintf(stderr, "usage: bintana [run] <project> [args...]\n");
@@ -1243,7 +1331,7 @@ static int run_project(int argc, char **argv)
     entry_name    = bta_project_string(ctx, cfg, "main", NULL);
     g_free(base);
 
-    if (!entry_name) {
+    if (!entry_name && !testing) {
         fprintf(stderr,
                 "bintana: '%s' opens a window (startup '%s'); this "
                 "host has no display. Run it with bintana-gui.\n",
@@ -1278,6 +1366,26 @@ static int run_project(int argc, char **argv)
 
     if (bta_modules_check(ctx) < 0) {
         bta_dump_error(ctx);
+        goto out;
+    }
+
+    if (testing) {
+        if (!run_tests_here(ctx, dir, filter, json)) {
+            status = 2;
+            goto out;
+        }
+        /* `runTests` schedules the next test with `Timer.After(0, ...)` and
+         * ends with `Application.Quit`, so the loop is what lets a test run at
+         * all; a run that reaches `Quit` never comes back here. */
+        if (bta_sys_pending() + bta_network_pending() > 0) {
+            GMainLoop *loop = g_main_loop_new(NULL, FALSE);
+            guint tick = g_timeout_add(20, project_idle, loop);
+
+            g_main_loop_run(loop);
+            g_source_remove(tick);
+            g_main_loop_unref(loop);
+        }
+        status = headless_uncaught ? 1 : 0;
         goto out;
     }
 
@@ -1385,14 +1493,20 @@ static char *find_gui_host(void)
 }
 
 /* Replace this process with the graphical host, every word and descriptor as
- * it arrived. The exit status is that host's, which is what a runner reads. */
-static int exec_gui(const char *gui, char **words, int nwords)
+ * it arrived. `lead` is the command word the graphical host expects (`test`)
+ * or NULL for a run; the exit status is that host's, which is what a runner
+ * reads. */
+static int exec_gui_lead(const char *gui, const char *lead,
+                         char **words, int nwords)
 {
-    char **args = g_new0(char *, (gsize)nwords + 2);
+    int   extra = lead ? 1 : 0;
+    char **args = g_new0(char *, (gsize)nwords + (gsize)extra + 2);
 
     args[0] = (char *)gui;
+    if (lead)
+        args[1] = (char *)lead;
     for (int i = 0; i < nwords; i++)
-        args[i + 1] = words[i];
+        args[1 + extra + i] = words[i];
 
     execv(gui, args);
     fprintf(stderr, "bintana: cannot run the graphical host %s: %s\n",
@@ -1401,9 +1515,73 @@ static int exec_gui(const char *gui, char **words, int nwords)
     return 2;
 }
 
+static int exec_gui(const char *gui, char **words, int nwords)
+{
+    return exec_gui_lead(gui, NULL, words, nwords);
+}
+
+/*
+ * `bintana test [--json] <project> [filter]`: the graphical host owns a
+ * `startup` project's tests, because they build widgets; a `main` project's run
+ * here, with no toolkit. The words travel whole, so `test` and `--json` mean
+ * the same thing in both hosts.
+ */
+static int run_test_command(int argc, char **argv)
+{
+    const char *project = NULL;
+    const char *filter  = NULL;
+    bool        json    = false;
+
+    for (int i = 0; i < argc; i++) {
+        if (!strcmp(argv[i], "--json")) {
+            json = true;
+            continue;
+        }
+        if (argv[i][0] == '-' && !project) {
+            fprintf(stderr, "bintana: unknown option '%s'\n", argv[i]);
+            return 2;
+        }
+        if (!project)
+            project = argv[i];
+        else if (!filter)
+            filter = argv[i];
+    }
+    if (!project) {
+        fprintf(stderr, "usage: bintana test [--json] <project> [filter]\n");
+        return 2;
+    }
+
+    char *dir      = bta_project_dir(project);
+    int   has_main = bta_project_has_main(dir);
+
+    if (has_main == 0) {
+        char *gui = find_gui_host();
+
+        if (!gui) {
+            char *name = g_path_get_basename(dir);
+
+            fprintf(stderr, "bintana: '%s' runs its tests in a window, and "
+                            "no graphical host is beside this binary. Install "
+                            "bintana-gui there, or set BINTANA_GUI to it.\n",
+                    name);
+            g_free(name);
+            g_free(dir);
+            return 2;
+        }
+        g_free(dir);
+        return exec_gui_lead(gui, "test", argv, argc);
+    }
+    g_free(dir);
+
+    char *one[1] = { (char *)project };
+
+    return run_project(1, one, true, json, filter);
+}
+
 static void usage(void)
 {
     fputs("usage: bintana [run] <project> [args...]\n"
+          "       bintana test [--json] <project> [filter]\n"
           "       bintana check [options] <project>\n"
           "       bintana --version\n", stderr);
 }
@@ -1453,12 +1631,15 @@ int main(int argc, char **argv)
     }
     if (argc >= 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
         fputs("usage: bintana [run] <project> [args...]\n"
+              "       bintana test [--json] <project> [filter]\n"
               "       bintana check [options] <project>\n"
               "       bintana --version\n", stdout);
         return 0;
     }
     if (argc >= 2 && !strcmp(argv[1], "check"))
         return run_check(argc - 2, argv + 2);
+    if (argc >= 2 && !strcmp(argv[1], "test"))
+        return run_test_command(argc - 2, argv + 2);
 
     /* `run` is a word, not an option, and it says nothing the first bare word
      * does not: it is dropped before the project is looked for. */
@@ -1522,7 +1703,7 @@ int main(int argc, char **argv)
     if (has_main < 0)
         /* The full parser's diagnosis is the useful one; no option is worth
          * reading for a manifest that cannot be read. */
-        return run_project(nwords - project, words + project);
+        return run_project(nwords - project, words + project, false, false, NULL);
 
     for (int i = 0; i < project; i++) {
         int rc = main_option(words[i]);
@@ -1532,5 +1713,5 @@ int main(int argc, char **argv)
         if (option_takes_value(words[i]))
             i++;
     }
-    return run_project(nwords - project, words + project);
+    return run_project(nwords - project, words + project, false, false, NULL);
 }

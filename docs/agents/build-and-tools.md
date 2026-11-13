@@ -522,8 +522,9 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 
 ## The console core
 
-**`bintana` is the core host: `--version`, `check`, a project's `main`, and
-the dispatch of `startup` to `bintana-gui`, with no toolkit in the link.** It
+**`bintana` is the core host: `--version`, `check`, a project's `main` and
+tests, and the dispatch of `startup` to `bintana-gui`, with no toolkit in the
+link.** It
 links 17 libraries, and `bintana check ide` answers byte for byte what
 `bintana-gui check ide` answers with half the memory. `tests/headless.sh` runs
 both, and diffs the core run of a fixture project against the graphical one.
@@ -548,8 +549,11 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   and `tests/headless.sh` uses a fake `BINTANA_GUI` script to watch the exec
   without a window. The type is decided from the manifest's top-level object
   (`bta_project_has_main`), with no QuickJS context: a window project must not
-  start the language before the toolkit. The arguments after the project become
-  `Application.Arguments`, exactly as in the graphical host. Windows has no core
+  start the language before the toolkit. `bintana test` takes the same road:
+  a `main` project's `tests/*Test.js` run in the core, a `startup` project's
+  are exec'd as `bintana-gui test`, with `--json` and the filter intact. The
+  arguments after the project become `Application.Arguments`, exactly as in the
+  graphical host. Windows has no core
   host yet and still ships the single graphical `bintana.exe` plus
   `bintanaw.exe`; do not fake a console host there with a stub form.
 - **`BTA_META_ONLY` belongs to `bintana-meta` now, and it is built `-O1`.**

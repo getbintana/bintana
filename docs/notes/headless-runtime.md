@@ -94,7 +94,7 @@ puts the prelude's `Doc` in `Widget.Members`.
 evaluates the ten captures `forms.js` expects from `rad.js` (plus a stub
 `FormPart`), then evaluates `forms.js` itself, and finally the file. It calls
 `Main` if the file declares one. That is what lets **the same
-`tests/headless/Main.js` run under `bintana` as a `main` project and under
+`tests/headless/Main.js` run under `bintana-gui` as a `main` project and under
 `bintana-meta`**, which is how the test compares them.
 
 The captures are the reflection (`defineProperty`, `prototypeOf`, `ownNames`,
@@ -162,8 +162,8 @@ host whose prelude did not load; it is not the answer the test exercises.
 
 **The console host is `bintana`; the graphical host is `bintana-gui`.**
 `bintana` is the first real console runtime: `--version`, `check`, a project's
-`main`, and the dispatch of a window project to the graphical host, with no GTK
-in the link. It is not a test host -- it loads `tools/check`, `lib/check`, and
+`main` and its tests, and the dispatch of a window project to the graphical
+host, with no GTK in the link. It is not a test host -- it loads `tools/check`, `lib/check`, and
 an arbitrary console project with the libraries its `uses` names -- and both
 hosts install.
 
@@ -210,6 +210,11 @@ files `bta_runtime.c` would have supplied -- `bta_lookup_global`,
 `main` that names a widget sees no `Widget` at all -- the metadata is a `check`
 document, not a toolkit -- and the language's own `ReferenceError` is the
 answer, not a stub that pretends.
+
+**`bintana test` is the same split.** A console project's `tests/*Test.js`
+run here, with `runTests` from rad.js and no toolkit; a window project's tests
+are exec'd as `bintana-gui test ...`, because the tests build widgets. `--json`
+and the filter travel unchanged.
 
 **A project that declares `startup` is exec'd as the graphical host**, with
 every word, descriptor and the exit status unchanged. The decision is made from

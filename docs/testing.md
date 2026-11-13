@@ -752,6 +752,10 @@ the graphical pass with **17 libraries against 153** and about 33 MB against
 58 MB on the IDE's own project. The binary links no widget file; the document
 is 1.7 MB and is loaded only for `check`.
 
+**It runs a project's tests too**: `bintana test` on a `main` project reads
+`tests/*Test.js` with `runTests` and no toolkit; a `startup` project's tests are
+exec'd as `bintana-gui test`, which the fixture holds with the fake host.
+
 **It runs a project's `main` too, and the fixtures are in
 `tests/headless/projects/`.** `run` is a console project with a library in
 `lib/greeting`: the script runs it through both hosts and diffs the output, so

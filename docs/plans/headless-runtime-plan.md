@@ -267,6 +267,8 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
    - `bintana <proyecto>` → leer `project.btp`; `main` corre en core, `startup`
      executa el host gráfico con los mismos argumentos y descriptores.
    - `bintana test` → `main` en core, `startup` en el host gráfico.
+     **Hecho:** los tests de un `main` corren en el core con `runTests`; los de
+     un `startup` se executan como `bintana-gui test`, con `--json` y el filtro.
    - `--form`, `--theme`, `--text-scale`, `--rtl` → host gráfico; `--strict`,
      `--profile`, `--debug` → el host que corresponda, con `--debug` pasando
      descriptor 3 y stdin.
