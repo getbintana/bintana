@@ -16217,7 +16217,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "any CSS colour, the same spelling `Background` takes (`\"rgba(53,132,228,0.2)\"`). Reads back the string it was given; before anything is set, the theme's ink",
+          "Doc": "a colour name (`\"red\"`), `#rgb` or `#rrggbb` with an optional alpha, `rgb()`/`rgba()` or `hsl()`/`hsla()` (`\"rgba(53,132,228,0.2)\"`) -- read the same way in every host and on every GTK. Reads back the string it was given; before anything is set, the theme's ink",
           "Native": true
         },
         {

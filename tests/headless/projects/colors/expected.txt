@@ -1,0 +1,79 @@
+"red": = "red"
+"Red": = "red"
+"  red  ": refused
+"rebeccapurple": = "rebeccapurple"
+"transparent": refused
+"notacolour": refused
+"#f00": = "red"
+"#f008": = "#f008"
+"#ff0000": = "red"
+"#ff000080": = "#ff000080"
+"#ff0000zz": refused
+"#ff00": = "#ff00"
+"#fffff": refused
+"#": refused
+"#F0a": = "#F0a"
+" #ff0000": refused
+"#ff0000 ": refused
+"rgb(255,0,0)": = "red"
+"rgb(255, 0, 0)": = "red"
+"rgb( 255 , 0 , 0 )": = "red"
+"rgb(100%,0%,0%)": = "red"
+"rgb(300,-5,0)": = "red"
+"rgb(255,0,0) x": refused
+"rgb(255,0)": refused
+"rgb(255 0 0)": refused
+"rgba(255,0,0,0.5)": = "#ff000080"
+"rgba(255,0,0,50%)": refused
+"rgba(255,0,0,2)": = "red"
+"rgba(255,0,0)": refused
+"RGB(255,0,0)": refused
+"rgb(255.5,0,0)": = "red"
+"hsl(0,100%,50%)": = "red"
+"hsl(120, 100%, 25%)": = "hsl(120, 100%, 25%)"
+"hsla(240,100%,50%,0.5)": = "hsla(240,100%,50%,0.5)"
+"hsl(0,100,50)": = "red"
+"hsl(360,100%,50%)": = "red"
+"hsl(-120,100%,50%)": = "hsl(-120,100%,50%)"
+"hsla(0,100%,50%)": refused
+"#fff000fff": = "#fff000fff"
+"#ffff00000000": = "red"
+"#ff0000ff00": refused
+"rgba(255,0,0,.5)": = "#ff000080"
+"rgb(255,0,0,0.5)": refused
+"rgba (255,0,0,1)": = "red"
+"rgb(255,0,0": refused
+"rgba(255,0,0,-1)": = "#ff00"
+"rgb(50%,255,0)": = "rgb(50%,255,0)"
+"rgb(1e2,0,0)": = "rgb(1e2,0,0)"
+"rgb(+255,0,0)": = "red"
+"hsl(0,100%,50%,0.5)": refused
+"hsla(0,100%,50%,50%)": refused
+"hsl(0deg,100%,50%)": refused
+"hsl(0, 150%, 50%)": = "red"
+"hsl(0,100%,120%)": = "hsl(0,100%,120%)"
+"hsla(0,100%,50%,2)": = "red"
+"HSL(0,100%,50%)": refused
+"hsl(30.5,50.5%,40.5%)": = "hsl(30.5,50.5%,40.5%)"
+"white": = "hsl(0,100%,120%)"
+"WHITE": = "hsl(0,100%,120%)"
+"grey": = "grey"
+"gray50": = "gray50"
+"lightgoldenrodyellow": = "lightgoldenrodyellow"
+"": refused
+" ": refused
+"rgb(102,51,153)": = "rebeccapurple"
+"rgb(0,127.5,0)": = "hsl(120, 100%, 25%)"
+"rgba(0,0,255,0.5)": = "hsla(240,100%,50%,0.5)"
+"blue": = "hsl(-120,100%,50%)"
+"rgb(155.43,104.14,51.12)": = "hsl(30.5,50.5%,40.5%)"
+"rgb(127,127,127)": = "gray50"
+"rgb(250,250,210)": = "lightgoldenrodyellow"
+"rgb(128,128,128)": = "grey"
+"rgb(255,0,170)": = "#F0a"
+"magenta": = "#fff000fff"
+"rgb(127.5,255,0)": = "rgb(50%,255,0)"
+"rgb(100,0,0)": = "rgb(1e2,0,0)"
+"rgba(255,0,0,0.533)": = "#f008"
+"rgba(255,255,0,0)": = "#ff00"
+"rgb(255,255,255)": = "hsl(0,100%,120%)"

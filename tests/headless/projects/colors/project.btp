@@ -1,0 +1,7 @@
+{
+  "name": "headless-colors",
+  "main": "Main",
+  "description": "Painter.Color in both hosts: which strings are colours, and which colour each one is",
+  "uses": ["drawing"],
+  "sources": ["Main.js"]
+}

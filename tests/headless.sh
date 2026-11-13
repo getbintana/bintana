@@ -370,6 +370,24 @@ else
     fail=1
 fi
 
+# `Painter.Color`'s syntax is the runtime's, the same in both hosts and on any
+# GTK: seventy-eight strings, each taken or refused and drawn, printed as which
+# earlier sample drew the same pixels. `expected.txt` is GDK's answer on
+# GTK 4.20, when both hosts still asked it; the core's own parser disagreed on
+# eleven of them.
+colors_ok=1
+for host in "$BINTANA_CORE" "$BINTANA"; do
+    if ! "$host" tests/headless/projects/colors >"$tmp/colors.out" 2>&1 ||
+       ! diff -u tests/headless/projects/colors/expected.txt "$tmp/colors.out" \
+            >"$tmp/colors.diff"; then
+        echo "$host does not read Painter.Color as expected:" >&2
+        cat "$tmp/colors.diff" >&2
+        colors_ok=0
+        fail=1
+    fi
+done
+[[ $colors_ok == 1 ]] && echo "Painter.Color reads the same colours in both hosts"
+
 # `Application.OnError` takes an uncaught error over in both hosts: the same
 # two strings reach the handler, the replacement hint with them, and the run
 # still exits 1. The core used to accept the assignment and never call it.

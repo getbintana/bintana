@@ -799,6 +799,13 @@ owed an answer, so the core's loop is what is asked, and a `CRITICAL` on its
 stderr is a failure. With `bta_http_init` taken out of the core the block goes
 red on `Http is not defined`.
 
+**`Painter.Color` reads the same colours in both hosts**:
+`tests/headless/projects/colors` assigns seventy-eight strings, draws each that
+is taken, and prints which earlier sample drew the same pixels -- an equality,
+so the answer holds on any machine. Both hosts are diffed against
+`expected.txt`, which is what GDK answered (GTK 4.20) before both hosts used
+`bta_color_parse`; the core's previous parser is thirty lines off.
+
 **`Application.OnError` takes an uncaught error in both hosts**:
 `tests/headless/projects/onerror` assigns a handler and throws twice from
 `Timer` callbacks, once with a name the language took away. Both hosts must

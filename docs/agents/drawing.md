@@ -260,6 +260,19 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `gdk_rgba_parse` refused it from inside a `Draw`. The alpha goes through
   `g_ascii_formatd`, and `tests/widgets` matches the **whole** string now -- the
   prefix test it had accepted the comma.
+- **`Painter.Color` reads its own syntax, not GDK's** (`bta_color_parse` in
+  `bta_paint.c`). The graphical host asked `gdk_rgba_parse` and the core had a
+  parser of its own, and they disagreed on eleven of forty strings: the core
+  took `#ff0000zz`, `rgb(255,0,0) x`, `" #ff0000"`, `transparent` and a
+  percentage alpha, and refused every `hsl()`. The syntax is written down as
+  GDK answered it on GTK 4.20 (2026-11-13) -- including its surprises: no
+  `transparent`, no percentage alpha, `rgba (` with a space taken,
+  saturation and lightness with or without `%`, 9- and 12-digit hex through
+  Pango -- and both hosts read it, so a palette does not move with the GTK
+  version either. `tests/headless/projects/colors` draws seventy-eight
+  strings and prints which earlier sample drew the same pixels; its
+  `expected.txt` was captured from GDK before the switch. Widget colours
+  (`Background`, `Style`) are still GTK's CSS.
 
 ## Printing
 

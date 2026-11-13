@@ -34,7 +34,9 @@
 #include <cairo.h>
 #include <cairo-pdf.h>
 #include <glib/gstdio.h>
+#include <errno.h>
 #include <math.h>
+#include <string.h>
 #include <pango/pangocairo.h>
 
 /* ---------------------------------------------------------------- Painter */
@@ -218,7 +220,7 @@ static char *rgba_text(const GdkRGBA *c)
 
     /* The alpha through `g_ascii_formatd` and not through `%g`, or a desktop
      * that writes a decimal comma hands back `rgba(32,64,96,0,5)` -- a string
-     * `gdk_rgba_parse` refuses, so assigning it to `Color` throws from inside
+     * the colour syntax refuses, so assigning it to `Color` throws from inside
      * a `Draw`.  The same trap the JSON patch in `vendor/` exists for. */
     char alpha[NUMLEN];
 
@@ -273,90 +275,161 @@ static JSValue painter_get_color(JSContext *ctx, JSValueConst this_val)
     return painter_get_foreground(ctx, this_val);
 }
 
-#ifdef BTA_HEADLESS
-/* The core's colour syntax: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, the
- * `rgb()`/`rgba()` forms and Pango's names. GDK's own parser is the graphical
- * host's; a report's palette must set the same colours with no toolkit. */
-static bool core_rgba_parse(GdkRGBA *c, const char *s)
+/*
+ * The colour syntax `Painter.Color` takes, in both hosts.
+ *
+ * The graphical host used `gdk_rgba_parse` and the core a parser of its own,
+ * and they disagreed on eleven of forty strings measured
+ * (`tests/headless/projects/colors`): the core took `#ff0000zz` and
+ * `rgb(255,0,0) x`, a space before a `#`, `transparent` and a percentage
+ * alpha, and refused every `hsl()`. GDK's answer also moves with the GTK
+ * version, and a report's palette should not. So the syntax is written down
+ * here, as GDK answered it on 2026-11-13 (GTK 4.20), and both hosts read it:
+ *
+ *   - a name or a `#` colour is Pango's (`pango_color_parse_with_alpha`):
+ *     the X11 names in any case, and 3, 4, 6, 8, 9 or 12 hex digits, with
+ *     nothing before or after -- so not `transparent`, and not `" red"`;
+ *   - `rgb(r, g, b)` and `rgba(r, g, b, a)`: a channel is a number of 0-255
+ *     or a percentage, clamped; spaces around every part, including before
+ *     the parenthesis; the alpha is a number of 0-1, clamped, never a
+ *     percentage;
+ *   - `hsl(h, s, l)` and `hsla(h, s, l, a)`: the hue in degrees, any number,
+ *     turned around the circle; saturation and lightness are percentages
+ *     with or without the `%`, clamped;
+ *   - lower case only (`RGB(...)` is refused, as GDK refuses it), and nothing
+ *     after the closing parenthesis but spaces.
+ */
+static const char *color_spaces(const char *s)
 {
     while (g_ascii_isspace(*s))
         s++;
+    return s;
+}
 
-    if (*s == '#') {
-        const char *hex = s + 1;
-        size_t      n   = 0;
+/* A number, as `g_ascii_strtod` reads one, and refused when it is not one. */
+static bool color_number(const char **s, double *out)
+{
+    char *end = NULL;
 
-        while (g_ascii_isxdigit(hex[n]))
-            n++;
-        if (n != 3 && n != 4 && n != 6 && n != 8)
-            return false;
-
-        guint v[4] = { 0, 0, 0, 255 };
-        if (n <= 4) {
-            for (size_t i = 0; i < n; i++) {
-                char one[2] = { hex[i], 0 };
-                v[i] = (guint)g_ascii_strtoull(one, NULL, 16) * 17;
-            }
-        } else {
-            for (size_t i = 0; i < n / 2; i++) {
-                char two[3] = { hex[i * 2], hex[i * 2 + 1], 0 };
-                v[i] = (guint)g_ascii_strtoull(two, NULL, 16);
-            }
-        }
-        c->red = v[0] / 255.0; c->green = v[1] / 255.0;
-        c->blue = v[2] / 255.0; c->alpha = v[3] / 255.0;
-        return true;
-    }
-
-    if (g_str_has_prefix(s, "rgb(") || g_str_has_prefix(s, "rgba(")) {
-        bool   alpha = s[3] == 'a';
-        double v[4]  = { 0, 0, 0, 1 };
-        int    count = alpha ? 4 : 3;
-
-        s += alpha ? 5 : 4;
-        for (int i = 0; i < count; i++) {
-            while (g_ascii_isspace(*s))
-                s++;
-            char *end = NULL;
-            v[i] = g_ascii_strtod(s, &end);
-            if (end == s)
-                return false;
-            s = end;
-            if (*s == '%') {
-                v[i] = i < 3 ? v[i] * 2.55 : v[i] / 100.0;
-                s++;
-            }
-            while (g_ascii_isspace(*s))
-                s++;
-            if (i < count - 1) {
-                if (*s != ',')
-                    return false;
-                s++;
-            }
-        }
-        if (*s != ')')
-            return false;
-        for (int i = 0; i < 3; i++)
-            v[i] = CLAMP(v[i], 0, 255);
-        c->red = v[0] / 255.0; c->green = v[1] / 255.0;
-        c->blue = v[2] / 255.0;
-        c->alpha = alpha ? CLAMP(v[3], 0, 1) : 1;
-        return true;
-    }
-
-    if (!g_ascii_strcasecmp(s, "transparent")) {
-        *c = (GdkRGBA){ 0, 0, 0, 0 };
-        return true;
-    }
-
-    PangoColor pc;
-    if (!pango_color_parse(&pc, s))
+    errno = 0;
+    *out = g_ascii_strtod(*s, &end);
+    if (end == *s || errno == ERANGE || isinf(*out) || isnan(*out))
         return false;
-    c->red = pc.red / 65535.0; c->green = pc.green / 65535.0;
-    c->blue = pc.blue / 65535.0; c->alpha = 1;
+    *s = end;
     return true;
 }
-#endif
+
+/* An rgb channel: 0-255, or a percentage of it, as a fraction. */
+static bool color_channel(const char **s, double *out)
+{
+    if (!color_number(s, out))
+        return false;
+    *s = color_spaces(*s);
+    if (**s == '%') {
+        (*s)++;
+        *out /= 100.0;
+    } else {
+        *out /= 255.0;
+    }
+    *out = CLAMP(*out, 0.0, 1.0);
+    return true;
+}
+
+/* A saturation or a lightness: a percentage, the sign optional. */
+static bool color_percent(const char **s, double *out)
+{
+    if (!color_number(s, out))
+        return false;
+    *s = color_spaces(*s);
+    if (**s == '%')
+        (*s)++;
+    *out = CLAMP(*out / 100.0, 0.0, 1.0);
+    return true;
+}
+
+static double color_hue_value(double m1, double m2, double hue)
+{
+    while (hue >= 360)
+        hue -= 360;
+    while (hue < 0)
+        hue += 360;
+    if (hue < 60)
+        return m1 + (m2 - m1) * hue / 60;
+    if (hue < 180)
+        return m2;
+    if (hue < 240)
+        return m1 + (m2 - m1) * (240 - hue) / 60;
+    return m1;
+}
+
+static bool bta_color_parse(const char *spec, double rgba[4])
+{
+    const char *s = spec;
+    bool        alpha, hsl;
+
+    if (g_str_has_prefix(s, "rgba"))      { alpha = true;  hsl = false; s += 4; }
+    else if (g_str_has_prefix(s, "rgb"))  { alpha = false; hsl = false; s += 3; }
+    else if (g_str_has_prefix(s, "hsla")) { alpha = true;  hsl = true;  s += 4; }
+    else if (g_str_has_prefix(s, "hsl"))  { alpha = false; hsl = true;  s += 3; }
+    else {
+        PangoColor pc;
+        guint16    a = 65535;
+
+        if (!pango_color_parse_with_alpha(&pc, &a, spec))
+            return false;
+        rgba[0] = pc.red / 65535.0;
+        rgba[1] = pc.green / 65535.0;
+        rgba[2] = pc.blue / 65535.0;
+        rgba[3] = a / 65535.0;
+        return true;
+    }
+
+    double v[4] = { 0, 0, 0, 1 };
+
+    s = color_spaces(s);
+    if (*s++ != '(')
+        return false;
+    for (int i = 0; i < 3; i++) {
+        s = color_spaces(s);
+        bool ok = !hsl         ? color_channel(&s, &v[i])
+                : i == 0       ? color_number(&s, &v[i])
+                               : color_percent(&s, &v[i]);
+        if (!ok)
+            return false;
+        s = color_spaces(s);
+        if (i < 2 && *s++ != ',')
+            return false;
+    }
+    if (alpha) {
+        if (*s++ != ',')
+            return false;
+        s = color_spaces(s);
+        if (!color_number(&s, &v[3]))
+            return false;
+        v[3] = CLAMP(v[3], 0.0, 1.0);
+        s = color_spaces(s);
+    }
+    if (*s++ != ')')
+        return false;
+    if (*color_spaces(s))
+        return false;
+
+    if (hsl) {
+        double l = v[2], sat = v[1];
+        if (sat == 0) {
+            v[0] = v[1] = v[2] = l;
+        } else {
+            double m2 = l <= 0.5 ? l * (1 + sat) : l + sat - l * sat;
+            double m1 = 2 * l - m2, hue = v[0];
+
+            v[0] = color_hue_value(m1, m2, hue + 120);
+            v[1] = color_hue_value(m1, m2, hue);
+            v[2] = color_hue_value(m1, m2, hue - 120);
+        }
+    }
+    memcpy(rgba, v, sizeof v);
+    return true;
+}
 
 static JSValue painter_set_color(JSContext *ctx, JSValueConst this_val,
                                  JSValueConst val)
@@ -369,18 +442,14 @@ static JSValue painter_set_color(JSContext *ctx, JSValueConst this_val,
     if (!s)
         return JS_EXCEPTION;
 
-    GdkRGBA c;
-#ifdef BTA_HEADLESS
-    if (!core_rgba_parse(&c, s)) {
-#else
-    if (!gdk_rgba_parse(&c, s)) {
-#endif
+    double c[4];
+    if (!bta_color_parse(s, c)) {
         JSValue e = JS_ThrowRangeError(ctx, "Color: '%s' is not a colour", s);
         JS_FreeCString(ctx, s);
         return e;
     }
 
-    cairo_set_source_rgba(p->cr, c.red, c.green, c.blue, c.alpha);
+    cairo_set_source_rgba(p->cr, c[0], c[1], c[2], c[3]);
     g_free(p->color);
     p->color = g_strdup(s);
     note(p, "Color %s", s);
@@ -2209,9 +2278,10 @@ static JSValue painter_transform(JSContext *ctx, JSValueConst this_val,
 
 static const JSCFunctionListEntry painter_props[] = {
     /* Color
-     *   any CSS colour, the same spelling `Background` takes
-     *   (`"rgba(53,132,228,0.2)"`). Reads back the string it was given;
-     *   before anything is set, the theme's ink
+     *   a colour name (`"red"`), `#rgb` or `#rrggbb` with an optional alpha,
+     *   `rgb()`/`rgba()` or `hsl()`/`hsla()` (`"rgba(53,132,228,0.2)"`) --
+     *   read the same way in every host and on every GTK. Reads back the
+     *   string it was given; before anything is set, the theme's ink
      */
     JS_CGETSET_DEF("Color",      painter_get_color,      painter_set_color),
     /* LineDash
