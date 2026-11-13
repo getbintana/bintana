@@ -173,6 +173,14 @@ function contents(prefix) {
     for (const tree of ["ide", "examples", "lib"])
         whole(tree, File.Join(ROOT, tree), File.Join(prefix, "share", "bintana", tree));
 
+    /* The core loads this only when a project runs; the build tree and the
+     * install have to agree on its name, and `lib` versus `lib64` is the
+     * packager's choice, so ask the tree. */
+    const drawing = Directory.Files(prefix, { Pattern: "bintana-drawing.*",
+                                              Recursive: true });
+    check("installed the drawing module", drawing.length === 1,
+          drawing.join(", "));
+
     /* The sources the manifest names, resolved against the installed directory
      * rather than the source one. A project.btp that lists a file the install
      * did not carry is exactly the failure this exists for, and the runtime

@@ -524,8 +524,8 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 
 **`bintana` is the core host: `--version`, `check`, a project's `main` and
 tests, and the dispatch of `startup` to `bintana-gui`, with no toolkit in the
-link.** It links 44 libraries, and `bintana check ide` answers byte for byte what
-`bintana-gui check ide` answers with less memory (36.7 MB against 57.6 MB on
+link.** It links 17 libraries, and `bintana check ide` answers byte for byte what
+`bintana-gui check ide` answers with less memory (32.7 MB against 57.6 MB on
 `RelWithDebInfo`). `tests/headless.sh` runs
 both, and diffs the core run of a fixture project against the graphical one.
 Both binaries are installed; `bintana-meta` is the generator and is not.
@@ -534,16 +534,26 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `check/widgets.json` from the real rows, property tables, both preludes and
   the generated signatures; `runtime/js/widget-meta.js` answers `Widget.*` over
   it. The data is 1.7 MB and loads only for `check`; the binary is 3.4 MB in
-  Debug and 7.9 MB with `RelWithDebInfo`'s symbols, which a packager strips.
+  Debug and 7.7 MB with `RelWithDebInfo`'s symbols, which a packager strips.
   A `main` that never asks for a widget never sees `Widget` at all.
-- **`bta_paint.c` is compiled into both hosts, and only its toolkit half is
-  guarded.** `Painter`, `Metrics`, `Drawing` and the PNG/PDF writers use cairo,
-  Pango and GdkPixbuf; `DrawingArea` (the `Control`), `Painter.Render` and the
-  `GtkSettings`/widget font lookups are inside `#ifndef BTA_HEADLESS`. A GTK
-  call outside that guard is a core link failure. Where the two differ inside
-  the shared half: the GUI uses `GdkTexture` and `gdk_rgba_parse`, the core
-  GdkPixbuf and its own CSS-colour parser; `Bitmap.Rotate` likewise converts the
-  cairo surface itself instead of calling `gdk_pixbuf_get_from_surface`.
+- **`bta_paint.c` is compiled twice: into `bintana-gui` and into
+  `bintana-drawing.so`.** The module is built with `BTA_HEADLESS`; the core
+  itself does not link it. `Painter`, `Metrics`, `Drawing` and the PNG/PDF
+  writers use cairo, Pango and GdkPixbuf; `DrawingArea` (the `Control`),
+  `Painter.Render` and the `GtkSettings`/widget font lookups are inside
+  `#ifndef BTA_HEADLESS`. A GTK call outside that guard is a module link
+  failure. Where the two differ inside the shared half: the GUI uses
+  `GdkTexture` and `gdk_rgba_parse`, the module GdkPixbuf and its own
+  CSS-colour parser; `Bitmap.Rotate` likewise converts the cairo surface itself
+  instead of calling `gdk_pixbuf_get_from_surface`.
+- **The drawing module is loaded when a project boots, not for `--version` or
+  `check`.** `run_project` opens `bintana-drawing.so` (beside the binary in the
+  build tree, under `lib*/bintana` installed) and calls
+  `bta_drawing_module_init`; the module's ABI is checked and a mismatch is a
+  sentence. The module resolves the runtime's symbols from the executable, so
+  the core link keeps `--export-dynamic`; it is not the public `bta_plugin.h`
+  contract, which cannot carry `Painter`'s class and properties without a second
+  implementation.
 - **A library that defines a widget class guards it with `typeof Component`.**
   `lib/report` and `lib/charts` define `ReportDocument`/`ChartDocument`
   unconditionally, and `let Report;` followed by `Report = class Report extends

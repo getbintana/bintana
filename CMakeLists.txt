@@ -612,8 +612,6 @@ if(NOT WIN32)
         runtime/src/bta_sys.c
         runtime/src/bta_form.c
         runtime/src/bta_plugin.c
-        runtime/src/bta_paint.c
-        runtime/src/bta_bitmap.c
         runtime/src/bta_profile.c
         runtime/src/bta_locale.c
         runtime/src/bta_xml.c
@@ -670,8 +668,7 @@ if(NOT WIN32)
     endif()
     add_dependencies(bintana bintana-check-data)
     target_link_libraries(bintana PRIVATE
-        quickjs PkgConfig::GLIBCORE PkgConfig::GMODULE PkgConfig::CAIRO
-        PkgConfig::PANGO PkgConfig::GDKPIXBUF)
+        quickjs PkgConfig::GLIBCORE PkgConfig::GMODULE)
     if(NOT WIN32)
         target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)
     endif()
@@ -680,6 +677,35 @@ if(NOT WIN32)
         -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow
     )
     target_link_options(bintana PRIVATE -Wl,--gc-sections)
+
+    # The drawing half, loadable: the same sources the graphical host links,
+    # built with BTA_HEADLESS and resolved against the core's symbols. The
+    # module brings cairo, Pango and GdkPixbuf only when a project runs; the
+    # core's `--version` and `check` do not.
+    add_library(bintana-drawing MODULE
+        runtime/src/bta_paint.c
+        runtime/src/bta_bitmap.c
+        runtime/src/bta_drawing_module.c
+    )
+    set_target_properties(bintana-drawing PROPERTIES
+        PREFIX ""
+        OUTPUT_NAME "bintana-drawing"
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    )
+    target_include_directories(bintana-drawing PRIVATE
+        ${CMAKE_SOURCE_DIR}/runtime/include
+        ${CMAKE_BINARY_DIR}/generated
+        ${GTK4_INCLUDE_DIRS}
+        ${CMAKE_SOURCE_DIR}/vendor/quickjs
+    )
+    target_compile_definitions(bintana-drawing PRIVATE
+        BTA_HEADLESS
+        BTA_VERSION_STRING="${PROJECT_VERSION}"
+    )
+    target_link_libraries(bintana-drawing PRIVATE
+        PkgConfig::CAIRO PkgConfig::PANGO PkgConfig::GDKPIXBUF)
+    target_compile_options(bintana-drawing PRIVATE
+        -fPIC -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow)
 endif()
 
 # ----------------------------------------------------------- test plugins ---
@@ -774,6 +800,8 @@ configure_file(tools/bintana-ide.in ${CMAKE_BINARY_DIR}/bintana-ide @ONLY)
 install(TARGETS ${BTA_GUI_TARGET} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 if(NOT WIN32)
     install(TARGETS bintana RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(TARGETS bintana-drawing
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/bintana)
 endif()
 install(PROGRAMS ${CMAKE_BINARY_DIR}/bintana-ide DESTINATION ${CMAKE_INSTALL_BINDIR})
 

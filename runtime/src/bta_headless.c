@@ -905,22 +905,18 @@ static bool install_core(JSContext *ctx, JSValueConst global,
                                                JS_CFUNC_generic_magic, i));
     JS_SetPropertyStr(ctx, global, "Logger", logger);
     bta_bytes_init(ctx, global);
-    bta_bitmap_init(ctx, global);
-    bta_painter_init(ctx, global);
-    bta_drawing_init(ctx, global);
     bta_decimal_init(ctx, global);
     bta_day_init(ctx, global);
     bta_xml_init(ctx, global);
     bta_network_init(ctx, global);
 
-    /* `bta_metrics_init` is what makes `Text`, with Width, Height, Bounds and
-     * the rest; the one editor answer `lib/check` reads is added to the same
-     * object, so neither replaces the other. */
-    bta_metrics_init(ctx, global);
-    JSValue text = JS_GetPropertyStr(ctx, global, "Text");
+    /* The drawing module adds Width, Height, Bounds and the rest to this
+     * object when a project runs; `LineOf` is the one editor answer `check`
+     * needs and it never loads the module. */
+    JSValue text = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, text, "LineOf",
                       JS_NewCFunction(ctx, headless_text_line_of, "LineOf", 2));
-    JS_FreeValue(ctx, text);
+    JS_SetPropertyStr(ctx, global, "Text", text);
     bta_locale_init(ctx, global, project, libs);
 
     bta_record_init(ctx, global, project, libs);
@@ -1152,6 +1148,82 @@ static int run_check(int argc, char **argv)
     return ok && !headless_uncaught ? 0 : 1;
 }
 
+/* --------------------------------------------------------- drawing module */
+
+/* The `.so` that carries cairo, Pango and GdkPixbuf. It is found beside the
+ * binary in the build tree, or under the installed `lib` directory. A missing module
+ * is not an error: `Drawing` stays the stub the check reads, and a project that
+ * needs it says so when it uses it. A module that is there but cannot load, or
+ * speaks another ABI, is an error. */
+static bool load_drawing_module(JSContext *ctx, JSValue global)
+{
+    GPtrArray *tried = g_ptr_array_new_with_free_func(g_free);
+    char      *exe   = bta_exe_path();
+
+    if (exe) {
+        char *bin = g_path_get_dirname(exe);
+        char *up  = g_path_get_dirname(bin);
+
+        g_ptr_array_add(tried, g_build_filename(bin, "bintana-drawing." G_MODULE_SUFFIX, NULL));
+        g_ptr_array_add(tried, g_build_filename(up, "lib", "bintana",
+                                                "bintana-drawing." G_MODULE_SUFFIX, NULL));
+        g_ptr_array_add(tried, g_build_filename(up, "lib64", "bintana",
+                                                "bintana-drawing." G_MODULE_SUFFIX, NULL));
+        g_free(up);
+        g_free(bin);
+        g_free(exe);
+    }
+    g_ptr_array_add(tried, g_build_filename("/usr", "lib", "bintana",
+                                            "bintana-drawing." G_MODULE_SUFFIX, NULL));
+
+    char *path = NULL;
+    for (guint i = 0; i < tried->len && !path; i++)
+        if (g_file_test(tried->pdata[i], G_FILE_TEST_IS_REGULAR))
+            path = g_strdup(tried->pdata[i]);
+    g_ptr_array_unref(tried);
+
+    if (!path)
+        return true;
+
+    GModule *m = g_module_open(path, G_MODULE_BIND_LOCAL);
+    if (!m) {
+        fprintf(stderr, "bintana: the drawing module %s did not load: %s\n",
+                path, g_module_error() ?: "unknown");
+        g_free(path);
+        return false;
+    }
+
+    typedef int  (*abi_fn)(void);
+    typedef bool (*init_fn)(JSContext *, JSValue);
+    gpointer abi_sym = NULL, init_sym = NULL;
+
+    if (!g_module_symbol(m, "bta_drawing_module_abi", &abi_sym) ||
+        !g_module_symbol(m, "bta_drawing_module_init", &init_sym) ||
+        !abi_sym || !init_sym) {
+        fprintf(stderr, "bintana: %s is not a drawing module\n", path);
+        g_module_close(m);
+        g_free(path);
+        return false;
+    }
+    int abi = ((abi_fn)abi_sym)();
+    if (abi != 1) {
+        fprintf(stderr, "bintana: %s speaks drawing ABI %d, this runtime 1 -- "
+                        "rebuild it with this runtime\n", path, abi);
+        g_module_close(m);
+        g_free(path);
+        return false;
+    }
+    if (!((init_fn)init_sym)(ctx, global)) {
+        fprintf(stderr, "bintana: %s refused to install itself\n", path);
+        g_module_close(m);
+        g_free(path);
+        return false;
+    }
+
+    g_free(path);
+    return true;
+}
+
 /* The console loop's own tick: stop once the services that answer later have
  * nothing left. It is the check `run_console` makes, for the services this host
  * links -- a `main` that starts a `Network.Reach` must not exit before the
@@ -1342,6 +1414,11 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     libs    = bta_project_libs(ctx, dir, cfg);
     sources = bta_project_sources(ctx, dir, libs, cfg);
     install_core(ctx, global, dir, libs);
+
+    if (!load_drawing_module(ctx, global)) {
+        status = 2;
+        goto out;
+    }
 
     /* A library's native half loads before `rad.js` and before the project's
      * own sources, which is the contract `bta_plugin.h` states: `init` sees

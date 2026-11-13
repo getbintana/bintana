@@ -184,14 +184,17 @@ la Fase 2 hereda esa idea, o mueve el `bta_symbols` real.
 **Objetivo: un target que corre un `main` de verdad sin GTK.**
 
 **Primer slice hecho (2026-11-12): `bintana --version`, `check` y el
-`main` de un proyecto.** Enlaza 44 bibliotecas (cairo, Pango y GdkPixbuf, ninguna
-gráfica), **3,4 MB en Debug** (7,9 MB con los símbolos de `RelWithDebInfo`; un
-paquete los strippea) más un `widgets.json` de 1,7 MB que solo carga para
-`check`, y `check ide` da la misma salida que el check gráfico con 38,6 MB
-contra 60,3 MB en Debug, **36,7 contra 57,6 MB** en `RelWithDebInfo`. Corre `tools/check` y `lib/check`
+`main` de un proyecto.** Enlaza 17 bibliotecas (ninguna gráfica), **3,3 MB en
+Debug** (7,7 MB con los símbolos de `RelWithDebInfo`; un paquete los strippea)
+más un `widgets.json` de 1,7 MB que solo carga para `check`, y `check ide` da
+la misma salida que el check gráfico con 35,3 MB contra 59,9 MB en Debug,
+**32,7 contra 57,6 MB** en `RelWithDebInfo`. `Painter`, `Drawing`, `Metrics` y
+`Bitmap` viven en `bintana-drawing.so` (166 KB Debug), que se carga al arrancar
+un proyecto y no para `--version` ni `check`. Corre `tools/check` y `lib/check`
 como módulos, con las globals core (`File`, `Exec`, `Directory`, `Hash`,
-`Locale`, `Xml`, `Network`, `Text`, `Bitmap`, `Painter`, `Drawing`, `Decimal`,
-`Day`, `Bytes`),
+`Locale`, `Xml`, `Network`, `Text.LineOf`, `Decimal`, `Day`, `Bytes`), y el
+módulo de dibujo agrega `Text`, `Bitmap`, `Painter` y `Drawing` cuando corre un
+proyecto.
 `Application` con `Symbols`/`FreeNames`/`CheckSource`/`Globals`/`LibraryPath` y
 `rad.js`. **No enlaza ningún archivo de widgets:** `bintana-meta --dump` genera
 `check/widgets.json` de las filas y firmas reales, y `widget-meta.js` responde

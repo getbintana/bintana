@@ -11,7 +11,8 @@ bta_project.c     project.btp, `uses`, the library search path and load order;
 bta_util.c        bta_to_number and bta_to_int, needed by every host and by
                   the network and XML globals rather than by the widgets alone
 bta_headless.c    the core host (`bintana`): version, check, a project's
-                  `main`, and the exec of a `startup` project as `bintana-gui`
+                  `main`, the exec of a `startup` as `bintana-gui`, and the
+                  `bintana-drawing.so` load when a project runs
 bta_widget.c      the base Widget: geometry, Style and colours, events, drag and
                   drop, the class table machinery, lifetimes
 bta_controls.c    Form, Container, Panel, Label, Button, Image, TextBox,
@@ -22,8 +23,9 @@ bta_layout.c      Split, Frame, Overlay, RowList, Scroller, Flow
 bta_notebook.c    Notebook
 bta_switcher.c    Switcher (GtkStackSwitcher over a GtkStack)
 bta_paint.c       DrawingArea (GtkDrawingArea, GUI only) and Painter, Metrics
-                  and Drawing (cairo + Pango, in both hosts)
+                  and Drawing (cairo + Pango, in bintana-gui and the module)
 bta_bitmap.c      Bitmap: scale, crop, rotate and flip, on GdkPixbuf alone
+bta_drawing_module.c  the loadable drawing half's entry, ABI and init
 bta_text.c        Editor (abstract) and TextEditor (GtkTextView)
 bta_editor.c      SourceEditor (GtkSourceView), on top of Editor
 bta_terminal.c    Terminal (VTE on Linux, ConPTY + libvterm on Windows;

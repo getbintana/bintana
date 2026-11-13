@@ -748,7 +748,7 @@ measurements behind the target are in
 `bintana-gui` answers, and `ldd` is read again. It is the first real
 console runtime, not the test host: it loads `tools/check`, `lib/check` and the
 generated `widgets.json` through `WidgetMeta.js`, and `check` is byte for byte
-the graphical pass with **44 libraries against 153** and about 37 MB against
+the graphical pass with **17 libraries against 153** and about 33 MB against
 58 MB on the IDE's own project. The binary links no widget file; the document
 is 1.7 MB and is loaded only for `check`.
 
@@ -782,7 +782,7 @@ the dispatch to the words it was given and to the host's own exit status; a
 `main` run with the same fake must not dispatch at all, and a
 `BINTANA_GUI` that does not exist must be a sentence and exit 2. The console
 run costs **13.4 MB against 43.3 MB** on the same fixture, and the
-`Drawing` one **27.5 MB against 56.9 MB**.
+`Drawing` one **27.2 MB against 56.9 MB**.
 
 ## The install, which the suite cannot see either
 

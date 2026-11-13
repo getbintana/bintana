@@ -169,26 +169,27 @@ hosts install.
 
 | command | wall | max RSS | libraries |
 |---|---:|---:|---:|
-| `bintana --version` | 0.00 s | 9.8 MB | 44 |
-| `bintana check examples/hello` | 0.09 s | 24.1 MB | 44 |
-| `bintana check ide` | 5.49 s | 38.6 MB | 44 |
-| `bintana-gui check ide` | 5.58 s | 60.3 MB | 153 |
-| `bintana tests/headless/projects/run` (a `main`) | 0.02 s | 13.4 MB | 44 |
+| `bintana --version` | 0.00 s | 5.8 MB | 17 |
+| `bintana check examples/hello` | 0.09 s | 20.8 MB | 17 |
+| `bintana check ide` | 5.33 s | 35.3 MB | 17 |
+| `bintana-gui check ide` | 5.36 s | 59.9 MB | 153 |
+| `bintana tests/headless/projects/run` (a `main`) | 0.02 s | 13.4 MB | 17 |
 | `bintana-gui tests/headless/projects/run` | 0.04 s | 43.3 MB | 153 |
-| `bintana tests/headless/projects/draw` (`Drawing`) | 0.05 s | 27.5 MB | 44 |
+| `bintana tests/headless/projects/draw` (`Drawing`) | 0.05 s | 27.2 MB | 17 |
 | `bintana-gui tests/headless/projects/draw` | 0.13 s | 56.9 MB | 153 |
 
 The `check ide` rows are the same pass, and their output is byte for byte the
 same (`--json` too); the core uses less memory and maps no toolkit.
 The `check` rows are the Debug build (`build/`). On `RelWithDebInfo`
-(`build-rwd`) the same check is **1.57 s and 36.7 MB** against **1.62 s and
-57.6 MB** for the graphical binary; `--version` is 9.8 MB. The project rows are
-`RelWithDebInfo`: a `main` over a tiny library costs the core **13.4 MB against
-43.3 MB**, and a `Drawing` document with a logo **27.5 MB against 56.9 MB** --
-the toolkit is mapped before the graphical runtime's `main` even reads
-`project.btp`. The binary is **3.4 MB**
-in the Debug build and **7.9 MB** with `RelWithDebInfo`'s symbols -- a packager
-strips them; the metadata document it loads for `check` is **1.7 MB**.
+(`build-rwd`) the same check is **1.46 s and 32.7 MB** against **1.62 s and
+57.6 MB** for the graphical binary; `--version` is 5.3 MB there. The project
+rows are `RelWithDebInfo`: a `main` over a tiny library costs the core **13.4 MB
+against 43.3 MB**, and a `Drawing` document with a logo **27.2 MB against
+56.9 MB** -- the toolkit is mapped before the graphical runtime's `main` even
+reads `project.btp`. The binary is **3.3 MB** in the Debug build and **7.7 MB**
+with `RelWithDebInfo`'s symbols -- a packager strips them; the drawing module
+is 166 KB Debug and 261 KB with symbols, and the metadata document it loads
+for `check` is **1.7 MB**.
 
 **How it is put together.** The core `bintana` links **no widget file**. At build
 time `bintana-meta --dump` writes `check/widgets.json` from the real class rows,
@@ -199,11 +200,13 @@ their property tables, both preludes and the generated signatures;
 `Hash` and `Environment`. **`bta_project.c` is the boot both hosts share**:
 `project.btp`, `uses`, the six-place library search and the order sources load
 in. It has no toolkit in it, so `bintana` resolves a library the same
-way `bintana` does instead of keeping a second answer. `bta_headless.c` is the
+way `bintana-gui` does instead of keeping a second answer. `bta_headless.c` is the
 rest of the host: core globals, `Application`, `rad.js`, then either the
 project's libraries, sources and `main`, or -- for `check` only -- the metadata
-document, `bta_modules_scope`, `lib/check` and `tools/check`'s `main`. The
-files `bta_runtime.c` would have supplied -- `bta_lookup_global`,
+document, `bta_modules_scope`, `lib/check` and `tools/check`'s `main`. **The
+drawing half is `bintana-drawing.so`**, loaded by `run_project` and never by
+`--version` or `check`, so the core's link carries no cairo, Pango or
+GdkPixbuf. The files `bta_runtime.c` would have supplied -- `bta_lookup_global`,
 `bta_dump_error`, `bta_symbols`, `bta_split_doc`, `bta_read_file`,
 `bta_drain_jobs` and the error text -- are in the host.
 `bintana-meta` is the generator and the test; it is not installed.
@@ -267,10 +270,11 @@ suite's reference plugin is the fixture: `tests/headless/projects/plugin` with
 2, as in the graphical host. That is the road by which `taglib` -- or a
 `drawing` plugin -- can be optional.
 
-**Drawing is core.** `Painter`, `Metrics`, `Bitmap` and `Drawing` are in the
-host -- cairo, Pango and GdkPixbuf, none of GTK -- so a `main` writes a PNG or a
-PDF and measures text with no display. `DrawingArea`, which needs a widget, is
-the GUI's. **The report's document half is core too:** `lib/report` and
+**Drawing is a loadable module.** `Painter`, `Metrics`, `Bitmap` and `Drawing`
+are not linked into `bintana`: `bintana-drawing.so` carries cairo, Pango and
+GdkPixbuf and is loaded when a project runs, so `--version` and `check` stay at
+17 libraries and 5.8 MB. A `main` still writes a PNG or a PDF and measures text
+with no display; `DrawingArea`, which needs a widget, is the GUI's. **The report's document half is core too:** `lib/report` and
 `lib/charts` define `ReportDocument`/`ChartDocument` always, and their
 `Report`/`Chart` controls only when `Component` exists, so a `main` lays out and
 writes a report with `uses: ["report", "charts"]` and no display. `PdfDocument`

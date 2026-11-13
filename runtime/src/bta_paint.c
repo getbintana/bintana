@@ -1833,10 +1833,29 @@ static const JSCFunctionListEntry text_props[] = {
 
 void bta_metrics_init(JSContext *ctx, JSValue global)
 {
-    JSValue text = JS_NewObject(ctx);
+    /* **Add to the `Text` that is there**, not replace it: the core installs
+     * `LineOf` before this module loads, and a second object would take it
+     * away. In the graphical host there is no `Text` yet, so one is made. */
+    JSValue text = JS_GetPropertyStr(ctx, global, "Text");
 
-    JS_SetPropertyFunctionList(ctx, text, text_props, G_N_ELEMENTS(text_props));
+    if (!JS_IsObject(text)) {
+        JS_FreeValue(ctx, text);
+        text = JS_NewObject(ctx);
+    } else {
+        /* The core installs `LineOf` before the module loads; the module's
+         * table declares it too, and redefining a property that is there
+         * aborts the engine. Drop the one and install the table whole. */
+        JSAtom line = JS_NewAtom(ctx, "LineOf");
+        JS_DeleteProperty(ctx, text, line, 0);
+        JS_FreeAtom(ctx, line);
+    }
+
+    /* The extractor ties `text_props` to `Text` through these two lines; the
+     * first hands the reference over, the second takes it back. */
     JS_SetPropertyStr(ctx, global, "Text", text);
+    text = JS_GetPropertyStr(ctx, global, "Text");
+    JS_SetPropertyFunctionList(ctx, text, text_props, G_N_ELEMENTS(text_props));
+    JS_FreeValue(ctx, text);
 }
 
 /* ------------------------------------------------------------------ paths */
