@@ -16718,7 +16718,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "`{ A4: { Width, Height }, Letter: …, A5: … }`, in **points**. Read off GTK, so a size that reads 595 here is the 595 the print context hands the handler",
+          "Doc": "`{ A4: { Width, Height }, Letter: …, A5: … }`, in whole **points** -- the standard sizes, the same table in every host, so a document with no display lays itself out on the sheet a print context hands the handler here",
           "Native": true
         },
         {

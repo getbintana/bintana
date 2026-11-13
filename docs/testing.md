@@ -803,8 +803,10 @@ library directory, so a `main` gets `TestPlug` with no display.
 **A report without its control** is the other document fixture:
 `tests/headless/projects/report` uses `lib/report` and `lib/charts`, builds a
 `ReportDocument`, writes a PDF and asserts that `Report`/`Chart` do not exist
-in the core (they do in `bintana-gui`). `lib/report` keeps its paper table
-locally, so the document does not need `Printer`, which is GTK's.
+in the core (they do in `bintana-gui`). `lib/report` reads `Printer.Papers`,
+which both hosts answer out of one table (bta_util.c): the core's `Printer`
+has `Papers` and nothing else, and the globals fixture holds both hosts to
+GTK's 595x842, 612x792 and 420x595.
 
 **The console globals are the graphical host's own**:
 `tests/headless/projects/globals` is a `main` that asks `typeof` of `Http`,

@@ -798,6 +798,8 @@ int  bta_line_of_utf16(const char *utf8, int index);
 /* `Text.LineOf(text, index)` (bta_util.c), installed by both hosts. */
 JSValue bta_text_line_of(JSContext *ctx, JSValueConst this_val,
                          int argc, JSValueConst *argv);
+/* `Printer.Papers`' table (bta_util.c), the same in both hosts. */
+JSValue bta_papers_new(JSContext *ctx);
 int  bta_chars_at_position(const char *utf8, int line, int column);
 void bta_editor_register(void);    /* bta_editor.c: SourceEditor */
 void bta_terminal_register(void);  /* bta_terminal.c */

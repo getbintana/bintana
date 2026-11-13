@@ -523,3 +523,38 @@ bool bta_is_identifier(const char *s)
             return false;
     return true;
 }
+
+/*
+ * `Printer.Papers`: the sheets a document lays itself out on, in whole points,
+ * the same table in both hosts.
+ *
+ * It was asked of GTK (`gtk_paper_size_get_width`), which the console host
+ * does not have, so `lib/report` kept a copy of its own to paginate a
+ * `ReportDocument` with no display -- the table this was made to stop being
+ * written twice. The three are standard sizes and need no toolkit: A4 and A5
+ * are ISO millimetres, Letter is inches, and 72 points to the inch is a PDF
+ * page's unit. Rounded to whole points, as the GTK answer was, because a
+ * quarter of a point is the noise of the millimetre conversion and not a
+ * size anybody lays out to. tests/headless.sh holds both hosts to 595x842,
+ * 612x792 and 420x595, which is what GTK answered.
+ */
+JSValue bta_papers_new(JSContext *ctx)
+{
+    static const struct { const char *name; double w_mm, h_mm; } sheets[] = {
+        { "A4",     210.0, 297.0 },
+        { "Letter", 215.9, 279.4 },   /* 8.5 x 11 in */
+        { "A5",     148.0, 210.0 },
+    };
+    JSValue out = JS_NewObject(ctx);
+
+    for (size_t i = 0; i < G_N_ELEMENTS(sheets); i++) {
+        JSValue sheet = JS_NewObject(ctx);
+
+        JS_SetPropertyStr(ctx, sheet, "Width",
+                          JS_NewInt32(ctx, (int)(sheets[i].w_mm * 72.0 / 25.4 + 0.5)));
+        JS_SetPropertyStr(ctx, sheet, "Height",
+                          JS_NewInt32(ctx, (int)(sheets[i].h_mm * 72.0 / 25.4 + 0.5)));
+        JS_SetPropertyStr(ctx, out, sheets[i].name, sheet);
+    }
+    return out;
+}

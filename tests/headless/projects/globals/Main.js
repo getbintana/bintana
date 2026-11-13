@@ -42,6 +42,9 @@ function language() {
         }
     }
     print(`LineOf: ${Text.LineOf("a\nb", 2)}`);
+    /* The sheets a document lays out on: one table in both hosts, where the
+     * core had none and lib/report kept a copy. */
+    print(`Papers: ${JSON.stringify(Printer.Papers)}`);
     /* `CheckSource` reads the line and column off the stack it builds, and a
      * program that set `Error.prepareStackTrace` must not change them: the
      * graphical host guarded it and the core's copy did not. */

@@ -294,6 +294,15 @@ static void install_gui_stubs(JSContext *ctx, JSValueConst global)
     }
 }
 
+/* `Printer.Papers` in a host with no printer: the table is data a document
+ * lays itself out on (bta_util.c), and the rest of `Printer` is the
+ * graphical host's. */
+static JSValue core_printer_papers(JSContext *ctx, JSValueConst this_val)
+{
+    (void)this_val;
+    return bta_papers_new(ctx);
+}
+
 static bool install_core(JSContext *ctx, JSValueConst global,
                          const char *project, GPtrArray *libs)
 {
@@ -343,6 +352,15 @@ static bool install_core(JSContext *ctx, JSValueConst global,
     bta_class_of_name_init(ctx, global);
     bta_strict_init(ctx, global);
     install_gui_stubs(ctx, global);
+
+    JSValue printer = JS_GetPropertyStr(ctx, global, "Printer");
+    JSAtom  papers  = JS_NewAtom(ctx, "Papers");
+    JS_DefinePropertyGetSet(ctx, printer, papers,
+        JS_NewCFunction2(ctx, (JSCFunction *)(void *)core_printer_papers,
+                         "Papers", 0, JS_CFUNC_getter, 0),
+        JS_UNDEFINED, JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, papers);
+    JS_FreeValue(ctx, printer);
     return true;
 }
 

@@ -401,6 +401,11 @@ if "$BINTANA_CORE" tests/headless/projects/globals one two \
         echo "the core's run ended before its task answered:" >&2
         cat "$tmp/globals-core.out" >&2
         fail=1
+    elif ! grep -qF 'Papers: {"A4":{"Width":595,"Height":842},"Letter":{"Width":612,"Height":792},"A5":{"Width":420,"Height":595}}' \
+            "$tmp/globals-core.out"; then
+        echo "Printer.Papers is not the sheets GTK answered:" >&2
+        grep '^Papers' "$tmp/globals-core.out" >&2
+        fail=1
     elif grep -Eq 'CRITICAL|WARNING' "$tmp/globals-core.err"; then
         echo "the core's run warned:" >&2
         cat "$tmp/globals-core.err" >&2

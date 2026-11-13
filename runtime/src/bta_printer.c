@@ -1119,45 +1119,21 @@ static JSValue printer_get_default(JSContext *ctx, JSValueConst this_val)
 }
 
 /*
- * **The paper sizes, in points, asked of GTK rather than written down.**
+ * **The paper sizes, in points, written once** (`bta_papers_new`, bta_util.c).
  *
  * `lib/report` and `lib/markdown` each carried this table, identically, and the
  * copies did more than repeat themselves: both were a top-level `const PAPERS`,
  * so a project that named **both libraries** did not start at all --
  * `SyntaxError: redeclaration of 'PAPERS'`, on line 1 of a file its author
- * never wrote. It is one table here, where the three names already had to be
- * known (`paper_size` above hands them to GTK), and neither library declares
- * one.
- *
- * The numbers are `gtk_paper_size_get_width/height` and not three pairs typed
- * out: this is the same GTK that lays the page out, so a size that reads 595
- * here is the 595 the print context will hand the handler. Points, 72 to the
- * inch, because that is what a PDF page is and what the frame arrives in.
+ * never wrote. It came here, asked of GTK; it is in bta_util.c now, out of the
+ * standard millimetres, because the console host has no GTK and a
+ * `ReportDocument` still has to know A4 is 595x842. The names are the ones
+ * `paper_size` above hands to GTK for printing.
  */
 static JSValue printer_get_papers(JSContext *ctx, JSValueConst this_val)
 {
-    static const char *names[] = { "A4", "Letter", "A5" };
-    JSValue            out     = JS_NewObject(ctx);
-
-    for (guint i = 0; i < G_N_ELEMENTS(names); i++) {
-        GtkPaperSize *size  = gtk_paper_size_new(paper_size(names[i]));
-        JSValue       sheet = JS_NewObject(ctx);
-
-        /* Whole points. GTK answers the exact conversion from millimetres --
-         * A4 is 595.2755905511812 wide -- and a quarter of a point is the
-         * noise of that conversion rather than a size anybody laid out to: a
-         * PDF surface is made in whole points and both libraries rounded on
-         * the way in already. Rounded here instead, once, so the number a
-         * layout is written against and the number the page is made with are
-         * the same one. */
-        JS_SetPropertyStr(ctx, sheet, "Width",
-            JS_NewInt32(ctx, (int)(gtk_paper_size_get_width(size, GTK_UNIT_POINTS) + 0.5)));
-        JS_SetPropertyStr(ctx, sheet, "Height",
-            JS_NewInt32(ctx, (int)(gtk_paper_size_get_height(size, GTK_UNIT_POINTS) + 0.5)));
-        JS_SetPropertyStr(ctx, out, names[i], sheet);
-        gtk_paper_size_free(size);
-    }
-    return out;
+    (void)this_val;
+    return bta_papers_new(ctx);
 }
 
 static const JSCFunctionListEntry printer_props[] = {
@@ -1167,9 +1143,10 @@ static const JSCFunctionListEntry printer_props[] = {
      */
     JS_CGETSET_DEF("Names",   printer_get_names,   NULL),
     /* Papers
-     *   `{ A4: { Width, Height }, Letter: …, A5: … }`, in **points**. Read
-     *   off GTK, so a size that reads 595 here is the 595 the print context
-     *   hands the handler
+     *   `{ A4: { Width, Height }, Letter: …, A5: … }`, in whole **points** --
+     *   the standard sizes, the same table in every host, so a document
+     *   with no display lays itself out on the sheet a print context hands
+     *   the handler here
      */
     JS_CGETSET_DEF("Papers",  printer_get_papers,  NULL),
     /* Default
