@@ -544,6 +544,17 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   the shared half: the GUI uses `GdkTexture` and `gdk_rgba_parse`, the core
   GdkPixbuf and its own CSS-colour parser; `Bitmap.Rotate` likewise converts the
   cairo surface itself instead of calling `gdk_pixbuf_get_from_surface`.
+- **A library that defines a widget class guards it with `typeof Component`.**
+  `lib/report` and `lib/charts` define `ReportDocument`/`ChartDocument`
+  unconditionally, and `let Report;` followed by `Report = class Report extends
+  Component` inside `if (typeof Component !== "undefined")`. In the core the
+  component is absent, so the control is skipped and the document loads.
+  **`let`, not `var`**: a top-level `var` is a property of the global object,
+  and a completion that reads the global names then offers `Report` to a project
+  that never used the library -- the IDE test caught exactly that. **And not
+  `globalThis`**, which is not in the language (rad.js says so when it is used).
+  A library that needs a GTK table it cannot have (`Printer.Papers` for paper
+  sizes) keeps a local table for its document half instead.
 - **`bta_project.c` is the boot both hosts share, and it must stay toolkit-free.**
   It holds `project.btp`, `uses`, the six-place library search and the source
   order; `bta_runtime.c` and `bta_headless.c` both link it. A GTK call added

@@ -248,9 +248,12 @@ throw on construction and answer the metadata questions.
 **Drawing is core.** `Painter`, `Metrics`, `Bitmap` and `Drawing` are in the
 host -- cairo, Pango and GdkPixbuf, none of GTK -- so a `main` writes a PNG or a
 PDF and measures text with no display. `DrawingArea`, which needs a widget, is
-the GUI's. `PdfDocument` is still a stub (poppler and PoDoFo are not linked
-here), so a report's form fields remain the graphical host's until the core
-globals are split. `File.Info` answers no icon name -- there is no theme to ask
+the GUI's. **The report's document half is core too:** `lib/report` and
+`lib/charts` define `ReportDocument`/`ChartDocument` always, and their
+`Report`/`Chart` controls only when `Component` exists, so a `main` lays out and
+writes a report with `uses: ["report", "charts"]` and no display. `PdfDocument`
+is still a stub (poppler and PoDoFo are not linked here), so a report's form
+fields remain the graphical host's until the core globals are split. `File.Info` answers no icon name -- there is no theme to ask
 -- which no check reads.
 
 **What it does not do yet.** The dispatch lives in the core; both hosts

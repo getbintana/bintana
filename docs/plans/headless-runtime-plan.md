@@ -248,12 +248,14 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
 
 - `bintana-meta` corre `tests/api` y `tests/icons`/`tests/styles`.
 - Un `main` mínimo y el `testDocument` de `tests/report` corren sin GTK y
-  escriben el PDF. **Mitad hecha:** `Painter`, `Metrics`, `Bitmap` y `Drawing`
-  están en el core (cairo, Pango y GdkPixbuf), `Drawing.Save`/`ToPng`/`SavePdf`
-  funcionan sin display y el fixture `tests/headless/projects/draw` lo difea
-  contra el host gráfico. Falta separar `lib/report` en `ReportDocument` (core)
-  y `Report` (widget) para correr el `testDocument` entero, que hoy arrastra
-  `Component`, `DrawingArea` y `Probe`.
+  escriben el PDF. **Hecho:** `Painter`, `Metrics`, `Bitmap` y `Drawing` están
+  en el core (cairo, Pango y GdkPixbuf), `Drawing.Save`/`ToPng`/`SavePdf`
+  funcionan sin display, y `lib/report`/`lib/charts` separan su documento del
+  control: `ReportDocument` y `ChartDocument` cargan sin `Component` y escriben
+  el PDF; `Report`/`Chart` no existen en el core. Los fixtures
+  `tests/headless/projects/{draw,report}` lo difean contra el host gráfico. El
+  `testDocument` entero sigue siendo del host gráfico porque compara contra
+  `DrawingArea` y el control, no por el documento.
 - `tests/media` corre en core si GStreamer queda core; si no, se documenta por
   qué va al host gráfico.
 - El worker de `Task` sigue pasando sus tests; su instalador y el core no se

@@ -169,6 +169,33 @@ else
     fail=1
 fi
 
+# `lib/report` and `lib/charts` split their document from their control: the
+# widget classes are not defined in the core, and `ReportDocument` still lays
+# out pages and writes the PDF. The last two lines say which host it is.
+if BINTANA_LIB_PATH="$PWD/lib" "$BINTANA_CORE" tests/headless/projects/report \
+        >"$tmp/report-core.out" 2>"$tmp/report-core.err" &&
+   BINTANA_LIB_PATH="$PWD/lib" "$BINTANA" tests/headless/projects/report \
+        >"$tmp/report-gui.out" 2>"$tmp/report-gui.err"; then
+    head -3 "$tmp/report-core.out" >"$tmp/report-core-stable"
+    head -3 "$tmp/report-gui.out"  >"$tmp/report-gui-stable"
+    if diff -u "$tmp/report-gui-stable" "$tmp/report-core-stable" \
+            >"$tmp/report.diff" &&
+       grep -qx "singleton undefined" "$tmp/report-core.out" &&
+       grep -qx "chart undefined" "$tmp/report-core.out" &&
+       grep -qx "singleton function" "$tmp/report-gui.out" &&
+       grep -qx "chart function" "$tmp/report-gui.out"; then
+        echo "a ReportDocument writes the PDF without the Report control"
+    else
+        echo "the report document differs between hosts:" >&2
+        cat "$tmp/report.diff" "$tmp/report-core.out" "$tmp/report-gui.out" >&2
+        fail=1
+    fi
+else
+    echo "one of the hosts failed the report document:" >&2
+    cat "$tmp/report-core.err" "$tmp/report-gui.err" >&2
+    fail=1
+fi
+
 # `Drawing` is the document half of `DrawingArea`: a PNG and a PDF with no
 # control and no display, through Painter, Metrics and Bitmap. Both hosts draw
 # the same document; the fixture prints only what is stable across them.

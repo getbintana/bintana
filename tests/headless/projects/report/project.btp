@@ -1,0 +1,7 @@
+{
+  "name": "headless-report",
+  "main": "Main",
+  "description": "A ReportDocument and a PDF with no display, over lib/report and lib/charts",
+  "uses": ["report", "charts"],
+  "sources": ["Main.js"]
+}

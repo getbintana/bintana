@@ -752,6 +752,12 @@ the graphical pass with **44 libraries against 153** and about 37 MB against
 58 MB on the IDE's own project. The binary links no widget file; the document
 is 1.7 MB and is loaded only for `check`.
 
+**A report without its control** is the other document fixture:
+`tests/headless/projects/report` uses `lib/report` and `lib/charts`, builds a
+`ReportDocument`, writes a PDF and asserts that `Report`/`Chart` do not exist
+in the core (they do in `bintana-gui`). `lib/report` keeps its paper table
+locally, so the document does not need `Printer`, which is GTK's.
+
 **It runs a project's tests too**: `bintana test` on a `main` project reads
 `tests/*Test.js` with `runTests` and no toolkit; a `startup` project's tests are
 exec'd as `bintana-gui test`, which the fixture holds with the fake host.
