@@ -1,0 +1,68 @@
+{
+  "format": "bintana-form/1",
+  "class": "MainForm",
+  "properties": {
+    "Height": 260,
+    "Text": "System note",
+    "Width": 460
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblNote",
+      "properties": {
+        "For": "TxtNote",
+        "Height": 24,
+        "Text": "Note:",
+        "Width": 100,
+        "X": 12,
+        "Y": 12
+      }
+    },
+    {
+      "type": "TextBox",
+      "name": "TxtNote",
+      "properties": {
+        "Height": 34,
+        "Width": 420,
+        "X": 12,
+        "Y": 40
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnWrite",
+      "properties": {
+        "Height": 36,
+        "Style": "suggested-action",
+        "Text": "Write for all users",
+        "Width": 180,
+        "X": 12,
+        "Y": 84
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Height": 24,
+        "Text": "",
+        "Width": 228,
+        "X": 204,
+        "Y": 92
+      }
+    },
+    {
+      "type": "TextEditor",
+      "name": "Log",
+      "properties": {
+        "AccessibleName": "Output",
+        "Height": 110,
+        "ReadOnly": true,
+        "Width": 420,
+        "X": 12,
+        "Y": 132
+      }
+    }
+  ]
+}

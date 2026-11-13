@@ -1,0 +1,5 @@
+{
+  "name": "write-note",
+  "main": "Main",
+  "sources": ["Main.js"]
+}

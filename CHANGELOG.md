@@ -50,7 +50,9 @@ one-page answer to *what is new since the release I have*.
   application's own window is never elevated; the helper answers through the
   same `Exec` job (`Stop`, `Kill`, `onLine`, `onExit`) and reads
   `Privilege.Elevated`, `CanElevate` and `Invoker`. A helper that declares
-  `startup` is refused before the dialog, and a `Task` cannot ask.
+  `startup` is refused before the dialog, and a `Task` cannot ask. A directory
+  with its own `project.btp` is a project of its own: the application does not
+  load the helper's sources, and `bintana check` knows the `"privileged"` key.
 - **`Logger.Target = "EventLog"` on Windows.** `Logger` now writes to the
   Application log that `eventvwr.exe` shows: `Debug` and `Info` as Information,
   `Warning` as Warning and `Error` as Error, with the line as the message.

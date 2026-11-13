@@ -1365,6 +1365,13 @@ icon when the theme has one by that name (`gtkapplication.c`).
   application, and reads its `project.btp` for `main` before launching. A
   `startup` helper is refused there; the helper's `--privileged` mode checks the
   elevation too, so a direct unelevated run says `must be run elevated`.
+- **A nested project is not one of the parent's sources.** `collect_js` and
+  `lib/check`'s `ProjectFiles` skip a directory with its own `project.btp`; the
+  `privileged` helper is one, so its `Main.js` is not loaded by the application
+  and is not reported as an unlisted source. The helper is checked as its own
+  project (`bintana check tools/install`), and `ProjectFile` knows the
+  `"privileged"` key so the manifest check does not call it a key nothing
+  reads.
 - **Windows has no console in `bintanaw.exe`.** The launcher is the sibling
   `bintana.exe`; it creates a temp file, starts `bintanaw.exe --privileged
   --out <file>` with UAC, waits, copies the file to its stdout and exits with

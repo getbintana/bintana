@@ -3278,6 +3278,19 @@ static void collect_js(GPtrArray *out, const char *dir, bool root)
 
         char *path = g_build_filename(dir, name, NULL);
         if (g_file_test(path, G_FILE_TEST_IS_DIR)) {
+            /* A folder with its own manifest is a project of its own -- the
+             * `privileged` helper is one -- and not a folder of this one's
+             * sources.  The root is this project and is not asked. */
+            if (!root) {
+                char *manifest = g_build_filename(path, "project.btp", NULL);
+                bool  project  = g_file_test(manifest, G_FILE_TEST_IS_REGULAR);
+
+                g_free(manifest);
+                if (project) {
+                    g_free(path);
+                    continue;
+                }
+            }
             collect_js(out, path, false);
             g_free(path);
         } else if (g_str_has_suffix(name, ".js")) {
