@@ -287,6 +287,7 @@ add_executable(bintana
     runtime/src/bta_debug.c
     runtime/src/bta_profile.c
     runtime/src/bta_sys.c
+    runtime/src/bta_privilege.c
     runtime/src/bta_task.c
     runtime/src/bta_cancellable.c
     runtime/src/bta_lock.c

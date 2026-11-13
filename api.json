@@ -16792,6 +16792,56 @@
       ]
     },
     {
+      "Name": "Privilege",
+      "Members": [
+        {
+          "Name": "CanElevate",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the OS can ask: `pkexec` on Linux, UAC on Windows, and false in a sandbox or a Task.  `Run` still works when `Elevated` is true, since there is nobody left to ask",
+          "Native": true
+        },
+        {
+          "Name": "Elevated",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether this process already has root/administrator rights: true in a helper, false in the application that asked for one",
+          "Native": true
+        },
+        {
+          "Name": "Invoker",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`{ Id, Name, Home }` of the user who asked for the helper.  Inside a helper this is the person at the desktop, not `root`: on Linux it comes from `PKEXEC_UID`/`SUDO_UID`, and on Windows it is the same user with an elevated token",
+          "Native": true
+        },
+        {
+          "Name": "Run",
+          "Kind": "Method",
+          "Params": 5,
+          "Signature": "(helper, [args], [options], [onLine], [onExit])",
+          "Returns": "Exec",
+          "Doc": "runs a helper project declared in `project.btp`'s `\"privileged\"` list, with the platform's consent dialog.  `helper` is a project directory with a `main`; `args` are its `Application.Arguments`; `options` are `Exec`'s (`Timeout`, `Env`, `Dir`).  Answers the same job handle `Exec` does, so `Stop`/`Kill` and the callbacks are the ones the language already has.  On Windows the helper's output arrives when it exits, because the unelevated launcher forwards the file UAC let it write",
+          "Native": true
+        },
+        {
+          "Name": "Wait",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(helper, [args], [options])",
+          "Returns": "{ ExitCode, Output }",
+          "Doc": "the same, run to the end.  It blocks the main loop: use `Run` from a window, and `Wait` from a console project or a place that can wait",
+          "Native": true
+        }
+      ]
+    },
+    {
       "Name": "Probe",
       "Members": [
         {

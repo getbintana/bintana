@@ -378,6 +378,13 @@ struct BtaApp {
     char           *entry;
     GPtrArray      *sources;  /* absolute paths of .js files, in load order */
     /*
+     * project.btp's "privileged": the helper projects this application may ask
+     * the OS to run elevated, resolved to absolute directories.  Empty when it
+     * declares none.  `Privilege.Run` accepts nothing outside this list, and a
+     * helper must be a `main` project -- see `runtime/src/bta_privilege.c`.
+     */
+    GPtrArray      *privileged;
+    /*
      * The libraries `project.btp`'s "uses" named, resolved to absolute
      * directories in the order they were declared.  A library is a directory of
      * `.js` and `.form` files and nothing else: its sources load before the
@@ -1824,6 +1831,21 @@ const char *bta_platform_log_name(void);
 bool        bta_platform_log_available(void);
 const char *bta_platform_log_why(void);
 bool        bta_platform_log_send(int level, const char *text);
+
+/*
+ * `Privilege`, the launcher for a helper project run elevated.  The runtime
+ * never handles the password and never elevates itself: `Run` starts a
+ * `main` project through pkexec on Linux or through the `--elevate` launcher
+ * on Windows, and the OS shows its own consent dialog.
+ */
+void bta_privilege_init(JSContext *ctx, JSValueConst global, bool worker);
+bool bta_privilege_elevated(void);
+bool bta_privilege_can_elevate(void);
+#ifdef G_OS_WIN32
+/* The internal `--elevate` mode: ShellExecuteEx("runas") on the helper, with
+ * its output in a temporary file that this process forwards. */
+int bta_privilege_elevate(int argc, char **argv);
+#endif
 
 #ifdef G_OS_WIN32
 /* Writes the `Bintana` event source into HKLM, with this executable as its

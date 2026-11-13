@@ -408,8 +408,8 @@ save will edit `examples/hello` for real.
   (2026-11-11): `tests/smoke` 171/0, `tests/markdown` 171/0, `tests/qr`
   120/0, `tests/report` 259/0 and `tests/xlsx` 57/0 on that desktop.
   `tests/widgets` runs natively there with `testClipboard`'s round trip
-  skipped (the clipboard SEGV below): 6364 assertions, of which the two or
-  three crowding failures below are the red ones (the last run was 6362
+  skipped (the clipboard SEGV below): 6372 assertions, of which the two or
+  three crowding failures below are the red ones (the last run was 6370
   passed, 2 failed on 2026-11-13). What is left is the suite's own crowding,
   none of it seen alone: `testHttpServer`'s TLS restart on an ephemeral port
   another socket took, `testNetwork`'s probe of a stopped server answering

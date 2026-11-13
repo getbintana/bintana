@@ -697,7 +697,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "ReferenceHint", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Cipher", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "ReferenceHint", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Cipher", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Privilege", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Parts", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FontDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -18241,6 +18241,60 @@ class Form1 extends Form {
 
         /* And the thing it replaced is gone. */
         eq("console is not part of the language", typeof console, "undefined");
+    }
+
+    /* --- a helper with the OS's consent --------------------------------------
+     *
+     * The API is a launcher, not an elevation: the platform asks (pkexec/UAC)
+     * and a separate `main` project does the work.  What a suite with no
+     * elevation can prove is the refusals and the child's own guard; the
+     * consent dialog is by hand.
+     */
+    testPrivilege() {
+        check("Privilege.Elevated is a boolean", typeof Privilege.Elevated === "boolean",
+              String(Privilege.Elevated));
+        check("Privilege.CanElevate is a boolean",
+              typeof Privilege.CanElevate === "boolean", String(Privilege.CanElevate));
+
+        const who = Privilege.Invoker;
+        check("Privilege.Invoker is the person at the desktop",
+              !!who && typeof who.Name === "string" && who.Name.length > 0,
+              JSON.stringify(who));
+        check("...with a home and an id",
+              typeof who.Home === "string" && typeof who.Id === "string" &&
+              who.Id.length > 0, JSON.stringify(who));
+
+        throws("a helper outside the application is refused",
+               () => { Privilege.Run("../nope", []); });
+        throws("a helper not declared in project.btp is refused",
+               () => { Privilege.Run("nope", []); });
+        throws("Wait refuses the same way",
+               () => { Privilege.Wait("../nope", []); });
+
+        /* The child's own door: `--privileged` runs only when the process is
+         * elevated.  The helper here is outside the app on purpose -- that
+         * declaration is the parent's check, and this mode does not know it. */
+        const helper = File.Join(SCRATCH, "privilege-helper");
+        Directory.Make(helper);
+        File.Save(File.Join(helper, "project.btp"),
+                  JSON.stringify({ name: "helper", main: "HelperMain",
+                                   sources: ["Helper.js"] }));
+        File.Save(File.Join(helper, "Helper.js"),
+                  "export function HelperMain() {\n" +
+                  "    print(`ELEVATED=${Privilege.Elevated}`);\n" +
+                  "}\n");
+        const r = Exec.Wait([Application.Executable, "--privileged", helper],
+                            { Timeout: 10000, Stderr: "separate" });
+        const said = `${r.Output}${r.Errors || ""}`;
+        if (Privilege.Elevated)
+            check("a helper runs when the process is elevated",
+                  r.ExitCode === 0 && said.includes("ELEVATED=true"),
+                  JSON.stringify({ code: r.ExitCode, said }));
+        else
+            check("an unelevated --privileged is refused",
+                  r.ExitCode === 2 && said.includes("must be run elevated"),
+                  JSON.stringify({ code: r.ExitCode, said }));
+        Directory.DeleteTree(helper);
     }
 
     /* --- timers, said in one line -------------------------------------------

@@ -2949,6 +2949,7 @@ static bool install_globals(BtaApp *app)
     bta_widgets_init(ctx, global);
     bta_menu_init(ctx);
     bta_sys_init(ctx, global);
+    bta_privilege_init(ctx, global, false);
     bta_cancellable_init(ctx, global);
     bta_task_init(ctx, global);
     bta_lock_init(ctx, global);
@@ -3742,6 +3743,25 @@ JSContext *bta_new_context(JSRuntime *rt)
     return ctx;
 }
 
+/* `path` is inside the directory `root` -- a helper project may not be the
+ * application itself, nor a `..` that climbed out of it.  Lexical, like
+ * `File.Within`: an application's own manifest is not a security boundary, and
+ * the OS prompt is. */
+static bool privilege_path_inside(const char *path, const char *root)
+{
+    size_t n = strlen(root);
+
+#ifdef G_OS_WIN32
+    if (g_ascii_strncasecmp(path, root, n))
+        return false;
+#else
+    if (strncmp(path, root, n))
+        return false;
+#endif
+    return path[n] == '/' || path[n] == '\\' ||
+           (n && (root[n - 1] == '/' || root[n - 1] == '\\'));
+}
+
 BtaApp *bta_app_new(const char *project_dir)
 {
     BtaApp *app = g_new0(BtaApp, 1);
@@ -3827,6 +3847,7 @@ BtaApp *bta_app_new(const char *project_dir)
     app->version = g_strdup("");
     app->id      = g_strdup("");
     app->startup = g_strdup("Form1");
+    app->privileged = g_ptr_array_new_with_free_func(g_free);
 
     char *cfg_path = project_manifest(app->dir);
     size_t len;
@@ -3873,6 +3894,51 @@ BtaApp *bta_app_new(const char *project_dir)
             app->entry   = json_str(app->ctx, cfg, "main", NULL);
             app->libs    = collect_libs(app, cfg);
             app->sources = collect_sources(app, cfg);
+
+            /*
+             * `"privileged": ["tools/install"]`: the helper projects this
+             * application may ask the OS to run elevated.  Resolved here, once,
+             * so `Privilege.Run` compares canonical paths and a `..` cannot
+             * name something outside the project.
+             */
+            JSValue pv = JS_GetPropertyStr(app->ctx, cfg, "privileged");
+
+            if (!JS_IsUndefined(pv)) {
+                if (!JS_IsArray(pv)) {
+                    fprintf(stderr, "bintana: project.btp privileged is not an "
+                                    "array of project directories\n");
+                    exit(2);
+                }
+                JSValue  lv = JS_GetPropertyStr(app->ctx, pv, "length");
+                uint32_t n  = 0;
+
+                JS_ToUint32(app->ctx, &n, lv);
+                JS_FreeValue(app->ctx, lv);
+                for (uint32_t i = 0; i < n; i++) {
+                    JSValue     ev  = JS_GetPropertyUint32(app->ctx, pv, i);
+                    const char *rel = JS_IsString(ev)
+                                          ? JS_ToCString(app->ctx, ev) : NULL;
+
+                    if (!rel) {
+                        JS_FreeValue(app->ctx, ev);
+                        fprintf(stderr, "bintana: project.btp privileged entry "
+                                        "%u is not a path\n", i);
+                        exit(2);
+                    }
+                    char *abs = g_canonicalize_filename(rel, app->dir);
+
+                    JS_FreeCString(app->ctx, rel);
+                    JS_FreeValue(app->ctx, ev);
+                    if (!privilege_path_inside(abs, app->dir)) {
+                        fprintf(stderr, "bintana: project.btp privileged entry "
+                                        "\"%s\" is not a directory inside the "
+                                        "project\n", abs);
+                        exit(2);
+                    }
+                    g_ptr_array_add(app->privileged, abs);
+                }
+            }
+            JS_FreeValue(app->ctx, pv);
         }
         JS_FreeValue(app->ctx, cfg);
         g_free(cfg_src);
@@ -3924,6 +3990,8 @@ void bta_app_free(BtaApp *app)
         return;
     if (app->sources)
         g_ptr_array_unref(app->sources);
+    if (app->privileged)
+        g_ptr_array_unref(app->privileged);
     if (app->forms)
         g_hash_table_unref(app->forms);
     /* First: workers hold values of this context and run on their own threads,

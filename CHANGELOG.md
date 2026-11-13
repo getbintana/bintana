@@ -43,6 +43,14 @@ one-page answer to *what is new since the release I have*.
   becomes the shortcut's `.ico`, and uninstall removes the shortcut and that
   generated icon. The notification backend no longer overwrites an installed
   application's shortcut with its generic one.
+- **A privileged task is a helper project, not a root window.** `Privilege.Run`
+  and `Privilege.Wait` start a `main` project declared in `project.btp`'s
+  `"privileged"` array with the operating system's consent: `pkexec` and
+  polkit's agent on Linux, UAC through an unelevated launcher on Windows. The
+  application's own window is never elevated; the helper answers through the
+  same `Exec` job (`Stop`, `Kill`, `onLine`, `onExit`) and reads
+  `Privilege.Elevated`, `CanElevate` and `Invoker`. A helper that declares
+  `startup` is refused before the dialog, and a `Task` cannot ask.
 - **`Logger.Target = "EventLog"` on Windows.** `Logger` now writes to the
   Application log that `eventvwr.exe` shows: `Debug` and `Info` as Information,
   `Warning` as Warning and `Error` as Error, with the line as the message.

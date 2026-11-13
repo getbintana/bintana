@@ -216,6 +216,35 @@ icon when the theme has one by that name (`gtkapplication.c`).
   `FormatMessage` answered `ERROR_MR_MID_NOT_FOUND` until the line went. The
   `.rc` is neutral so every locale falls back to the one table.
 
+### A privileged task is a helper, not a window
+
+- **Polkit and UAC elevate a process, never a callback.** `Privilege.Run`
+  launches a `main` project through `pkexec` (Linux) or the runtime's
+  `--elevate` mode (Windows, `ShellExecuteEx("runas")`), and answers the `Exec`
+  job. The window stays unelevated; the helper is headless, which `main` already
+  means.
+- **The manifest is a typo guard, the OS prompt is the boundary.** `Run`
+  accepts only a project in `project.btp`'s `"privileged"` list, inside the
+  application, and reads its `project.btp` for `main` before launching. A
+  `startup` helper is refused there; the helper's `--privileged` mode checks the
+  elevation too, so a direct unelevated run says `must be run elevated`.
+- **Windows has no console in `bintanaw.exe`.** The launcher is the sibling
+  `bintana.exe`; it creates a temp file, starts `bintanaw.exe --privileged
+  --out <file>` with UAC, waits, copies the file to its stdout and exits with
+  the helper's code. The parent's `Exec` therefore hears the helper's output
+  when it exits, not while it runs. `--elevate` is Windows-only; on Linux
+  `pkexec` forwards stdout as it goes.
+- **`pkexec` runs the helper as root with `HOME=/root`.** `Privilege.Invoker`
+  reads `PKEXEC_UID` (or `SUDO_UID`) and looks the account up, so a helper that
+  writes into the person's home has the right path and still has to restore the
+  owner. `CanElevate` is false in a Flatpak, where the portal is the road.
+- **No Task asks.** A worker has no display for the OS dialog and no main loop
+  for its answer; `Privilege.Run`/`Wait` there throw. The facts (`Elevated`,
+  `Invoker`) are still installed.
+- **The positive path cannot be in the suite.** UAC and polkit need a person;
+  `tests/widgets` proves the refusals and the child's guard, and the consent
+  dialog is a by-hand check.
+
 ## Plugins
 
 - **A plugin is a table and not a link, and every corner of that decision was

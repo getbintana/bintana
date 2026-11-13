@@ -1465,6 +1465,7 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      * that has no source on the main loop. */
     bta_sys_env_readonly(ctx, global);
     task_exec_wait_only(ctx, global);
+    bta_privilege_init(ctx, global, true);
     /* The blocking HTTP verbs, each on this thread's own session. */
     bta_http_init_worker(ctx, global);
     /* The two names exist and refuse: a socket needs the main loop's events. */
