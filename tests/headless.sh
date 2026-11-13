@@ -196,6 +196,25 @@ else
     fail=1
 fi
 
+# A native plugin in the core: `uses: ["testplug"]` finds the suite's reference
+# shared object in a library directory and its `init` installs the global before
+# `rad.js` runs. Copy it out of the build so the project has no `.so` of its own.
+mkdir -p "$tmp/lib/testplug"
+plugin_so=$(dirname "$BINTANA_CORE")/testlibs/testplug/testplug.so
+if [[ ! -f $plugin_so ]]; then
+    echo "no reference plugin at $plugin_so -- build the test plugins" >&2
+    fail=1
+elif cp "$plugin_so" "$tmp/lib/testplug/testplug.so" &&
+     BINTANA_LIB_PATH="$tmp/lib" "$BINTANA_CORE" tests/headless/projects/plugin \
+        >"$tmp/plugin.out" 2>"$tmp/plugin.err" &&
+     grep -q "plugin:ok" "$tmp/plugin.out"; then
+    echo "the core loads a native plugin a project's uses names"
+else
+    echo "the core did not run a native plugin:" >&2
+    cat "$tmp/plugin.out" "$tmp/plugin.err" >&2
+    fail=1
+fi
+
 # `Drawing` is the document half of `DrawingArea`: a PNG and a PDF with no
 # control and no display, through Painter, Metrics and Bitmap. Both hosts draw
 # the same document; the fixture prints only what is stable across them.

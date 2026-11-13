@@ -18,6 +18,12 @@ The file is named after its directory the way the library itself is named by
 `uses`: one name, no manifest, nothing to keep in step.  A directory with no
 shared object is an ordinary JavaScript library and nothing about it changes.
 
+**Both hosts load it.** The console core resolves `uses` and loads the object
+before `rad.js`, exactly as the graphical host does, so a `main` project can use
+`TagLib` with no display; `tests/headless.sh` runs the suite's reference plugin
+through it. That is also the road by which a heavy optional half -- `taglib`, or
+a future `drawing` plugin -- stays out of the core's link.
+
 **When not to write one.**  If it can be a `.js` library, it should be -- see
 [extending.md](extending.md).  A plugin is for reaching a C library the runtime
 does not carry and should not: a format parser, a database driver, a device.

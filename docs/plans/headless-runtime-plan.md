@@ -256,6 +256,11 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
   `tests/headless/projects/{draw,report}` lo difean contra el host gráfico. El
   `testDocument` entero sigue siendo del host gráfico porque compara contra
   `DrawingArea` y el control, no por el documento.
+- **Plugins nativos en el core (hecho):** `uses` resuelve `<name>/<name>.so` y
+  lo carga antes de `rad.js`, con `host->call`; el plugin de referencia del
+  suite corre en `tests/headless.sh`. Es la vía para que `taglib` -- o un
+  eventual `drawing` -- sean opcionales, en vez de enlazar cairo/Pango/Pixbuf
+  en el core.
 - `tests/media` corre en core si GStreamer queda core; si no, se documenta por
   qué va al host gráfico.
 - El worker de `Task` sigue pasando sus tests; su instalador y el core no se

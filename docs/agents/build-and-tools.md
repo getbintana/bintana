@@ -555,6 +555,16 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `globalThis`**, which is not in the language (rad.js says so when it is used).
   A library that needs a GTK table it cannot have (`Printer.Papers` for paper
   sizes) keeps a local table for its document half instead.
+- **Native plugins work in the core, and `bta_form.c` is guarded like
+  `bta_paint.c`.** `bta_plugin.c` is in the core, `uses` loads
+  `<name>/<name>.<suffix>` before `rad.js`, and the loader reaches the context
+  through `bta_current_app()`: `run_project` hands it a zeroed `BtaApp` with
+  `ctx`, `dir`, `name`, `version` and `libs` for the length of the boot.
+  `bta_report_fatal` and `bta_log_debug` answer on stderr there. The `.form`
+  builder (`shape_of` through `bta_form_build`) is `#ifndef BTA_HEADLESS`; the
+  `ClassFile` index and `bta_record_init` are shared, because `Record` needs
+  them. A plugin that will not load is a sentence and exit 2, not a silent
+  library without its native half.
 - **`bta_project.c` is the boot both hosts share, and it must stay toolkit-free.**
   It holds `project.btp`, `uses`, the six-place library search and the source
   order; `bta_runtime.c` and `bta_headless.c` both link it. A GTK call added

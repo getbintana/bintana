@@ -1,0 +1,7 @@
+{
+  "name": "headless-plugin",
+  "main": "Main",
+  "description": "A native library plugin, loaded by the core from uses",
+  "uses": ["testplug"],
+  "sources": ["Main.js"]
+}

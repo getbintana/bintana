@@ -1191,6 +1191,16 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `globalThis`**, which is not in the language (rad.js says so when it is used).
   A library that needs a GTK table it cannot have (`Printer.Papers` for paper
   sizes) keeps a local table for its document half instead.
+- **Native plugins work in the core, and `bta_form.c` is guarded like
+  `bta_paint.c`.** `bta_plugin.c` is in the core, `uses` loads
+  `<name>/<name>.<suffix>` before `rad.js`, and the loader reaches the context
+  through `bta_current_app()`: `run_project` hands it a zeroed `BtaApp` with
+  `ctx`, `dir`, `name`, `version` and `libs` for the length of the boot.
+  `bta_report_fatal` and `bta_log_debug` answer on stderr there. The `.form`
+  builder (`shape_of` through `bta_form_build`) is `#ifndef BTA_HEADLESS`; the
+  `ClassFile` index and `bta_record_init` are shared, because `Record` needs
+  them. A plugin that will not load is a sentence and exit 2, not a silent
+  library without its native half.
 - **`bta_project.c` is the boot both hosts share, and it must stay toolkit-free.**
   It holds `project.btp`, `uses`, the six-place library search and the source
   order; `bta_runtime.c` and `bta_headless.c` both link it. A GTK call added
@@ -13612,6 +13622,12 @@ The file is named after its directory the way the library itself is named by
 `uses`: one name, no manifest, nothing to keep in step.  A directory with no
 shared object is an ordinary JavaScript library and nothing about it changes.
 
+**Both hosts load it.** The console core resolves `uses` and loads the object
+before `rad.js`, exactly as the graphical host does, so a `main` project can use
+`TagLib` with no display; `tests/headless.sh` runs the suite's reference plugin
+through it. That is also the road by which a heavy optional half -- `taglib`, or
+a future `drawing` plugin -- stays out of the core's link.
+
 **When not to write one.**  If it can be a `.js` library, it should be -- see
 [extending.md](extending.md).  A plugin is for reaching a C library the runtime
 does not carry and should not: a format parser, a database driver, a device.
@@ -15188,6 +15204,10 @@ generated `widgets.json` through `WidgetMeta.js`, and `check` is byte for byte
 the graphical pass with **44 libraries against 153** and about 37 MB against
 58 MB on the IDE's own project. The binary links no widget file; the document
 is 1.7 MB and is loaded only for `check`.
+
+**A native plugin loads too**: `tests/headless/projects/plugin` names
+`testplug`, and the script copies the suite's reference `.so` into a scratch
+library directory, so a `main` gets `TestPlug` with no display.
 
 **A report without its control** is the other document fixture:
 `tests/headless/projects/report` uses `lib/report` and `lib/charts`, builds a

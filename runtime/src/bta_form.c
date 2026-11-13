@@ -11,12 +11,15 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef BTA_HEADLESS
 static int apply_properties(JSContext *ctx, JSValueConst target,
                             JSValueConst props, const char *where,
                             const BtaClass *cls, bool deferred);
 
 static int build_children(JSContext *ctx, JSValueConst form_obj,
                           BtaWidget *parent, JSValueConst children, int depth);
+
+#endif
 
 /*
  * How deeply a `.form` may nest. A form is a window, and one eleven levels
@@ -36,6 +39,7 @@ static int build_children(JSContext *ctx, JSValueConst form_obj,
 
 /* An object and not an array: JSON's array is an object to QuickJS, and a
  * `properties` that is a list would be applied by index. */
+#ifndef BTA_HEADLESS
 static bool is_json_object(JSValueConst v)
 {
     return JS_IsObject(v) && !JS_IsArray(v);
@@ -78,6 +82,8 @@ static char *spec_string(JSContext *ctx, JSValueConst spec, const char *key)
     return out;
 }
 
+#endif
+
 bool bta_is_identifier(const char *s)
 {
     if (!s || !*s || (!g_ascii_isalpha(*s) && *s != '_' && *s != '$'))
@@ -103,6 +109,7 @@ bool bta_is_identifier(const char *s)
  * down. Nothing else in an object is looked at -- a column's `Alignment` is the
  * word `Right`, and a catalogue that reached it would translate a keyword.
  */
+#ifndef BTA_HEADLESS
 static JSValue translate_value(JSContext *ctx, JSValueConst v, const char *field)
 {
     if (JS_IsString(v)) {
@@ -711,6 +718,8 @@ static int build_parts(JSContext *ctx, JSValueConst form_obj, JSValueConst root)
     return 0;
 }
 
+#endif
+
 /* --------------------------------------------------- where a class's file lives
  *
  * A project may organise its classes in directories, so <Class>.form is not
@@ -1003,6 +1012,7 @@ void bta_record_init(JSContext *ctx, JSValueConst global, const char *dir,
 
 /* -------------------------------------------------------------------- entry */
 
+#ifndef BTA_HEADLESS
 /* The body, wrapped below by the profiler's span. */
 static int form_build(JSContext *ctx, JSValueConst form_obj,
                       const char *class_name)
@@ -1169,3 +1179,5 @@ int bta_form_build(JSContext *ctx, JSValueConst form_obj, const char *class_name
         bta_profile_end(prof, "Bintana", "Form", class_name);
     return rc;
 }
+
+#endif

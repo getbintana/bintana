@@ -245,6 +245,14 @@ still there. The widget classes are not stubs in the binary: they do not exist
 until `check` loads the metadata; then `widget-meta.js` installs names that
 throw on construction and answer the metadata questions.
 
+**Native plugins are core too.** A project's `uses` resolves a library
+directory and, when it holds `<name>.<suffix>`, the core loads it before
+`rad.js` and before the project's sources, with `host->call` available. The
+suite's reference plugin is the fixture: `tests/headless/projects/plugin` with
+`uses: ["testplug"]`. A plugin that cannot load is a sentence on stderr and exit
+2, as in the graphical host. That is the road by which `taglib` -- or a
+`drawing` plugin -- can be optional.
+
 **Drawing is core.** `Painter`, `Metrics`, `Bitmap` and `Drawing` are in the
 host -- cairo, Pango and GdkPixbuf, none of GTK -- so a `main` writes a PNG or a
 PDF and measures text with no display. `DrawingArea`, which needs a widget, is

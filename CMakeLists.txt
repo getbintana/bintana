@@ -611,6 +611,7 @@ if(NOT WIN32)
         runtime/src/bta_debug.c
         runtime/src/bta_sys.c
         runtime/src/bta_form.c
+        runtime/src/bta_plugin.c
         runtime/src/bta_paint.c
         runtime/src/bta_bitmap.c
         runtime/src/bta_profile.c
@@ -669,8 +670,8 @@ if(NOT WIN32)
     endif()
     add_dependencies(bintana bintana-check-data)
     target_link_libraries(bintana PRIVATE
-        quickjs PkgConfig::GLIBCORE PkgConfig::CAIRO PkgConfig::PANGO
-        PkgConfig::GDKPIXBUF)
+        quickjs PkgConfig::GLIBCORE PkgConfig::GMODULE PkgConfig::CAIRO
+        PkgConfig::PANGO PkgConfig::GDKPIXBUF)
     if(NOT WIN32)
         target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)
     endif()

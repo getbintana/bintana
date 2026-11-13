@@ -752,6 +752,10 @@ the graphical pass with **44 libraries against 153** and about 37 MB against
 58 MB on the IDE's own project. The binary links no widget file; the document
 is 1.7 MB and is loaded only for `check`.
 
+**A native plugin loads too**: `tests/headless/projects/plugin` names
+`testplug`, and the script copies the suite's reference `.so` into a scratch
+library directory, so a `main` gets `TestPlug` with no display.
+
 **A report without its control** is the other document fixture:
 `tests/headless/projects/report` uses `lib/report` and `lib/charts`, builds a
 `ReportDocument`, writes a PDF and asserts that `Report`/`Chart` do not exist

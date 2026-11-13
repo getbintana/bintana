@@ -58,9 +58,30 @@ void bta_drain_jobs(JSRuntime *rt)
     }
 }
 
+/* The boot's application, for the one caller that asks: `bta_plugin.c` reaches
+ * the context through it while a plugin's `init` runs. It is NULL everywhere
+ * else, which is the answer the other core code expects. */
+static BtaApp *headless_app;
+
 BtaApp *bta_current_app(void)
 {
-    return NULL;
+    return headless_app;
+}
+
+/* A plugin that will not load must say why, and in the core stderr is where its
+ * reader already is. `bta_plugin.c` calls this for every refusal. */
+void bta_report_fatal(BtaApp *app, const char *message)
+{
+    (void)app;
+    fprintf(stderr, "bintana: %s\n", message);
+}
+
+/* `host->log` from a plugin: the core's Logger is a JS object, and a plugin's
+ * Debug line is not worth re-entering it before `rad.js` has run. */
+void bta_log_debug(JSContext *ctx, const char *text)
+{
+    (void)ctx;
+    fprintf(stderr, "%s\n", text ? text : "");
 }
 
 bool bta_task_is_worker(JSContext *ctx)
@@ -1281,6 +1302,7 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     }
 
     int      status = 1;
+    BtaApp   app    = { 0 };
     JSValue  global = JS_GetGlobalObject(ctx);
     JSValue  cfg    = JS_UNDEFINED;
     JSValue  entry  = JS_UNDEFINED;
@@ -1320,6 +1342,20 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     libs    = bta_project_libs(ctx, dir, cfg);
     sources = bta_project_sources(ctx, dir, libs, cfg);
     install_core(ctx, global, dir, libs);
+
+    /* A library's native half loads before `rad.js` and before the project's
+     * own sources, which is the contract `bta_plugin.h` states: `init` sees
+     * `Application` but not `Dictionary`. */
+    app.ctx     = ctx;
+    app.dir     = dir;
+    app.name    = name;
+    app.version = version;
+    app.libs    = libs;
+    headless_app = &app;
+    if (!bta_plugins_load(&app, ctx, global)) {
+        status = 2;
+        goto out;
+    }
 
     if (!load_prelude(ctx))
         goto out;
@@ -1406,6 +1442,10 @@ out:
     bta_modules_forget(ctx);
     JS_FreeContext(ctx);
     JS_FreeRuntime(rt);
+    /* The contract says a plugin's cleanup runs after the context is gone and
+     * must not call the host; the loader's list is C only. */
+    bta_plugins_cleanup(&app);
+    headless_app = NULL;
     g_free(text);
     g_free(manifest);
     g_free(dir);
