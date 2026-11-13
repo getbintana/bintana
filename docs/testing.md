@@ -762,6 +762,12 @@ reads the bundled CSV, groups `Decimal` amounts, draws a `ChartDocument` and
 writes a PDF with `ReportDocument`. The script runs it with no display and
 checks the PDF's magic and, when `pdftotext` is present, its rows.
 
+**A name is one library per program**: `tests/headless/projects/libshadow`
+carries its own `inner` and uses a shared `outer` (from
+`tests/headless/libpath`, through `BINTANA_LIB_PATH`) that names `inner` too.
+Both hosts must load the project's copy only; resolving `outer`'s `uses` from
+`outer`'s own directory loaded both and failed on a redeclaration.
+
 **Library dependencies** are held by the report fixture: it now names only
 `uses: ["report"]`, and `report`'s manifest pulls `charts` and `drawing`, so the
 PDF still works. `tests/headless/projects/nodraw` names no `drawing` and checks

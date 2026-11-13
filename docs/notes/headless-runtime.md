@@ -322,7 +322,10 @@ and their controls are skipped.
 
 **A library may declare its own `uses`.** The resolver walks it transitively,
 loads dependencies before the library that names them, skips a directory
-reached twice and refuses a cycle. `lib/report` names `charts` and `drawing`,
+reached twice and refuses a cycle. **Every name is resolved from the project**, at
+any depth, so a project that carries its own copy of a library gets that copy
+for the libraries that name it too -- one library per name per program
+(`tests/headless/projects/libshadow`). `lib/report` names `charts` and `drawing`,
 `lib/charts` names `drawing`, and a project says only `uses: ["report"]`. The
 manifest is the same `project.btp` a library already uses for `sources` and
 `worker`; there is no second format.

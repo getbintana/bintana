@@ -370,6 +370,23 @@ else
     fail=1
 fi
 
+# A name is one library per program: a library's own `uses` is resolved from
+# the project, so a project that carries its own `inner` and uses a shared
+# `outer` that names `inner` loads one `inner`, its own. It used to be resolved
+# from the library's directory, and both copies loaded: a redeclaration.
+shadow_ok=1
+for host in "$BINTANA_CORE" "$BINTANA"; do
+    out=$(BINTANA_LIB_PATH="$PWD/tests/headless/libpath" \
+          "$host" tests/headless/projects/libshadow 2>&1)
+    if [[ $out != "outer sees the project's inner" ]]; then
+        echo "$host loaded a library twice, or the wrong copy:" >&2
+        echo "$out" >&2
+        shadow_ok=0
+        fail=1
+    fi
+done
+[[ $shadow_ok == 1 ]] && echo "a library's uses finds the project's own copy"
+
 # `Painter.Color`'s syntax is the runtime's, the same in both hosts and on any
 # GTK: seventy-eight strings, each taken or refused and drawn, printed as which
 # earlier sample drew the same pixels. `expected.txt` is GDK's answer on

@@ -336,8 +336,15 @@ char *bta_library_resolve(const char *project, const char *name, GString *tried)
  */
 /* The library graph, walked once. A library's own `project.btp` may name
  * `uses`; its dependencies load before it, and a name reached twice is loaded
- * once. A cycle is refused rather than walked forever. */
+ * once. A cycle is refused rather than walked forever.
+ *
+ * **Every name is resolved from the project**, at any depth: a name is one
+ * library per program. A library's own `uses` used to be resolved from the
+ * library's directory, which skips the project's `lib/` -- so a project that
+ * carried its own `charts` and used `report` loaded two `charts`, and failed
+ * on a redeclaration in a file its author never wrote. */
 typedef struct {
+    const char *project;
     GPtrArray  *out;
     GHashTable *seen;
     GHashTable *visiting;
@@ -402,7 +409,7 @@ static void lib_walk(JSContext *ctx, const char *base, const char *name,
                     const char *dep  = JS_ToCString(ctx, e);
 
                     if (dep && *dep)
-                        lib_walk(ctx, canon, dep, walk);
+                        lib_walk(ctx, walk->project, dep, walk);
                     JS_FreeCString(ctx, dep);
                     JS_FreeValue(ctx, e);
                 }
@@ -431,6 +438,7 @@ GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg)
     }
 
     LibWalk walk = {
+        .project  = dir,
         .out      = out,
         .seen     = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL),
         .visiting = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL),

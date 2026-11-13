@@ -1,0 +1,6 @@
+{
+  "name": "outer",
+  "description": "A shared library that names inner in its own uses",
+  "uses": ["inner"],
+  "sources": ["Outer.js"]
+}
