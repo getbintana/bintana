@@ -28,7 +28,15 @@ if [[ ! -f $BUILD/CMakeCache.txt ]]; then
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" >/dev/null || exit 2
 fi
 echo "== building $BUILD"
-cmake --build "$BUILD" -j"$(nproc)" >/dev/null || exit 2
+# **Not `bintana-meta`.** Its class rows are linked with `--gc-sections` so the
+# toolkit vfuncs drop; under AddressSanitizer's instrumentation the linker keeps
+# the GObject class structs even at -O0 and the no-GTK link fails. The sanitizer
+# suite does not run `tests/headless.sh`, so the metadata generator is not part
+# of this question. Everything the suite starts is built: the core, the GUI it
+# dispatches to, the drawing module, and the plugins.
+cmake --build "$BUILD" -j"$(nproc)" \
+      --target bintana bintana-gui bintana-drawing \
+               testplug testplug-bare testplug-old testplug-abi1 >/dev/null || exit 2
 
 rm -f "$LOG".*
 export ASAN_OPTIONS="detect_leaks=1:log_path=$LOG:abort_on_error=0"

@@ -666,7 +666,12 @@ if(NOT WIN32)
         target_compile_definitions(bintana PRIVATE BTA_HAVE_SYSPROF=1)
         target_link_libraries(bintana PRIVATE PkgConfig::SYSPROF)
     endif()
-    add_dependencies(bintana bintana-check-data)
+    # **No `add_dependencies(bintana bintana-check-data)`.** The data is an
+    # `ALL` target, so a whole build makes it; making the executable depend on
+    # it would drag the metadata generator into a targeted sanitizer build,
+    # whose instrumentation keeps the GObject class structs and fails the
+    # toolkit-free metadata link. A `bintana check` built with `--target
+    # bintana` alone says the document is not installed, which is true.
     target_link_libraries(bintana PRIVATE
         quickjs PkgConfig::GLIBCORE PkgConfig::GMODULE)
     if(NOT WIN32)
