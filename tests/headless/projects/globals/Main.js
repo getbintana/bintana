@@ -42,6 +42,13 @@ function language() {
         }
     }
     print(`LineOf: ${Text.LineOf("a\nb", 2)}`);
+    /* `CheckSource` reads the line and column off the stack it builds, and a
+     * program that set `Error.prepareStackTrace` must not change them: the
+     * graphical host guarded it and the core's copy did not. */
+    Error.prepareStackTrace = () => "a stack of the program's own";
+    const broken = Application.CheckSource("let ok = 1;\nlet = ;");
+    Error.prepareStackTrace = undefined;
+    print(`CheckSource: ${broken.Line}:${broken.Column}`);
     try {
         Object.prototype.leak = 1;
         print("Object.prototype took a new name");

@@ -11,6 +11,8 @@ bta_project.c     project.btp, `uses`, the library search path and load order;
 bta_language.c    the language every host and every Task worker gets: the
                   context's intrinsics, the closing of the hatches after the
                   prelude, and the table of names taken away
+bta_source.c      what a source text declares, reads and whether it compiles:
+                  the symbol pass, Symbols, FreeNames and CheckSource
 bta_message.c     Message: the catalogue lookup is shared, and each host says
                   how it shows one (an alert, or stderr with no display)
 bta_error.c       the report of an uncaught error: the line, the replacement

@@ -510,15 +510,16 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 - **`bta_meta.c` is a test host, not a console host.** It copies
   `bta_lookup_global`, answers `bta_module_runtime_owns` false, and prints an
   exception with `bta_dump_error`. It evaluates `forms.js` with ten captures of
-  `rad.js` and a stub `FormPart`, and it carries a `bta_symbols` without the
-  module machinery so the prelude's JSDoc reaches `Members`; that is what gives
+  `rad.js` and a stub `FormPart`, and its `bta_symbols` is the shared pass
+  compiled as a script (`bta_symbols_script`, bta_source.c) so the prelude's
+  JSDoc reaches `Members`; that is what gives
   it `DataField`, `Serialize`, `Doc` and the rest of the prelude's members.
   Phase 2 owns the real boot and globals.
 - **`PropertyNames` now uses the real walk in `forms.js`.** The C walk in
   `bta_widget.c` is the fallback for a host whose prelude did not load, and it
   is the one without `DataField`. `Members` matches in full, `Doc` included:
-  `bta_meta.c` carries a version of `bta_symbols` without the module machinery
-  and runs it over both generated prelude sources. `SourceEditor.Language` and
+  `bta_meta.c` runs the shared pass (`bta_symbols_script`) over both generated
+  prelude sources; it used to carry a third copy of the pass. `SourceEditor.Language` and
   `.Theme` are GtkSourceView's lists and answer `NULL` here;
   `Video.Available` uses the row's `available`, not the machine's probe.
 - **`tests/api.sh` does not see the stubs.** They are `static inline` in the
@@ -703,8 +704,7 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `tests/headless/projects/modthrow` holds it. (`bta_module_run` takes the
   compiled module, as `JS_EvalFunction` does; freeing it again aborts in
   QuickJS.)
-- **The core supplies `bta_lookup_global`, `bta_symbols`, `bta_split_doc`,
-  `bta_read_file`, `bta_drain_jobs`, `bta_current_app`, `bta_message_show`, `bta_task_worker_host`, `bta_host_error_uncaught` and
+- **The core supplies `bta_lookup_global`, `bta_read_file`, `bta_drain_jobs`, `bta_current_app`, `bta_message_show`, `bta_task_worker_host`, `bta_host_error_uncaught` and
   `bta_host_show_error` in `bta_headless.c`; the graphical host's live in
   `bta_runtime.c`.** The library listing and the project boot are shared, in
   `bta_project.c`, and so are `Application.LibraryPath` and `Libraries` (the
@@ -714,8 +714,10 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `Handler`); the error text in `bta_util.c`; the report of an uncaught error in `bta_error.c`, which the
   core used to print bare, without the replacement hint and without calling
   `Application.OnError` (`tests/headless/projects/onerror`).
-  `bta_symbols` and `bta_split_doc` are the same code the graphical host uses,
-  not a second reader. The division is the link, not the file: the core must
+  The symbol pass and `Application.Symbols`, `FreeNames` and `CheckSource` are
+  `bta_source.c`, for all three hosts: the core's `CheckSource` had not
+  guarded `Error.prepareStackTrace` and answered `0:0` for a program that set
+  one. The division is the link, not the file: the core must
   not name a GTK symbol.
 
 ## To review later

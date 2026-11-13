@@ -804,7 +804,9 @@ locally, so the document does not need `Printer`, which is GTK's.
 answers for `Level`, `Target` and a `Handler`; `Application.Id` and
 `Application.ProtectPrototype()`, after which `Object.prototype` refuses a new
 name; that `Application.Quit("fail")` and `Text.LineOf(text, "two")` refuse
-the word instead of reading 0; that the hatches are
+the word instead of reading 0; that `CheckSource` answers the right line and
+column while the program has its own `Error.prepareStackTrace` (the core's copy
+answered `0:0`); that the hatches are
 closed (`Object.keys` and `eval` gone, `setTimeout` naming `Timer.After`);
 that a missing file says `no such file or directory`; then compresses, zips,
 queries an in-memory sqlite, serves and fetches over a local `Http.Server`,

@@ -86,7 +86,8 @@ The functions the widget files still reach for are supplied by the host:
 `bta_lookup_global` (the same bare-name/dotted-name rule, without the
 identifier validation), `bta_module_runtime_owns` (false: there is no module
 loader here), `bta_dump_error` (a line on stderr) and `bta_current_app` (NULL).
-`bta_symbols` is the compiler's symbol pass without the module detection, and
+`bta_symbols` is the shared symbol pass compiled as a script
+(`bta_symbols_script`, bta_source.c), and
 `bta_prelude_sources` hands it the two generated prelude sources; that is what
 puts the prelude's `Doc` in `Widget.Members`.
 
@@ -122,7 +123,7 @@ for class metadata; the widget half is.
 
 `Widget.Members("Button")` is the whole row, `Doc` included, for the C members
 and the `forms.js` ones: `bta_meta.c` runs the engine's symbol pass over both
-generated prelude sources (`bta_symbols` without the module machinery), so the
+generated prelude sources (`bta_symbols_script`, the shared pass compiled as a script), so the
 JSDoc a member carries is attached the way the graphical host attaches it. The
 test diffs the whole array, not a projection of it.
 
@@ -234,10 +235,10 @@ document, `bta_modules_scope`, `lib/check` and `tools/check`'s `main`. **The
 drawing half is `bintana-drawing.so`**, loaded by `run_project` and never by
 `--version` or `check`, so the core's link carries no cairo, Pango or
 GdkPixbuf. The files `bta_runtime.c` would have supplied -- `bta_lookup_global`,
-`bta_dump_error`, `bta_symbols`, `bta_split_doc`, `bta_read_file`,
-`bta_drain_jobs`, how a `Message` is shown and what a `Task` worker gets from
-its host -- are in the host; the language (`bta_language.c`), `Message`
-(`bta_message.c`) and the error text (`bta_util.c`) are shared.
+`bta_dump_error`, `bta_read_file`, `bta_drain_jobs`, how a `Message` is shown and what a `Task` worker gets from
+its host -- are in the host; the language (`bta_language.c`), the symbol
+pass and the source questions (`bta_source.c`), `Message` (`bta_message.c`)
+and the error text (`bta_util.c`) are shared.
 `bintana-meta` is the generator and the test; it is not installed.
 
 **`bintana <project>` runs a `main`.** The words after the project are

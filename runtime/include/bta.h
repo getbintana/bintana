@@ -996,6 +996,17 @@ JSValue bta_lookup_global(JSContext *ctx, const char *name);
  * what `Widget.Members` reads a class's own shape out of.  Takes the text and
  * owns the result. */
 JSValue bta_symbols(JSContext *ctx, const char *src);
+/* The same pass over a text known to be a script, for a host with no module
+ * loader (bta_source.c). */
+JSValue bta_symbols_script(JSContext *ctx, const char *src);
+/* `Application.Symbols`, `FreeNames` and `CheckSource` (bta_source.c), which
+ * every host with a module loader installs. */
+JSValue bta_application_symbols(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv);
+JSValue bta_application_free_names(JSContext *ctx, JSValueConst this_val,
+                                   int argc, JSValueConst *argv);
+JSValue bta_application_check_source(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv);
 
 /* --- projects and libraries (bta_project.c) ------------------------------ */
 /* The project directory a command-line argument names: the directory itself,

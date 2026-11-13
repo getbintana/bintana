@@ -341,6 +341,7 @@ add_executable(${BTA_GUI_TARGET}
     runtime/src/main.c
     runtime/src/bta_runtime.c
     runtime/src/bta_language.c
+    runtime/src/bta_source.c
     runtime/src/bta_message.c
     runtime/src/bta_error.c
     runtime/src/bta_log.c
@@ -561,6 +562,7 @@ target_compile_options(${BTA_GUI_TARGET} PRIVATE -Wall -Wextra -Wno-unused-param
 # GtkSourceView or VTE.
 set(BTA_META_SOURCES
     runtime/src/bta_meta.c
+    runtime/src/bta_source.c
     runtime/src/bta_util.c
     runtime/src/bta_widget.c
     runtime/src/bta_controls.c
@@ -631,6 +633,7 @@ if(NOT WIN32)
     set(BTA_HEADLESS_SOURCES
         runtime/src/bta_headless.c
         runtime/src/bta_language.c
+        runtime/src/bta_source.c
         runtime/src/bta_message.c
         runtime/src/bta_error.c
         runtime/src/bta_log.c
