@@ -12,7 +12,7 @@ for one.
 
 - `uses` names a library; `bta_project.c` searches six places, first the
   project's own `lib/<name>`, then `$BINTANA_LIB_PATH`, then the shipped `lib/`.
-  The graphical host and `bintana-headless` share that file, so the search has
+  The graphical host and `bintana` share that file, so the search has
   one definition.
 - A library is a directory: `.js`, `.form`, optional `project.btp` (`sources`,
   `worker`) and optional native code (`<name>.so`, the plugin ABI).

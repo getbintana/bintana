@@ -17,7 +17,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-BINTANA=${BINTANA:-./build/bintana}
+BINTANA=${BINTANA:-./build/bintana-gui}
 if [[ ! -x $BINTANA ]]; then
     echo "no runtime at $BINTANA -- build first: cmake --build build" >&2
     exit 2

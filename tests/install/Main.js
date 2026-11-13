@@ -145,6 +145,7 @@ function staged(prefix) {
  */
 function contents(prefix) {
     for (const rel of ["bin/bintana",
+                       "bin/bintana-gui",
                        "bin/bintana-ide",
                        "share/bintana/ide/project.btp",
                        "share/bintana/ide/po/es.po",
@@ -298,7 +299,8 @@ function pluginDev(prefix, work) {
      * installed binary's loader, its GModule, its ABI check, and the global the
      * plugin installs -- which is the whole reason a plugin exists.  A console
      * project of our own, a library directory made of the one file, and the
-     * installed runtime run against both.
+     * installed runtime run against both. **The graphical host is the one that
+     * loads plugins**: the core has no toolkit for the host table to reach.
      */
     const lib  = File.Join(work, "plugins");
     const mine = File.Join(lib, "testplug");
@@ -317,7 +319,7 @@ function Main() {
 }
 `);
 
-    const ran = Exec.Wait([File.Join(prefix, "bin", "bintana"), proj],
+    const ran = Exec.Wait([File.Join(prefix, "bin", "bintana-gui"), proj],
                           { Environment: { BINTANA_LIB_PATH: lib },
                             Timeout: 60000, Stderr: "separate" });
     check("the installed runtime loads a plugin built against it",

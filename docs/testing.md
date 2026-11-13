@@ -726,7 +726,7 @@ The vocabulary it prints, and the node table to read it against, are in
 `tests/headless.sh` holds the Phase 1 spike of
 [plans/headless-runtime-plan.md](plans/headless-runtime-plan.md) to the runtime
 it describes. The same `tests/headless/Main.js` runs twice: once as a `main`
-project under `bintana`, whose class prototypes are the real ones, and once
+project under `bintana-gui`, whose class prototypes are the real ones, and once
 under `bintana-meta`, which compiles the class rows with stubs and links no
 GTK. The two outputs are diffed, and `ldd` is read for a toolkit.
 
@@ -743,9 +743,9 @@ table that stopped being read is a diff rather than a green run. The
 measurements behind the target are in
 [notes/headless-runtime.md](notes/headless-runtime.md).
 
-**The same script holds the console host.** `bintana-headless --version`,
+**The same script holds the core host.** `bintana --version`,
 `check examples/hello`, and `check --json tests/smoke` are diffed against the
-graphical binary's own answers, and `ldd` is read again. It is the first real
+`bintana-gui` answers, and `ldd` is read again. It is the first real
 console runtime, not the test host: it loads `tools/check`, `lib/check` and the
 generated `widgets.json` through `WidgetMeta.js`, and `check` is byte for byte
 the graphical pass with **17 libraries against 153** and about 33 MB against
@@ -757,7 +757,7 @@ is 1.7 MB and is loaded only for `check`.
 `lib/greeting`: the script runs it through both hosts and diffs the output, so
 `uses`, the library-first load order and `Application.Arguments` are held to
 the graphical answer. `bare` prints `typeof Widget` and must say `undefined` --
-the console host has no toolkit even for a `main`. `window` declares `startup`:
+the core host has no toolkit even for a `main`. `window` declares `startup`:
 the test writes a fake graphical host, points `BINTANA_GUI` at it, and holds
 the dispatch to the words it was given and to the host's own exit status; a
 `main` run with the same fake must not dispatch at all, and a
@@ -1009,7 +1009,7 @@ reached GTK, `Name` prefilled the field, `Folder` set the breadcrumb, and the
 listing under a `*.js *.mjs` filter shows `MAYUS.JS`, which is the whole reason
 `*.ext` becomes a suffix instead of a glob.
 
-**Translation is a test the suite cannot be.** `LANGUAGE=es ./build/bintana ide
+**Translation is a test the suite cannot be.** `LANGUAGE=es ./build/bintana-gui ide
 examples/hello` runs the IDE off `ide/po/es.po`, and running it that way found four
 kinds of string that escape extraction and one layout that overflows -- none of
 which any assertion was looking for. `examples/i18n` is the reduced case: the same

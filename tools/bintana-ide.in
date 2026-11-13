@@ -2,9 +2,9 @@
 #
 # The installed IDE, as one word.
 #
-# `bintana` takes a project directory and the IDE is a project like any other, so
-# what a menu entry -- or a person at a shell -- needs is a name for the pair.
-# That name is all this adds.
+# The graphical host takes a project directory and the IDE is a project like any
+# other, so what a menu entry -- or a person at a shell -- needs is a name for
+# the pair. That name is all this adds.
 #
 # **It resolves its own location instead of carrying a prefix.** The path baked
 # in at configure time is wrong for every install that moves afterwards, and two
@@ -23,4 +23,4 @@ set -u
 
 here=$(dirname "$(readlink -f "$0")")
 
-exec "$here/bintana" "$here/@BTA_BIN_TO_IDE@" "$@"
+exec "$here/@BTA_IDE_EXE@" "$here/@BTA_BIN_TO_IDE@" "$@"

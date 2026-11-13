@@ -9,13 +9,14 @@
 # -- and diffs the answers. It also reads the metadata host's `ldd`: a GTK,
 # GtkSourceView or VTE entry there is the failure this target exists to prevent.
 #
-# `BINTANA=<path>` names the graphical build; `BINTANA_META` names the metadata
-# one, and defaults to its sibling. No display is opened: both halves run a
-# `main` project.
+# `BINTANA=<path>` names the graphical host (`bintana-gui`), `BINTANA_CORE`
+# the core one (`bintana`), and `BINTANA_META` the metadata generator; the two
+# hosts default to siblings of `BINTANA`. No display is opened: the metadata
+# half and the parity fixture run `main` projects.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-BINTANA=${BINTANA:-./build/bintana}
+BINTANA=${BINTANA:-./build/bintana-gui}
 if [[ ! -x $BINTANA ]]; then
     echo "no runtime at $BINTANA -- build first: cmake --build build" >&2
     exit 2
@@ -27,9 +28,9 @@ if [[ ! -x $BINTANA_META ]]; then
     exit 2
 fi
 
-BINTANA_HEADLESS=${BINTANA_HEADLESS:-$(dirname "$BINTANA")/bintana-headless}
-if [[ ! -x $BINTANA_HEADLESS ]]; then
-    echo "no console host at $BINTANA_HEADLESS -- build it: cmake --build build --target bintana-headless" >&2
+BINTANA_CORE=${BINTANA_CORE:-$(dirname "$BINTANA")/bintana}
+if [[ ! -x $BINTANA_CORE ]]; then
+    echo "no core host at $BINTANA_CORE -- build it: cmake --build build --target bintana" >&2
     exit 2
 fi
 
@@ -82,26 +83,26 @@ for wanted in '"Click"' '"Property"' '"Method"' '"Index"' 'true'; do
     fi
 done
 
-# --- the console host --------------------------------------------------------
+# --- the core host --------------------------------------------------------
 #
 # `--version` is its own answer, and `check --json` is the same pass the
 # graphical binary runs -- the same text, the same lines, the same exit status.
-if "$BINTANA_HEADLESS" --version | grep -q '^bintana-headless '; then
-    echo "the console host says its own version"
+if "$BINTANA_CORE" --version | grep -q '^bintana '; then
+    echo "the core host says its own version"
 else
-    echo "the console host did not answer --version" >&2
+    echo "the core host did not answer --version" >&2
     fail=1
 fi
 
-if "$BINTANA_HEADLESS" check examples/hello >"$tmp/cli-hello.out" 2>"$tmp/cli-hello.err"; then
-    echo "the console host checks a clean project"
+if "$BINTANA_CORE" check examples/hello >"$tmp/cli-hello.out" 2>"$tmp/cli-hello.err"; then
+    echo "the core host checks a clean project"
 else
-    echo "the console host failed a clean project:" >&2
+    echo "the core host failed a clean project:" >&2
     cat "$tmp/cli-hello.err" >&2
     fail=1
 fi
 
-if "$BINTANA_HEADLESS" check --json tests/smoke >"$tmp/cli-smoke.out" 2>"$tmp/cli-smoke.err" &&
+if "$BINTANA_CORE" check --json tests/smoke >"$tmp/cli-smoke.out" 2>"$tmp/cli-smoke.err" &&
    "$BINTANA" check --json tests/smoke >"$tmp/gui-smoke.out" 2>"$tmp/gui-smoke.err"; then
     if diff -u "$tmp/gui-smoke.out" "$tmp/cli-smoke.out" >"$tmp/smoke.diff"; then
         echo "the console check answers what the runtime check answers"
@@ -122,11 +123,11 @@ fi
 # runtime's: the same library first, the same sources, the same words after the
 # project in `Application.Arguments`. The console host has no window, so a
 # project that declares `startup` is refused by naming the form.
-if "$BINTANA_HEADLESS" run tests/headless/projects/run one two \
+if "$BINTANA_CORE" run tests/headless/projects/run one two \
         >"$tmp/headless-run.out" 2>"$tmp/headless-run.err"; then
-    echo "the console host runs a project's main"
+    echo "the core host runs a project's main"
 else
-    echo "the console host failed a console project:" >&2
+    echo "the core host failed a console project:" >&2
     cat "$tmp/headless-run.err" >&2
     fail=1
 fi
@@ -148,7 +149,7 @@ fi
 
 # The binary links no widget file, and the metadata document is loaded only for
 # `check`: a `main` gets the language's own answer for `Widget`.
-if out=$("$BINTANA_HEADLESS" tests/headless/projects/bare 2>"$tmp/bare.err") &&
+if out=$("$BINTANA_CORE" tests/headless/projects/bare 2>"$tmp/bare.err") &&
    [[ $out == undefined ]]; then
     echo "the bare host has no Widget for a main"
 else
@@ -171,7 +172,7 @@ GUI
 chmod +x "$gui"
 
 BINTANA_GUI="$gui" BINTANA_TEST_GUI_ARGS="$tmp/gui-args" \
-    "$BINTANA_HEADLESS" run --theme dark tests/headless/projects/window one two \
+    "$BINTANA_CORE" run --theme dark tests/headless/projects/window one two \
     >"$tmp/gui.out" 2>"$tmp/gui.err"
 gui_status=$?
 printf '%s\n' --theme dark tests/headless/projects/window one two \
@@ -181,7 +182,7 @@ if [[ $gui_status -eq 7 ]] && diff -u "$tmp/gui-want" "$tmp/gui-args" \
         >"$tmp/gui.diff"; then
     echo "a window project is exec'd as the graphical host"
 else
-    echo "the console host did not exec the graphical host: exit " \
+    echo "the core host did not exec the graphical host: exit " \
          "$gui_status" >&2
     cat "$tmp/gui.diff" "$tmp/gui.err" >&2
     fail=1
@@ -189,18 +190,18 @@ fi
 
 # The other half of the dispatch: a `main` must not load the toolkit.
 BINTANA_GUI="$gui" BINTANA_TEST_GUI_ARGS="$tmp/gui-args-main" \
-    "$BINTANA_HEADLESS" tests/headless/projects/run \
+    "$BINTANA_CORE" tests/headless/projects/run \
     >/dev/null 2>"$tmp/gui-main.err"
 if [[ ! -e "$tmp/gui-args-main" ]]; then
     echo "a main project does not dispatch"
 else
-    echo "the console host dispatched a main project to the toolkit" >&2
+    echo "the core host dispatched a main project to the toolkit" >&2
     fail=1
 fi
 
-if BINTANA_GUI=/nonexistent/host "$BINTANA_HEADLESS" \
+if BINTANA_GUI=/nonexistent/host "$BINTANA_CORE" \
         tests/headless/projects/window >/dev/null 2>"$tmp/gui-fail.err"; then
-    echo "the console host claimed to run a missing graphical host" >&2
+    echo "the core host claimed to run a missing graphical host" >&2
     fail=1
 elif grep -q "cannot run the graphical host" "$tmp/gui-fail.err"; then
     echo "a missing graphical host is a sentence"
@@ -211,12 +212,12 @@ else
 fi
 
 if command -v ldd >/dev/null; then
-    if ldd "$BINTANA_HEADLESS" | grep -Eiq 'libgtk|libgtksource|libvte'; then
-        echo "the console host links a toolkit:" >&2
-        ldd "$BINTANA_HEADLESS" | grep -Ei 'libgtk|libgtksource|libvte' >&2
+    if ldd "$BINTANA_CORE" | grep -Eiq 'libgtk|libgtksource|libvte'; then
+        echo "the core host links a toolkit:" >&2
+        ldd "$BINTANA_CORE" | grep -Ei 'libgtk|libgtksource|libvte' >&2
         fail=1
     else
-        echo "the console host links no GTK, GtkSourceView or VTE"
+        echo "the core host links no GTK, GtkSourceView or VTE"
     fi
 fi
 

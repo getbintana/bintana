@@ -349,10 +349,14 @@ disagree.
   Windows runner, so the evidence is by hand: a scratch copy of `Rows.js` given the
   backslashed keys the walk really returns reports the same 31 pages with the
   fix removed.
-- **`add_executable(bintana …)` lists its sources by hand while the signature
-  extractor globs `runtime/src/*.c`.** A new `.c` that is not in the list builds
-  green up to the link and then fails as *undefined reference to `bta_x_init`* --
-  and is already in `generated/bta_signatures.h`, so it looks half registered.
+- **`add_executable` lists its sources by hand -- two lists now, `bintana`
+  (core) and `${BTA_GUI_TARGET}` (`bintana-gui`, or `bintana` on Windows) --
+  while the signature extractor globs `runtime/src/*.c`.** A new `.c` that is
+  not in the right list builds green up to the link and then fails as
+  *undefined reference to `bta_x_init`* -- and is already in
+  `generated/bta_signatures.h`, so it looks half registered. A file that
+  touches GTK belongs only in the GUI list; one both hosts need belongs in
+  both, and `ldd` on the core is what catches a stray GTK reference.
   A new global is five places: the `.c`, its `CMakeLists.txt` line, its init in
   `bta.h`, and the two `install` roads, `bta_runtime.c` **and** `bta_task.c`
   (a global missing from the worker is *not a function* at call time, which
@@ -516,15 +520,16 @@ reads `ldd` for GTK, GtkSourceView and VTE.
 - **`tests/api.sh` does not see the stubs.** They are `static inline` in the
   header and not exported names, which is why they are not in `api.json`.
 
-## The console host
+## The console core
 
-**`bintana-headless` is Phase 2's console host: `--version`, `check`, and a
-project's `main`, with no toolkit in the link.** It links 17 libraries, and
-`check ide` answers byte for byte what `bintana check ide` answers with half the
-memory. `tests/headless.sh` runs both, and diffs the console run of a fixture
-project against the graphical one.
+**`bintana` is the core host: `--version`, `check`, a project's `main`, and
+the dispatch of `startup` to `bintana-gui`, with no toolkit in the link.** It
+links 17 libraries, and `bintana check ide` answers byte for byte what
+`bintana-gui check ide` answers with half the memory. `tests/headless.sh` runs
+both, and diffs the core run of a fixture project against the graphical one.
+Both binaries are installed; `bintana-meta` is the generator and is not.
 
-- **The console host links no widget file.** `bintana-meta --dump` writes
+- **The core links no widget file.** `bintana-meta --dump` writes
   `check/widgets.json` from the real rows, property tables, both preludes and
   the generated signatures; `runtime/js/widget-meta.js` answers `Widget.*` over
   it. The data is 1.7 MB and loads only for `check`; the binary is 2.9 MB in
@@ -538,21 +543,21 @@ project against the graphical one.
   that is nowhere, so both hosts stop with the same sentence.
 - **A `startup` project is exec'd, not refused: `execv` gives the graphical
   host the words, the descriptors and the exit status.** `$BINTANA_GUI` names
-  it; otherwise `bintana-gui` beside this binary (the installed split) or
-  `bintana` beside it (the source tree's single binary). The candidate that
-  would be this process is skipped -- an exec of itself is an infinite loop --
+  it; otherwise `bintana-gui` beside this binary. The candidate that would be
+  this process is skipped -- an exec of itself is an infinite loop --
   and `tests/headless.sh` uses a fake `BINTANA_GUI` script to watch the exec
   without a window. The type is decided from the manifest's top-level object
   (`bta_project_has_main`), with no QuickJS context: a window project must not
   start the language before the toolkit. The arguments after the project become
-  `Application.Arguments`, exactly as in the graphical host. Dispatch from a
-  single `bintana` binary is Phase 3; do not fake it with a stub form.
+  `Application.Arguments`, exactly as in the graphical host. Windows has no core
+  host yet and still ships the single graphical `bintana.exe` plus
+  `bintanaw.exe`; do not fake a console host there with a stub form.
 - **`BTA_META_ONLY` belongs to `bintana-meta` now, and it is built `-O1`.**
   At `-O2` GCC merges the GObject class structs `G_DEFINE_TYPE` builds into a
   `.data.rel.ro` section the linker cannot split; the vfuncs that point at
   GtkSourceCompletion are then kept even though their `get_type` is dropped,
   and a no-GTK link fails on `gtk_source_completion_*`. `-O1` keeps them
-  sectioned; nothing in the generator is hot. The console host does not compile
+  sectioned; nothing in the generator is hot. The core host does not compile
   those files at all.
 - **`BTA_HEADLESS` is on the core files.** It leaves `Screen`, `Dialog`,
   `Clipboard` and `File.Open` out of `bta_sys_init` and the icon lookup out of
@@ -577,13 +582,14 @@ project against the graphical one.
 - **`bta_module_run` takes the compiled module** (`JS_EvalFunction` does); freeing
   it again aborts in QuickJS. A script from `bta_compile` goes through
   `JS_EvalFunction`.
-- **The host supplies `bta_lookup_global`, `bta_dump_error`, `bta_symbols`,
+- **The core supplies `bta_lookup_global`, `bta_dump_error`, `bta_symbols`,
   `bta_split_doc`, `bta_read_file`, `bta_drain_jobs`, `bta_gerror_text`,
-  `bta_errno_text`, `bta_current_app` and `bta_task_hard_cancellable`.** They
-  live in `bta_runtime.c` today; Phase 3 moves them to `bta_core.c`. The
-  library listing is already shared, in `bta_project.c`. `bta_symbols` and
-  `bta_split_doc` are the same code the graphical host uses, not a second
-  reader.
+  `bta_errno_text`, `bta_current_app` and `bta_task_hard_cancellable` in
+  `bta_headless.c`; the graphical host's live in `bta_runtime.c`.** The
+  library listing and the project boot are shared, in `bta_project.c`.
+  `bta_symbols` and `bta_split_doc` are the same code the graphical host uses,
+  not a second reader. The division is the link, not the file: the core must
+  not name a GTK symbol.
 
 ## To review later
 

@@ -1,9 +1,10 @@
 # Un runtime sin GTK: el host de consola
 
-**Estado: Fase 0 medida y Fase 1 probada (2026-11-12), y Fase 2 en curso**:
-`bintana-headless --version`, `check` y el `main` de un proyecto corren sin GTK,
-con la misma salida que el runtime gráfico, y un proyecto `startup` se ejecuta
-como el host gráfico. Lo que falta de Fase 2 es la instalación.
+**Estado: Fase 0 medida, Fase 1 probada y Fase 2 con sus dos hosts instalados
+(2026-11-12)**: `bintana --version`, `check` y el `main` de un proyecto corren
+sin GTK, con la misma salida que `bintana-gui`, y un proyecto `startup` se
+ejecuta como el host gráfico. Faltan los ítems de aceptación de Fase 2 y el
+resto de Fase 3 (Windows, CI y empaquetado).
 El spike está en [`docs/notes/headless-runtime.md`](../notes/headless-runtime.md):
 `bintana-meta` compila las filas de clases con stubs, no enlaza GTK, carga
 `forms.js` con los diez captures de `rad.js`, y sus respuestas coinciden con
@@ -182,7 +183,7 @@ la Fase 2 hereda esa idea, o mueve el `bta_symbols` real.
 
 **Objetivo: un target que corre un `main` de verdad sin GTK.**
 
-**Primer slice hecho (2026-11-12): `bintana-headless --version`, `check` y el
+**Primer slice hecho (2026-11-12): `bintana --version`, `check` y el
 `main` de un proyecto.** Enlaza 17 bibliotecas (ninguna gráfica), **2,9 MB en
 Debug** (7,4 MB con los símbolos de `RelWithDebInfo`; un paquete los strippea)
 más un `widgets.json` de 1,7 MB que solo carga para `check`, y `check ide` da
@@ -200,17 +201,17 @@ objetos vacíos para que `Application.Globals()` no invente "no declarado"; una
 llamada a uno de ellos todavía no tiene su frase de refusal. **El boot de
 proyecto es compartido:** `bta_project.c` lee `project.btp`, resuelve `uses` y
 ordena las fuentes para los dos hosts, así que una librería se busca igual en
-consola y en gráfico. `bintana-headless <proyecto>` corre el `main` (con los
+consola y en gráfico. `bintana <proyecto>` corre el `main` (con los
 argumentos en `Application.Arguments`), y **un `startup` se executa como el host
 gráfico** con las mismas palabras, descriptores y código de salida: el tipo de
 proyecto se decide leyendo el objeto de nivel superior de `project.btp`, sin
-crear un contexto QuickJS, y el host se busca en `$BINTANA_GUI`, en
-`bintana-gui` al lado del binario (el split instalado) o en `bintana` al lado
-(el binario único del árbol). Un `main` no ve `Widget`, porque la metadata es un
-documento de `check`, no un toolkit. Lo que falta de esta fase: instalar el
-binario de consola. `tests/headless.sh` corre el meta-host, el check headless, el
-runner, el dispatch contra un host gráfico falso, y el gráfico, y difea las
-respuestas.
+crear un contexto QuickJS, y el host se busca en `$BINTANA_GUI` o en
+`bintana-gui` al lado del binario. **Los dos hosts se instalan:** `bintana` es
+el core y `bintana-gui` el gráfico; no hay un tercer binario para `check`.
+Un `main` no ve `Widget`, porque la metadata es un documento de `check`, no un
+toolkit. Lo que falta de esta fase son los ítems de aceptación de abajo.
+`tests/headless.sh` corre el meta-host, el check del core, el runner, el
+dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
 
 1. **`bta_boot.c` (core):** leer `project.btp`, resolver `sources`, `uses`,
    `main`/`startup`, construir el contexto, cargar módulos y `rad.js`. Sacar de
@@ -258,6 +259,9 @@ respuestas.
 1. **CMake:** `bintana-core` y `bintana-ui` como object/static libraries;
    `bintana` enlaza core; `bintanaw` (Windows) / `bintana-gui` (Linux) enlaza
    core+ui. `bintana` es el host de consola y el dispatcher.
+   **Hecho en Linux:** los targets son `bintana` (core) y `bintana-gui`
+   (gráfico), los dos se instalan, y `bintana-ide` lanza el gráfico. Windows
+   sigue con el `bintana.exe` único y `bintanaw.exe` hasta que exista su core.
 2. **Dispatch:**
    - `bintana --version` y `bintana check` → core.
    - `bintana <proyecto>` → leer `project.btp`; `main` corre en core, `startup`
@@ -269,7 +273,7 @@ respuestas.
    - `bintana <proyecto-startup>` no debe construir un contexto QuickJS para
      descubrir el tipo; usar el parser de `project.btp` (el mismo que ya lee
      `main`/`startup`) y ser barato.
-   - **Hecho en `bintana-headless`:** el dispatch executa el host con todo tal
+   - **Hecho en el core `bintana`:** el dispatch executa el host con todo tal
      como llegó, se niega a execurarse a sí mismo, y `--debug` instala el
      protocolo en el core. `--strict` y `--profile` de un `main` se rechazan con
      una frase hasta que el modo estricto y el profiler sean core; en un

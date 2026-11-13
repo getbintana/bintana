@@ -110,7 +110,8 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 
 | lands | what it is |
 |---|---|
-| `<prefix>/bin/bintana` | the runtime |
+| `<prefix>/bin/bintana` | the core runtime: `--version`, `check`, a project's `main`, and dispatch of `startup` |
+| `<prefix>/bin/bintana-gui` | the graphical host: windows, widgets, `forms.js` |
 | `<prefix>/bin/bintana-ide` | a one-line launcher for the IDE, under a name a menu entry can carry |
 | `<prefix>/share/bintana/ide/` | the IDE as the project directory it is |
 | `<prefix>/share/bintana/examples/` | the examples, to open and copy |
@@ -152,6 +153,11 @@ user's:
 ```sh
 xdg-mime default bintana-ide.desktop application/x-bintana-project
 ```
+
+**Two binaries, two roles.** `bintana` is the core and never loads GTK: it
+answers `--version` and `check`, runs a `main`, and execs `bintana-gui` for a
+project that declares `startup`. `bintana-gui` is the only one that opens a
+window. `bintana-ide` starts the graphical host on the IDE project.
 
 `bintana check` is the same project pass the IDE runs, from a shell: it reads
 the project and opens no window, so a CI job or a git hook can ask it. The exit
@@ -390,7 +396,7 @@ Two ways in, neither of which needs the runtime built specially:
 
 ```sh
 # Samples, GTK's frame marks and the runtime's own, in one capture:
-sysprof-cli -- ./build/bintana ide examples/hello
+sysprof-cli -- ./build/bintana-gui ide examples/hello
 # ...or the Sysprof application's "Profile a new process".
 
 # The runtime's marks alone, with no Sysprof installed, to open later:

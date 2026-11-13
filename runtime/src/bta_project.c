@@ -3,7 +3,7 @@
  *
  * This is the half of `bta_runtime.c`'s boot that never touches the toolkit,
  * in a file both hosts link. `bintana` uses it to decide what to load before a
- * window exists; `bintana-headless` uses the same functions to run a console
+ * window exists; the core host uses the same functions to run a console
  * project and to find `tools/check`. One definition, so a library resolves the
  * same way in both and a source order cannot drift.
  */

@@ -17,7 +17,7 @@ cd "$(dirname "$0")/.."
 # must not translate the suite's output under it.
 export LANGUAGE=C
 
-BINTANA=${BINTANA:-./build/bintana}
+BINTANA=${BINTANA:-./build/bintana-gui}
 if [[ ! -x $BINTANA ]]; then
     echo "no runtime at $BINTANA -- build first: cmake --build build" >&2
     exit 2

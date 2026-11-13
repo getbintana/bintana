@@ -34,6 +34,15 @@ const TESTS = File.Join(ROOT, "tests");
 const BINTANA = Application.Executable;
 
 /*
+ * The graphical host beside it. This runner is a console project, so it runs
+ * in the core `bintana`; each test project is a `startup` one, and the core
+ * execs `bintana-gui` for it. `BINTANA_GUI` names the host when a build keeps
+ * it somewhere else, the same variable the core itself honours.
+ */
+const BINTANA_GUI = Environment.Get("BINTANA_GUI") ||
+                    File.Join(File.Directory(BINTANA), "bintana-gui");
+
+/*
  * GTK's portal and D-Bus chatter, and Mesa's complaint about a virtual display
  * having no GPU.  Neither says anything about the runtime.
  *
@@ -303,20 +312,28 @@ function isTestProject(name) {
  * including at a sanitizer build that takes two minutes to link.
  */
 function warnIfStale() {
-    const built = File.Info(BINTANA);
-    if (!built) return;
+    /* **Both hosts.** The suite runs in the core and the projects in the
+     * graphical host; one can be rebuilt and the other left behind, and a
+     * stale one is worse than no binary. */
+    const binaries = [BINTANA, BINTANA_GUI].filter(
+        (path, i, all) => File.Exists(path) && all.indexOf(path) === i);
 
-    /* Everything the binary is made of: the C, the headers, and rad.js, which is
+    /* Everything a binary is made of: the C, the headers, and rad.js, which is
      * the one that does not look like a source. */
     const sources = [File.Join(ROOT, "CMakeLists.txt")];
     for (const pattern of ["*.c", "*.h", "*.js", "CMakeLists.txt"])
         for (const dir of [File.Join(ROOT, "runtime"), File.Join(ROOT, "vendor")])
             sources.push(...Directory.Files(dir, { Pattern: pattern, Recursive: true }));
 
-    const newer = sources.find((path) => {
-        const info = File.Info(path);
-        return info && info.Modified > built.Modified;
-    });
-    if (newer)
-        Logger.Warning(`${newer} is newer than ${BINTANA} -- rebuild first: cmake --build build`);
+    for (const binary of binaries) {
+        const built = File.Info(binary);
+        if (!built) continue;
+
+        const newer = sources.find((path) => {
+            const info = File.Info(path);
+            return info && info.Modified > built.Modified;
+        });
+        if (newer)
+            Logger.Warning(`${newer} is newer than ${binary} -- rebuild first: cmake --build build`);
+    }
 }

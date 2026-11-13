@@ -1095,7 +1095,7 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
 
   ```sh
   Xvfb :99 -screen 0 1024x768x24 & sleep 2
-  DISPLAY=:99 ./build/bintana <probe-project> &            # a Calendar at 8,60
+  DISPLAY=:99 ./build/bintana-gui <probe-project> &            # a Calendar at 8,60
   W=$(DISPLAY=:99 xdotool search --name CalProbe | tail -1)
   DISPLAY=:99 xdotool mousemove --window $W 133 72 click 1     # the > arrow
   DISPLAY=:99 import -window $W /tmp/turned.png

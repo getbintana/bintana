@@ -528,7 +528,7 @@ icon when the theme has one by that name (`gtkapplication.c`).
   through `sizes_parse` and are untouched. A new numeric property that calls
   `JS_ToInt32` directly is the regression to watch for. The two live in
   `runtime/src/bta_util.c`, not in `bta_widget.c`: `bta_network.c` and
-  `bta_xml.c` use them too, and the console host links those and no widget
+  `bta_xml.c` use them too, and the core host links those and no widget
   file.
   **And it was never only setters.** An audit found forty-five *method*
   arguments still converting with a bare `JS_ToInt32` -- every list's
@@ -746,15 +746,15 @@ icon when the theme has one by that name (`gtkapplication.c`).
   died with no message at all -- found while testing something unrelated, and
   costing a `gdb` backtrace to identify because there was nothing to read. It is
   a refusal now (`bta_ctor`): *a project with a `main` has no display, so it
-  cannot make widgets*. `bintana-headless` goes further and does not install the
+  cannot make widgets*. The core `bintana` goes further and does not install the
   class at all for a `main`: the metadata document is loaded only for `check`,
   so the answer there is the language's `ReferenceError` and not a stub.
 - **A `startup` project reaches the graphical host by `exec`, and the decision
   must stay cheap.** `bta_project_has_main` reads the top-level object of
   `project.btp` for a string `"main"`; a QuickJS context must not exist yet, or
   a window project pays to start the language before GTK. `$BINTANA_GUI`, then
-  `bintana-gui` beside the binary, then `bintana` beside it; never this process
-  itself, which would exec forever. `execv` carries every word, descriptor and
+  `bintana-gui` beside the binary; never this process itself, which would exec
+  forever. `execv` carries every word, descriptor and
   the exit status, which is what a runner reads.
 - **A library is a directory, and the runtime finds it one hop from its own
   binary.** `"uses": ["charts"]` in project.btp resolves over the project's
@@ -769,8 +769,8 @@ icon when the theme has one by that name (`gtkapplication.c`).
   **both directions** and neither belongs anywhere else: `Application.LibraryPath`
   resolves one name, `Application.Libraries` says which names there are, and both
   walk `bta_library_candidates` in `runtime/src/bta_project.c`. **That file is
-  also the console host's**, so the project manifest, `uses` and the load order
-  have one definition in `bintana` and `bintana-headless`; do not add a GTK call
+  also the core's**, so the project manifest, `uses` and the load order
+  have one definition in `bintana` and `bintana-gui`; do not add a GTK call
   there, and do not grow a second search in either host. The IDE ticks libraries
   in its project dialog off the second; a copy of that path in JavaScript would
   be the copy that goes stale, because the C one is what every program runs.

@@ -5,7 +5,7 @@
  * They used to live in `bta_widget.c`, which was the file with the most numeric
  * setters and not the file they belong to: `bta_network.c` and `bta_xml.c` use
  * both, and so does the console host, which links neither widget file. Keeping
- * them here is what lets `bintana` and `bintana-headless` share one definition
+ * them here is what lets `bintana` and `bintana-gui` share one definition
  * instead of two copies that can drift apart.
  */
 #include "bta.h"

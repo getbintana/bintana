@@ -22,6 +22,9 @@ maximum resident set; `libs` is the number of lines `ldd` prints.
 | `bintana-meta tests/headless/Main.js` | 0.06 s | 9.4 MB | 15 |
 | `bintana tests/headless` (the same questions as a `main`) | 0.11 s | 46.3 MB | 153 |
 
+These rows predate the split: the one binary was `bintana`, which is today
+`bintana-gui`.
+
 - **`LD_DEBUG=libs` shows `calling init` for `libgtk-4`, `libgtksourceview-5`
   and `libvte-2.91-gtk4` for `--version` and for a `main`**, not only for a
   window. The loader maps them before `main`; no project type is exempt.
@@ -157,23 +160,24 @@ host whose prelude did not load; it is not the answer the test exercises.
 
 ## Phase 2: the console host, first slice
 
-`bintana-headless` is the first real console runtime: `--version`, `check`, a
-project's `main`, and the dispatch of a window project to the graphical host,
-with no GTK in the link. It is not a test host -- it loads `tools/check`,
-`lib/check`, and an arbitrary console project with the libraries its `uses`
-names -- and it is not installed yet.
+**The console host is `bintana`; the graphical host is `bintana-gui`.**
+`bintana` is the first real console runtime: `--version`, `check`, a project's
+`main`, and the dispatch of a window project to the graphical host, with no GTK
+in the link. It is not a test host -- it loads `tools/check`, `lib/check`, and
+an arbitrary console project with the libraries its `uses` names -- and both
+hosts install.
 
 | command | wall | max RSS | libraries |
 |---|---:|---:|---:|
-| `bintana-headless --version` | 0.00 s | 5.6 MB | 17 |
-| `bintana-headless check examples/hello` | 0.08 s | 20.8 MB | 17 |
-| `bintana-headless check ide` | 5.83 s | 35.5 MB | 17 |
-| `bintana check ide` | 5.60 s | 60.2 MB | 153 |
-| `bintana-headless tests/headless/projects/run` (a `main`) | 0.01 s | 8.7 MB | 17 |
-| `bintana tests/headless/projects/run` | 0.04 s | 43.3 MB | 153 |
+| `bintana --version` | 0.00 s | 5.6 MB | 17 |
+| `bintana check examples/hello` | 0.08 s | 20.8 MB | 17 |
+| `bintana check ide` | 5.83 s | 35.5 MB | 17 |
+| `bintana-gui check ide` | 5.60 s | 60.2 MB | 153 |
+| `bintana tests/headless/projects/run` (a `main`) | 0.01 s | 8.7 MB | 17 |
+| `bintana-gui tests/headless/projects/run` | 0.04 s | 43.3 MB | 153 |
 
 The `check ide` rows are the same pass, and their output is byte for byte the
-same (`--json` too); the console host uses less memory and maps no toolkit.
+same (`--json` too); the core uses less memory and maps no toolkit.
 The `check` rows are the Debug build (`build/`). On `RelWithDebInfo`
 (`build-rwd`) the same check is **1.48 s and 32.8 MB** against **1.52 s and
 58.0 MB** for the graphical binary; `--version` stays at 5.6 MB. The two
@@ -183,7 +187,7 @@ graphical runtime's `main` even reads `project.btp`. The binary is **2.9 MB**
 in the Debug build and **7.4 MB** with `RelWithDebInfo`'s symbols -- a packager
 strips them; the metadata document it loads for `check` is **1.7 MB**.
 
-**How it is put together.** The console host links **no widget file**. At build
+**How it is put together.** The core `bintana` links **no widget file**. At build
 time `bintana-meta --dump` writes `check/widgets.json` from the real class rows,
 their property tables, both preludes and the generated signatures;
 `runtime/js/widget-meta.js` reads that document and answers `Widget.*` from it.
@@ -191,7 +195,7 @@ their property tables, both preludes and the generated signatures;
 `Clipboard` and the GTK `File.Open` out and keeps `File`, `Directory`, `Exec`,
 `Hash` and `Environment`. **`bta_project.c` is the boot both hosts share**:
 `project.btp`, `uses`, the six-place library search and the order sources load
-in. It has no toolkit in it, so `bintana-headless` resolves a library the same
+in. It has no toolkit in it, so `bintana` resolves a library the same
 way `bintana` does instead of keeping a second answer. `bta_headless.c` is the
 rest of the host: core globals, `Application`, `rad.js`, then either the
 project's libraries, sources and `main`, or -- for `check` only -- the metadata
@@ -201,7 +205,7 @@ files `bta_runtime.c` would have supplied -- `bta_lookup_global`,
 `bta_drain_jobs` and the error text -- are in the host.
 `bintana-meta` is the generator and the test; it is not installed.
 
-**`bintana-headless <project>` runs a `main`.** The words after the project are
+**`bintana <project>` runs a `main`.** The words after the project are
 `Application.Arguments`, exactly as the graphical runtime hands them over. A
 `main` that names a widget sees no `Widget` at all -- the metadata is a `check`
 document, not a toolkit -- and the language's own `ReferenceError` is the
@@ -212,8 +216,7 @@ every word, descriptor and the exit status unchanged. The decision is made from
 the manifest before any QuickJS context exists -- the top-level object is read
 for a string `"main"` -- because a window project must not pay to start the
 language before the toolkit. `$BINTANA_GUI` names the host; otherwise
-`bintana-gui` beside this binary (the installed split) or `bintana` beside it
-(the source tree's single binary) is used. A candidate that resolves to this
+`bintana-gui` beside this binary is used. A candidate that resolves to this
 process is skipped, so the dispatch can never exec itself forever.
 
 `tests/headless/projects/` holds the fixtures the shell test uses: a console
@@ -239,12 +242,11 @@ in the host over `bta_line_of_utf16`; the rest of `Text` needs Pango and a font
 map and belongs to the graphical host. `File.Info` answers no icon name -- there
 is no theme to ask -- which no check reads.
 
-**What it does not do yet.** The dispatch lives in `bintana-headless`; Phase 3
-installs that core as `bintana` and names the graphical host `bintana-gui`.
-**Two installed binaries are the design -- a core and a graphical host; the
-third binary that is not wanted is one that exists only for `check` and the
-test tools.** CMake installs neither host yet. The Windows target does not
-exist, and the Phase 2 acceptance
+**What it does not do yet.** The dispatch lives in the core; both hosts
+install, and the graphical one is `bintana-gui`. **Two installed binaries are
+the design -- a core and a graphical host; the third binary that is not wanted
+is one that exists only for `check` and the test tools.** The Windows split
+does not exist yet, and the Phase 2 acceptance
 projects -- `tests/report`'s `testDocument`, `tests/media`, and `tests/api` with
 its `Widget.*` -- are still the graphical host's. A `main` refuses `--strict`
 and `--profile` with a sentence: strictness is about widget properties and this
@@ -253,10 +255,10 @@ host has no widgets, and the profiler is not linked yet. `--debug` works.
 ## Reproducing
 
 ```sh
-cmake --build build --target bintana-meta bintana-headless
+cmake --build build --target bintana-meta bintana bintana-gui
 ./tests/headless.sh
-ldd build/bintana-meta build/bintana-headless | grep -Ei 'gtk|gtksource|vte'  # no output
+ldd build/bintana-meta build/bintana | grep -Ei 'gtk|gtksource|vte'  # no output
 ```
 
-`tests/headless.sh` needs no display: both the metadata host and the console
-host run a `main` project, and the check it diffs is the graphical one's.
+`tests/headless.sh` needs no display: the metadata host and the core run `main`
+projects, and the check it diffs is the graphical host's.

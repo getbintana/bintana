@@ -84,7 +84,7 @@ What bit, or would, in the order it was learned:
   pointers** -- the default `Debug` build has both; a release wants
   `-g -fno-omit-frame-pointer`. One project at a time, since one capture file
   holds one run: `tests/try.sh --profile /tmp/w.syscap tests/widgets 12345`, or
-  `sysprof-cli -- ./build/bintana ide examples/hello`.
+  `sysprof-cli -- ./build/bintana-gui ide examples/hello`.
 - **`BINTANA_PROFILE=<dir>` profiles the whole suite, one capture per project.**
   It is an environment variable because the runner **builds** each child's
   command line: `./tests/run.sh --profile x` would hand the flag to the runner,

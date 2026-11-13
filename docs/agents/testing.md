@@ -341,15 +341,15 @@ save will edit `examples/hello` for real.
   X server and `xdotool` works against it, so a resize or a click done "for
   real" belongs there too.
 - **`HEADLESS=1` is read by `tests/runner`, the suite's own runner. The binary
-  does not read it at all.** `HEADLESS=1 ./build/bintana <project>` is a window on the user's desktop,
+  does not read it at all.** `HEADLESS=1 ./build/bintana-gui <project>` is a window on the user's desktop,
   and it *looks* exactly like the safe thing right up until it opens -- which is
   how a catalogue probe went onto the user's screen twice, sixty seconds each. Run an
   ad-hoc project with **`tests/try.sh <dir>`**, which is `xvfb-run` and cannot be
   forgotten; going back to a real screen there is `HEADLESS= tests/try.sh`, and
   it should be a question you can say out loud (an icon, a theme). Debugging
-  under `gdb` changes nothing about this: `gdb --args xvfb-run -a ./build/bintana
+  under `gdb` changes nothing about this: `gdb --args xvfb-run -a ./build/bintana-gui
   <project>` debugs the same binary on a display nobody uses, and a bare
-  `gdb ./build/bintana tests/widgets` is a windowed suite on the user's screen held
+  `gdb ./build/bintana-gui tests/widgets` is a windowed suite on the user's screen held
   open by a breakpoint.
 - **And a real screen is worse than an inconvenience: it fails assertions.** A
   run on the user's desktop put every window *on that screen* — dozens of them,

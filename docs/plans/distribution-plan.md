@@ -55,34 +55,29 @@ dependencies and lists them; the tarball keeps hiding them.
 ## Decisions
 
 **One runtime family, many application packages.** The runtime is shared; an
-application package carries only its project, launcher and metadata. How many
-packages the runtime itself is depends on the headless host, and that is the
-one boundary this plan does not freeze yet:
+application package carries only its project, launcher and metadata. The
+headless split settled how many packages the runtime itself is:
 
-- **If headless Phase 1 says no:** one `bintana` package with the runtime, the
-  IDE and the shared data.
-- **If it says yes:** `bintana` is the console host and the dispatcher,
-  `bintana-gui` is the graphical host (GTK, GtkSourceView and VTE), and
-  `bintana-ide` is the IDE data, its launcher and its menu entry, depending on
+- `bintana` is the console core and the dispatcher.
+- `bintana-gui` is the graphical host (GTK, GtkSourceView and VTE).
+- `bintana-ide` is the IDE data, its launcher and its menu entry, depending on
   both. A `main` application depends on `bintana`; a `startup` application
   depends on `bintana-gui`; the IDE package depends on `bintana-ide`.
 
-**`bintana-desktop` is the name to publish before the split.** It keeps
-`bintana` free for the core: before headless it is the one GUI package; after
-the split it is a meta-package depending on `bintana`, `bintana-gui` and
-`bintana-ide`, so an installed user keeps the name and gains the console host
-without a renamed package to migrate from.
+**`bintana-desktop` is the name to keep published.** It is a meta-package
+depending on `bintana`, `bintana-gui` and `bintana-ide`, so an installed user
+keeps the name and gains the split without a renamed package to migrate from.
 
 | artefact | runtime | GTK / GtkSourceView | updates |
 |---|---|---|---|
-| `.deb` | `Depends: bintana` (and `bintana-gui` when headless) | the distribution's | apt repository |
-| `.rpm` | `Requires: bintana` (and `bintana-gui` when headless) | the distribution's | dnf repository |
+| `.deb` | `Depends: bintana` or `bintana-gui` as the application needs | the distribution's | apt repository |
+| `.rpm` | `Requires: bintana` or `bintana-gui` as the application needs | the distribution's | dnf repository |
 | AppImage | core, plus the GUI host for a windowed application | bundled | AppImageUpdate / a new file |
 | Flatpak | both hosts in `/app/bin` | the runtime | `flatpak update` |
 
 **The package boundary waited on headless Phase 1.** The headless plan's Phase 0
-and Phase 1 decide whether the runtime is one binary or a console core plus a
-GUI host. **Phase 1 now passes (2026-11-12):** `bintana-meta` answers the class
+and Phase 1 decided whether the runtime is one binary or a console core plus a
+GUI host: it is two. **Phase 1 now passes (2026-11-12):** `bintana-meta` answers the class
 metadata, `PropertyNames`, `Methods` and `Members` with `Doc`, with `forms.js`
 loaded and no GTK in its link (15 libraries against 153), so the split is the
 working layout and the names above are not placeholders. **Two installed
@@ -91,18 +86,16 @@ third binary that exists only for `check` and the test tools**, because that is
 a role the core host already has. The staging layer in Stage 1 takes a list of
 hosts and a list of data directories, never one hard-coded binary. **The check
 data is a document, not a binary:** `bintana-meta --dump` writes
-`widgets.json`, `WidgetMeta.js` answers over it, and `bintana-headless` loads
+`widgets.json`, `WidgetMeta.js` answers over it, and `bintana` loads
 both only for `check`; the core links no widget file.
 
-**The core `bintana` package still waits for the rest of Phase 2**: the console
-host runs `check`, a project's `main`, and dispatches `startup` to the graphical
-host, but CMake does not install it yet, and Phase 3 is what names the core
-`bintana` and the graphical host `bintana-gui`. Until then, the package that
-ships is `bintana-desktop`. The staging code is written for the split list now.
-The console binary is 2.9 MB in Debug and 7.4 MB with `RelWithDebInfo`'s
-symbols (a packager strips them), with 17 libraries; the check document is
-1.7 MB, and `bintana-headless check` already matches the graphical check byte
-for byte.
+**The core `bintana` package's runtime side is now installable**: one prefix
+carries `bin/bintana` (core), `bin/bintana-gui` (graphical host), the launcher,
+the libraries and the check document. The packaging work itself -- `.deb`,
+`.rpm`, AppImage -- is Stage 1 and unchanged. The core binary is 2.9 MB in
+Debug and 7.4 MB with `RelWithDebInfo`'s symbols (a packager strips them), with
+17 libraries; the check document is 1.7 MB, and `bintana check` matches the
+graphical check byte for byte.
 
 **`Package` stays the Flatpak context.** `Deb`, `Rpm` and `AppImage` are
 separate classes beside `Nsis`, because each one consumes a different tree and

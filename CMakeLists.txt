@@ -277,7 +277,15 @@ else()
     set(BTA_SERIAL_SOURCE)
 endif()
 
-add_executable(bintana
+# **Two hosts, two binaries.** On Linux the core is `bintana` and the
+# graphical host is `bintana-gui`; Windows still ships the single graphical
+# `bintana.exe` plus `bintanaw.exe` until its console host exists (Phase 3).
+set(BTA_GUI_TARGET bintana)
+if(NOT WIN32)
+    set(BTA_GUI_TARGET bintana-gui)
+endif()
+
+add_executable(${BTA_GUI_TARGET}
     runtime/src/main.c
     runtime/src/bta_runtime.c
     runtime/src/bta_project.c
@@ -343,11 +351,11 @@ add_executable(bintana
     ${BASE_CSS_H}
     ${SIGNATURES_H}
 )
-target_include_directories(bintana PRIVATE
+target_include_directories(${BTA_GUI_TARGET} PRIVATE
     ${CMAKE_SOURCE_DIR}/runtime/include
     ${CMAKE_BINARY_DIR}/generated
 )
-target_link_libraries(bintana PRIVATE quickjs PkgConfig::GTK4 PkgConfig::GTKSOURCE
+target_link_libraries(${BTA_GUI_TARGET} PRIVATE quickjs PkgConfig::GTK4 PkgConfig::GTKSOURCE
                                        PkgConfig::GMODULE)
 if(WIN32)
     # `Shell_NotifyIconW` is shell32; the hidden window, the popup menu and the
@@ -355,7 +363,7 @@ if(WIN32)
     # toast needs `RoInitialize`/`RoGetActivationFactory` from runtimeobject and
     # COM from ole32.  GTK links them already, and naming them here is what
     # makes these halves independent of GTK's link line.
-    target_link_libraries(bintana PRIVATE shell32 user32 gdi32 runtimeobject ole32 advapi32 winspool)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE shell32 user32 gdi32 runtimeobject ole32 advapi32 winspool)
 endif()
 
 if(APPLE)
@@ -365,15 +373,15 @@ if(APPLE)
         message(FATAL_ERROR "no Security framework: Keyring's macOS provider "
                             "needs it")
     endif()
-    target_link_libraries(bintana PRIVATE ${SECURITY_FRAMEWORK})
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE ${SECURITY_FRAMEWORK})
 endif()
 if(GIOUNIX_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::GIOUNIX)
 endif()
 
 if(VTE_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::VTE)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_VTE=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::VTE)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_VTE=1)
     message(STATUS "vte ${VTE_VERSION}: Terminal can run a child")
 else()
     message(STATUS "no vte: Terminal exists and refuses to run one")
@@ -392,8 +400,8 @@ if(WIN32)
     # is a plain `-lvterm`.
     pkg_check_modules(LIBVTERM vterm)
     if(LIBVTERM_FOUND)
-        target_link_libraries(bintana PRIVATE ${LIBVTERM_LINK_LIBRARIES})
-        target_compile_definitions(bintana PRIVATE BTA_HAVE_LIBVTERM=1)
+        target_link_libraries(${BTA_GUI_TARGET} PRIVATE ${LIBVTERM_LINK_LIBRARIES})
+        target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_LIBVTERM=1)
         message(STATUS "libvterm ${LIBVTERM_VERSION}: Terminal runs a child through ConPTY")
     else()
         message(STATUS "no libvterm: Terminal exists and refuses to run one")
@@ -401,81 +409,81 @@ if(WIN32)
 endif()
 
 if(POPPLER_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::POPPLER)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_POPPLER=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::POPPLER)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_POPPLER=1)
     message(STATUS "poppler-glib ${POPPLER_VERSION}: PdfDocument and Probe.Pdf read a PDF")
 else()
     message(STATUS "no poppler-glib: PdfDocument's reading half and Probe.Pdf will say so when called")
 endif()
 
 if(SQLITE3_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::SQLITE3)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_SQLITE=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::SQLITE3)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_SQLITE=1)
     message(STATUS "sqlite3 ${SQLITE3_VERSION}: Database.Sqlite is available")
 else()
     message(STATUS "no sqlite3: Database.Sqlite will say so when called")
 endif()
 
 if(WIN32)
-    target_link_libraries(bintana PRIVATE odbc32)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_ODBC=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE odbc32)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_ODBC=1)
     message(STATUS "odbc32: Database.Odbc is available")
 elseif(ODBC_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::ODBC)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_ODBC=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::ODBC)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_ODBC=1)
     message(STATUS "unixODBC ${ODBC_VERSION}: Database.Odbc is available")
 else()
     message(STATUS "no unixODBC: Database.Odbc will say so when called")
 endif()
 
 if(UNIXPRINT_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::UNIXPRINT)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_UNIX_PRINT=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::UNIXPRINT)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_UNIX_PRINT=1)
     message(STATUS "gtk4-unix-print ${UNIXPRINT_VERSION}: Printer.Names and Printer.Default can answer")
 else()
     message(STATUS "no gtk4-unix-print: Printer.Names and Printer.Default will say so; printing itself is unaffected")
 endif()
 
 if(SYSTEMD_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::SYSTEMD)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_JOURNAL=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::SYSTEMD)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_JOURNAL=1)
 endif()
 
 if(SOUP_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::SOUP)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_SOUP=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::SOUP)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_SOUP=1)
     message(STATUS "libsoup ${SOUP_VERSION}: Http is available")
 else()
     message(STATUS "no libsoup: Http will say so when called")
 endif()
 
 if(GNUTLS_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::GNUTLS)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_GNUTLS=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::GNUTLS)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_GNUTLS=1)
     message(STATUS "gnutls ${GNUTLS_VERSION}: Cipher and Key are available")
 else()
     message(STATUS "no gnutls: Cipher and Key exist and refuse")
 endif()
 
 if(GSTREAMER_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::GSTREAMER)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_GST=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::GSTREAMER)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_GST=1)
     message(STATUS "gstreamer ${GSTREAMER_VERSION}: Video and AudioPlayer are available")
 else()
     message(STATUS "no gstreamer: Video and AudioPlayer will say so when called")
 endif()
 
 if(LIBXML_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::LIBXML)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_LIBXML=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::LIBXML)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_LIBXML=1)
     message(STATUS "libxml2 ${LIBXML_VERSION}: Xml is available")
 else()
     message(STATUS "no libxml2: Xml exists and refuses to read anything")
 endif()
 
 if(SECRET_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::SECRET)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_LIBSECRET=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::SECRET)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_LIBSECRET=1)
     message(STATUS "libsecret ${SECRET_VERSION}: Keyring uses the Secret Service")
 elseif(WIN32)
     message(STATUS "no libsecret: Keyring uses the Credential Manager")
@@ -486,8 +494,8 @@ else()
 endif()
 
 if(SYSPROF_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::SYSPROF)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_SYSPROF=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::SYSPROF)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_SYSPROF=1)
     message(STATUS "sysprof-capture ${SYSPROF_VERSION}: --profile can write a "
                    "capture, and a Sysprof run carries the runtime's marks")
 else()
@@ -496,18 +504,18 @@ else()
 endif()
 
 if(PODOFO_FOUND)
-    target_link_libraries(bintana PRIVATE PkgConfig::PODOFO)
-    target_compile_definitions(bintana PRIVATE BTA_HAVE_PODOFO=1)
+    target_link_libraries(${BTA_GUI_TARGET} PRIVATE PkgConfig::PODOFO)
+    target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_HAVE_PODOFO=1)
     message(STATUS "podofo ${PODOFO_VERSION}: PdfDocument can add form fields and encrypt")
 else()
     message(STATUS "no podofo: PdfDocument refuses to write, naming the package")
 endif()
-target_compile_definitions(bintana PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION}")
+target_compile_definitions(${BTA_GUI_TARGET} PRIVATE BTA_VERSION_STRING="${PROJECT_VERSION}")
 # -Wshadow, -Wnull-dereference and -Wformat=2 are clean across runtime/src
 # today; keeping them on is what keeps them clean.  (-Wconversion is not here
 # on purpose: GTK's own guint/int mixing would bury the two real sign flips,
 # which carry explicit casts instead.)
-target_compile_options(bintana PRIVATE -Wall -Wextra -Wno-unused-parameter
+target_compile_options(${BTA_GUI_TARGET} PRIVATE -Wall -Wextra -Wno-unused-parameter
                                           -Wshadow -Wnull-dereference -Wformat=2)
 
 # ----------------------------------------------------------- metadata host ---
@@ -581,7 +589,7 @@ if(NOT WIN32)
 endif()
 
 # ----------------------------------------------------------- console host ---
-# Phase 2's first slice: `bintana-headless --version` and `check`, with the
+# The console core: `bintana --version`, `check`, a project's `main` and the
 # core globals and the metadata rows, and no toolkit in the link.  The widget
 # files are the same `BTA_META_ONLY` ones; `bta_sys.c` leaves out the desktop
 # objects under `BTA_HEADLESS`; `bta_headless.c` supplies the few symbols that
@@ -621,8 +629,8 @@ if(NOT WIN32)
     configure_file(${CMAKE_SOURCE_DIR}/runtime/js/widget-meta.js
                    ${CMAKE_BINARY_DIR}/check/WidgetMeta.js COPYONLY)
 
-    add_executable(bintana-headless ${BTA_HEADLESS_SOURCES})
-    target_include_directories(bintana-headless PRIVATE
+    add_executable(bintana ${BTA_HEADLESS_SOURCES})
+    target_include_directories(bintana PRIVATE
         ${CMAKE_SOURCE_DIR}/runtime/include
         ${CMAKE_BINARY_DIR}/generated
         ${GTK4_INCLUDE_DIRS}
@@ -631,31 +639,31 @@ if(NOT WIN32)
         ${GSTREAMER_INCLUDE_DIRS}
         ${LIBXML_INCLUDE_DIRS}
     )
-    target_compile_definitions(bintana-headless PRIVATE
+    target_compile_definitions(bintana PRIVATE
         BTA_HEADLESS
         BTA_VERSION_STRING="${PROJECT_VERSION}"
     )
     if(VTE_FOUND)
-        target_compile_definitions(bintana-headless PRIVATE BTA_HAVE_VTE=1)
+        target_compile_definitions(bintana PRIVATE BTA_HAVE_VTE=1)
     endif()
     if(GSTREAMER_FOUND)
-        target_compile_definitions(bintana-headless PRIVATE BTA_HAVE_GST=1)
+        target_compile_definitions(bintana PRIVATE BTA_HAVE_GST=1)
     endif()
     if(LIBXML_FOUND)
-        target_compile_definitions(bintana-headless PRIVATE BTA_HAVE_LIBXML=1)
-        target_link_libraries(bintana-headless PRIVATE PkgConfig::LIBXML)
+        target_compile_definitions(bintana PRIVATE BTA_HAVE_LIBXML=1)
+        target_link_libraries(bintana PRIVATE PkgConfig::LIBXML)
     endif()
-    add_dependencies(bintana-headless bintana-check-data)
-    target_link_libraries(bintana-headless PRIVATE
+    add_dependencies(bintana bintana-check-data)
+    target_link_libraries(bintana PRIVATE
         quickjs PkgConfig::GLIBCORE)
     if(NOT WIN32)
-        target_link_libraries(bintana-headless PRIVATE PkgConfig::GIOUNIX)
+        target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)
     endif()
-    target_compile_options(bintana-headless PRIVATE
+    target_compile_options(bintana PRIVATE
         -ffunction-sections -fdata-sections
         -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow
     )
-    target_link_options(bintana-headless PRIVATE -Wl,--gc-sections)
+    target_link_options(bintana PRIVATE -Wl,--gc-sections)
 endif()
 
 # ----------------------------------------------------------- test plugins ---
@@ -739,9 +747,18 @@ set(BTA_DATADIR ${CMAKE_INSTALL_DATADIR}/bintana)
 # would not.
 file(RELATIVE_PATH BTA_BIN_TO_IDE
      ${CMAKE_INSTALL_FULL_BINDIR} ${CMAKE_INSTALL_FULL_DATADIR}/bintana/ide)
+# Which binary the launcher execs: the graphical host on Unix, the single
+# graphical `bintana` on Windows.
+set(BTA_IDE_EXE bintana-gui)
+if(WIN32)
+    set(BTA_IDE_EXE bintana)
+endif()
 configure_file(tools/bintana-ide.in ${CMAKE_BINARY_DIR}/bintana-ide @ONLY)
 
-install(TARGETS bintana RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS ${BTA_GUI_TARGET} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+if(NOT WIN32)
+    install(TARGETS bintana RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 install(PROGRAMS ${CMAKE_BINARY_DIR}/bintana-ide DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # **`bintanaw.exe` on Windows: the same runtime, without a console.** Windows
@@ -763,8 +780,8 @@ if(WIN32)
                             "PE subsystem set to windows, and objcopy is what sets it")
     endif()
     set(BTA_GUI_EXE ${CMAKE_BINARY_DIR}/bintanaw.exe)
-    add_custom_command(TARGET bintana POST_BUILD
-        COMMAND ${CMAKE_OBJCOPY} --subsystem windows $<TARGET_FILE:bintana> ${BTA_GUI_EXE}
+    add_custom_command(TARGET ${BTA_GUI_TARGET} POST_BUILD
+        COMMAND ${CMAKE_OBJCOPY} --subsystem windows $<TARGET_FILE:${BTA_GUI_TARGET}> ${BTA_GUI_EXE}
         BYPRODUCTS ${BTA_GUI_EXE}
         COMMENT "bintanaw.exe: the runtime without a console")
     install(PROGRAMS ${BTA_GUI_EXE} DESTINATION ${CMAKE_INSTALL_BINDIR})

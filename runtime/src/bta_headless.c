@@ -1,5 +1,5 @@
 /*
- * The console host: `bintana-headless --version` and `check`, with no toolkit.
+ * The console host: `bintana --version` and `check`, with no toolkit.
  *
  * This is the Phase 2 first slice of
  * `docs/plans/headless-runtime-plan.md`. It is deliberately a **console
@@ -436,8 +436,14 @@ static JSValue js_application_check_source(JSContext *ctx, JSValueConst this_val
     if (!src)
         return JS_ThrowTypeError(ctx, "Application.CheckSource(text) needs text");
 
-    bool    is_module;
+    /* A text being checked has no file to be relative to, and an `import`
+     * must not read the disk: the graphical host sets the same flag around its
+     * compile, and a project with `import './SheetParts.js'` was the failure
+     * that showed the core had forgotten it. */
+    bool is_module;
+    bta_modules_checking(ctx, true);
     JSValue r = bta_compile(ctx, src, strlen(src), "<check>", &is_module);
+    bta_modules_checking(ctx, false);
     JS_FreeCString(ctx, src);
 
     if (!JS_IsException(r)) {
@@ -586,6 +592,31 @@ static JSValue js_application_libraries(JSContext *ctx, JSValueConst this_val,
     return JS_NewArray(ctx);
 }
 
+/* `Application.HasCommand(name)`: the core half of the graphical answer, and
+ * the reason a console tool can ask before `Exec` throws. A name with a
+ * separator is a file to look at; a bare one is the PATH's. */
+static JSValue js_application_has_command(JSContext *ctx, JSValueConst this_val,
+                                          int argc, JSValueConst *argv)
+{
+    (void)this_val;
+    const char *name = argc > 0 ? JS_ToCString(ctx, argv[0]) : NULL;
+    if (!name)
+        return JS_ThrowTypeError(ctx, "HasCommand(name) expects a name");
+
+    bool has;
+    if (strchr(name, G_DIR_SEPARATOR)) {
+        has = g_file_test(name, G_FILE_TEST_IS_EXECUTABLE) &&
+              !g_file_test(name, G_FILE_TEST_IS_DIR);
+    } else {
+        char *found = g_find_program_in_path(name);
+
+        has = found != NULL;
+        g_free(found);
+    }
+    JS_FreeCString(ctx, name);
+    return JS_NewBool(ctx, has);
+}
+
 static void install_application(JSContext *ctx, JSValueConst global,
                                 const char *directory, const char *name,
                                 const char *version, char **args, int nargs)
@@ -607,7 +638,7 @@ static void install_application(JSContext *ctx, JSValueConst global,
 
     char *exe = bta_exe_path();
     JS_SetPropertyStr(ctx, application, "Executable",
-                      JS_NewString(ctx, exe ? exe : "bintana-headless"));
+                      JS_NewString(ctx, exe ? exe : "bintana"));
     g_free(exe);
 
     JSValue arguments = JS_NewArray(ctx);
@@ -633,6 +664,9 @@ static void install_application(JSContext *ctx, JSValueConst global,
     JS_SetPropertyStr(ctx, application, "Libraries",
                       JS_NewCFunction(ctx, js_application_libraries,
                                       "Libraries", 1));
+    JS_SetPropertyStr(ctx, application, "HasCommand",
+                      JS_NewCFunction(ctx, js_application_has_command,
+                                      "HasCommand", 1));
     JS_SetPropertyStr(ctx, application, "Replacements",
                       JS_NewCFunction(ctx, js_application_replacements,
                                       "Replacements", 0));
@@ -681,7 +715,7 @@ static bool eval_file(JSContext *ctx, const char *path)
     size_t len = 0;
     char  *src = bta_read_file(path, &len);
     if (!src) {
-        fprintf(stderr, "bintana-headless: cannot read %s\n", path);
+        fprintf(stderr, "bintana: cannot read %s\n", path);
         return false;
     }
 
@@ -727,7 +761,13 @@ static const char *const GUI_GLOBALS[] = {
     "Notification", "Desktop", "Popover", "Keyring", "Http", "Socket",
     "ServerSocket", "UdpSocket", "SerialPort", "WebSocket", "SmtpClient",
     "Database", "Sqlite", "Odbc", "Task", "Lock", "Cancellable", "Profile",
-    "Random", "Gzip", "Zip", "Cipher", "Key", "Probe", "Media", "AudioPlayer"
+    "Random", "Gzip", "Zip", "Cipher", "Key", "Probe", "Media", "AudioPlayer",
+    /* The drawing and document globals, and the two the network/database
+     * classes reach through. The check reads names, so a project that draws a
+     * chart must not be told `Painter` does not exist because this host has no
+     * cairo surface to hand it. */
+    "Bitmap", "Drawing", "Painter", "PdfDocument", "Multipart", "Video",
+    "Connection"
 };
 
 /* The line breaks GTK's buffer uses, which is the model `Text.LineOf` follows:
@@ -824,6 +864,16 @@ static JSValue headless_log(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/* A global the console host does not have. Calling it says so; the check only
+ * needs the name. */
+static JSValue headless_missing_global(JSContext *ctx, JSValueConst this_val,
+                                       int argc, JSValueConst *argv, int magic)
+{
+    (void)this_val; (void)argc; (void)argv;
+    return JS_ThrowTypeError(ctx, "%s needs the graphical host",
+                             GUI_GLOBALS[magic]);
+}
+
 static void install_gui_stubs(JSContext *ctx, JSValueConst global)
 {
     for (size_t i = 0; i < G_N_ELEMENTS(GUI_GLOBALS); i++) {
@@ -833,8 +883,25 @@ static void install_gui_stubs(JSContext *ctx, JSValueConst global)
         if (JS_IsException(existing))
             JS_FreeValue(ctx, JS_GetException(ctx));
         JS_FreeValue(ctx, existing);
-        if (!present)
+        if (present)
+            continue;
+
+        /* **`Connection` is a constructor rad.js patches**, and it asks
+         * `if (GLOBAL.Connection)` before touching `.prototype`: an empty
+         * object there makes the prelude throw while it loads. The rest are
+         * names a check reads, not objects a program uses. */
+        if (!strcmp(GUI_GLOBALS[i], "Connection")) {
+            JSValue ctor = JS_NewCFunctionMagic(ctx, headless_missing_global,
+                                                GUI_GLOBALS[i], 0,
+                                                JS_CFUNC_generic_magic, (int)i);
+
+            /* A C function has no `.prototype` until one is set, and rad.js
+             * hangs `Table` and `Cursor` on it while the prelude loads. */
+            JS_SetPropertyStr(ctx, ctor, "prototype", JS_NewObject(ctx));
+            JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i], ctor);
+        } else {
             JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i], JS_NewObject(ctx));
+        }
     }
 }
 
@@ -950,20 +1017,20 @@ static CheckData find_check_data(void)
 static int run_check(int argc, char **argv)
 {
     if (argc < 1) {
-        fprintf(stderr, "usage: bintana-headless check [options] <project>\n");
+        fprintf(stderr, "usage: bintana check [options] <project>\n");
         return 2;
     }
 
     char *tools = find_check_project();
     if (!tools) {
-        fprintf(stderr, "bintana-headless: tools/check is not beside the binary\n");
+        fprintf(stderr, "bintana: tools/check is not beside the binary\n");
         return 2;
     }
 
     GString *tried   = g_string_new(NULL);
     char    *library = bta_library_resolve(tools, "check", tried);
     if (!library) {
-        fprintf(stderr, "bintana-headless: lib/check is not in any of:%s\n",
+        fprintf(stderr, "bintana: lib/check is not in any of:%s\n",
                 tried->str);
         g_string_free(tried, TRUE);
         g_free(tools);
@@ -1017,7 +1084,7 @@ static int run_check(int argc, char **argv)
      */
     CheckData data = find_check_data();
     if (!data.meta) {
-        fprintf(stderr, "bintana-headless: the check metadata is not installed "
+        fprintf(stderr, "bintana: the check metadata is not installed "
                         "(WidgetMeta.js and widgets.json)\n");
         JS_FreeContext(ctx);
         JS_FreeRuntime(rt);
@@ -1065,10 +1132,10 @@ static int run_check(int argc, char **argv)
         JSValue main = bta_lookup_global(ctx, "main");
         if (JS_IsException(main)) {
             JS_FreeValue(ctx, JS_GetException(ctx));
-            fprintf(stderr, "bintana-headless: tools/check declares no main\n");
+            fprintf(stderr, "bintana: tools/check declares no main\n");
             ok = false;
         } else if (!JS_IsFunction(ctx, main)) {
-            fprintf(stderr, "bintana-headless: 'main' is not a function\n");
+            fprintf(stderr, "bintana: 'main' is not a function\n");
             ok = false;
         } else {
             JSValue r = JS_Call(ctx, main, JS_UNDEFINED, 0, NULL);
@@ -1106,11 +1173,12 @@ static gboolean project_idle(gpointer data)
 }
 
 /*
- * `bintana-headless [run] <project> [args...]`: the project's own `main`.
+ * `bintana [run] <project> [args...]`: the project's own `main`.
  *
- * A project that declares `startup` instead opens a window, and this host has
- * no display: it refuses by naming the form, rather than failing later with a
- * `ReferenceError` about a widget. Dispatch to the graphical host is Phase 3.
+ * A project that declares `startup` is dispatched before this is reached; the
+ * refusal below is the fallback for a manifest that could not be read as one
+ * or the other, and it names the form instead of failing later with a
+ * `ReferenceError` about a widget.
  *
  * The classes are the core's. `Widget` is not installed for a `main` -- a
  * console project that asks for a control does not get a stub that pretends;
@@ -1120,7 +1188,7 @@ static gboolean project_idle(gpointer data)
 static int run_project(int argc, char **argv)
 {
     if (argc < 1) {
-        fprintf(stderr, "usage: bintana-headless [run] <project> [args...]\n");
+        fprintf(stderr, "usage: bintana [run] <project> [args...]\n");
         return 2;
     }
 
@@ -1130,7 +1198,7 @@ static int run_project(int argc, char **argv)
     char   *text     = bta_read_file(manifest, &len);
 
     if (!text) {
-        fprintf(stderr, "bintana-headless: no project.btp in %s\n", dir);
+        fprintf(stderr, "bintana: no project.btp in %s\n", dir);
         g_free(manifest);
         g_free(dir);
         return 2;
@@ -1177,8 +1245,8 @@ static int run_project(int argc, char **argv)
 
     if (!entry_name) {
         fprintf(stderr,
-                "bintana-headless: '%s' opens a window (startup '%s'); this "
-                "host has no display. Run it with the graphical bintana.\n",
+                "bintana: '%s' opens a window (startup '%s'); this "
+                "host has no display. Run it with bintana-gui.\n",
                 name, startup);
         status = 2;
         goto out;
@@ -1219,7 +1287,7 @@ static int run_project(int argc, char **argv)
         goto out;
     }
     if (!JS_IsFunction(ctx, entry)) {
-        fprintf(stderr, "bintana-headless: main function '%s' not found\n",
+        fprintf(stderr, "bintana: main function '%s' not found\n",
                 entry_name);
         goto out;
     }
@@ -1273,9 +1341,8 @@ static bool option_takes_value(const char *word)
 }
 
 /*
- * The graphical host: `$BINTANA_GUI` when set, otherwise the binary that sits
- * beside this one. **`bintana-gui` is the installed split and `bintana` is the
- * source tree's single binary**, which is why both are tried.
+ * The graphical host: `$BINTANA_GUI` when set, otherwise `bintana-gui` beside
+ * this binary -- the installed split, and the source tree's build too.
  *
  * The answer is never this process itself: a name that resolves to the console
  * host would exec it again, forever, and that includes a `BINTANA_GUI` that
@@ -1290,7 +1357,7 @@ static char *find_gui_host(void)
         char *gui = g_canonicalize_filename(env, NULL);
 
         if (self && !g_strcmp0(gui, self)) {
-            fprintf(stderr, "bintana-headless: BINTANA_GUI names this console "
+            fprintf(stderr, "bintana: BINTANA_GUI names this console "
                             "host; it needs the graphical one\n");
             g_free(gui);
             g_free(self);
@@ -1302,19 +1369,15 @@ static char *find_gui_host(void)
 
     if (self) {
         char *bin = g_path_get_dirname(self);
-        static const char *const names[] = { "bintana-gui", "bintana" };
+        char *gui = g_build_filename(bin, "bintana-gui", NULL);
 
-        for (size_t i = 0; i < G_N_ELEMENTS(names); i++) {
-            char *gui = g_build_filename(bin, names[i], NULL);
-
-            if (g_file_test(gui, G_FILE_TEST_IS_EXECUTABLE) &&
-                g_strcmp0(gui, self) != 0) {
-                g_free(bin);
-                g_free(self);
-                return gui;
-            }
-            g_free(gui);
+        if (g_file_test(gui, G_FILE_TEST_IS_EXECUTABLE) &&
+            g_strcmp0(gui, self) != 0) {
+            g_free(bin);
+            g_free(self);
+            return gui;
         }
+        g_free(gui);
         g_free(bin);
     }
     g_free(self);
@@ -1332,7 +1395,7 @@ static int exec_gui(const char *gui, char **words, int nwords)
         args[i + 1] = words[i];
 
     execv(gui, args);
-    fprintf(stderr, "bintana-headless: cannot run the graphical host %s: %s\n",
+    fprintf(stderr, "bintana: cannot run the graphical host %s: %s\n",
             gui, g_strerror(errno));
     g_free(args);
     return 2;
@@ -1340,9 +1403,9 @@ static int exec_gui(const char *gui, char **words, int nwords)
 
 static void usage(void)
 {
-    fputs("usage: bintana-headless [run] <project> [args...]\n"
-          "       bintana-headless check [options] <project>\n"
-          "       bintana-headless --version\n", stderr);
+    fputs("usage: bintana [run] <project> [args...]\n"
+          "       bintana check [options] <project>\n"
+          "       bintana --version\n", stderr);
 }
 
 /* What an option before the project means to a `main`. A console project opens
@@ -1355,29 +1418,29 @@ static int main_option(const char *word)
         return 0;
     }
     if (!strcmp(word, "--strict")) {
-        fprintf(stderr, "bintana-headless: --strict is for widget properties, "
+        fprintf(stderr, "bintana: --strict is for widget properties, "
                         "and this host has no widgets; run it with the "
                         "graphical bintana\n");
         return 2;
     }
     if (!strcmp(word, "--form")) {
-        fprintf(stderr, "bintana-headless: --form opens a form, and this "
+        fprintf(stderr, "bintana: --form opens a form, and this "
                         "project declares \"main\": it has none to open\n");
         return 2;
     }
     if (!strcmp(word, "--profile")) {
-        fprintf(stderr, "bintana-headless: --profile is not in the console "
+        fprintf(stderr, "bintana: --profile is not in the console "
                         "host yet; run it with the graphical bintana\n");
         return 2;
     }
     if (!strcmp(word, "--theme") || !strcmp(word, "--text-scale") ||
         !strcmp(word, "--rtl")) {
-        fprintf(stderr, "bintana-headless: %s is a setting of the toolkit, and "
+        fprintf(stderr, "bintana: %s is a setting of the toolkit, and "
                         "a project with \"main\" opens no window; run it with "
                         "the graphical bintana\n", word);
         return 2;
     }
-    fprintf(stderr, "bintana-headless: unknown option '%s'\n", word);
+    fprintf(stderr, "bintana: unknown option '%s'\n", word);
     usage();
     return 2;
 }
@@ -1385,13 +1448,13 @@ static int main_option(const char *word)
 int main(int argc, char **argv)
 {
     if (argc >= 2 && (!strcmp(argv[1], "--version") || !strcmp(argv[1], "-v"))) {
-        printf("bintana-headless %s\n", BTA_VERSION_STRING);
+        printf("bintana %s\n", BTA_VERSION_STRING);
         return 0;
     }
     if (argc >= 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
-        fputs("usage: bintana-headless [run] <project> [args...]\n"
-              "       bintana-headless check [options] <project>\n"
-              "       bintana-headless --version\n", stdout);
+        fputs("usage: bintana [run] <project> [args...]\n"
+              "       bintana check [options] <project>\n"
+              "       bintana --version\n", stdout);
         return 0;
     }
     if (argc >= 2 && !strcmp(argv[1], "check"))
@@ -1418,7 +1481,7 @@ int main(int argc, char **argv)
         }
         if (option_takes_value(words[i])) {
             if (i + 1 >= nwords) {
-                fprintf(stderr, "bintana-headless: %s needs a value\n", words[i]);
+                fprintf(stderr, "bintana: %s needs a value\n", words[i]);
                 return 2;
             }
             i++;
@@ -1442,7 +1505,7 @@ int main(int argc, char **argv)
         if (!gui) {
             char *name = g_path_get_basename(dir);
 
-            fprintf(stderr, "bintana-headless: '%s' opens a window, and no "
+            fprintf(stderr, "bintana: '%s' opens a window, and no "
                             "graphical host is beside this binary. Install "
                             "bintana-gui there, or set BINTANA_GUI to it.\n",
                     name);
