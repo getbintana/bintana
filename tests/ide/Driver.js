@@ -13289,45 +13289,78 @@ function* p_errors(ide) {
          */
         const hadShell = Environment.Get("SHELL");
 
-        Environment.Set("SHELL", "/bin/pwd");
-        ide.ConsoleBox.Current = ide.shellPage;
-        yield* until(() => ide.Shell.Text.includes(TMP), 200);
-        check("the terminal starts in the project's directory",
-              ide.Shell.Text.includes(TMP), JSON.stringify(ide.Shell.Text));
+        if (Environment.OS === "Windows") {
+            /* `cmd.exe` prints its full directory in the prompt; there is no
+             * `/bin/pwd` to run and exit, so the prompt is the answer. */
+            const hadPrompt = Environment.Get("PROMPT");
+            const shell = Environment.Get("COMSPEC") ||
+                          "C:\\Windows\\System32\\cmd.exe";
 
-        /*
-         * **Waited for on its own**, because it is a second thing arriving down
-         * the same pty: `/bin/pwd` prints the directory and *then* exits, and
-         * what the IDE writes when it exits is a line of its own. Waiting only
-         * for the first and reading the second was a race that the ordinary
-         * build won and `tests/asan.sh` -- four times slower -- lost.
-         */
-        yield* until(() => ide.Shell.Text.includes("shell"), 200);
-        check("...and says when the shell ended",
-              ide.Shell.Text.includes("shell"), JSON.stringify(ide.Shell.Text));
+            Environment.Set("SHELL", shell);
+            Environment.Set("PROMPT", "$P$G");
+            ide.ConsoleBox.Current = ide.shellPage;
+            yield* until(() => ide.Shell.Text.includes(TMP), 200);
+            check("the terminal starts in the project's directory",
+                  ide.Shell.Text.includes(TMP), JSON.stringify(ide.Shell.Text));
 
-        /*
-         * And the child is this process's, so leaving asks it to end.
-         *
-         * `cat` and not a shell, because what this can assert is that the
-         * SIGTERM arrives -- an interactive bash *ignores* it, and what ends
-         * one is the pty being closed (the kernel hangs up the foreground
-         * group, which VTE does when the widget goes). That half is not
-         * answerable from here and was measured by hand: no shell is left
-         * behind after the IDE quits.
-         */
-        Environment.Set("SHELL", "/bin/cat");
-        ide.ConsoleBox.Current = 0;
-        ide.ConsoleBox.Current = ide.shellPage;
-        yield* until(() => ide.Shell.Running, 200);
-        check("looking at the page again starts another", ide.Shell.Running);
+            /* An interactive `cmd` is not ended by the console interrupt the
+             * IDE's Stop sends; the test is about the page, so it uses the
+             * verb that is guaranteed to end it. */
+            ide.Shell.Kill();
+            yield* until(() => !ide.Shell.Running, 200);
+            check("and leaving asks the child to end", !ide.Shell.Running);
 
-        ide.stopShell();
-        yield* until(() => !ide.Shell.Running, 200);
-        check("and leaving asks the child to end", !ide.Shell.Running);
+            ide.ConsoleBox.Current = 0;
+            ide.ConsoleBox.Current = ide.shellPage;
+            yield* until(() => ide.Shell.Running, 200);
+            check("looking at the page again starts another", ide.Shell.Running);
+            ide.Shell.Kill();
+            yield* until(() => !ide.Shell.Running, 200);
 
-        ide.ConsoleBox.Current = 0;
-        if (hadShell) Environment.Set("SHELL", hadShell);
+            ide.ConsoleBox.Current = 0;
+            Environment.Set("SHELL", hadShell || null);
+            Environment.Set("PROMPT", hadPrompt || null);
+        } else {
+            Environment.Set("SHELL", "/bin/pwd");
+            ide.ConsoleBox.Current = ide.shellPage;
+            yield* until(() => ide.Shell.Text.includes(TMP), 200);
+            check("the terminal starts in the project's directory",
+                  ide.Shell.Text.includes(TMP), JSON.stringify(ide.Shell.Text));
+
+            /*
+             * **Waited for on its own**, because it is a second thing arriving down
+             * the same pty: `/bin/pwd` prints the directory and *then* exits, and
+             * what the IDE writes when it exits is a line of its own. Waiting only
+             * for the first and reading the second was a race that the ordinary
+             * build won and `tests/asan.sh` -- four times slower -- lost.
+             */
+            yield* until(() => ide.Shell.Text.includes("shell"), 200);
+            check("...and says when the shell ended",
+                  ide.Shell.Text.includes("shell"), JSON.stringify(ide.Shell.Text));
+
+            /*
+             * And the child is this process's, so leaving asks it to end.
+             *
+             * `cat` and not a shell, because what this can assert is that the
+             * SIGTERM arrives -- an interactive bash *ignores* it, and what ends
+             * one is the pty being closed (the kernel hangs up the foreground
+             * group, which VTE does when the widget goes). That half is not
+             * answerable from here and was measured by hand: no shell is left
+             * behind after the IDE quits.
+             */
+            Environment.Set("SHELL", "/bin/cat");
+            ide.ConsoleBox.Current = 0;
+            ide.ConsoleBox.Current = ide.shellPage;
+            yield* until(() => ide.Shell.Running, 200);
+            check("looking at the page again starts another", ide.Shell.Running);
+
+            ide.stopShell();
+            yield* until(() => !ide.Shell.Running, 200);
+            check("and leaving asks the child to end", !ide.Shell.Running);
+
+            ide.ConsoleBox.Current = 0;
+            if (hadShell) Environment.Set("SHELL", hadShell);
+        }
     }
 
     /* --- from the error to the line ----------------------------------------
@@ -13342,13 +13375,16 @@ function* p_errors(ide) {
      * `LinkPattern` matched inside the terminal and handed the text over, so
      * there was nothing to assert but that the pattern had been assigned.
      */
-    const TRACE_LINE = `    at Form_Open (${TMP}/Main.js:42:9)`;
+    /* The reader normalizes a traceback to `/`, so a click on a Windows path
+     * is one token; the expected names are normalized the same way. */
+    const TRACE = TMP.replace(/\\/g, "/");
+    const TRACE_LINE = `    at Form_Open (${TRACE}/Main.js:42:9)`;
 
     eq("a click on a place in the log names it",
-       ide.runner.linkAt(1, 20, TRACE_LINE), `${TMP}/Main.js:42`);
+       ide.runner.linkAt(1, 20, TRACE_LINE), `${TRACE}/Main.js:42`);
     eq("...from either end of it",
        ide.runner.linkAt(1, TRACE_LINE.indexOf(":42"), TRACE_LINE),
-       `${TMP}/Main.js:42`);
+       `${TRACE}/Main.js:42`);
     eq("a click on the words before it names nothing",
        ide.runner.linkAt(1, 8, TRACE_LINE), "");
     /* The cursor clamps to the end of the line, so this is the one case a
@@ -13358,10 +13394,10 @@ function* p_errors(ide) {
        ide.runner.linkAt(1, TRACE_LINE.length + 20, TRACE_LINE), "");
     /* ...while the space *inside* a line still points at the word before it,
      * which is where a click one pixel wide of a place lands. */
-    const trailing = `${TMP}/Main.js:42 y`;
+    const trailing = `${TRACE}/Main.js:42 y`;
     eq("a click just past a place still names it",
        ide.runner.linkAt(1, trailing.indexOf(" y") + 1, trailing),
-       `${TMP}/Main.js:42`);
+       `${TRACE}/Main.js:42`);
     eq("a line with no place in it has none",
        ide.runner.linkAt(1, 4, "hello from tabs"), "");
     eq("nor does a line that is not there",
@@ -13369,17 +13405,17 @@ function* p_errors(ide) {
     /* The right *line* of several, which is the half a column alone cannot do. */
     eq("the place read is the one on the line clicked",
        ide.runner.linkAt(2, 20, `nothing here\n${TRACE_LINE}`),
-       `${TMP}/Main.js:42`);
+       `${TRACE}/Main.js:42`);
 
     const traceback =
         "Bintana error: Error: boom\n" +
         "    at Deep (/usr/lib/bintana/other.js:9:1)\n" +
-        `    at Form_Open (${TMP}/Main.js:2:9)\n` +
+        `    at Form_Open (${TRACE}/Main.js:2:9)\n` +
         "    at Show (native)\n";
 
     const spot = ide.errorLocation(traceback);
     check("a traceback names a place", spot !== null, JSON.stringify(spot));
-    eq("and the frame taken is the project's own", spot.path, `${TMP}/Main.js`);
+    eq("and the frame taken is the project's own", spot.path, `${TRACE}/Main.js`);
     eq("at the line it says",                      spot.line, 2);
 
     eq("a traceback with nothing of ours in it names nowhere",
@@ -13389,7 +13425,7 @@ function* p_errors(ide) {
 
     /* Two of them: the one worth going to is the one that just happened. */
     eq("the last traceback is the one read",
-       ide.errorLocation(`Bintana error: first\n    at A (${TMP}/project.btp:1:1)\n` +
+       ide.errorLocation(`Bintana error: first\n    at A (${TRACE}/project.btp:1:1)\n` +
                          traceback).line, 2);
 
     /*
@@ -13437,11 +13473,11 @@ function* p_errors(ide) {
     /* A traceback writes an absolute path; everything in this IDE speaks the
      * name a tab is keyed by. */
     eq("a path of the project is made relative",
-       ide.runner.relative(`${TMP}/Main.js`), "Main.js");
+       ide.runner.relative(`${TRACE}/Main.js`), "Main.js");
     eq("...and one that is not is left as it stands",
        ide.runner.relative("/usr/lib/bintana/other.js"), "/usr/lib/bintana/other.js");
 
-    check("clicking a place goes there", ide.runner.clicked(`${TMP}/Main.js:2`));
+    check("clicking a place goes there", ide.runner.clicked(`${TRACE}/Main.js:2`));
     eq("...opening that file",           ide.activeFile, "Main.js");
     eq("...at that line",                ide.Editor.Line, 2);
 
@@ -16412,8 +16448,11 @@ function* p_git(ide) {
     check("the answer starts the push", git.job !== null);
     yield* until(() => git.job === null, 300);
     yield* settled(ide);
+    /* `@{u}` is not a string Git for Windows passes through the MSYS runtime
+     * intact; the ref's own upstream field is. */
     eq("to the remote that was chosen",
-       run("rev-parse", "--abbrev-ref", "rama@{u}").Output.trim(), "backup/rama");
+       run("for-each-ref", "--format=%(upstream:short)",
+           "refs/heads/rama").Output.trim(), "backup/rama");
 
     const heardFrom = ide.LogView.Text.length;
     eq("a branch that follows one pushes without asking", git.push(() => ide.refreshGit()), true);

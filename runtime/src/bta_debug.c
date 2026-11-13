@@ -345,6 +345,8 @@ static const BtaSpan *span_around(const char *file, int line)
     return best;
 }
 
+static bool path_is_sep(char c) { return c == '/' || c == '\\'; }
+
 /*
  * **Whether the engine's path is the file the IDE named: a tail that starts at
  * a path separator, not any tail.** The IDE names a file the way the project
@@ -356,9 +358,32 @@ static bool path_is(const char *path, const char *file)
 {
     size_t pl = strlen(path), fl = strlen(file);
 
-    if (!fl || fl > pl || strcmp(path + pl - fl, file))
+    if (!fl || fl > pl)
         return false;
-    return pl == fl || path[pl - fl - 1] == '/' || path[pl - fl - 1] == '\\';
+    /* A Windows path written by hand may use either separator, and the IDE
+     * names a file the way `project.btp` spells it -- `tests/DbgTest.js` --
+     * while the engine was handed the native `tests\DbgTest.js`.  A tail
+     * ending in `tests\DbgTest.js` is the same file as `tests/DbgTest.js`
+     * there, so the two separators compare equal (measured on Windows: a
+     * breakpoint in a test file never fired). */
+    if (pl != fl && !path_is_sep(path[pl - fl - 1]))
+        return false;
+
+    for (size_t i = 0; i < fl; i++) {
+        char a = path[pl - fl + i];
+        char b = file[i];
+
+        if (a == b)
+            continue;
+#ifdef G_OS_WIN32
+        if (path_is_sep(a) && path_is_sep(b))
+            continue;
+        if (g_ascii_tolower((guchar)a) == g_ascii_tolower((guchar)b))
+            continue;
+#endif
+        return false;
+    }
+    return true;
 }
 
 static int bta_cmp_int(const void *a, const void *b)

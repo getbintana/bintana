@@ -410,7 +410,7 @@ save will edit `examples/hello` for real.
   `tests/widgets` runs natively there with `testClipboard`'s round trip
   skipped (the clipboard SEGV below): 6363 assertions, of which the two or
   three crowding failures below are the red ones (the last run was 6361
-  passed, 2 failed on 2026-11-12). What is left is the suite's own crowding,
+  passed, 2 failed on 2026-11-13). What is left is the suite's own crowding,
   none of it seen alone: `testHttpServer`'s TLS restart on an ephemeral port
   another socket took, `testNetwork`'s probe of a stopped server answering
   `Error` (both in [`network.md`](network.md)), and a timing check that comes
@@ -423,10 +423,11 @@ save will edit `examples/hello` for real.
   Developer Mode (or `core.symlinks=true` with the privilege) before believing
   anything about `tests/ide` on Windows. With the symlinks materialized it does
   run: the `apps` prefix (everything through installing the project) passed
-  2732/0 on 2026-11-12, and the full project 3508/15 -- the reds after `apps`
-  are the terminal's `COMSPEC`/`CreateProcess`, debugger and module-owner paths
-  printed with `\`, and one git branch. The `tar --force-local` and path
-  comparisons that used to fail the export and the earlier phases are fixed.
+  2732/0 on 2026-11-12, and the full project 3804/0 on 2026-11-13. What had been
+  red there is fixed: `tar --force-local` for a `C:` path, path comparisons on
+  either separator, the terminal's `COMSPEC` and prompt, the debugger matching
+  a file component by component, and the branch's upstream read from porcelain
+  v2 (`@{u}` does not survive the MSYS layer).
 - **Windows editors write UTF-8 BOM and UTF-16, and the loader has to meet
   them.** PowerShell 5.1's `Set-Content -Encoding UTF8`/`Out-File`, Notepad's
   older *Unicode* and Visual Studio all write a BOM; a `project.btp` or `.form` saved that way

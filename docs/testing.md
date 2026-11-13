@@ -304,12 +304,14 @@ under gdb is enough to miss it, which is how the rest of the suite was measured.
 
 Measured on Windows 11 26H2 (2026-11-11), on that desktop: `tests/smoke`
 171/0, `tests/markdown` 171/0, `tests/qr` 120/0, `tests/report` 259/0 and
-`tests/xlsx` 57/0. `tests/widgets` ran natively on 2026-11-12: 6363
+`tests/xlsx` 57/0. `tests/widgets` ran natively on 2026-11-13: 6363
 assertions, with the two or three crowding failures in
 [`docs/agents/testing.md`](agents/testing.md) — the last run was 6361 passed,
 2 failed — and the clipboard round trip skipped because of the GTK crash
 above. An earlier run under gdb was 6112 assertions and 53 failures, many of
-them the slower debugger and HTTP timing.
+them the slower debugger and HTTP timing. The full `tests/ide` project ran
+3804/0 there on 2026-11-13, the terminal's `cmd.exe` replacing `/bin/pwd` and
+the debugger accepting either separator in a breakpoint's file.
 
 The Windows differences worth knowing before reading a red run:
 

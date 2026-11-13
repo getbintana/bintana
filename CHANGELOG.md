@@ -43,11 +43,14 @@ one-page answer to *what is new since the release I have*.
   becomes the shortcut's `.ico`, and uninstall removes the shortcut and that
   generated icon. The notification backend no longer overwrites an installed
   application's shortcut with its generic one.
-- **The IDE's export and its Windows test paths.** `tar` gets
+- **The IDE's export and its Windows paths.** `tar` gets
   `--force-local` on Windows, so a path beginning `C:` is not read as a remote
   host, and the path comparisons in `tests/ide` accept the native separator.
-  The `apps` prefix now runs 2732/0 there; the full IDE run is 3508/15, with
-  the remaining reds in the terminal, debugger and module-owner phases.
+  The terminal test drives `cmd.exe` and reads its prompt; the debugger matches
+  a breakpoint's file one component at a time, with `/` and `\` the same on
+  Windows; and a branch's upstream comes from `git status --porcelain=v2
+  --branch`, since `@{u}` does not survive Git for Windows' MSYS layer. The
+  `apps` prefix runs 2732/0 there and the full project 3804/0.
 - **`SerialPort` works on Windows.** `Open` is `CreateFileW` on `COM3` (or
   `\\.\COM3`) and a `DCB` for speed, data bits, parity, stop bits, flow control
   and DTR/RTS. A COM handle is not pollable by GLib, so a reader thread does

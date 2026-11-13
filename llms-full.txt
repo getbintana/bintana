@@ -4159,7 +4159,7 @@ save will edit `examples/hello` for real.
   `tests/widgets` runs natively there with `testClipboard`'s round trip
   skipped (the clipboard SEGV below): 6363 assertions, of which the two or
   three crowding failures below are the red ones (the last run was 6361
-  passed, 2 failed on 2026-11-12). What is left is the suite's own crowding,
+  passed, 2 failed on 2026-11-13). What is left is the suite's own crowding,
   none of it seen alone: `testHttpServer`'s TLS restart on an ephemeral port
   another socket took, `testNetwork`'s probe of a stopped server answering
   `Error` (both in [`network.md`](network.md)), and a timing check that comes
@@ -4172,10 +4172,11 @@ save will edit `examples/hello` for real.
   Developer Mode (or `core.symlinks=true` with the privilege) before believing
   anything about `tests/ide` on Windows. With the symlinks materialized it does
   run: the `apps` prefix (everything through installing the project) passed
-  2732/0 on 2026-11-12, and the full project 3508/15 -- the reds after `apps`
-  are the terminal's `COMSPEC`/`CreateProcess`, debugger and module-owner paths
-  printed with `\`, and one git branch. The `tar --force-local` and path
-  comparisons that used to fail the export and the earlier phases are fixed.
+  2732/0 on 2026-11-12, and the full project 3804/0 on 2026-11-13. What had been
+  red there is fixed: `tar --force-local` for a `C:` path, path comparisons on
+  either separator, the terminal's `COMSPEC` and prompt, the debugger matching
+  a file component by component, and the branch's upstream read from porcelain
+  v2 (`@{u}` does not survive the MSYS layer).
 - **Windows editors write UTF-8 BOM and UTF-16, and the loader has to meet
   them.** PowerShell 5.1's `Set-Content -Encoding UTF8`/`Out-File`, Notepad's
   older *Unicode* and Visual Studio all write a BOM; a `project.btp` or `.form` saved that way
@@ -14612,12 +14613,14 @@ under gdb is enough to miss it, which is how the rest of the suite was measured.
 
 Measured on Windows 11 26H2 (2026-11-11), on that desktop: `tests/smoke`
 171/0, `tests/markdown` 171/0, `tests/qr` 120/0, `tests/report` 259/0 and
-`tests/xlsx` 57/0. `tests/widgets` ran natively on 2026-11-12: 6363
+`tests/xlsx` 57/0. `tests/widgets` ran natively on 2026-11-13: 6363
 assertions, with the two or three crowding failures in
 [`docs/agents/testing.md`](agents/testing.md) — the last run was 6361 passed,
 2 failed — and the clipboard round trip skipped because of the GTK crash
 above. An earlier run under gdb was 6112 assertions and 53 failures, many of
-them the slower debugger and HTTP timing.
+them the slower debugger and HTTP timing. The full `tests/ide` project ran
+3804/0 there on 2026-11-13, the terminal's `cmd.exe` replacing `/bin/pwd` and
+the debugger accepting either separator in a breakpoint's file.
 
 The Windows differences worth knowing before reading a red run:
 

@@ -38,7 +38,7 @@
  * the text clickable; the pane is an ordinary `TextEditor` now, so it is only
  * ever a JavaScript regex -- see `Runner.linkAt`.
  */
-export const SOURCE_LINK = "[\\w./+-]+\\.(?:js|form|btp|json):\\d+";
+export const SOURCE_LINK = "[\\w./+:\\\\-]+\\.(?:js|form|btp|json):\\d+";
 
 /* What the output pane keeps, in characters. Long enough for a traceback and
  * the output that led to it; short enough that a runaway `print` is a bounded

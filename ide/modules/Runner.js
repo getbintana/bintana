@@ -290,7 +290,7 @@ export class Runner {
      * place, and a click at either end of that line is on neither of them.
      */
     linkAt(line, column, text) {
-        const row = (text || "").split("\n")[line - 1];
+        const row = ((text || "").split("\n")[line - 1] || "").replace(/\\/g, "/");
         if (!row) return "";
 
         /*
@@ -302,7 +302,8 @@ export class Runner {
          * still has to end in `.js:NN`.
          */
         const spaced = new Regex(
-            "(?:[/~][\\w./+ \\-]+|[\\w.+\\-]+/[\\w.+\\- ]+(?:/[\\w.+\\- ]+)*)" +
+            "(?:[A-Za-z]:[\\\\/][\\w./+ \\\\-]+|[/~][\\w./+ \\\\-]+|" +
+            "[\\w.+\\-]+[/\\\\][\\w.+\\- ]+(?:[/\\\\][\\w.+\\- ]+)*)" +
             "\\.(?:js|form|json):\\d+");
 
         for (const m of spaced.Matches(row)) {
@@ -310,7 +311,7 @@ export class Runner {
                 return m.Value;
         }
 
-        const TOKEN = /[\w./+:-]/;
+        const TOKEN = /[\w./+:\\-]/;
         let from = column - 1;
 
         /* The cursor clamps to the end of the line, so a click anywhere in the
@@ -383,7 +384,7 @@ export class Runner {
         /* The last error and not the first: a program can survive several, and
          * the one worth going to is the one that just happened. */
         const said  = text.lastIndexOf("Bintana error:");
-        const where = said >= 0 ? text.slice(said) : text;
+        const where = (said >= 0 ? text.slice(said) : text).replace(/\\/g, "/");
 
         for (const m of new Regex(`(${SOURCE_LINK})`).Matches(where)) {
             const at = /^(.*):(\d+)$/.exec(m.Group(1));
