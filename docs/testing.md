@@ -745,7 +745,10 @@ measurements behind the target are in
 
 **The same script holds the core host.** `bintana --version`,
 `check examples/hello`, and `check --json tests/smoke` are diffed against the
-`bintana-gui` answers, and `ldd` is read again. It is the first real
+`bintana-gui` answers, and `ldd` is read again. **And every project `tests/check.sh`
+checks -- 68 today -- is checked by both hosts**, whose output and exit status
+must match: that comparison found `forms.js`'s global helpers and the core's
+missing `setlocale`, which two projects had not. It is the first real
 console runtime, not the test host: it loads `tools/check`, `lib/check` and the
 generated `widgets.json` through `WidgetMeta.js`, and `check` is byte for byte
 the graphical pass with **42 libraries against 153** and 38 MB against

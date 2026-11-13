@@ -117,6 +117,30 @@ else
     fail=1
 fi
 
+# And every project `tests/check.sh` checks, not two: the console check and the
+# graphical one must say the same thing, exit status included, about each.
+# Comparing two projects let a difference live in `tests/widgets` -- a call to
+# `mixIn`, which forms.js used to leave global, so the graphical check knew the
+# name and the console one did not -- and it found the core running in the C
+# locale, which listed `tests/headless`'s files in byte order. forms.js keeps
+# its helpers to itself now, the core reads the locale, and both checks answer
+# alike.
+parity=0 parity_bad=0
+for project in examples/* tests/*; do
+    [[ -f "$project/project.btp" ]] || continue
+    [[ $project == tests/ide && ! -L tests/ide/MainForm.form ]] && continue
+    "$BINTANA_CORE" check "$project" >"$tmp/pc.out" 2>&1; core_rc=$?
+    "$BINTANA" check "$project" >"$tmp/pg.out" 2>&1; gui_rc=$?
+    parity=$((parity + 1))
+    if [[ $core_rc -ne $gui_rc ]] || ! diff -q "$tmp/pg.out" "$tmp/pc.out" >/dev/null; then
+        echo "the two checks disagree about $project (core $core_rc, gui $gui_rc):" >&2
+        diff -u "$tmp/pg.out" "$tmp/pc.out" >&2
+        parity_bad=$((parity_bad + 1))
+        fail=1
+    fi
+done
+[[ $parity_bad -eq 0 ]] && echo "the two checks agree about all $parity projects"
+
 # --- the project runner ------------------------------------------------------
 #
 # A project that declares `main` runs here, and the answer is the graphical
