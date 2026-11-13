@@ -259,8 +259,11 @@ show is that cairo can live in a plugin, that the core can drive a painter
 through `host->call`, and that the boundary is not the hot-path catastrophe it
 looked like. A real `lib/drawing` would still need the full API, a JavaScript
 façade for the property/class semantics, Pango text and images, and a decision
-between `uses: ["drawing"]` and load-on-first-use. The linked code stays until
-that exists.
+between `uses: ["drawing"]` and load-on-first-use. **The project chose the
+explicit road:** `uses: ["drawing"]` loads the module -- directly, or through a
+library that names it -- and a `main` without it never maps cairo. The public
+plugin remains a spike for implementations that can live behind the plugin ABI;
+the linked code is now the module, not core.
 
 **A UI library in a `main` is refused by name.** Loading `lib/markdown` (or
 `qr`, `pdfview`, `dialog`, `datagrid`) in a host with no widgets fails at the
@@ -269,6 +272,13 @@ graphical host: a project with "main" has no display. Run it with bintana-gui.`
 instead of letting the engine's `ReferenceError` be the whole answer.
 `report` and `charts` do not hit it: their document classes are unconditional
 and their controls are skipped.
+
+**A library may declare its own `uses`.** The resolver walks it transitively,
+loads dependencies before the library that names them, skips a directory
+reached twice and refuses a cycle. `lib/report` names `charts` and `drawing`,
+`lib/charts` names `drawing`, and a project says only `uses: ["report"]`. The
+manifest is the same `project.btp` a library already uses for `sources` and
+`worker`; there is no second format.
 
 **Native plugins are core too.** A project's `uses` resolves a library
 directory and, when it holds `<name>.<suffix>`, the core loads it before
@@ -280,12 +290,14 @@ suite's reference plugin is the fixture: `tests/headless/projects/plugin` with
 
 **Drawing is a loadable module.** `Painter`, `Metrics`, `Bitmap` and `Drawing`
 are not linked into `bintana`: `bintana-drawing.so` carries cairo, Pango and
-GdkPixbuf and is loaded when a project runs, so `--version` and `check` stay at
-17 libraries and 5.8 MB. A `main` still writes a PNG or a PDF and measures text
+GdkPixbuf and is loaded when a project's resolved `uses` names `drawing`, so
+`--version`, `check` and a `main` that never draws stay at 17 libraries and
+5.8 MB. A `main` still writes a PNG or a PDF and measures text
 with no display; `DrawingArea`, which needs a widget, is the GUI's. **The report's document half is core too:** `lib/report` and
 `lib/charts` define `ReportDocument`/`ChartDocument` always, and their
 `Report`/`Chart` controls only when `Component` exists, so a `main` lays out and
-writes a report with `uses: ["report", "charts"]` and no display. `PdfDocument`
+writes a report with `uses: ["report"]` and no display: `report`'s own manifest
+names `charts` and `drawing`, and a library's `uses` resolves transitively. `PdfDocument`
 is still a stub (poppler and PoDoFo are not linked here), so a report's form
 fields remain the graphical host's until the core globals are split. `File.Info` answers no icon name -- there is no theme to ask
 -- which no check reads.

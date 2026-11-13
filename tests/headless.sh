@@ -270,6 +270,19 @@ else
     fail=1
 fi
 
+# Without `uses: ["drawing"]` the global is a stub that says what to add; the
+# module is not loaded there.
+if "$BINTANA_CORE" tests/headless/projects/nodraw         >"$tmp/nodraw.out" 2>"$tmp/nodraw.err"; then
+    echo "the core drew without uses: drawing" >&2
+    fail=1
+elif grep -q 'does not use it: add "uses": \["drawing"\]' "$tmp/nodraw.err"; then
+    echo "Drawing without uses says what to add"
+else
+    echo "Drawing without uses failed without the sentence:" >&2
+    cat "$tmp/nodraw.out" "$tmp/nodraw.err" >&2
+    fail=1
+fi
+
 # The example that uses all of it: CSV in, chart, report and PDF out, with no
 # display. It is the CLI the core exists for.
 ledger="$tmp/ledger.pdf"

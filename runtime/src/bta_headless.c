@@ -907,6 +907,43 @@ static JSValue headless_missing_global(JSContext *ctx, JSValueConst this_val,
                              GUI_GLOBALS[magic]);
 }
 
+static JSValue headless_needs_drawing(JSContext *ctx, JSValueConst this_val,
+                                     int argc, JSValueConst *argv)
+{
+    (void)this_val; (void)argc; (void)argv;
+    return JS_ThrowTypeError(ctx, "this needs drawing, and the project does "
+                                  "not use it: add \"uses\": [\"drawing\"] "
+                                  "to project.btp");
+}
+
+static void stub_function(JSContext *ctx, JSValue obj, const char *name,
+                          int length)
+{
+    JS_SetPropertyStr(ctx, obj, name,
+                      JS_NewCFunction(ctx, headless_needs_drawing, name, length));
+}
+
+/* `Drawing` and `Bitmap` before the module loads: the names are there for the
+ * check, and calling one says what to add, not "not a function". */
+static JSValue headless_drawing_stub(JSContext *ctx)
+{
+    JSValue out = JS_NewObject(ctx);
+
+    stub_function(ctx, out, "Save", 4);
+    stub_function(ctx, out, "ToPng", 3);
+    stub_function(ctx, out, "SavePdf", 5);
+    return out;
+}
+
+static JSValue headless_bitmap_stub(JSContext *ctx)
+{
+    JSValue out = JS_NewObject(ctx);
+
+    stub_function(ctx, out, "Load", 1);
+    stub_function(ctx, out, "FromBytes", 1);
+    return out;
+}
+
 static void install_gui_stubs(JSContext *ctx, JSValueConst global)
 {
     for (size_t i = 0; i < G_N_ELEMENTS(GUI_GLOBALS); i++) {
@@ -923,7 +960,13 @@ static void install_gui_stubs(JSContext *ctx, JSValueConst global)
          * `if (GLOBAL.Connection)` before touching `.prototype`: an empty
          * object there makes the prelude throw while it loads. The rest are
          * names a check reads, not objects a program uses. */
-        if (!strcmp(GUI_GLOBALS[i], "Connection")) {
+        if (!strcmp(GUI_GLOBALS[i], "Drawing")) {
+            JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i],
+                              headless_drawing_stub(ctx));
+        } else if (!strcmp(GUI_GLOBALS[i], "Bitmap")) {
+            JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i],
+                              headless_bitmap_stub(ctx));
+        } else if (!strcmp(GUI_GLOBALS[i], "Connection")) {
             JSValue ctor = JS_NewCFunctionMagic(ctx, headless_missing_global,
                                                 GUI_GLOBALS[i], 0,
                                                 JS_CFUNC_generic_magic, (int)i);
@@ -1201,7 +1244,7 @@ static int run_check(int argc, char **argv)
  * is not an error: `Drawing` stays the stub the check reads, and a project that
  * needs it says so when it uses it. A module that is there but cannot load, or
  * speaks another ABI, is an error. */
-static bool load_drawing_module(JSContext *ctx, JSValue global)
+static bool load_drawing_module(JSContext *ctx, JSValue global, bool required)
 {
     GPtrArray *tried = g_ptr_array_new_with_free_func(g_free);
     char      *exe   = bta_exe_path();
@@ -1228,8 +1271,12 @@ static bool load_drawing_module(JSContext *ctx, JSValue global)
             path = g_strdup(tried->pdata[i]);
     g_ptr_array_unref(tried);
 
-    if (!path)
-        return true;
+    if (!path) {
+        if (required)
+            fprintf(stderr, "bintana: this project uses \"drawing\", but "
+                            "bintana-drawing.%s is not installed\n", G_MODULE_SUFFIX);
+        return !required;
+    }
 
     GModule *m = g_module_open(path, G_MODULE_BIND_LOCAL);
     if (!m) {
@@ -1461,7 +1508,17 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     sources = bta_project_sources(ctx, dir, NULL, cfg);
     install_core(ctx, global, dir, libs);
 
-    if (!load_drawing_module(ctx, global)) {
+    /* The module is what `uses: ["drawing"]` buys -- directly or through a
+     * library's own `uses`. A `main` that never names it never maps cairo,
+     * Pango or GdkPixbuf. */
+    bool needs_drawing = false;
+    for (guint i = 0; i < libs->len && !needs_drawing; i++) {
+        char *base = g_path_get_basename(libs->pdata[i]);
+
+        needs_drawing = !strcmp(base, "drawing");
+        g_free(base);
+    }
+    if (needs_drawing && !load_drawing_module(ctx, global, true)) {
         status = 2;
         goto out;
     }

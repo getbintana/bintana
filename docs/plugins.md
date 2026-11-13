@@ -18,6 +18,10 @@ The file is named after its directory the way the library itself is named by
 `uses`: one name, no manifest, nothing to keep in step.  A directory with no
 shared object is an ordinary JavaScript library and nothing about it changes.
 
+A library's own `project.btp` may also name `uses`: the same key a project has,
+walked transitively, dependencies first. That is how `lib/report` says it needs
+`charts` and `drawing` without every project repeating it.
+
 **Both hosts load it.** The console core resolves `uses` and loads the object
 before `rad.js`, exactly as the graphical host does, so a `main` project can use
 `TagLib` with no display; `tests/headless.sh` runs the suite's reference plugin

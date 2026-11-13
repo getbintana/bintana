@@ -1169,7 +1169,7 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
 - **The core links no widget file.** `bintana-meta --dump` writes
   `check/widgets.json` from the real rows, property tables, both preludes and
   the generated signatures; `runtime/js/widget-meta.js` answers `Widget.*` over
-  it. The data is 1.7 MB and loads only for `check`; the binary is 3.4 MB in
+  it. The data is 1.7 MB and loads only for `check`; the binary is 3.3 MB in
   Debug and 7.7 MB with `RelWithDebInfo`'s symbols, which a packager strips.
   A `main` that never asks for a widget never sees `Widget` at all.
 - **`bta_paint.c` is compiled twice: into `bintana-gui` and into
@@ -1182,11 +1182,13 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `GdkTexture` and `gdk_rgba_parse`, the module GdkPixbuf and its own
   CSS-colour parser; `Bitmap.Rotate` likewise converts the cairo surface itself
   instead of calling `gdk_pixbuf_get_from_surface`.
-- **The drawing module is loaded when a project boots, not for `--version` or
-  `check`.** `run_project` opens `bintana-drawing.so` (beside the binary in the
-  build tree, under `lib*/bintana` installed) and calls
-  `bta_drawing_module_init`; the module's ABI is checked and a mismatch is a
-  sentence. The module resolves the runtime's symbols from the executable, so
+- **The drawing module is loaded when a project's resolved `uses` names
+  `drawing`, not for `--version` or `check`.** `run_project` opens
+  `bintana-drawing.so` (beside the binary in the build tree, under
+  `lib*/bintana` installed) and calls `bta_drawing_module_init`; the module's
+  ABI is checked and a mismatch is a sentence. `lib/drawing` is the library
+  directory that makes the name resolvable, and `lib/report`/`lib/charts`
+  declare it so a project that uses `report` gets it without knowing. The module resolves the runtime's symbols from the executable, so
   the core link keeps `--export-dynamic`; it is not the public `bta_plugin.h`
   contract, which cannot carry `Painter`'s class and properties without a second
   implementation.
@@ -1211,6 +1213,15 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `ClassFile` index and `bta_record_init` are shared, because `Record` needs
   them. A plugin that will not load is a sentence and exit 2, not a silent
   library without its native half.
+- **A library's `project.btp` may name `uses`, and the resolver walks it.** The
+  order is dependencies before the library that names them; a directory reached
+  twice loads once; a cycle is a sentence and exit 2. `lib/report` uses
+  `charts` and `drawing`, so a project that uses `report` does not have to know.
+  **Names in a library are global**, and a dependency adds its top-level names
+  to the same scope: `lib/charts`'s `PALETTE` collided with the IDE's own
+  exported `PALETTE` when `report` started pulling it in, and became
+  `CHART_PALETTE`. Check a new library's top-level constants against the IDE's
+  before adding it as a dependency.
 - **`bta_project.c` is the boot both hosts share, and it must stay toolkit-free.**
   It holds `project.btp`, `uses`, the six-place library search and the source
   order; `bta_runtime.c` and `bta_headless.c` both link it. A GTK call added
@@ -13634,6 +13645,10 @@ The file is named after its directory the way the library itself is named by
 `uses`: one name, no manifest, nothing to keep in step.  A directory with no
 shared object is an ordinary JavaScript library and nothing about it changes.
 
+A library's own `project.btp` may also name `uses`: the same key a project has,
+walked transitively, dependencies first. That is how `lib/report` says it needs
+`charts` and `drawing` without every project repeating it.
+
 **Both hosts load it.** The console core resolves `uses` and loads the object
 before `rad.js`, exactly as the graphical host does, so a `main` project can use
 `TagLib` with no display; `tests/headless.sh` runs the suite's reference plugin
@@ -15221,6 +15236,16 @@ is 1.7 MB and is loaded only for `check`.
 `drawing.so` carrying cairo draws a PDF, and the script prints its time beside
 the same loop through the linked `Drawing`. It is a measurement, not an
 assertion on the numbers.
+
+**The ledger example** (`examples/ledger`) is the CLI the core exists for: it
+reads the bundled CSV, groups `Decimal` amounts, draws a `ChartDocument` and
+writes a PDF with `ReportDocument`. The script runs it with no display and
+checks the PDF's magic and, when `pdftotext` is present, its rows.
+
+**Library dependencies** are held by the report fixture: it now names only
+`uses: ["report"]`, and `report`'s manifest pulls `charts` and `drawing`, so the
+PDF still works. `tests/headless/projects/nodraw` names no `drawing` and checks
+the sentence a `Drawing` call gives.
 
 **A UI library named by a `main`** is refused with its name and the missing
 display (`tests/headless/projects/uilibrary`), not with `Component is not

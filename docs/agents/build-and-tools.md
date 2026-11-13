@@ -546,11 +546,13 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `GdkTexture` and `gdk_rgba_parse`, the module GdkPixbuf and its own
   CSS-colour parser; `Bitmap.Rotate` likewise converts the cairo surface itself
   instead of calling `gdk_pixbuf_get_from_surface`.
-- **The drawing module is loaded when a project boots, not for `--version` or
-  `check`.** `run_project` opens `bintana-drawing.so` (beside the binary in the
-  build tree, under `lib*/bintana` installed) and calls
-  `bta_drawing_module_init`; the module's ABI is checked and a mismatch is a
-  sentence. The module resolves the runtime's symbols from the executable, so
+- **The drawing module is loaded when a project's resolved `uses` names
+  `drawing`, not for `--version` or `check`.** `run_project` opens
+  `bintana-drawing.so` (beside the binary in the build tree, under
+  `lib*/bintana` installed) and calls `bta_drawing_module_init`; the module's
+  ABI is checked and a mismatch is a sentence. `lib/drawing` is the library
+  directory that makes the name resolvable, and `lib/report`/`lib/charts`
+  declare it so a project that uses `report` gets it without knowing. The module resolves the runtime's symbols from the executable, so
   the core link keeps `--export-dynamic`; it is not the public `bta_plugin.h`
   contract, which cannot carry `Painter`'s class and properties without a second
   implementation.
@@ -575,6 +577,15 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `ClassFile` index and `bta_record_init` are shared, because `Record` needs
   them. A plugin that will not load is a sentence and exit 2, not a silent
   library without its native half.
+- **A library's `project.btp` may name `uses`, and the resolver walks it.** The
+  order is dependencies before the library that names them; a directory reached
+  twice loads once; a cycle is a sentence and exit 2. `lib/report` uses
+  `charts` and `drawing`, so a project that uses `report` does not have to know.
+  **Names in a library are global**, and a dependency adds its top-level names
+  to the same scope: `lib/charts`'s `PALETTE` collided with the IDE's own
+  exported `PALETTE` when `report` started pulling it in, and became
+  `CHART_PALETTE`. Check a new library's top-level constants against the IDE's
+  before adding it as a dependency.
 - **`bta_project.c` is the boot both hosts share, and it must stay toolkit-free.**
   It holds `project.btp`, `uses`, the six-place library search and the source
   order; `bta_runtime.c` and `bta_headless.c` both link it. A GTK call added

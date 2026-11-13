@@ -2,5 +2,10 @@
   "name": "headless-draw",
   "main": "Main",
   "description": "A drawing with no control: PNG, PDF and text measurements in the core",
-  "sources": ["Main.js"]
+  "sources": [
+    "Main.js"
+  ],
+  "uses": [
+    "drawing"
+  ]
 }

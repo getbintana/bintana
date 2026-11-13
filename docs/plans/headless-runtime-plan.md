@@ -271,8 +271,11 @@ dispatch contra un host gráfico falso, y `bintana-gui`, y difea las respuestas.
   enlazado; la comparación no es pura (el nativo anota cada llamada para
   `Dump()`), pero prueba que el ABI no es un cuello de botella y que el core
   puede manejarlo. Falta la API completa, la fachada JS de propiedades/clases,
-  Pango e imágenes, y decidir `uses` explícito o carga al primer uso. **No se
-  instaló**; el código enlazado se queda hasta entonces.
+  Pango e imágenes. **Decidido:** el camino es `uses: ["drawing"]` y el módulo
+  privado `bintana-drawing.so`; el plugin público queda como spike. `lib/drawing`
+  existe como directorio de librería, `lib/report`/`lib/charts` lo declaran y el
+  core lo carga sólo si aparece en la lista resuelta. El `drawing.so` del spike
+  no se instala.
 - **Plugins nativos en el core (hecho):** `uses` resuelve `<name>/<name>.so` y
   lo carga antes de `rad.js`, con `host->call`; el plugin de referencia del
   suite corre en `tests/headless.sh`. Es la vía para que `taglib` -- o un

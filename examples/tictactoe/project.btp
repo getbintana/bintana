@@ -1,4 +1,5 @@
 {
+  "uses": ["drawing"],
   "name": "TicTacToe",
   "startup": "MainForm",
   "sources": [

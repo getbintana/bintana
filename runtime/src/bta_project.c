@@ -334,6 +334,92 @@ char *bta_library_resolve(const char *project, const char *name, GString *tried)
  * without, and the failure a moment later would be `unknown widget type 'Chart'`
  * with nothing about a missing library in it.
  */
+/* The library graph, walked once. A library's own `project.btp` may name
+ * `uses`; its dependencies load before it, and a name reached twice is loaded
+ * once. A cycle is refused rather than walked forever. */
+typedef struct {
+    GPtrArray  *out;
+    GHashTable *seen;
+    GHashTable *visiting;
+} LibWalk;
+
+static void lib_walk(JSContext *ctx, const char *base, const char *name,
+                     LibWalk *walk)
+{
+    GString *tried = g_string_new(NULL);
+    char    *lib   = bta_library_resolve(base, name, tried);
+
+    if (!lib) {
+        fprintf(stderr, "bintana: project.btp uses \"%s\", which is not "
+                        "in any of:%s\n", name, tried->str);
+        g_string_free(tried, TRUE);
+        exit(2);
+    }
+    g_string_free(tried, TRUE);
+
+    char *canon = g_canonicalize_filename(lib, NULL);
+    g_free(lib);
+
+    if (g_hash_table_contains(walk->seen, canon)) {
+        g_free(canon);
+        return;
+    }
+    if (g_hash_table_contains(walk->visiting, canon)) {
+        fprintf(stderr, "bintana: library \"%s\" is part of a uses cycle "
+                        "(it reaches itself again)\n", canon);
+        g_free(canon);
+        exit(2);
+    }
+
+    /* Its own manifest may name more libraries. Parsed here rather than
+     * through `bta_project_libs`, which would allocate a second list. */
+    char *manifest = bta_project_manifest(canon);
+    char *text     = NULL;
+
+    if (g_file_test(manifest, G_FILE_TEST_IS_REGULAR))
+        text = bta_read_file(manifest, NULL);
+    g_free(manifest);
+
+    if (text) {
+        JSValue cfg = JS_ParseJSON(ctx, text, strlen(text), "library");
+
+        if (JS_IsException(cfg)) {
+            JS_FreeValue(ctx, JS_GetException(ctx));
+            fprintf(stderr, "bintana: %s's project file is not JSON; loading "
+                            "its files by path and ignoring its uses\n", canon);
+        } else {
+            JSValue arr = JS_GetPropertyStr(ctx, cfg, "uses");
+
+            if (JS_IsArray(arr)) {
+                JSValue  lenv = JS_GetPropertyStr(ctx, arr, "length");
+                uint32_t n    = 0;
+
+                JS_ToUint32(ctx, &n, lenv);
+                JS_FreeValue(ctx, lenv);
+                g_hash_table_add(walk->visiting, g_strdup(canon));
+                for (uint32_t i = 0; i < n; i++) {
+                    JSValue     e    = JS_GetPropertyUint32(ctx, arr, i);
+                    const char *dep  = JS_ToCString(ctx, e);
+
+                    if (dep && *dep)
+                        lib_walk(ctx, canon, dep, walk);
+                    JS_FreeCString(ctx, dep);
+                    JS_FreeValue(ctx, e);
+                }
+                g_hash_table_remove(walk->visiting, canon);
+            }
+            JS_FreeValue(ctx, arr);
+            JS_FreeValue(ctx, cfg);
+        }
+        g_free(text);
+    }
+
+    if (!g_hash_table_contains(walk->visiting, canon))
+        g_hash_table_add(walk->seen, g_strdup(canon));
+    g_ptr_array_add(walk->out, g_strdup(canon));
+    g_free(canon);
+}
+
 GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg)
 {
     GPtrArray *out = g_ptr_array_new_with_free_func(g_free);
@@ -344,6 +430,12 @@ GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg)
         return out;
     }
 
+    LibWalk walk = {
+        .out      = out,
+        .seen     = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL),
+        .visiting = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL),
+    };
+
     JSValue  lenv = JS_GetPropertyStr(ctx, arr, "length");
     uint32_t n    = 0;
     JS_ToUint32(ctx, &n, lenv);
@@ -353,28 +445,14 @@ GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg)
         JSValue     e    = JS_GetPropertyUint32(ctx, arr, i);
         const char *name = JS_ToCString(ctx, e);
 
-        if (name && *name) {
-            GString *tried = g_string_new(NULL);
-            char    *lib   = bta_library_resolve(dir, name, tried);
-
-            if (lib) {
-                g_ptr_array_add(out, lib);
-            } else {
-                fprintf(stderr, "bintana: project.btp uses \"%s\", which is not "
-                                "in any of:%s\n", name, tried->str);
-                g_string_free(tried, TRUE);
-                JS_FreeCString(ctx, name);
-                JS_FreeValue(ctx, e);
-                g_ptr_array_free(out, TRUE);
-                JS_FreeValue(ctx, arr);
-                exit(2);
-            }
-            g_string_free(tried, TRUE);
-        }
+        if (name && *name)
+            lib_walk(ctx, dir, name, &walk);
         JS_FreeCString(ctx, name);
         JS_FreeValue(ctx, e);
     }
     JS_FreeValue(ctx, arr);
+    g_hash_table_unref(walk.seen);
+    g_hash_table_unref(walk.visiting);
     return out;
 }
 

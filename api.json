@@ -22282,6 +22282,10 @@
       ]
     },
     {
+      "Name": "drawing",
+      "Classes": []
+    },
+    {
       "Name": "markdown",
       "Classes": [
         {

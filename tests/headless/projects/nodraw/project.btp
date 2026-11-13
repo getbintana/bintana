@@ -1,0 +1,6 @@
+{
+  "name": "headless-nodraw",
+  "main": "Main",
+  "description": "Calls Drawing without uses: the core says what to add",
+  "sources": ["Main.js"]
+}

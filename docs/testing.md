@@ -762,6 +762,11 @@ reads the bundled CSV, groups `Decimal` amounts, draws a `ChartDocument` and
 writes a PDF with `ReportDocument`. The script runs it with no display and
 checks the PDF's magic and, when `pdftotext` is present, its rows.
 
+**Library dependencies** are held by the report fixture: it now names only
+`uses: ["report"]`, and `report`'s manifest pulls `charts` and `drawing`, so the
+PDF still works. `tests/headless/projects/nodraw` names no `drawing` and checks
+the sentence a `Drawing` call gives.
+
 **A UI library named by a `main`** is refused with its name and the missing
 display (`tests/headless/projects/uilibrary`), not with `Component is not
 defined` from inside the class.
