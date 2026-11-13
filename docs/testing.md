@@ -794,6 +794,11 @@ owed an answer, so the core's loop is what is asked, and a `CRITICAL` on its
 stderr is a failure. With `bta_http_init` taken out of the core the block goes
 red on `Http is not defined`.
 
+**A module that throws while it loads is reported**:
+`tests/headless/projects/modthrow` is a `Main.js` with `export` and a `throw`
+at the top level; the core must exit non-zero with the error on stderr. It used
+to exit 1 in silence, because the core's own loader forgot a module's error.
+
 **It runs a project's tests too**: `bintana test` on a `main` project reads
 `tests/*Test.js` with `runTests` and no toolkit; a `startup` project's tests are
 exec'd as `bintana-gui test`, which the fixture holds with the fake host.

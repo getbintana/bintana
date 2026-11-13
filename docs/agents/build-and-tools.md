@@ -672,9 +672,15 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   photographs the runtime's names for `Application.FreeNames`; taken before the
   prelude, every `Regex` in a project was reported as undeclared, and taken
   before `widget-meta.js`, every `Button` was.
-- **`bta_module_run` takes the compiled module** (`JS_EvalFunction` does); freeing
-  it again aborts in QuickJS. A script from `bta_compile` goes through
-  `JS_EvalFunction`.
+- **Both hosts load a file with `bta_eval_file` (bta_module.c).** The core had
+  a shorter copy that never reported a module's error -- a `Main.js` with
+  `export` that threw while loading exited 1 with nothing on stderr -- and
+  skipped `bta_module_done`, the debugger's view of the compiled file and the
+  profiler span. `bta_eval_file_keep` leaves the error pending for a host that
+  has something to add: the core's UI-library sentence.
+  `tests/headless/projects/modthrow` holds it. (`bta_module_run` takes the
+  compiled module, as `JS_EvalFunction` does; freeing it again aborts in
+  QuickJS.)
 - **The core supplies `bta_lookup_global`, `bta_dump_error`, `bta_symbols`,
   `bta_split_doc`, `bta_read_file`, `bta_drain_jobs`, `bta_current_app`,
   `bta_log_debug_plain`, `bta_message_show` and `bta_task_worker_host` in

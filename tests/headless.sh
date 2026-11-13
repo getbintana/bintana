@@ -354,6 +354,21 @@ else
     fail=1
 fi
 
+# A source that is a module and throws while it loads. The core used to leave
+# the error pending and exit 1 with nothing on stderr; both hosts load a file
+# through the same `bta_eval_file` now, and the error is the report.
+if "$BINTANA_CORE" tests/headless/projects/modthrow \
+        >/dev/null 2>"$tmp/modthrow.err"; then
+    echo "the core ran a project whose module throws while it loads" >&2
+    fail=1
+elif grep -q "thrown while the module loads" "$tmp/modthrow.err"; then
+    echo "a module that throws while it loads is reported"
+else
+    echo "a module that threw while it loaded said nothing:" >&2
+    cat "$tmp/modthrow.err" >&2
+    fail=1
+fi
+
 # The binary links no widget file, and the metadata document is loaded only for
 # `check`: a `main` gets the language's own answer for `Widget`.
 if out=$("$BINTANA_CORE" tests/headless/projects/bare 2>"$tmp/bare.err") &&

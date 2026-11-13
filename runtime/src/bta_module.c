@@ -1331,3 +1331,100 @@ void bta_modules_scope(JSContext *ctx, const char *project, GPtrArray *libs)
     JS_SetModuleLoaderFunc(JS_GetRuntime(ctx), module_normalize, module_load,
                            NULL);
 }
+
+/* ------------------------------------------------------------ a file */
+
+/*
+ * One project or library file, loaded the way both hosts load it: a file that
+ * an `import` already evaluated is not evaluated again; a file with `export`
+ * is compiled as a module, shown to the debugger and run, its exports handed
+ * out; a script is evaluated in the global scope, and a ReferenceError that a
+ * missing `export` explains says so. Each file is one profiler span.
+ *
+ * `bta_eval_file_keep` answers -1 with the error **still pending**, for a host
+ * that has something to add before it is reported -- the console host names a
+ * UI library and the display it lacks. A file that cannot be read is a
+ * sentence on stderr and -1 with nothing pending. `bta_eval_file` reports
+ * the error itself, which is what every other caller wants.
+ *
+ * It lived in bta_runtime.c, and the console host kept a shorter copy that
+ * forgot a module's error, the `import` that had already run the file, the
+ * debugger and the profiler.
+ */
+int bta_eval_file_keep(JSContext *ctx, const char *path)
+{
+    int64_t prof = bta_profile_begin();
+    int     rc   = 0;
+    size_t  len;
+    char   *src;
+    /* The name a module is known by, so that `import "./x.js"` from another
+     * file finds the same record and not a second one. */
+    char   *name = g_canonicalize_filename(path, NULL);
+
+    /* Already a module of this program: something earlier imported it, and
+     * the engine evaluated it then. */
+    if (bta_module_done(ctx, name))
+        goto out;
+
+    src = bta_read_file(path, &len);
+    if (!src) {
+        fprintf(stderr, "bintana: cannot read %s\n", path);
+        rc = -1;
+        goto out;
+    }
+
+    /*
+     * Under `--debug` the file is compiled first and run second, with the
+     * debugger shown the compiled form in between: that is the only moment the
+     * lines it can stop on exist to be read. An ordinary run does neither and
+     * evaluates in one step, as it always did.
+     */
+    JSValue r;
+    bool    is_module = false;
+
+    /* A file with `export` is a module (bta_module.c): compiled, shown to the
+     * debugger like a script, then evaluated and its exports handed out. */
+    r = bta_compile(ctx, src, len, name, &is_module);
+    g_free(src);
+    if (!JS_IsException(r)) {
+        bta_debug_compiled(ctx, name, r);
+        if (is_module) {
+            r = bta_module_run(ctx, r, name) < 0 ? JS_EXCEPTION : JS_UNDEFINED;
+        } else {
+            r = JS_EvalFunction(ctx, r);
+            if (JS_IsException(r))
+                bta_modules_explain(ctx, name);
+        }
+    }
+
+    if (JS_IsException(r)) {
+        JS_FreeValue(ctx, r);      /* JS_EXCEPTION; the error stays pending */
+        rc = -1;
+        goto out;
+    }
+    JS_FreeValue(ctx, r);
+    bta_drain_jobs(JS_GetRuntime(ctx));
+
+out:
+    /* One span per loaded file, named by its basename: the shape a capture of
+     * a startup wants, where a script that grew is the one that moved.  The
+     * end is read before the basename is built, so the profiler's own work is
+     * not charged to the file. */
+    if (prof) {
+        int64_t done = g_get_monotonic_time();
+        char   *base = g_path_get_basename(path);
+        bta_profile_end_at(prof, done, "Bintana", "Script", base);
+        g_free(base);
+    }
+    g_free(name);
+    return rc;
+}
+
+int bta_eval_file(JSContext *ctx, const char *path)
+{
+    int rc = bta_eval_file_keep(ctx, path);
+
+    if (rc < 0 && JS_HasException(ctx))
+        bta_dump_error(ctx);
+    return rc;
+}

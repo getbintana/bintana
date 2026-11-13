@@ -907,7 +907,10 @@ char   *bta_read_file(const char *path, size_t *len);
 const char *bta_gerror_text(const GError *err);
 /* And `errno`'s: `g_strerror` is translated too. */
 const char *bta_errno_text(int errnum);
+/* Loads one project or library file the way both hosts do (bta_module.c).
+ * The `_keep` form answers -1 with the error still pending. */
 int     bta_eval_file(JSContext *ctx, const char *path);
+int     bta_eval_file_keep(JSContext *ctx, const char *path);
 void    bta_dump_error(JSContext *ctx);
 /* The language without any project (bta_language.c): the intrinsics every
  * host and every `Task` worker start from, and the closing that takes the

@@ -693,8 +693,6 @@ static bool eval_script(JSContext *ctx, const char *text, size_t len,
     return true;
 }
 
-/* A library file is a module when it says `export`; a project's `Main.js` is a
- * script. `bta_compile` decides the same way the loader does. */
 /* A library whose JavaScript defines a widget class fails on the missing
  * toolkit name. The sentence names the library and the display, which is the
  * refusal the plan asks for, instead of a `ReferenceError` three files in. */
@@ -730,43 +728,17 @@ static bool library_needs_display(JSContext *ctx, const char *library)
     return ui;
 }
 
+/* A file of the project or of a library, through the loader both hosts share
+ * (bta_module.c). Only the report is this host's: a library that reaches for a
+ * widget gets the display sentence instead of the engine's error. */
 static bool eval_file_at(JSContext *ctx, const char *path, const char *library)
 {
-    size_t len = 0;
-    char  *src = bta_read_file(path, &len);
-    if (!src) {
-        fprintf(stderr, "bintana: cannot read %s\n", path);
-        return false;
-    }
-
-    bool    is_module;
-    JSValue compiled = bta_compile(ctx, src, len, path, &is_module);
-    g_free(src);
-
-    if (JS_IsException(compiled)) {
-        if (!library || !library_needs_display(ctx, library))
-            bta_dump_error(ctx);
-        JS_FreeValue(ctx, compiled);
-        return false;
-    }
-
-    bool ok;
-    if (is_module) {
-        /* `bta_module_run` takes the compiled module: `JS_EvalFunction` does. */
-        ok = bta_module_run(ctx, compiled, path) == 0;
-        if (!ok && library && library_needs_display(ctx, library))
-            ok = false;
-    } else {
-        JSValue r = JS_EvalFunction(ctx, compiled);
-        ok = !JS_IsException(r);
-        if (!ok) {
-            if (!library || !library_needs_display(ctx, library))
-                bta_dump_error(ctx);
-        }
-        JS_FreeValue(ctx, r);
-    }
-    bta_drain_jobs(JS_GetRuntime(ctx));
-    return ok;
+    if (bta_eval_file_keep(ctx, path) == 0)
+        return true;
+    if (JS_HasException(ctx) &&
+        !(library && library_needs_display(ctx, library)))
+        bta_dump_error(ctx);
+    return false;
 }
 
 static bool eval_file(JSContext *ctx, const char *path)
