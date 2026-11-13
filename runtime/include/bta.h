@@ -795,6 +795,9 @@ void bta_text_iter_at_line(GtkTextBuffer *buf, GtkTextIter *it, int32_t line);
  * `bta_line_of_utf16` for why the conversion cannot be the identity.
  */
 int  bta_line_of_utf16(const char *utf8, int index);
+/* `Text.LineOf(text, index)` (bta_util.c), installed by both hosts. */
+JSValue bta_text_line_of(JSContext *ctx, JSValueConst this_val,
+                         int argc, JSValueConst *argv);
 int  bta_chars_at_position(const char *utf8, int line, int column);
 void bta_editor_register(void);    /* bta_editor.c: SourceEditor */
 void bta_terminal_register(void);  /* bta_terminal.c */

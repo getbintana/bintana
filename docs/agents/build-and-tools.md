@@ -665,6 +665,14 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   `g-io-error-quark (1)` where the graphical host says `no such file or
   directory`. It is in `bta_util.c` once; the `GDK_TEXTURE_ERROR` branch is
   compiled only where GDK is linked.
+- **`Application.Quit` ends a core run by its own road.** It used to
+  `exit()` on the spot -- no worker joined, no context freed -- and read
+  `Quit("fail")` as 0. It keeps the code and stops the loop, as the graphical
+  host's `run_console` does; the status is `Quit`'s when one was said, else 1
+  for an uncaught error (`core_status`). `check` and `bintana test` end through
+  it too. `Text.LineOf` was a copy in the core with the same bare
+  `JS_ToInt32` as the graphical one; it is `bta_text_line_of` in `bta_util.c`
+  for both, through `bta_to_int`.
 - **The core's loop source must not remove itself.** `project_idle` answered
   `G_SOURCE_REMOVE` and the caller removed the same id after the loop: a
   `GLib-CRITICAL` on every run that waited, unseen while nothing but `Network`

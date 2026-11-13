@@ -1792,28 +1792,6 @@ static JSValue js_text_escape(JSContext *ctx, JSValueConst this_val,
  * which wrap at a width and break U+2028; these answer the lines the editor
  * draws, which is the one a `GotoLine` will land on.
  */
-static JSValue js_text_line_of(JSContext *ctx, JSValueConst this_val,
-                               int argc, JSValueConst *argv)
-{
-    if (argc < 2)
-        return JS_ThrowTypeError(ctx, "Text.LineOf(text, index) needs the text "
-                                      "and an index");
-
-    const char *s = JS_ToCString(ctx, argv[0]);
-    if (!s)
-        return JS_EXCEPTION;
-
-    int32_t index = 0;
-    if (JS_ToInt32(ctx, &index, argv[1])) {
-        JS_FreeCString(ctx, s);
-        return JS_EXCEPTION;
-    }
-
-    int   line = bta_line_of_utf16(s, index);
-    JS_FreeCString(ctx, s);
-    return JS_NewInt32(ctx, line);
-}
-
 static JSValue js_text_offset_at(JSContext *ctx, JSValueConst this_val,
                                  int argc, JSValueConst *argv)
 {
@@ -1886,7 +1864,7 @@ static const JSCFunctionListEntry text_props[] = {
      *   the line an index falls on, 1-based and clamped — `index` is the
      *   number a **search** gave, so it is counted in UTF-16 units
      */
-    JS_CFUNC_DEF("LineOf",  2, js_text_line_of),
+    JS_CFUNC_DEF("LineOf",  2, bta_text_line_of),
     /* OffsetAt(text, line, [column]) -> number
      *   the **character** offset of that line and column, clamped the way an
      *   editor's `Select` clamps

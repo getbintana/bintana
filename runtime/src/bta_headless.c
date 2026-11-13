@@ -373,16 +373,42 @@ static JSValue headless_print(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+/*
+ * `Application.Quit(code)`, as the graphical host's `run_console` reads it:
+ * the code is kept, the loop is stopped if it runs, and the run ends by its
+ * own road -- workers joined, the context freed. It used to `exit()` on the
+ * spot, which skipped all of that, and to read `Quit("fail")` as 0, which a
+ * runner takes for success. A status is a number; `undefined` is the one
+ * non-number that means 0.
+ */
+static bool       core_quitting;
+static int32_t    core_exit_code;
+static GMainLoop *core_loop;
+
 static JSValue js_application_quit(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv)
 {
     (void)this_val;
     int32_t code = 0;
-    if (argc > 0 && JS_ToInt32(ctx, &code, argv[0]))
-        code = 1;
-    bta_profile_finish();
-    exit(code);
+    if (argc > 0 && !JS_IsUndefined(argv[0]) &&
+        !bta_to_int(ctx, argv[0], "Application.Quit", &code))
+        return JS_EXCEPTION;
+
+    core_exit_code = code;
+    core_quitting  = true;
+    if (core_loop)
+        g_main_loop_quit(core_loop);
     return JS_UNDEFINED;
+}
+
+/* The status a run ends with: `Quit`'s when the program said one, and
+ * otherwise 1 if an error went uncaught -- a callback that threw after `main`
+ * returned is not a success. */
+static int core_status(void)
+{
+    if (core_quitting)
+        return core_exit_code;
+    return headless_uncaught ? 1 : 0;
 }
 
 static JSValue js_application_symbols(JSContext *ctx, JSValueConst this_val,
@@ -764,32 +790,6 @@ static const char *const GUI_GLOBALS[] = {
     "Bitmap", "Drawing", "Painter", "PdfDocument",
 };
 
-/* The one `Text` answer `lib/check` reads: the UTF-16 index to its 1-based
- * line, over the same bridge `bta_text.c` gives an editor. The measuring half
- * needs Pango and a font map, and a console check has no line to underline. */
-static JSValue headless_text_line_of(JSContext *ctx, JSValueConst this_val,
-                                     int argc, JSValueConst *argv)
-{
-    (void)this_val;
-    if (argc < 2)
-        return JS_ThrowTypeError(ctx, "Text.LineOf(text, index) needs the text "
-                                      "and an index");
-
-    const char *text = JS_ToCString(ctx, argv[0]);
-    if (!text)
-        return JS_EXCEPTION;
-
-    int32_t index = 0;
-    if (JS_ToInt32(ctx, &index, argv[1])) {
-        JS_FreeCString(ctx, text);
-        return JS_EXCEPTION;
-    }
-
-    int line = bta_line_of_utf16(text, index);
-    JS_FreeCString(ctx, text);
-    return JS_NewInt32(ctx, line);
-}
-
 static JSValue headless_strict_seal(JSContext *ctx, JSValueConst this_val,
                                     int argc, JSValueConst *argv)
 {
@@ -906,7 +906,7 @@ static bool install_core(JSContext *ctx, JSValueConst global,
      * needs and it never loads the module. */
     JSValue text = JS_NewObject(ctx);
     JS_SetPropertyStr(ctx, text, "LineOf",
-                      JS_NewCFunction(ctx, headless_text_line_of, "LineOf", 2));
+                      JS_NewCFunction(ctx, bta_text_line_of, "LineOf", 2));
     JS_SetPropertyStr(ctx, global, "Text", text);
     bta_locale_init(ctx, global, project, libs);
 
@@ -1144,7 +1144,7 @@ static int run_check(int argc, char **argv)
     JS_FreeRuntime(rt);
     g_ptr_array_unref(libs);
     g_free(tools); g_free(library);
-    return ok && !headless_uncaught ? 0 : 1;
+    return ok ? core_status() : 1;
 }
 
 /* --------------------------------------------------------- drawing module */
@@ -1273,6 +1273,22 @@ static gboolean project_idle(gpointer data)
 
     g_main_loop_quit(loop);
     return G_SOURCE_CONTINUE;
+}
+
+/* Run the loop while anything is owed an answer, unless the program already
+ * said `Quit`; `Quit` from a callback stops it through `core_loop`. */
+static void core_wait(void)
+{
+    if (core_quitting || core_pending() == 0)
+        return;
+
+    core_loop = g_main_loop_new(NULL, FALSE);
+    guint tick = g_timeout_add(20, project_idle, core_loop);
+
+    g_main_loop_run(core_loop);
+    g_source_remove(tick);
+    g_main_loop_unref(core_loop);
+    core_loop = NULL;
 }
 
 /*
@@ -1547,16 +1563,9 @@ static int run_project(int argc, char **argv, bool testing, bool json,
         }
         /* `runTests` schedules the next test with `Timer.After(0, ...)` and
          * ends with `Application.Quit`, so the loop is what lets a test run at
-         * all; a run that reaches `Quit` never comes back here. */
-        if (core_pending() > 0) {
-            GMainLoop *loop = g_main_loop_new(NULL, FALSE);
-            guint tick = g_timeout_add(20, project_idle, loop);
-
-            g_main_loop_run(loop);
-            g_source_remove(tick);
-            g_main_loop_unref(loop);
-        }
-        status = headless_uncaught ? 1 : 0;
+         * all, and `Quit` is what ends it with the tests' status. */
+        core_wait();
+        status = core_status();
         goto out;
     }
 
@@ -1580,15 +1589,8 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     JS_FreeValue(ctx, r);
     bta_drain_jobs(rt);
 
-    if (core_pending() > 0) {
-        GMainLoop *loop = g_main_loop_new(NULL, FALSE);
-
-        guint tick = g_timeout_add(20, project_idle, loop);
-        g_main_loop_run(loop);
-        g_source_remove(tick);
-        g_main_loop_unref(loop);
-    }
-    status = headless_uncaught ? 1 : 0;
+    core_wait();
+    status = core_status();
 
 out:
     /* Before anything they could touch goes: a worker holds values of this

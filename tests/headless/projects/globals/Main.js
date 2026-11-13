@@ -32,6 +32,16 @@ function language() {
         print(`File.Load: ${e.message.replace(dir, "<dir>")}`);
     }
     print(`Application: ${Application.Id} ${Application.ProtectPrototype()}`);
+    for (const [what, call] of [["Quit", () => Application.Quit("fail")],
+                                ["LineOf", () => Text.LineOf("a\nb", "two")]]) {
+        try {
+            call();
+            print(`${what} took a word for a number`);
+        } catch (e) {
+            print(`${what}: ${e.name}: ${e.message}`);
+        }
+    }
+    print(`LineOf: ${Text.LineOf("a\nb", 2)}`);
     try {
         Object.prototype.leak = 1;
         print("Object.prototype took a new name");

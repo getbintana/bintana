@@ -451,3 +451,32 @@ const char *bta_errno_text(int errnum)
     g_snprintf(other, sizeof other, "errno %d", errnum);
     return other;
 }
+
+/*
+ * `Text.LineOf(text, index)`: the line a JavaScript string index falls on,
+ * over `bta_line_of_utf16`. Here and not in bta_paint.c because the core
+ * answers it for `check` without the drawing module, and the core's copy and
+ * the graphical one both read the index with a bare `JS_ToInt32` -- so
+ * `LineOf(src, "abc")` answered line 1. The index goes through `bta_to_int`
+ * now, which refuses what is not a number.
+ */
+JSValue bta_text_line_of(JSContext *ctx, JSValueConst this_val,
+                         int argc, JSValueConst *argv)
+{
+    (void)this_val;
+    if (argc < 2)
+        return JS_ThrowTypeError(ctx, "Text.LineOf(text, index) needs the text "
+                                      "and an index");
+
+    int32_t index = 0;
+    if (!bta_to_int(ctx, argv[1], "Text.LineOf", &index))
+        return JS_EXCEPTION;
+
+    const char *s = JS_ToCString(ctx, argv[0]);
+    if (!s)
+        return JS_EXCEPTION;
+
+    int line = bta_line_of_utf16(s, index);
+    JS_FreeCString(ctx, s);
+    return JS_NewInt32(ctx, line);
+}
