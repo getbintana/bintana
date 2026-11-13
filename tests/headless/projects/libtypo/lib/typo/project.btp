@@ -1,0 +1,5 @@
+{
+  "name": "typo",
+  "description": "Names a function nobody declared, whose name happens to contain Form",
+  "sources": ["Typo.js"]
+}

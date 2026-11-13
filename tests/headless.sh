@@ -270,6 +270,22 @@ else
     fail=1
 fi
 
+# ...and only a UI library: a console library with a typo whose name merely
+# contains `Form` (`FormatRow`) gets the engine's ReferenceError. The name used
+# to be matched anywhere in the message, and the real error was swallowed.
+if "$BINTANA_CORE" tests/headless/projects/libtypo \
+        >/dev/null 2>"$tmp/typo.err"; then
+    echo "the core ran a library with an undeclared name" >&2
+    fail=1
+elif grep -q 'FormatRow is not defined' "$tmp/typo.err" &&
+     ! grep -q 'needs the graphical host' "$tmp/typo.err"; then
+    echo "a typo in a library is its own error, not a missing display"
+else
+    echo "a typo in a library was reported as something else:" >&2
+    cat "$tmp/typo.err" >&2
+    fail=1
+fi
+
 # Without `uses: ["drawing"]` the global is a stub that says what to add; the
 # module is not loaded there.
 if "$BINTANA_CORE" tests/headless/projects/nodraw         >"$tmp/nodraw.out" 2>"$tmp/nodraw.err"; then

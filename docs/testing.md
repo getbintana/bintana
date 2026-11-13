@@ -769,7 +769,9 @@ the sentence a `Drawing` call gives.
 
 **A UI library named by a `main`** is refused with its name and the missing
 display (`tests/headless/projects/uilibrary`), not with `Component is not
-defined` from inside the class.
+defined` from inside the class. The name is compared whole: `tests/headless/projects/libtypo` has a
+console library that calls an undeclared `FormatRow`, and the report must be
+that `ReferenceError`, not the display sentence.
 
 **A native plugin loads too**: `tests/headless/projects/plugin` names
 `testplug`, and the script copies the suite's reference `.so` into a scratch

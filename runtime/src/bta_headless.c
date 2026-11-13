@@ -693,9 +693,43 @@ static bool eval_script(JSContext *ctx, const char *text, size_t len,
     return true;
 }
 
+/* The identifier a `ReferenceError` is about, or NULL. The engine's message is
+ * `"<name> is not defined"`, and a name the language took away carries a hint
+ * after it (bta_language.c), so the name is what stands before the first
+ * " is not defined". Freed by the caller. */
+static char *reference_error_name(JSContext *ctx, JSValueConst exc)
+{
+    if (!JS_IsError(exc))
+        return NULL;
+
+    JSValue     kind_v = JS_GetPropertyStr(ctx, exc, "name");
+    JSValue     text_v = JS_GetPropertyStr(ctx, exc, "message");
+    const char *kind   = JS_ToCString(ctx, kind_v);
+    const char *text   = JS_ToCString(ctx, text_v);
+    char       *name   = NULL;
+
+    if (!kind || !text)
+        JS_FreeValue(ctx, JS_GetException(ctx));
+    if (kind && text && !strcmp(kind, "ReferenceError")) {
+        const char *end = strstr(text, " is not defined");
+        if (end && end > text)
+            name = g_strndup(text, (gsize)(end - text));
+    }
+    JS_FreeCString(ctx, kind);
+    JS_FreeCString(ctx, text);
+    JS_FreeValue(ctx, kind_v);
+    JS_FreeValue(ctx, text_v);
+    return name;
+}
+
 /* A library whose JavaScript defines a widget class fails on the missing
  * toolkit name. The sentence names the library and the display, which is the
- * refusal the plan asks for, instead of a `ReferenceError` three files in. */
+ * refusal the plan asks for, instead of a `ReferenceError` three files in.
+ *
+ * **The name is compared whole.** It used to be found anywhere in the
+ * message, so `FormatRow is not defined` -- a typo in a console library --
+ * was reported as a library that needs a display, and the real error was
+ * never printed. */
 static bool library_needs_display(JSContext *ctx, const char *library)
 {
     static const char *const NAMES[] = {
@@ -703,16 +737,17 @@ static bool library_needs_display(JSContext *ctx, const char *library)
         "DrawingArea", "TextEditor", "SourceEditor",
     };
 
-    JSValue     exc = JS_GetException(ctx);
-    const char *msg = JS_ToCString(ctx, exc);
-    bool        ui  = false;
+    JSValue  exc  = JS_GetException(ctx);
+    char    *name = reference_error_name(ctx, exc);
+    bool     ui   = false;
 
-    if (msg && strstr(msg, "is not defined"))
+    if (name)
         for (size_t i = 0; i < G_N_ELEMENTS(NAMES); i++)
-            if (strstr(msg, NAMES[i])) {
+            if (!strcmp(name, NAMES[i])) {
                 ui = true;
                 break;
             }
+    g_free(name);
 
     if (ui)
         fprintf(stderr, "bintana: library \"%s\" needs the graphical host: "
@@ -721,8 +756,6 @@ static bool library_needs_display(JSContext *ctx, const char *library)
     else
         JS_Throw(ctx, exc);        /* restore it for the normal dump */
 
-    if (msg)
-        JS_FreeCString(ctx, msg);
     if (ui)
         JS_FreeValue(ctx, exc);
     return ui;

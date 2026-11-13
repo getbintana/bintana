@@ -314,7 +314,9 @@ the linked code is now the module, not core.
 `qr`, `pdfview`, `dialog`, `datagrid`) in a host with no widgets fails at the
 first `extends Component`, and the core says `library "markdown" needs the
 graphical host: a project with "main" has no display. Run it with bintana-gui.`
-instead of letting the engine's `ReferenceError` be the whole answer.
+instead of letting the engine's `ReferenceError` be the whole answer. The
+identifier the `ReferenceError` names is compared whole against the toolkit
+names: a typo such as `FormatRow` in a console library is its own error.
 `report` and `charts` do not hit it: their document classes are unconditional
 and their controls are skipped.
 
