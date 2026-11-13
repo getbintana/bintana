@@ -325,6 +325,13 @@ bool bta_message_show(int kind, const char *text)
     return true;
 }
 
+/* Nothing to do before a `Task` starts: every class this host registers is
+ * registered at boot, before any worker can number one. */
+void bta_task_starting(JSContext *ctx)
+{
+    (void)ctx;
+}
+
 /* A `Task` worker's share of this host (bta_task.c): GdkPixbuf's `Bitmap`,
  * `Probe` and `PdfDocument`, which read and answer and hold no callback, and
  * `Tray`'s names, which exist and refuse off the main thread. */

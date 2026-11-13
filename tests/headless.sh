@@ -317,16 +317,29 @@ else
     fail=1
 fi
 
-# Without `uses: ["drawing"]` the global is a stub that says what to add; the
-# module is not loaded there.
-if "$BINTANA_CORE" tests/headless/projects/nodraw         >"$tmp/nodraw.out" 2>"$tmp/nodraw.err"; then
-    echo "the core drew without uses: drawing" >&2
-    fail=1
-elif grep -q 'does not use it: add "uses": \["drawing"\]' "$tmp/nodraw.err"; then
-    echo "Drawing without uses says what to add"
+# Without `uses: ["drawing"]` a `main` draws all the same: the module loads on
+# the first touch of what it brings, and not before -- cairo is not mapped at
+# the start, and is after. A Task that loads a Bitmap before the main thread
+# has drawn gets one, as in the graphical host. The names that stand in for the
+# module before it loads must be `Text`'s as the graphical host has them.
+if "$BINTANA_CORE" tests/headless/projects/lazydraw \
+        >"$tmp/lazy.out" 2>"$tmp/lazy.err" &&
+   grep -q '^cairo before: false$' "$tmp/lazy.out" &&
+   grep -q '^a worker loaded a Bitmap: [0-9]*x[0-9]*$' "$tmp/lazy.out" &&
+   grep -q '^Drawing.ToPng: true$' "$tmp/lazy.out" &&
+   grep -q '^cairo after: true$' "$tmp/lazy.out"; then
+    if "$BINTANA" tests/headless/projects/textnames >"$tmp/textnames.out" 2>&1 &&
+       grep -qxF "$(head -1 "$tmp/textnames.out")" "$tmp/lazy.out"; then
+        echo "a main draws without uses: the module loads on the first touch"
+    else
+        echo "the core's stand-ins for Text are not the graphical host's Text:" >&2
+        cat "$tmp/textnames.out" >&2
+        grep '^Text names' "$tmp/lazy.out" >&2
+        fail=1
+    fi
 else
-    echo "Drawing without uses failed without the sentence:" >&2
-    cat "$tmp/nodraw.out" "$tmp/nodraw.err" >&2
+    echo "a main that draws without uses did not load the module as it should:" >&2
+    cat "$tmp/lazy.out" "$tmp/lazy.err" >&2
     fail=1
 fi
 

@@ -1080,3 +1080,20 @@ another class's `this.total` alone.
   slice**: read the C, and do not treat a clean `asan.sh` as evidence. A
   *large* `JSValue` string -- past the arena's threshold -- does reach `free()`
   and is caught, so the family is invisible exactly where a short name puts you.
+
+## Class ids: per runtime, kept in one variable
+
+`JS_NewClassID(rt, &id)` in quickjs-ng numbers a class by **the runtime that
+asks first** (`rt->class_count`) and writes it into `id`, which in this tree
+is a `static` shared by every runtime in the process -- the main one and each
+`Task` worker's. The invariant the code relies on without saying so: **the
+main runtime registers every class first**, and a worker reuses its number.
+The graphical host meets it by registering everything at boot. The console
+host loads its drawing module on first use (2026-11-13), and a `Task` that
+touched `Bitmap` before the main thread had drawn registered it first: the
+worker's runtime has fewer classes, so `Bitmap` got a low number, the main
+runtime later registered it over a class it had already given that number,
+and the next collection asserted in `gc_decref_child`. The core now loads the
+module on the main thread when a task starts (`bta_task_starting`). **A class
+that may be registered lazily must be registered by the main runtime before a
+worker can exist** -- not "eventually", and not from the worker.

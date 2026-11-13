@@ -2069,6 +2069,11 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
     if (bta_task_is_worker(ctx))
         return JS_ThrowTypeError(ctx, "Task: a task cannot start another task");
 
+    /* The host's word before a worker exists, on this, the main thread: the
+     * console host loads its drawing module here, so the classes a worker
+     * registers are numbered by this runtime first (bta_headless.c). */
+    bta_task_starting(ctx);
+
     started = JS_GetPropertyStr(ctx, this_val, "__started");
     was = JS_ToBool(ctx, started);
     JS_FreeValue(ctx, started);

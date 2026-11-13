@@ -62,17 +62,6 @@ bool bta_message_show(int kind, const char *text)
     return false;
 }
 
-/* The drawing module's half of a `Task` worker: `Bitmap`, when a project
- * loaded the module (`uses: ["drawing"]`). Set once, before any task can
- * start, and read from worker threads after. */
-static bool (*drawing_worker_init)(JSContext *, JSValue);
-
-void bta_task_worker_host(JSContext *ctx, JSValueConst global)
-{
-    if (drawing_worker_init)
-        drawing_worker_init(ctx, global);
-}
-
 /* Whether any error was reported. A callback that throws after `main` returned
  * still has to reach the exit status, or a runner reads "it worked" over a
  * traceback -- the failure `run_console` fixes with `app->uncaught`. */
@@ -287,43 +276,6 @@ void bta_strict_init(JSContext *ctx, JSValueConst global)
                       JS_NewCFunction(ctx, headless_strict_seal, "strictSeal", 1));
 }
 
-static JSValue headless_needs_drawing(JSContext *ctx, JSValueConst this_val,
-                                     int argc, JSValueConst *argv)
-{
-    (void)this_val; (void)argc; (void)argv;
-    return JS_ThrowTypeError(ctx, "this needs drawing, and the project does "
-                                  "not use it: add \"uses\": [\"drawing\"] "
-                                  "to project.btp");
-}
-
-static void stub_function(JSContext *ctx, JSValue obj, const char *name,
-                          int length)
-{
-    JS_SetPropertyStr(ctx, obj, name,
-                      JS_NewCFunction(ctx, headless_needs_drawing, name, length));
-}
-
-/* `Drawing` and `Bitmap` before the module loads: the names are there for the
- * check, and calling one says what to add, not "not a function". */
-static JSValue headless_drawing_stub(JSContext *ctx)
-{
-    JSValue out = JS_NewObject(ctx);
-
-    stub_function(ctx, out, "Save", 4);
-    stub_function(ctx, out, "ToPng", 3);
-    stub_function(ctx, out, "SavePdf", 5);
-    return out;
-}
-
-static JSValue headless_bitmap_stub(JSContext *ctx)
-{
-    JSValue out = JS_NewObject(ctx);
-
-    stub_function(ctx, out, "Load", 1);
-    stub_function(ctx, out, "FromBytes", 1);
-    return out;
-}
-
 static void install_gui_stubs(JSContext *ctx, JSValueConst global)
 {
     for (size_t i = 0; i < G_N_ELEMENTS(GUI_GLOBALS); i++) {
@@ -336,16 +288,9 @@ static void install_gui_stubs(JSContext *ctx, JSValueConst global)
         if (present)
             continue;
 
-        /* The rest are names a check reads, not objects a program uses. */
-        if (!strcmp(GUI_GLOBALS[i], "Drawing")) {
-            JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i],
-                              headless_drawing_stub(ctx));
-        } else if (!strcmp(GUI_GLOBALS[i], "Bitmap")) {
-            JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i],
-                              headless_bitmap_stub(ctx));
-        } else {
-            JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i], JS_NewObject(ctx));
-        }
+        /* Names a check reads, not objects a program uses. A run replaces the
+         * drawing ones with getters that load the module. */
+        JS_SetPropertyStr(ctx, global, GUI_GLOBALS[i], JS_NewObject(ctx));
     }
 }
 
@@ -633,14 +578,44 @@ static int run_check(int argc, char **argv)
 
 /* --------------------------------------------------------- drawing module */
 
-/* The `.so` that carries cairo, Pango and GdkPixbuf. It is found in two
- * places and no others: beside the binary (the build tree), and where this
- * build installs it -- `BTA_BIN_TO_MODULES`, the hop from bindir to the
- * configured libdir, which CMake works out. A missing module is not an error: `Drawing` stays the stub the check reads, and a project that
- * needs it says so when it uses it. A module that is there but cannot load, or
- * speaks another ABI, is an error. */
-static bool load_drawing_module(JSContext *ctx, JSValue global, bool required)
+/*
+ * The `.so` that carries cairo, Pango and GdkPixbuf, **loaded when a program
+ * first touches what it brings**: `Painter`, `Drawing`, `Bitmap` and `Text`'s
+ * measurements. A `main` that never draws never maps it; one that does gets it
+ * the moment it asks, so a program is the same program under `bintana` and
+ * `bintana-gui`, where the drawing half is always there. It used to load only
+ * for a project whose `uses` named `drawing`, and every other `main` that drew
+ * was told to add the line. `uses: ["drawing"]` still loads it at the start.
+ *
+ * It is found in two places and no others: beside the binary (the build tree),
+ * and where this build installs it -- `BTA_BIN_TO_MODULES`, the hop from
+ * bindir to the configured libdir, which CMake works out.
+ *
+ * **Opening is once per process, under a lock**, and installing is per
+ * context: the main thread's gets the four, and a `Task` worker gets `Bitmap`
+ * alone (`bta_drawing_module_worker_init`), which a worker may be the first to
+ * ask for. A module that is missing, will not load, or speaks another ABI is
+ * remembered with the sentence that says so, and every later ask answers it.
+ */
+typedef int  (*drawing_abi_fn)(void);
+typedef bool (*drawing_init_fn)(JSContext *, JSValue);
+
+static GMutex           drawing_lock;
+static bool             drawing_tried;
+static char            *drawing_error;
+static drawing_init_fn  drawing_init;
+static drawing_init_fn  drawing_worker_init;
+
+static bool drawing_open(void)
 {
+    g_mutex_lock(&drawing_lock);
+    if (drawing_tried) {
+        bool ok = drawing_init != NULL;
+        g_mutex_unlock(&drawing_lock);
+        return ok;
+    }
+    drawing_tried = true;
+
     GPtrArray *tried = g_ptr_array_new_with_free_func(g_free);
     char      *exe   = bta_exe_path();
 
@@ -665,62 +640,223 @@ static bool load_drawing_module(JSContext *ctx, JSValue global, bool required)
             path = g_strdup(tried->pdata[i]);
 
     if (!path) {
-        if (required) {
-            fprintf(stderr, "bintana: this project uses \"drawing\", but "
-                            "bintana-drawing.%s is not in any of:\n", G_MODULE_SUFFIX);
-            for (guint i = 0; i < tried->len; i++)
-                fprintf(stderr, "  %s\n", (char *)tried->pdata[i]);
-        }
+        GString *s = g_string_new(NULL);
+
+        g_string_printf(s, "drawing needs bintana-drawing.%s, which is not in "
+                           "any of:", G_MODULE_SUFFIX);
+        for (guint i = 0; i < tried->len; i++)
+            g_string_append_printf(s, "\n  %s", (char *)tried->pdata[i]);
+        drawing_error = g_string_free(s, FALSE);
         g_ptr_array_unref(tried);
-        return !required;
+        g_mutex_unlock(&drawing_lock);
+        return false;
     }
     g_ptr_array_unref(tried);
 
     GModule *m = g_module_open(path, G_MODULE_BIND_LOCAL);
+    gpointer abi_sym = NULL, init_sym = NULL, worker_sym = NULL;
+
     if (!m) {
-        fprintf(stderr, "bintana: the drawing module %s did not load: %s\n",
-                path, g_module_error() ?: "unknown");
-        g_free(path);
-        return false;
+        drawing_error = g_strdup_printf("the drawing module %s did not load: %s",
+                                        path, g_module_error() ?: "unknown");
+    } else if (!g_module_symbol(m, "bta_drawing_module_abi", &abi_sym) ||
+               !g_module_symbol(m, "bta_drawing_module_init", &init_sym) ||
+               !abi_sym || !init_sym) {
+        drawing_error = g_strdup_printf("%s is not a drawing module", path);
+    } else if (((drawing_abi_fn)abi_sym)() != BTA_DRAWING_MODULE_ABI) {
+        drawing_error = g_strdup_printf("%s speaks drawing ABI %d, this runtime "
+                                        "%d -- rebuild it with this runtime",
+                                        path, ((drawing_abi_fn)abi_sym)(),
+                                        BTA_DRAWING_MODULE_ABI);
+    } else {
+        /* Never closed: the classes it registers live as long as the process. */
+        drawing_init = (drawing_init_fn)init_sym;
+        if (g_module_symbol(m, "bta_drawing_module_worker_init", &worker_sym))
+            drawing_worker_init = (drawing_init_fn)worker_sym;
     }
-
-    typedef int  (*abi_fn)(void);
-    typedef bool (*init_fn)(JSContext *, JSValue);
-    gpointer abi_sym = NULL, init_sym = NULL;
-
-    if (!g_module_symbol(m, "bta_drawing_module_abi", &abi_sym) ||
-        !g_module_symbol(m, "bta_drawing_module_init", &init_sym) ||
-        !abi_sym || !init_sym) {
-        fprintf(stderr, "bintana: %s is not a drawing module\n", path);
+    if (!drawing_init && m)
         g_module_close(m);
-        g_free(path);
-        return false;
-    }
-    int abi = ((abi_fn)abi_sym)();
-    if (abi != BTA_DRAWING_MODULE_ABI) {
-        fprintf(stderr, "bintana: %s speaks drawing ABI %d, this runtime %d -- "
-                        "rebuild it with this runtime\n", path, abi,
-                BTA_DRAWING_MODULE_ABI);
-        g_module_close(m);
-        g_free(path);
-        return false;
-    }
-    if (!((init_fn)init_sym)(ctx, global)) {
-        fprintf(stderr, "bintana: %s refused to install itself\n", path);
-        g_module_close(m);
-        g_free(path);
-        return false;
-    }
-
-    /* A `Task` worker gets `Bitmap` from the same module. Set before any
-     * task can start, and the module is never closed, so a worker thread
-     * reading the pointer later sees it. */
-    gpointer worker_sym = NULL;
-    if (g_module_symbol(m, "bta_drawing_module_worker_init", &worker_sym))
-        drawing_worker_init = (init_fn)worker_sym;
-
     g_free(path);
+
+    bool ok = drawing_init != NULL;
+    g_mutex_unlock(&drawing_lock);
+    return ok;
+}
+
+/* The names the module brings, which stand in as getters until it loads. The
+ * list is held to the module by tests/headless.sh, which compares `Text`'s
+ * members and the globals with the graphical host's. */
+static const char *const DRAWING_GLOBALS[] = { "Painter", "Drawing", "Bitmap" };
+static const char *const TEXT_MEASURES[]   = {
+    "Width", "Height", "Size", "Lines", "Escape", "IndexAt", "Bounds",
+    "OffsetAt", "Font",
+};
+
+static void drawing_forget_getters(JSContext *ctx, JSValueConst global)
+{
+    for (size_t i = 0; i < G_N_ELEMENTS(DRAWING_GLOBALS); i++) {
+        JSAtom a = JS_NewAtom(ctx, DRAWING_GLOBALS[i]);
+        JS_DeleteProperty(ctx, global, a, 0);
+        JS_FreeAtom(ctx, a);
+    }
+    JSValue text = JS_GetPropertyStr(ctx, global, "Text");
+    if (JS_IsObject(text))
+        for (size_t i = 0; i < G_N_ELEMENTS(TEXT_MEASURES); i++) {
+            JSAtom a = JS_NewAtom(ctx, TEXT_MEASURES[i]);
+            JS_DeleteProperty(ctx, text, a, 0);
+            JS_FreeAtom(ctx, a);
+        }
+    JS_FreeValue(ctx, text);
+}
+
+/* Load and install into this, the main, context. With `uses: ["drawing"]`
+ * at the start; otherwise from a getter, the first time a name is touched. */
+static bool drawing_in_main;   /* installed into the main context */
+
+static bool drawing_load(JSContext *ctx, JSValueConst global)
+{
+    if (drawing_in_main)
+        return true;
+    if (!drawing_open())
+        return false;
+    drawing_forget_getters(ctx, global);
+    if (!drawing_init(ctx, (JSValue)global)) {
+        g_mutex_lock(&drawing_lock);
+        if (!drawing_error)
+            drawing_error = g_strdup("the drawing module refused to install itself");
+        g_mutex_unlock(&drawing_lock);
+        return false;
+    }
+    drawing_in_main = true;
     return true;
+}
+
+/* magic: 0..2 a global, 16.. a `Text` member, 32 the worker's `Bitmap`. */
+enum { DRAWING_TEXT = 16, DRAWING_WORKER_BITMAP = 32 };
+
+static const char *drawing_name(int magic)
+{
+    if (magic == DRAWING_WORKER_BITMAP)
+        return "Bitmap";
+    return magic >= DRAWING_TEXT ? TEXT_MEASURES[magic - DRAWING_TEXT]
+                                 : DRAWING_GLOBALS[magic];
+}
+
+/* Load, then hand back what the name means now. A setter is the same and
+ * then assigns, so `Text.Font = ...` before any measurement works too. */
+static JSValue drawing_touch(JSContext *ctx, JSValueConst this_val, int magic,
+                             JSValueConst *value)
+{
+    JSValue global = JS_GetGlobalObject(ctx);
+    bool    ok;
+
+    /* A worker never loads the module itself: `bta_task_starting` loaded it
+     * on the main thread before the worker existed, so reaching here from a
+     * worker means it is not to be had, and the sentence says why. */
+    ok = magic != DRAWING_WORKER_BITMAP && drawing_load(ctx, global);
+
+    if (!ok) {
+        JS_FreeValue(ctx, global);
+        g_mutex_lock(&drawing_lock);
+        JSValue e = bta_throw_text(ctx, "%s", drawing_error
+                                   ? drawing_error
+                                   : "the drawing module is not loaded");
+        g_mutex_unlock(&drawing_lock);
+        return e;
+    }
+
+    const char *name   = drawing_name(magic);
+    JSValue     holder = magic >= DRAWING_TEXT && magic != DRAWING_WORKER_BITMAP
+                       ? JS_DupValue(ctx, this_val) : JS_DupValue(ctx, global);
+    JSValue     out;
+
+    if (value) {
+        out = JS_SetPropertyStr(ctx, holder, name, JS_DupValue(ctx, *value)) < 0
+            ? JS_EXCEPTION : JS_UNDEFINED;
+    } else {
+        out = JS_GetPropertyStr(ctx, holder, name);
+    }
+    JS_FreeValue(ctx, holder);
+    JS_FreeValue(ctx, global);
+    return out;
+}
+
+static JSValue drawing_get(JSContext *ctx, JSValueConst this_val, int magic)
+{
+    return drawing_touch(ctx, this_val, magic, NULL);
+}
+
+static JSValue drawing_set(JSContext *ctx, JSValueConst this_val, JSValueConst v,
+                           int magic)
+{
+    return drawing_touch(ctx, this_val, magic, &v);
+}
+
+static void drawing_getter(JSContext *ctx, JSValueConst obj, const char *name,
+                           int magic)
+{
+    JSAtom a = JS_NewAtom(ctx, name);
+
+    JS_DefinePropertyGetSet(ctx, obj, a,
+        JS_NewCFunction2(ctx, (JSCFunction *)(void *)drawing_get, name, 0,
+                         JS_CFUNC_getter_magic, magic),
+        JS_NewCFunction2(ctx, (JSCFunction *)(void *)drawing_set, name, 1,
+                         JS_CFUNC_setter_magic, magic),
+        JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
+    JS_FreeAtom(ctx, a);
+}
+
+/* The main context's stand-ins: the three globals in place of the check's
+ * empty objects, and `Text`'s measurements beside its `LineOf`. */
+static void drawing_install_getters(JSContext *ctx, JSValueConst global)
+{
+    for (size_t i = 0; i < G_N_ELEMENTS(DRAWING_GLOBALS); i++) {
+        JSAtom a = JS_NewAtom(ctx, DRAWING_GLOBALS[i]);
+        JS_DeleteProperty(ctx, global, a, 0);
+        JS_FreeAtom(ctx, a);
+        drawing_getter(ctx, global, DRAWING_GLOBALS[i], (int)i);
+    }
+    JSValue text = JS_GetPropertyStr(ctx, global, "Text");
+    if (JS_IsObject(text))
+        for (size_t i = 0; i < G_N_ELEMENTS(TEXT_MEASURES); i++)
+            drawing_getter(ctx, text, TEXT_MEASURES[i], DRAWING_TEXT + (int)i);
+    JS_FreeValue(ctx, text);
+}
+
+/*
+ * Before a `Task` starts, on the main thread: load the module here if it is to
+ * be had, so `Bitmap`'s class is numbered by the main runtime before a worker
+ * registers it. QuickJS-ng numbers a class by the runtime that asks first and
+ * keeps the number in one process-wide variable; a worker that asked first
+ * took a low number the main runtime had already given another class, and
+ * the main thread's later registration overwrote it -- a GC assertion, found
+ * by `tests/headless/projects/lazydraw`. A program that starts a task maps
+ * cairo whether or not it draws, which is what the graphical host always does.
+ */
+void bta_task_starting(JSContext *ctx)
+{
+    if (drawing_in_main)
+        return;
+
+    JSValue global = JS_GetGlobalObject(ctx);
+    drawing_load(ctx, global);       /* not to be had: a worker says so */
+    JS_FreeValue(ctx, global);
+}
+
+/* A `Task` worker's share of the module: `Bitmap`, as a worker in the
+ * graphical host gets it -- or, when the module is not to be had, a getter
+ * that says why. Read from the worker's thread after `bta_task_starting`
+ * settled it on the main one. */
+void bta_task_worker_host(JSContext *ctx, JSValueConst global)
+{
+    g_mutex_lock(&drawing_lock);
+    drawing_init_fn worker = drawing_init ? drawing_worker_init : NULL;
+    g_mutex_unlock(&drawing_lock);
+
+    if (worker && drawing_in_main)
+        worker(ctx, (JSValue)global);
+    else
+        drawing_getter(ctx, global, "Bitmap", DRAWING_WORKER_BITMAP);
 }
 
 /* What is still owed an answer: the same sum `run_console` adds up in the
@@ -985,9 +1121,10 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     }
     install_core(ctx, global, dir, libs);
 
-    /* The module is what `uses: ["drawing"]` buys -- directly or through a
-     * library's own `uses`. A `main` that never names it never maps cairo,
-     * Pango or GdkPixbuf. */
+    /* The drawing module: at the start when the resolved `uses` names
+     * `drawing` -- directly or through a library's own -- and otherwise on
+     * the first touch of what it brings. A `main` that never draws never maps
+     * cairo, Pango or GdkPixbuf. */
     bool needs_drawing = false;
     for (guint i = 0; i < libs->len && !needs_drawing; i++) {
         char *base = g_path_get_basename(libs->pdata[i]);
@@ -995,10 +1132,14 @@ static int run_project(int argc, char **argv, bool testing, bool json,
         needs_drawing = !strcmp(base, "drawing");
         g_free(base);
     }
-    if (needs_drawing && !load_drawing_module(ctx, global, true)) {
+    if (needs_drawing && !drawing_load(ctx, global)) {
+        fprintf(stderr, "bintana: this project uses \"drawing\": %s\n",
+                drawing_error);
         status = 2;
         goto out;
     }
+    if (!needs_drawing)
+        drawing_install_getters(ctx, global);
 
     /* A library's native half loads before `rad.js` and before the project's
      * own sources, which is the contract `bta_plugin.h` states: `init` sees

@@ -311,8 +311,11 @@ through `host->call`, and that the boundary is not the hot-path catastrophe it
 looked like. A real `lib/drawing` would still need the full API, a JavaScript
 façade for the property/class semantics, Pango text and images, and a decision
 between `uses: ["drawing"]` and load-on-first-use. **The project chose the
-explicit road:** `uses: ["drawing"]` loads the module -- directly, or through a
-library that names it -- and a `main` without it never maps cairo. The public
+explicit road first** -- `uses: ["drawing"]` loaded the module, and a `main`
+without it was told to add the line -- **and then load-on-first-use
+(2026-11-13)**, because the explicit road made one program two: it drew under
+`bintana-gui` and refused under `bintana`. `uses: ["drawing"]` still loads it at
+the start. The public
 plugin remains a spike for implementations that can live behind the plugin ABI;
 the linked code is now the module, not core.
 
@@ -349,9 +352,16 @@ suite's reference plugin is the fixture: `tests/headless/projects/plugin` with
 
 **Drawing is a loadable module.** `Painter`, `Bitmap`, `Drawing` and `Text`'s measurements
 are not linked into `bintana`: `bintana-drawing.so` carries cairo, Pango and
-GdkPixbuf and is loaded when a project's resolved `uses` names `drawing`, so
+GdkPixbuf and is loaded **the first time a program touches what it brings**:
+until then `Painter`, `Drawing`, `Bitmap` and the nine measurements on `Text`
+are getters that load it, install the real values and answer with them.
 `--version`, `check` and a `main` that never draws stay at 42 libraries and
-11.5 MB, none of them cairo, Pango or GdkPixbuf. A `main` still writes a PNG or a PDF and measures text
+11.5 MB, none of them cairo, Pango or GdkPixbuf. **A program that starts a
+`Task` loads it then, on the main thread**, if it is installed: QuickJS-ng
+numbers a class by the runtime that registers it first and keeps the number
+in one process-wide variable, so a worker registering `Bitmap` first took a
+number the main runtime had given another class -- a GC assertion, found by
+the fixture. A worker then gets `Bitmap` as it does in the graphical host. A `main` still writes a PNG or a PDF and measures text
 with no display; `DrawingArea`, which needs a widget, is the GUI's. **The report's document half is core too:** `lib/report` and
 `lib/charts` define `ReportDocument`/`ChartDocument` always, and their
 `Report`/`Chart` controls only when `Component` exists, so a `main` lays out and

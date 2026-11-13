@@ -980,6 +980,12 @@ bool    bta_message_show(int kind, const char *text);
  * `Bitmap`, `Probe`, `PdfDocument` and `Tray`'s refusals, and in the core
  * `Bitmap` only when the drawing module is loaded. */
 void    bta_task_worker_host(JSContext *ctx, JSValueConst global);
+/* The host's word when a `Task` is about to start, on the main thread: the
+ * console host loads its drawing module there, so a class a worker registers
+ * has its number from the main runtime first (QuickJS-ng numbers classes per
+ * runtime into one process-wide variable). The graphical host has nothing
+ * to do. */
+void    bta_task_starting(JSContext *ctx);
 
 /* The drawing module's version (bta_drawing_module.c answers it, the core's
  * loader compares it). One constant, so moving it cannot leave the two

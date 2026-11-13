@@ -781,8 +781,11 @@ Both hosts must load the project's copy only; resolving `outer`'s `uses` from
 
 **Library dependencies** are held by the report fixture: it now names only
 `uses: ["report"]`, and `report`'s manifest pulls `charts` and `drawing`, so the
-PDF still works. `tests/headless/projects/nodraw` names no `drawing` and checks
-the sentence a `Drawing` call gives.
+PDF still works. `tests/headless/projects/lazydraw` names no `drawing` and draws
+all the same: `/proc/self/maps` has no cairo at the start and has it after; a
+`Task` loads a `Bitmap` before the main thread draws; and the names standing in
+for the module before it loads must be `Text`'s as the graphical host's
+`Widget.Members` lists them (`textnames`).
 
 **A UI library named by a `main`** is refused with its name and the missing
 display (`tests/headless/projects/uilibrary`), before it loads, because its

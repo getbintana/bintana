@@ -1,0 +1,6 @@
+{
+  "name": "headless-lazydraw",
+  "main": "Main",
+  "description": "Draws with no uses: drawing. The module loads on the first touch -- from a Task worker first -- and not before",
+  "sources": ["Thumb.js", "Main.js"]
+}
