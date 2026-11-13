@@ -625,9 +625,15 @@ bool bta_emit_ok(BtaWidget *w, const char *event, int argc, JSValueConst *argv)
     if (!w)
         return true;
 
-    bool threw = false;
-    JS_FreeValue(w->ctx,
-                 emit_on(w->ctx, w, w->form, w->name, event, argc, argv, &threw));
+    /* **The context before the call.** A handler may drop the control it was
+     * raised on -- a Video removing itself from its own `Error` handler is the
+     * case that found this -- and then `w` is freed when the event returns;
+     * reading `w->ctx` after it is a use-after-free. */
+    JSContext *ctx = w->ctx;
+    bool       threw = false;
+
+    JS_FreeValue(ctx,
+                 emit_on(ctx, w, w->form, w->name, event, argc, argv, &threw));
     return !threw;
 }
 
@@ -653,7 +659,10 @@ JSValue bta_emit_answer(BtaWidget *w, const char *event, int argc,
             *threw = false;
         return JS_UNDEFINED;
     }
-    return emit_on(w->ctx, w, w->form, w->name, event, argc, argv, threw);
+    /* The same copy as `bta_emit_ok`: the handler may free `w`. */
+    JSContext *ctx = w->ctx;
+
+    return emit_on(ctx, w, w->form, w->name, event, argc, argv, threw);
 }
 
 /*
@@ -698,7 +707,12 @@ void bta_emit(BtaWidget *w, const char *event, int argc, JSValueConst *argv)
 {
     if (!w)
         return;
-    JS_FreeValue(w->ctx, bta_emit_answer(w, event, argc, argv, NULL));
+
+    /* Read the context first: `bta_emit_answer` can free the control. */
+    JSContext *ctx = w->ctx;
+    JSValue    r   = bta_emit_answer(w, event, argc, argv, NULL);
+
+    JS_FreeValue(ctx, r);
 }
 
 /* ------------------------------------------------- base Widget properties */
