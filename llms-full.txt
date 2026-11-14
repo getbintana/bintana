@@ -992,26 +992,30 @@ disagree.
 - **The Windows Event Log's message table is generated, not checked in.**
   `runtime/src/bintana-events.mc` is the source; CMake finds `windmc` and
   `windres`, writes `generated/events/MSG00001.bin`, and links the resource
-  object into `bintana.exe` (`bintanaw.exe` is a copy and carries it too). Both
-  tools come with mingw-w64 and both are optional: without them the build is
-  green and events have no description. A `.mc` with `Severity=` gets the
+  object into both hosts, `bintana.exe` and `bintana-gui.exe`: each one writes
+  the log, and the message file is the executable that runs. Both tools come
+  with mingw-w64 and both are optional: without them the build is green and
+  events have no description. A `.mc` with `Severity=` gets the
   severity folded into the id's high bits (`0x40001000`) and the viewer cannot
   find the message, so the file has none -- see
   [`runtime.md`](runtime.md#the-platform-log). A clean configure and build is
   the way to check the custom commands; an incremental one can hide a missing
   dependency.
 - **`add_executable` lists its sources by hand -- two lists now, `bintana`
-  (core) and `${BTA_GUI_TARGET}` (`bintana-gui`, or `bintana` on Windows) --
-  while the signature extractor globs `runtime/src/*.c`.** A new `.c` that is
+  (core) and `${BTA_GUI_TARGET}` (`bintana-gui`, with `.exe` only on Windows)
+  -- while the signature extractor globs `runtime/src/*.c`.** A new `.c` that is
   not in the right list builds green up to the link and then fails as
   *undefined reference to `bta_x_init`* -- and is already in
   `generated/bta_signatures.h`, so it looks half registered. A file that
   touches GTK belongs only in the GUI list; one both hosts need belongs in
   both, and `ldd` on the core is what catches a stray GTK reference.
-  A new global is five places: the `.c`, its `CMakeLists.txt` line, its init in
-  `bta.h`, and the two `install` roads, `bta_runtime.c` **and** `bta_task.c`
-  (a global missing from the worker is *not a function* at call time, which
-  `testTask`'s `entropy` step now asserts).
+  A new global is up to seven places: the `.c`, its line in each `CMakeLists.txt`
+  list it belongs in, its init in `bta.h`, and the three `install` roads,
+  `bta_runtime.c`, `bta_headless.c` (`install_core`, for a global a `main` has)
+  **and** `bta_task.c` (a global missing from the worker is *not a function* at
+  call time, which `testTask`'s `entropy` step now asserts). `Privilege` came
+  from a branch that predated the core and linked `bta_task.c` against a
+  symbol only the graphical list had: the core failed at link.
 
 **`tests/run.sh widgets <name>` selects by name, ignoring case, and takes every
 test whose name contains it** (`hash` runs `Hash`), plus what `NEEDS` adds; a
@@ -1259,16 +1263,23 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   a `main` project's `tests/*Test.js` run in the core, a `startup` project's
   are exec'd as `bintana-gui test`, with `--json` and the filter intact. The
   arguments after the project become `Application.Arguments`, exactly as in the
-  graphical host. Windows has no core
-  host yet and still ships the single graphical `bintana.exe` plus
-  `bintanaw.exe`; do not fake a console host there with a stub form.
+  graphical host. **Windows has no `execv`**, so the core starts
+  `bintana-gui.exe` through `g_spawn_sync` and waits for its status, with the
+  child inheriting the core's stdout and stderr. Inheriting and not capturing
+  is deliberate: a capture buffers the run until the host exits, and waits for
+  EOF on the pipes, which a grandchild that inherited them keeps open -- a test
+  project's own child left the core reading a pipe after the host was gone.
+  The name is `bintana-gui.exe` there, and `BINTANA_GUI` keeps its meaning.
 - **`BTA_META_ONLY` belongs to `bintana-meta` now, and it is built `-O1`.**
   At `-O2` GCC merges the GObject class structs `G_DEFINE_TYPE` builds into a
   `.data.rel.ro` section the linker cannot split; the vfuncs that point at
   GtkSourceCompletion are then kept even though their `get_type` is dropped,
   and a no-GTK link fails on `gtk_source_completion_*`. `-O1` keeps them
   sectioned; nothing in the generator is hot. The core host does not compile
-  those files at all.
+  those files at all. **On Windows the generator links GTK**, because MinGW's
+  linker keeps the class structs and the vfuncs they name even with
+  `--gc-sections`; it is a build tool, never installed, and the shipped hosts
+  are unaffected.
 - **`BTA_HEADLESS` is on the core files.** It leaves `Screen`, `Dialog`,
   `Clipboard` and `File.Open` out of `bta_sys_init` and the icon lookup out of
   `File.Info`; the GUI tables are unreferenced and the linker drops them.
@@ -1623,17 +1634,24 @@ icon when the theme has one by that name (`gtkapplication.c`).
   application, and reads its `project.btp` for `main` before launching. A
   `startup` helper is refused there; the helper's `--privileged` mode checks the
   elevation too, so a direct unelevated run says `must be run elevated`.
-- **A nested project is not one of the parent's sources.** `collect_js` and
+- **Both hosts install `Privilege`, and on Linux the helper runs in the core.**
+  A helper is a `main`, so `bta_privilege.c` is in the core's list too, the
+  core reads `"privileged"` through the same `bta_project_privileged` the
+  graphical host does, and it takes `--privileged` with the same elevation
+  check. `pkexec` is pointed at the `bintana` beside `bintana-gui` when there
+  is one, so a process running as root never maps GTK; without the core the
+  graphical host still runs the helper.
+- **A nested project is not one of the parent's sources.** `bta_collect_js` and
   `lib/check`'s `ProjectFiles` skip a directory with its own `project.btp`; the
   `privileged` helper is one, so its `Main.js` is not loaded by the application
   and is not reported as an unlisted source. The helper is checked as its own
   project (`bintana check tools/install`), and `ProjectFile` knows the
   `"privileged"` key so the manifest check does not call it a key nothing
   reads.
-- **Windows has no console in `bintanaw.exe`.** The launcher is the sibling
-  `bintana.exe`; it creates a temp file, starts `bintanaw.exe --privileged
-  --out <file>` with UAC, waits, copies the file to its stdout and exits with
-  the helper's code. The parent's `Exec` therefore hears the helper's output
+- **Windows has no console in `bintana-gui.exe`.** The launcher is the sibling
+  core `bintana.exe`; it creates a temp file, starts `bintana-gui.exe
+  --privileged --out <file>` with UAC, waits, copies the file to its stdout and
+  exits with the helper's code. The parent's `Exec` therefore hears the helper's output
   when it exits, not while it runs. `--elevate` is Windows-only; on Linux
   `pkexec` forwards stdout as it goes.
 - **`pkexec` runs the helper as root with `HOME=/root`.** `Privilege.Invoker`
@@ -2357,8 +2375,8 @@ documentation's example first got wrong.
 **`Desktop.Shortcut` is the Windows user-application install, and the record is
 not beside the shortcut.** `Write` puts a `.lnk` in
 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Bintana`, with the project's
-id as its `System.AppUserModel.ID` and the target as `bintanaw.exe` when that
-sits beside `bintana.exe`; the Start Menu folder is a menu, so the sidecar that
+id as its `System.AppUserModel.ID` and the target as `bintana-gui.exe` when
+that sits beside `bintana.exe`; the Start Menu folder is a menu, so the sidecar that
 `Installed`/`Read` use is `%APPDATA%\Bintana\apps\<id>.shortcut` instead of
 another file in it. `Notification` now leaves an existing `.lnk` alone rather
 than replacing an installed application's chosen name and icon with its own
@@ -4558,7 +4576,11 @@ save will edit `examples/hello` for real.
   `unexpected character`. `bta_text_from_bytes` now drops a UTF-8 BOM and
   decodes UTF-16LE/BE (and UTF-32) with one, and `bta_read_file` and `File.Load`
   both go through it; bytes with no BOM are copied untouched, so the Latin-1
-  foreign file and `File.LoadBytes` keep their bytes. `tests/widgets`'
+  foreign file and `File.LoadBytes` keep their bytes. **Copied by length, not
+  with `g_strndup`**, which stops at the first NUL: the first version did, and
+  `File.Load` of a binary file came back cut short -- the Sysprof capture
+  `testProfile` and `tests/ide` read for its strings, five red lines on Linux
+  only, since Windows has no capture (2026-11-13). `tests/widgets`'
   `TextEncodings` writes a project whose `.btp`, `.form` and `.js` use those
   encodings and runs a child, and asks `File.Load`/`File.LoadJson` for both
   UTF-16 byte orders. `FileWatch` now runs on Windows too: the deletion
@@ -11862,7 +11884,7 @@ C:\Temp\bintana-installed\bin\bintana.exe --version
 C:\Temp\bintana-installed\Uninstall.exe /S
 ```
 
-The shortcut starts `bin\bintanaw.exe` with the installed project directory as
+The shortcut starts `bin\bintana-gui.exe` with the installed project directory as
 its argument -- read back from the `.lnk` and launched -- and the uninstaller
 removes the directory, the Start Menu folder and the `HKCU` uninstall key.
 The bundled compiler was checked too: the official NSIS 3.12 tree under
@@ -14589,10 +14611,11 @@ reference pages `F1` reads are a package of their own,
 [`bintana-docs`](https://github.com/getbintana/bintana-docs), which is why
 moving the tree after the fact changes nothing. On Windows the same is true and
 the launcher is `bin\bintana-ide.cmd` — the IDE, from wherever the zip was
-unzipped to. Beside `bintana.exe` is **`bintanaw.exe`**, the same runtime with
-the header that tells Windows not to open a console: an installer's shortcuts
-start that one, and `bintana.exe` stays for a terminal, where what a program
-prints is wanted. Both wear **the system's own title bar**: GTK4 draws its
+unzipped to. Beside `bintana.exe` is **`bintana-gui.exe`**, the graphical host,
+built with the header that tells Windows not to open a console: an installer's
+shortcuts start that one, and `bintana.exe` stays the console core for a
+terminal, where what a program prints is wanted. Both wear **the system's own
+title bar**: GTK4 draws its
 own on Windows unless `GTK_CSD` is `0`, so the runtime sets that when it is
 unset (`GTK_CSD=1` still asks for GTK's). What Windows needs that Linux does not is GTK's runtime data
 alongside: schemas, the icon themes, the gdk-pixbuf loaders and GtkSourceView's
@@ -14885,7 +14908,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11415 assertions
+./tests/run.sh                          # all seven projects, 11447 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -15703,7 +15726,7 @@ measurements behind the target are in
 **The same script holds the core host.** `bintana --version`,
 `check examples/hello`, and `check --json tests/smoke` are diffed against the
 `bintana-gui` answers, and `ldd` is read again. **And every project `tests/check.sh`
-checks -- 68 today -- is checked by both hosts**, whose output and exit status
+checks -- 69 today -- is checked by both hosts**, whose output and exit status
 must match: that comparison found `forms.js`'s global helpers and the core's
 missing `setlocale`, which two projects had not. It is the first real
 console runtime, not the test host: it loads `tools/check`, `lib/check` and the
@@ -15711,6 +15734,13 @@ generated `widgets.json` through `WidgetMeta.js`, and `check` is byte for byte
 the graphical pass with **42 libraries against 153** and 38 MB against
 57 MB on the IDE's own project. The binary links no widget file; the document
 is 1.7 MB and is loaded only for `check`.
+
+**`Privilege` is a global of both hosts** (`tests/headless/projects/privilege`):
+a `main` sees the same facts and the same refusals under `bintana` and
+`bintana-gui`, the core refuses an unelevated `--privileged`, and the fixture
+keeps its helper at `helper/`, the first level, where the walk once loaded the
+helper's `Main.js` as one of the application's sources and the run printed
+nothing.
 
 **The drawing plugin spike** is built and run in the same script: a temporary
 `drawing.so` carrying cairo draws a PDF, and the script prints its time beside

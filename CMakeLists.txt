@@ -332,13 +332,10 @@ function(bta_link_console_libraries target)
     endif()
 endfunction()
 
-# **Two hosts, two binaries.** On Linux the core is `bintana` and the
-# graphical host is `bintana-gui`; Windows still ships the single graphical
-# `bintana.exe` plus `bintanaw.exe` until its console host exists (Phase 3).
-set(BTA_GUI_TARGET bintana)
-if(NOT WIN32)
-    set(BTA_GUI_TARGET bintana-gui)
-endif()
+# **Two hosts, two binaries, on every platform.** The core is `bintana`; the
+# graphical host is `bintana-gui`, `.exe` on Windows, where `WIN32_EXECUTABLE`
+# is what keeps a shortcut from opening a console.
+set(BTA_GUI_TARGET bintana-gui)
 
 add_executable(${BTA_GUI_TARGET}
     runtime/src/main.c
@@ -413,6 +410,14 @@ add_executable(${BTA_GUI_TARGET}
     ${SIGNATURES_H}
 )
 
+if(WIN32)
+    # A GUI header, so a shortcut starts no console. `main` still starts the
+    # same way under MinGW; what changes is the field Windows reads before it
+    # creates the console, and the stdout/stderr it inherits from a parent that
+    # already has one (the core's dispatch, `Exec` in a test).
+    set_target_properties(${BTA_GUI_TARGET} PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
 # **The Event Log's message table**, compiled into the executable: without it
 # the viewer records the event and says the description cannot be found.  The
 # `.mc` is the source; `windmc` turns it into a neutral message table and
@@ -446,7 +451,12 @@ if(WIN32)
         )
         set_source_files_properties(${BTA_EVENT_DIR}/bintana-events.o
             PROPERTIES GENERATED TRUE EXTERNAL_OBJECT TRUE)
-        target_sources(${BTA_GUI_TARGET} PRIVATE ${BTA_EVENT_DIR}/bintana-events.o)
+        # **Both hosts.** Each one writes the Event Log and each one answers
+        # `--register-event-source`, and the message file is the executable
+        # that runs -- a table only in the GUI host left the core's events
+        # undescribed.
+        set(BTA_EVENT_OBJECT ${BTA_EVENT_DIR}/bintana-events.o)
+        target_sources(${BTA_GUI_TARGET} PRIVATE ${BTA_EVENT_OBJECT})
         message(STATUS "Event Log message table: windmc and windres found")
     else()
         message(STATUS "Event Log message table: no windmc/windres -- "
@@ -598,14 +608,16 @@ target_compile_options(${BTA_GUI_TARGET} PRIVATE -Wall -Wextra -Wno-unused-param
 
 # ----------------------------------------------------------- metadata host ---
 # The metadata host (docs/notes/headless-runtime.md): the class rows and their
-# property tables, with no toolkit in the link.  `BTA_META_ONLY` turns every
-# property entry into a stub and drops `build`/`probe` from each row; the
-# functions those rows named are then unreferenced, and the linker's GC drops
-# everything that would call GTK.  `bta_meta.c` is the small host around it.
+# property tables, with no toolkit in the link **on Linux**.  `BTA_META_ONLY`
+# turns every property entry into a stub and drops `build`/`probe` from each
+# row; the functions those rows named are then unreferenced, and the linker's
+# GC drops everything that would call GTK.  `bta_meta.c` is the small host
+# around it.
 #
 # **Not installed.**  It is a test target: `tests/headless.sh` runs a script
-# against it and checks what `Widget.*` answers, and `ldd` must not list GTK,
-# GtkSourceView or VTE.
+# against it and checks what `Widget.*` answers, and on Linux `ldd` must not
+# list GTK, GtkSourceView or VTE.  On Windows the link names GTK (below), so
+# that half of the check does not apply there.
 set(BTA_META_SOURCES
     runtime/src/bta_meta.c
     runtime/src/bta_language.c
@@ -628,44 +640,68 @@ set(BTA_META_SOURCES
     ${FORMS_H}
     ${SIGNATURES_H}
 )
-# The Windows host is Phase 3's: its linker and its `bintanaw.exe` split need a
-# real desktop to prove, and the metadata host does not belong in a job that
-# cannot run `tests/headless.sh` yet.
-if(NOT WIN32)
-    add_executable(bintana-meta ${BTA_META_SOURCES})
-    target_include_directories(bintana-meta PRIVATE
-        ${CMAKE_SOURCE_DIR}/runtime/include
-        ${CMAKE_BINARY_DIR}/generated
-        ${GTK4_INCLUDE_DIRS}
-        ${GTKSOURCE_INCLUDE_DIRS}
-        ${VTE_INCLUDE_DIRS}
-        ${GSTREAMER_INCLUDE_DIRS}
-    )
-    target_compile_definitions(bintana-meta PRIVATE
-        BTA_META_ONLY
-        BTA_VERSION_STRING="${PROJECT_VERSION}"
-    )
-    if(VTE_FOUND)
-        target_compile_definitions(bintana-meta PRIVATE BTA_HAVE_VTE=1)
-    endif()
+if(WIN32)
+    # MinGW keeps the class structs and their vfuncs, so the bodies below the
+    # metadata rows are live and name these: the console files they come from
+    # are still toolkit-free, and the linker needs them to resolve.
+    list(APPEND BTA_META_SOURCES
+        runtime/src/bta_fixed.c
+        runtime/src/bta_popover.c
+        runtime/src/bta_form.c
+        runtime/src/bta_locale.c
+        runtime/src/bta_bytes.c
+        runtime/src/bta_decimal.c
+        runtime/src/bta_profile.c)
+endif()
+# Both hosts need the widget metadata as a document: `check` loads it, and
+# `bintana-meta --dump` is what writes it.  On Linux it links no GTK; on
+# Windows it does, for the reason in the link block below.
+add_executable(bintana-meta ${BTA_META_SOURCES})
+target_include_directories(bintana-meta PRIVATE
+    ${CMAKE_SOURCE_DIR}/runtime/include
+    ${CMAKE_BINARY_DIR}/generated
+    ${GTK4_INCLUDE_DIRS}
+    ${GTKSOURCE_INCLUDE_DIRS}
+    ${VTE_INCLUDE_DIRS}
+    ${GSTREAMER_INCLUDE_DIRS}
+)
+target_compile_definitions(bintana-meta PRIVATE
+    BTA_META_ONLY
+    BTA_VERSION_STRING="${PROJECT_VERSION}"
+)
+if(VTE_FOUND)
+    target_compile_definitions(bintana-meta PRIVATE BTA_HAVE_VTE=1)
+endif()
+if(GSTREAMER_FOUND)
+    target_compile_definitions(bintana-meta PRIVATE BTA_HAVE_GST=1)
+endif()
+target_link_libraries(bintana-meta PRIVATE quickjs PkgConfig::GLIBCORE)
+if(WIN32)
+    # **The Windows build tool links GTK, and the core does not.** On Linux
+    # `BTA_META_ONLY` plus `--gc-sections` drops every widget body and proves a
+    # toolkit-free link; MinGW's linker keeps the GObject class structs and the
+    # vfuncs they name, so the same trick fails there.  This target is never
+    # installed and never opens a window: it only answers the metadata `check`
+    # reads, and the shipped hosts are unaffected.
+    target_link_libraries(bintana-meta PRIVATE
+        PkgConfig::GTK4 PkgConfig::GTKSOURCE)
     if(GSTREAMER_FOUND)
-        target_compile_definitions(bintana-meta PRIVATE BTA_HAVE_GST=1)
+        target_link_libraries(bintana-meta PRIVATE PkgConfig::GSTREAMER)
     endif()
-    target_link_libraries(bintana-meta PRIVATE quickjs PkgConfig::GLIBCORE)
-    target_compile_options(bintana-meta PRIVATE
-        # `-O2` merges the GObject class structs G_DEFINE_TYPE builds into one
-        # `.data.rel.ro` section, and the linker then keeps the vfuncs that
-        # point at GTK even though `get_type` itself is dropped. `-O1` keeps
-        # them sectioned; the metadata host has no hot path to lose.
-        -O1
-        -ffunction-sections -fdata-sections
-        -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow
-    )
-    if(APPLE)
-        target_link_options(bintana-meta PRIVATE -Wl,-dead_strip)
-    else()
-        target_link_options(bintana-meta PRIVATE -Wl,--gc-sections)
-    endif()
+endif()
+target_compile_options(bintana-meta PRIVATE
+    # `-O2` merges the GObject class structs G_DEFINE_TYPE builds into one
+    # `.data.rel.ro` section, and the linker then keeps the vfuncs that
+    # point at GTK even though `get_type` itself is dropped. `-O1` keeps
+    # them sectioned; the metadata host has no hot path to lose.
+    -O1
+    -ffunction-sections -fdata-sections
+    -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow
+)
+if(APPLE)
+    target_link_options(bintana-meta PRIVATE -Wl,-dead_strip)
+else()
+    target_link_options(bintana-meta PRIVATE -Wl,--gc-sections)
 endif()
 
 # ----------------------------------------------------------- console host ---
@@ -676,8 +712,7 @@ endif()
 # -- and `bta_language.c`, so a `main` is one language in both hosts.
 # `bta_sys.c` leaves out the desktop objects under `BTA_HEADLESS`, and
 # `bta_headless.c` supplies the few symbols that live in `bta_runtime.c`.
-if(NOT WIN32)
-    set(BTA_HEADLESS_SOURCES
+set(BTA_HEADLESS_SOURCES
         runtime/src/bta_headless.c
         runtime/src/bta_language.c
         runtime/src/bta_source.c
@@ -717,8 +752,15 @@ if(NOT WIN32)
         runtime/src/bta_key.c
         runtime/src/bta_keyring.c
         runtime/src/bta_desktop.c
+        ${BTA_NOTIFICATION_SOURCE}
         ${PRELUDE_H}
     )
+    if(WIN32)
+        # `Desktop.Shortcut` and `Notification` share one WinRT/COM backend;
+        # the shortcut writer is what the console host needs, and the file
+        # that owns the click has no GTK in it either.
+        list(APPEND BTA_HEADLESS_SOURCES runtime/src/bta_notification.c)
+    endif()
 
     # The widget metadata is a document the console host loads for `check`.
     # `bintana-meta` is the generator (and the test): it is not installed, and
@@ -763,6 +805,12 @@ if(NOT WIN32)
         target_compile_definitions(bintana PRIVATE BTA_HAVE_SYSPROF=1)
         target_link_libraries(bintana PRIVATE PkgConfig::SYSPROF)
     endif()
+    if(WIN32 AND BTA_EVENT_OBJECT)
+        # The resource the GUI host carries, so `Logger`'s events from a
+        # `main` are described by the viewer too -- the message file is the
+        # executable that writes them.
+        target_sources(bintana PRIVATE ${BTA_EVENT_OBJECT})
+    endif()
     # **No `add_dependencies(bintana bintana-check-data)`.** The data is an
     # `ALL` target, so a whole build makes it; making the executable depend on
     # it would drag the metadata generator into a targeted sanitizer build,
@@ -774,6 +822,20 @@ if(NOT WIN32)
     bta_link_console_libraries(bintana)
     if(NOT WIN32)
         target_link_libraries(bintana PRIVATE PkgConfig::GIOUNIX)
+    else()
+        # The console globals that are Windows': `Desktop.Shortcut` writes an
+        # `.lnk` through COM, `Logger` writes the Event Log, `Keyring` the
+        # Credential Manager, and `Privilege` asks through ShellExecuteEx.
+        target_link_libraries(bintana PRIVATE
+            shell32 ole32 oleaut32 uuid runtimeobject advapi32 user32 gdi32)
+        # The drawing module is a DLL that resolves the runtime's symbols from
+        # this executable; MinGW needs the executable to export them and to
+        # leave an import library behind.  `ENABLE_EXPORTS` writes the
+        # byproduct name into the build graph; the flags are what produce it.
+        set_target_properties(bintana PROPERTIES ENABLE_EXPORTS TRUE)
+        target_link_options(bintana PRIVATE
+            -Wl,--export-all-symbols
+            -Wl,--out-implib,${CMAKE_BINARY_DIR}/libbintana.dll.a)
     endif()
     target_compile_options(bintana PRIVATE
         -ffunction-sections -fdata-sections
@@ -794,6 +856,7 @@ if(NOT WIN32)
         PREFIX ""
         OUTPUT_NAME "bintana-drawing"
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
     )
     target_include_directories(bintana-drawing PRIVATE
         ${CMAKE_SOURCE_DIR}/runtime/include
@@ -807,9 +870,18 @@ if(NOT WIN32)
     )
     target_link_libraries(bintana-drawing PRIVATE
         PkgConfig::CAIRO PkgConfig::PANGO PkgConfig::GDKPIXBUF)
-    target_compile_options(bintana-drawing PRIVATE
-        -fPIC -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow)
-endif()
+    if(WIN32)
+        # The module's own entry points, and the core's import library it
+        # resolves the rest against.
+        set_target_properties(bintana-drawing PROPERTIES
+            WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+        target_link_libraries(bintana-drawing PRIVATE bintana)
+        target_compile_options(bintana-drawing PRIVATE
+            -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow)
+    else()
+        target_compile_options(bintana-drawing PRIVATE
+            -fPIC -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -Wshadow)
+    endif()
 
 # ----------------------------------------------------------- test plugins ---
 # The shared objects the suite loads, built here so `cmake --build build` is the
@@ -892,15 +964,12 @@ set(BTA_DATADIR ${CMAKE_INSTALL_DATADIR}/bintana)
 # would not.
 file(RELATIVE_PATH BTA_BIN_TO_IDE
      ${CMAKE_INSTALL_FULL_BINDIR} ${CMAKE_INSTALL_FULL_DATADIR}/bintana/ide)
-# Which binary the launcher execs: the graphical host on Unix, the single
-# graphical `bintana` on Windows.
+# Which binary the launcher execs: the graphical host, on every platform.
 set(BTA_IDE_EXE bintana-gui)
-if(WIN32)
-    set(BTA_IDE_EXE bintana)
-endif()
 configure_file(tools/bintana-ide.in ${CMAKE_BINARY_DIR}/bintana-ide @ONLY)
 
 install(TARGETS ${BTA_GUI_TARGET} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS bintana RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 if(NOT WIN32)
     # Where the core finds the drawing module once installed: the same hop
     # from bindir the launcher walks to the IDE, so it survives `--prefix` and
@@ -912,37 +981,18 @@ if(NOT WIN32)
          ${CMAKE_INSTALL_FULL_BINDIR} ${CMAKE_INSTALL_FULL_LIBDIR}/bintana)
     target_compile_definitions(bintana PRIVATE
         BTA_BIN_TO_MODULES="${BTA_BIN_TO_MODULES}")
-    install(TARGETS bintana RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     install(TARGETS bintana-drawing
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/bintana)
+else()
+    # Beside the core: Windows already searches the executable's directory for
+    # a DLL, and nothing has to be put on PATH for a `main` that draws.  A
+    # `MODULE` is a DLL, and CMake calls that a LIBRARY destination on some
+    # generators and a RUNTIME on others; both are the one directory here.
+    install(TARGETS bintana-drawing
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 install(PROGRAMS ${CMAKE_BINARY_DIR}/bintana-ide DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# **`bintanaw.exe` on Windows: the same runtime, without a console.** Windows
-# decides by a field of the executable's header whether starting it opens a
-# console, and `bintana.exe` is a console program -- which it has to be, for
-# `--version`, `print`, a `main` project and the suite. Started from a shortcut,
-# though, it brings a black window up behind the application's own. The
-# `pythonw.exe` / `javaw.exe` answer: a second executable whose header says
-# "GUI", for the shortcuts an installer writes (`lib/package/Nsis.js`).
-#
-# It is **the same file with that one field changed** (`objcopy --subsystem
-# windows`, what Microsoft's `editbin /SUBSYSTEM:WINDOWS` does), not a second
-# link: MinGW starts `main` the same way under either subsystem, so there is
-# nothing to compile differently -- and two targets would be every option above
-# spelled twice. What it gives up is the console: its `print` goes nowhere.
-if(WIN32)
-    if(NOT CMAKE_OBJCOPY)
-        message(FATAL_ERROR "no objcopy: bintanaw.exe is bintana.exe with its "
-                            "PE subsystem set to windows, and objcopy is what sets it")
-    endif()
-    set(BTA_GUI_EXE ${CMAKE_BINARY_DIR}/bintanaw.exe)
-    add_custom_command(TARGET ${BTA_GUI_TARGET} POST_BUILD
-        COMMAND ${CMAKE_OBJCOPY} --subsystem windows $<TARGET_FILE:${BTA_GUI_TARGET}> ${BTA_GUI_EXE}
-        BYPRODUCTS ${BTA_GUI_EXE}
-        COMMENT "bintanaw.exe: the runtime without a console")
-    install(PROGRAMS ${BTA_GUI_EXE} DESTINATION ${CMAKE_INSTALL_BINDIR})
-endif()
 
 # `ide/` and `examples/` whole, because a Bintana project *is* its directory:
 # listing the files here would mean a new form in the IDE silently missing from
@@ -967,12 +1017,11 @@ install(DIRECTORY tools/check DESTINATION ${BTA_DATADIR}/tools
         PATTERN "*.pot" EXCLUDE)
 
 # The console host's check data: the generated metadata and the script that
-# answers `Widget.*` over it. No binary; `bintana` loads both only for `check`.
-if(NOT WIN32)
-    install(FILES runtime/js/widget-meta.js
-            DESTINATION ${BTA_DATADIR}/check RENAME WidgetMeta.js)
-    install(FILES ${WIDGETS_JSON} DESTINATION ${BTA_DATADIR}/check)
-endif()
+# answers `Widget.*` over it. No binary; `bintana` loads both only for `check`,
+# on both platforms.
+install(FILES runtime/js/widget-meta.js
+        DESTINATION ${BTA_DATADIR}/check RENAME WidgetMeta.js)
+install(FILES ${WIDGETS_JSON} DESTINATION ${BTA_DATADIR}/check)
 
 # **One header, and that is the whole development surface a plugin needs.** Not
 # `bta.h` and not `quickjs.h`: a plugin links neither the runtime nor the

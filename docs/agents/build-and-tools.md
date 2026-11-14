@@ -356,17 +356,18 @@ disagree.
 - **The Windows Event Log's message table is generated, not checked in.**
   `runtime/src/bintana-events.mc` is the source; CMake finds `windmc` and
   `windres`, writes `generated/events/MSG00001.bin`, and links the resource
-  object into `bintana.exe` (`bintanaw.exe` is a copy and carries it too). Both
-  tools come with mingw-w64 and both are optional: without them the build is
-  green and events have no description. A `.mc` with `Severity=` gets the
+  object into both hosts, `bintana.exe` and `bintana-gui.exe`: each one writes
+  the log, and the message file is the executable that runs. Both tools come
+  with mingw-w64 and both are optional: without them the build is green and
+  events have no description. A `.mc` with `Severity=` gets the
   severity folded into the id's high bits (`0x40001000`) and the viewer cannot
   find the message, so the file has none -- see
   [`runtime.md`](runtime.md#the-platform-log). A clean configure and build is
   the way to check the custom commands; an incremental one can hide a missing
   dependency.
 - **`add_executable` lists its sources by hand -- two lists now, `bintana`
-  (core) and `${BTA_GUI_TARGET}` (`bintana-gui`, or `bintana` on Windows) --
-  while the signature extractor globs `runtime/src/*.c`.** A new `.c` that is
+  (core) and `${BTA_GUI_TARGET}` (`bintana-gui`, with `.exe` only on Windows)
+  -- while the signature extractor globs `runtime/src/*.c`.** A new `.c` that is
   not in the right list builds green up to the link and then fails as
   *undefined reference to `bta_x_init`* -- and is already in
   `generated/bta_signatures.h`, so it looks half registered. A file that
@@ -626,16 +627,23 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
   a `main` project's `tests/*Test.js` run in the core, a `startup` project's
   are exec'd as `bintana-gui test`, with `--json` and the filter intact. The
   arguments after the project become `Application.Arguments`, exactly as in the
-  graphical host. Windows has no core
-  host yet and still ships the single graphical `bintana.exe` plus
-  `bintanaw.exe`; do not fake a console host there with a stub form.
+  graphical host. **Windows has no `execv`**, so the core starts
+  `bintana-gui.exe` through `g_spawn_sync` and waits for its status, with the
+  child inheriting the core's stdout and stderr. Inheriting and not capturing
+  is deliberate: a capture buffers the run until the host exits, and waits for
+  EOF on the pipes, which a grandchild that inherited them keeps open -- a test
+  project's own child left the core reading a pipe after the host was gone.
+  The name is `bintana-gui.exe` there, and `BINTANA_GUI` keeps its meaning.
 - **`BTA_META_ONLY` belongs to `bintana-meta` now, and it is built `-O1`.**
   At `-O2` GCC merges the GObject class structs `G_DEFINE_TYPE` builds into a
   `.data.rel.ro` section the linker cannot split; the vfuncs that point at
   GtkSourceCompletion are then kept even though their `get_type` is dropped,
   and a no-GTK link fails on `gtk_source_completion_*`. `-O1` keeps them
   sectioned; nothing in the generator is hot. The core host does not compile
-  those files at all.
+  those files at all. **On Windows the generator links GTK**, because MinGW's
+  linker keeps the class structs and the vfuncs they name even with
+  `--gc-sections`; it is a build tool, never installed, and the shipped hosts
+  are unaffected.
 - **`BTA_HEADLESS` is on the core files.** It leaves `Screen`, `Dialog`,
   `Clipboard` and `File.Open` out of `bta_sys_init` and the icon lookup out of
   `File.Info`; the GUI tables are unreferenced and the linker drops them.

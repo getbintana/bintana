@@ -149,32 +149,42 @@ install, beside `bintana-ide`; there is no third binary for checks. So a
 and the staging code in Stage 1 takes `Hosts` and `Data` lists for exactly
 that.
 
-**Windows still ships one graphical `bintana.exe` plus `bintanaw.exe`**, the
-same file with its PE subsystem set to GUI (`objcopy`). The split is this
-plan's to finish, because an installer is what needs it:
+**Windows ships the same two hosts (2026-11-13).** `bintana.exe` is the console
+core, built from the core sources and linked as CUI; `bintana-gui.exe` is the
+graphical host, built as a real `WIN32_EXECUTABLE` rather than an `objcopy` of
+the core; `bintana-drawing.dll` is the loadable drawing half. `objdump -p` says
+`Windows CUI` for the first and `Windows GUI` for the second. What that took:
 
-- `bintana.exe` a real console host, built from the core sources; `bintanaw.exe`
-  the graphical host, with the GUI subsystem (`-mwindows`, or the `objcopy` moved
-  to that target). `objdump -p` must say `Windows CUI` for one and `Windows GUI`
-  for the other.
-- `tools/windows-portable.sh`: `bintana-ide.cmd` starts `bintanaw.exe`; the zip
-  carries both closures, the core's and GTK's -- one zip or two is a decision
-  to make. The NSIS installer carries both, and `lib/package/Nsis.js` already
-  uses `bintanaw.exe` for shortcuts and needs `bintana.exe` for the `.cmd`
-  launchers. `bta_notification_win32.c` already looks for `bintanaw.exe` beside
-  itself.
-- `windows/ci/build.yml`: the file lists, `objdump`, and a smoke run of each
-  host. The fixtures under `tests/headless/projects/` are console projects
-  and run there as they are; `tests/headless.sh` around them is bash.
+- `bintana-meta.exe` stays the build-time metadata generator, never installed.
+  On Windows it links GTK: MinGW's linker keeps the GObject class structs and
+  the vfuncs they name under `--gc-sections`, so the toolkit-free link that
+  works on Linux fails there. The shipped hosts are unaffected.
+- The core exports its symbols (`--export-all-symbols`, with an import library)
+  for the drawing DLL, and links the Windows half of `Desktop`, `Notification`,
+  `Keyring`, `Privilege` and `Logger`: `shell32`, `ole32`, `runtimeobject`,
+  `advapi32` and the rest.
+- `tools/windows-portable.sh`: `bintana-ide.cmd` starts `bintana-gui.exe`; the
+  zip carries both closures and the drawing DLL. The NSIS installer carries
+  both, using `bintana-gui.exe` for shortcuts and `bintana.exe` for the `.cmd`
+  launchers.
+- `windows/ci/build.yml` and the release job check both subsystems with
+  `objdump`, run the documented API surface against the GUI host and the
+  console check against the core.
 - **`gspawn` has a helper per subsystem** (`tools/windows-portable.sh`): the
   console host uses `gspawn-win64-helper-console.exe`, the graphical one the
-  other. Ship both.
+  other. Both ship.
 - **A `.cmd` in the zip always opens a console.** That is a hole of its own;
-  do not promise the `.cmd` launcher does not. The installer uses `bintanaw.exe`
-  directly.
+  do not promise the `.cmd` launcher does not. The installer uses
+  `bintana-gui.exe` directly.
+- Windows has no `execv`, so the core dispatches a `startup` project through
+  `g_spawn_sync` and waits for its status; the host inherits stdout and stderr,
+  as `execv` would have given them.
+- `bintana-gui.exe --version` and `--help` open a message box when neither
+  stdout nor stderr is a real handle, which is the shortcut case; a terminal or
+  `Exec` with a pipe still gets text.
 - Acceptance: `bintana --version` and `bintana check` on a staged tree with only
-  the core's closure, and the zip starting the IDE from `bintanaw.exe` on a
-  real desktop.
+  the core's closure, and the IDE started from `bintana-gui.exe` on a real
+  desktop.
 
 Stage 0 here -- the `.deb` in a container and the AppImage spike -- does not
 depend on Windows and can run now.

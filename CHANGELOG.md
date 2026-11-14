@@ -15,8 +15,12 @@ one-page answer to *what is new since the release I have*.
   that opens windows, and `bintana-ide` execs it. A command that worked before
   works the same way through the dispatch: `bintana examples/hello` still opens
   the window, and `--form`, `--theme`, `--text-scale` and `--rtl` go to the
-  graphical host. A `main` maps 17 libraries instead of 153. On Windows there
-  is still one graphical `bintana.exe`; the split there is not done.
+  graphical host. A `main` maps 17 libraries instead of 153. **On Windows the
+  split is the same two hosts**: `bintana.exe` is the console core (CUI) and
+  `bintana-gui.exe` the graphical host (GUI subsystem), with
+  `bintana-drawing.dll` for a `main` that draws. A shortcut starts the GUI
+  host, so no console follows the window; `bintana-gui.exe --version` and
+  `--help` open a small message box when there is no console to print to.
 - **The core is the same language as the graphical host.** It closes the same
   names, runs `rad.js` the same way and links the same console globals --
   `Http`, `Database`, `Task`, `Zip`, sockets, `SerialPort`, `Keyring`,
@@ -190,7 +194,7 @@ one-page answer to *what is new since the release I have*.
   working directory and `Arguments` as one `(sas)` message, exits `0`, and the
   first calls `Application.OnSecondInstance` and raises its window. The same
   `project.btp` id is set with `SetCurrentProcessExplicitAppUserModelID`, so the
-  taskbar groups the application rather than `bintanaw.exe`; the toast's
+  taskbar groups the application rather than `bintana-gui.exe`; the toast's
   shortcut already uses that id.
 - **Install as user application works on Windows.** The IDE now writes a
   `.lnk` in the user's Start Menu through `Desktop.Shortcut`, with the project's

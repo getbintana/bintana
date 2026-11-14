@@ -32,7 +32,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef G_OS_WIN32
 #include <unistd.h>
+#else
+#include <windows.h>
+#endif
+
+/* The graphical host's name: the same word on every platform, and Windows'
+ * executable extension is the only difference. */
+#ifdef G_OS_WIN32
+#define BTA_GUI_FILE "bintana-gui.exe"
+#else
+#define BTA_GUI_FILE "bintana-gui"
+#endif
 
 /* ------------------------------------------------------- the core stubs */
 
@@ -1324,11 +1336,28 @@ static bool option_takes_value(const char *word)
  * compared unequal and was exec'd -- this process again, forever. */
 static char *resolved(const char *path)
 {
+#ifdef G_OS_WIN32
+    /* No `realpath` on Windows.  The lexical spelling is enough for the
+     * comparison that follows; a link or a copy that points back at this host
+     * is caught by the BINTANA_DISPATCHED mark, which no path can fake. */
+    return g_canonicalize_filename(path, NULL);
+#else
     char *real = realpath(path, NULL);
     char *out  = g_strdup(real ? real : path);
 
     free(real);
     return out;
+#endif
+}
+
+/* The same file, by the platform's rule: Windows folds the case. */
+static bool same_path(const char *a, const char *b)
+{
+#ifdef G_OS_WIN32
+    return !g_ascii_strcasecmp(a, b);
+#else
+    return !g_strcmp0(a, b);
+#endif
 }
 
 static char *find_gui_host(void)
@@ -1339,7 +1368,7 @@ static char *find_gui_host(void)
     if (env && *env) {
         char *gui  = g_canonicalize_filename(env, NULL);
         char *real = resolved(gui);
-        bool  same = self && !g_strcmp0(real, self);
+        bool  same = self && same_path(real, self);
 
         g_free(real);
         if (same) {
@@ -1355,9 +1384,9 @@ static char *find_gui_host(void)
 
     if (self) {
         char *bin = g_path_get_dirname(self);
-        char *gui  = g_build_filename(bin, "bintana-gui", NULL);
+        char *gui  = g_build_filename(bin, BTA_GUI_FILE, NULL);
         char *real = resolved(gui);
-        bool  same = !g_strcmp0(real, self);
+        bool  same = same_path(real, self);
 
         g_free(real);
         if (g_file_test(gui, G_FILE_TEST_IS_EXECUTABLE) && !same) {
@@ -1373,9 +1402,11 @@ static char *find_gui_host(void)
 }
 
 /* Replace this process with the graphical host, every word and descriptor as
- * it arrived. `lead` is the command word the graphical host expects (`test`)
- * or NULL for a run; the exit status is that host's, which is what a runner
- * reads. */
+ * it arrived -- on Unix.  Windows has no `execv`: the host is started as a
+ * child that inherits this process's stdout and stderr, and its exit code is
+ * this function's.  `lead` is the command word the graphical host expects
+ * (`test`) or NULL for a run; the exit status is that host's, which is what a
+ * runner reads. */
 static int exec_gui_lead(const char *gui, const char *lead,
                          char **words, int nwords)
 {
@@ -1404,12 +1435,42 @@ static int exec_gui_lead(const char *gui, const char *lead,
     }
     g_setenv("BINTANA_DISPATCHED", "1", TRUE);
 
+#ifdef G_OS_WIN32
+    gint    status = 0;
+    GError *error  = NULL;
+    /*
+     * **Inherit the two streams; do not capture them.**  A capture buffers the
+     * whole run, so a `main` hears its child only at the end -- and it waits
+     * for EOF on the pipes, which every grandchild that inherits them keeps
+     * open.  The suite's projects start children of their own, and one that
+     * outlived the host left the core reading a pipe nobody would close, long
+     * after the graphical host had exited.  Inherited streams have neither
+     * problem and are what `execv` would have given them.
+     */
+    bool ran = g_spawn_sync(NULL, args, NULL,
+                            G_SPAWN_LEAVE_DESCRIPTORS_OPEN,
+                            NULL, NULL, NULL, NULL, &status, &error);
+
+    g_unsetenv("BINTANA_DISPATCHED");
+    if (!ran) {
+        fprintf(stderr, "bintana: cannot run the graphical host %s: %s\n",
+                gui, error ? error->message : "unknown");
+        g_clear_error(&error);
+        g_free(args);
+        return 2;
+    }
+    fflush(stdout);
+    fflush(stderr);
+    g_free(args);
+    return (int)status;
+#else
     execv(gui, args);
     g_unsetenv("BINTANA_DISPATCHED");
     fprintf(stderr, "bintana: cannot run the graphical host %s: %s\n",
             gui, g_strerror(errno));
     g_free(args);
     return 2;
+#endif
 }
 
 static int exec_gui(const char *gui, char **words, int nwords)
@@ -1496,6 +1557,13 @@ static bool is_look_option(const char *word)
 
 int main(int argc, char **argv)
 {
+#ifdef G_OS_WIN32
+    /* The console's own code page, which is not UTF-8 by default: without
+     * this every line a `main` prints reaches a Windows terminal as mojibake,
+     * exactly as in the graphical host (`main.c`). */
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
     /*
      * The desktop's locale, as the graphical host asks for it first thing
      * (main.c). The console host never did, so every `main` ran in the C
@@ -1506,6 +1574,42 @@ int main(int argc, char **argv)
      * depend on it: CSS, JSON and numbers for C go through `g_ascii_*`.
      */
     setlocale(LC_ALL, "");
+#ifdef G_OS_WIN32
+    /* UCRT's `setlocale(LC_ALL, "")` ignores `LC_ALL`/`LANG`; honour the two
+     * spellings every POSIX script uses, as `main.c` does. */
+    const char *lc_all = g_getenv("LC_ALL");
+    const char *lang   = g_getenv("LANG");
+    const char *want   = (lc_all && *lc_all) ? lc_all : lang;
+
+    if (want && (!g_ascii_strcasecmp(want, "C") ||
+                 !g_ascii_strcasecmp(want, "POSIX")))
+        setlocale(LC_ALL, "C");
+#endif
+
+#ifdef G_OS_WIN32
+    /* The internal modes the graphical host has in `main.c`: the core is the
+     * launcher an elevated helper starts, and the Event Log's registration is
+     * a command a person runs, not a project. */
+    if (argc >= 2 && !strcmp(argv[1], "--elevate"))
+        return bta_privilege_elevate(argc, argv);
+    if (argc >= 2 && !strcmp(argv[1], "--register-event-source")) {
+        if (bta_eventlog_register()) {
+            puts("bintana: the Bintana event source is registered");
+            return 0;
+        }
+        fprintf(stderr, "bintana: %s\n", bta_platform_log_why());
+        return 1;
+    }
+#else
+    if (argc >= 2 && !strcmp(argv[1], "--elevate")) {
+        fputs("bintana: --elevate is Windows'\n", stderr);
+        return 2;
+    }
+    if (argc >= 2 && !strcmp(argv[1], "--register-event-source")) {
+        fputs("bintana: the event log is Windows'\n", stderr);
+        return 2;
+    }
+#endif
 
     if (argc >= 2 && (!strcmp(argv[1], "--version") || !strcmp(argv[1], "-v"))) {
         printf("bintana %s\n", BTA_VERSION_STRING);

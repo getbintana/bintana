@@ -764,7 +764,7 @@ static char *shortcut_gui_target(const char *target)
         return NULL;
 
     char *dir = g_path_get_dirname(chosen);
-    char *gui = g_build_filename(dir, "bintanaw.exe", NULL);
+    char *gui = g_build_filename(dir, "bintana-gui.exe", NULL);
 
     if (g_file_test(gui, G_FILE_TEST_EXISTS) &&
         g_str_has_suffix(chosen, "bintana.exe")) {

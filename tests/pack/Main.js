@@ -458,9 +458,9 @@ function checkNsis(root) {
     check("wearing the wrapped icon",
           nsi.includes(`Icon "io.github.getbintana.Setup.ico"`), nsi);
     /* Windows runs a `.cmd` in a console, and so a shortcut to one opens a
-     * black window behind the application: every way in starts `bintanaw.exe`
+     * black window behind the application: every way in starts `bintana-gui.exe`
      * on the project, with the icon after the arguments. */
-    const shortcut = `"$INSTDIR\\bin\\bintanaw.exe" ` +
+    const shortcut = `"$INSTDIR\\bin\\bintana-gui.exe" ` +
                      `'"$INSTDIR\\share\\bintana\\apps\\bintana-setup"' ` +
                      `"$INSTDIR\\io.github.getbintana.Setup.ico"`;
     check("the menu's shortcut starts the runtime with no console",
@@ -471,7 +471,7 @@ function checkNsis(root) {
      * double-quoted string, where the path's own quotes would end it. */
     check("and the finish page's Run",
           nsi.includes(`!define MUI_FINISHPAGE_RUN_FUNCTION RunApplication`) &&
-          nsi.includes(`Exec '"$INSTDIR\\bin\\bintanaw.exe" ` +
+          nsi.includes(`Exec '"$INSTDIR\\bin\\bintana-gui.exe" ` +
                        `"$INSTDIR\\share\\bintana\\apps\\bintana-setup"'`) &&
           !nsi.includes(`MUI_FINISHPAGE_RUN_PARAMETERS`), nsi);
     check("and none of them the .cmd", !nsi.includes(`bintana-setup.cmd`), nsi);
@@ -533,7 +533,7 @@ function checkNsis(root) {
         File.Save(File.Join(prefix, rel), text);
     };
     put(File.Join("bin", "bintana.exe"), "MZ");
-    put(File.Join("bin", "bintanaw.exe"), "MZ, with a GUI header");
+    put(File.Join("bin", "bintana-gui.exe"), "MZ, with a GUI header");
     put(File.Join("bin", "gspawn-win64-helper.exe"), "MZ");
     put(File.Join("bin", "gspawn-win64-helper-console.exe"), "MZ");
     put(File.Join("bin", "libgtk-4.dll"), "DLL");
@@ -556,7 +556,7 @@ function checkNsis(root) {
     check("the executable travels",
           File.Exists(File.Join(staged, "bin", "bintana.exe")));
     check("and the one the shortcuts start",
-          File.Exists(File.Join(staged, "bin", "bintanaw.exe")));
+          File.Exists(File.Join(staged, "bin", "bintana-gui.exe")));
     check("and GLib's spawn helpers, which an Exec with its output piped needs",
           File.Exists(File.Join(staged, "bin", "gspawn-win64-helper.exe")) &&
           File.Exists(File.Join(staged, "bin", "gspawn-win64-helper-console.exe")));
@@ -628,17 +628,17 @@ function checkNsis(root) {
                             { Prefix: File.Join(root, "nsis-nometa") }),
            "no bin/bintana.exe");
 
-    /* A tree from before `bintanaw.exe` would install a broken menu entry. */
+    /* A tree from before `bintana-gui.exe` would install a broken menu entry. */
     const older = File.Join(root, "prefix-older");
     Directory.Make(File.Join(older, "bin"));
     File.Save(File.Join(older, "bin", "bintana.exe"), "MZ");
-    throws("a tree with no bintanaw.exe is refused",
+    throws("a tree with no bintana-gui.exe is refused",
            () => Nsis.Stage(dir, File.Join(root, "out-stage-older"), { Prefix: older }),
-           "no bin/bintanaw.exe");
+           "no bin/bintana-gui.exe");
 
     /* And one without GLib's helpers: it builds, installs, starts -- and every
      * Run in the IDE answers "it could not be started". */
-    File.Save(File.Join(older, "bin", "bintanaw.exe"), "MZ");
+    File.Save(File.Join(older, "bin", "bintana-gui.exe"), "MZ");
     throws("a tree with no spawn helper is refused",
            () => Nsis.Stage(dir, File.Join(root, "out-stage-nohelper"), { Prefix: older }),
            "no bin/gspawn-win64-helper.exe");

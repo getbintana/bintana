@@ -40,7 +40,9 @@ const BINTANA = Application.Executable;
  * it somewhere else, the same variable the core itself honours.
  */
 const BINTANA_GUI = Environment.Get("BINTANA_GUI") ||
-                    File.Join(File.Directory(BINTANA), "bintana-gui");
+                    File.Join(File.Directory(BINTANA),
+                              Environment.OS === "Windows" ? "bintana-gui.exe"
+                                                           : "bintana-gui");
 
 /*
  * GTK's portal and D-Bus chatter, and Mesa's complaint about a virtual display

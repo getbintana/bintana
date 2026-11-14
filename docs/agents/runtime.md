@@ -242,10 +242,10 @@ icon when the theme has one by that name (`gtkapplication.c`).
   project (`bintana check tools/install`), and `ProjectFile` knows the
   `"privileged"` key so the manifest check does not call it a key nothing
   reads.
-- **Windows has no console in `bintanaw.exe`.** The launcher is the sibling
-  `bintana.exe`; it creates a temp file, starts `bintanaw.exe --privileged
-  --out <file>` with UAC, waits, copies the file to its stdout and exits with
-  the helper's code. The parent's `Exec` therefore hears the helper's output
+- **Windows has no console in `bintana-gui.exe`.** The launcher is the sibling
+  core `bintana.exe`; it creates a temp file, starts `bintana-gui.exe
+  --privileged --out <file>` with UAC, waits, copies the file to its stdout and
+  exits with the helper's code. The parent's `Exec` therefore hears the helper's output
   when it exits, not while it runs. `--elevate` is Windows-only; on Linux
   `pkexec` forwards stdout as it goes.
 - **`pkexec` runs the helper as root with `HOME=/root`.** `Privilege.Invoker`
@@ -969,8 +969,8 @@ documentation's example first got wrong.
 **`Desktop.Shortcut` is the Windows user-application install, and the record is
 not beside the shortcut.** `Write` puts a `.lnk` in
 `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Bintana`, with the project's
-id as its `System.AppUserModel.ID` and the target as `bintanaw.exe` when that
-sits beside `bintana.exe`; the Start Menu folder is a menu, so the sidecar that
+id as its `System.AppUserModel.ID` and the target as `bintana-gui.exe` when
+that sits beside `bintana.exe`; the Start Menu folder is a menu, so the sidecar that
 `Installed`/`Read` use is `%APPDATA%\Bintana\apps\<id>.shortcut` instead of
 another file in it. `Notification` now leaves an existing `.lnk` alone rather
 than replacing an installed application's chosen name and icon with its own

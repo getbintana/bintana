@@ -795,7 +795,9 @@ jobs:
       # platform.
       - name: The documented surface
         env:
-          BINTANA: ./build/bintana.exe
+          # `tests/api` asks `Widget.*`, which is the graphical host's: the
+          # core deliberately has no `Widget`.
+          BINTANA: ./build/bintana-gui.exe
         run: ./tests/api.sh
 
       # The project pass: every `project.btp`, `.form` and source in the tree,
@@ -840,8 +842,8 @@ jobs:
           # finds it and why the closure alone would drop it.
           test -f "stage/$name/bin/vulkan-1.dll"
           test -f "stage/$name/bin/librsvg-2-2.dll"
-          # The Windows terminal's screen: linked by bintana.exe, and without
-          # the DLL the runtime does not start at all.
+          # The Windows terminal's screen: linked by the graphical host, and
+          # without the DLL the runtime does not start at all.
           test -f "stage/$name/bin/libvterm-0.dll"
           # The optional halves the environment promises: `Video` asks the
           # GStreamer registry for `gtk4paintablesink` (the plugin DLL, opened
@@ -975,11 +977,14 @@ jobs:
           grep -q '^PdfRead=true$' <<<"$out" \
               || { echo "the staged tree cannot read a PDF" >&2; exit 1; }
           rm -rf "$probe"
-          BINTANA="$PWD/stage/$name/bin/bintana.exe" ./tests/api.sh
+          BINTANA="$PWD/stage/$name/bin/bintana-gui.exe" ./tests/api.sh
           # The one a shortcut starts: the same runtime with a GUI header, so a
-          # menu entry opens no console (`bintanaw.exe` in CMakeLists.txt).
-          objdump -p "stage/$name/bin/bintanaw.exe" | grep -q 'Windows GUI' \
-              || { echo "bintanaw.exe is not a GUI executable" >&2; exit 1; }
+          # menu entry opens no console (`bintana-gui.exe` in CMakeLists.txt),
+          # and the terminal's `bintana.exe` is the console core.
+          objdump -p "stage/$name/bin/bintana-gui.exe" | grep -q 'Windows GUI' \
+              || { echo "bintana-gui.exe is not a GUI executable" >&2; exit 1; }
+          objdump -p "stage/$name/bin/bintana.exe" | grep -q 'Windows CUI' \
+              || { echo "bintana.exe is not a console executable" >&2; exit 1; }
 
       # The first look at the IDE on Windows, and **not a hard step**: whether
       # this runner has a desktop for a window to open on is not something this

@@ -327,7 +327,7 @@ jobs:
       # Flatpak repository runs: a `main` project never initialises GTK, so it
       # needs no desktop, and its `Decimal` is the vendored arithmetic patch
       # answering from inside the installed tree. And the application's own
-      # project has to be where the shortcut points, and `bintanaw.exe` -- what
+      # project has to be where the shortcut points, and `bintana-gui.exe` -- what
       # the shortcut starts -- has to be a GUI executable, or the application
       # opens with a console behind it.
       #
@@ -337,7 +337,7 @@ jobs:
       # went missing exactly like that. The installed tree is run with only
       # Windows' own directories, by both executables, and the smoke project
       # starts a child with its output piped, which is what goes through the
-      # helper: `bintana.exe` uses the `-console` one, `bintanaw.exe` the other.
+      # helper: `bintana.exe` uses the `-console` one, `bintana-gui.exe` the other.
       #
       # `MSYS2_ARG_CONV_EXCL`: MSYS2 rewrites an argument that looks like a
       # path, and `/S` looks like one.
@@ -379,7 +379,7 @@ jobs:
               test -f "$into/bin/$cmd.cmd"
               test -f "$into/share/bintana/apps/$cmd/project.btp"
               test -f "$into/Uninstall.exe"
-              objdump -p "$into/bin/bintanaw.exe" | grep -q 'Windows GUI'
+              objdump -p "$into/bin/bintana-gui.exe" | grep -q 'Windows GUI'
               # Adwaita inherits AdwaitaLegacy, where its full-colour icons are.
               for theme in Adwaita AdwaitaLegacy hicolor; do
                   test -f "$into/share/icons/$theme/index.theme" \
@@ -401,8 +401,8 @@ jobs:
               PATH="$clean" "$into/bin/bintana.exe" "$smoke"
               # No console, so nothing it prints is seen: the exit code is the
               # answer, and it is the IDE's own Run, helper and all.
-              PATH="$clean" "$into/bin/bintanaw.exe" "$smoke" \
-                  || { echo "$name: bintanaw.exe could not run the smoke" >&2; exit 1; }
+              PATH="$clean" "$into/bin/bintana-gui.exe" "$smoke" \
+                  || { echo "$name: bintana-gui.exe could not run the smoke" >&2; exit 1; }
           done
 
       # A release per application version, the setup attached to it. A version

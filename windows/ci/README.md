@@ -130,8 +130,10 @@ Before anything is published, every setup this run built is **installed**,
 silently (`/S`, into a directory of the run's own), and the installed tree is
 run: `bin/bintana.exe --version`, which is the DLL closure, and one console
 project, which is the runtime working out of a tree that is not the build one.
-The launcher the shortcut points at and the application's `project.btp` have
-to be where the script put them. A setup that installs a program that does not
+`bin/bintana-gui.exe` runs the same project with no console, and `objdump`
+confirms one is `Windows CUI` and the other `Windows GUI`. The launcher the
+shortcut points at and the application's `project.btp` have to be where the
+script put them. A setup that installs a program that does not
 start is not released.
 
 What is **not** run is the application's window: a hosted runner may have no

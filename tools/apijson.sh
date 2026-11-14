@@ -11,7 +11,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-BINTANA=${BINTANA:-./build/bintana-gui}
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) BINTANA=${BINTANA:-./build/bintana-gui.exe} ;;
+    *)                    BINTANA=${BINTANA:-./build/bintana-gui} ;;
+esac
 if [[ ! -x $BINTANA ]]; then
     echo "no runtime at $BINTANA -- build first: cmake --build build" >&2
     exit 2

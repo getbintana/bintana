@@ -376,8 +376,10 @@ fields remain the graphical host's until the core globals are split. `File.Info`
 **What it does not do yet.** The dispatch lives in the core; both hosts
 install, and the graphical one is `bintana-gui`. **Two installed binaries are
 the design -- a core and a graphical host; the third binary that is not wanted
-is one that exists only for `check` and the test tools.** The Windows split
-does not exist yet, and the Phase 2 acceptance
+is one that exists only for `check` and the test tools.** The Windows split is
+the same two hosts (2026-11-13): `bintana.exe` core and `bintana-gui.exe`
+graphical, with `bintana-drawing.dll`; what a shortcut needed is in
+[`distribution-plan.md`](../plans/distribution-plan.md). The Phase 2 acceptance
 projects -- `tests/report`'s `testDocument`, `tests/media`, and `tests/api` with
 its `Widget.*` -- are still the graphical host's. A `main` accepts `--strict`
 (there are no widgets to make strict) and `--profile` writes its capture from

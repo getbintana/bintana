@@ -229,10 +229,11 @@ reference pages `F1` reads are a package of their own,
 [`bintana-docs`](https://github.com/getbintana/bintana-docs), which is why
 moving the tree after the fact changes nothing. On Windows the same is true and
 the launcher is `bin\bintana-ide.cmd` — the IDE, from wherever the zip was
-unzipped to. Beside `bintana.exe` is **`bintanaw.exe`**, the same runtime with
-the header that tells Windows not to open a console: an installer's shortcuts
-start that one, and `bintana.exe` stays for a terminal, where what a program
-prints is wanted. Both wear **the system's own title bar**: GTK4 draws its
+unzipped to. Beside `bintana.exe` is **`bintana-gui.exe`**, the graphical host,
+built with the header that tells Windows not to open a console: an installer's
+shortcuts start that one, and `bintana.exe` stays the console core for a
+terminal, where what a program prints is wanted. Both wear **the system's own
+title bar**: GTK4 draws its
 own on Windows unless `GTK_CSD` is `0`, so the runtime sets that when it is
 unset (`GTK_CSD=1` still asks for GTK's). What Windows needs that Linux does not is GTK's runtime data
 alongside: schemas, the icon themes, the gdk-pixbuf loaders and GtkSourceView's

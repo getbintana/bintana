@@ -15,56 +15,105 @@
 #include <windows.h>
 #endif
 
-static void usage(void)
+/*
+ * **The graphical host on Windows has no console when a shortcut starts it.**
+ * Its stdout is then an invalid handle, and a `--version` or `--help` would be
+ * a sentence nobody sees.  A GUI process started from a terminal or a pipe
+ * (`Exec`, the suite) still has a handle with a type, and there the text goes
+ * where it always did; only the no-handle case opens the message box.
+ */
+static void say_text(const char *text, bool error)
 {
-    fputs("usage: bintana [run] <project-dir|project.btp> [args...]\n"
-          "       bintana test [--json] <project-dir|project.btp> [filter]\n"
-          "       bintana check [--json] [--strict] [--components <file>] [--fix] <project-dir|project.btp>\n"
-          "\n"
-          "Runs the Bintana project in <project-dir>: evaluates its .js\n"
-          "sources, then instantiates and shows the startup form named in\n"
-          "project.btp.  A project that declares \"main\" instead calls that\n"
-          "function and opens no display at all.  A project.btp file may be\n"
-          "given instead of the directory it sits in.  Anything after the\n"
-          "project is handed to the project as Application.Arguments.\n"
-          "\n"
-          "  --version print the runtime's own release and exit.  An\n"
-          "            application's version is Application.Version, and the\n"
-          "            protocol a plugin speaks is BTA_PLUGIN_ABI.\n"
-          "  --debug   stop and wait for a debugger before the project runs.\n"
-          "            Events go out on descriptor 3 and commands come in on\n"
-          "            stdin; the IDE is what speaks it.\n"
-          "  --strict  a control refuses a property its class does not have,\n"
-          "            so a misspelt name throws where it is written instead\n"
-          "            of doing nothing forever.  For development: an\n"
-          "            application that keeps state on a control will throw.\n"
-          "  --profile <file>  write a Sysprof capture of the runtime's own\n"
-          "            marks to <file>, with no Sysprof installed.  Running\n"
-          "            under `sysprof-cli` or the Sysprof application instead\n"
-          "            needs no flag and carries the samples too.\n"
-          "  --form <Class>  open that form instead of project.btp's\n"
-          "            \"startup\", and as an instance of its own even if the\n"
-          "            project is single-instance.  How one dialog is looked\n"
-          "            at without walking the program to it.\n"
-          "  --text-scale <factor>  text as the desktop's Large Text makes\n"
-          "            it: 1.25, 1.5, 2.  Between 0.5 and 4.\n"
-          "  --theme dark|light  the theme's dark or light variant.\n"
-          "  --rtl     lay out right to left, as an Arabic or Hebrew\n"
-          "            desktop would.\n"
-          "\n"
-          "`bintana test` runs the project's tests/*Test.js instead: each\n"
-          "file a class extending Test, each method named test... one test.\n"
-          "Only the tests whose Class.method contains <filter> run.  It ends\n"
-          "0 when every test passed and 1 when one did not.\n"
-          "  --json    one JSON line per test, and one at the end.\n",
-          stderr);
 #ifdef G_OS_WIN32
-    fputs("  --register-event-source  register the `Bintana` source in the\n"
-          "            Application log, with this executable as its message\n"
-          "            file, so the viewer describes the events.  Needs an\n"
-          "            elevated prompt; writing works without it, with the\n"
-          "            data but no description.\n", stderr);
+    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE err = GetStdHandle(STD_ERROR_HANDLE);
+    bool   out_ok = out && out != INVALID_HANDLE_VALUE &&
+                    GetFileType(out) != FILE_TYPE_UNKNOWN;
+    bool   err_ok = err && err != INVALID_HANDLE_VALUE &&
+                    GetFileType(err) != FILE_TYPE_UNKNOWN;
+
+    /* One valid handle is enough: `Exec` can merge stderr into a stdout pipe
+     * and leave the other invalid, and a message box there would block the
+     * caller instead of answering with the child's status. */
+    if (!out_ok && !err_ok) {
+        wchar_t *wide = g_utf8_to_utf16(text, -1, NULL, NULL, NULL);
+
+        if (wide) {
+            MessageBoxW(NULL, wide, L"Bintana",
+                        MB_OK | (error ? MB_ICONERROR : MB_ICONINFORMATION));
+            g_free(wide);
+            return;
+        }
+    }
+    FILE *to;
+
+    if (error && err_ok)
+        to = stderr;
+    else if (out_ok)
+        to = stdout;
+    else
+        to = stderr;      /* only `err_ok` can be true here */
+    fputs(text, to);
+    fflush(to);
+#else
+    fputs(text, error ? stderr : stdout);
+    fflush(error ? stderr : stdout);
 #endif
+}
+
+static void usage(bool error)
+{
+    GString *text = g_string_new(
+        "usage: bintana [run] <project-dir|project.btp> [args...]\n"
+        "       bintana test [--json] <project-dir|project.btp> [filter]\n"
+        "       bintana check [--json] [--strict] [--components <file>] [--fix] <project-dir|project.btp>\n"
+        "\n"
+        "Runs the Bintana project in <project-dir>: evaluates its .js\n"
+        "sources, then instantiates and shows the startup form named in\n"
+        "project.btp.  A project that declares \"main\" instead calls that\n"
+        "function and opens no display at all.  A project.btp file may be\n"
+        "given instead of the directory it sits in.  Anything after the\n"
+        "project is handed to the project as Application.Arguments.\n"
+        "\n"
+        "  --version print the runtime's own release and exit.  An\n"
+        "            application's version is Application.Version, and the\n"
+        "            protocol a plugin speaks is BTA_PLUGIN_ABI.\n"
+        "  --debug   stop and wait for a debugger before the project runs.\n"
+        "            Events go out on descriptor 3 and commands come in on\n"
+        "            stdin; the IDE is what speaks it.\n"
+        "  --strict  a control refuses a property its class does not have,\n"
+        "            so a misspelt name throws where it is written instead\n"
+        "            of doing nothing forever.  For development: an\n"
+        "            application that keeps state on a control will throw.\n"
+        "  --profile <file>  write a Sysprof capture of the runtime's own\n"
+        "            marks to <file>, with no Sysprof installed.  Running\n"
+        "            under `sysprof-cli` or the Sysprof application instead\n"
+        "            needs no flag and carries the samples too.\n"
+        "  --form <Class>  open that form instead of project.btp's\n"
+        "            \"startup\", and as an instance of its own even if the\n"
+        "            project is single-instance.  How one dialog is looked\n"
+        "            at without walking the program to it.\n"
+        "  --text-scale <factor>  text as the desktop's Large Text makes\n"
+        "            it: 1.25, 1.5, 2.  Between 0.5 and 4.\n"
+        "  --theme dark|light  the theme's dark or light variant.\n"
+        "  --rtl     lay out right to left, as an Arabic or Hebrew\n"
+        "            desktop would.\n"
+        "\n"
+        "`bintana test` runs the project's tests/*Test.js instead: each\n"
+        "file a class extending Test, each method named test... one test.\n"
+        "Only the tests whose Class.method contains <filter> run.  It ends\n"
+        "0 when every test passed and 1 when one did not.\n"
+        "  --json    one JSON line per test, and one at the end.\n");
+#ifdef G_OS_WIN32
+    g_string_append(text,
+        "  --register-event-source  register the `Bintana` source in the\n"
+        "            Application log, with this executable as its message\n"
+        "            file, so the viewer describes the events.  Needs an\n"
+        "            elevated prompt; writing works without it, with the\n"
+        "            data but no description.\n");
+#endif
+    say_text(text->str, error);
+    g_string_free(text, TRUE);
 }
 
 /*
@@ -135,16 +184,16 @@ static int run_check(int argc, char **argv)
         } else if (!strcmp(argv[i], "--components")) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "bintana check: --components needs a file\n");
-                usage();
+                usage(true);
                 return 2;
             }
             components = argv[++i];
         } else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help")) {
-            usage();
+            usage(false);
             return 0;
         } else if (argv[i][0] == '-' || target) {
             fprintf(stderr, "bintana check: unexpected '%s'\n", argv[i]);
-            usage();
+            usage(true);
             return 2;
         } else {
             target = argv[i];
@@ -152,7 +201,7 @@ static int run_check(int argc, char **argv)
     }
 
     if (!target) {
-        usage();
+        usage(true);
         return 2;
     }
     char *root = NULL;
@@ -212,10 +261,10 @@ static int run_check(int argc, char **argv)
 }
 
 /*
- * The helper's `--out`: a Windows helper is `bintanaw.exe`, which has no
- * console for `print`, so the launcher hands it a file and this makes that
- * file its stdout and stderr.  Binary, because the lines are UTF-8 and a CRLF
- * translation would add a byte nobody wrote.
+ * The helper's `--out`: a Windows helper is the GUI host `bintana-gui.exe`,
+ * which has no console for `print`, so the launcher hands it a file and this
+ * makes that file its stdout and stderr.  Binary, because the lines are UTF-8
+ * and a CRLF translation would add a byte nobody wrote.
  */
 static bool privileged_redirect(const char *path)
 {
@@ -326,10 +375,12 @@ int main(int argc, char **argv)
 #ifdef G_OS_WIN32
     if (argc > 1 && !strcmp(argv[1], "--register-event-source")) {
         if (bta_eventlog_register()) {
-            puts("bintana: the Bintana event source is registered");
+            say_text("bintana: the Bintana event source is registered\n", false);
             return 0;
         }
-        fprintf(stderr, "bintana: %s\n", bta_platform_log_why());
+        char *why = g_strdup_printf("bintana: %s\n", bta_platform_log_why());
+        say_text(why, true);
+        g_free(why);
         return 1;
     }
 #else
@@ -369,7 +420,7 @@ int main(int argc, char **argv)
             continue;
         }
         if (!dir && (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))) {
-            usage();
+            usage(false);
             g_ptr_array_unref(rest);
             return 0;
         }
@@ -379,7 +430,10 @@ int main(int argc, char **argv)
          * plugin's configure had to start a project to ask. See BTA_VERSION_STRING.
          */
         if (!dir && !strcmp(argv[i], "--version")) {
-            printf("bintana %s\n", BTA_VERSION_STRING);
+            char *text = g_strdup_printf("bintana %s\n", BTA_VERSION_STRING);
+
+            say_text(text, false);
+            g_free(text);
             g_ptr_array_unref(rest);
             return 0;
         }
@@ -425,7 +479,7 @@ int main(int argc, char **argv)
         if (!dir && !strcmp(argv[i], "--profile")) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "bintana: --profile needs a file\n");
-                usage();
+                usage(true);
                 g_ptr_array_unref(rest);
                 return 2;
             }
@@ -484,7 +538,7 @@ int main(int argc, char **argv)
     g_ptr_array_add(rest, NULL);
 
     if (!dir) {
-        usage();
+        usage(true);
         g_ptr_array_unref(rest);
         return 2;
     }

@@ -123,7 +123,7 @@ C:\Temp\bintana-installed\bin\bintana.exe --version
 C:\Temp\bintana-installed\Uninstall.exe /S
 ```
 
-The shortcut starts `bin\bintanaw.exe` with the installed project directory as
+The shortcut starts `bin\bintana-gui.exe` with the installed project directory as
 its argument -- read back from the `.lnk` and launched -- and the uninstaller
 removes the directory, the Start Menu folder and the `HKCU` uninstall key.
 The bundled compiler was checked too: the official NSIS 3.12 tree under

@@ -73,6 +73,8 @@ copy_deps() {
 }
 
 copy_deps "$dest/bin/bintana.exe"
+copy_deps "$dest/bin/bintana-gui.exe"
+copy_deps "$dest/bin/bintana-drawing.dll"
 
 # Vulkan, which `libgtk-4-1.dll` imports at load time -- GTK's Vulkan renderer
 # is built in -- and Windows does not carry: the loader is the GPU driver's,
@@ -85,8 +87,8 @@ cp "$ucrt/bin/vulkan-1.dll" "$dest/bin/"
 
 # GLib's spawn helpers, which no link names: on Windows a child with its output
 # piped -- every `Exec` that reads what it printed, the IDE's Run among them --
-# is started *through* `gspawn-win64-helper.exe` (from a process with no
-# console, `bintanaw.exe`) or its `-console` twin (from `bintana.exe`). GLib
+# is started *through* `gspawn-win64-helper.exe` (from the GUI-subsystem host,
+# `bintana-gui.exe`) or its `-console` twin (from `bintana.exe`). GLib
 # looks for them beside its own DLL and then on the PATH, which is why an
 # MSYS2 shell -- `/ucrt64/bin` on its PATH -- never misses them, and a machine
 # that unzipped this tree answers `Exec failed: it could not be started`.
@@ -152,7 +154,7 @@ fi
 
 # GStreamer's plugins, and the scanner that reads them.
 #
-# `bintana.exe` links gstreamer-1.0, so `ldd` already brought the core; the
+# `bintana-gui.exe` links gstreamer-1.0, so `ldd` already brought it; the
 # plugins are opened by name later, like the pixbuf loaders, and without them
 # `Video` builds a pipeline that has no sink. `libgstgtk4.dll` is
 # `gtk4paintablesink`, from gst-plugins-rs -- the difference between
@@ -243,7 +245,7 @@ cat > "$dest/bin/bintana-ide.cmd" <<'EOF'
 rem The IDE, from wherever this tree was unzipped to.
 setlocal
 set "HERE=%~dp0"
-"%HERE%bintana.exe" "%HERE%..\share\bintana\ide" %*
+"%HERE%bintana-gui.exe" "%HERE%..\share\bintana\ide" %*
 EOF
 
 # --- what it came to ---------------------------------------------------------

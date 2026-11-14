@@ -2276,7 +2276,7 @@ int bta_app_run(BtaApp *app, int argc, char **argv)
 #ifdef G_OS_WIN32
     /* The taskbar, the toast and the jump list all group a process by its
      * AppUserModelID; without this every Bintana application is the runtime's
-     * `bintanaw.exe`.  Set before the first window exists. */
+     * `bintana-gui.exe`.  Set before the first window exists. */
     if (app->id[0])
         win_set_app_id(app->id);
 #endif

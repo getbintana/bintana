@@ -143,10 +143,10 @@ static bool privilege_has_main(JSContext *ctx, const char *dir, char **why)
     return ok;
 }
 
-/* The console runtime to start.  On Windows `bintanaw.exe` is a copy of it
- * with the console subsystem cleared, and a helper launched by UAC has no
- * console for `print`; the sibling `bintana.exe` is the launcher that can
- * capture and forward the helper's output. */
+/* The console runtime to start.  On Windows the graphical host is
+ * `bintana-gui.exe`, built with the GUI subsystem so a helper launched by UAC
+ * has no console for `print`; the sibling core `bintana.exe` is the launcher
+ * that can capture and forward the helper's output. */
 static char *privilege_console_exe(void)
 {
     char *exe = bta_exe_path();
@@ -154,7 +154,7 @@ static char *privilege_console_exe(void)
 #ifdef G_OS_WIN32
     char *base = g_path_get_basename(exe);
 
-    if (!g_ascii_strcasecmp(base, "bintanaw.exe")) {
+    if (!g_ascii_strcasecmp(base, "bintana-gui.exe")) {
         char *dir = g_path_get_dirname(exe);
         char *alt = g_build_filename(dir, "bintana.exe", NULL);
 
@@ -570,7 +570,7 @@ int bta_privilege_elevate(int argc, char **argv)
 
     char *launcher = privilege_console_exe();
     char *dir      = g_path_get_dirname(launcher);
-    char *helper   = g_build_filename(dir, "bintanaw.exe", NULL);
+    char *helper   = g_build_filename(dir, "bintana-gui.exe", NULL);
 
     if (!g_file_test(helper, G_FILE_TEST_IS_EXECUTABLE)) {
         g_free(helper);

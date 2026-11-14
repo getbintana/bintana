@@ -282,11 +282,11 @@ static bool ensure_shortcut(const char *aumid, const char *project_dir)
     if (!exe)
         return false;
 
-    /* `bintanaw.exe` is the same runtime with a GUI header: a shortcut that
-     * opens a console behind the window is not what a Start Menu entry is
-     * for. */
+    /* `bintana-gui.exe` is the graphical host with a GUI header: a shortcut
+     * that opens a console behind the window is not what a Start Menu entry
+     * is for. */
     exe_dir = g_path_get_dirname(exe);
-    gui = g_build_filename(exe_dir, "bintanaw.exe", NULL);
+    gui = g_build_filename(exe_dir, "bintana-gui.exe", NULL);
     if (!g_file_test(gui, G_FILE_TEST_EXISTS)) {
         g_free(gui);
         gui = g_strdup(exe);

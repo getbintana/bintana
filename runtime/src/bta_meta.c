@@ -78,6 +78,25 @@ BtaApp *bta_current_app(void)
     return NULL;
 }
 
+/* `bta_runtime.c` and `bta_log.c` own these in the graphical host.  The
+ * widget rows reach them, and this host answers with the empty answer: no
+ * form is remembered and no line is written. */
+JSValue bta_forms_hook(JSContext *ctx, const char *name)
+{
+    (void)ctx; (void)name;
+    return JS_UNDEFINED;
+}
+
+void bta_log_debug(JSContext *ctx, const char *text)
+{
+    (void)ctx; (void)text;
+}
+
+void bta_log_debug_plain(const char *text)
+{
+    (void)text;
+}
+
 /*
  * The prelude's declarations, without the module machinery: the prelude is
  * two scripts, so the shared pass compiles them as scripts
