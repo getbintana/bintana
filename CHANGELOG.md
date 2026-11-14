@@ -35,7 +35,8 @@ one-page answer to *what is new since the release I have*.
   directory`, as on Linux, instead of System32's program of that name or an
   `ExitCode` of 127. The child's `argv[0]` is the name it was called by, as on
   Linux. An empty PATH entry is skipped rather than read as the current
-  folder, so `Environment: { PATH: "" }` finds nothing on Windows.
+  folder, so `Environment: { PATH: "" }` finds nothing on Windows, where Linux
+  reads it as the current folder.
 - **The core is the same language as the graphical host.** It closes the same
   names, runs `rad.js` the same way and links the same console globals --
   `Http`, `Database`, `Task`, `Zip`, sockets, `SerialPort`, `Keyring`,
@@ -83,6 +84,12 @@ one-page answer to *what is new since the release I have*.
 - **The helpers in `forms.js` are no longer globals.** `mixIn`, `applyNode`,
   `savableValue`, `showError`, `rememberWindow` and the rest were
   undocumented, but a program could call or replace them.
+- **`Exec` looks a bare name up on the PATH the child is given, on Linux
+  too.** A call with `Environment: { PATH: … }` used to have its command
+  searched on the *program's* PATH there: a tool only the call's PATH named
+  was `no such file or directory`, and of two tools of one name the program's
+  ran. Now the call's PATH decides on every platform, a relative entry is
+  read from `Directory`, and a call with no PATH of its own is unchanged.
 - **`File.Relative` answers with `/` on Windows**, as on every other platform:
   the answer names something inside a tree, and Windows accepts `/`.
 

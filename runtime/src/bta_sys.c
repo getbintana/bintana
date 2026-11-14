@@ -3154,6 +3154,14 @@ static bool exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args,
                               : g_get_current_dir();
 
         g_free(directory);
+        /* A `Directory` that is not there is the spawn's to refuse, with its
+         * own sentence about the working directory: a lookup from it would
+         * only say "no such file", which points at the wrong thing. */
+        if (!g_file_test(base, G_FILE_TEST_IS_DIR)) {
+            g_free(base);
+            g_free(path);
+            return true;
+        }
         if (custom && path) {
             resolved = exec_win_search(path, command, base);
         } else if (custom) {
@@ -3321,6 +3329,18 @@ static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
 #else
     flags |= split ? G_SUBPROCESS_FLAGS_STDERR_PIPE
                    : G_SUBPROCESS_FLAGS_STDERR_MERGE;
+    /*
+     * **A bare name is looked up on the PATH the child is given**, the call's
+     * own `Environment` one when it has one -- the rule Windows follows in
+     * `exec_use_helper`.  Without the flag GSubprocess searched *this*
+     * process's PATH: a tool that only the call's PATH named was "no such
+     * file", and of two tools of one name the parent's ran.  GLib does the
+     * search itself, so `argv[0]` stays the name the child was called by.
+     * Since 2.72; the GTK floor (4.10) already needs a newer GLib.
+     */
+#if GLIB_CHECK_VERSION(2, 72, 0)
+    flags |= G_SUBPROCESS_FLAGS_SEARCH_PATH_FROM_ENVP;
+#endif
 #endif
 
     GSubprocessLauncher *launcher = g_subprocess_launcher_new(flags);

@@ -728,13 +728,14 @@ jobs:
   # `runtime/src` and the references, so it is the check that says the runtime
   # *runs* on Windows and not merely compiles, and it is run again out of the
   # staged tree -- which is what proves the DLL closure. The windowed projects
-  # are deliberately not here: they need a desktop session, and the suite's
-  # display handling (`xvfb-run`, `tests/icons`/`styles` reading a Linux theme
-  # off the disk) is Linux's as it stands. VTE does not exist on Windows and is
-  # not installed; `Terminal` refuses by name there, which is what
-  # `BTA_HAVE_VTE` was made optional for. The IDE is started once and left to a
-  # timeout as a diagnostic, not as a gate -- whether this runner has a desktop
-  # is not something this file can know.
+  # run on `tests/run.sh`'s private desktop (`tests/win-desktop.c`) **as
+  # diagnostics, not gates**: `smoke` and `widgets`, whose Windows-only
+  # assertions (Exec's helper and PATH, the Zip names, Network) have no other
+  # run in CI. Whether this runner's session lets GTK open windows on a desktop
+  # of its own is not something this file can know; when their logs are green
+  # for a while, dropping `continue-on-error` makes them gates. `Terminal` is
+  # ConPTY and libvterm there. The IDE is started once and left to a timeout
+  # as a diagnostic too.
   #
   # The packages are MSYS2's UCRT64 ones, which is the toolchain the plan named:
   # MinGW-w64 with the UCRT C runtime, and GTK4 from the same ecosystem. **Never
@@ -825,6 +826,17 @@ jobs:
           BINTANA: ./build/bintana.exe
           TIMEOUT: 600
         run: ./tests/run.sh smoke
+
+      # The widgets suite, the same way and for the same reason: the only CI
+      # run of the Windows halves of Exec, Zip and Network. 6469 assertions
+      # on a Windows 11 desktop (2026-11-14); a red line here is read, not
+      # gated, until it has been green for a while.
+      - name: The widgets suite (diagnostic)
+        continue-on-error: true
+        env:
+          BINTANA: ./build/bintana.exe
+          TIMEOUT: 1800
+        run: ./tests/run.sh widgets
 
       # The download: the executable, everything it links, the GTK data GTK
       # opens by name, the IDE as the project directory it is and the `.cmd`

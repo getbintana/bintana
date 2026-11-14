@@ -28699,16 +28699,6 @@ class Form1 extends Form {
                        Exec.Wait(["cmd", "/c", "echo %PATH%"],
                                  { Environment: { [key]: mine } }).Output.trim(), mine);
                 }
-
-                /* **A relative PATH entry is read from where the child starts**,
-                 * the call's Directory, as execvp reads it after its chdir. */
-                const sub = File.Join(bin, "rel");
-                Directory.Make(sub);
-                File.Save(File.Join(sub, "btarel.cmd"), "@echo off\r\necho [rel]\r\n");
-                eq("a relative PATH entry is looked up from Directory",
-                   Exec.Wait(["btarel"], { Directory: bin,
-                                           Environment: { PATH: "rel;" + sys } }).Output.trim(),
-                   "[rel]");
             } finally {
                 Directory.DeleteTree(bin);
             }
@@ -28734,6 +28724,59 @@ class Form1 extends Form {
             eq("...and Exec refuses it the same way",
                refusal(() => Exec(["bta-no-such-tool"], { Environment: { PATH: nowhere } })),
                "Exec failed: no such file or directory");
+        }
+
+        /*
+         * **The PATH the child is given decides, on both systems.**  Linux
+         * searched the parent's PATH until GSubprocess was told
+         * SEARCH_PATH_FROM_ENVP: a tool only the call's PATH named was "no such
+         * file or directory", and of two tools of one name the parent's ran,
+         * while Windows already looked where the child would.  Each assertion
+         * here was red on Linux before the flag (reported 2026-11-14).
+         */
+        {
+            const win  = Environment.OS === "Windows";
+            const sep  = win ? ";" : ":";
+            const sys  = win ? File.Join(Environment.Get("SystemRoot") || "C:\\Windows", "System32")
+                             : "/usr/bin:/bin";
+            const root = File.Join(Environment.TempDirectory, `bta exec own path ${Environment.ProcessId}`);
+            const call = File.Join(root, "call");
+            const mine = File.Join(root, "parent");
+            const rel  = File.Join(root, "rel");
+            const tool = (dir, name, said) => {
+                Directory.Make(dir);
+                if (win) {
+                    File.Save(File.Join(dir, name + ".cmd"), `@echo off\r\necho [${said}]\r\n`);
+                } else {
+                    const p = File.Join(dir, name);
+                    File.Save(p, `#!/bin/sh\necho [${said}]\n`);
+                    Exec.Wait(["chmod", "+x", p]);
+                }
+            };
+            const old = Environment.Get("PATH");
+
+            tool(call, "btaown", "call");
+            tool(mine, "btaown", "parent");
+            tool(mine, "btaparentonly", "parent");
+            tool(rel, "btarel", "rel");
+            Environment.Set("PATH", mine + sep + old);
+            try {
+                eq("a tool only the call's PATH names runs, and the call's wins over the parent's",
+                   Exec.Wait(["btaown"], { Environment: { PATH: call + sep + sys } }).Output.trim(),
+                   "[call]");
+                eq("...and with no PATH of the call's own, the program's decides",
+                   Exec.Wait(["btaown"]).Output.trim(), "[parent]");
+                eq("a tool only the parent's PATH names is not found on the call's",
+                   refusal(() => Exec.Wait(["btaparentonly"], { Environment: { PATH: call + sep + sys } })),
+                   "Exec.Wait failed: no such file or directory");
+                eq("a relative PATH entry is read from Directory, where the child starts",
+                   Exec.Wait(["btarel"], { Directory: root,
+                                           Environment: { PATH: "rel" + sep + sys } }).Output.trim(),
+                   "[rel]");
+            } finally {
+                Environment.Set("PATH", old);
+                Directory.DeleteTree(root);
+            }
         }
 
         /*

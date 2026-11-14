@@ -115,22 +115,34 @@ static const char *net_win32_ask(void);
  * program that reads `Online` in a loop or on every frame paid that each
  * time. NCSI itself changes on a scale of seconds. A mutex, because a `Task`
  * may read it too. */
+static GMutex      net_win32_lock;
+static gint64      net_win32_when;
+static const char *net_win32_word;
+
 static const char *net_win32_connectivity(void)
 {
-    static GMutex      lock;
-    static gint64      when;
-    static const char *word;
-    gint64             now = g_get_monotonic_time();
-    const char        *answer;
+    gint64      now = g_get_monotonic_time();
+    const char *answer;
 
-    g_mutex_lock(&lock);
-    if (!word || now - when > G_USEC_PER_SEC) {
-        word = net_win32_ask();
-        when = now;
+    g_mutex_lock(&net_win32_lock);
+    if (!net_win32_word || now - net_win32_when > G_USEC_PER_SEC) {
+        net_win32_word = net_win32_ask();
+        net_win32_when = now;
     }
-    answer = word;
-    g_mutex_unlock(&lock);
+    answer = net_win32_word;
+    g_mutex_unlock(&net_win32_lock);
     return answer;
+}
+
+/* **A notice is a reason to ask again.** Otherwise a read in `Form_Open`
+ * and the network coming up half a second later left `net_report` the cached
+ * old word, equal to the last one reported, and the `OnChange` was lost for
+ * good -- nothing raises that change twice. */
+static void net_win32_forget(void)
+{
+    g_mutex_lock(&net_win32_lock);
+    net_win32_word = NULL;
+    g_mutex_unlock(&net_win32_lock);
 }
 
 static const char *net_win32_ask(void)
@@ -229,6 +241,9 @@ static gboolean net_report(gpointer data)
  * and says something only when the answer moved. */
 static void net_changed(void)
 {
+#ifdef G_OS_WIN32
+    net_win32_forget();
+#endif
     net_answered = true;
     if (!net_idle)
         net_idle = g_idle_add(net_report, NULL);

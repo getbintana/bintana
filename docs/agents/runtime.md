@@ -760,8 +760,21 @@ icon when the theme has one by that name (`gtkapplication.c`).
   call whose PATH had none, with `ExitCode` 0 (measured 2026-11-14). A command
   the helper is handed and Windows still refuses to start is the remaining
   127, with `bintana-exec: cannot start the child` on stderr. The lookahead
-  reads `Environment`'s getters once more than the launcher does; a getter
-  with side effects sees two reads. The handle's
+  reads the `Environment` and `Directory` getters once more than the launcher
+  does; a getter with side effects sees two reads. A `Directory` that does not
+  exist is left to the spawn, whose refusal names the working directory.
+  **The `=` argument is a private protocol between the hosts and the helper
+  of the same build**: a new `bintana-gui.exe` beside an old
+  `bintana-exec.exe` answers every bare-name `Exec` with exit 2 and `every
+  argument must start with '+'`. The installers and the portable tree replace
+  `bin\` whole; a hand-copied host must bring its helper.
+  **Linux follows the same rule**: `exec_launcher` sets
+  `G_SUBPROCESS_FLAGS_SEARCH_PATH_FROM_ENVP`, so GLib looks a bare name up on
+  the PATH of the child's environment -- the call's own when it has one --
+  after the child's `chdir`, and `argv[0]` is untouched. Without it GSubprocess
+  searched the parent's PATH: a tool only the call's PATH named was "no such
+  file or directory", and of two of one name the parent's ran (reported
+  2026-11-14 from a Linux run). The handle's
   `ProcessId` on Windows names the helper -- the group leader -- not the
   program it started; `Stop`, `Kill` and the exit status still mean the group.
 - **GLib's Windows spawn drops an empty argument**, measured on 2.90 with and
