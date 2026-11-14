@@ -511,10 +511,11 @@ void bta_privilege_init(JSContext *ctx, JSValueConst global, bool worker)
          * answer. */
         /* **Defined, not assigned**: `CanElevate` is a getter with no setter
          * in the function list above, so an assignment failed with "no setter
-         * for property" and left that exception pending in every worker -- the
-         * getter answered false here anyway, so nothing showed until an
-         * `Exec.Wait` that checks for a pending exception reported it in the
-         * task's first call (2026-11-14). */
+         * for property". The getter stayed and answered the *system's*
+         * capability -- true on Windows, true on Linux where pkexec is -- where
+         * the description promises false in a Task, and the failed assignment
+         * left its exception pending in every worker until an `Exec.Wait` that
+         * checks for one threw it in the task's first call (2026-11-14). */
         JS_DefinePropertyValueStr(ctx, privilege, "CanElevate", JS_FALSE,
                                   JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
         JS_SetPropertyStr(ctx, privilege, "Run",

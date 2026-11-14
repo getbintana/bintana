@@ -665,16 +665,25 @@ icon when the theme has one by that name (`gtkapplication.c`).
   the child started in this process's folder with `ExitCode` 0 (reported
   2026-11-14). It now returns false on `JS_IsException` for `Directory`,
   `Environment` and each entry, and `exec_launcher` refuses when anything is
-  still pending from the options read before it (`Stderr`, `Timeout`,
-  `KillAfter`). A lookahead that reads the same option first
-  (`exec_custom_path`, `exec_option_directory`) consumes its own throw.
+  still pending from the options read before it. **Both verbs read every
+  option before the launcher**: `Exec.Wait` its `Input`, `Stderr`, `Timeout`
+  and `KillAfter`, and `Exec` its `Stderr`, `KillAfter`, `Timeout` and
+  `Control` -- the last three used to be read after the spawn, so a throwing
+  getter let the child run on the defaults and waited for the next call.
+  `Control` is read once (`exec_control_callback`) and handed to the job, not
+  asked again. `Exec.Wait` takes no `Control` and never reads one. A
+  lookahead that reads the same option first (`exec_custom_path`,
+  `exec_option_directory`) consumes its own throw.
 - **`JS_SetPropertyStr` over a getter with no setter fails, and leaves the
   exception pending** ("no setter for property"). `bta_privilege_init` did
-  that to `CanElevate` in every `Task` worker since `Privilege` arrived; the
-  getter answered `false` there anyway, so nothing showed until `Exec.Wait`
-  learnt to refuse a pending exception, and then the first `Exec.Wait` in any
-  task threw it -- with an empty stack, the sign of a throw from C with no JS
-  frame. **Replace a function-list accessor with `JS_DefinePropertyValueStr`**
+  that to `CanElevate` in every `Task` worker since `Privilege` arrived: the
+  getter stayed and answered the system's capability (true on Windows, true
+  on Linux with pkexec) where the description promises false in a task, and
+  the pending exception went unseen until `Exec.Wait` learnt to refuse one --
+  then the first `Exec.Wait` in any task threw it, with an empty stack, the
+  sign of a throw from C with no JS frame. (A `testTask` step that fails and
+  does not call `next()` ends the sequence: a later step "passing" against a
+  broken binary may simply not have run.) **Replace a function-list accessor with `JS_DefinePropertyValueStr`**
   (the entry is configurable), and when a worker misbehaves, print
   `JS_HasException` along `task_build_worker` to find the step.
 - **An empty `JS_EXCEPTION` is not a refusal, and in some builds it is a

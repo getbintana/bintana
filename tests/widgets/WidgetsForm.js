@@ -28735,12 +28735,18 @@ class Form1 extends Form {
          */
         {
             const boom = (key) => ({ get [key]() { throw new Error(`${key} getter boom`); } });
-            for (const key of ["Directory", "Environment", "Timeout", "Stderr"]) {
+            for (const key of ["Directory", "Environment", "Timeout", "KillAfter", "Stderr", "Input"]) {
                 eq(`Exec.Wait throws what the ${key} getter threw`,
                    refusal(() => Exec.Wait(["sh", "-c", "exit 0"], boom(key))), `${key} getter boom`);
             }
-            eq("...as does Exec, for Directory",
-               refusal(() => Exec(["sh", "-c", "exit 0"], boom("Directory"))), "Directory getter boom");
+            /* Exec read KillAfter, Timeout and Control after the spawn: the
+             * child ran on the defaults and the throw waited for the next call. */
+            for (const key of ["Directory", "Environment", "Timeout", "KillAfter", "Stderr", "Control"]) {
+                eq(`Exec throws what the ${key} getter threw, before it starts anything`,
+                   refusal(() => Exec(["sh", "-c", "exit 0"], boom(key))), `${key} getter boom`);
+            }
+            eq("Exec.Wait takes no Control and does not read one",
+               Exec.Wait(["sh", "-c", "exit 0"], boom("Control")).ExitCode, 0);
             eq("...and for a getter inside Environment",
                refusal(() => Exec.Wait(["sh", "-c", "exit 0"], { Environment: boom("BTA_GETTER") })),
                "BTA_GETTER getter boom");
@@ -32219,9 +32225,10 @@ class Form1 extends Form {
             t.Error = (m) => fail(`privilege errored: ${m}`);
             t.Done  = (r) => {
                 /* The worker's `CanElevate` used to be assigned over a getter
-                 * with no setter; the getter already answered false here, but
-                 * the failed assignment left an exception pending in every
-                 * worker -- which the two Exec.Wait steps above now see. */
+                 * with no setter: the assignment failed, the getter answered the
+                 * system's capability (true on Windows, and on Linux with
+                 * pkexec), and the failed assignment left an exception pending in
+                 * every worker -- which the two Exec.Wait steps above now see. */
                 eq("a task's Privilege.CanElevate is false", r.can, false);
                 next();
             };

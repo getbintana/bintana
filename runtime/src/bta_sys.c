@@ -2603,7 +2603,7 @@ static bool exec_apply_options(JSContext *ctx, JSValueConst opts,
         uint32_t        len = 0;
 
         if (JS_GetOwnPropertyNames(ctx, &tab, &len, env,
-                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0) {
+                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) != 0) {
             JS_FreeValue(ctx, env);
             return false;
         }
@@ -3296,25 +3296,34 @@ static bool exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args,
  * platforms, because a callback accepted and never called is the silent
  * failure this whole runtime is written against.
  */
-static bool exec_wants_control(JSContext *ctx, JSValueConst opts)
+/*
+ * The `Control` callback, read **once and before anything starts**: a
+ * function, `JS_UNDEFINED` when there is none, or `JS_EXCEPTION` when its
+ * getter threw -- which is the verb's error.  It used to be asked twice, once
+ * whether there was one and again after the spawn for the value, and a getter
+ * that threw left its exception pending while the child ran without the
+ * stream (reported 2026-11-14).  The caller owns the answer.
+ */
+static JSValue exec_control_callback(JSContext *ctx, JSValueConst opts)
 {
     if (JS_IsUndefined(opts))
-        return false;
+        return JS_UNDEFINED;
 
     JSValue cb = JS_GetPropertyStr(ctx, opts, "Control");
-    bool    yes = JS_IsFunction(ctx, cb);
 
+    if (JS_IsException(cb) || JS_IsFunction(ctx, cb))
+        return cb;
     JS_FreeValue(ctx, cb);
-    return yes;
+    return JS_UNDEFINED;
 }
 
 #ifndef G_OS_WIN32
-static int exec_control_fd(JSContext *ctx, JSValueConst opts,
+static int exec_control_fd(JSContext *ctx, bool wanted,
                            GSubprocessLauncher *launcher)
 {
     int ends[2];
 
-    if (!exec_wants_control(ctx, opts))
+    if (!wanted)
         return -1;
 
     /*
@@ -3384,8 +3393,9 @@ static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
         g_object_unref(launcher);
         return NULL;               /* it threw on the way; that stands */
     }
-    /* The options read before this one -- `Stderr`, `Timeout`, `KillAfter`,
-     * each by a helper that answers a value and has no way to fail -- may
+    /* The options read before this one -- `Stderr`, `Timeout`, `KillAfter`
+     * and `Input`, each by a helper that answers a value and has no way to
+     * fail -- may
      * have left a getter's exception pending.  It is the verb's error, and it
      * is reported here, before anything starts, rather than surfacing in the
      * next call into JS. */
@@ -3424,16 +3434,34 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
 
-    bool split = exec_wants_split(ctx, opts);
+    /*
+     * **Every option is read before anything starts**, so a getter that
+     * throws is this call's error and not the next one's: `Stderr` here,
+     * `KillAfter`, `Timeout` and `Control` too -- the last three used to be
+     * read after the spawn, and their getters' exceptions were left pending
+     * while the child ran on the defaults (reported 2026-11-14).
+     * `exec_launcher` refuses when any of them threw.
+     */
+    bool     split      = exec_wants_split(ctx, opts);
+    unsigned kill_after = exec_millis(ctx, opts, "KillAfter", EXEC_KILL_AFTER);
+    unsigned timeout    = exec_millis(ctx, opts, "Timeout", 0);
+    JSValue  control_cb = JS_HasException(ctx) ? JS_UNDEFINED
+                                               : exec_control_callback(ctx, opts);
+
+    if (JS_IsException(control_cb)) {
+        g_ptr_array_unref(args);
+        return JS_EXCEPTION;
+    }
 
     GSubprocessLauncher *launcher = exec_launcher(ctx, opts, split);
     if (!launcher) {
+        JS_FreeValue(ctx, control_cb);
         g_ptr_array_unref(args);
         return JS_EXCEPTION;
     }
 #ifdef G_OS_WIN32
     ExecControl *control_win = NULL;
-    if (exec_wants_control(ctx, opts)) {
+    if (JS_IsFunction(ctx, control_cb)) {
         char *why = NULL;
 
         control_win = exec_control_new(launcher, &why);
@@ -3441,16 +3469,18 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
             JS_ThrowPlainError(ctx, "Exec: Control could not be opened: %s",
                                why ? why : "the control pipe could not be made");
             g_free(why);
+            JS_FreeValue(ctx, control_cb);
             g_object_unref(launcher);
             g_ptr_array_unref(args);
             return JS_EXCEPTION;
         }
     }
 #else
-    int ctl_fd = exec_control_fd(ctx, opts, launcher);
+    int ctl_fd = exec_control_fd(ctx, JS_IsFunction(ctx, control_cb), launcher);
 
     /* Refused, and the refusal is the answer: see exec_control_fd. */
     if (ctl_fd == -2) {
+        JS_FreeValue(ctx, control_cb);
         g_object_unref(launcher);
         g_ptr_array_unref(args);
         return JS_EXCEPTION;
@@ -3467,6 +3497,7 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
         JSValue e = JS_ThrowPlainError(ctx, "Exec failed: %s",
                                        bta_gerror_text(err));
         g_clear_error(&err);
+        JS_FreeValue(ctx, control_cb);
 #ifdef G_OS_WIN32
         if (control_win) {
             exec_control_close(control_win);
@@ -3522,21 +3553,25 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
                                              G_DATA_STREAM_NEWLINE_TYPE_ANY);
     job->err_eof = job->err == NULL;
     job->in      = g_subprocess_get_stdin_pipe(proc);
+    /* The callback read before the spawn, handed over: not asked again. */
     job->on_control = JS_UNDEFINED;
 #ifdef G_OS_WIN32
     if (control_win) {
         job->control_win = control_win;
-        job->on_control  = JS_GetPropertyStr(ctx, opts, "Control");
+        job->on_control  = control_cb;
+        control_cb       = JS_UNDEFINED;
     }
 #else
     if (ctl_fd >= 0) {
         job->control    = g_data_input_stream_new(
             g_unix_input_stream_new(ctl_fd, TRUE));
-        job->on_control = JS_GetPropertyStr(ctx, opts, "Control");
+        job->on_control = control_cb;
+        control_cb      = JS_UNDEFINED;
     }
 #endif
+    JS_FreeValue(ctx, control_cb);
 
-    job->kill_after = exec_millis(ctx, opts, "KillAfter", EXEC_KILL_AFTER);
+    job->kill_after = kill_after;
 
     exec_jobs = g_list_prepend(exec_jobs, job);
 
@@ -3598,7 +3633,6 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
      * yet.  A child already reaped needs no guard -- `/bin/true` can be gone by
      * this line.
      */
-    unsigned timeout = exec_millis(ctx, opts, "Timeout", 0);
     if (timeout > 0 && !job->reaped)
         job->guard = g_timeout_add(timeout, on_exec_guard, job);
 
@@ -3677,6 +3711,9 @@ static bool exec_wait_input(JSContext *ctx, JSValueConst opts, GBytes **out)
         return true;
 
     JSValue iv = JS_GetPropertyStr(ctx, opts, "Input");
+    /* A getter that threw is the error, not a wrong type. */
+    if (JS_IsException(iv))
+        return false;
     if (JS_IsUndefined(iv) || JS_IsNull(iv)) {
         JS_FreeValue(ctx, iv);
         return true;

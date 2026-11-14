@@ -321,7 +321,7 @@ with `testClipboard`'s round trip skipped on Windows, no run has crashed since
 Measured on Windows 11 26H2 (2026-11-14), the whole `./tests/run.sh` on that
 desktop with `TIMEOUT=2400`: `tests/ide` 3839/0, `tests/markdown` 171/0,
 `tests/qr` 120/0, `tests/report` 259/0, `tests/smoke` 171/0, `tests/widgets`
-6477/0 and `tests/xlsx` 57/0 -- 11094 assertions, none failed, with the
+6485/0 and `tests/xlsx` 57/0 -- 11102 assertions, none failed, with the
 clipboard round trip skipped because of the GTK crash above. The crowding
 failures in [`docs/agents/testing.md`](agents/testing.md) (the run of
 2026-11-13 was 6370 passed, 2 failed) did not appear in this one; an earlier
