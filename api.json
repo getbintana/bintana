@@ -16158,7 +16158,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "assign `() => …`: called when `Connectivity` or `Metered` changed, once per change however many notices it took. Read them again inside; `null` takes it off",
+          "Doc": "assign `() => …`: called when `Connectivity` or `Metered` changed, once per change however many notices it took. Read them again inside; `null` takes it off. On Windows the internet check finishes a few seconds after the network comes up and raises no notice of its own, so a program waiting to be `Online` reads it again on a `Timer` rather than only waiting for this",
           "Native": true
         },
         {

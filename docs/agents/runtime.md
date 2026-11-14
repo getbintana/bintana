@@ -736,18 +736,32 @@ icon when the theme has one by that name (`gtkapplication.c`).
   **A bare name is resolved in the parent before the spawn** (`exec_use_helper`,
   `exec_win_search`), on the `PATH` the child will have: the call's own
   `Environment` one -- `PATH`, `Path` or `path`, since Windows' names ignore
-  case -- or this process's, with `g_find_program_in_path` as the last word
-  only when the call names no PATH (it searches the executable's folder, the
-  current one and System32 first, `CreateProcessW`'s order). An unset PATH
-  (`null`) searches `%SystemRoot%\System32` and `%SystemRoot%`, `execvp`'s
-  default path in Windows' words. Not found is `Exec failed: no such file or
-  directory` -- Linux's sentence, thrown before anything starts -- and found
-  hands the helper an absolute path. The helper's own search is only for a
-  caller that did not, and **not found there is 127 and never a
-  `CreateProcessW` search**: that search ran System32's `sort` for a call
-  whose PATH had none, with `ExitCode` 0 (measured 2026-11-14). A command the
-  helper finds and Windows still refuses to start is the remaining 127, with
-  `bintana-exec: cannot start the child` on stderr. The handle's
+  case -- or this process's, **and nowhere else**: not `g_find_program_in_path`,
+  which searches the executable's folder, the current one and System32 before
+  PATH (`CreateProcessW`'s order), so a `sort` absent from PATH would still be
+  System32's. A relative entry (`.`, `bin`) is read from the call's
+  `Directory`, as `execvp` reads it after the child's `chdir`, and the answer
+  is canonicalised so the helper -- which starts in `Directory` -- runs that
+  file. An empty entry is skipped, so `PATH: ""` finds nothing where Linux
+  would search the current folder: "current folder" is POSIX's reading of an
+  empty entry, not Windows'. An unset PATH (`null`) searches
+  `%SystemRoot%\System32` and `%SystemRoot%`, `execvp`'s default path in
+  Windows' words. Not found is `Exec failed: no such file or directory` --
+  Linux's sentence, thrown before anything starts. Found travels to the helper
+  as an argument of its own, `=C:\...\ls.exe`, ahead of the `+` ones, and the
+  name stays at the head of the command line: **the child's `argv[0]` is
+  the name**, as on Linux; handing the path over as the command made it
+  `C:\WINDOWS\system32\cmd.exe`. `cmd /c echo %CMDCMDLINE%` shows the line as
+  it arrived and is the test; MSYS2's tools trim argv[0] themselves, so `ls`
+  says `ls:` either way and proves nothing. A batch file is the exception it
+  always was: `cmd.exe` is given its full path. The helper's own search is
+  only for a caller that did not resolve, and **not found there is 127 and
+  never a `CreateProcessW` search**: that search ran System32's `sort` for a
+  call whose PATH had none, with `ExitCode` 0 (measured 2026-11-14). A command
+  the helper is handed and Windows still refuses to start is the remaining
+  127, with `bintana-exec: cannot start the child` on stderr. The lookahead
+  reads `Environment`'s getters once more than the launcher does; a getter
+  with side effects sees two reads. The handle's
   `ProcessId` on Windows names the helper -- the group leader -- not the
   program it started; `Stop`, `Kill` and the exit status still mean the group.
 - **GLib's Windows spawn drops an empty argument**, measured on 2.90 with and

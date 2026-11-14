@@ -30,9 +30,12 @@ one-page answer to *what is new since the release I have*.
   backslash keeps its closing quote, and a `.cmd` or `.bat` runs by its bare
   name. A bare name is looked up on the PATH the child is given -- the call's
   own `Environment` PATH in any spelling of the name (`PATH`, `Path`), or the
-  program's -- and only there: one that is not on it is `Exec failed: no such
-  file or directory`, as on Linux, instead of System32's program of that name
-  or an `ExitCode` of 127.
+  program's -- and only there, a relative entry read from the call's
+  `Directory`: one that is not on it is `Exec failed: no such file or
+  directory`, as on Linux, instead of System32's program of that name or an
+  `ExitCode` of 127. The child's `argv[0]` is the name it was called by, as on
+  Linux. An empty PATH entry is skipped rather than read as the current
+  folder, so `Environment: { PATH: "" }` finds nothing on Windows.
 - **The core is the same language as the graphical host.** It closes the same
   names, runs `rad.js` the same way and links the same console globals --
   `Http`, `Database`, `Task`, `Zip`, sockets, `SerialPort`, `Keyring`,
@@ -303,7 +306,7 @@ one-page answer to *what is new since the release I have*.
   to be online reads `Online` again rather than only listening.
 - **`ZipArchive.ExtractAll` refuses what only Windows reads as more than a
   name**: a `:` (which writes an NTFS alternate data stream into another
-  file), a device such as `CON`, `NUL` or `COM1` whatever its extension, a
+  file), a device such as `CON`, `NUL`, `COM1` or `CONIN$` whatever its extension, a
   part ending in a dot or a space, and `<>"|?*` or a control character. The
   whole archive is refused before a byte is written, as for `../`. On Linux
   those letters are still ordinary names.

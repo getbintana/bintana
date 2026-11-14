@@ -13029,6 +13029,8 @@ class Form1 extends Form {
             rejected("stream", [{ name: "ok.txt", data: "fine" }, { name: "ok.txt:hidden", data: "x" }], "alternate data stream");
             rejected("device", [{ name: "sub/CON.txt", data: "x" }], "Windows device");
             rejected("device-com", [{ name: "com1", data: "x" }], "Windows device");
+            rejected("device-conin", [{ name: "CONIN$", data: "x" }], "Windows device");
+            rejected("device-clock", [{ name: "a/clock$.txt", data: "x" }], "Windows device");
             rejected("trailing-dot", [{ name: "a./b.txt", data: "x" }], "dot or a space");
             rejected("star", [{ name: "a*b.txt", data: "x" }], "does not allow");
         } else {
@@ -28686,6 +28688,27 @@ class Form1 extends Form {
                 eq("...spelled Path as well, since Windows' names ignore case",
                    Exec.Wait(["btapath", "mixto"],
                              { Environment: { Path: bin + ";" + old } }).Output.trim(), "[mixto]");
+
+                /* The child's own environment, not only the lookup: the block
+                 * it is handed must say the new PATH and not the inherited one,
+                 * whichever spelling the call used. */
+                const sys = File.Join(Environment.Get("SystemRoot") || "C:\\Windows", "System32");
+                for (const key of ["PATH", "Path"]) {
+                    const mine = bin + ";" + sys;
+                    eq(`the child reads the PATH the call gave as ${key}`,
+                       Exec.Wait(["cmd", "/c", "echo %PATH%"],
+                                 { Environment: { [key]: mine } }).Output.trim(), mine);
+                }
+
+                /* **A relative PATH entry is read from where the child starts**,
+                 * the call's Directory, as execvp reads it after its chdir. */
+                const sub = File.Join(bin, "rel");
+                Directory.Make(sub);
+                File.Save(File.Join(sub, "btarel.cmd"), "@echo off\r\necho [rel]\r\n");
+                eq("a relative PATH entry is looked up from Directory",
+                   Exec.Wait(["btarel"], { Directory: bin,
+                                           Environment: { PATH: "rel;" + sys } }).Output.trim(),
+                   "[rel]");
             } finally {
                 Directory.DeleteTree(bin);
             }
@@ -28711,6 +28734,21 @@ class Form1 extends Form {
             eq("...and Exec refuses it the same way",
                refusal(() => Exec(["bta-no-such-tool"], { Environment: { PATH: nowhere } })),
                "Exec failed: no such file or directory");
+        }
+
+        /*
+         * **The child is called by the name it was given.**  On Windows the
+         * runtime resolves a bare name to a file, and the helper used to put
+         * that path at the head of the line, so a program's argv[0] read
+         * `C:\WINDOWS\system32\cmd.exe` where Linux reads the name.  cmd's
+         * `%CMDCMDLINE%` is the line exactly as it arrived; MSYS2's own tools
+         * cannot tell, since their runtime trims argv[0] (`ls` said `ls:`
+         * either way). Red with the path at the head, 2026-11-14.
+         */
+        if (Environment.OS === "Windows") {
+            const line = Exec.Wait(["cmd", "/c", "echo %CMDCMDLINE%"]).Output.trim();
+            check("a bare name is the child's argv[0], as on Linux",
+                  line.startsWith("cmd "), line);
         }
         eq("Environment adds a name",
            Exec.Wait(["sh", "-c", "echo [$BTA_PROBE]"],

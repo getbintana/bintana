@@ -108,7 +108,32 @@ static const IID bta_iid_nlm =
 /* Windows' own level, or NULL when the Network List Manager cannot be asked
  * (then GLib's answer stands). COM is entered and left around the one call,
  * the way the notification backend does, so any thread may ask. */
+static const char *net_win32_ask(void);
+
+/* **One question per second.** A read cost 2.3 ms of COM (measured
+ * 2026-11-14, 2000 reads in 4.5 s), where Linux answers from GLib's cache; a
+ * program that reads `Online` in a loop or on every frame paid that each
+ * time. NCSI itself changes on a scale of seconds. A mutex, because a `Task`
+ * may read it too. */
 static const char *net_win32_connectivity(void)
+{
+    static GMutex      lock;
+    static gint64      when;
+    static const char *word;
+    gint64             now = g_get_monotonic_time();
+    const char        *answer;
+
+    g_mutex_lock(&lock);
+    if (!word || now - when > G_USEC_PER_SEC) {
+        word = net_win32_ask();
+        when = now;
+    }
+    answer = word;
+    g_mutex_unlock(&lock);
+    return answer;
+}
+
+static const char *net_win32_ask(void)
 {
     HRESULT              com = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     INetworkListManager *nlm = NULL;
@@ -489,7 +514,10 @@ static const JSCFunctionListEntry network_props[] = {
     /* OnChange
      *   assign `() => …`: called when `Connectivity` or `Metered` changed,
      *   once per change however many notices it took. Read them again inside;
-     *   `null` takes it off
+     *   `null` takes it off. On Windows the internet check finishes a few
+     *   seconds after the network comes up and raises no notice of its own,
+     *   so a program waiting to be `Online` reads it again on a `Timer`
+     *   rather than only waiting for this
      */
     JS_CGETSET_DEF("OnChange", net_get_onchange, net_set_onchange),
     /* Reach(host, port, callback, [options])

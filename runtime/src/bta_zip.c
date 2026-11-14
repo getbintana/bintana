@@ -666,20 +666,21 @@ static char *zip_name_problem(const char *n, bool nul)
 /*
  * What else a name may not be **on Windows**, where it becomes a path: a `:`
  * opens an NTFS alternate data stream (`notes.txt:hidden` writes into
- * `notes.txt`), `CON`, `NUL`, `COM1` and the rest are devices whatever their
+ * `notes.txt`), `CON`, `NUL`, `COM1`, `CONIN$`, `CLOCK$` and the rest are devices whatever their
  * extension, a trailing dot or space is dropped by the file system so two
  * names become one, and `<>"|?*` and control characters are not names at all.
  * On Linux all of them are ordinary letters, so the check is Windows'.
  */
 static bool zip_reserved_device(const char *part)
 {
-    static const char *const names[] = { "CON", "PRN", "AUX", "NUL" };
+    static const char *const names[] = { "CON", "PRN", "AUX", "NUL",
+                                         "CONIN$", "CONOUT$", "CLOCK$" };
     gsize stem = strcspn(part, ".");
 
     while (stem > 0 && part[stem - 1] == ' ')
         stem--;
     for (guint i = 0; i < G_N_ELEMENTS(names); i++)
-        if (stem == 3 && g_ascii_strncasecmp(part, names[i], 3) == 0)
+        if (stem == strlen(names[i]) && g_ascii_strncasecmp(part, names[i], stem) == 0)
             return true;
     return stem == 4 && g_ascii_isdigit(part[3]) &&
            (g_ascii_strncasecmp(part, "COM", 3) == 0 ||

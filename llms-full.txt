@@ -945,15 +945,16 @@ disagree.
   `runtime/src/bta_printer.c`, which is off there: printing itself works through
   GTK's Win32 backend, and `Printer.Names`/`Printer.Default` ask Win32's
   `EnumPrintersW`/`GetDefaultPrinterW`; the Unix module is the `GtkPrinter`
-  enumeration road only. **There is no local way to compile any of
-  them**: the `windows` job in `.github/workflows/ci.yml` is the compiler, and
-  its first runs are the toolchain spike `docs/plans/portability-plan.md` asked for.
+  enumeration road only. They compile on a Windows machine with the MSYS2
+  UCRT64 tree [`tools/windows-build-tree.sh`](../../tools/windows-build-tree.sh)
+  stages (its `bintana-build.cmd`, or `ninja -C build` with its `ucrt64/bin`
+  first on `PATH`), and in the `windows` job of `.github/workflows/ci.yml`.
   The same job stages the downloadable zip through
   [`tools/windows-portable.sh`](../../tools/windows-portable.sh) -- DLLs by `ldd`,
   GTK's runtime data by hand, caches rewritten to bare names because an
-  absolute path is nobody's on the machine that unzips it. None of that script
-  has run on a Windows desktop either; the log, and whoever unzips it, are the
-  test. The job installs GStreamer with `gst-plugins-rs` and poppler too, so
+  absolute path is nobody's on the machine that unzips it. The staged tree was
+  run on Windows 11 with only `System32` on `PATH` (2026-11-11, see
+  [`installing.md`](../installing.md#a-downloadable-build)). The job installs GStreamer with `gst-plugins-rs` and poppler too, so
   `Video` and `PdfDocument`'s reading half are compiled there; the portable tree
   carries the plugin directory, the scanner and poppler's data, and asks the
   staged runtime for both before the zip is published. It also runs
@@ -2141,9 +2142,36 @@ icon when the theme has one by that name (`gtkapplication.c`).
   127. A batch file goes at the head of the line by its full path, with no
   application name, so `CreateProcessW` runs it through `cmd.exe /c` itself.
   The child starts suspended and is resumed only once it is in the helper's
-  job, so a grandchild cannot start outside it. A call that gives `Exec` its
-  own `Environment` `PATH` still uses the helper: the helper inherits that
-  environment and decides, not this process's `PATH`. The handle's
+  job, so a grandchild cannot start outside it.
+  **A bare name is resolved in the parent before the spawn** (`exec_use_helper`,
+  `exec_win_search`), on the `PATH` the child will have: the call's own
+  `Environment` one -- `PATH`, `Path` or `path`, since Windows' names ignore
+  case -- or this process's, **and nowhere else**: not `g_find_program_in_path`,
+  which searches the executable's folder, the current one and System32 before
+  PATH (`CreateProcessW`'s order), so a `sort` absent from PATH would still be
+  System32's. A relative entry (`.`, `bin`) is read from the call's
+  `Directory`, as `execvp` reads it after the child's `chdir`, and the answer
+  is canonicalised so the helper -- which starts in `Directory` -- runs that
+  file. An empty entry is skipped, so `PATH: ""` finds nothing where Linux
+  would search the current folder: "current folder" is POSIX's reading of an
+  empty entry, not Windows'. An unset PATH (`null`) searches
+  `%SystemRoot%\System32` and `%SystemRoot%`, `execvp`'s default path in
+  Windows' words. Not found is `Exec failed: no such file or directory` --
+  Linux's sentence, thrown before anything starts. Found travels to the helper
+  as an argument of its own, `=C:\...\ls.exe`, ahead of the `+` ones, and the
+  name stays at the head of the command line: **the child's `argv[0]` is
+  the name**, as on Linux; handing the path over as the command made it
+  `C:\WINDOWS\system32\cmd.exe`. `cmd /c echo %CMDCMDLINE%` shows the line as
+  it arrived and is the test; MSYS2's tools trim argv[0] themselves, so `ls`
+  says `ls:` either way and proves nothing. A batch file is the exception it
+  always was: `cmd.exe` is given its full path. The helper's own search is
+  only for a caller that did not resolve, and **not found there is 127 and
+  never a `CreateProcessW` search**: that search ran System32's `sort` for a
+  call whose PATH had none, with `ExitCode` 0 (measured 2026-11-14). A command
+  the helper is handed and Windows still refuses to start is the remaining
+  127, with `bintana-exec: cannot start the child` on stderr. The lookahead
+  reads `Environment`'s getters once more than the launcher does; a getter
+  with side effects sees two reads. The handle's
   `ProcessId` on Windows names the helper -- the group leader -- not the
   program it started; `Stop`, `Kill` and the exit status still mean the group.
 - **GLib's Windows spawn drops an empty argument**, measured on 2.90 with and
@@ -2152,7 +2180,9 @@ icon when the theme has one by that name (`gtkapplication.c`).
   (`exec_use_helper`), which the helper takes off and refuses to do without.
   The helper's own quoting writes `""` for an empty argument and doubles the
   backslashes before a closing quote (`"C:\a b\"` read back as `C:\a b"`);
-  `tests/win-desktop.c` has the same function and the same fix.
+  The quoter is `runtime/src/bta_win_quote.h`, the one copy `bintana-exec`
+  and `tests/win-desktop.c` both include: they had been two, and were fixed
+  apart once.
   This is the Windows spelling of what POSIX already did -- a child with pipes
   and no terminal -- and it is not the IDE's business: a pure GTK application
   that runs `git` gets the same answer.
@@ -11351,6 +11381,17 @@ each rule below; read it before changing a level.
   where somebody checked: NetworkManager with `ConnectivityCheckEnabled`
   (read from NM itself over the system bus), or the portal inside a sandbox.
   Everything else with a route is `"Routed"`, and `Online` is `false` there.
+- **On Windows that rule left `Online` false forever**: GLib's Win32 monitor
+  is route-only. Windows' own check is NCSI, published by
+  `INetworkListManager::GetConnectivity` (an `*_INTERNET` bit), so on Windows
+  the Network List Manager answers before GLib -- `"Full"`, `"Local"` or
+  `"None"` -- and GLib's answer stands only when COM cannot be asked. NCSI
+  settling after a route change raises no GLib notice, so `OnChange` can miss
+  that one step. The GUIDs are spelled in the file because the graphical host
+  links no `libuuid`. Measured 2026-11-14 on Windows 11: `Full`/`true`. One
+  question cost 2.3 ms of COM, so the answer is kept for a second
+  (`net_win32_connectivity`, under a mutex for a `Task`); the public
+  description of `OnChange` tells a program to poll on a `Timer`.
 - **Force a backend with `GIO_USE_NETWORK_MONITOR`** (`networkmanager`,
   `netlink`, `base`) to see what each answers on the same machine. `portal` is
   refused outside a sandbox and falls back silently.
@@ -14976,8 +15017,10 @@ same conclusion first, and both now export `HEADLESS=${HEADLESS-1}`: with `-`
 rather than `:-`, so that an explicitly empty one survives and the way back
 works.
 
-**Windows has no `xvfb-run`.** There the only display is the session's own, so
-`run.sh` leaves `HEADLESS` empty and `HEADLESS=1` cannot be honored. The same
+**Windows has no `xvfb-run`.** There `run.sh` honours `HEADLESS=1` with a
+private `CreateDesktop` desktop instead (see
+[Windows](#windows-where-the-suite-gets-a-desktop) below), and falls back to the real
+screen, with a sentence, only when it cannot build that helper. The same
 checkout may have `tests/ide`'s `.form` symlinks written as text files when Git
 could not create links (Developer Mode off); `tests/check.sh` says so and skips
 that one project rather than reporting twenty JSON errors. `tests/check.sh` is
@@ -15256,22 +15299,23 @@ crashes when a window message reaches a context that has already been destroyed
 (the stack is in `libgtk-4-1.dll`), and it can land under any test once the
 suite has been up for a few minutes. No test types IME text on Windows, so the
 suite runs without one; that is a workaround for a GTK bug and not a runtime
-setting. It removes that crash, not every one: a native run of `tests/widgets`
-still takes a `g_utf8_to_utf16`-with-NULL segmentation fault inside `libgtk`'s
-window procedure, at the end of the run, in the idle before the summary — a run
-stopped at `ExecCloseInput` hits it too, so it is not `Exec`'s chain. The timing
-under gdb is enough to miss it, which is how the rest of the suite was measured.
+setting. The other crash a native run used to take, a `g_utf8_to_utf16`-with-NULL
+segmentation fault near the end, was GTK 4.24.1's clipboard
+([`ISSUE-windows-clipboard-crash.md`](issues/ISSUE-windows-clipboard-crash.md)):
+with `testClipboard`'s round trip skipped on Windows, no run has crashed since
+(2026-11-12).
 
-Measured on Windows 11 26H2 (2026-11-11), on that desktop: `tests/smoke`
-171/0, `tests/markdown` 171/0, `tests/qr` 120/0, `tests/report` 259/0 and
-`tests/xlsx` 57/0. `tests/widgets` ran natively on 2026-11-13: 6372
-assertions, with the two or three crowding failures in
-[`docs/agents/testing.md`](agents/testing.md) — the last run was 6370 passed,
-2 failed — and the clipboard round trip skipped because of the GTK crash
-above. An earlier run under gdb was 6112 assertions and 53 failures, many of
-them the slower debugger and HTTP timing. The full `tests/ide` project ran
-3804/0 there on 2026-11-13, the terminal's `cmd.exe` replacing `/bin/pwd` and
-the debugger accepting either separator in a breakpoint's file.
+Measured on Windows 11 26H2 (2026-11-14), the whole `./tests/run.sh` on that
+desktop with `TIMEOUT=2400`: `tests/ide` 3839/0, `tests/markdown` 171/0,
+`tests/qr` 120/0, `tests/report` 259/0, `tests/smoke` 171/0, `tests/widgets`
+6456/0 and `tests/xlsx` 57/0 -- 11073 assertions, none failed, with the
+clipboard round trip skipped because of the GTK crash above. The crowding
+failures in [`docs/agents/testing.md`](agents/testing.md) (the run of
+2026-11-13 was 6370 passed, 2 failed) did not appear in this one; an earlier
+run under gdb was 6112 assertions and 53 failures, many of them the slower
+debugger and HTTP timing. `tests/ide` runs there with the terminal's
+`cmd.exe` replacing `/bin/pwd` and the debugger accepting either separator in
+a breakpoint's file.
 
 The Windows differences worth knowing before reading a red run:
 
@@ -15283,7 +15327,10 @@ The Windows differences worth knowing before reading a red run:
   argument (GLib's spawn drops it, the helper's `+` prefix carries it), a
   quoted argument ending in a backslash, and a `.cmd` found on `PATH` by its
   bare name with its exit status; the last is Windows-only. All three were red
-  against the helper as first committed (2026-11-14).
+  against the helper as first committed (2026-11-14). On Windows it also holds
+  the lookup: the call's own PATH spelled `Path`, and `sort` or an unknown name
+  absent from that PATH being Linux's `no such file or directory` rather than
+  System32's `sort` or an `ExitCode` of 127.
 - **`Exec.Wait.Output` keeps the child's line endings.** The line callback
   strips CRLF; a test that splits `Output` on `\n` uses `outputLines()` in
   `WidgetsForm.js`, or it compares a `\r` the platform put there.
@@ -15298,11 +15345,14 @@ The Windows differences worth knowing before reading a red run:
   reports status `1` rather than a signal's `-1`, and there are no process
   groups: `ExecKill` skips. `DISPLAY` is X11's, so a console child still has a
   display: the form-needs-`DISPLAY` control skips while its `main` half runs.
-- **The font and colour choosers are modal and nothing in JS can close them.**
+- **The colour chooser is modal and nothing in JS can close it.**
   `testFileDialog` already refuses to open one for that reason; the two
-  `Dialog.Color` calls got away with sitting open on Linux, and the font
-  chooser's preview is one more GTK/Win32 path with a NULL family. Both are
-  skipped on Windows and only their refusals are asserted.
+  `Dialog.Color` calls got away with sitting open on Linux. It is skipped on
+  Windows and only its refusals are asserted. The font chooser runs there: it
+  had been skipped as a crash that turned out to be the clipboard's.
+- **`ZipArchive.ExtractAll` refuses more names on Windows** (`:`, devices such
+  as `CON`, a trailing dot or space, `<>"|?*`), and `testZip` asserts those
+  refusals there and that `12:30.log` extracts elsewhere.
 
 ## What a test has to prove
 

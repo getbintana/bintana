@@ -252,7 +252,10 @@ each rule below; read it before changing a level.
   `"None"` -- and GLib's answer stands only when COM cannot be asked. NCSI
   settling after a route change raises no GLib notice, so `OnChange` can miss
   that one step. The GUIDs are spelled in the file because the graphical host
-  links no `libuuid`. Measured 2026-11-14 on Windows 11: `Full`/`true`.
+  links no `libuuid`. Measured 2026-11-14 on Windows 11: `Full`/`true`. One
+  question cost 2.3 ms of COM, so the answer is kept for a second
+  (`net_win32_connectivity`, under a mutex for a `Task`); the public
+  description of `OnChange` tells a program to poll on a `Timer`.
 - **Force a backend with `GIO_USE_NETWORK_MONITOR`** (`networkmanager`,
   `netlink`, `base`) to see what each answers on the same machine. `portal` is
   refused outside a sandbox and falls back silently.

@@ -174,11 +174,28 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
         return 2;
     }
 
+    /* **The program, when the runtime resolved it**: `=C:\...\sh.exe` comes
+     * first, and the command that follows is the name the child is called by
+     * -- its `argv[0]` stays `sh`, as on Linux, while the file that runs is the
+     * one the runtime found on the child's PATH. */
+    const wchar_t *given = NULL;
+    int            first = 1;
+
+    if (argv[1][0] == L'=') {
+        given = argv[1] + 1;
+        first = 2;
+        if (argc < 3 || !*given) {
+            say("bintana-exec: '=' names a program and a command follows it\n");
+            LocalFree(argv);
+            return 2;
+        }
+    }
+
     /* **Each argument arrives with a `+` in front** (`exec_use_helper` in
      * bta_sys.c): GLib's spawn drops an empty argument on its way here, and a
      * prefixed one is never empty.  Taken off in place, so `argv[i]` is the
      * argument from here on. */
-    for (int i = 1; i < argc; i++) {
+    for (int i = first; i < argc; i++) {
         if (argv[i][0] != L'+') {
             say("bintana-exec: every argument must start with '+'\n");
             LocalFree(argv);
@@ -187,11 +204,11 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
         argv[i]++;
     }
 
-    wchar_t *program = find_command(argv[1]);
-    /* **Not found is not started.**  `exec_use_helper` hands over an absolute
-     * path, so this is a caller that did not; letting `CreateProcessW` search
-     * instead would run whatever its own order finds first -- System32's
-     * `sort` for a PATH that has none. */
+    wchar_t *program = given ? _wcsdup(given) : find_command(argv[first]);
+    /* **Not found is not started.**  `exec_use_helper` hands over the path, so
+     * this is a caller that did not; letting `CreateProcessW` search instead
+     * would run whatever its own order finds first -- System32's `sort` for a
+     * PATH that has none. */
     if (!program) {
         say("bintana-exec: the command is not on the PATH the child was given\n");
         LocalFree(argv);
@@ -201,10 +218,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
      * and no application: CreateProcessW then starts `cmd.exe /c` with that
      * line itself, which is what `_wspawnvp` did. */
     bool           batch = is_batch(program);
-    const wchar_t *head  = batch ? program : argv[1];
+    const wchar_t *head  = batch ? program : argv[first];
 
     size_t size = wcslen(head) * 2 + 4;
-    for (int i = 2; i < argc; i++)
+    for (int i = first + 1; i < argc; i++)
         size += wcslen(argv[i]) * 2 + 4;
 
     wchar_t *line = malloc(size * sizeof(wchar_t));
@@ -215,7 +232,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
     }
     line[0] = 0;
     bta_win_append_quoted(line, head);
-    for (int i = 2; i < argc; i++) {
+    for (int i = first + 1; i < argc; i++) {
         wcscat(line, L" ");
         bta_win_append_quoted(line, argv[i]);
     }

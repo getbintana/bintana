@@ -3023,9 +3023,17 @@ static char *exec_custom_path(JSContext *ctx, JSValueConst opts, bool *custom,
  * `.cmd`.  Not `g_find_program_in_path`, which on Windows searches the
  * application's folder, the current folder and System32 *before* PATH --
  * `CreateProcessW`'s order -- and so finds Windows' `sort` ahead of the one the
- * PATH names.  An absolute path, or NULL.
+ * PATH names.  An empty entry is skipped: "the current folder" is POSIX's
+ * reading of one, not Windows'.
+ *
+ * **A relative entry (`.`, `bin`) is read from where the child starts** --
+ * `base`, the call's `Directory`, or this process's folder without one -- as
+ * `execvp` reads it on Linux after the child's `chdir`.  The answer is
+ * canonical and absolute, so the helper, which starts in `Directory`, runs the
+ * file that was found and not another.  NULL when there is none.
  */
-static char *exec_win_search(const char *path, const char *command)
+static char *exec_win_search(const char *path, const char *command,
+                             const char *base)
 {
     if (!path || !*path)
         return NULL;
@@ -3055,9 +3063,11 @@ static char *exec_win_search(const char *path, const char *command)
             continue;
         for (guint e = 0; e < count && !found; e++) {
             char *name      = g_strconcat(command, extensions[e], NULL);
-            char *candidate = g_build_filename(dir, name, NULL);
+            char *joined    = g_build_filename(dir, name, NULL);
+            char *candidate = g_canonicalize_filename(joined, base);
 
             g_free(name);
+            g_free(joined);
             if (g_file_test(candidate, G_FILE_TEST_IS_REGULAR))
                 found = candidate;
             else
@@ -3102,13 +3112,18 @@ static bool exec_command_exists(const char *command, const char *directory)
  *
  * **A bare name is resolved here, on the PATH the child will have** -- the
  * call's own, spelled `PATH`, `Path` or any other way, or this process's --
- * and the helper is handed the absolute path.  Two things follow. A name that
- * PATH does not have is `<verb> failed: no such file or directory`, the
- * exception Linux gives, instead of the helper's exit status 127; and the
- * helper never leaves the search to `CreateProcessW`, which would find
- * Windows' own `sort` in System32 for a PATH that has none.  With no PATH of
- * the call's own, a name that only `g_find_program_in_path` finds (beside the
- * executable, in the current folder) still runs, as it did before the helper.
+ * and nowhere else: not the executable's folder, not the current one, not
+ * System32 unless PATH names it, which is what `execvp` does on Linux.  A
+ * name PATH does not have is `<verb> failed: no such file or directory`,
+ * Linux's exception, instead of the helper's exit status 127, and the helper
+ * never leaves the search to `CreateProcessW`, which would find Windows' own
+ * `sort` in System32 for a PATH that has none.
+ *
+ * **The child still sees the name it was called by.**  The helper is handed
+ * the resolved path as an argument of its own (`=C:\...\sh.exe`, before the
+ * `+` arguments) and the name as the head of the command line, so `argv[0]`,
+ * `$0` and `sys.argv[0]` read `sh` as they do on Linux.  A batch file is the
+ * exception it always was: `cmd.exe` is handed its full path.
  */
 static bool exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args,
                             const char *verb)
@@ -3131,8 +3146,16 @@ static bool exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args,
             g_free(path);
             return true;            /* the launcher says what is wrong with it */
         }
+        /* Where the child starts, which is what a relative entry is read
+         * from: the call's `Directory`, itself read from here. */
+        char *directory = exec_option_directory(ctx, opts);
+        char *base      = directory && *directory
+                              ? g_canonicalize_filename(directory, NULL)
+                              : g_get_current_dir();
+
+        g_free(directory);
         if (custom && path) {
-            resolved = exec_win_search(path, command);
+            resolved = exec_win_search(path, command, base);
         } else if (custom) {
             /* PATH unset: the system's own folders, as `execvp` falls back to
              * its default path on Linux and `CreateProcessW` searches them. */
@@ -3141,13 +3164,12 @@ static bool exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args,
                                                root ? root : "C:\\Windows",
                                                root ? root : "C:\\Windows");
 
-            resolved = exec_win_search(dirs, command);
+            resolved = exec_win_search(dirs, command, base);
             g_free(dirs);
         } else {
-            resolved = exec_win_search(g_getenv("PATH"), command);
-            if (!resolved)
-                resolved = g_find_program_in_path(command);
+            resolved = exec_win_search(g_getenv("PATH"), command, base);
         }
+        g_free(base);
         g_free(path);
         if (!resolved) {
             /* Word for word what GLib's spawn says on Linux, so a program
@@ -3169,10 +3191,6 @@ static bool exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args,
         g_free(resolved);
         return true;
     }
-    if (resolved) {
-        g_free(args->pdata[0]);
-        args->pdata[0] = resolved;
-    }
 
     /*
      * **Every argument travels with a `+` in front, which the helper takes
@@ -3187,6 +3205,10 @@ static bool exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args,
 
         args->pdata[i] = g_strconcat("+", arg, NULL);
         g_free(arg);
+    }
+    if (resolved) {
+        g_ptr_array_insert(args, 0, g_strconcat("=", resolved, NULL));
+        g_free(resolved);
     }
     g_ptr_array_insert(args, 0, helper);
     return true;
