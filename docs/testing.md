@@ -318,16 +318,17 @@ segmentation fault near the end, was GTK 4.24.1's clipboard
 with `testClipboard`'s round trip skipped on Windows, no run has crashed since
 (2026-11-12).
 
-Measured on Windows 11 26H2 (2026-11-11), on that desktop: `tests/smoke`
-171/0, `tests/markdown` 171/0, `tests/qr` 120/0, `tests/report` 259/0 and
-`tests/xlsx` 57/0. `tests/widgets` ran natively on 2026-11-13: 6372
-assertions, with the two or three crowding failures in
-[`docs/agents/testing.md`](agents/testing.md) — the last run was 6370 passed,
-2 failed — and the clipboard round trip skipped because of the GTK crash
-above. An earlier run under gdb was 6112 assertions and 53 failures, many of
-them the slower debugger and HTTP timing. The full `tests/ide` project ran
-3804/0 there on 2026-11-13, the terminal's `cmd.exe` replacing `/bin/pwd` and
-the debugger accepting either separator in a breakpoint's file.
+Measured on Windows 11 26H2 (2026-11-14), the whole `./tests/run.sh` on that
+desktop with `TIMEOUT=2400`: `tests/ide` 3839/0, `tests/markdown` 171/0,
+`tests/qr` 120/0, `tests/report` 259/0, `tests/smoke` 171/0, `tests/widgets`
+6456/0 and `tests/xlsx` 57/0 -- 11073 assertions, none failed, with the
+clipboard round trip skipped because of the GTK crash above. The crowding
+failures in [`docs/agents/testing.md`](agents/testing.md) (the run of
+2026-11-13 was 6370 passed, 2 failed) did not appear in this one; an earlier
+run under gdb was 6112 assertions and 53 failures, many of them the slower
+debugger and HTTP timing. `tests/ide` runs there with the terminal's
+`cmd.exe` replacing `/bin/pwd` and the debugger accepting either separator in
+a breakpoint's file.
 
 The Windows differences worth knowing before reading a red run:
 
