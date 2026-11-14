@@ -21437,7 +21437,7 @@
           "Params": 1,
           "Signature": "(folder, [{ MaxSize }], [cancellable])",
           "Returns": "number",
-          "Doc": "every entry under `folder`, made as needed, answering how many files it wrote. **Nothing is written until every name, every method and the total size have passed**: an entry named `../x`, an absolute path, a drive letter, a backslash or an empty part refuses the whole archive. Existing files are replaced; only files and folders are made, never a link. A `Cancellable` last stops it between two entries, leaving the ones written",
+          "Doc": "every entry under `folder`, made as needed, answering how many files it wrote. **Nothing is written until every name, every method and the total size have passed**: an entry named `../x`, an absolute path, a drive letter, a backslash or an empty part refuses the whole archive -- and on Windows also a `:` (an alternate data stream), `<>\"|?*`, a device name such as `CON` or `NUL`, or a part ending in a dot or a space. Existing files are replaced; only files and folders are made, never a link. A `Cancellable` last stops it between two entries, leaving the ones written",
           "Native": true
         },
         {

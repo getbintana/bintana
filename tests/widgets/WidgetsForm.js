@@ -13022,6 +13022,31 @@ class Form1 extends Form {
         rejected("encrypted-in-all", [{ name: "ok.txt", data: "fine" }, { name: "secret.txt", data: "x", flags: 1 }], "encrypted");
         rejected("method", [{ name: "bz.txt", data: "x", method: 12 }], "method 12");
 
+        /* What only Windows reads as more than a name: `a.txt:s` writes an NTFS
+         * alternate data stream into `a.txt`, `CON.txt` is the console, and a
+         * trailing dot is dropped. On Linux the same letters are a file. */
+        if (Environment.OS === "Windows") {
+            rejected("stream", [{ name: "ok.txt", data: "fine" }, { name: "ok.txt:hidden", data: "x" }], "alternate data stream");
+            rejected("device", [{ name: "sub/CON.txt", data: "x" }], "Windows device");
+            rejected("device-com", [{ name: "com1", data: "x" }], "Windows device");
+            rejected("trailing-dot", [{ name: "a./b.txt", data: "x" }], "dot or a space");
+            rejected("star", [{ name: "a*b.txt", data: "x" }], "does not allow");
+        } else {
+            const archive = put("colon.zip", zipBuild([{ name: "12:30.log", data: "x" }]));
+            const out = File.Join(dir, "out-colon");
+            Directory.Make(out);
+            Zip.Open(archive).ExtractAll(out);
+            check("a ':' in a name is an ordinary letter off Windows", File.Exists(File.Join(out, "12:30.log")));
+        }
+        {   /* a name that only looks like a device is a name */
+            const archive = put("console.zip", zipBuild([{ name: "console.txt", data: "x" }, { name: "CONFIG/a.txt", data: "y" }]));
+            const out = File.Join(dir, "out-console");
+            Directory.Make(out);
+            Zip.Open(archive).ExtractAll(out);
+            check("console.txt and CONFIG/ are not devices",
+                  File.Exists(File.Join(out, "console.txt")) && File.Exists(File.Join(out, "CONFIG", "a.txt")));
+        }
+
         {   /* the ceiling is the caller's to raise, and then it is not in the way */
             const archive = put("ceil.zip", zipBuild([{ name: "a.txt", data: "x".repeat(600) }, { name: "b.txt", data: "y".repeat(600) }]));
             const out = File.Join(dir, "out-ceil");

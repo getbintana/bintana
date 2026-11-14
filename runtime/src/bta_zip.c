@@ -42,6 +42,9 @@
  *   absolute name, a drive letter, a backslash, a `..` or empty component, and a NUL
  *   -- the zip-slip class, an entry called `../../.ssh/authorized_keys` -- and
  *   **refuse the whole archive before writing a byte**, so a refusal leaves nothing.
+ *   `ExtractAll` on Windows also refuses what only Windows reads as more than a
+ *   name: a `:` (an alternate data stream), a device (`CON`, `NUL`, `COM1`), a
+ *   part ending in a dot or a space, and `<>"|?*` (see `zip_windows_name_problem`).
  *   Only regular files and folders are ever made: there is no mode and no link in
  *   what this writes, so an archive cannot plant a symlink. A symlink already in the
  *   destination is the caller's, as it is for every extractor.
@@ -659,9 +662,67 @@ static char *zip_name_problem(const char *n, bool nul)
                                  "or has an empty part", n) : NULL;
 }
 
+#ifdef G_OS_WIN32
+/*
+ * What else a name may not be **on Windows**, where it becomes a path: a `:`
+ * opens an NTFS alternate data stream (`notes.txt:hidden` writes into
+ * `notes.txt`), `CON`, `NUL`, `COM1` and the rest are devices whatever their
+ * extension, a trailing dot or space is dropped by the file system so two
+ * names become one, and `<>"|?*` and control characters are not names at all.
+ * On Linux all of them are ordinary letters, so the check is Windows'.
+ */
+static bool zip_reserved_device(const char *part)
+{
+    static const char *const names[] = { "CON", "PRN", "AUX", "NUL" };
+    gsize stem = strcspn(part, ".");
+
+    while (stem > 0 && part[stem - 1] == ' ')
+        stem--;
+    for (guint i = 0; i < G_N_ELEMENTS(names); i++)
+        if (stem == 3 && g_ascii_strncasecmp(part, names[i], 3) == 0)
+            return true;
+    return stem == 4 && g_ascii_isdigit(part[3]) &&
+           (g_ascii_strncasecmp(part, "COM", 3) == 0 ||
+            g_ascii_strncasecmp(part, "LPT", 3) == 0);
+}
+
+static char *zip_windows_name_problem(const char *n)
+{
+    char **parts = g_strsplit(n, "/", -1);
+    char  *why = NULL;
+
+    for (guint i = 0; parts[i] && !why; i++) {
+        const char *p = parts[i];
+        gsize       len = strlen(p);
+
+        if (!len)
+            continue;
+        if (strchr(p, ':'))
+            why = g_strdup_printf("'%s' has a ':', which on Windows writes an alternate "
+                                  "data stream into another file", n);
+        for (const char *c = p; *c && !why; c++)
+            if ((guchar)*c < 32 || strchr("<>\"|?*", *c))
+                why = g_strdup_printf("'%s' has a character Windows does not allow in a name", n);
+        if (!why && (p[len - 1] == '.' || p[len - 1] == ' '))
+            why = g_strdup_printf("'%s' has a part ending in a dot or a space, which "
+                                  "Windows drops, so two entries could be one file", n);
+        if (!why && zip_reserved_device(p))
+            why = g_strdup_printf("'%s' names a Windows device (CON, NUL, COM1 ...)", n);
+    }
+    g_strfreev(parts);
+    return why;
+}
+#endif
+
 static char *zip_bad_name(const ZipEntry *x)
 {
-    return zip_name_problem(x->name, x->nul);
+    char *why = zip_name_problem(x->name, x->nul);
+
+#ifdef G_OS_WIN32
+    if (!why)
+        why = zip_windows_name_problem(x->name);
+#endif
+    return why;
 }
 
 static bool zip_write_file(const char *dest, const guint8 *data, gsize n, char **why)
@@ -854,7 +915,9 @@ static const JSCFunctionListEntry zip_proto_props[] = {
      *   every entry under `folder`, made as needed, answering how many files it
      *   wrote. **Nothing is written until every name, every method and the total
      *   size have passed**: an entry named `../x`, an absolute path, a drive
-     *   letter, a backslash or an empty part refuses the whole archive. Existing
+     *   letter, a backslash or an empty part refuses the whole archive -- and on
+     *   Windows also a `:` (an alternate data stream), `<>"|?*`, a device name
+     *   such as `CON` or `NUL`, or a part ending in a dot or a space. Existing
      *   files are replaced; only files and folders are made, never a link. A
      *   `Cancellable` last stops it between two entries, leaving the ones
      *   written
