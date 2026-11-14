@@ -2950,6 +2950,12 @@ static char *exec_option_directory(JSContext *ctx, JSValueConst opts)
         JS_FreeCString(ctx, text);
     }
     JS_FreeValue(ctx, value);
+    /* A getter that threw is consumed: this is a lookahead, and the launcher
+     * reads `Directory` again and reports what it finds -- as
+     * `exec_custom_path` does for `Environment`.  Left pending, it surfaced
+     * in whatever called into JS next. */
+    if (JS_HasException(ctx))
+        JS_FreeValue(ctx, JS_GetException(ctx));
     return dir;
 }
 
@@ -5959,7 +5965,11 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   is no place for a default that never ends — and `Timeout: 0` is the
      *   explicit *wait forever*. A `Cancellable` last ends the child when
      *   raised, and raised already starts none; in a task,
-     *   `this.Cancellable` is how `Stop` reaches it
+     *   `this.Cancellable` is how `Stop` reaches it. Here as in `Exec`, a bare
+     *   command name is looked up on the PATH the child is given -- the
+     *   options' `Environment` one when there is one, else the program's --
+     *   with a relative entry read from `Directory`; one not found there
+     *   throws `no such file or directory`
      */
     JS_SetPropertyStr(ctx, exec, "Wait",
                       JS_NewCFunction(ctx, sys_exec_wait, "Wait", 3));

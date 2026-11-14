@@ -745,8 +745,10 @@ icon when the theme has one by that name (`gtkapplication.c`).
   file. An empty entry is skipped, so `PATH: ""` finds nothing where Linux
   would search the current folder: "current folder" is POSIX's reading of an
   empty entry, not Windows'. An unset PATH (`null`) searches
-  `%SystemRoot%\System32` and `%SystemRoot%`, `execvp`'s default path in
-  Windows' words. Not found is `Exec failed: no such file or directory` --
+  `%SystemRoot%\System32` and `%SystemRoot%` -- the system's folders, as GLib's
+  default on Linux is `/bin:/usr/bin:.`, **but without that trailing `.`**:
+  a tool in the current folder runs with `PATH: null` on Linux and is not
+  found on Windows, the same choice as for an empty entry. Not found is `Exec failed: no such file or directory` --
   Linux's sentence, thrown before anything starts. Found travels to the helper
   as an argument of its own, `=C:\...\ls.exe`, ahead of the `+` ones, and the
   name stays at the head of the command line: **the child's `argv[0]` is

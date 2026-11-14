@@ -14877,7 +14877,7 @@
           "Params": 3,
           "Signature": "(argv, [options], [cancellable])",
           "Returns": "{ ExitCode, Output }",
-          "Doc": "runs it and **waits**, answering what it printed: `{ ExitCode, Output }`. It blocks the main loop, so it is for programs that answer in milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for one that might sit there; `Input` is the text or `Bytes` the child reads, which is what makes `Exec.Wait([\"sort\"], { Input: text })` a filter. **With no `Timeout` it gives up after 30 s** — a frozen window is no place for a default that never ends — and `Timeout: 0` is the explicit *wait forever*. A `Cancellable` last ends the child when raised, and raised already starts none; in a task, `this.Cancellable` is how `Stop` reaches it",
+          "Doc": "runs it and **waits**, answering what it printed: `{ ExitCode, Output }`. It blocks the main loop, so it is for programs that answer in milliseconds -- `msgfmt`, `git rev-parse`, `which` -- and never for one that might sit there; `Input` is the text or `Bytes` the child reads, which is what makes `Exec.Wait([\"sort\"], { Input: text })` a filter. **With no `Timeout` it gives up after 30 s** — a frozen window is no place for a default that never ends — and `Timeout: 0` is the explicit *wait forever*. A `Cancellable` last ends the child when raised, and raised already starts none; in a task, `this.Cancellable` is how `Stop` reaches it. Here as in `Exec`, a bare command name is looked up on the PATH the child is given -- the options' `Environment` one when there is one, else the program's -- with a relative entry read from `Directory`; one not found there throws `no such file or directory`",
           "Native": true
         }
       ]

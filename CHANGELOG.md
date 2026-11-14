@@ -36,7 +36,9 @@ one-page answer to *what is new since the release I have*.
   `ExitCode` of 127. The child's `argv[0]` is the name it was called by, as on
   Linux. An empty PATH entry is skipped rather than read as the current
   folder, so `Environment: { PATH: "" }` finds nothing on Windows, where Linux
-  reads it as the current folder.
+  reads it as the current folder; and `PATH: null` searches System32 and the
+  Windows folder, where Linux's default (`/bin:/usr/bin:.`) also has the
+  current folder.
 - **The core is the same language as the graphical host.** It closes the same
   names, runs `rad.js` the same way and links the same console globals --
   `Http`, `Database`, `Task`, `Zip`, sockets, `SerialPort`, `Keyring`,
