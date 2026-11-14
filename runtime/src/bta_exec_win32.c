@@ -34,13 +34,19 @@
 #include <string.h>
 #include <wchar.h>
 
-/* One argument, quoted the way CommandLineToArgvW reads it back.  The same
- * function `tests/win-desktop.c` uses; there is no GLib here to borrow one
- * from. */
+/* One argument, quoted the way CommandLineToArgvW and the CRT read it back.
+ * The same function `tests/win-desktop.c` uses; there is no GLib here to
+ * borrow one from.
+ *
+ * **An empty argument is `""`**, or it vanishes: `git commit -m ""` reached
+ * git one argument short.  **Backslashes before the closing quote are
+ * doubled**, or `"C:\My dir\"` reads as `C:\My dir"` with the quote escaped.
+ * Backslashes anywhere else are literal.  The caller sizes `out` at twice the
+ * argument plus four, which covers both. */
 static void append_quoted(wchar_t *out, const wchar_t *arg)
 {
     const wchar_t *p = arg;
-    int            quote = 0;
+    int            quote = *arg == 0;
 
     for (const wchar_t *q = arg; *q; q++)
         if (*q == L' ' || *q == L'\t' || *q == L'"')
@@ -54,11 +60,15 @@ static void append_quoted(wchar_t *out, const wchar_t *arg)
             backslashes++;
             p++;
         }
-        if (*p == L'"') {
-            for (int i = 0; i < backslashes * 2 + 1; i++)
+        if (*p == L'"' || (*p == 0 && quote)) {
+            int count = backslashes * 2 + (*p == L'"');
+
+            for (int i = 0; i < count; i++)
                 wcscat(out, L"\\");
-            wcscat(out, L"\"");
-            p++;
+            if (*p == L'"') {
+                wcscat(out, L"\"");
+                p++;
+            }
         } else {
             for (int i = 0; i < backslashes; i++)
                 wcscat(out, L"\\");
@@ -118,17 +128,20 @@ static wchar_t *find_command(const wchar_t *command)
 
     /* A bare name is not an executable: Windows runs `cmd.exe`, not the
      * extensionless `cmd` script some MSYS2 directories carry.  A name that
-     * already has an extension is taken as it is. */
-    const wchar_t *extensions[3];
+     * already has an extension is tried as it is first.  **The batch
+     * extensions are searched too**, in `_wspawnvp`'s order: `npm`, `code` and
+     * the IDE's own launcher are `.cmd` files, and `g_find_program_in_path`
+     * (which decides the helper is used at all) finds them -- leaving them out
+     * here made such a command a 127 instead of a run. */
+    const wchar_t *extensions[5];
     size_t         count = 0;
 
-    if (wcschr(command, L'.')) {
+    if (wcschr(command, L'.'))
         extensions[count++] = L"";
-        extensions[count++] = L".exe";
-    } else {
-        extensions[count++] = L".exe";
-        extensions[count++] = L".com";
-    }
+    extensions[count++] = L".com";
+    extensions[count++] = L".exe";
+    extensions[count++] = L".bat";
+    extensions[count++] = L".cmd";
 
     wchar_t *copy  = _wcsdup(path);
     wchar_t *found = NULL;
@@ -171,6 +184,15 @@ static wchar_t *find_command(const wchar_t *command)
     return found;
 }
 
+/* A batch file, which CreateProcessW runs through `cmd.exe` only when it is
+ * named in the command line rather than as the application. */
+static bool is_batch(const wchar_t *path)
+{
+    const wchar_t *dot = path ? wcsrchr(path, L'.') : NULL;
+
+    return dot && (!_wcsicmp(dot, L".bat") || !_wcsicmp(dot, L".cmd"));
+}
+
 static void say(const char *text)
 {
     DWORD written = 0;
@@ -195,19 +217,40 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
         return 2;
     }
 
-    size_t size = 0;
-    for (int i = 1; i < argc; i++)
+    /* **Each argument arrives with a `+` in front** (`exec_use_helper` in
+     * bta_sys.c): GLib's spawn drops an empty argument on its way here, and a
+     * prefixed one is never empty.  Taken off in place, so `argv[i]` is the
+     * argument from here on. */
+    for (int i = 1; i < argc; i++) {
+        if (argv[i][0] != L'+') {
+            say("bintana-exec: every argument must start with '+'\n");
+            LocalFree(argv);
+            return 2;
+        }
+        argv[i]++;
+    }
+
+    wchar_t *program = find_command(argv[1]);
+    /* A batch file is named by its full path at the head of the command line
+     * and no application: CreateProcessW then starts `cmd.exe /c` with that
+     * line itself, which is what `_wspawnvp` did. */
+    bool           batch = is_batch(program);
+    const wchar_t *head  = batch ? program : argv[1];
+
+    size_t size = wcslen(head) * 2 + 4;
+    for (int i = 2; i < argc; i++)
         size += wcslen(argv[i]) * 2 + 4;
 
     wchar_t *line = malloc(size * sizeof(wchar_t));
     if (!line) {
+        free(program);
         LocalFree(argv);
         return 2;
     }
     line[0] = 0;
-    for (int i = 1; i < argc; i++) {
-        if (i > 1)
-            wcscat(line, L" ");
+    append_quoted(line, head);
+    for (int i = 2; i < argc; i++) {
+        wcscat(line, L" ");
         append_quoted(line, argv[i]);
     }
 
@@ -225,24 +268,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
     PROCESS_INFORMATION pi;
     ZeroMemory(&pi, sizeof pi);
 
-    wchar_t *program = find_command(argv[1]);
-
-    if (!CreateProcessW(program, line, NULL, NULL, TRUE, CREATE_NO_WINDOW,
-                        NULL, NULL, &si, &pi)) {
-        char message[512];
-
-        _snprintf(message, sizeof message,
-                  "bintana-exec: cannot start the child: Windows error %lu\n",
-                  (unsigned long)GetLastError());
-        message[sizeof message - 1] = 0;
-        say(message);
-        free(program);
-        free(line);
-        LocalFree(argv);
-        return 127;
-    }
-    free(program);
-
     /*
      * **The job is what makes Stop/Kill reach what the child started.**  A
      * nested job is fine on Windows 8 and later; where the assignment is
@@ -258,8 +283,35 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
             JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
         SetInformationJobObject(job, JobObjectExtendedLimitInformation,
                                 &limits, sizeof limits);
-        AssignProcessToJobObject(job, pi.hProcess);
     }
+
+    /* **Started suspended, and let go only once it is in the job**: a child
+     * that ran first could start a process of its own before the assignment,
+     * and that one would be outside the group nothing then reaches.  This is
+     * the race `exec_win_job_open` in bta_sys.c cannot close, because
+     * GSubprocess starts *this* helper running; here the call is ours. */
+    if (!CreateProcessW(batch ? NULL : program, line, NULL, NULL, TRUE,
+                        CREATE_NO_WINDOW | CREATE_SUSPENDED,
+                        NULL, NULL, &si, &pi)) {
+        char message[512];
+
+        _snprintf(message, sizeof message,
+                  "bintana-exec: cannot start the child: Windows error %lu\n",
+                  (unsigned long)GetLastError());
+        message[sizeof message - 1] = 0;
+        say(message);
+        if (job)
+            CloseHandle(job);
+        free(program);
+        free(line);
+        LocalFree(argv);
+        return 127;
+    }
+    free(program);
+
+    if (job)
+        AssignProcessToJobObject(job, pi.hProcess);
+    ResumeThread(pi.hThread);
 
     WaitForSingleObject(pi.hProcess, INFINITE);
 

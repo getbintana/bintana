@@ -25,7 +25,10 @@ one-page answer to *what is new since the release I have*.
   helper that passes `CREATE_NO_WINDOW` and the pipes `Exec` made, so a console
   tool a windowed application runs -- `git` while the IDE opens a project, a
   compiler -- has no window of its own: the same no-terminal contract as
-  Linux. The runtime ships the helper beside both hosts.
+  Linux. The runtime ships the helper beside both hosts. An empty argument
+  reaches the child (GLib's spawn dropped it), a quoted one ending in a
+  backslash keeps its closing quote, and a `.cmd` or `.bat` runs by its bare
+  name.
 - **The core is the same language as the graphical host.** It closes the same
   names, runs `rad.js` the same way and links the same console globals --
   `Http`, `Database`, `Task`, `Zip`, sockets, `SerialPort`, `Keyring`,

@@ -727,6 +727,19 @@ icon when the theme has one by that name (`gtkapplication.c`).
   grandchild holding the pipe is still the caller's to end. A bare name is
   resolved on the child's `PATH`, in order: `CreateProcessW` alone searches
   `System32` first and would run the Windows `sort` instead of the MSYS2 one.
+  It tries `.com`, `.exe`, `.bat`, `.cmd` like `_wspawnvp`: with only the first
+  two, `npm` or any `.cmd` that `g_find_program_in_path` had found answered
+  127. A batch file goes at the head of the line by its full path, with no
+  application name, so `CreateProcessW` runs it through `cmd.exe /c` itself.
+  The child starts suspended and is resumed only once it is in the helper's
+  job, so a grandchild cannot start outside it.
+- **GLib's Windows spawn drops an empty argument**, measured on 2.90 with and
+  without the helper: `Exec.Wait(["cmd", "/c", "echo", "x", "", "y"])` printed
+  `x y`. So every argument handed to `bintana-exec.exe` carries a `+` in front
+  (`exec_use_helper`), which the helper takes off and refuses to do without.
+  The helper's own quoting writes `""` for an empty argument and doubles the
+  backslashes before a closing quote (`"C:\a b\"` read back as `C:\a b"`);
+  `tests/win-desktop.c` has the same function and the same fix.
   This is the Windows spelling of what POSIX already did -- a child with pipes
   and no terminal -- and it is not the IDE's business: a pure GTK application
   that runs `git` gets the same answer.

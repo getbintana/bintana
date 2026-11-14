@@ -2998,6 +2998,20 @@ static void exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args)
     if (!helper)
         return;
 
+    /*
+     * **Every argument travels with a `+` in front, which the helper takes
+     * off.**  GLib's Windows spawn drops an empty argument on the way to its
+     * own `gspawn` helper -- measured on 2.90 with and without this one:
+     * `Exec.Wait(["cmd", "/c", "echo", "x", "", "y"])` printed `x y` -- so
+     * `git commit -m ""` reached git one argument short.  A prefixed argument
+     * is never empty, and the helper refuses one that lacks it.
+     */
+    for (guint i = 0; i + 1 < args->len; i++) {
+        char *arg = g_ptr_array_index(args, i);
+
+        args->pdata[i] = g_strconcat("+", arg, NULL);
+        g_free(arg);
+    }
     g_ptr_array_insert(args, 0, helper);
 }
 #else

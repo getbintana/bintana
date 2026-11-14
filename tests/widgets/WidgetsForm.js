@@ -28600,6 +28600,45 @@ class Form1 extends Form {
             eq("Directory", Exec.Wait(["pwd"], { Directory: "/tmp" }).Output.trim(),
                "/tmp");
         }
+
+        /*
+         * **Every argument arrives as it was given.**  On Windows a command
+         * line is one string that the child splits again, and the helper that
+         * starts every `Exec` child there (`bintana-exec.exe`) wrote it: an
+         * empty argument vanished -- `git commit -m ""` reached git one short --
+         * and a quoted one ending in a backslash swallowed its closing quote.
+         */
+        eq("an empty argument is still an argument",
+           Exec.Wait(["sh", "-c", 'printf "[%s]" "$@"', "sh", "", "b"]).Output,
+           "[][b]");
+        eq("and one with a space that ends in a backslash keeps both",
+           Exec.Wait(["sh", "-c", 'printf "[%s]" "$@"', "sh", "C:\\a b\\", "c"]).Output,
+           "[C:\\a b\\][c]");
+
+        /*
+         * **A batch file is a command, by its bare name.**  `npm`, `code` and
+         * the IDE's own launcher are `.cmd` files; the helper searched only
+         * `.exe` and `.com`, so a name `Exec` had found answered 127 instead of
+         * running.  In a directory with a space, which the line has to quote.
+         */
+        if (Environment.OS === "Windows") {
+            const bin = File.Join(Environment.TempDirectory, "bta batch dir");
+            const old = Environment.Get("PATH");
+
+            Directory.Make(bin);
+            File.Save(File.Join(bin, "btaprobe.cmd"),
+                      "@echo off\r\necho [%~1][%~2]\r\nexit /b 3\r\n");
+            Environment.Set("PATH", bin + ";" + old);
+            try {
+                const ran = Exec.Wait(["btaprobe", "uno", "dos tres"]);
+                eq("a .cmd found on PATH by its bare name runs",
+                   ran.Output.trim(), "[uno][dos tres]");
+                eq("...and its exit status is the caller's", ran.ExitCode, 3);
+            } finally {
+                Environment.Set("PATH", old);
+                Directory.DeleteTree(bin);
+            }
+        }
         eq("Environment adds a name",
            Exec.Wait(["sh", "-c", "echo [$BTA_PROBE]"],
                      { Environment: { BTA_PROBE: "si" } }).Output.trim(), "[si]");

@@ -333,6 +333,11 @@ The Windows differences worth knowing before reading a red run:
   child's stderr on Windows, so the launcher always pipes both and
   `Exec.Wait`/`onLine` fold them. Without it a child's `Bintana error:` line
   was empty in `Output` and present only under `Stderr: "separate"`.
+- **`testExecWait` holds `bintana-exec.exe`'s command line.** An empty
+  argument (GLib's spawn drops it, the helper's `+` prefix carries it), a
+  quoted argument ending in a backslash, and a `.cmd` found on `PATH` by its
+  bare name with its exit status; the last is Windows-only. All three were red
+  against the helper as first committed (2026-11-14).
 - **`Exec.Wait.Output` keeps the child's line endings.** The line callback
   strips CRLF; a test that splits `Output` on `\n` uses `outputLines()` in
   `WidgetsForm.js`, or it compares a `\r` the platform put there.

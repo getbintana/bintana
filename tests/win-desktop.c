@@ -28,11 +28,13 @@
 #include <stdlib.h>
 #include <wchar.h>
 
-/* One argument, quoted the way CommandLineToArgvW reads it back. */
+/* One argument, quoted the way CommandLineToArgvW reads it back: an empty one
+ * is `""`, and backslashes before the closing quote are doubled.  The same
+ * function as `runtime/src/bta_exec_win32.c`. */
 static void append_quoted(wchar_t *out, const wchar_t *arg)
 {
     const wchar_t *p = arg;
-    int            quote = 0;
+    int            quote = *arg == 0;
 
     for (const wchar_t *q = arg; *q; q++)
         if (*q == L' ' || *q == L'\t' || *q == L'"')
@@ -46,11 +48,15 @@ static void append_quoted(wchar_t *out, const wchar_t *arg)
             backslashes++;
             p++;
         }
-        if (*p == L'"') {
-            for (int i = 0; i < backslashes * 2 + 1; i++)
+        if (*p == L'"' || (*p == 0 && quote)) {
+            int count = backslashes * 2 + (*p == L'"');
+
+            for (int i = 0; i < count; i++)
                 wcscat(out, L"\\");
-            wcscat(out, L"\"");
-            p++;
+            if (*p == L'"') {
+                wcscat(out, L"\"");
+                p++;
+            }
         } else {
             for (int i = 0; i < backslashes; i++)
                 wcscat(out, L"\\");
