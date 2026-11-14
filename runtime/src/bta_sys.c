@@ -2953,6 +2953,28 @@ static char *exec_option_directory(JSContext *ctx, JSValueConst opts)
     return dir;
 }
 
+/* Whether the call gives the child a `PATH` of its own.  A bare command the
+ * parent's PATH does not know may still be in that one, and the helper -- which
+ * inherits it -- is the one that has to look. */
+static bool exec_has_custom_path(JSContext *ctx, JSValueConst opts)
+{
+    if (JS_IsUndefined(opts) || JS_IsNull(opts))
+        return false;
+
+    JSValue environment = JS_GetPropertyStr(ctx, opts, "Environment");
+    bool    custom      = false;
+
+    if (JS_IsObject(environment) && !JS_IsArray(environment) &&
+        !JS_IsFunction(ctx, environment)) {
+        JSValue path = JS_GetPropertyStr(ctx, environment, "PATH");
+
+        custom = !JS_IsUndefined(path);
+        JS_FreeValue(ctx, path);
+    }
+    JS_FreeValue(ctx, environment);
+    return custom;
+}
+
 /* Is the command there at all?  A helper that cannot start something reports
  * an exit status; `Exec`'s contract says a missing command is an exception
  * before a job exists, so a command that is not there takes the direct road
@@ -2989,9 +3011,12 @@ static void exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args)
     const char *command   = g_ptr_array_index(args, 0);
     char       *directory = exec_option_directory(ctx, opts);
     bool        exists    = exec_command_exists(command, directory);
+    bool        bare      = !g_path_is_absolute(command) &&
+                            !strchr(command, G_DIR_SEPARATOR) &&
+                            !strchr(command, '/');
 
     g_free(directory);
-    if (!exists)
+    if (!exists && !(bare && exec_has_custom_path(ctx, opts)))
         return;
 
     char *helper = exec_win_helper();
@@ -3299,7 +3324,8 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
      * The handle: what the child is, and the two ways to end it.  It used to be
      * the pid as a string, which was a number to print and nothing to do -- and
      * a string for a number besides, where `Environment.ProcessId` next to it is
-     * an integer.
+     * an integer.  **On Windows the id is `bintana-exec.exe`'s**, the head of
+     * the group `Stop`/`Kill` act on; the program it started is its child.
      *
      * `Running` and `ExitCode` are written on it rather than asked of the job,
      * because the question outlives the job: the ordinary place to read an exit

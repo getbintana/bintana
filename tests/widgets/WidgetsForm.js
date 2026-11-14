@@ -28639,6 +28639,29 @@ class Form1 extends Form {
                 Directory.DeleteTree(bin);
             }
         }
+
+        /*
+         * And the same when the PATH belongs to the call: the helper, not this
+         * process's own PATH, decides whether a bare command is there.  A GTK
+         * application that ships a tool and points `Environment` at it gets
+         * the tool, not a console window.
+         */
+        if (Environment.OS === "Windows") {
+            const bin = File.Join(Environment.TempDirectory, "bta exec path");
+            const old = Environment.Get("PATH");
+
+            Directory.Make(bin);
+            File.Save(File.Join(bin, "btapath.cmd"),
+                      "@echo off\r\necho [%~1]\r\nexit /b 0\r\n");
+            try {
+                const ran = Exec.Wait(["btapath", "propio"],
+                    { Environment: { PATH: bin + ";" + old } });
+                eq("a .cmd found on the call's own PATH runs",
+                   ran.Output.trim(), "[propio]");
+            } finally {
+                Directory.DeleteTree(bin);
+            }
+        }
         eq("Environment adds a name",
            Exec.Wait(["sh", "-c", "echo [$BTA_PROBE]"],
                      { Environment: { BTA_PROBE: "si" } }).Output.trim(), "[si]");

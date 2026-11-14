@@ -2141,7 +2141,11 @@ icon when the theme has one by that name (`gtkapplication.c`).
   127. A batch file goes at the head of the line by its full path, with no
   application name, so `CreateProcessW` runs it through `cmd.exe /c` itself.
   The child starts suspended and is resumed only once it is in the helper's
-  job, so a grandchild cannot start outside it.
+  job, so a grandchild cannot start outside it. A call that gives `Exec` its
+  own `Environment` `PATH` still uses the helper: the helper inherits that
+  environment and decides, not this process's `PATH`. The handle's
+  `ProcessId` on Windows names the helper -- the group leader -- not the
+  program it started; `Stop`, `Kill` and the exit status still mean the group.
 - **GLib's Windows spawn drops an empty argument**, measured on 2.90 with and
   without the helper: `Exec.Wait(["cmd", "/c", "echo", "x", "", "y"])` printed
   `x y`. So every argument handed to `bintana-exec.exe` carries a `+` in front

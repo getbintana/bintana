@@ -270,9 +270,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
 
     /*
      * **The job is what makes Stop/Kill reach what the child started.**  A
-     * nested job is fine on Windows 8 and later; where the assignment is
-     * refused, the child still ends when this helper does, and only a
-     * grandchild could survive.
+     * nested job is fine on Windows 8 and later.  If the assignment is
+     * refused there is no group of this helper's own: Stop/Kill still end the
+     * helper, but what it started may outlive it; only the runtime's own job
+     * could still reach it.
      */
     HANDLE job = CreateJobObjectW(NULL, NULL);
     if (job) {
@@ -309,9 +310,28 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
     }
     free(program);
 
-    if (job)
-        AssignProcessToJobObject(job, pi.hProcess);
-    ResumeThread(pi.hThread);
+    if (job && !AssignProcessToJobObject(job, pi.hProcess)) {
+        CloseHandle(job);
+        job = NULL;
+    }
+
+    if (ResumeThread(pi.hThread) == (DWORD)-1) {
+        char message[512];
+
+        _snprintf(message, sizeof message,
+                  "bintana-exec: cannot resume the child: Windows error %lu\n",
+                  (unsigned long)GetLastError());
+        message[sizeof message - 1] = 0;
+        say(message);
+        TerminateProcess(pi.hProcess, 1);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        if (job)
+            CloseHandle(job);
+        free(line);
+        LocalFree(argv);
+        return 127;
+    }
 
     WaitForSingleObject(pi.hProcess, INFINITE);
 
