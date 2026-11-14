@@ -716,6 +716,20 @@ icon when the theme has one by that name (`gtkapplication.c`).
   non-blocking context loop that owns the deadline. **The asynchronous `Exec`
   has one too now** (`ExecJob.win_job`), and waits for the output like POSIX:
   `Timeout`, `Stop()` and `Kill()` terminate the job, grandchild included.
+- **On Windows every `Exec` child starts through `bintana-exec.exe`.** GLib's
+  GSubprocess has no `CREATE_NO_WINDOW`, and a console program started by a
+  GUI program gets a console window of its own: `git` while the IDE opened a
+  project flashed one, and so would any console tool a GTK application ran.
+  The helper is a GUI-subsystem program installed beside both hosts; it starts
+  the real command with the pipes GSubprocess made and `CREATE_NO_WINDOW`, and
+  returns its status. Its job keeps `Stop`, `Kill` and `Timeout` reaching what
+  the child started, and it waits for that group, not just the leader, so a
+  grandchild holding the pipe is still the caller's to end. A bare name is
+  resolved on the child's `PATH`, in order: `CreateProcessW` alone searches
+  `System32` first and would run the Windows `sort` instead of the MSYS2 one.
+  This is the Windows spelling of what POSIX already did -- a child with pipes
+  and no terminal -- and it is not the IDE's business: a pure GTK application
+  that runs `git` gets the same answer.
 - **It used to give up on a clock instead, and that cut living output.** Once
   the leader was reaped with a pipe open, the job was reported 250 ms later.
   Reads are main-loop time and, on Windows, GIO thread-pool time: a line

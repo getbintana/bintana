@@ -2905,6 +2905,110 @@ static GPtrArray *exec_build_argv(JSContext *ctx, JSValueConst list,
     return args;
 }
 
+#ifdef G_OS_WIN32
+/*
+ * **The helper `Exec` starts its child through.**
+ *
+ * GSubprocess cannot pass `CREATE_NO_WINDOW`, and a console program started by
+ * a GUI program gets a console window without it -- a `git` the IDE runs would
+ * flash a window on every project, and so would any console tool a GTK
+ * program started.  `bintana-exec.exe` is a GUI-subsystem program installed
+ * beside this host: it starts the real command with that flag and the pipes
+ * GSubprocess made, and returns its status.  See `bta_exec_win32.c`.
+ */
+static char *exec_win_helper(void)
+{
+    char *exe = bta_exe_path();
+
+    if (!exe)
+        return NULL;
+
+    char *dir    = g_path_get_dirname(exe);
+    char *helper = g_build_filename(dir, "bintana-exec.exe", NULL);
+
+    g_free(exe);
+    g_free(dir);
+    if (g_file_test(helper, G_FILE_TEST_IS_EXECUTABLE))
+        return helper;
+    g_free(helper);
+    return NULL;
+}
+
+/* The `Directory` option, when there is one: a relative command is looked up
+ * where the child will start, not where this process happens to be. */
+static char *exec_option_directory(JSContext *ctx, JSValueConst opts)
+{
+    if (JS_IsUndefined(opts) || JS_IsNull(opts))
+        return NULL;
+
+    JSValue     value = JS_GetPropertyStr(ctx, opts, "Directory");
+    char       *dir   = NULL;
+    const char *text  = JS_IsString(value) ? JS_ToCString(ctx, value) : NULL;
+
+    if (text) {
+        dir = g_strdup(text);
+        JS_FreeCString(ctx, text);
+    }
+    JS_FreeValue(ctx, value);
+    return dir;
+}
+
+/* Is the command there at all?  A helper that cannot start something reports
+ * an exit status; `Exec`'s contract says a missing command is an exception
+ * before a job exists, so a command that is not there takes the direct road
+ * and fails exactly as it always did. */
+static bool exec_command_exists(const char *command, const char *directory)
+{
+    if (!command || !*command)
+        return false;
+
+    if (g_path_is_absolute(command) || strchr(command, G_DIR_SEPARATOR) ||
+        strchr(command, '/')) {
+        char *path = g_path_is_absolute(command)
+            ? g_strdup(command)
+            : g_build_filename(directory && *directory ? directory : ".",
+                               command, NULL);
+        bool exists = g_file_test(path, G_FILE_TEST_EXISTS);
+
+        g_free(path);
+        return exists;
+    }
+
+    char *found  = g_find_program_in_path(command);
+    bool  exists = found != NULL;
+
+    g_free(found);
+    return exists;
+}
+
+static void exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args)
+{
+    if (!args || args->len < 2)
+        return;
+
+    const char *command   = g_ptr_array_index(args, 0);
+    char       *directory = exec_option_directory(ctx, opts);
+    bool        exists    = exec_command_exists(command, directory);
+
+    g_free(directory);
+    if (!exists)
+        return;
+
+    char *helper = exec_win_helper();
+    if (!helper)
+        return;
+
+    g_ptr_array_insert(args, 0, helper);
+}
+#else
+static void exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args)
+{
+    (void)ctx;
+    (void)opts;
+    (void)args;
+}
+#endif
+
 /*
  * The launcher both spellings of Exec start their child with: one pipe for
  * stdout, stderr either merged into it or on a pipe of its own, and a process
@@ -3038,6 +3142,7 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     GPtrArray *args = exec_build_argv(ctx, argv[0], "Exec");
     if (!args)
         return JS_EXCEPTION;
+    exec_use_helper(ctx, opts, args);
 
     bool split = exec_wants_split(ctx, opts);
 
@@ -3413,6 +3518,7 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
         g_clear_pointer(&input, g_bytes_unref);
         return JS_EXCEPTION;
     }
+    exec_use_helper(ctx, opts, args);
 
     bool     split      = exec_wants_split(ctx, opts);
     unsigned timeout    = exec_millis(ctx, opts, "Timeout", BTA_WAIT_DEFAULT);

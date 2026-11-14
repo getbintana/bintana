@@ -232,7 +232,10 @@ the launcher is `bin\bintana-ide.cmd` — the IDE, from wherever the zip was
 unzipped to. Beside `bintana.exe` is **`bintana-gui.exe`**, the graphical host,
 built with the header that tells Windows not to open a console: an installer's
 shortcuts start that one, and `bintana.exe` stays the console core for a
-terminal, where what a program prints is wanted. Both wear **the system's own
+terminal, where what a program prints is wanted. **`bintana-exec.exe`** is the
+helper `Exec` starts a child through; it is a GUI process that passes
+`CREATE_NO_WINDOW`, so a console tool an application runs (`git`, a compiler)
+has no window of its own. Both wear **the system's own
 title bar**: GTK4 draws its
 own on Windows unless `GTK_CSD` is `0`, so the runtime sets that when it is
 unset (`GTK_CSD=1` still asks for GTK's). What Windows needs that Linux does not is GTK's runtime data

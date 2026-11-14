@@ -48,6 +48,12 @@ cmake --install "$build" --prefix "$dest"
 # gets a .cmd that does the same.
 rm -f "$dest/bin/bintana-ide"
 
+# `Exec` starts every child through this GUI-subsystem helper, which is what
+# keeps a console tool from opening a window of its own.  A tree without it
+# would still run, with the old flashing, so say it here instead.
+[ -f "$dest/bin/bintana-exec.exe" ] \
+    || { echo "no bin/bintana-exec.exe in the staged tree" >&2; exit 1; }
+
 # --- 2. every DLL the executable links ---------------------------------------
 #
 # `ldd` is recursive, so one pass over the exe is its whole closure.  Only the

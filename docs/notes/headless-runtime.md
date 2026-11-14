@@ -378,7 +378,8 @@ install, and the graphical one is `bintana-gui`. **Two installed binaries are
 the design -- a core and a graphical host; the third binary that is not wanted
 is one that exists only for `check` and the test tools.** The Windows split is
 the same two hosts (2026-11-13): `bintana.exe` core and `bintana-gui.exe`
-graphical, with `bintana-drawing.dll`; what a shortcut needed is in
+graphical, with `bintana-drawing.dll` and the `Exec` helper
+`bintana-exec.exe`; what a shortcut needed is in
 [`distribution-plan.md`](../plans/distribution-plan.md). The Phase 2 acceptance
 projects -- `tests/report`'s `testDocument`, `tests/media`, and `tests/api` with
 its `Widget.*` -- are still the graphical host's. A `main` accepts `--strict`

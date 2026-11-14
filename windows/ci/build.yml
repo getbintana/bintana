@@ -377,9 +377,11 @@ jobs:
               echo "-- $name: $(basename "$setup")"
               MSYS2_ARG_CONV_EXCL='*' "$setup" /S "/D=$(cygpath -w "$into")"
               test -f "$into/bin/$cmd.cmd"
+              test -f "$into/bin/bintana-exec.exe"
               test -f "$into/share/bintana/apps/$cmd/project.btp"
               test -f "$into/Uninstall.exe"
               objdump -p "$into/bin/bintana-gui.exe" | grep -q 'Windows GUI'
+              objdump -p "$into/bin/bintana-exec.exe" | grep -q 'Windows GUI'
               # Adwaita inherits AdwaitaLegacy, where its full-colour icons are.
               for theme in Adwaita AdwaitaLegacy hicolor; do
                   test -f "$into/share/icons/$theme/index.theme" \

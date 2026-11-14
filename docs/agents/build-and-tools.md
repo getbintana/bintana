@@ -373,6 +373,9 @@ disagree.
   `generated/bta_signatures.h`, so it looks half registered. A file that
   touches GTK belongs only in the GUI list; one both hosts need belongs in
   both, and `ldd` on the core is what catches a stray GTK reference.
+  **Windows has one more target that is neither host**: `bintana-exec` is the
+  source of `bintana-exec.exe`, the GUI-subsystem helper `Exec` starts its
+  child through; a `.c` added there does not belong in either host list.
   A new global is up to seven places: the `.c`, its line in each `CMakeLists.txt`
   list it belongs in, its init in `bta.h`, and the three `install` roads,
   `bta_runtime.c`, `bta_headless.c` (`install_core`, for a global a `main` has)

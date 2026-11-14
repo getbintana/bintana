@@ -21,6 +21,11 @@ one-page answer to *what is new since the release I have*.
   `bintana-drawing.dll` for a `main` that draws. A shortcut starts the GUI
   host, so no console follows the window; `bintana-gui.exe --version` and
   `--help` open a small message box when there is no console to print to.
+  **`Exec` starts every child through `bintana-exec.exe`**, a GUI-subsystem
+  helper that passes `CREATE_NO_WINDOW` and the pipes `Exec` made, so a console
+  tool a windowed application runs -- `git` while the IDE opens a project, a
+  compiler -- has no window of its own: the same no-terminal contract as
+  Linux. The runtime ships the helper beside both hosts.
 - **The core is the same language as the graphical host.** It closes the same
   names, runs `rad.js` the same way and links the same console globals --
   `Http`, `Database`, `Task`, `Zip`, sockets, `SerialPort`, `Keyring`,

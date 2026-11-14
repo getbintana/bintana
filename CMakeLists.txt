@@ -416,6 +416,17 @@ if(WIN32)
     # creates the console, and the stdout/stderr it inherits from a parent that
     # already has one (the core's dispatch, `Exec` in a test).
     set_target_properties(${BTA_GUI_TARGET} PROPERTIES WIN32_EXECUTABLE TRUE)
+
+    # **`Exec`'s Windows half.**  GLib's GSubprocess cannot pass
+    # `CREATE_NO_WINDOW`, and a console program started by a GUI program gets a
+    # console window without it.  This GUI-subsystem program starts the real
+    # command with that flag, hands it the pipes `Exec` made, waits and returns
+    # its status.  It is installed beside both hosts, and links only Windows.
+    add_executable(bintana-exec runtime/src/bta_exec_win32.c)
+    set_target_properties(bintana-exec PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_link_libraries(bintana-exec PRIVATE shell32)
+    target_compile_options(bintana-exec PRIVATE
+        -Wall -Wextra -Wno-unused-parameter -Wshadow)
 endif()
 
 # **The Event Log's message table**, compiled into the executable: without it
@@ -991,6 +1002,8 @@ else()
     install(TARGETS bintana-drawing
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
             LIBRARY DESTINATION ${CMAKE_INSTALL_BINDIR})
+    # The program `Exec` starts its child through; see bta_exec_win32.c.
+    install(TARGETS bintana-exec RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 install(PROGRAMS ${CMAKE_BINARY_DIR}/bintana-ide DESTINATION ${CMAKE_INSTALL_BINDIR})
 

@@ -985,6 +985,12 @@ jobs:
               || { echo "bintana-gui.exe is not a GUI executable" >&2; exit 1; }
           objdump -p "stage/$name/bin/bintana.exe" | grep -q 'Windows CUI' \
               || { echo "bintana.exe is not a console executable" >&2; exit 1; }
+          # The helper `Exec` starts a child through, so a console tool the
+          # IDE or an application runs has no window of its own.
+          test -f "stage/$name/bin/bintana-exec.exe" \
+              || { echo "the staged tree has no bin/bintana-exec.exe" >&2; exit 1; }
+          objdump -p "stage/$name/bin/bintana-exec.exe" | grep -q 'Windows GUI' \
+              || { echo "bintana-exec.exe is not a GUI executable" >&2; exit 1; }
 
       # The first look at the IDE on Windows, and **not a hard step**: whether
       # this runner has a desktop for a window to open on is not something this

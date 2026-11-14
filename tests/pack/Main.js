@@ -534,6 +534,7 @@ function checkNsis(root) {
     };
     put(File.Join("bin", "bintana.exe"), "MZ");
     put(File.Join("bin", "bintana-gui.exe"), "MZ, with a GUI header");
+    put(File.Join("bin", "bintana-exec.exe"), "MZ, the Exec helper");
     put(File.Join("bin", "gspawn-win64-helper.exe"), "MZ");
     put(File.Join("bin", "gspawn-win64-helper-console.exe"), "MZ");
     put(File.Join("bin", "libgtk-4.dll"), "DLL");
@@ -557,6 +558,8 @@ function checkNsis(root) {
           File.Exists(File.Join(staged, "bin", "bintana.exe")));
     check("and the one the shortcuts start",
           File.Exists(File.Join(staged, "bin", "bintana-gui.exe")));
+    check("and the one Exec starts its children through",
+          File.Exists(File.Join(staged, "bin", "bintana-exec.exe")));
     check("and GLib's spawn helpers, which an Exec with its output piped needs",
           File.Exists(File.Join(staged, "bin", "gspawn-win64-helper.exe")) &&
           File.Exists(File.Join(staged, "bin", "gspawn-win64-helper-console.exe")));
@@ -636,9 +639,16 @@ function checkNsis(root) {
            () => Nsis.Stage(dir, File.Join(root, "out-stage-older"), { Prefix: older }),
            "no bin/bintana-gui.exe");
 
+    /* The program `Exec` starts a child through, which a tree from before it
+     * does not carry. */
+    File.Save(File.Join(older, "bin", "bintana-gui.exe"), "MZ");
+    throws("a tree with no bintana-exec.exe is refused",
+           () => Nsis.Stage(dir, File.Join(root, "out-stage-noexec"), { Prefix: older }),
+           "no bin/bintana-exec.exe");
+
     /* And one without GLib's helpers: it builds, installs, starts -- and every
      * Run in the IDE answers "it could not be started". */
-    File.Save(File.Join(older, "bin", "bintana-gui.exe"), "MZ");
+    File.Save(File.Join(older, "bin", "bintana-exec.exe"), "MZ");
     throws("a tree with no spawn helper is refused",
            () => Nsis.Stage(dir, File.Join(root, "out-stage-nohelper"), { Prefix: older }),
            "no bin/gspawn-win64-helper.exe");

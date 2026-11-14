@@ -152,8 +152,10 @@ that.
 **Windows ships the same two hosts (2026-11-13).** `bintana.exe` is the console
 core, built from the core sources and linked as CUI; `bintana-gui.exe` is the
 graphical host, built as a real `WIN32_EXECUTABLE` rather than an `objcopy` of
-the core; `bintana-drawing.dll` is the loadable drawing half. `objdump -p` says
-`Windows CUI` for the first and `Windows GUI` for the second. What that took:
+the core; `bintana-drawing.dll` is the loadable drawing half, and
+`bintana-exec.exe` is the GUI-subsystem helper every `Exec` child starts
+through, so a console tool has no window. `objdump -p` says `Windows CUI` for
+the first and `Windows GUI` for the other two. What that took:
 
 - `bintana-meta.exe` stays the build-time metadata generator, never installed.
   On Windows it links GTK: MinGW's linker keeps the GObject class structs and

@@ -126,6 +126,8 @@ C:\Temp\bintana-installed\Uninstall.exe /S
 The shortcut starts `bin\bintana-gui.exe` with the installed project directory as
 its argument -- read back from the `.lnk` and launched -- and the uninstaller
 removes the directory, the Start Menu folder and the `HKCU` uninstall key.
+`bin\bintana-exec.exe` travels too: every `Exec` starts its child through it,
+so the console tools an application runs have no window of their own.
 The bundled compiler was checked too: the official NSIS 3.12 tree under
 `share/bintana/tools/nsis` answered `v3.12` from the installed directory, so a
 setup can be built without NSIS installed. There is no `tools/check` beside an
