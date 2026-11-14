@@ -2953,26 +2953,119 @@ static char *exec_option_directory(JSContext *ctx, JSValueConst opts)
     return dir;
 }
 
-/* Whether the call gives the child a `PATH` of its own.  A bare command the
- * parent's PATH does not know may still be in that one, and the helper -- which
- * inherits it -- is the one that has to look. */
-static bool exec_has_custom_path(JSContext *ctx, JSValueConst opts)
+/*
+ * The `PATH` the call gives the child, when it gives one.  **Windows' variable
+ * names are not case-sensitive**, so `Path` and `path` are the same variable
+ * and are found here too; the last one listed wins, as it does in the block
+ * the child gets.  `*custom` says whether there was one; the answer is NULL
+ * when it unsets the variable (`null`), and `*usable` is false when a value is
+ * not text -- the launcher refuses that one, with the sentence, a moment later.
+ */
+static char *exec_custom_path(JSContext *ctx, JSValueConst opts, bool *custom,
+                              bool *usable)
 {
+    *custom = false;
+    *usable = true;
     if (JS_IsUndefined(opts) || JS_IsNull(opts))
-        return false;
+        return NULL;
 
     JSValue environment = JS_GetPropertyStr(ctx, opts, "Environment");
-    bool    custom      = false;
+    char   *value       = NULL;
 
     if (JS_IsObject(environment) && !JS_IsArray(environment) &&
         !JS_IsFunction(ctx, environment)) {
-        JSValue path = JS_GetPropertyStr(ctx, environment, "PATH");
+        JSPropertyEnum *tab = NULL;
+        uint32_t        len = 0;
 
-        custom = !JS_IsUndefined(path);
-        JS_FreeValue(ctx, path);
+        if (JS_GetOwnPropertyNames(ctx, &tab, &len, environment,
+                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0) {
+            for (uint32_t i = 0; i < len; i++) {
+                const char *name = JS_AtomToCString(ctx, tab[i].atom);
+                bool        is_path = name && g_ascii_strcasecmp(name, "PATH") == 0;
+
+                JS_FreeCString(ctx, name);
+                if (!is_path)
+                    continue;
+
+                JSValue v = JS_GetProperty(ctx, environment, tab[i].atom);
+
+                *custom = true;
+                *usable = true;
+                g_clear_pointer(&value, g_free);
+                /* Converted as the launcher converts it, so both read the same
+                 * PATH; `null` unsets it. */
+                if (!JS_IsNull(v) && !JS_IsUndefined(v)) {
+                    const char *text = JS_ToCString(ctx, v);
+
+                    value   = text ? g_strdup(text) : NULL;
+                    *usable = text != NULL;
+                    JS_FreeCString(ctx, text);
+                }
+                JS_FreeValue(ctx, v);
+            }
+            JS_FreePropertyEnum(ctx, tab, len);
+        }
+    }
+    /* A getter that threw is consumed here: this is only a lookahead, and the
+     * launcher reads the same options again and reports what it finds. */
+    if (JS_HasException(ctx)) {
+        JS_FreeValue(ctx, JS_GetException(ctx));
+        *usable = false;
     }
     JS_FreeValue(ctx, environment);
-    return custom;
+    return value;
+}
+
+/*
+ * **A bare command, looked up on one PATH and nowhere else**, the way the
+ * helper's `find_command` does and `_wspawnvp` did: each entry in order, the
+ * name as written when it has an extension, then `.com`, `.exe`, `.bat`,
+ * `.cmd`.  Not `g_find_program_in_path`, which on Windows searches the
+ * application's folder, the current folder and System32 *before* PATH --
+ * `CreateProcessW`'s order -- and so finds Windows' `sort` ahead of the one the
+ * PATH names.  An absolute path, or NULL.
+ */
+static char *exec_win_search(const char *path, const char *command)
+{
+    if (!path || !*path)
+        return NULL;
+
+    const char *extensions[5];
+    guint       count = 0;
+
+    if (strchr(command, '.'))
+        extensions[count++] = "";
+    extensions[count++] = ".com";
+    extensions[count++] = ".exe";
+    extensions[count++] = ".bat";
+    extensions[count++] = ".cmd";
+
+    char **dirs  = g_strsplit(path, ";", -1);
+    char  *found = NULL;
+
+    for (guint i = 0; dirs[i] && !found; i++) {
+        char *dir = dirs[i];
+        gsize n   = strlen(dir);
+
+        if (n >= 2 && dir[0] == '"' && dir[n - 1] == '"') {
+            dir[n - 1] = 0;
+            dir++;
+        }
+        if (!*dir)
+            continue;
+        for (guint e = 0; e < count && !found; e++) {
+            char *name      = g_strconcat(command, extensions[e], NULL);
+            char *candidate = g_build_filename(dir, name, NULL);
+
+            g_free(name);
+            if (g_file_test(candidate, G_FILE_TEST_IS_REGULAR))
+                found = candidate;
+            else
+                g_free(candidate);
+        }
+    }
+    g_strfreev(dirs);
+    return found;
 }
 
 /* Is the command there at all?  A helper that cannot start something reports
@@ -3003,25 +3096,83 @@ static bool exec_command_exists(const char *command, const char *directory)
     return exists;
 }
 
-static void exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args)
+/*
+ * Puts the helper in front of the command, and answers false with an
+ * exception thrown when there is no command to start.
+ *
+ * **A bare name is resolved here, on the PATH the child will have** -- the
+ * call's own, spelled `PATH`, `Path` or any other way, or this process's --
+ * and the helper is handed the absolute path.  Two things follow. A name that
+ * PATH does not have is `<verb> failed: no such file or directory`, the
+ * exception Linux gives, instead of the helper's exit status 127; and the
+ * helper never leaves the search to `CreateProcessW`, which would find
+ * Windows' own `sort` in System32 for a PATH that has none.  With no PATH of
+ * the call's own, a name that only `g_find_program_in_path` finds (beside the
+ * executable, in the current folder) still runs, as it did before the helper.
+ */
+static bool exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args,
+                            const char *verb)
 {
     if (!args || args->len < 2)
-        return;
+        return true;
 
-    const char *command   = g_ptr_array_index(args, 0);
-    char       *directory = exec_option_directory(ctx, opts);
-    bool        exists    = exec_command_exists(command, directory);
-    bool        bare      = !g_path_is_absolute(command) &&
-                            !strchr(command, G_DIR_SEPARATOR) &&
-                            !strchr(command, '/');
+    const char *command  = g_ptr_array_index(args, 0);
+    bool        bare     = !g_path_is_absolute(command) &&
+                           !strchr(command, G_DIR_SEPARATOR) &&
+                           !strchr(command, '/') && !strchr(command, ':');
+    char       *resolved = NULL;
 
-    g_free(directory);
-    if (!exists && !(bare && exec_has_custom_path(ctx, opts)))
-        return;
+    if (bare) {
+        bool  custom = false;
+        bool  usable = true;
+        char *path   = exec_custom_path(ctx, opts, &custom, &usable);
+
+        if (!usable) {
+            g_free(path);
+            return true;            /* the launcher says what is wrong with it */
+        }
+        if (custom && path) {
+            resolved = exec_win_search(path, command);
+        } else if (custom) {
+            /* PATH unset: the system's own folders, as `execvp` falls back to
+             * its default path on Linux and `CreateProcessW` searches them. */
+            const char *root = g_getenv("SystemRoot");
+            char       *dirs = g_strdup_printf("%s\\System32;%s",
+                                               root ? root : "C:\\Windows",
+                                               root ? root : "C:\\Windows");
+
+            resolved = exec_win_search(dirs, command);
+            g_free(dirs);
+        } else {
+            resolved = exec_win_search(g_getenv("PATH"), command);
+            if (!resolved)
+                resolved = g_find_program_in_path(command);
+        }
+        g_free(path);
+        if (!resolved) {
+            /* Word for word what GLib's spawn says on Linux, so a program
+             * matching the sentence matches it on both. */
+            JS_ThrowPlainError(ctx, "%s failed: no such file or directory", verb);
+            return false;
+        }
+    } else {
+        char *directory = exec_option_directory(ctx, opts);
+        bool  exists    = exec_command_exists(command, directory);
+
+        g_free(directory);
+        if (!exists)
+            return true;            /* the direct road fails as it always did */
+    }
 
     char *helper = exec_win_helper();
-    if (!helper)
-        return;
+    if (!helper) {
+        g_free(resolved);
+        return true;
+    }
+    if (resolved) {
+        g_free(args->pdata[0]);
+        args->pdata[0] = resolved;
+    }
 
     /*
      * **Every argument travels with a `+` in front, which the helper takes
@@ -3038,13 +3189,17 @@ static void exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args)
         g_free(arg);
     }
     g_ptr_array_insert(args, 0, helper);
+    return true;
 }
 #else
-static void exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args)
+static bool exec_use_helper(JSContext *ctx, JSValueConst opts, GPtrArray *args,
+                            const char *verb)
 {
     (void)ctx;
     (void)opts;
     (void)args;
+    (void)verb;
+    return true;
 }
 #endif
 
@@ -3181,7 +3336,10 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
     GPtrArray *args = exec_build_argv(ctx, argv[0], "Exec");
     if (!args)
         return JS_EXCEPTION;
-    exec_use_helper(ctx, opts, args);
+    if (!exec_use_helper(ctx, opts, args, "Exec")) {
+        g_ptr_array_unref(args);
+        return JS_EXCEPTION;
+    }
 
     bool split = exec_wants_split(ctx, opts);
 
@@ -3558,7 +3716,11 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
         g_clear_pointer(&input, g_bytes_unref);
         return JS_EXCEPTION;
     }
-    exec_use_helper(ctx, opts, args);
+    if (!exec_use_helper(ctx, opts, args, "Exec.Wait")) {
+        g_ptr_array_unref(args);
+        g_clear_pointer(&input, g_bytes_unref);
+        return JS_EXCEPTION;
+    }
 
     bool     split      = exec_wants_split(ctx, opts);
     unsigned timeout    = exec_millis(ctx, opts, "Timeout", BTA_WAIT_DEFAULT);

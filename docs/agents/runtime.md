@@ -732,9 +732,22 @@ icon when the theme has one by that name (`gtkapplication.c`).
   127. A batch file goes at the head of the line by its full path, with no
   application name, so `CreateProcessW` runs it through `cmd.exe /c` itself.
   The child starts suspended and is resumed only once it is in the helper's
-  job, so a grandchild cannot start outside it. A call that gives `Exec` its
-  own `Environment` `PATH` still uses the helper: the helper inherits that
-  environment and decides, not this process's `PATH`. The handle's
+  job, so a grandchild cannot start outside it.
+  **A bare name is resolved in the parent before the spawn** (`exec_use_helper`,
+  `exec_win_search`), on the `PATH` the child will have: the call's own
+  `Environment` one -- `PATH`, `Path` or `path`, since Windows' names ignore
+  case -- or this process's, with `g_find_program_in_path` as the last word
+  only when the call names no PATH (it searches the executable's folder, the
+  current one and System32 first, `CreateProcessW`'s order). An unset PATH
+  (`null`) searches `%SystemRoot%\System32` and `%SystemRoot%`, `execvp`'s
+  default path in Windows' words. Not found is `Exec failed: no such file or
+  directory` -- Linux's sentence, thrown before anything starts -- and found
+  hands the helper an absolute path. The helper's own search is only for a
+  caller that did not, and **not found there is 127 and never a
+  `CreateProcessW` search**: that search ran System32's `sort` for a call
+  whose PATH had none, with `ExitCode` 0 (measured 2026-11-14). A command the
+  helper finds and Windows still refuses to start is the remaining 127, with
+  `bintana-exec: cannot start the child` on stderr. The handle's
   `ProcessId` on Windows names the helper -- the group leader -- not the
   program it started; `Stop`, `Kill` and the exit status still mean the group.
 - **GLib's Windows spawn drops an empty argument**, measured on 2.90 with and

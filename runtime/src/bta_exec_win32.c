@@ -231,6 +231,15 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
     }
 
     wchar_t *program = find_command(argv[1]);
+    /* **Not found is not started.**  `exec_use_helper` hands over an absolute
+     * path, so this is a caller that did not; letting `CreateProcessW` search
+     * instead would run whatever its own order finds first -- System32's
+     * `sort` for a PATH that has none. */
+    if (!program) {
+        say("bintana-exec: the command is not on the PATH the child was given\n");
+        LocalFree(argv);
+        return 127;
+    }
     /* A batch file is named by its full path at the head of the command line
      * and no application: CreateProcessW then starts `cmd.exe /c` with that
      * line itself, which is what `_wspawnvp` did. */

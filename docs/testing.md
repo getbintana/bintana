@@ -339,7 +339,10 @@ The Windows differences worth knowing before reading a red run:
   argument (GLib's spawn drops it, the helper's `+` prefix carries it), a
   quoted argument ending in a backslash, and a `.cmd` found on `PATH` by its
   bare name with its exit status; the last is Windows-only. All three were red
-  against the helper as first committed (2026-11-14).
+  against the helper as first committed (2026-11-14). On Windows it also holds
+  the lookup: the call's own PATH spelled `Path`, and `sort` or an unknown name
+  absent from that PATH being Linux's `no such file or directory` rather than
+  System32's `sort` or an `ExitCode` of 127.
 - **`Exec.Wait.Output` keeps the child's line endings.** The line callback
   strips CRLF; a test that splits `Output` on `\n` uses `outputLines()` in
   `WidgetsForm.js`, or it compares a `\r` the platform put there.

@@ -28,7 +28,11 @@ one-page answer to *what is new since the release I have*.
   Linux. The runtime ships the helper beside both hosts. An empty argument
   reaches the child (GLib's spawn dropped it), a quoted one ending in a
   backslash keeps its closing quote, and a `.cmd` or `.bat` runs by its bare
-  name.
+  name. A bare name is looked up on the PATH the child is given -- the call's
+  own `Environment` PATH in any spelling of the name (`PATH`, `Path`), or the
+  program's -- and only there: one that is not on it is `Exec failed: no such
+  file or directory`, as on Linux, instead of System32's program of that name
+  or an `ExitCode` of 127.
 - **The core is the same language as the graphical host.** It closes the same
   names, runs `rad.js` the same way and links the same console globals --
   `Http`, `Database`, `Task`, `Zip`, sockets, `SerialPort`, `Keyring`,
@@ -365,7 +369,9 @@ something different, so a program meant for both reads them once.
   killed child's `ExitCode` is `1` rather than `-1`, and `ProcessId` is the
   `bintana-exec.exe` helper's. `Exec.Wait`'s `Output` is the child's bytes as
   written -- a console program's CRLF included -- where the line callbacks end
-  a line at LF, CRLF or CR on both systems.
+  a line at LF, CRLF or CR on both systems. A command that exists but that
+  Windows refuses to start answers `ExitCode` 127 with a `bintana-exec:` line
+  on stderr, where Linux throws.
 - **`Terminal.Stop`** sends Ctrl+C, which a child may ignore; `Kill` ends it.
 - **`Privilege.Invoker.Id`** is the user's name, not a numeric uid, and
   `CanElevate` is true for every user (UAC asks for an administrator's

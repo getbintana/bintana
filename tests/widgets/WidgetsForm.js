@@ -28683,9 +28683,34 @@ class Form1 extends Form {
                     { Environment: { PATH: bin + ";" + old } });
                 eq("a .cmd found on the call's own PATH runs",
                    ran.Output.trim(), "[propio]");
+                eq("...spelled Path as well, since Windows' names ignore case",
+                   Exec.Wait(["btapath", "mixto"],
+                             { Environment: { Path: bin + ";" + old } }).Output.trim(), "[mixto]");
             } finally {
                 Directory.DeleteTree(bin);
             }
+
+            /*
+             * **Not on the call's PATH is not found** -- the exception Linux
+             * gives, before anything starts.  The helper used to let
+             * CreateProcessW search instead, which ran System32's `sort` for a
+             * PATH that had none, and a name nobody has came back as
+             * `ExitCode: 127` rather than an error.
+             */
+            const nowhere = File.Join(Environment.TempDirectory, "bta-no-such-dir");
+            for (const [label, name] of [["a Windows command", "sort"],
+                                         ["a name nobody has", "bta-no-such-tool"]]) {
+                let msg = "";
+                try {
+                    const r = Exec.Wait([name], { Environment: { PATH: nowhere }, Input: "b\na\n" });
+                    msg = `ran, ExitCode ${r.ExitCode}`;
+                } catch (e) { msg = e.message; }
+                eq(`${label} absent from the call's PATH is Linux's exception, not a run`,
+                   msg, "Exec.Wait failed: no such file or directory");
+            }
+            eq("...and Exec refuses it the same way",
+               refusal(() => Exec(["bta-no-such-tool"], { Environment: { PATH: nowhere } })),
+               "Exec failed: no such file or directory");
         }
         eq("Environment adds a name",
            Exec.Wait(["sh", "-c", "echo [$BTA_PROBE]"],
