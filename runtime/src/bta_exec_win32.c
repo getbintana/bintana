@@ -34,53 +34,7 @@
 #include <string.h>
 #include <wchar.h>
 
-/* One argument, quoted the way CommandLineToArgvW and the CRT read it back.
- * The same function `tests/win-desktop.c` uses; there is no GLib here to
- * borrow one from.
- *
- * **An empty argument is `""`**, or it vanishes: `git commit -m ""` reached
- * git one argument short.  **Backslashes before the closing quote are
- * doubled**, or `"C:\My dir\"` reads as `C:\My dir"` with the quote escaped.
- * Backslashes anywhere else are literal.  The caller sizes `out` at twice the
- * argument plus four, which covers both. */
-static void append_quoted(wchar_t *out, const wchar_t *arg)
-{
-    const wchar_t *p = arg;
-    int            quote = *arg == 0;
-
-    for (const wchar_t *q = arg; *q; q++)
-        if (*q == L' ' || *q == L'\t' || *q == L'"')
-            quote = 1;
-    if (quote)
-        wcscat(out, L"\"");
-    while (*p) {
-        int backslashes = 0;
-
-        while (*p == L'\\') {
-            backslashes++;
-            p++;
-        }
-        if (*p == L'"' || (*p == 0 && quote)) {
-            int count = backslashes * 2 + (*p == L'"');
-
-            for (int i = 0; i < count; i++)
-                wcscat(out, L"\\");
-            if (*p == L'"') {
-                wcscat(out, L"\"");
-                p++;
-            }
-        } else {
-            for (int i = 0; i < backslashes; i++)
-                wcscat(out, L"\\");
-            if (*p) {
-                wchar_t one[2] = { *p++, 0 };
-                wcscat(out, one);
-            }
-        }
-    }
-    if (quote)
-        wcscat(out, L"\"");
-}
+#include "bta_win_quote.h"       /* the one quoter, shared with tests/win-desktop.c */
 
 static HANDLE standard_handle(int fd)
 {
@@ -159,8 +113,11 @@ static wchar_t *find_command(const wchar_t *command)
             dir[length_dir - 1] = 0;
             dir++;
         }
+        /* An empty entry is skipped (`wcstok` never hands one out anyway):
+         * "the current folder" is POSIX's reading of it, not Windows', and
+         * `exec_win_search` in bta_sys.c skips it the same way. */
         if (!*dir)
-            dir = L".";
+            continue;
 
         for (size_t i = 0; i < count && !found; i++) {
             size_t  size = wcslen(dir) + wcslen(command) +
@@ -257,10 +214,10 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command,
         return 2;
     }
     line[0] = 0;
-    append_quoted(line, head);
+    bta_win_append_quoted(line, head);
     for (int i = 2; i < argc; i++) {
         wcscat(line, L" ");
-        append_quoted(line, argv[i]);
+        bta_win_append_quoted(line, argv[i]);
     }
 
     STARTUPINFOW si;

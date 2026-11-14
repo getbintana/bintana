@@ -28,47 +28,8 @@
 #include <stdlib.h>
 #include <wchar.h>
 
-/* One argument, quoted the way CommandLineToArgvW reads it back: an empty one
- * is `""`, and backslashes before the closing quote are doubled.  The same
- * function as `runtime/src/bta_exec_win32.c`. */
-static void append_quoted(wchar_t *out, const wchar_t *arg)
-{
-    const wchar_t *p = arg;
-    int            quote = *arg == 0;
-
-    for (const wchar_t *q = arg; *q; q++)
-        if (*q == L' ' || *q == L'\t' || *q == L'"')
-            quote = 1;
-    if (quote)
-        wcscat(out, L"\"");
-    while (*p) {
-        int backslashes = 0;
-
-        while (*p == L'\\') {
-            backslashes++;
-            p++;
-        }
-        if (*p == L'"' || (*p == 0 && quote)) {
-            int count = backslashes * 2 + (*p == L'"');
-
-            for (int i = 0; i < count; i++)
-                wcscat(out, L"\\");
-            if (*p == L'"') {
-                wcscat(out, L"\"");
-                p++;
-            }
-        } else {
-            for (int i = 0; i < backslashes; i++)
-                wcscat(out, L"\\");
-            if (*p) {
-                wchar_t one[2] = { *p++, 0 };
-                wcscat(out, one);
-            }
-        }
-    }
-    if (quote)
-        wcscat(out, L"\"");
-}
+/* The runtime's quoter, the same one `bintana-exec` uses. */
+#include "../runtime/src/bta_win_quote.h"
 
 int wmain(int argc, wchar_t **argv)
 {
@@ -105,7 +66,7 @@ int wmain(int argc, wchar_t **argv)
     for (int i = 1; i < argc; i++) {
         if (i > 1)
             wcscat(cmd, L" ");
-        append_quoted(cmd, argv[i]);
+        bta_win_append_quoted(cmd, argv[i]);
     }
 
     /*

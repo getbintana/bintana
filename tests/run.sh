@@ -82,9 +82,12 @@ case "$(uname -s)" in
         export GTK_IM_MODULE=${GTK_IM_MODULE-none}
         if [[ -n ${HEADLESS:-} ]]; then
             helper=build/win-desktop.exe
-            if [[ ! -x $helper || tests/win-desktop.c -nt $helper ]]; then
-                if command -v cc >/dev/null 2>&1; then
-                    cc -O2 -municode -o "$helper" tests/win-desktop.c || helper=
+            if [[ ! -x $helper || tests/win-desktop.c -nt $helper ||
+                  runtime/src/bta_win_quote.h -nt $helper ]]; then
+                # `cc` where the toolchain names one, `gcc` where only that is.
+                compiler=$(command -v cc || command -v gcc || true)
+                if [[ -n $compiler ]]; then
+                    "$compiler" -O2 -municode -o "$helper" tests/win-desktop.c || helper=
                 else
                     helper=
                 fi

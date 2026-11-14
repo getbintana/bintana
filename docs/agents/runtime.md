@@ -756,7 +756,9 @@ icon when the theme has one by that name (`gtkapplication.c`).
   (`exec_use_helper`), which the helper takes off and refuses to do without.
   The helper's own quoting writes `""` for an empty argument and doubles the
   backslashes before a closing quote (`"C:\a b\"` read back as `C:\a b"`);
-  `tests/win-desktop.c` has the same function and the same fix.
+  The quoter is `runtime/src/bta_win_quote.h`, the one copy `bintana-exec`
+  and `tests/win-desktop.c` both include: they had been two, and were fixed
+  apart once.
   This is the Windows spelling of what POSIX already did -- a child with pipes
   and no terminal -- and it is not the IDE's business: a pure GTK application
   that runs `git` gets the same answer.
