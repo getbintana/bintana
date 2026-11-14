@@ -30,8 +30,10 @@ same conclusion first, and both now export `HEADLESS=${HEADLESS-1}`: with `-`
 rather than `:-`, so that an explicitly empty one survives and the way back
 works.
 
-**Windows has no `xvfb-run`.** There the only display is the session's own, so
-`run.sh` leaves `HEADLESS` empty and `HEADLESS=1` cannot be honored. The same
+**Windows has no `xvfb-run`.** There `run.sh` honours `HEADLESS=1` with a
+private `CreateDesktop` desktop instead (see
+[Windows](#windows-where-the-suite-gets-a-desktop) below), and falls back to the real
+screen, with a sentence, only when it cannot build that helper. The same
 checkout may have `tests/ide`'s `.form` symlinks written as text files when Git
 could not create links (Developer Mode off); `tests/check.sh` says so and skips
 that one project rather than reporting twenty JSON errors. `tests/check.sh` is
@@ -310,11 +312,11 @@ crashes when a window message reaches a context that has already been destroyed
 (the stack is in `libgtk-4-1.dll`), and it can land under any test once the
 suite has been up for a few minutes. No test types IME text on Windows, so the
 suite runs without one; that is a workaround for a GTK bug and not a runtime
-setting. It removes that crash, not every one: a native run of `tests/widgets`
-still takes a `g_utf8_to_utf16`-with-NULL segmentation fault inside `libgtk`'s
-window procedure, at the end of the run, in the idle before the summary — a run
-stopped at `ExecCloseInput` hits it too, so it is not `Exec`'s chain. The timing
-under gdb is enough to miss it, which is how the rest of the suite was measured.
+setting. The other crash a native run used to take, a `g_utf8_to_utf16`-with-NULL
+segmentation fault near the end, was GTK 4.24.1's clipboard
+([`ISSUE-windows-clipboard-crash.md`](issues/ISSUE-windows-clipboard-crash.md)):
+with `testClipboard`'s round trip skipped on Windows, no run has crashed since
+(2026-11-12).
 
 Measured on Windows 11 26H2 (2026-11-11), on that desktop: `tests/smoke`
 171/0, `tests/markdown` 171/0, `tests/qr` 120/0, `tests/report` 259/0 and
@@ -352,11 +354,14 @@ The Windows differences worth knowing before reading a red run:
   reports status `1` rather than a signal's `-1`, and there are no process
   groups: `ExecKill` skips. `DISPLAY` is X11's, so a console child still has a
   display: the form-needs-`DISPLAY` control skips while its `main` half runs.
-- **The font and colour choosers are modal and nothing in JS can close them.**
+- **The colour chooser is modal and nothing in JS can close it.**
   `testFileDialog` already refuses to open one for that reason; the two
-  `Dialog.Color` calls got away with sitting open on Linux, and the font
-  chooser's preview is one more GTK/Win32 path with a NULL family. Both are
-  skipped on Windows and only their refusals are asserted.
+  `Dialog.Color` calls got away with sitting open on Linux. It is skipped on
+  Windows and only its refusals are asserted. The font chooser runs there: it
+  had been skipped as a crash that turned out to be the clipboard's.
+- **`ZipArchive.ExtractAll` refuses more names on Windows** (`:`, devices such
+  as `CON`, a trailing dot or space, `<>"|?*`), and `testZip` asserts those
+  refusals there and that `12:30.log` extracts elsewhere.
 
 ## What a test has to prove
 

@@ -309,15 +309,16 @@ disagree.
   `runtime/src/bta_printer.c`, which is off there: printing itself works through
   GTK's Win32 backend, and `Printer.Names`/`Printer.Default` ask Win32's
   `EnumPrintersW`/`GetDefaultPrinterW`; the Unix module is the `GtkPrinter`
-  enumeration road only. **There is no local way to compile any of
-  them**: the `windows` job in `.github/workflows/ci.yml` is the compiler, and
-  its first runs are the toolchain spike `docs/plans/portability-plan.md` asked for.
+  enumeration road only. They compile on a Windows machine with the MSYS2
+  UCRT64 tree [`tools/windows-build-tree.sh`](../../tools/windows-build-tree.sh)
+  stages (its `bintana-build.cmd`, or `ninja -C build` with its `ucrt64/bin`
+  first on `PATH`), and in the `windows` job of `.github/workflows/ci.yml`.
   The same job stages the downloadable zip through
   [`tools/windows-portable.sh`](../../tools/windows-portable.sh) -- DLLs by `ldd`,
   GTK's runtime data by hand, caches rewritten to bare names because an
-  absolute path is nobody's on the machine that unzips it. None of that script
-  has run on a Windows desktop either; the log, and whoever unzips it, are the
-  test. The job installs GStreamer with `gst-plugins-rs` and poppler too, so
+  absolute path is nobody's on the machine that unzips it. The staged tree was
+  run on Windows 11 with only `System32` on `PATH` (2026-11-11, see
+  [`installing.md`](../installing.md#a-downloadable-build)). The job installs GStreamer with `gst-plugins-rs` and poppler too, so
   `Video` and `PdfDocument`'s reading half are compiled there; the portable tree
   carries the plugin directory, the scanner and poppler's data, and asks the
   staged runtime for both before the zip is published. It also runs

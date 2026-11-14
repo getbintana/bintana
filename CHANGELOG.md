@@ -240,7 +240,10 @@ one-page answer to *what is new since the release I have*.
   Windows; and a branch's upstream comes from `git status --porcelain=v2
   --branch`, since `@{u}` does not survive Git for Windows' MSYS layer. The
   `apps` prefix runs 2732/0 there and the full project 3804/0.
-- **`SerialPort` works on Windows.** `Open` is `CreateFileW` on `COM3` (or
+- **`SerialPort`**, a serial device on the main loop: `PortName`, `Speed`,
+  `DataBits`, `Parity`, `StopBits`, `FlowControl`, `Line`/`EndOfLine`,
+  `Data`/`Line`/`Error`, queued `Write`/`WriteLine`, and the `FormPart`.
+  Linux is POSIX `termios`. On Windows `Open` is `CreateFileW` on `COM3` (or
   `\\.\COM3`) and a `DCB` for speed, data bits, parity, stop bits, flow control
   and DTR/RTS. A COM handle is not pollable by GLib, so a reader thread does
   the waiting and a writer thread drains `Write`: the window never blocks, and
@@ -288,6 +291,18 @@ one-page answer to *what is new since the release I have*.
   recognized POSIX absolute paths: `C:\...\lib\xlsx\Xlsx.js` was taken for a
   library of that name and refused. A drive-letter or UNC prefix is a path now,
   so the same `import { Xlsx } from "xlsx"` works in a worker on both systems.
+- **`Network.Online` can be true on Windows.** GLib's Win32 monitor only
+  knows that a route exists, so `Connectivity` was `"Routed"` forever and
+  `Online` never true. Windows' own internet check (NCSI, through the Network
+  List Manager) answers now: `"Full"`, `"Local"` (a captive portal included)
+  or `"None"`. `OnChange` still follows GLib's notices, so a program waiting
+  to be online reads `Online` again rather than only listening.
+- **`ZipArchive.ExtractAll` refuses what only Windows reads as more than a
+  name**: a `:` (which writes an NTFS alternate data stream into another
+  file), a device such as `CON`, `NUL` or `COM1` whatever its extension, a
+  part ending in a dot or a space, and `<>"|?*` or a control character. The
+  whole archive is refused before a byte is written, as for `../`. On Linux
+  those letters are still ordinary names.
 - **`Printer.Names` and `Printer.Default` work on Windows.** The Windows
   implementation asks `EnumPrintersW`/`GetDefaultPrinterW` instead of GTK's
   Unix-only `gtk_enumerate_printers`; `Printer.Send`/`ToFile` already used
@@ -306,11 +321,6 @@ one-page answer to *what is new since the release I have*.
   deliver the click; Windows does too, through a WinRT toast with up to three
   buttons and `Withdraw` -- the first `Send` writes the Start Menu shortcut that
   registers the project's AppUserModelID, which an unpackaged toast needs.
-- **`SerialPort`**, a serial device on the main loop: `PortName`, `Speed`,
-  `DataBits`, `Parity`, `StopBits`, `FlowControl`, `Line`/`EndOfLine`,
-  `Data`/`Line`/`Error`, queued `Write`/`WriteLine`, and the `FormPart`.
-  Linux over POSIX `termios`; the Windows half is the `CreateFileW`/`DCB`
-  implementation above.
 - **`Dialog.Font(title, [current], cb)`** is the desktop's font chooser, the
   same asynchronous bargain as `Dialog.Color`: the callback is handed a Pango
   description (`"Cantarell Bold 12"`), exactly what `Widget.Font` takes, and is
@@ -345,6 +355,38 @@ one-page answer to *what is new since the release I have*.
   sites with Add/Remove. The `--selftest` half lives in `SelfTest.js` so the
   form reads the same either way. The rows are `Record`/`Table`, not
   hand-built SQL.
+
+### What still differs on Windows
+
+The same program runs on both; these are the places where it is told
+something different, so a program meant for both reads them once.
+
+- **`Exec`**: `Stop` ends the job at once (there is no SIGTERM to catch), a
+  killed child's `ExitCode` is `1` rather than `-1`, and `ProcessId` is the
+  `bintana-exec.exe` helper's. `Exec.Wait`'s `Output` is the child's bytes as
+  written -- a console program's CRLF included -- where the line callbacks end
+  a line at LF, CRLF or CR on both systems.
+- **`Terminal.Stop`** sends Ctrl+C, which a child may ignore; `Kill` ends it.
+- **`Privilege.Invoker.Id`** is the user's name, not a numeric uid, and
+  `CanElevate` is true for every user (UAC asks for an administrator's
+  password when the user is not one).
+- **`Notification`** ignores `Icon`, and a click that starts a closed
+  application does not carry its action.
+- **`Desktop.Entries`** writes `.desktop` files that no Windows menu reads;
+  `Desktop.Shortcut` is the Windows word. `Application.ConfigDirectory` and
+  the data directory are the same folder there (`%LOCALAPPDATA%`).
+- **`Socket`/`ServerSocket` with `Path`** (Unix sockets) refuse; a TCP port
+  on `127.0.0.1` is the portable road.
+- **Collation**: `Locale.Compare` and `COLLATE LOCALE` follow Windows' own
+  order, which is not glibc's for every accent and case.
+- **Not in the Windows build this release ships**: `PdfDocument`'s writing
+  half -- `Encrypt` and `Sign` (no PoDoFo), the Journal (`"EventLog"` is
+  Windows' target) and the IDE's Sysprof capture.
+  `Database.Odbc` is built on `odbc32` but has not yet been run against a
+  server on Windows.
+- **Known crash**: replacing text on the clipboard with an image while another
+  program reads it can end the process inside GTK 4.24.1
+  ([`docs/issues/ISSUE-windows-clipboard-crash.md`](docs/issues/ISSUE-windows-clipboard-crash.md)).
 
 ## 0.3.0 — 2026-11-04
 
