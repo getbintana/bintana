@@ -16140,7 +16140,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "what the network reaches, as far as this machine can know: `\"Unknown\"` (not answered yet), `\"None\"`, `\"Local\"` (a network with no way out), `\"Routed\"` (a way out that nobody checked reaches the internet -- what most backends can honestly say), `\"Limited\"`, `\"Portal\"` (a captive portal: a sign-in page first) or `\"Full\"` (the internet, checked). Advice, not a guarantee: whether a server answers is a request to it, or `Reach`",
+          "Doc": "what the network reaches, as far as this machine can know: `\"Unknown\"` (not answered yet), `\"None\"`, `\"Local\"` (a network with no way out), `\"Routed\"` (a way out that nobody checked reaches the internet -- what most backends can honestly say), `\"Limited\"`, `\"Portal\"` (a captive portal: a sign-in page first) or `\"Full\"` (the internet, checked). On Windows it is Windows' own check: `\"Full\"`, `\"Local\"` or `\"None\"`. Advice, not a guarantee: whether a server answers is a request to it, or `Reach`",
           "Native": true
         },
         {

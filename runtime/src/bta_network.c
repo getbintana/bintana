@@ -20,6 +20,16 @@
  *   (`CONNECTED_LOCAL`). GLib folds both into *unavailable*.
  * - Inside a sandbox the host decides: the portal's FULL is taken as it comes,
  *   since NM's own settings are not reachable from there.
+ * - **On Windows the Network List Manager answers**, not GLib. GLib's Win32
+ *   monitor only knows a route exists, so it said "Routed" forever and
+ *   `Online` was never true there. Windows' own NCSI probe is the checked
+ *   answer -- the NM connectivity check's equivalent -- and
+ *   `INetworkListManager::GetConnectivity` publishes it: an `*_INTERNET` bit
+ *   is "Full", a subnet or local network without it is "Local" (a captive
+ *   portal included: NLM does not tell it apart there), and nothing is
+ *   "None". GLib's signals still drive `OnChange`; NCSI finishing its probe a
+ *   few seconds after a route change raises no signal of its own, so a
+ *   program that waits for `Online` reads it again rather than only listening.
  *
  * The monitor is made on first use, not at startup: `g_network_monitor_get_default`
  * asks NetworkManager over the system bus, and a program that never asks about
@@ -29,6 +39,13 @@
 
 #include <gio/gio.h>
 #include <string.h>
+
+#ifdef G_OS_WIN32
+#define COBJMACROS
+#include <windows.h>
+#include <ole2.h>
+#include <netlistmgr.h>
+#endif
 
 /* NetworkManager's NMState values this file reads. */
 #define NM_STATE_CONNECTED_LOCAL 50
@@ -80,6 +97,45 @@ static int nm_uint(const char *name, int fallback)
     return n;
 }
 
+#ifdef G_OS_WIN32
+/* The GUIDs are spelled here rather than taken from libuuid, which the
+ * graphical host does not link. */
+static const CLSID bta_clsid_nlm =
+    { 0xdcb00c01, 0x570f, 0x4a9b, { 0x8d, 0x69, 0x19, 0x9f, 0xdb, 0xa5, 0x72, 0x3b } };
+static const IID bta_iid_nlm =
+    { 0xdcb00000, 0x570f, 0x4a9b, { 0x8d, 0x69, 0x19, 0x9f, 0xdb, 0xa5, 0x72, 0x3b } };
+
+/* Windows' own level, or NULL when the Network List Manager cannot be asked
+ * (then GLib's answer stands). COM is entered and left around the one call,
+ * the way the notification backend does, so any thread may ask. */
+static const char *net_win32_connectivity(void)
+{
+    HRESULT              com = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    INetworkListManager *nlm = NULL;
+    NLM_CONNECTIVITY     c   = NLM_CONNECTIVITY_DISCONNECTED;
+    const char          *word = NULL;
+
+    if (FAILED(com) && com != RPC_E_CHANGED_MODE)
+        return NULL;
+    if (SUCCEEDED(CoCreateInstance(&bta_clsid_nlm, NULL, CLSCTX_ALL,
+                                   &bta_iid_nlm, (void **)&nlm))) {
+        if (SUCCEEDED(INetworkListManager_GetConnectivity(nlm, &c))) {
+            if (c & (NLM_CONNECTIVITY_IPV4_INTERNET | NLM_CONNECTIVITY_IPV6_INTERNET))
+                word = "Full";
+            else if (c & (NLM_CONNECTIVITY_IPV4_LOCALNETWORK | NLM_CONNECTIVITY_IPV6_LOCALNETWORK |
+                          NLM_CONNECTIVITY_IPV4_SUBNET | NLM_CONNECTIVITY_IPV6_SUBNET))
+                word = "Local";
+            else
+                word = "None";
+        }
+        INetworkListManager_Release(nlm);
+    }
+    if (SUCCEEDED(com))
+        CoUninitialize();
+    return word;
+}
+#endif
+
 /* The level, as one of the seven words. Static strings: nothing to free. */
 static const char *net_connectivity(void)
 {
@@ -87,6 +143,12 @@ static const char *net_connectivity(void)
         return "None";
     if (net_portal && !net_answered)
         return "Unknown";
+
+#ifdef G_OS_WIN32
+    const char *win = net_win32_connectivity();
+    if (win)
+        return win;
+#endif
 
     bool avail = g_network_monitor_get_network_available(net_monitor);
     if (!avail)
@@ -409,8 +471,9 @@ static const JSCFunctionListEntry network_props[] = {
      *   way out), `"Routed"` (a way out that nobody checked reaches the
      *   internet -- what most backends can honestly say), `"Limited"`,
      *   `"Portal"` (a captive portal: a sign-in page first) or `"Full"` (the
-     *   internet, checked). Advice, not a guarantee: whether a server answers
-     *   is a request to it, or `Reach`
+     *   internet, checked). On Windows it is Windows' own check: `"Full"`,
+     *   `"Local"` or `"None"`. Advice, not a guarantee: whether a server
+     *   answers is a request to it, or `Reach`
      */
     JS_CGETSET_DEF("Connectivity", net_get_connectivity, NULL),
     /* Online

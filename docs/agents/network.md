@@ -245,6 +245,14 @@ each rule below; read it before changing a level.
   where somebody checked: NetworkManager with `ConnectivityCheckEnabled`
   (read from NM itself over the system bus), or the portal inside a sandbox.
   Everything else with a route is `"Routed"`, and `Online` is `false` there.
+- **On Windows that rule left `Online` false forever**: GLib's Win32 monitor
+  is route-only. Windows' own check is NCSI, published by
+  `INetworkListManager::GetConnectivity` (an `*_INTERNET` bit), so on Windows
+  the Network List Manager answers before GLib -- `"Full"`, `"Local"` or
+  `"None"` -- and GLib's answer stands only when COM cannot be asked. NCSI
+  settling after a route change raises no GLib notice, so `OnChange` can miss
+  that one step. The GUIDs are spelled in the file because the graphical host
+  links no `libuuid`. Measured 2026-11-14 on Windows 11: `Full`/`true`.
 - **Force a backend with `GIO_USE_NETWORK_MONITOR`** (`networkmanager`,
   `netlink`, `base`) to see what each answers on the same machine. `portal` is
   refused outside a sandbox and falls back silently.
