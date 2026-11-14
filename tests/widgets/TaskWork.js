@@ -412,6 +412,10 @@ class TaskWork extends Task {
         }
 
         /* The blocking child only: callbacks belong to the main loop. */
+        /* A worker cannot ask the OS for consent, and says so. */
+        if (msg.mode === "privilege")
+            return { can: Privilege.CanElevate, type: typeof Privilege.CanElevate };
+
         if (msg.mode === "exec") {
             const r = Exec.Wait(TaskWork.say("hi"));
             let   async = "";

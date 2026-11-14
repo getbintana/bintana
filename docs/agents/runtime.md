@@ -659,6 +659,24 @@ icon when the theme has one by that name (`gtkapplication.c`).
   leaves the list, the menu or the tab strip exactly as it was. That is the
   `AddNode` rule applied to a conversion: *a value the runtime refuses throws
   with the subtree already half built* is a worse refusal than none.
+- **An option's getter that throws is the verb's error too**, and a getter
+  is not only a conversion: `exec_apply_options` read `Directory`, found it
+  was not a string and dropped it, the getter's exception still pending, so
+  the child started in this process's folder with `ExitCode` 0 (reported
+  2026-11-14). It now returns false on `JS_IsException` for `Directory`,
+  `Environment` and each entry, and `exec_launcher` refuses when anything is
+  still pending from the options read before it (`Stderr`, `Timeout`,
+  `KillAfter`). A lookahead that reads the same option first
+  (`exec_custom_path`, `exec_option_directory`) consumes its own throw.
+- **`JS_SetPropertyStr` over a getter with no setter fails, and leaves the
+  exception pending** ("no setter for property"). `bta_privilege_init` did
+  that to `CanElevate` in every `Task` worker since `Privilege` arrived; the
+  getter answered `false` there anyway, so nothing showed until `Exec.Wait`
+  learnt to refuse a pending exception, and then the first `Exec.Wait` in any
+  task threw it -- with an empty stack, the sign of a throw from C with no JS
+  frame. **Replace a function-list accessor with `JS_DefinePropertyValueStr`**
+  (the entry is configurable), and when a worker misbehaves, print
+  `JS_HasException` along `task_build_worker` to find the step.
 - **An empty `JS_EXCEPTION` is not a refusal, and in some builds it is a
   crash.** Fifteen methods -- the list and table `Select`/`Deselect`, `Remove`,
   `PickAt`/`ContainerAt`/`LocalPoint`, the editor's `OffsetAt`/`LineOf`/

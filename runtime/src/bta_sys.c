@@ -2573,30 +2573,57 @@ static bool exec_wants_split(JSContext *ctx, JSValueConst opts)
 static bool exec_apply_options(JSContext *ctx, JSValueConst opts,
                                GSubprocessLauncher *launcher)
 {
+    /*
+     * **A getter that throws is the verb's error.**  `Directory`'s used to be
+     * read, found not to be a string, and dropped with its exception still
+     * pending: the child started in this process's folder and the error landed
+     * on whatever called into JS next (reported 2026-11-14 from Linux). The
+     * Windows lookahead in `exec_use_helper` consumes its own read; this one
+     * is the one that reports.
+     */
     JSValue dir = JS_GetPropertyStr(ctx, opts, "Directory");
+    if (JS_IsException(dir))
+        return false;
     if (JS_IsString(dir)) {
         const char *s = JS_ToCString(ctx, dir);
-        if (s) {
-            g_subprocess_launcher_set_cwd(launcher, s);
-            JS_FreeCString(ctx, s);
+        if (!s) {
+            JS_FreeValue(ctx, dir);
+            return false;
         }
+        g_subprocess_launcher_set_cwd(launcher, s);
+        JS_FreeCString(ctx, s);
     }
     JS_FreeValue(ctx, dir);
 
     JSValue env = JS_GetPropertyStr(ctx, opts, "Environment");
+    if (JS_IsException(env))
+        return false;
     if (JS_IsObject(env)) {
         JSPropertyEnum *tab = NULL;
         uint32_t        len = 0;
 
         if (JS_GetOwnPropertyNames(ctx, &tab, &len, env,
-                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) == 0) {
+                                   JS_GPN_STRING_MASK | JS_GPN_ENUM_ONLY) < 0) {
+            JS_FreeValue(ctx, env);
+            return false;
+        }
+        {
             for (uint32_t i = 0; i < len; i++) {
                 const char *name = JS_AtomToCString(ctx, tab[i].atom);
                 JSValue     v    = JS_GetProperty(ctx, env, tab[i].atom);
 
-                if (name && (JS_IsNull(v) || JS_IsUndefined(v))) {
+                /* An entry's getter that throws, or a name that cannot be
+                 * spelled, is reported as itself -- not as "not text". */
+                if (!name || JS_IsException(v)) {
+                    JS_FreeCString(ctx, name);
+                    JS_FreeValue(ctx, v);
+                    JS_FreePropertyEnum(ctx, tab, len);
+                    JS_FreeValue(ctx, env);
+                    return false;
+                }
+                if (JS_IsNull(v) || JS_IsUndefined(v)) {
                     g_subprocess_launcher_unsetenv(launcher, name);
-                } else if (name) {
+                } else {
                     const char *val = JS_ToCString(ctx, v);
 
                     /*
@@ -2950,10 +2977,9 @@ static char *exec_option_directory(JSContext *ctx, JSValueConst opts)
         JS_FreeCString(ctx, text);
     }
     JS_FreeValue(ctx, value);
-    /* A getter that threw is consumed: this is a lookahead, and the launcher
-     * reads `Directory` again and reports what it finds -- as
-     * `exec_custom_path` does for `Environment`.  Left pending, it surfaced
-     * in whatever called into JS next. */
+    /* A getter that threw is consumed: this is a lookahead, and
+     * `exec_apply_options` reads `Directory` again and throws what it finds
+     * -- as `exec_custom_path` does for `Environment`. */
     if (JS_HasException(ctx))
         JS_FreeValue(ctx, JS_GetException(ctx));
     return dir;
@@ -3357,6 +3383,15 @@ static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
     if (!JS_IsUndefined(opts) && !exec_apply_options(ctx, opts, launcher)) {
         g_object_unref(launcher);
         return NULL;               /* it threw on the way; that stands */
+    }
+    /* The options read before this one -- `Stderr`, `Timeout`, `KillAfter`,
+     * each by a helper that answers a value and has no way to fail -- may
+     * have left a getter's exception pending.  It is the verb's error, and it
+     * is reported here, before anything starts, rather than surfacing in the
+     * next call into JS. */
+    if (JS_HasException(ctx)) {
+        g_object_unref(launcher);
+        return NULL;
     }
 
     return launcher;

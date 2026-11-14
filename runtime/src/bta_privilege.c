@@ -509,7 +509,14 @@ void bta_privilege_init(JSContext *ctx, JSValueConst global, bool worker)
         /* Facts are still facts; asking is the main thread's, because a
          * worker has no display for the OS dialog and no main loop for its
          * answer. */
-        JS_SetPropertyStr(ctx, privilege, "CanElevate", JS_FALSE);
+        /* **Defined, not assigned**: `CanElevate` is a getter with no setter
+         * in the function list above, so an assignment failed with "no setter
+         * for property" and left that exception pending in every worker -- the
+         * getter answered false here anyway, so nothing showed until an
+         * `Exec.Wait` that checks for a pending exception reported it in the
+         * task's first call (2026-11-14). */
+        JS_DefinePropertyValueStr(ctx, privilege, "CanElevate", JS_FALSE,
+                                  JS_PROP_CONFIGURABLE | JS_PROP_ENUMERABLE);
         JS_SetPropertyStr(ctx, privilege, "Run",
                           JS_NewCFunction(ctx, js_privilege_worker, "Run", 5));
         JS_SetPropertyStr(ctx, privilege, "Wait",

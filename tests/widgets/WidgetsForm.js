@@ -28727,6 +28727,28 @@ class Form1 extends Form {
         }
 
         /*
+         * **An option's getter that throws is the verb's error.**  Directory's
+         * was read, found not to be a string and dropped, its exception left
+         * pending: the child started in this process's folder with ExitCode 0
+         * and the error surfaced in the next call into JS (reported from Linux,
+         * 2026-11-14). Environment, an entry of it, and Timeout the same.
+         */
+        {
+            const boom = (key) => ({ get [key]() { throw new Error(`${key} getter boom`); } });
+            for (const key of ["Directory", "Environment", "Timeout", "Stderr"]) {
+                eq(`Exec.Wait throws what the ${key} getter threw`,
+                   refusal(() => Exec.Wait(["sh", "-c", "exit 0"], boom(key))), `${key} getter boom`);
+            }
+            eq("...as does Exec, for Directory",
+               refusal(() => Exec(["sh", "-c", "exit 0"], boom("Directory"))), "Directory getter boom");
+            eq("...and for a getter inside Environment",
+               refusal(() => Exec.Wait(["sh", "-c", "exit 0"], { Environment: boom("BTA_GETTER") })),
+               "BTA_GETTER getter boom");
+            eq("...and nothing is left pending for the next call",
+               Exec.Wait(["sh", "-c", "exit 0"]).ExitCode, 0);
+        }
+
+        /*
          * **The PATH the child is given decides, on both systems.**  Linux
          * searched the parent's PATH until GSubprocess was told
          * SEARCH_PATH_FROM_ENVP: a tool only the call's PATH named was "no such
@@ -32189,6 +32211,21 @@ class Form1 extends Form {
                 next();
             };
             t.Start({ mode: "exec" });
+        });
+
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`privilege errored: ${m}`);
+            t.Done  = (r) => {
+                /* The worker's `CanElevate` used to be assigned over a getter
+                 * with no setter; the getter already answered false here, but
+                 * the failed assignment left an exception pending in every
+                 * worker -- which the two Exec.Wait steps above now see. */
+                eq("a task's Privilege.CanElevate is false", r.can, false);
+                next();
+            };
+            t.Start({ mode: "privilege" });
         });
 
         steps.push(() => {

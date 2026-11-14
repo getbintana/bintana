@@ -828,7 +828,7 @@ jobs:
         run: ./tests/run.sh smoke
 
       # The widgets suite, the same way and for the same reason: the only CI
-      # run of the Windows halves of Exec, Zip and Network. 6469 assertions
+      # run of the Windows halves of Exec, Zip and Network. 6477 assertions
       # on a Windows 11 desktop (2026-11-14); a red line here is read, not
       # gated, until it has been green for a while.
       - name: The widgets suite (diagnostic)
