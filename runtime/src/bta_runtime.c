@@ -25,6 +25,7 @@
 #ifdef G_OS_WIN32
 #include <windows.h>
 #include <shobjidl.h>
+#include <gdk/win32/gdkwin32.h>
 #endif
 
 static BtaApp *g_app;
@@ -566,6 +567,101 @@ static GParamSpec *theme_scheme_spec(GtkSettings *settings)
     return NULL;
 }
 
+/*
+ * **Windows' own dark mode, which GTK does not read.**
+ *
+ * On Linux "as the desktop says" is the settings portal moving GTK's two
+ * settings. GTK's Win32 backend has no such road: its DLL (4.24.1) never
+ * mentions `AppsUseLightTheme`, so a desktop in dark mode drew every Bintana
+ * window light. The value lives in the registry, and a change is broadcast to
+ * top-level windows as `WM_SETTINGCHANGE` with the text `ImmersiveColorSet`,
+ * which GDK lets a filter see.
+ *
+ * It writes exactly what the portal writes on Linux -- the two settings a
+ * `Form`'s `ThemeChange` listens to -- so `Dark` and the event need nothing of
+ * their own. **Only while nothing outranks the desktop**: a program's
+ * `Application.Theme`, `--theme`, or a `GTK_THEME` the user set.
+ *
+ * The filter runs inside GDK's window procedure, so it only queues an idle;
+ * the settings are written from the main loop, as any other change would be.
+ */
+#ifdef G_OS_WIN32
+static bool win_theme_following;
+static guint win_theme_idle;
+
+/* 1 dark, 0 light, -1 the registry does not say (Windows before 10 1809). */
+static int win_theme_desktop_dark(void)
+{
+    DWORD light = 1, size = sizeof light;
+    LSTATUS st = RegGetValueW(HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        L"AppsUseLightTheme", RRF_RT_REG_DWORD, NULL, &light, &size);
+
+    if (st != ERROR_SUCCESS)
+        return -1;
+    return light == 0;
+}
+
+static void win_theme_apply(void)
+{
+    GtkSettings *settings = gtk_settings_get_default();
+    int dark = win_theme_desktop_dark();
+
+    if (!win_theme_following || theme_forced || !settings || dark < 0)
+        return;
+
+    /* 4.20's word where there is one; `prefer-dark` only before it, since
+     * writing it on 4.20+ warns "Use gtk-interface-color-scheme instead". */
+    GParamSpec *scheme = theme_scheme_spec(settings);
+    GEnumValue *v = scheme ? g_enum_get_value_by_nick(G_PARAM_SPEC_ENUM(scheme)->enum_class,
+                                                      dark ? "dark" : "light") : NULL;
+    if (v) {
+        int now = -1;
+        g_object_get(settings, "gtk-interface-color-scheme", &now, NULL);
+        if (now != v->value)
+            g_object_set(settings, "gtk-interface-color-scheme", v->value, NULL);
+        return;
+    }
+
+    gboolean was = FALSE;
+    g_object_get(settings, "gtk-application-prefer-dark-theme", &was, NULL);
+    if (was != (gboolean)dark)
+        g_object_set(settings, "gtk-application-prefer-dark-theme", (gboolean)dark, NULL);
+}
+
+static gboolean win_theme_idle_cb(gpointer data)
+{
+    win_theme_idle = 0;
+    win_theme_apply();
+    return G_SOURCE_REMOVE;
+}
+
+static GdkWin32MessageFilterReturn win_theme_filter(GdkWin32Display *display, MSG *msg,
+                                                    int *ret, gpointer data)
+{
+    /* Every top-level window gets its own copy of the broadcast; one idle
+     * takes them all in. */
+    if (msg->message == WM_SETTINGCHANGE && msg->lParam &&
+        !wcscmp((const wchar_t *)msg->lParam, L"ImmersiveColorSet") && !win_theme_idle)
+        win_theme_idle = g_idle_add(win_theme_idle_cb, NULL);
+    return GDK_WIN32_MESSAGE_FILTER_CONTINUE;
+}
+
+/* Once, when GTK is up and before `--theme` is applied, so a forced variant
+ * saves the desktop's real values as the ones `""` puts back. */
+static void win_theme_follow(void)
+{
+    const char *env = g_getenv("GTK_THEME");
+    GdkDisplay *display = gdk_display_get_default();
+
+    if (win_theme_following || (env && *env) || !display || !GDK_IS_WIN32_DISPLAY(display))
+        return;
+    win_theme_following = true;
+    gdk_win32_display_add_filter(GDK_WIN32_DISPLAY(display), win_theme_filter, NULL);
+    win_theme_apply();
+}
+#endif
+
 static void set_theme(const char *theme)
 {
     GtkSettings *settings = gtk_settings_get_default();
@@ -595,6 +691,10 @@ static void set_theme(const char *theme)
         g_object_set(settings, "gtk-application-prefer-dark-theme", theme_saved_dark, NULL);
         if (scheme && theme_saved_scheme >= 0)
             g_object_set(settings, "gtk-interface-color-scheme", theme_saved_scheme, NULL);
+#ifdef G_OS_WIN32
+        /* The desktop may have changed while the program held its own. */
+        win_theme_apply();
+#endif
         return;
     }
 
@@ -649,7 +749,8 @@ static const JSCFunctionListEntry app_props[] = {
      *   the desktop said. **The program outranks `--theme`**, which sets the
      *   starting value; a word that is not one of the three is refused. A
      *   theme forced with the `GTK_THEME` variable (`Adwaita:dark`) is
-     *   beyond it
+     *   beyond it. On Windows `""` follows the system's *app mode*
+     *   (Settings → Personalization → Colors), live, which GTK alone does not
      */
     JS_CGETSET_DEF("Theme", js_app_get_theme, js_app_set_theme),
 };
@@ -1764,6 +1865,9 @@ static void apply_look(BtaApp *app)
         g_object_set(settings, "gtk-xft-dpi", (int)(dpi * app->text_scale), NULL);
     }
 
+#ifdef G_OS_WIN32
+    win_theme_follow();
+#endif
     if (app->theme)
         set_theme(app->theme);
 

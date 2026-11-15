@@ -692,7 +692,7 @@ const TESTS = [
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
     "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "DesktopShortcut", "Bitmap", "Picture", "Media", "MediaAttach", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
-    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeForced", "LoadQuiet", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "DatabaseOdbc", "Action", "Groups",
+    "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeWindows", "ThemeForced", "LoadQuiet", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "DatabaseOdbc", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Pdf", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
@@ -7845,6 +7845,36 @@ class Form1 extends Form {
                 this.On("ThemeChange", null);
             });
         });
+    }
+
+    /*
+     * **On Windows "as the desktop says" has to be read by the runtime**: GTK's
+     * Win32 backend never looks at the app mode, so a desktop in dark mode drew
+     * every form light. The registry is read here with `reg.exe` -- read only,
+     * since the setting is the user's -- and the form has to agree with it.
+     * The live half (a `WM_SETTINGCHANGE` while running) changes the user's
+     * real desktop to provoke, so it is measured by hand, not here.
+     */
+    testThemeWindows() {
+        if (Environment.OS !== "Windows") {
+            print("  (skipping the Windows app mode: not Windows)");
+            return;
+        }
+        const out = Exec.Wait(["reg", "query",
+            "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+            "/v", "AppsUseLightTheme"], { Timeout: 20000 }).Output;
+        const at = out.indexOf("REG_DWORD");
+        if (at < 0) {
+            print("  (skipping the Windows app mode: the registry does not say)");
+            return;
+        }
+        const desktopDark = parseInt(out.substring(at + 9).trim(), 16) === 0;
+
+        /* Synchronous, and listed before `testThemeForced`: that test forces
+         * the other variant in a tail of its own, and a wait here would be
+         * answered by it instead of by the desktop. */
+        eq("a run with no --theme follows the desktop", Application.Theme, "");
+        eq("and a form is drawn in Windows' app mode", this.Dark, desktopDark);
     }
 
     /*

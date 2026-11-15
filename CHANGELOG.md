@@ -197,6 +197,14 @@ one-page answer to *what is new since the release I have*.
 
 ### Platform and parts
 
+- **On Windows the application follows the system's dark mode.** GTK's Win32
+  backend never reads Windows' *app mode* (Settings → Personalization →
+  Colors), so a desktop in dark mode drew every window light. With
+  `Application.Theme` at `""` the runtime now reads it from the registry at
+  start and again when Windows announces a change, live: open forms restyle,
+  raise `ThemeChange` and `Dark` answers the new ground. `Application.Theme`,
+  `--theme` and a `GTK_THEME` the user set still outrank it.
+  `tests/widgets`' `ThemeWindows` holds the form to the registry.
 - **A text file saved the way Windows editors save it now loads.** Notepad,
   PowerShell 5.1 and Visual Studio can all save a UTF-8 BOM, and PowerShell
   5.1's `Out-File` and Notepad's older *Unicode* write UTF-16LE with one. A

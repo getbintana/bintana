@@ -601,6 +601,23 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 ## Icons, themes and styles
 
+- **GTK on Windows does not follow the system's dark mode; the runtime does.**
+  `libgtk-4-1.dll` (4.24.1, MSYS2 UCRT64) contains no `AppsUseLightTheme`, so
+  "as the desktop says" was always light there. `bta_runtime.c`
+  (`win_theme_*`) reads `HKCU\...\Themes\Personalize\AppsUseLightTheme` in
+  `apply_look`, before `--theme`, so a forced variant saves the desktop's
+  real values for `""` to put back. It then listens through
+  `gdk_win32_display_add_filter` for `WM_SETTINGCHANGE` with
+  `"ImmersiveColorSet"`. The filter only queues an idle, because it runs
+  inside GDK's window procedure. It writes `gtk-interface-color-scheme`, and
+  `gtk-application-prefer-dark-theme` only on a GTK without it: on 4.20+
+  writing `prefer-dark` warns *Use GtkSettings:gtk-interface-color-scheme
+  instead*. `tests/widgets`' `ThemeWindows` is listed **before**
+  `ThemeForced`: that test forces the other variant in an async tail, and a
+  wait in the Windows test was answered by it. That test passed with the
+  registry read inverted until it was made synchronous (2026-11-15). The live
+  change is not in the suite, since provoking it changes the user's real
+  desktop.
 - An own `-symbolic` icon is drawn with **fills**: GTK's recolouring forces
   `fill`, and a stroke keeps the colour in the file (black on a dark theme).
 - **A headless run does not see the desktop's icon theme.** Under `xvfb-run` GTK
