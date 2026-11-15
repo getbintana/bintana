@@ -13508,10 +13508,17 @@ class Form1 extends Form {
             });
         });
 
-        /* A read that never answers would leave the run waiting on the counter
-         * instead of failing, which is the silence `until` has a comment
-         * about. */
-        Timer.After(3000, () => { if (!done) fail("no answer from the clipboard"); });
+        /*
+         * A read that never answers would leave the run waiting on the
+         * counter instead of failing, which is the silence `until` has a
+         * comment about. **`until` and not a timer armed here**: the
+         * synchronous part of `Form_Open` still has hundreds of tests to
+         * start, and under the sanitizer that outlasts three seconds -- the
+         * deadline was already overdue when the loop first ran, and it won
+         * the race against the clipboard's own answer. `until` counts from
+         * that first turn.
+         */
+        until("Clipboard: no answer from the clipboard", () => done, finish, 300);
     }
 
     /* --- Screen -------------------------------------------------------------
