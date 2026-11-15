@@ -32521,6 +32521,10 @@ class Form1 extends Form {
          * is one file; `qr` keeps its view in a script beside `QrCode.js`, and
          * the module loader skips a script in a worker.  Both write and encode
          * with the classes the main thread uses, from their own file.
+         *
+         * libxml2 is optional and `Xlsx.Write` needs it, so the refusal is the
+         * assertion on that build (`no-libxml` in CI); the QR half is the same
+         * on both.
          */
         steps.push(() => {
             Directory.Make(SCRATCH);
@@ -32529,11 +32533,17 @@ class Form1 extends Form {
 
             t.Error = (m) => fail(`library errored: ${m}`);
             t.Done  = (r) => {
-                eq("a worker writes an xlsx through a library", r.sheets, 1);
-                check("...and the file is there", r.size > 0, String(r.size));
+                if (Xlsx.Available) {
+                    eq("a worker writes an xlsx through a library", r.sheets, 1);
+                    check("...and the file is there", r.size > 0, String(r.size));
+                } else {
+                    check("a worker loads Xlsx, which says this build has no libxml2",
+                          String(r.xlsx).includes("libxml2"), String(r.xlsx));
+                }
                 eq("...and encodes a QR", r.qrSize, 21);
                 eq("...of the version that fits", r.qrVersion, 1);
-                File.Delete(path);
+                if (File.Exists(path))
+                    File.Delete(path);
                 next();
             };
             t.Start({ path });
