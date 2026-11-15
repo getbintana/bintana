@@ -28,7 +28,7 @@ jobs:
             libsysprof-capture-4-dev libgnutls28-dev \
             unixodbc-dev libsqliteodbc odbc-postgresql \
             libgstreamer1.0-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-            gstreamer1.0-tools \
+            gstreamer1.0-x gstreamer1.0-tools \
             xvfb xdotool desktop-file-utils \
             softhsm2 gnutls-bin openssl \
             librsvg2-common fonts-cantarell
@@ -46,6 +46,11 @@ jobs:
           # picture that is not there.  **`fonts-cantarell` is the font the
           # metrics assertions were written against** -- a label at `Cantarell
           # 11.5` measured against a substituted font is a different number.
+
+          # `gstreamer1.0-x` is where Ubuntu packages GStreamer's pango
+          # plugin, and `textoverlay` lives in it -- not in plugins-base beside
+          # the rest of what `tests/media` builds. Without it the media test
+          # stops at its first conversion, before a single pipeline.
 
           # The GTK4 video sink lives in gst-plugins-rs, which not every
           # release packages -- and a Video is the only thing that needs it, so
@@ -972,22 +977,41 @@ jobs:
                   || { echo "the tree has no bin/$helper: Exec with a pipe fails" >&2; exit 1; }
           done
           # The theme Adwaita inherits first, where its full-colour icons went:
-          # without it the IDE's toolbar (`document-new`...) is blank.
+          # without it `dialog-warning` and the playback icons are blank.
           test -f "stage/$name/share/icons/AdwaitaLegacy/index.theme" \
               || { echo "the tree has no AdwaitaLegacy: the IDE's toolbar is blank" >&2; exit 1; }
           # Ask the tree itself for the two optional halves, with the same clean
           # PATH: `Video` goes through the GStreamer registry and
           # `PdfDocument.CanRead` is the poppler build flag. The checks above
           # prove the files were copied; this proves the runtime finds them.
+          #
+          # **The graphical host, not the core**: `Widget` is not installed for
+          # a `main` under `bintana.exe`, so `Widget.Available` there is a
+          # ReferenceError. `bintana-gui.exe` is a GUI executable, so its
+          # `print` is not seen from this shell -- it is from `Exec`'s pipe,
+          # which is a different handle -- and the answer goes to a file the
+          # program writes itself. `Application.OnError` does the same for a
+          # throw, so a broken tree is a sentence in the log rather than a
+          # dialog waiting on a click nobody will make.
           probe="stage/probe"
           rm -rf "$probe"; mkdir -p "$probe"
           printf '%s\n' '{"name":"probe","main":"Main"}' > "$probe/project.btp"
           printf '%s\n' \
               'function Main() {' \
-              '    print(`Video=${Widget.Available("Video")}`);' \
-              '    print(`PdfRead=${PdfDocument.CanRead}`);' \
+              '    Application.OnError = (e) => {' \
+              '        File.Save(File.Join(Application.Directory, "answer.txt"), `error=${e}\n`);' \
+              '        Application.Quit(1);' \
+              '    };' \
+              '    File.Save(File.Join(Application.Directory, "answer.txt"),' \
+              '              `Video=${Widget.Available("Video")}\n` +' \
+              '              `PdfRead=${PdfDocument.CanRead}\n`);' \
               '}' > "$probe/Main.js"
-          out=$(PATH=/c/Windows/System32:/c/Windows "stage/$name/bin/bintana.exe" "$probe")
+          if ! PATH=/c/Windows/System32:/c/Windows "stage/$name/bin/bintana-gui.exe" "$probe"; then
+              cat "$probe/answer.txt" 2>/dev/null || true
+              echo "the staged tree could not answer about Video and PDF" >&2
+              exit 1
+          fi
+          out=$(cat "$probe/answer.txt")
           echo "$out"
           grep -q '^Video=true$' <<<"$out" \
               || { echo "the staged tree cannot build a Video pipeline" >&2; exit 1; }

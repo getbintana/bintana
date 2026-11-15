@@ -957,8 +957,10 @@ disagree.
   [`installing.md`](../installing.md#a-downloadable-build)). The job installs GStreamer with `gst-plugins-rs` and poppler too, so
   `Video` and `PdfDocument`'s reading half are compiled there; the portable tree
   carries the plugin directory, the scanner and poppler's data, and asks the
-  staged runtime for both before the zip is published. It also runs
-  `tests/check.sh` as a gate and `tests/run.sh smoke` as a diagnostic -- the
+  staged **graphical** host (`bintana-gui.exe`) for both before the zip is
+  published: a `main` under `bintana.exe` has no `Widget`, and a GUI executable
+  writes the answer to a file because its `print` is not the shell's. It also
+  runs `tests/check.sh` as a gate and `tests/run.sh smoke` as a diagnostic -- the
   first windowed project there; the rest of the suite and the `tests/ide`
   symlinks still need a desktop and a checkout that could create links.
   Editing one blind and pushing is the loop, so keep each guard as small as it
@@ -10938,6 +10940,11 @@ Each of these was measured while building it, and each one shaped a rule.
   and a field this surface carries no value for is left out rather than
   guessed at. `tests/media`'s `levels` scenario holds it to two channels'
   peaks in dB.
+- **`textoverlay` is in the pango plugin, packaged as `gstreamer1.0-x` on
+  Debian and Ubuntu -- not in `plugins-base` beside `videotestsrc` and
+  `audiotestsrc`.** The media test's first conversion builds it, so a runner
+  with only base and good stops there with "there is no element type
+  'textoverlay'" (CI, 2026-11-15); the elements test needs all three packages.
 
 ### Cameras: `Media.Devices` and `Video.Attach`
 
@@ -15647,7 +15654,10 @@ device once -- red without starting the monitor, which answers a device per
 provider. `Video.Attach` needs a display and is `tests/widgets`'s
 `MediaAttach`: a live `videotestsrc` at the program's own caps over a
 Video's clip, then `Play` back to the clip, red without the picture being
-handed back.
+handed back. The elements it builds are `plugins-base` and `plugins-good`'s,
+plus `textoverlay`: Debian and Ubuntu package the pango plugin that carries it
+as `gstreamer1.0-x`, and a runner with only the first two stops at the first
+conversion.
 
 Four scenarios hold the lifetimes of the subscriptions, each of which crashed,
 hung or leaked before: `busDrop` (a handler takes another wrapper of the same

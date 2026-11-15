@@ -321,8 +321,10 @@ disagree.
   [`installing.md`](../installing.md#a-downloadable-build)). The job installs GStreamer with `gst-plugins-rs` and poppler too, so
   `Video` and `PdfDocument`'s reading half are compiled there; the portable tree
   carries the plugin directory, the scanner and poppler's data, and asks the
-  staged runtime for both before the zip is published. It also runs
-  `tests/check.sh` as a gate and `tests/run.sh smoke` as a diagnostic -- the
+  staged **graphical** host (`bintana-gui.exe`) for both before the zip is
+  published: a `main` under `bintana.exe` has no `Widget`, and a GUI executable
+  writes the answer to a file because its `print` is not the shell's. It also
+  runs `tests/check.sh` as a gate and `tests/run.sh smoke` as a diagnostic -- the
   first windowed project there; the rest of the suite and the `tests/ide`
   symlinks still need a desktop and a checkout that could create links.
   Editing one blind and pushing is the loop, so keep each guard as small as it

@@ -232,6 +232,11 @@ Each of these was measured while building it, and each one shaped a rule.
   and a field this surface carries no value for is left out rather than
   guessed at. `tests/media`'s `levels` scenario holds it to two channels'
   peaks in dB.
+- **`textoverlay` is in the pango plugin, packaged as `gstreamer1.0-x` on
+  Debian and Ubuntu -- not in `plugins-base` beside `videotestsrc` and
+  `audiotestsrc`.** The media test's first conversion builds it, so a runner
+  with only base and good stops there with "there is no element type
+  'textoverlay'" (CI, 2026-11-15); the elements test needs all three packages.
 
 ### Cameras: `Media.Devices` and `Video.Attach`
 

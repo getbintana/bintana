@@ -592,7 +592,10 @@ device once -- red without starting the monitor, which answers a device per
 provider. `Video.Attach` needs a display and is `tests/widgets`'s
 `MediaAttach`: a live `videotestsrc` at the program's own caps over a
 Video's clip, then `Play` back to the clip, red without the picture being
-handed back.
+handed back. The elements it builds are `plugins-base` and `plugins-good`'s,
+plus `textoverlay`: Debian and Ubuntu package the pango plugin that carries it
+as `gstreamer1.0-x`, and a runner with only the first two stops at the first
+conversion.
 
 Four scenarios hold the lifetimes of the subscriptions, each of which crashed,
 hung or leaked before: `busDrop` (a handler takes another wrapper of the same
