@@ -26,6 +26,7 @@
  * GLib, with `uname` asked through `g_get_os_info`.
  */
 #ifndef G_OS_WIN32
+#include <fcntl.h>
 #include <gio/gunixinputstream.h>
 #include <sys/utsname.h>
 #endif
@@ -3467,8 +3468,25 @@ static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
 
         *pid_fd = -1;
         if (pipe(ends) == 0) {
-            g_subprocess_launcher_take_fd(launcher, ends[1], EXEC_PID_FD);
-            *pid_fd = ends[0];
+            /*
+             * **The source and the target must differ.** `pipe()` hands back
+             * the two lowest free descriptors, and the write end is fd 4 when
+             * the table is as empty as a fresh process's -- which is GLib's
+             * target too. Its child closes each source after `dup2`ing it, and
+             * `dup2(4, 4)` is a no-op whose "source" it then closes, so the
+             * setup would write to a closed descriptor and the parent would
+             * read an end of file. A duplicate above the target keeps the two
+             * apart whatever the table looks like.
+             */
+            int src = fcntl(ends[1], F_DUPFD, EXEC_PID_FD + 1);
+
+            close(ends[1]);
+            if (src >= 0) {
+                g_subprocess_launcher_take_fd(launcher, src, EXEC_PID_FD);
+                *pid_fd = ends[0];
+            } else {
+                close(ends[0]);
+            }
         }
         g_subprocess_launcher_set_child_setup(
             launcher, exec_child_setup,
