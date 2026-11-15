@@ -1,5 +1,5 @@
 /*
- * Gzip -- the one compression format this runtime speaks.
+ * Gzip -- the gzip format, with members, on the shared deflate engine.
  *
  *     const z = Gzip.Compress(text)                  // Bytes
  *     const b = Gzip.Decompress(z)                   // Bytes
@@ -8,10 +8,10 @@
  *
  * **The implementation is GIO's** (`GZlibCompressor`/`GZlibDecompressor`, which
  * is `libz` already linked through GIO), so this adds no dependency and no CI
- * job. What is written here is the surface and the refusals -- and the refusals
- * are the whole reason it is not twenty lines, because the converter's defaults
- * are wrong in three ways that were measured before this was written
- * (docs/plans/crypto-compress-plan.md):
+ * job. What is written here is the gzip surface, the file verbs and the
+ * refusals; the loop itself is `bta_deflate.c`, shared with `Zlib`. The
+ * converter's defaults are wrong in three ways that were measured before this
+ * was written (docs/plans/crypto-compress-plan.md):
  *
  * - **Two members glued together** (`cat a.gz b.gz`, which is valid gzip and
  *   what `gzip -c >>` makes) decompress to *the first member only, with no
@@ -33,11 +33,12 @@
  * second (measured), so a big one belongs in a `Task` -- and nothing here calls
  * back or keeps a list, so a worker has it (bta_task.c installs it).
  *
- * Only gzip is published. zlib framing and raw deflate are other names for the
- * same algorithm, and a name goes out when something needs one.
+ * zlib framing and raw DEFLATE are `Zlib` (`bta_zlib.c`), the same engine
+ * without the gzip wrapper.
  */
 
 #include "bta.h"
+#include "bta_deflate.h"
 
 #include <glib/gstdio.h>
 #include <gio/gio.h>
@@ -48,7 +49,6 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#define GZ_CHUNK        65536
 #define GZ_DEFAULT_MAX  ((uint64_t)256 * 1024 * 1024)
 
 /* ------------------------------------------------------------ options */
@@ -143,164 +143,6 @@ static bool gz_max(JSContext *ctx, JSValueConst opts, const char *who, uint64_t 
     return true;
 }
 
-/* ------------------------------------------------------------- engine */
-
-/* Where the input comes from and where the output goes: memory or a file, so
- * one loop serves both and the cap and the truncation rule are written once. */
-typedef struct {
-    const guint8 *mem;
-    size_t        memlen, mempos;
-    FILE         *file;
-    GCancellable *cancel;           /* the caller's, or NULL; asked per chunk */
-} GzSource;
-
-typedef struct {
-    GByteArray *mem;
-    FILE       *file;
-    uint64_t    total, max;
-    bool        exceeded;
-} GzSink;
-
-/* Up to `cap` bytes of input; 0 is the end. `*failed` for a read error. */
-static size_t gz_read(GzSource *s, guint8 *buf, size_t cap, bool *failed)
-{
-    if (s->file) {
-        size_t got = fread(buf, 1, cap, s->file);
-        *failed = got == 0 && ferror(s->file);
-        return got;
-    }
-    size_t n = s->memlen - s->mempos;
-    if (n > cap)
-        n = cap;
-    if (n)
-        memcpy(buf, s->mem + s->mempos, n);
-    s->mempos += n;
-    return n;
-}
-
-static bool gz_write(GzSink *k, const guint8 *buf, size_t n)
-{
-    if (!n)
-        return true;
-    if (k->total + n > k->max) {
-        k->exceeded = true;
-        return false;
-    }
-    k->total += n;
-    if (k->file)
-        return fwrite(buf, 1, n, k->file) == n;
-    g_byte_array_append(k->mem, buf, (guint)n);
-    return true;
-}
-
-/*
- * Runs a converter over a source into a sink. Answers NULL on success and a
- * newly allocated sentence (for the caller to throw and free) when it did not --
- * a string rather than an exception so that the caller cleans up its temporary
- * file *before* throwing.
- */
-static char *gz_run(GConverter *conv, bool inflate, GzSource *src, GzSink *sink)
-{
-    guint8   in[GZ_CHUNK], out[GZ_CHUNK];
-    size_t   have = 0, off = 0;
-    uint64_t consumed = 0, member_start = 0;
-    bool     eof = false, in_member = false, failed = false;
-    int      stalled = 0;
-
-    for (;;) {
-        /* Between two chunks: a stop reaches a big file within 64 KB. The
-         * file verbs then remove their temporary, as for any refusal. */
-        if (src->cancel && g_cancellable_is_cancelled(src->cancel))
-            return g_strdup("cancelled");
-
-        if (off == have && !eof) {
-            have = gz_read(src, in, sizeof in, &failed);
-            off  = 0;
-            if (failed)
-                return g_strdup_printf("cannot read the input: %s", bta_errno_text(errno));
-            if (have == 0)
-                eof = true;
-        }
-
-        if (inflate && off == have && eof) {
-            if (in_member)
-                return g_strdup_printf("the data is truncated: the stream ends "
-                                       "inside a member, after %" G_GUINT64_FORMAT
-                                       " bytes of input", consumed);
-            if (consumed == 0)
-                return g_strdup("empty input is not gzip data");
-            return NULL;
-        }
-
-        if (!in_member)
-            member_start = consumed;
-
-        GError            *err = NULL;
-        gsize              br = 0, bw = 0;
-        GConverterFlags    flags = (!inflate && eof) ? G_CONVERTER_INPUT_AT_END : 0;
-        GConverterResult   r = g_converter_convert(conv, in + off, have - off,
-                                                   out, sizeof out, flags,
-                                                   &br, &bw, &err);
-
-        off      += br;
-        consumed += br;
-        if (br)
-            in_member = true;
-
-        if (!gz_write(sink, out, bw)) {
-            g_clear_error(&err);
-            if (sink->exceeded)
-                return g_strdup_printf("the output exceeds MaxSize (%" G_GUINT64_FORMAT
-                                       " bytes) -- raise it with { MaxSize } if "
-                                       "this data is trusted", sink->max);
-            return g_strdup_printf("cannot write the output: %s", bta_errno_text(errno));
-        }
-
-        if (r == G_CONVERTER_ERROR) {
-            char *msg;
-
-            if (inflate && g_error_matches(err, G_IO_ERROR, G_IO_ERROR_PARTIAL_INPUT)) {
-                g_clear_error(&err);
-                continue;                    /* wants more; the top asks for it */
-            }
-            /* GLib's own sentence is not used: it is translated into the
-             * desktop's language, and an error that reads differently on each
-             * machine cannot be matched by a program or quoted in a report. */
-            if (!inflate)
-                msg = g_strdup(bta_gerror_text(err));
-            else if (member_start == 0)
-                msg = g_strdup("not gzip data, or damaged");
-            else
-                msg = g_strdup_printf("the member starting at byte %" G_GUINT64_FORMAT
-                                      " is not gzip data, or damaged (the bytes "
-                                      "before it were fine)", member_start);
-            g_clear_error(&err);
-            return msg;
-        }
-
-        if (r == G_CONVERTER_FINISHED) {
-            if (!inflate)
-                return NULL;
-            /* **The member ended and the input may not have**: concatenated
-             * members are valid gzip, and the converter would stop here and
-             * report success -- which is the silent half-answer this refuses. */
-            g_converter_reset(conv);
-            in_member = false;
-            stalled   = 0;
-            continue;
-        }
-
-        /* A converter with input and room that does neither is not going to
-         * (this has never been seen; it is a loop that must not be possible). */
-        if (br == 0 && bw == 0 && (have - off > 0 || !eof)) {
-            if (++stalled > 8)
-                return g_strdup("the converter made no progress");
-        } else {
-            stalled = 0;
-        }
-    }
-}
-
 /* ------------------------------------------------------------- verbs */
 
 /* The data to compress: text (UTF-8) or Bytes, and nothing else -- a number or
@@ -357,12 +199,12 @@ static JSValue gzip_compress(JSContext *ctx, JSValueConst this_val,
     if (!data)
         return JS_EXCEPTION;
 
-    GConverter *conv = G_CONVERTER(g_zlib_compressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP, level));
-    BtaCancelScope sc;
-    GzSource    src  = { .mem = data, .memlen = len,
-                         .cancel = bta_cancel_scope(ctx, cancel, &sc) };
-    GzSink      sink = { .mem = g_byte_array_new(), .max = UINT64_MAX };
-    char       *why  = gz_run(conv, false, &src, &sink);
+    GConverter *conv = bta_deflate_compressor(BTA_DEFLATE_GZIP, level);
+    BtaCancelScope   sc;
+    BtaDeflateSource src  = { .mem = data, .memlen = len,
+                              .cancel = bta_cancel_scope(ctx, cancel, &sc) };
+    BtaDeflateSink   sink = { .mem = g_byte_array_new(), .max = UINT64_MAX };
+    char            *why  = bta_deflate_run(conv, false, BTA_DEFLATE_GZIP, &src, &sink);
 
     bta_cancel_scope_end(&sc);
 
@@ -390,12 +232,12 @@ static JSValue gzip_decompress(JSContext *ctx, JSValueConst this_val,
     if (!gz_max(ctx, argc > 1 ? argv[1] : JS_UNDEFINED, who, &max))
         return JS_EXCEPTION;
 
-    GConverter *conv = G_CONVERTER(g_zlib_decompressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP));
-    BtaCancelScope sc;
-    GzSource    src  = { .mem = data, .memlen = len,
-                         .cancel = bta_cancel_scope(ctx, cancel, &sc) };
-    GzSink      sink = { .mem = g_byte_array_new(), .max = max };
-    char       *why  = gz_run(conv, true, &src, &sink);
+    GConverter *conv = bta_deflate_decompressor(BTA_DEFLATE_GZIP);
+    BtaCancelScope   sc;
+    BtaDeflateSource src  = { .mem = data, .memlen = len,
+                              .cancel = bta_cancel_scope(ctx, cancel, &sc) };
+    BtaDeflateSink   sink = { .mem = g_byte_array_new(), .max = max };
+    char            *why  = bta_deflate_run(conv, true, BTA_DEFLATE_GZIP, &src, &sink);
 
     bta_cancel_scope_end(&sc);
 
@@ -454,13 +296,13 @@ static JSValue gz_file(JSContext *ctx, int argc, JSValueConst *argv,
 
     if (!why) {
         GConverter *conv = inflate
-            ? G_CONVERTER(g_zlib_decompressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP))
-            : G_CONVERTER(g_zlib_compressor_new(G_ZLIB_COMPRESSOR_FORMAT_GZIP, level));
+            ? bta_deflate_decompressor(BTA_DEFLATE_GZIP)
+            : bta_deflate_compressor(BTA_DEFLATE_GZIP, level);
         BtaCancelScope sc;
-        GzSource src  = { .file = in, .cancel = bta_cancel_scope(ctx, cancel, &sc) };
-        GzSink   sink = { .file = out, .max = max };
+        BtaDeflateSource src  = { .file = in, .cancel = bta_cancel_scope(ctx, cancel, &sc) };
+        BtaDeflateSink   sink = { .file = out, .max = max };
 
-        why = gz_run(conv, inflate, &src, &sink);
+        why = bta_deflate_run(conv, inflate, BTA_DEFLATE_GZIP, &src, &sink);
         bta_cancel_scope_end(&sc);
         written = sink.total;
         g_object_unref(conv);

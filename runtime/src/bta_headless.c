@@ -344,6 +344,7 @@ static bool install_core(JSContext *ctx, JSValueConst global,
     bta_lock_init(ctx, global);
     bta_random_init(ctx, global);
     bta_gzip_init(ctx, global);
+    bta_zlib_init(ctx, global);
     bta_cipher_init(ctx, global);
     bta_zip_init(ctx, global);
     bta_key_init(ctx, global);

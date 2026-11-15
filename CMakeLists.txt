@@ -372,7 +372,9 @@ add_executable(${BTA_GUI_TARGET}
     runtime/src/bta_cancellable.c
     runtime/src/bta_lock.c
     runtime/src/bta_random.c
+    runtime/src/bta_deflate.c
     runtime/src/bta_gzip.c
+    runtime/src/bta_zlib.c
     runtime/src/bta_notification.c
     ${BTA_NOTIFICATION_SOURCE}
     runtime/src/bta_tray.c
@@ -750,7 +752,9 @@ set(BTA_HEADLESS_SOURCES
         runtime/src/bta_task.c
         runtime/src/bta_lock.c
         runtime/src/bta_random.c
+        runtime/src/bta_deflate.c
         runtime/src/bta_gzip.c
+        runtime/src/bta_zlib.c
         runtime/src/bta_zip.c
         runtime/src/bta_database.c
         runtime/src/bta_sqlite.c

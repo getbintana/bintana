@@ -18938,6 +18938,29 @@
           "Native": true
         }
       ]
+    },
+    {
+      "Name": "Zlib",
+      "Members": [
+        {
+          "Name": "Compress",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(data, [{ Raw, Level }], [cancellable])",
+          "Returns": "Bytes",
+          "Doc": "`data` (text as its UTF-8, or a `Bytes`) as one stream: zlib framing (RFC 1950) unless `Raw` is true, which writes raw DEFLATE (RFC 1951). `Level` is 1 (fast) to 9 (small), 6 unless told. An option it does not know, or a value that is neither text nor `Bytes`, is refused. About 50 MB a second: a big one belongs in a `Task`, and a `Cancellable` last stops it between two 64 KB chunks",
+          "Native": true
+        },
+        {
+          "Name": "Decompress",
+          "Kind": "Method",
+          "Params": 3,
+          "Signature": "(bytes, [{ Raw, MaxSize }], [cancellable])",
+          "Returns": "Bytes",
+          "Doc": "what `bytes` holds, **all of it**: `Raw` says the bytes are raw DEFLATE rather than zlib-framed, a stream that stops inside one **throws** (naming how far it got) rather than answering what it had, and so does anything that is not the format asked for. Bytes after the stream are refused. The answer may not pass `MaxSize` bytes (256 MiB unless told). **Raw DEFLATE carries no checksum**: a damaged byte can decode to a different document without an error, so zlib framing is the one that catches damage. A `Cancellable` last stops it",
+          "Native": true
+        }
+      ]
     }
   ],
   "Types": [

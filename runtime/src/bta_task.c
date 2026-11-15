@@ -1488,6 +1488,7 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     bta_random_init(ctx, global);
     /* Pure CPU over a value or a file: the reason to have a worker. */
     bta_gzip_init(ctx, global);
+    bta_zlib_init(ctx, global);
     bta_cipher_init(ctx, global);
     /* Reading an archive off the main thread is what a worker is for. */
     bta_zip_init(ctx, global);

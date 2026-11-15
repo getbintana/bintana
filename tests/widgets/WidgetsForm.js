@@ -697,7 +697,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "ReferenceHint", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Cipher", "Random", "Gzip", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Privilege", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "ReferenceHint", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Cipher", "Random", "Gzip", "Zlib", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Privilege", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Parts", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FontDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -12867,6 +12867,75 @@ class Form1 extends Form {
 
         for (const f of [src, dst, back, keep, File.Join(SCRATCH, "gz-junk.gz")])
             File.Delete(f);
+    }
+
+    testZlib() {
+        const text = "hola mundo\n".repeat(200);
+        const z    = Zlib.Compress(text);
+        const raw  = Zlib.Compress(text, { Raw: true });
+
+        eq("zlib framing round trip", Zlib.Decompress(z).ToText(), text);
+        eq("raw deflate round trip", Zlib.Decompress(raw, { Raw: true }).ToText(), text);
+        eq("text goes in as its UTF-8",
+           Zlib.Decompress(Zlib.Compress("ñandú", { Raw: true }), { Raw: true }).ToText(), "ñandú");
+        eq("Bytes go in as they are",
+           Zlib.Decompress(Zlib.Compress(Bytes.FromHex("00ff10"))).ToHex(), "00ff10");
+        eq("empty in, empty out", Zlib.Decompress(Zlib.Compress("")).Length, 0);
+        eq("...raw too", Zlib.Decompress(Zlib.Compress("", { Raw: true }), { Raw: true }).Length, 0);
+        check("a higher level is not larger",
+              Zlib.Compress(text, { Level: 9 }).Length <= Zlib.Compress(text, { Level: 1 }).Length);
+
+        /* Past one 64 KB converter chunk, in both framings. */
+        const big = new Bytes("a line that repeats. ".repeat(5000));
+        eq("over a chunk, zlib", Zlib.Decompress(Zlib.Compress(big)).Length, big.Length);
+        eq("over a chunk, raw", Zlib.Decompress(Zlib.Compress(big, { Raw: true }), { Raw: true }).Length, big.Length);
+
+        /* **The external oracle**: a draw.io page as draw.io writes it, raw
+         * deflate then Base64, produced by another implementation. */
+        const page = "ZVC7DsIwDPwVyzt9DYih6cIACxK/YCmmiZQ0VRqg/Xsc2oGKyXc+W3d26+eHdQwmTEkhjWOhLfWR/FQMnLBrNwoDeVZ4p54PtbT9fIk0mlvQ7EDPCk9VhaAXhUcBXRtDSHnqzM6B1QorLHe8Rhgp8pD+pQbhRe4pdtfgSAjHxPNuZYvAwXOKC2RR7MW9kfK2OhnpZGzY9iblVAg0Key3lWxZrp4C1rTl71FCt9O/Qn5S9wE=";
+        const xml = Zlib.Decompress(Bytes.FromBase64(page), { Raw: true }).ToText();
+        check("a compressed draw.io page reads as XML", xml.indexOf("<mxGraphModel") > 0, `${xml.length} bytes`);
+
+        throws("a truncated zlib stream throws", () => Zlib.Decompress(z.Slice(0, z.Length - 4)));
+        throws("a truncated raw stream throws", () => Zlib.Decompress(raw.Slice(0, raw.Length - 4), { Raw: true }));
+        let msg = "";
+        try { Zlib.Decompress(z.Slice(0, z.Length - 4)); } catch (e) { msg = e.message; }
+        check("...and says how far it got", msg.includes("bytes"), msg);
+
+        throws("the wrong framing is refused", () => Zlib.Decompress(z, { Raw: true }));
+        throws("...and the other way", () => Zlib.Decompress(raw));
+        throws("bytes after the stream throw", () => Zlib.Decompress(z.Concat(new Bytes("junk"))));
+        throws("empty input is not zlib", () => Zlib.Decompress(new Bytes("")));
+        throws("text is not compressed data", () => Zlib.Decompress("abc"));
+
+        const bomb = Zlib.Compress(new Bytes("x".repeat(100000)));
+        throws("the output is capped", () => Zlib.Decompress(bomb, { MaxSize: 1000 }));
+        msg = "";
+        try { Zlib.Decompress(bomb, { MaxSize: 1000 }); } catch (e) { msg = e.message; }
+        check("...and the refusal names the ceiling", msg.includes("MaxSize"), msg);
+        eq("Infinity is no ceiling", Zlib.Decompress(bomb, { MaxSize: Infinity }).Length, 100000);
+
+        throws("an option it does not know is refused", () => Zlib.Compress("x", { Lvel: 9 }));
+        throws("Raw is a boolean", () => Zlib.Compress("x", { Raw: 1 }));
+        throws("a level of 0 is refused, as Gzip refuses it", () => Zlib.Compress("x", { Level: 0 }));
+        throws("a number is not data", () => Zlib.Compress(5));
+        throws("options are an object", () => Zlib.Compress("x", 9));
+
+        /* **zlib checks Adler-32; raw checks nothing.** Flip the last byte of
+         * a zlib stream and it is damaged; flip a literal in a raw stream and
+         * it is a different document and a success. This is the sentence the
+         * documentation has to carry. */
+        const other = { "0":"1","1":"0","2":"3","3":"2","4":"5","5":"4","6":"7","7":"6",
+                        "8":"9","9":"8","a":"b","b":"a","c":"d","d":"c","e":"f","f":"e" };
+        let hex = z.ToHex();
+        const badAdler = Bytes.FromHex(hex.slice(0, hex.length - 1) + other[hex.charAt(hex.length - 1)]);
+        throws("a damaged zlib stream throws", () => Zlib.Decompress(badAdler));
+
+        hex = Zlib.Compress("hello world", { Raw: true }).ToHex();
+        const badRaw = Bytes.FromHex(hex.slice(0, 5) + other[hex.charAt(5)] + hex.slice(6));
+        let decoded = "";
+        try { decoded = Zlib.Decompress(badRaw, { Raw: true }).ToText(); } catch (e) { decoded = `threw: ${e.message}`; }
+        check("a damaged raw stream decodes instead of throwing", decoded !== "hello world", decoded);
     }
 
     testZip() {

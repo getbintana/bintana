@@ -1683,6 +1683,16 @@ void bta_random_init(JSContext *ctx, JSValue global);
  */
 void bta_gzip_init(JSContext *ctx, JSValue global);
 
+/* --- Zlib -----------------------------------------------------------------
+ *
+ * `Zlib.Compress`/`Decompress` over values: zlib framing (RFC 1950), or raw
+ * DEFLATE (RFC 1951) with `{ Raw: true }`. One stream, read whole; bytes after
+ * it, a truncated stream and anything that is not the format asked for throw.
+ * Raw carries no checksum. Pure and callback-free, so a worker installs it too.
+ * See runtime/src/bta_zlib.c.
+ */
+void bta_zlib_init(JSContext *ctx, JSValue global);
+
 /*
  * Cipher: AES-256-GCM behind `Encrypt`/`Decrypt`, with the key hashed to the 32
  * bytes the cipher takes. Optional at build time (BTA_HAVE_GNUTLS), the sqlite
