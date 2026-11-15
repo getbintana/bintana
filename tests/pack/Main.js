@@ -499,6 +499,63 @@ function checkNsis(root) {
     check("but names the file that would change it",
           sctx.Note.includes(`${svg.id}.png`), sctx.Note);
 
+    /* --- what the application opens --------------------------------------- */
+    check("with no Files or Schemes the script registers nothing",
+          !nsi.includes("Software\\Classes") && !nsi.includes("SHChangeNotify"), nsi);
+
+    const actx = Nsis.Script(dir, File.Join(root, "out-nsis-assoc"), {
+        Files:   [{ Extension: ".Setup", Description: "Setup $plan" }, "setupx"],
+        Schemes: ["setup-app://"] });
+    const ansi = File.Load(actx.Script);
+    const run  = `'"$INSTDIR\\bin\\bintana-gui.exe" ` +
+                 `"$INSTDIR\\share\\bintana\\apps\\bintana-setup" "%1"'`;
+    check("an extension gets a ProgID of its own, named by the escaped description",
+          ansi.includes(`WriteRegStr HKCU "Software\\Classes\\bintana-setup.setup" "" ` +
+                        `"Setup $$plan"`), ansi);
+    check("and one is described by the application when it says nothing",
+          ansi.includes(`"Software\\Classes\\bintana-setup.setupx" "" "Setup setupx file"`), ansi);
+    check("whose open verb starts the application on the file",
+          ansi.includes(`"Software\\Classes\\bintana-setup.setup\\shell\\open\\command" "" ${run}`),
+          ansi);
+    check("named after the application, not after bintana-gui.exe",
+          ansi.includes(`"Software\\Classes\\bintana-setup.setup\\shell\\open" ` +
+                        `"FriendlyAppName" "Setup"`), ansi);
+    check("wearing the application's icon",
+          ansi.includes(`"Software\\Classes\\bintana-setup.setup\\DefaultIcon" "" ` +
+                        `"$INSTDIR\\io.github.getbintana.Setup.ico"`), ansi);
+    check("offered in Open with, and the default only where there was none",
+          ansi.includes(`"Software\\Classes\\.setup\\OpenWithProgids" "bintana-setup.setup" ""`) &&
+          ansi.includes(`ReadRegStr $0 HKCR ".setup" ""`) &&
+          ansi.includes(`StrCmp $0 "" 0 bta_ext0_taken`), ansi);
+    check("a scheme is a URL protocol starting the same verb",
+          ansi.includes(`WriteRegStr HKCU "Software\\Classes\\setup-app" "URL Protocol" ""`) &&
+          ansi.includes(`"Software\\Classes\\setup-app\\shell\\open\\command" "" ${run}`), ansi);
+    check("and Explorer is told",
+          ansi.includes("SHChangeNotify(i 0x08000000"), ansi);
+    const uninstall = ansi.substring(ansi.indexOf(`Section "Uninstall"`));
+    check("the uninstaller removes the ProgIDs",
+          uninstall.includes(`DeleteRegKey HKCU "Software\\Classes\\bintana-setup.setup"`) &&
+          uninstall.includes(`DeleteRegKey HKCU "Software\\Classes\\bintana-setup.setupx"`), uninstall);
+    check("but an extension's default only while it is still ours",
+          uninstall.includes(`StrCmp $0 "bintana-setup.setup" 0 bta_unext0_kept`), uninstall);
+    check("and a scheme only while its command is the one it wrote",
+          uninstall.includes(`StrCmp $0 ${run} 0 bta_unscheme0_kept`), uninstall);
+
+    const refusedOut = File.Join(root, "out-nsis-refused");
+    throws("an extension that is Windows' own is refused",
+           () => Nsis.Script(dir, refusedOut, { Files: ["exe"] }), "Windows' own");
+    throws("so is one that is not an extension",
+           () => Nsis.Script(dir, refusedOut, { Files: ["a b"] }), "not a file extension");
+    throws("and one named twice",
+           () => Nsis.Script(dir, refusedOut, { Files: ["setup", ".SETUP"] }), "twice");
+    throws("a scheme the browser owns is refused",
+           () => Nsis.Script(dir, refusedOut, { Schemes: ["https"] }), "browser");
+    throws("and so is one of the system's",
+           () => Nsis.Script(dir, refusedOut, { Schemes: ["ms-settings"] }), "system");
+    throws("a one-letter scheme is a drive",
+           () => Nsis.Script(dir, refusedOut, { Schemes: ["c"] }), "not a URL scheme");
+    check("and a refusal writes nothing", !File.Exists(refusedOut), refusedOut);
+
     /* --- what it refuses -------------------------------------------------- */
     const nometa = File.Join(root, "nsis-nometa");
     Directory.Make(nometa);

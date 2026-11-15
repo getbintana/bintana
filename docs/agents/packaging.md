@@ -134,6 +134,26 @@ setup can be built without NSIS installed. There is no `tools/check` beside an
 installed runtime, so `bintana check` is a development-tree command and not a
 post-install probe.
 
+**File types and URL schemes are the installer's options, not the project's**
+(`Nsis.Script(project, out, { Files, Schemes })`, `tools/pack.sh --nsis …
+--file invoice=Invoice --scheme myapp`, 2026-11-15). Nothing in the project
+format declares them, and the owner chose Windows only for now, so the IDE's
+*Windows installer…* passes none: it would have nowhere to keep them between
+runs. The script writes `HKCU\Software\Classes`: a ProgID
+`<command>.<extension>` with an `open` verb on `"%1"`, `OpenWithProgids` on the
+extension, and the extension's default **only when it had none**. A scheme gets
+a key with `URL Protocol`. Then `SHChangeNotify(SHCNE_ASSOCCHANGED)` runs through
+NSIS's `System` plugin, which the bundled subset carries under `Plugins`. The
+uninstaller removes the ProgID, and removes a default or a scheme only while it
+is still this installer's: another program may have taken it since. Every
+application's verb starts `bintana-gui.exe`, so `FriendlyAppName` on the verb
+carries the application's name. Whether *Open with* honours it there has not
+been seen yet. `tests/pack` reads the script back, and a script with an
+extension and a scheme compiled clean with `makensis` 3.x. **Not yet run:**
+installing one and double-clicking a file. The file or URL reaches the program
+as `Application.Arguments[0]`, and with `SingleInstance` through the running
+instance.
+
 **And a package's file dialog is the desktop's portal, with no other.** GTK
 routes a sandboxed application's chooser through
 `org.freedesktop.portal.Desktop` — `gdk_running_in_sandbox()` is just

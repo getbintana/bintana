@@ -205,6 +205,14 @@ one-page answer to *what is new since the release I have*.
   raise `ThemeChange` and `Dark` answers the new ground. `Application.Theme`,
   `--theme` and a `GTK_THEME` the user set still outrank it.
   `tests/widgets`' `ThemeWindows` holds the form to the registry.
+- **The Windows installer can register what the application opens.**
+  `Nsis.Script(project, out, { Files, Schemes })`, and `--file <ext>[=<name>]`
+  / `--scheme <name>` on `tools/pack.sh --nsis`, register file extensions and
+  URL schemes for the user. The application appears in *Open with*, takes
+  over an extension only when nothing had it, and the file or URL arrives as
+  `Application.Arguments[0]`. The uninstaller removes what is still its own.
+  Windows' own extensions (`.exe`, `.lnk` …) and the system's and browser's
+  schemes are refused. The IDE's *Windows installer…* does not offer it yet.
 - **A text file saved the way Windows editors save it now loads.** Notepad,
   PowerShell 5.1 and Visual Studio can all save a UTF-8 BOM, and PowerShell
   5.1's `Out-File` and Notepad's older *Unicode* write UTF-16LE with one. A

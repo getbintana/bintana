@@ -22713,10 +22713,10 @@
             {
               "Name": "Script",
               "Kind": "Static",
-              "Params": 2,
-              "Signature": "(project, out)",
+              "Params": 3,
+              "Signature": "(project, out, options)",
               "Returns": "",
-              "Doc": "writes the installer script from the metainfo, and answers where everything went: `{ Id, Command, Version, Script, Icon, Payload, Note }`",
+              "Doc": "writes the installer script from the metainfo, and answers where everything went: `{ Id, Command, Version, Script, Icon, Payload, Note }`. `options.Files` -- `[{ Extension, Description }]` -- are the file types the installed application opens, and `options.Schemes` -- `[\"myapp\"]` -- the URL schemes; both are registered for the user and removed by the uninstaller, and the file or URL reaches the program as the first of `Application.Arguments`",
               "Native": false
             },
             {

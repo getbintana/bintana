@@ -4,7 +4,8 @@
  *   ./build/bintana tools/pack <project> <out> [--finish-args <a,b,c>]
  *   tools/pack.sh <project> <out> [--finish-args <a,b,c>]
  *   tools/pack.sh --nsis <project> <out> [--exe <file>] [--prefix <tree>]
- *                        [--with <path>]...
+ *                        [--with <path>]... [--file <ext>[=<description>]]...
+ *                        [--scheme <name>]...
  *
  * The first form writes the files a Flatpak is built from -- the metainfo,
  * the `.desktop`, the icon and the manifest -- into `<out>`, which is then a
@@ -19,6 +20,11 @@
  * one path relative to it per flag: the IDE's takes the examples, the
  * runtime's documentation and the bundled NSIS. A path the tree does not have
  * is refused, never skipped.
+ *
+ * **`--file` and `--scheme` are what the installed application opens**: an
+ * extension (`invoice`, or `invoice=Invoice` to name the type) or a URL scheme
+ * (`myapp`), registered for the user and removed by the uninstaller. The
+ * project format has no word for them, so they are the installer's.
  *
  * **`--finish-args` is how an application asks for more than a window.**  The
  * default is the four permissions an ordinary application needs, and a program
@@ -54,7 +60,8 @@ function Main() {
 
     if (!project || !out) {
         print("usage: pack <project> <out> [--finish-args <a,b,c>]");
-        print("       pack --nsis <project> <out> [--exe <file>] [--prefix <tree>] [--with <path>]...");
+        print("       pack --nsis <project> <out> [--exe <file>] [--prefix <tree>] [--with <path>]...\n" +
+              "            [--file <ext>[=<description>]]... [--scheme <name>]...");
         Application.Quit(2);
         return;
     }
@@ -91,6 +98,7 @@ function nsis(args) {
     let exe     = "";
     let prefix  = "";
     const extra = [];
+    const files = [], schemes = [];
 
     for (let i = 0; i < args.length; i++) {
         if (args[i] === "--exe")
@@ -99,6 +107,17 @@ function nsis(args) {
             prefix = args[++i] || "";
         else if (args[i] === "--with")
             extra.push(args[++i] || "");
+        else if (args[i] === "--file") {
+            /* `invoice` or `invoice=Invoice`: the extension, and the name
+             * Explorer gives the type when the application has one for it. */
+            const spec = args[++i] || "";
+            const eq   = spec.indexOf("=");
+            files.push(eq < 0 ? { Extension: spec }
+                              : { Extension: spec.substring(0, eq),
+                                  Description: spec.substring(eq + 1) });
+        }
+        else if (args[i] === "--scheme")
+            schemes.push(args[++i] || "");
         else if (!project)
             project = args[i];
         else if (!out)
@@ -111,14 +130,14 @@ function nsis(args) {
 
     if (!project || !out) {
         print("usage: pack --nsis <project> <out> [--exe <file>] [--prefix <tree>] " +
-              "[--with <path>]...");
+              "[--with <path>]... [--file <ext>[=<description>]]... [--scheme <name>]...");
         Application.Quit(2);
         return;
     }
 
     let ctx;
     try {
-        ctx = Nsis.Script(project, out);
+        ctx = Nsis.Script(project, out, { Files: files, Schemes: schemes });
         Nsis.Stage(project, out, { Prefix: prefix || undefined, With: extra });
         if (!exe)
             exe = File.Join(out, `${ctx.Command}-` +
