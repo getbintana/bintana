@@ -1079,7 +1079,7 @@
                   "properties": {
                     "Action": "ActNewForm",
                     "Height": 32,
-                    "Icon": "document-new",
+                    "Icon": "document-new-symbolic",
                     "Style": "flat",
                     "Width": 30,
                     "Tooltip": "New form (Ctrl+N)"
@@ -1103,7 +1103,7 @@
                   "properties": {
                     "Action": "ActSave",
                     "Height": 32,
-                    "Icon": "document-save",
+                    "Icon": "document-save-symbolic",
                     "Style": "flat",
                     "Width": 30,
                     "Tooltip": "Save (Ctrl+S)"
@@ -1115,7 +1115,7 @@
                   "properties": {
                     "Action": "ActSaveAll",
                     "Height": 32,
-                    "Icon": "document-save-as",
+                    "Icon": "document-save-as-symbolic",
                     "Style": "flat",
                     "Width": 30,
                     "Tooltip": "Save all (Ctrl+Shift+S)"
