@@ -31540,6 +31540,67 @@ class Form1 extends Form {
             steps.length = 0;
             waiting--;
         };
+
+        /*
+         * **A `Stop` that lands while a request is still dispatching keeps
+         * `Running` true until its idle has run** -- the port is still held --
+         * and a `Start` before then is refused as "already running". That is
+         * what the runner's timing found between two lines of the TLS step, so
+         * every restart here waits for the API's own answer, as
+         * `HttpServerStop` does.
+         */
+        const restartPlain = (then) => {
+            srv.Stop();
+            srv.Port = 0;     /* the old one is still held on Windows */
+            srv.Tls = null;
+            until("the server is stopped before the plain restart",
+                  () => !srv.Running, () => {
+                try { srv.Start(); api.BaseUrl = srv.Url; }
+                catch (x) { failures.push(`restart after tls: ${x.message}`); }
+                then();
+            });
+        };
+
+        const startTls = () => {
+            /* **A fresh port for the second start.**  Windows keeps the
+             * listening socket's port for a moment after `Stop`, and a
+             * rebind on it answered "address already in use" where Linux
+             * bound it again (2026-11-13).  What this step is about is
+             * TLS, not reusing a number; `Port: 0` asks for another. */
+            srv.Port = 0;
+            srv.Tls = { Cert: TlsCert, Key: TlsKey };
+            try {
+                srv.Start();
+            } catch (e) {
+                failures.push(`tls Start threw: ${e.message}`);
+                finish();
+                return;
+            }
+            check("https url", srv.Url.startsWith("https://"), srv.Url);
+
+            try {
+                Exec(["python3", "-c", [
+                    "import http.client, ssl",
+                    "ctx = ssl._create_unverified_context()",
+                    `c = http.client.HTTPSConnection("127.0.0.1", ${srv.Port}, context=ctx, timeout=10)`,
+                    "c.request(\"GET\", \"/hi\")",
+                    "r = c.getresponse()",
+                    "print(\"TLS-OK\" if r.status == 200 and r.read() == b\"hola\" else \"TLS-BAD\")",
+                ].join("\n")],
+                (line) => {
+                    check("tls answers", line.includes("TLS-OK"), line);
+                },
+                (code) => {
+                    eq("tls probe exits", code, 0);
+                    clientTrustChecks();
+                    clientTrustHandshakes(srv.Url, () => resumptionCheck(() =>
+                        restartPlain(() => steps[5]())));
+                });
+            } catch (e) {
+                failures.push(`tls probe could not run: ${e.message}`);
+                restartPlain(() => steps[5]());
+            }
+        };
         const steps = [
             () => steps.pending = api.Get("/echo?r=1&r=2", { Query: { a: "1", b: "x y" } }, (r, handle) => {
                 eq("dogfood answers 200", r.Status, 200);
@@ -31635,55 +31696,8 @@ class Form1 extends Form {
                     return;
                 }
                 srv.Stop();
-                /* **A fresh port for the second start.**  Windows keeps the
-                 * listening socket's port for a moment after `Stop`, and a
-                 * rebind on it answered "address already in use" where Linux
-                 * bound it again (2026-11-13).  What this step is about is
-                 * TLS, not reusing a number; `Port: 0` asks for another. */
-                srv.Port = 0;
-                srv.Tls = { Cert: TlsCert, Key: TlsKey };
-                try {
-                    srv.Start();
-                } catch (e) {
-                    failures.push(`tls Start threw: ${e.message}`);
-                    finish();
-                    return;
-                }
-                check("https url", srv.Url.startsWith("https://"), srv.Url);
-
-                try {
-                    Exec(["python3", "-c", [
-                        "import http.client, ssl",
-                        "ctx = ssl._create_unverified_context()",
-                        `c = http.client.HTTPSConnection("127.0.0.1", ${srv.Port}, context=ctx, timeout=10)`,
-                        "c.request(\"GET\", \"/hi\")",
-                        "r = c.getresponse()",
-                        "print(\"TLS-OK\" if r.status == 200 and r.read() == b\"hola\" else \"TLS-BAD\")",
-                    ].join("\n")],
-                    (line) => {
-                        check("tls answers", line.includes("TLS-OK"), line);
-                    },
-                    (code) => {
-                        eq("tls probe exits", code, 0);
-                        clientTrustChecks();
-                        clientTrustHandshakes(srv.Url, () => resumptionCheck(() => {
-                            srv.Stop();
-                            srv.Port = 0;     /* the old one is still held on Windows */
-                            srv.Tls = null;
-                            try { srv.Start(); api.BaseUrl = srv.Url; }
-                            catch (x) { failures.push(`restart after tls: ${x.message}`); }
-                            steps[5]();
-                        }));
-                    });
-                } catch (e) {
-                    failures.push(`tls probe could not run: ${e.message}`);
-                    srv.Stop();
-                    srv.Port = 0;
-                    srv.Tls = null;
-                    try { srv.Start(); api.BaseUrl = srv.Url; }
-                    catch (x) { failures.push(`restart after tls: ${x.message}`); }
-                    steps[5]();
-                }
+                until("the server is stopped before its TLS start",
+                      () => !srv.Running, startTls);
             },
             () => {
                 const m = new Multipart().Field("note", "hello")
@@ -31743,10 +31757,17 @@ class Form1 extends Form {
             () => api.Get("/silent", (r5) => {
                 eq("no answer is a 500", r5.Status, 500);
                 check("stopping answers true", srv.Stop() === true);
-                check("...and then false", srv.Stop() === false);
-                check("...and Running goes", srv.Running === false);
-                steps.length = 0;
-                waiting--;
+                /* The same deferral the TLS step waits for: a `Stop` while
+                 * the request is still dispatching keeps `Running` true until
+                 * its idle, and a second `Stop` before then still answers
+                 * true. Ask once it is over. */
+                until("the server is stopped after the silent answer",
+                      () => !srv.Running, () => {
+                    check("...and then false", srv.Stop() === false);
+                    check("...and Running goes", srv.Running === false);
+                    steps.length = 0;
+                    waiting--;
+                });
             }, (e) => {
                 failures.push(`silent errored: ${e.Message}`);
                 srv.Stop();
