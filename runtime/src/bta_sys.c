@@ -3351,6 +3351,14 @@ static int exec_control_fd(JSContext *ctx, bool wanted,
 static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
                                           bool split)
 {
+    /* **The first getter that throws is the verb's error.**  The caller reads
+     * `Stderr`, `Timeout`, `KillAfter` and `Input` before this, and one of
+     * them may have left its exception pending.  Ask now, before the options
+     * below run getters of their own: applying `Directory` after a `Timeout`
+     * throw used to replace the first error with the later one (2026-11-14).
+     */
+    if (JS_HasException(ctx))
+        return NULL;
     /*
      * **stdin is always a pipe.** Without it a child inherits whatever the
      * parent had -- the terminal the IDE was started from -- which is a thing
@@ -3393,12 +3401,8 @@ static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
         g_object_unref(launcher);
         return NULL;               /* it threw on the way; that stands */
     }
-    /* The options read before this one -- `Stderr`, `Timeout`, `KillAfter`
-     * and `Input`, each by a helper that answers a value and has no way to
-     * fail -- may
-     * have left a getter's exception pending.  It is the verb's error, and it
-     * is reported here, before anything starts, rather than surfacing in the
-     * next call into JS. */
+    /* And anything the options above left is the caller's error too: a
+     * launcher made under an exception is no use to it. */
     if (JS_HasException(ctx)) {
         g_object_unref(launcher);
         return NULL;

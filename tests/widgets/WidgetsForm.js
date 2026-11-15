@@ -28750,6 +28750,16 @@ class Form1 extends Form {
             eq("...and for a getter inside Environment",
                refusal(() => Exec.Wait(["sh", "-c", "exit 0"], { Environment: boom("BTA_GETTER") })),
                "BTA_GETTER getter boom");
+            /* **The first getter that throws is the one reported.**  `Exec`
+             * reads `Timeout` before `Directory`, but the launcher used to
+             * apply its own options with that exception pending, and the later
+             * `Directory` throw replaced the first. */
+            const both = { get Timeout() { throw new Error("Timeout getter boom"); },
+                           get Directory() { throw new Error("Directory getter boom"); } };
+            eq("the first option getter that throws is the one reported",
+               refusal(() => Exec(["sh", "-c", "exit 0"], both)), "Timeout getter boom");
+            eq("...and Exec.Wait reports it the same",
+               refusal(() => Exec.Wait(["sh", "-c", "exit 0"], both)), "Timeout getter boom");
             eq("...and nothing is left pending for the next call",
                Exec.Wait(["sh", "-c", "exit 0"]).ExitCode, 0);
         }

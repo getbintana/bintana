@@ -2083,7 +2083,10 @@ icon when the theme has one by that name (`gtkapplication.c`).
   `Control` is read once (`exec_control_callback`) and handed to the job, not
   asked again. `Exec.Wait` takes no `Control` and never reads one. A
   lookahead that reads the same option first (`exec_custom_path`,
-  `exec_option_directory`) consumes its own throw.
+  `exec_option_directory`) consumes its own throw. **The pending check runs
+  before `exec_apply_options`**: with two getters that throw, the first one
+  read is the error, not the later `Directory` the launcher applied with the
+  first still pending (a `Timeout` was replaced by `Directory`, 2026-11-14).
 - **`JS_SetPropertyStr` over a getter with no setter fails, and leaves the
   exception pending** ("no setter for property"). `bta_privilege_init` did
   that to `CanElevate` in every `Task` worker since `Privilege` arrived: the
