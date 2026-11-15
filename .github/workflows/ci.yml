@@ -336,8 +336,15 @@ jobs:
           found=
           for core in /tmp/cores/core.*; do
             found=1
-            echo "===== $core"
-            gdb -batch -ex "thread apply all bt 40" ./build-noprint/bintana "$core"
+            # `core.%e.%p`: the crashing process names its own binary, and the
+            # project host is `bintana-gui` -- the widget and GTK code a core
+            # from it names is not linked into the console `bintana`, which is
+            # what this step used to hand gdb. A core whose binary is not here
+            # still gets the shared half.
+            exe=$(basename "$core" | cut -d. -f2)
+            test -x "./build-noprint/$exe" || exe=bintana
+            echo "===== $core ($exe)"
+            gdb -batch -ex "thread apply all bt 40" "./build-noprint/$exe" "$core"
           done
           [ -n "$found" ] || echo "no core was written: the failure was not a crash"
 
