@@ -1,0 +1,107 @@
+{
+  "format": "bintana-form/1",
+  "class": "PomodoroForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "HideOnClose": true,
+    "Padding": 20,
+    "Spacing": 10,
+    "Text": "Pomodoro",
+    "Width": 360
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblTitle",
+      "properties": {
+        "Alignment": "Start",
+        "HAlign": "Fill",
+        "Style": "title-2",
+        "Text": "Pomodoro"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblWork",
+      "properties": {
+        "Alignment": "Start",
+        "For": "SpnWork",
+        "HAlign": "Fill",
+        "Text": "Work, minutes"
+      }
+    },
+    {
+      "type": "SpinBox",
+      "name": "SpnWork",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Max": 120,
+        "Min": 1,
+        "Value": 25
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblBreak",
+      "properties": {
+        "Alignment": "Start",
+        "For": "SpnBreak",
+        "HAlign": "Fill",
+        "Text": "Short break, minutes"
+      }
+    },
+    {
+      "type": "SpinBox",
+      "name": "SpnBreak",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Max": 60,
+        "Min": 1,
+        "Value": 5
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblLong",
+      "properties": {
+        "Alignment": "Start",
+        "For": "SpnLong",
+        "HAlign": "Fill",
+        "Text": "Long break, minutes (after every 4th work)"
+      }
+    },
+    {
+      "type": "SpinBox",
+      "name": "SpnLong",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 34,
+        "Max": 120,
+        "Min": 1,
+        "Value": 15
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblStatus",
+      "properties": {
+        "Alignment": "Start",
+        "HAlign": "Fill",
+        "Style": "dim-label",
+        "Text": "Stopped.",
+        "Wrap": true
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnStart",
+      "properties": {
+        "Height": 36,
+        "Style": "suggested-action",
+        "Text": "Start"
+      }
+    }
+  ]
+}

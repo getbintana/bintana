@@ -1,0 +1,10 @@
+{
+  "name": "Pomodoro",
+  "id": "io.github.getbintana.Pomodoro",
+  "startup": "PomodoroForm",
+  "sources": [
+    "PomodoroForm.js"
+  ],
+  "version": "1.0",
+  "description": "A Pomodoro timer whose window is only settings: it goes to the tray when started, and tells you each change of phase with a notification"
+}

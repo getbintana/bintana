@@ -277,6 +277,10 @@ one-page answer to *what is new since the release I have*.
   `OnClick` and `OnMenu`, plus `Tray.Available`/`CanMenu`. Linux is built on
   `StatusNotifierItem` and `dbusmenu`; Windows is built on `Shell_NotifyIcon`
   with a hidden window and an `HMENU`; macOS is a stub that says so.
+- **`examples/pomodoro`** puts the tray and a notification together: the window
+  is only the settings, put away while a phase runs, with the time left in the
+  tooltip and a notification at each change. Where there is no
+  status-notifier host it waits minimised, since there would be no way back.
 - **A `Video` keeps its picture when the audio endpoint cannot open.** The
   first audio-sink failure rebuilds the pipeline once with a `fakesink` and the
   audio branch off, so a virtualized Windows session with no audio device shows
