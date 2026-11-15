@@ -2678,9 +2678,57 @@ static bool exec_apply_options(JSContext *ctx, JSValueConst opts,
  * `exec_signal_group`'s problem and not one a `setsid` could solve.
  */
 #ifndef G_OS_WIN32
+/*
+ * Descriptor 4 in the child, after `Control`'s 3: the child's own pid, written
+ * back before it execs.
+ *
+ * **A job's group id must outlive its leader, and `GSubprocess` forgets it.**
+ * `g_subprocess_get_identifier` answers NULL the moment GLib's worker reaps the
+ * child, which for `sh -c "sleep 30 & echo up"` is a millisecond after the
+ * spawn; under load the parent can lose that race, and then `Stop`, `Kill` and
+ * `Timeout` could never reach the grandchild holding the output. The number is
+ * in this pipe before the leader can exit, because the setup writes it before
+ * exec.
+ */
+#define EXEC_PID_FD 4
+
 static void exec_child_setup(gpointer user_data)
 {
+    int fd = GPOINTER_TO_INT(user_data);
+
     setsid();
+
+    if (fd > 0) {
+        pid_t   pid = getpid();
+        ssize_t n;
+
+        do {
+            n = write(fd, &pid, sizeof pid);
+        } while (n < 0 && errno == EINTR);
+        close(fd);
+    }
+}
+
+/*
+ * The pid the child setup wrote, and a blocking read with a bound: it waits
+ * for the child's first turn on a CPU, not for the child to end. `fd` is -1
+ * when the pipe could not be made, and the caller then falls back to the
+ * identifier for as long as GLib still has it.
+ */
+static pid_t exec_pid_from(int fd)
+{
+    pid_t   pid = 0;
+    ssize_t n;
+
+    if (fd < 0)
+        return 0;
+
+    do {
+        n = read(fd, &pid, sizeof pid);
+    } while (n < 0 && errno == EINTR);
+
+    close(fd);
+    return n == (ssize_t)sizeof pid ? pid : 0;
 }
 #endif
 
@@ -3349,7 +3397,7 @@ static int exec_control_fd(JSContext *ctx, bool wanted,
 #endif
 
 static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
-                                          bool split)
+                                          bool split, int *pid_fd)
 {
     /* **The first getter that throws is the verb's error.**  The caller reads
      * `Stderr`, `Timeout`, `KillAfter` and `Input` before this, and one of
@@ -3394,9 +3442,6 @@ static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
 
     GSubprocessLauncher *launcher = g_subprocess_launcher_new(flags);
 
-#ifndef G_OS_WIN32
-    g_subprocess_launcher_set_child_setup(launcher, exec_child_setup, NULL, NULL);
-#endif
     if (!JS_IsUndefined(opts) && !exec_apply_options(ctx, opts, launcher)) {
         g_object_unref(launcher);
         return NULL;               /* it threw on the way; that stands */
@@ -3407,6 +3452,29 @@ static GSubprocessLauncher *exec_launcher(JSContext *ctx, JSValueConst opts,
         g_object_unref(launcher);
         return NULL;
     }
+
+    /*
+     * The pid pipe, and `setsid()` with it: the child leads its own group so
+     * `Stop`, `Kill` and `Timeout` reach what it started. Both belong to the
+     * child setup, which is why the pipe is made here rather than by the
+     * caller; `exec_pid_from` reads the number back after the spawn.
+     */
+#ifdef G_OS_WIN32
+    *pid_fd = -1;
+#else
+    {
+        int ends[2];
+
+        *pid_fd = -1;
+        if (pipe(ends) == 0) {
+            g_subprocess_launcher_take_fd(launcher, ends[1], EXEC_PID_FD);
+            *pid_fd = ends[0];
+        }
+        g_subprocess_launcher_set_child_setup(
+            launcher, exec_child_setup,
+            GINT_TO_POINTER(*pid_fd >= 0 ? EXEC_PID_FD : 0), NULL);
+    }
+#endif
 
     return launcher;
 }
@@ -3457,7 +3525,8 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
         return JS_EXCEPTION;
     }
 
-    GSubprocessLauncher *launcher = exec_launcher(ctx, opts, split);
+    int pid_fd = -1;
+    GSubprocessLauncher *launcher = exec_launcher(ctx, opts, split, &pid_fd);
     if (!launcher) {
         JS_FreeValue(ctx, control_cb);
         g_ptr_array_unref(args);
@@ -3487,6 +3556,8 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
         JS_FreeValue(ctx, control_cb);
         g_object_unref(launcher);
         g_ptr_array_unref(args);
+        if (pid_fd >= 0)
+            close(pid_fd);
         return JS_EXCEPTION;
     }
 #endif
@@ -3510,25 +3581,33 @@ static JSValue sys_exec(JSContext *ctx, JSValueConst this_val,
 #else
         if (ctl_fd >= 0)
             close(ctl_fd);
+        if (pid_fd >= 0)
+            close(pid_fd);
 #endif
         return e;
     }
 
     /*
-     * The pid, asked for **once and at once**.
+     * The pid, from the child setup and not from GLib.
      *
-     * GSubprocess reaps its child on GLib's own worker thread, so the identifier
-     * it hands out becomes NULL the moment the child is gone -- which for
-     * something like `/bin/true` can be between two lines of this function. Read
-     * later, or read twice, it is a NULL dereference that shows up only under
-     * load: AddressSanitizer crashed on it in the widgets suite, and a plain
-     * build had the same race waiting.
-     *
-     * Zero when it was already too late to ask, and `Stop`/`Kill` answer false
-     * for such a job -- there was never anything left to signal.
+     * `g_subprocess_get_identifier` answers NULL once GLib's worker has reaped
+     * the child, which a fast leader can be before this line -- and then a
+     * grandchild holding the output could never be signalled. The child writes
+     * its pid before `exec`, so this read cannot lose that race; the identifier
+     * stays as the fallback for a pipe that could not be made.
      */
+#ifdef G_OS_WIN32
     const char *ident = g_subprocess_get_identifier(proc);
     pid_t       pid   = ident ? (pid_t)g_ascii_strtoll(ident, NULL, 10) : 0;
+#else
+    pid_t       pid   = exec_pid_from(pid_fd);
+
+    if (pid <= 0) {
+        const char *ident = g_subprocess_get_identifier(proc);
+
+        pid = ident ? (pid_t)g_ascii_strtoll(ident, NULL, 10) : 0;
+    }
+#endif
 
     ExecJob *job = g_new0(ExecJob, 1);
     job->ctx     = ctx;
@@ -3869,7 +3948,8 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
     GMainContext *priv = g_main_context_new();
     g_main_context_push_thread_default(priv);
 
-    GSubprocessLauncher *launcher = exec_launcher(ctx, opts, split);
+    int pid_fd = -1;
+    GSubprocessLauncher *launcher = exec_launcher(ctx, opts, split, &pid_fd);
 
     if (!launcher) {
         g_ptr_array_unref(args);
@@ -3895,6 +3975,8 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
         g_clear_pointer(&input, g_bytes_unref);
         g_main_context_pop_thread_default(priv);
         g_main_context_unref(priv);
+        if (pid_fd >= 0)
+            close(pid_fd);
         return JS_ThrowPlainError(ctx, "Exec.Wait failed: the operation was cancelled");
     }
 
@@ -3911,14 +3993,29 @@ static JSValue sys_exec_wait(JSContext *ctx, JSValueConst this_val,
         g_clear_pointer(&input, g_bytes_unref);
         g_main_context_pop_thread_default(priv);
         g_main_context_unref(priv);
+        if (pid_fd >= 0)
+            close(pid_fd);
         return e;
     }
 
-    /* Asked for once and at once, for the reason the callback spelling explains:
-     * GSubprocess reaps on GLib's worker thread, so the identifier is gone the
-     * moment the child is. */
+    /*
+     * The pid the child wrote before `exec`, for the reason the callback
+     * spelling explains: `GSubprocess` forgets the identifier as soon as its
+     * worker reaps a leader that can have started a grandchild. This call
+     * blocks anyway, so the bounded read costs nothing it did not already.
+     */
+#ifdef G_OS_WIN32
     const char *ident = g_subprocess_get_identifier(proc);
     pid_t       pid   = ident ? (pid_t)g_ascii_strtoll(ident, NULL, 10) : 0;
+#else
+    pid_t       pid   = exec_pid_from(pid_fd);
+
+    if (pid <= 0) {
+        const char *ident = g_subprocess_get_identifier(proc);
+
+        pid = ident ? (pid_t)g_ascii_strtoll(ident, NULL, 10) : 0;
+    }
+#endif
 #ifdef G_OS_WIN32
     /* The process group `Exec.Wait`'s timeout needs; NULL when this process is
      * already in a job that refuses nesting, and the old road still applies. */

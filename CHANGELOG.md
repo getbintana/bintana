@@ -190,6 +190,10 @@ one-page answer to *what is new since the release I have*.
 - **`lib/propertygrid`** edits an object's properties as rows.
 - A control removed or freed by its own event handler no longer leaves
   `bta_emit` reading freed memory after the handler returns.
+- **`Stop`, `Kill` and `Timeout` reach a job whose leader has already gone**,
+  as when `sh -c "server & echo up"` leaves the server holding the output: every
+  Unix child writes its pid back before `exec`, so the job's process group is
+  known even if GLib has already reaped the leader.
 
 ### Platform and parts
 

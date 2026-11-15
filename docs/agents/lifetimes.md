@@ -176,6 +176,16 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   lives, and an open pipe says one does -- and never falls back to `kill(pid)`,
   which after the reap could be a stranger. `testExecGrandchild` waits thirty
   seconds and fails three assertions on the old code.
+  **The group id itself was still a race on a fast leader.** It came from
+  `g_subprocess_get_identifier`, and GLib sets that to NULL in
+  `g_subprocess_exited` on its worker thread the moment the child is reaped --
+  for a `sh -c` that forks and exits, under load, before the parent's next
+  line. Then `Stop()` answered false and the `sleep` ran its thirty seconds
+  (CI, 2026-11-15: `Stop() on a reaped leader still reaches its group: expected
+  true, got false`). Every Unix child now writes its own pid into descriptor 4
+  from the child setup, **before `exec`**, and `exec_pid_from` reads it back;
+  the identifier is only the fallback for a pipe that could not be made.
+  `Exec.Wait` takes the same road, since its timeout has the same hole.
   **`PrintRun` was the fourth to forget, and at teardown.** Its callback was
   released only by `done`, so `Printer.Send(a, cb)` then `Application.Quit(0)`
   aborted in `JS_FreeRuntime` (exit 134, `testPrintAtQuit` runs it as a

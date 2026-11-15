@@ -148,6 +148,10 @@ the ordinary place to read an exit code is after the child is gone.
 `{ Stderr: "separate" }` keeps the two streams apart and tags each line `"out"` or
 `"err"`; merged is the default because merging is what keeps the order — and note
 `xvfb-run` merges them itself (`"$@" 2>&1`), so under it there is nothing to split.
+**The group is named by a pid the child writes back before `exec`**, not by
+`GSubprocess`'s identifier: GLib forgets that as soon as its worker reaps a
+leader, and a grandchild holding the output is exactly the case that outlives it
+(see [`lifetimes.md`](lifetimes.md)).
 
 **A project declares `startup` or it declares `main`**, and the difference is
 whether it draws. `"main": "Main"` names a function, calls it once the sources are
