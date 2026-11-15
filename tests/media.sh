@@ -5,6 +5,11 @@
 #   BINTANA=/other/bintana tests/media.sh   another build, to compare
 #   TIMEOUT=300 tests/media.sh        a slower machine
 #
+# **Name a host that installs `Media`** -- `bintana-gui`, the default. The
+# core (`bintana`) does not link the media module and stubs the global, so
+# `BINTANA=./build/bintana` fails the first check instead of testing a build:
+# see docs/agents/media-desktop.md.
+#
 # The tool is `tests/media`, a Bintana console project -- no display. This is
 # the part that has to work when the runtime does not: find the binary, and
 # say so when there is none. **The timeout is the assertion a hang cannot

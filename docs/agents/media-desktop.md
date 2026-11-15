@@ -57,6 +57,15 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   once not at all in 40 s. `Playing` is now what `Play` asked for, cleared by
   `Pause`, `Stop`, the end and an error -- one flag, and the same answer for
   JS and for the loop.
+- **`tests/media.sh` names the graphical host; the core cannot run it.**
+  `bintana` does not link `bta_media.c`: it installs `Media` as an empty
+  object (in `GUI_GLOBALS`, so `Application.Globals()` stays honest) and execs
+  `bintana-gui` only for a project that opens a window. `tests/media` is a
+  `main`, so `BINTANA=./build/bintana ./tests/media.sh` stays in the core and
+  reports `Media.Available` undefined and `Media.Element is not a function` --
+  which is what the `no-gst` job did after the two hosts were split (measured
+  2026-11-15: `FAIL Media.Available is false`). Point it at `bintana-gui`:
+  the `#else` half that job exists to prove is compiled into that host.
 - **An optional dependency may not break the *designer*.** Without GStreamer
   every `Video` getter threw, which sounds like the sqlite mold and is not:
   the property grid reads every value of the selected control and the

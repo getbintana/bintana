@@ -606,7 +606,8 @@ for ever). `tests/media.sh` sets `MALLOC_PERTURB_=165`, without which
 
 It runs in CI with the hidden-GStreamer build beside it: `no-gst` builds with a
 `pkg-config` that answers no for `gstreamer-1.0` and runs `tests/media.sh`
-against *that*, which is the only build that proves the refusal half compiles
+against *that build's graphical host* (`bintana-gui`; the core installs no
+`Media`), which is the only build that proves the refusal half compiles
 and runs (`Media.Available` false, `Media.Element` naming the package).
 
 ## ODBC, which needs a driver

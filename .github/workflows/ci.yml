@@ -548,7 +548,12 @@ jobs:
 
       - name: Test
         env:
-          BINTANA: ./build-nogst/bintana
+          # **The graphical host, because the core does not link `Media`** --
+          # `bintana` stubs it as an empty object (`GUI_GLOBALS`) and execs
+          # `bintana-gui` only for a project that opens a window. `tests/media`
+          # is a `main`, so it runs in whichever host is named here, and the
+          # refusal half above exists in `bintana-gui`'s `#else`.
+          BINTANA: ./build-nogst/bintana-gui
         run: ./tests/media.sh
 
   # A seventh job, and the fifth optional half: the profiler without

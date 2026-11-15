@@ -3987,13 +3987,28 @@ class Form1 extends Form {
 
         /* The language's order, asked for in the statement.  Windows' collation
          * is not POSIX's, so the two orders this compares are not the same
-         * there; the NULL and index rules below still hold. */
+         * there; the NULL and index rules below still hold.
+         *
+         * **`Locale.Compare` is the desktop's order, and a desktop can have
+         * none.** Under a runner's `C.UTF-8`, `g_utf8_collate` is a byte
+         * compare, so raw `ORDER BY` and `COLLATE LOCALE` are the same order
+         * and the old `!==` here failed on the machine rather than on the
+         * statement.  Bytes are asserted against bytes; the difference from
+         * the language's order only where there is one to see. */
         db.Script("CREATE TABLE p (name TEXT)");
         const names = ["Zapata", "Álvarez", "Ñanculeo", "alba", "Óscar", "Beto", "Nuñez", "élan"];
         for (const n of names) db.Execute("INSERT INTO p (name) VALUES (?)", [n]);
+        const byBytes = names.slice().sort((a, b) => a < b ? -1 : a > b ? 1 : 0).join();
         const want = names.slice().sort(Locale.Compare).join();
-        check("ORDER BY alone is the bytes' order, not the language's",
-              db.Query("SELECT name FROM p ORDER BY name").map((r) => r.name).join() !== want, "");
+        const raw = db.Query("SELECT name FROM p ORDER BY name").map((r) => r.name).join();
+        if (byBytes === want) {
+            eq("ORDER BY alone is the bytes' order (this desktop's locale has none of its own)",
+               raw, byBytes);
+            print("  (skipping the bytes-versus-language half: this desktop's locale collates in byte order)");
+        } else {
+            check("ORDER BY alone is the bytes' order, not the language's",
+                  raw === byBytes && raw !== want, raw);
+        }
         if (Environment.OS === "Windows") {
             print("  (skipping the SQLite collation order: Windows' collation is not POSIX's)");
         } else {
@@ -4002,7 +4017,8 @@ class Form1 extends Form {
             eq("locale_key(name) sorts the same",
                db.Query("SELECT name FROM p ORDER BY locale_key(name)").map((r) => r.name).join(), want);
             eq("...and COLLATE LOCALE compares too",
-               db.Query("SELECT count(*) AS n FROM p WHERE name < 'B' COLLATE LOCALE")[0].n, 2);
+               db.Query("SELECT count(*) AS n FROM p WHERE name < 'B' COLLATE LOCALE")[0].n,
+               names.filter((n) => Locale.Compare(n, "B") < 0).length);
         }
         eq("locale_key keeps NULL", db.Query("SELECT locale_key(NULL) AS k")[0].k, null);
         throws("locale_key cannot be indexed: an index would keep one desktop's order in the file",
@@ -7237,13 +7253,23 @@ class Form1 extends Form {
             return;
         }
         waiting++;
-        const lines = [];
-        Exec([Application.Executable, dir, "--selftest"], { Timeout: 20000 }, (line) => lines.push(line), (code) => {
+        /* **The streams apart**, because a graphical host on a virtual display
+         * warns on stderr about the accessibility bus and Mesa's missing
+         * DRI3; merged, those lines sat in the expected output and the
+         * assertion failed on the runner and nowhere else.  The example prints
+         * its self-test on stdout, and stderr stays whole for what a failure
+         * says. */
+        const out = [];
+        const err = [];
+        Exec([Application.Executable, dir, "--selftest"],
+             { Timeout: 20000, Stderr: "separate" },
+             (line, from) => (from === "out" ? out : err).push(line),
+             (code) => {
           waiting--;
-          const output = lines.join("\n");
+          const output = out.concat(err).join("\n");
           try {
             eq("the example's self-test ends cleanly", code, 0, output);
-            eq("...and saw what the example is for", outputLines(output.trim()).filter((l) => !l.startsWith("MESA")).join("\n"),
+            eq("...and saw what the example is for", out.join("\n").trim(),
                "rows 400\n" +
                "frozen Sale,Client\n" +
                "totals 8101 72174411.50\n" +
