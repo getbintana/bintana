@@ -25,6 +25,7 @@
           "type": "Label",
           "name": "LblEvery",
           "properties": {
+            "For": "SpinInterval",
             "Text": "Every",
             "VAlign": "Center",
             "Width": 80
@@ -48,6 +49,7 @@
           "type": "Label",
           "name": "LblTimeout",
           "properties": {
+            "For": "SpinTimeout",
             "Text": "Timeout",
             "VAlign": "Center",
             "Width": 80
@@ -103,12 +105,12 @@
         {
           "type": "TextBox",
           "name": "TxtName",
-          "properties": { "Placeholder": "Name", "Width": 90 }
+          "properties": { "AccessibleName": "Name", "Placeholder": "Name", "Width": 90 }
         },
         {
           "type": "TextBox",
           "name": "TxtUrl",
-          "properties": { "Placeholder": "https://…", "Width": 160 }
+          "properties": { "AccessibleName": "URL", "Placeholder": "https://…", "Width": 160 }
         },
         {
           "type": "Button",

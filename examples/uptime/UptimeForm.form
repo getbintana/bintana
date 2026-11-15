@@ -102,6 +102,7 @@
               "type": "Button",
               "name": "BtnSettings",
               "properties": {
+                "AccessibleName": "Settings",
                 "Icon": "emblem-system-symbolic"
               }
             }
