@@ -224,11 +224,9 @@ static JSValue notebook_get_action(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    GtkPackType pack;
+    GtkPackType pack = GTK_PACK_END;
     if (argc > 0 && action_pack(ctx, argv[0], &pack) < 0)
         return JS_ThrowRangeError(ctx, "GetAction(where) takes Start or End");
-    if (argc == 0)
-        pack = GTK_PACK_END;
 
     GtkWidget *at = gtk_notebook_get_action_widget(GTK_NOTEBOOK(w->slot), pack);
     BtaWidget *cw = at ? g_object_get_data(G_OBJECT(at), BTA_WIDGET_QUARK) : NULL;

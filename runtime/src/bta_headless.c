@@ -1165,10 +1165,10 @@ static int run_project(int argc, char **argv, bool testing, bool json,
      * cairo, Pango or GdkPixbuf. */
     bool needs_drawing = false;
     for (guint i = 0; i < libs->len && !needs_drawing; i++) {
-        char *base = g_path_get_basename(libs->pdata[i]);
+        char *leaf = g_path_get_basename(libs->pdata[i]);
 
-        needs_drawing = !strcmp(base, "drawing");
-        g_free(base);
+        needs_drawing = !strcmp(leaf, "drawing");
+        g_free(leaf);
     }
     if (needs_drawing && !drawing_load(ctx, global)) {
         fprintf(stderr, "bintana: this project uses \"drawing\": %s\n",
@@ -1221,12 +1221,12 @@ static int run_project(int argc, char **argv, bool testing, bool json,
         GPtrArray *skip  = bta_library_display_files(ctx, libs->pdata[i]);
 
         for (guint j = 0; j < files->len; j++) {
-            char *base = g_path_get_basename(files->pdata[j]);
+            char *leaf = g_path_get_basename(files->pdata[j]);
             bool  ui   = false;
 
             for (guint k = 0; k < skip->len && !ui; k++)
-                ui = !strcmp(base, skip->pdata[k]);
-            g_free(base);
+                ui = !strcmp(leaf, skip->pdata[k]);
+            g_free(leaf);
             if (!ui && !eval_file(ctx, files->pdata[j])) {
                 g_ptr_array_unref(skip);
                 g_ptr_array_unref(files);

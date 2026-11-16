@@ -6801,7 +6801,7 @@ static int table_header_height(BtaWidget *w)
     if (page <= 0)
         return 0;
 
-    int above = (int)gtk_widget_get_allocated_height(w->inner) - page;
+    int above = (int)gtk_widget_get_height(w->inner) - page;
 
     return above > 0 ? above : 0;
 }

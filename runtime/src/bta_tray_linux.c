@@ -581,12 +581,12 @@ static GVariant *menu_get_property(GDBusConnection *conn, const char *sender,
         return g_variant_new_string("normal");
     if (strcmp(property, "IconThemePath") == 0) {
         GVariantBuilder b;
-        char *path = tray_icon_path(lt->tray->icon);
+        char *icon_path = tray_icon_path(lt->tray->icon);
 
         g_variant_builder_init(&b, G_VARIANT_TYPE("as"));
-        if (*path)
-            g_variant_builder_add(&b, "s", path);
-        g_free(path);
+        if (*icon_path)
+            g_variant_builder_add(&b, "s", icon_path);
+        g_free(icon_path);
         return g_variant_builder_end(&b);
     }
     g_set_error(error, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_PROPERTY,

@@ -1076,6 +1076,11 @@ install(FILES tools/bintana-ide.svg
         RENAME application-x-bintana-project.svg)
 
 install(FILES README.md LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+# **The engine is embedded, so its notice travels with the binary.** QuickJS is
+# MIT beside this tree's own; a package that ships `bin/bintana` without this
+# file ships a notice it does not give.
+install(FILES vendor/quickjs/LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR}
+        RENAME LICENSE-QuickJS)
 install(DIRECTORY docs/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs)
 
 # `cmake --build build --target uninstall` (or `make -C build uninstall`).

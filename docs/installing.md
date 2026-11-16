@@ -43,9 +43,13 @@ git clone --recurse-submodules https://github.com/getbintana/bintana.git
 # or, in a clone that is already there:
 git submodule update --init
 
-cmake -S . -B build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build -j"$(nproc)"
 ```
+
+**Name the type.** With none, `CMakeLists.txt` builds `Debug` -- `-O0`, which is
+what a checkout being debugged wants, and about three times slower (measured
+with `tests/bench.sh`). `RelWithDebInfo` is the one for a build to *run*.
 
 That is the whole build. QuickJS is compiled from `vendor/`, `runtime/js/rad.js`
 is embedded into the binary, and `.js`/`.form` files are read at run time — so
@@ -123,6 +127,7 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/share/applications/` + `share/icons/` | the menu entry and its icon |
 | `<prefix>/share/mime/packages/bintana.xml` | `application/x-bintana-project`, the type of a `project.btp` |
 | `<prefix>/share/icons/hicolor/scalable/mimetypes/` | the type's icon, under the same drawing as the IDE |
+| `<prefix>/share/doc/bintana/` | the README, the documentation under `docs/`, and the two notices: this tree's `LICENSE` and `LICENSE-QuickJS` for the embedded engine |
 
 A packager who installs somewhere else stages it first, which needs no second
 configure — the two paths that resolve from the binary are relative hops:

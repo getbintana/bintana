@@ -23,7 +23,8 @@ What changed in each release is in [CHANGELOG.md](CHANGELOG.md).
 ```sh
 git clone --recurse-submodules https://github.com/getbintana/bintana.git
 cd bintana
-cmake -S . -B build && cmake --build build -j
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo && cmake --build build -j
+# ...with no type it is Debug (-O0), which is about three times slower.
 ./build/bintana ide examples/hello    # the IDE, opening an example project
 ./build/bintana check examples/hello  # what is wrong with a project, no window
 ./build/bintana examples/ledger /tmp/expenses.pdf   # CSV to a chart and a PDF, no display

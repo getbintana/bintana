@@ -781,9 +781,9 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
 
 ## To review later
 
-- **Three files hold a third of the runtime's C**: `bta_widget.c` (9959 lines),
-  `bta_controls.c` (8713) and `bta_table.c` (7470), 26k of 80k, counted on
-  2026-10-30. The class table already registers a class by rows from each module
+- **Three files hold a quarter of the runtime's C**: `bta_widget.c` (10785
+  lines), `bta_controls.c` (9163) and `bta_table.c` (8638), 28.6k of 114.5k,
+  counted on 2026-11-16. The class table already registers a class by rows from each module
   (`bta_register_classes`), so a split by widget family needs no change of
   design -- only the includes and the `add_executable` line. Nothing is wrong
   with them yet; the question is whether finding a widget's code has become

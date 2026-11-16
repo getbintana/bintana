@@ -296,10 +296,11 @@ static void bta_fixed_layout_allocate(GtkLayoutManager *manager, GtkWidget *widg
         int box_w = 0, box_h = 0;
 
         if (is_form && own->gtk) {
-            GtkStyleContext *sc = gtk_widget_get_style_context(own->gtk);
+            GtkStyleContext *sc;
             GtkBorder pad, bor;
 
             G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+            sc = gtk_widget_get_style_context(own->gtk);
             gtk_style_context_get_padding(sc, &pad);
             gtk_style_context_get_border(sc, &bor);
             G_GNUC_END_IGNORE_DEPRECATIONS
