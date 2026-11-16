@@ -44,6 +44,12 @@ dest=$(cd "$dest" && pwd)
 # tree is exactly what lands here.
 cmake --install "$build" --prefix "$dest"
 
+# The third-party DLLs below keep their own licences.  `cmake --install` lays
+# down Bintana's and QuickJS's under share/licenses; this adds the MSYS2
+# packages' texts beside them, because the zip and the setup are the artifacts
+# that actually redistribute those binaries.
+"$(dirname "$0")/windows-licenses.sh" "$dest"
+
 # The Linux launcher is a shell script that resolves its own location; Windows
 # gets a .cmd that does the same.
 rm -f "$dest/bin/bintana-ide"

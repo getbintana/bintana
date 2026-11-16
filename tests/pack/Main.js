@@ -448,6 +448,15 @@ function checkNsis(root) {
     eq("with the version's numeric head as the version resource",
        new Regex(`^VIProductVersion "(.*)"`, { Multiline: true }).Matches(nsi)
            .map((m) => m.Group(1)).join(), "2.1.0.0");
+    check("and the two keys NSIS otherwise warns are missing",
+          nsi.includes(`VIAddVersionKey "FileVersion" "2.1"`) &&
+          nsi.includes(`VIAddVersionKey "LegalCopyright"`), nsi);
+    check("with a marker, a directory-page guard and an uninstaller that checks it",
+          nsi.includes(`bintana-installed`) &&
+          nsi.includes(`Function .onVerifyInstDir`) &&
+          nsi.includes(`$INSTDIR\\bin\\bintana.exe`) &&
+          nsi.includes(`bta_uninstall_ours`) &&
+          nsi.includes(`/SD IDOK`), nsi);
     check("welcoming with the description",
           nsi.includes("MUI_WELCOMEPAGE_TEXT"), nsi);
     check("with the prose escaped for NSIS",
@@ -605,6 +614,8 @@ function checkNsis(root) {
     put(File.Join("share", "bintana", "examples", "hello", "project.btp"), "{}");
     put(File.Join("share", "bintana", "tools", "nsis", "Bin", "makensis.exe"), "MZ");
     put(File.Join("share", "doc", "bintana", "README.md"), "# Bintana");
+    put(File.Join("share", "licenses", "bintana", "LICENSE-QuickJS"), "MIT");
+    put(File.Join("share", "licenses", "bintana", "msys2", "gtk4", "COPYING"), "LGPL");
     put(File.Join("lib", "gstreamer-1.0", "libgstgtk4.dll"), "DLL");
     put(File.Join("libexec", "gstreamer-1.0", "gst-plugin-scanner.exe"), "MZ");
     put(File.Join("share", "gstreamer-1.0", "presets", "x.prs"), "preset");
@@ -641,6 +652,11 @@ function checkNsis(root) {
           File.Exists(File.Join(staged, "share", "poppler", "cMap", "Adobe-Japan1")));
     check("and the shipped libraries the project's uses resolve from",
           File.Exists(File.Join(staged, "share", "bintana", "lib", "x.js")));
+    check("with the notices of the binaries it redistributes",
+          File.Exists(File.Join(staged, "share", "licenses", "bintana",
+                                "LICENSE-QuickJS")) &&
+          File.Exists(File.Join(staged, "share", "licenses", "bintana",
+                                "msys2", "gtk4", "COPYING")));
     check("without the IDE beside them",
           !File.IsDir(File.Join(staged, "share", "bintana", "ide")));
     check("the project travels as the application",

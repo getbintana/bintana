@@ -2,8 +2,9 @@
 
 Everything here is the same on any Linux with GTK 4.10 or newer; Fedora and
 Debian/Ubuntu are written out because those are the two the suite is run on.
-Windows has a plan of its own in [plans/portability-plan.md](plans/portability-plan.md),
-and macOS in [plans/macos-plan.md](plans/macos-plan.md).
+Windows is distributed as the portable zip and the per-user setup described
+under [A downloadable build](#a-downloadable-build); macOS is not started yet
+([plans/macos-plan.md](plans/macos-plan.md)).
 
 ## What it needs
 
@@ -43,6 +44,8 @@ git clone --recurse-submodules https://github.com/getbintana/bintana.git
 # or, in a clone that is already there:
 git submodule update --init
 
+# GitHub's "Download ZIP" does not carry vendor/quickjs: use a clone, or a
+# source archive that includes the submodule.
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build -j"$(nproc)"
 ```
@@ -128,6 +131,7 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/share/mime/packages/bintana.xml` | `application/x-bintana-project`, the type of a `project.btp` |
 | `<prefix>/share/icons/hicolor/scalable/mimetypes/` | the type's icon, under the same drawing as the IDE |
 | `<prefix>/share/doc/bintana/` | the README, the documentation under `docs/`, and the two notices: this tree's `LICENSE` and `LICENSE-QuickJS` for the embedded engine |
+| `<prefix>/share/licenses/bintana/` | the same notices in the place a package keeps them -- and, in the Windows tree, `msys2/` with the license of every bundled MSYS2 package and `THIRD-PARTY-NOTICES.md` saying what that means |
 
 A packager who installs somewhere else stages it first, which needs no second
 configure — the two paths that resolve from the binary are relative hops:
@@ -199,7 +203,8 @@ its own — so *would an install work* has an answer that installs nothing.
 
 The `package` job in the CI produces exactly that tree as one file —
 `bintana-<version>-linux-<arch>.tar.gz` — and every push keeps it as an
-artifact of the run; a tag also attaches it to the release. The `windows` job
+artifact of the run; a tag also attaches it to the release. A `.sha256` beside
+each download is attached too (`sha256sum -c bintana-<version>-linux-<arch>.tar.gz.sha256`). The `windows` job
 does the same for Windows, as a `.zip` with the GTK runtime data
 (`tools/windows-portable.sh`), and that one **is verified on Windows 11**
 (2026-11-11): the staged tree runs with only `System32` on `PATH`, and the setup
@@ -208,7 +213,10 @@ below was installed, launched and uninstalled from it. The same job builds
 compiled by the staged tree out of its own metainfo (`tools/pack.sh --nsis`) --
 which a tag attaches to the release beside the zip. The setup carries the same
 optional data as the zip: GStreamer's plugins and scanner, poppler's CMaps and
-the bundled NSIS. A setup that never arrives is the installer step's warning in
+the bundled NSIS. **Both Windows artifacts carry the licences of the binaries
+they bundle** under `share/licenses/bintana`: see
+[THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) before redistributing one.
+A setup that never arrives is the installer step's warning in
 the log, not a failed job: the zip is the established artifact, and the
 toolchain around the installer (a download, the runner's own NSIS) is outside
 this repository.
@@ -248,12 +256,14 @@ alongside: schemas, the icon themes, the gdk-pixbuf loaders and GtkSourceView's
 language specs, which the packaging script copies and arranges the way GLib's
 own prefix rule expects to find them.
 
-Three things it deliberately does not do: it does not bundle GTK (the machine
-needs GTK 4.10+ and GtkSourceView 5), it is built on `ubuntu-24.04` and so wants
-a glibc at least as new (2.39 — Fedora 40, Debian 13, Ubuntu 24.04), and it is
-built **without** the optional dependencies (`sqlite3`, unixODBC, `libsoup`, GStreamer,
-VTE, `libxml2`, `libsecret`, GnuTLS, PoDoFo, poppler) so that none of them becomes a shared library the
-downloader has to have.
+Three things the **Linux tarball** deliberately does not do: it does not bundle
+GTK (the machine needs GTK 4.10+ and GtkSourceView 5), it is built on
+`ubuntu-24.04` and so wants a glibc at least as new (2.39 — Fedora 40, Debian
+13, Ubuntu 24.04), and it is built **without** the optional dependencies
+(`sqlite3`, unixODBC, `libsoup`, GStreamer, VTE, `libxml2`, `libsecret`, GnuTLS,
+PoDoFo, poppler) so that none of them becomes a shared library the downloader
+has to have. The Windows zip makes the opposite trade: it carries those
+libraries, and their licences.
 
 ### The compiler inside the Windows build
 
@@ -302,8 +312,11 @@ interpreter:
 
 ```sh
 flatpak install --user flathub org.gnome.Platform//50 org.gnome.Sdk//50
-# ...and the BaseApp from the repository it is published in
-flatpak remote-add --if-not-exists --no-gpg-verify bintana https://...
+# ...and the BaseApp from the repository it is published in. **That repository
+# is not signed yet**, so the command tells Flatpak not to verify its summary;
+# when the project key exists, a `.flatpakrepo` file replaces this line.
+flatpak remote-add --if-not-exists --no-gpg-verify bintana \
+    https://getbintana.github.io/flatpak/
 flatpak install --user bintana io.github.getbintana.BaseApp//0.4
 ```
 

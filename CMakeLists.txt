@@ -7,6 +7,34 @@ project(bintana VERSION 0.4.0 LANGUAGES C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+if(WIN32)
+    enable_language(RC)
+endif()
+
+# A Windows executable with no version resource shows blank FileVersion and
+# ProductVersion in Explorer, Task Manager and the UAC prompt. The values come
+# from the one version above, so a release cannot leave them behind.
+function(bta_add_version_resource target description original)
+    if(NOT WIN32)
+        return()
+    endif()
+
+    set(BTA_RC_VERSION_COMMA
+        "${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},0")
+    set(BTA_RC_DESCRIPTION "${description}")
+    set(BTA_RC_ORIGINAL "${original}")
+    set(BTA_RC_INTERNAL "${target}")
+    if(target STREQUAL "bintana-drawing")
+        set(BTA_RC_FILETYPE "VFT_DLL")
+    else()
+        set(BTA_RC_FILETYPE "VFT_APP")
+    endif()
+
+    configure_file(runtime/src/bintana-version.rc.in
+                   "${CMAKE_CURRENT_BINARY_DIR}/${target}-version.rc" @ONLY)
+    target_sources(${target} PRIVATE
+                   "${CMAKE_CURRENT_BINARY_DIR}/${target}-version.rc")
+endfunction()
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)
@@ -411,6 +439,7 @@ add_executable(${BTA_GUI_TARGET}
     ${BASE_CSS_H}
     ${SIGNATURES_H}
 )
+bta_add_version_resource(${BTA_GUI_TARGET} "Bintana graphical host" "bintana-gui.exe")
 
 if(WIN32)
     # A GUI header, so a shortcut starts no console. `main` still starts the
@@ -425,6 +454,7 @@ if(WIN32)
     # command with that flag, hands it the pipes `Exec` made, waits and returns
     # its status.  It is installed beside both hosts, and links only Windows.
     add_executable(bintana-exec runtime/src/bta_exec_win32.c)
+    bta_add_version_resource(bintana-exec "Bintana Exec helper" "bintana-exec.exe")
     set_target_properties(bintana-exec PROPERTIES WIN32_EXECUTABLE TRUE)
     target_link_libraries(bintana-exec PRIVATE shell32)
     target_compile_options(bintana-exec PRIVATE
@@ -670,6 +700,7 @@ endif()
 # `bintana-meta --dump` is what writes it.  On Linux it links no GTK; on
 # Windows it does, for the reason in the link block below.
 add_executable(bintana-meta ${BTA_META_SOURCES})
+bta_add_version_resource(bintana-meta "Bintana metadata host" "bintana-meta.exe")
 target_include_directories(bintana-meta PRIVATE
     ${CMAKE_SOURCE_DIR}/runtime/include
     ${CMAKE_BINARY_DIR}/generated
@@ -793,6 +824,7 @@ set(BTA_HEADLESS_SOURCES
                    ${CMAKE_BINARY_DIR}/check/WidgetMeta.js COPYONLY)
 
     add_executable(bintana ${BTA_HEADLESS_SOURCES})
+    bta_add_version_resource(bintana "Bintana console core" "bintana.exe")
     target_include_directories(bintana PRIVATE
         ${CMAKE_SOURCE_DIR}/runtime/include
         ${CMAKE_BINARY_DIR}/generated
@@ -867,6 +899,7 @@ set(BTA_HEADLESS_SOURCES
         runtime/src/bta_bitmap.c
         runtime/src/bta_drawing_module.c
     )
+    bta_add_version_resource(bintana-drawing "Bintana drawing module" "bintana-drawing.dll")
     set_target_properties(bintana-drawing PROPERTIES
         PREFIX ""
         OUTPUT_NAME "bintana-drawing"
@@ -1075,13 +1108,26 @@ install(FILES tools/bintana-ide.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/mimetypes
         RENAME application-x-bintana-project.svg)
 
-install(FILES README.md LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR})
+install(FILES README.md LICENSE THIRD-PARTY-NOTICES.md
+        DESTINATION ${CMAKE_INSTALL_DOCDIR})
 # **The engine is embedded, so its notice travels with the binary.** QuickJS is
 # MIT beside this tree's own; a package that ships `bin/bintana` without this
 # file ships a notice it does not give.
 install(FILES vendor/quickjs/LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR}
         RENAME LICENSE-QuickJS)
 install(DIRECTORY docs/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs)
+
+# And the same notices under `share/licenses`, **outside `share/doc`**, because
+# the Flatpak BaseApp cleans that directory away and the Windows setup carries
+# this one as data. `tools/windows-portable.sh` adds the MSYS2 packages'
+# licenses beside them; see THIRD-PARTY-NOTICES.md.
+install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/bintana
+        RENAME LICENSE-Bintana)
+install(FILES vendor/quickjs/LICENSE
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/bintana
+        RENAME LICENSE-QuickJS)
+install(FILES THIRD-PARTY-NOTICES.md
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/bintana)
 
 # `cmake --build build --target uninstall` (or `make -C build uninstall`).
 # CMake has no uninstall of its own, and removing the manifest is the only

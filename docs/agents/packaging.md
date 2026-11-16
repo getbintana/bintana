@@ -107,6 +107,14 @@ are staged. **A smaller setup is not a smaller application when the missing
 piece is a plugin directory**, and the only way to see it is to run the
 installed tree, not just to compile the installer.
 
+**The payload also carries the third-party licences.** `Nsis.Stage` copies
+`share/licenses` (CMake installs Bintana's and QuickJS's there, and
+`tools/windows-portable.sh` adds the MSYS2 packages' texts). The setup writes
+`$INSTDIR\bintana-installed`; the directory page refuses a non-empty folder
+without that marker, and the uninstaller leaves such a folder alone instead of
+`RMDir /r` it. The license list and the source-offer caveat are in
+[`THIRD-PARTY-NOTICES.md`](../../THIRD-PARTY-NOTICES.md).
+
 The rest of the end-to-end test, so the next person can repeat it:
 
 ```powershell

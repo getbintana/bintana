@@ -71,7 +71,15 @@ commands, conventions and the rules every change follows -- and
 MIT — see [LICENSE](LICENSE).
 
 QuickJS-ng, vendored under `vendor/quickjs`, is MIT as well and carries its own
-[LICENSE](vendor/quickjs/LICENSE); its copyright notice has to travel with any
-copy of it, which is what that file is for. Nothing else is bundled: GTK4,
-GtkSourceView, VTE on Linux and libvterm on Windows are linked against and
-belong to their own projects.
+[LICENSE](vendor/quickjs/LICENSE); the install lays it down as
+`LICENSE-QuickJS`, because its copyright notice has to travel with every binary
+that embeds it.
+
+**The Windows zip and setup bundle third-party binaries.** They carry the MSYS2
+UCRT64 runtime they need -- GTK, GtkSourceView, GStreamer, poppler and their
+data -- and those keep their own licences. Their texts, where MSYS2 packages
+them, are installed under `share/licenses/bintana`, and
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) explains what each one asks
+for, including the source offer a distributor has to honour. The Linux tarball
+and the Flatpak BaseApp link against the distribution's or the GNOME runtime's
+libraries instead, so they do not copy those.
