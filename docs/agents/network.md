@@ -45,6 +45,33 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `tests/widgets`' `HttpServer` holds
   the refusal and the property, and the check was taken out to watch it go
   red.
+- **A download went to memory twice, and a blocking one died at 30 s.** The
+  client read every answer with `send_and_read` into a `GBytes`, and
+  `bta_bytes_new` copied that into the `Bytes` handed back: `examples/downloads`
+  held a 4 GB image as 8 GB at the peak before `File.SaveBytes` wrote it, and
+  its `GetWait` had no `Timeout`, so the default 30 s *of total length* cut any
+  download longer than that. `SaveTo` (2026-11-16) takes the `Stream` road --
+  `soup_session_send`, the headers, then decide -- and hands a 2xx to
+  `HttpSave`, a chain of `read_bytes_async` / `write_all_async` into
+  `<path>.<hex>.part` beside the destination, closed and `g_file_move`d over it
+  at the end, deleted on any other end. Three decisions worth keeping:
+  **`Timeout` is silence on that road** (`http_job_rearm`, `http_wait_arm`: the
+  headers and every block arm the guard again), because a download's length is
+  the line's business and a stall is the caller's; **the chain owns and frees
+  itself**, and an owner that goes first only sets `orphan` and cancels -- the
+  `HttpJob` can be freed by a `Stop` inside `Progress`, by teardown, or by its
+  own delivery, and each completion asks before touching anything; and
+  **`got-body-data` was not used**, though it would have been the smaller
+  change: it is `SOUP_AVAILABLE_IN_3_4` and the build asks for no minimum.
+  `Progress` is at most one call per 100 ms plus the last: a 4 GB file in 64 KiB
+  blocks is 65,536 blocks, and each `this.Report` from a task is a hop to the
+  window. A compressed answer's `Content-Length` is not the decoded size, so
+  `total` is `-1` there. **The test's steps are guarded**: with the old runtime
+  the first blocking download threw inside the chain, which hung the run to the
+  suite's timeout instead of going red -- each step catches, and `File.Hash` of
+  a file that is not there is read through `hashOf`, which does not throw. The
+  `HttpSave` test is red in 22 assertions with the C taken out, and clean under
+  ASan.
 - **libsoup3 has no session `authenticate` signal, and connecting one is a
   `GLib-GObject-CRITICAL`, not a `NULL` or a no-op.** The plan assumed the
   soup2 shape; measured, the signal is in neither `soup-session.h` nor any

@@ -713,6 +713,8 @@ const TESTS = [
      * every fifth of a second, so the run has to still be going a second
      * later. */
     "HttpStream",
+    /* Async as well, against a server that dribbles a download. */
+    "HttpSave",
     /* Async too, and answered on this same loop: it dogfoods the client, so
      * both must be going when either is. A Wait would freeze the loop the
      * server answers on -- that dogfood is async or it is a deadlock. */
@@ -829,6 +831,7 @@ const NEEDS = {
      * brings the tail that finishes the run. */
     Task:           ["Exec"],
     HttpStream:     ["Exec"],
+    HttpSave:       ["Exec"],
     HttpServer:     ["Exec"],
     /* Its answers come from a local server and a resolver, later turns. */
     Network:        ["Exec"],
@@ -30398,6 +30401,266 @@ class Form1 extends Form {
         });
     }
 
+    /* --- HttpSave -------------------------------------------------------
+     *
+     * `SaveTo`: the answer written to a file as it arrives, one block in
+     * memory whatever its size, against a server of our own. What is held:
+     * the file is the bytes the server sent (its own SHA-256 in a header),
+     * `Progress` ends on the whole, a 404 makes no file, a stop or a stall
+     * leaves nothing behind -- no file and no `.part` -- and **`Timeout` is
+     * silence, not length**: a download that keeps arriving outlives it.
+     */
+    testHttpSave() {
+        if (!Application.HasCommand("python3")) {
+            failures.push("Http tests need python3 on the PATH");
+            return;
+        }
+        let noSoup = false;
+        try {
+            Http.GetWait("http://127.0.0.1:9/", { Timeout: 1 });
+        } catch (e) {
+            noSoup = /without libsoup/.test(e.message);
+        }
+        if (noSoup)
+            return;
+
+        const srv = Exec(["python3", "-u", "-c", [
+            "from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer",
+            "import hashlib, time",
+            "class H(BaseHTTPRequestHandler):",
+            "    def body(self, n, pieces, gap, length=True, stall=0):",
+            "        data = bytes(i % 251 for i in range(n))",
+            "        self.send_response(200)",
+            "        self.send_header(\"Content-Type\", \"application/octet-stream\")",
+            "        if length:",
+            "            self.send_header(\"Content-Length\", str(n))",
+            "        self.send_header(\"X-Sha256\", hashlib.sha256(data).hexdigest())",
+            "        self.end_headers()",
+            "        step = n // pieces",
+            "        try:",
+            "            for i in range(pieces):",
+            "                self.wfile.write(data[i * step:(i + 1) * step if i < pieces - 1 else n])",
+            "                self.wfile.flush()",
+            "                time.sleep(stall if (stall and i == 0) else gap)",
+            "        except (BrokenPipeError, ConnectionResetError):",
+            "            pass",
+            "    def do_GET(self):",
+            "        if self.path == \"/blob\":",
+            "            return self.body(300000, 30, 0.02)",
+            "        if self.path == \"/nolength\":",
+            "            return self.body(50000, 5, 0, length=False)",
+            "        if self.path == \"/slow\":",
+            "            return self.body(20000, 20, 0.1)",
+            "        if self.path == \"/stall\":",
+            "            return self.body(100000, 10, 0, stall=3)",
+            "        b = b'{\"error\": \"no such file\"}'",
+            "        self.send_response(404)",
+            "        self.send_header(\"Content-Type\", \"application/json\")",
+            "        self.send_header(\"Content-Length\", str(len(b)))",
+            "        self.end_headers()",
+            "        self.wfile.write(b)",
+            "    def log_message(self, *a):",
+            "        pass",
+            "ThreadingHTTPServer((\"127.0.0.1\", 8475), H).serve_forever()",
+        ].join("\n")]);
+
+        const dir = File.Join(SCRATCH, "httpsave");
+        Directory.Make(dir);
+        const at    = (name) => File.Join(dir, name);
+        const parts = () => Directory.List(dir).filter((n) => n.endsWith(".part"));
+        /* Never throws: an assertion inside a callback that throws ends the
+         * chain, and the run hangs instead of going red. */
+        const hashOf = (p) => {
+            try { return File.Hash(p).toLowerCase(); }
+            catch (e) { return `no file: ${e.message}`; }
+        };
+        const api   = Http.Client({ BaseUrl: "http://127.0.0.1:8475" });
+        /* A step that throws is a red line and the next step, never a chain
+         * left hanging until the suite's own timeout -- which is what the old
+         * runtime did here, throwing from the first blocking download. */
+        const guarded = (fn, i) => () => {
+            try {
+                fn();
+            } catch (e) {
+                failures.push(`HttpSave step ${i} threw: ${e.message}`);
+                steps[i + 1]();
+            }
+        };
+
+        /* --- refused before anything is sent ------------------------------ */
+        throws("Progress without SaveTo is refused",
+               () => api.Get("/blob", { Progress: () => 0 }, () => 0));
+        eq("SaveTo is a path, as a string",
+           refusal(() => api.Get("/blob", { SaveTo: 7 }, () => 0)),
+           "Http.Get: SaveTo is a path, as a string");
+        eq("a folder that is not there is said before the download",
+           refusal(() => api.Get("/blob", { SaveTo: File.Join(dir, "no", "x") }, () => 0)),
+           `Http.Get: SaveTo: there is no folder '${File.Join(dir, "no")}'`);
+        throws("SaveTo naming a folder is refused",
+               () => api.Get("/blob", { SaveTo: dir }, () => 0));
+        throws("Stream hands lines over and takes no SaveTo",
+               () => api.Stream("GET", "/blob", { SaveTo: at("s") }, () => 0));
+        throws("a HEAD has no body to save",
+               () => api.Request("HEAD", "/blob", { SaveTo: at("h") }, () => 0));
+        throws("Progress is a function",
+               () => api.Get("/blob", { SaveTo: at("p"), Progress: 3 }, () => 0));
+
+        const steps = [
+            /* A download, with its progress. */
+            () => {
+                const seen = [];
+                File.Save(at("blob.bin"), "an older file, replaced only at the end");
+                const h = api.Get("/blob", {
+                    SaveTo: at("blob.bin"),
+                    Progress: (got, total, handle) => {
+                        seen.push([got, total]);
+                        if (seen.length === 1)
+                            check("Progress is handed the handle", handle === h);
+                    },
+                }, (r) => {
+                    eq("the answer says where it went", r.Saved, at("blob.bin"));
+                    eq("...and how much went there", r.Length, 300000);
+                    eq("...with an empty Body, since it is in the file", r.Body.Length, 0);
+                    eq("the status is the server's", r.Status, 200);
+                    eq("the file is the bytes the server sent",
+                       hashOf(at("blob.bin")), r.Headers["x-sha256"]);
+                    check("Progress was told along the way, not once",
+                          seen.length >= 2, JSON.stringify(seen));
+                    eq("...and its last word is the whole of it",
+                       JSON.stringify(seen[seen.length - 1]), "[300000,300000]");
+                    check("...counting up", seen.every((s, i) => i === 0 || s[0] >= seen[i - 1][0]),
+                          JSON.stringify(seen));
+                    eq("no .part is left beside it", parts().length, 0);
+                    steps[1]();
+                }, (e) => {
+                    failures.push(`the download errored: ${e.Message}`);
+                    steps[1]();
+                });
+            },
+            /* No Content-Length: the total is -1, and the file is whole. */
+            () => {
+                let last = null;
+                api.Get("/nolength", { SaveTo: at("nolength.bin"),
+                                       Progress: (got, total) => { last = [got, total]; } },
+                        (r) => {
+                    eq("with no declared length the total is -1",
+                       JSON.stringify(last), "[50000,-1]");
+                    eq("...and the file is still whole",
+                       hashOf(at("nolength.bin")), r.Headers["x-sha256"]);
+                    steps[2]();
+                }, (e) => {
+                    failures.push(`the unsized download errored: ${e.Message}`);
+                    steps[2]();
+                });
+            },
+            /* A 404 is an answer, and makes no file. */
+            () => {
+                api.Get("/missing", { SaveTo: at("missing.bin") }, (r) => {
+                    eq("a 404 is answered", r.Status, 404);
+                    eq("...with its page in Body, as Get gives it",
+                       r.Body.ToText(), '{"error": "no such file"}');
+                    check("...and no file is made", !File.Exists(at("missing.bin")));
+                    check("...nor said to be", r.Saved === undefined);
+                    steps[3]();
+                }, (e) => {
+                    failures.push(`the 404 errored: ${e.Message}`);
+                    steps[3]();
+                });
+            },
+            /* Timeout is silence: two seconds of steady arrival under 500 ms. */
+            () => {
+                api.Get("/slow", { SaveTo: at("slow.bin"), Timeout: 500 }, (r) => {
+                    eq("a download that keeps arriving outlives its Timeout",
+                       r.Length, 20000);
+                    steps[4]();
+                }, (e) => {
+                    failures.push(`a steady download timed out: ${e.Kind} ${e.Message}`);
+                    steps[4]();
+                });
+            },
+            /* ...and a stall is what it ends. */
+            () => {
+                api.Get("/stall", { SaveTo: at("stall.bin"), Timeout: 500 }, () => {
+                    failures.push("a stalled download finished");
+                    steps[5]();
+                }, (e) => {
+                    eq("a download that stops arriving times out", e.Kind, "Timeout");
+                    check("...and leaves no file", !File.Exists(at("stall.bin")));
+                    eq("...and no .part", parts().length, 0);
+                    steps[5]();
+                });
+            },
+            /* Stopped from its own Progress. */
+            () => {
+                let h = null;
+                h = api.Get("/blob", { SaveTo: at("stopped.bin"),
+                                       Progress: () => { h.Stop(); } }, () => {
+                    failures.push("a stopped download finished");
+                    steps[6]();
+                }, (e) => {
+                    eq("a download stopped from its Progress is cancelled", e.Kind, "Cancelled");
+                    check("...and leaves no file", !File.Exists(at("stopped.bin")));
+                    eq("...and no .part", parts().length, 0);
+                    steps[6]();
+                });
+            },
+            /* The blocking spelling: what a Task worker calls. */
+            () => {
+                const seen = [];
+                const r = Http.GetWait("http://127.0.0.1:8475/blob", {
+                    SaveTo: at("wait.bin"),
+                    Progress: (got, total) => seen.push([got, total]),
+                });
+                eq("GetWait saves too", r.Saved, at("wait.bin"));
+                eq("...all of it", r.Length, 300000);
+                eq("...the right bytes",
+                   hashOf(at("wait.bin")), r.Headers["x-sha256"]);
+                eq("...telling Progress the whole at the end",
+                   JSON.stringify(seen[seen.length - 1]), "[300000,300000]");
+
+                const slow = Http.GetWait("http://127.0.0.1:8475/slow",
+                                          { SaveTo: at("wait-slow.bin"), Timeout: 500 });
+                eq("a blocking download's Timeout is silence too", slow.Length, 20000);
+
+                let said = null;
+                try {
+                    Http.GetWait("http://127.0.0.1:8475/stall",
+                                 { SaveTo: at("wait-stall.bin"), Timeout: 500 });
+                } catch (e) {
+                    said = e.Kind;
+                }
+                eq("...and a stall throws Timeout", said, "Timeout");
+                check("...leaving no file", !File.Exists(at("wait-stall.bin")));
+
+                const gone = Http.GetWait("http://127.0.0.1:8475/missing",
+                                          { SaveTo: at("wait-missing.bin") });
+                eq("a blocking 404 is answered", gone.Status, 404);
+                check("...with no file made", !File.Exists(at("wait-missing.bin")));
+                eq("nothing anywhere left a .part", parts().length, 0);
+                steps[7]();
+            },
+            () => {
+                srv.Stop();
+                steps.length = 0;
+                waiting--;
+            },
+        ];
+        for (let i = 0; i < steps.length - 1; i++)
+            steps[i] = guarded(steps[i], i);
+
+        until("the download server answers", () => {
+            try {
+                Http.GetWait("http://127.0.0.1:8475/missing", { Timeout: 200 });
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }, () => {
+            waiting++;   /* counted, like an until: see testHttp's tail */
+            steps[0]();
+        });
+    }
+
     /* --- HttpServer -----------------------------------------------------
      *
      * Serving, dogfooded through the client: no python, no external net. The
@@ -32499,6 +32762,38 @@ class Form1 extends Form {
                 next();
             };
             t.Start({ mode: "http", url: srv.Url + "/" });
+        });
+
+        /* A worker's download to a file, its Progress reported to the window. */
+        steps.push(() => {
+            let srv = null;
+
+            try { srv = Http.Server({ Port: 0 }); }
+            catch (e) { next(); return; }   /* no libsoup */
+
+            const blob = Random.Bytes(200000);
+            const path = File.Join(SCRATCH, "task-save.bin");
+            const seen = [];
+
+            srv.Request = (req) => req.Answer(200, blob);
+            srv.Start();
+
+            const t = new TaskWork();
+
+            t.Progress = (p) => seen.push([p.received, p.total]);
+            t.Error = (m) => { srv.Stop(); fail(`the worker's download errored: ${m}`); };
+            t.Done  = (r) => {
+                eq("a worker saves a download to a file", r.saved, path);
+                eq("...all of it", r.length, 200000);
+                eq("...with nothing in Body", r.body, 0);
+                eq("...and the file is the bytes served",
+                   File.LoadBytes(path).Equals(blob), true);
+                eq("its Progress reaches the window, ending on the whole",
+                   JSON.stringify(seen[seen.length - 1]), "[200000,200000]");
+                srv.Stop();
+                next();
+            };
+            t.Start({ mode: "save", url: srv.Url + "/", path });
         });
 
         /*

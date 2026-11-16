@@ -37,7 +37,7 @@
         "For": "SpnTimeout",
         "HAlign": "End",
         "Height": 20,
-        "Text": "Timeout, s (0: none)",
+        "Text": "Stall, s (0: never)",
         "Width": 140,
         "X": 400,
         "Y": 12
@@ -51,7 +51,7 @@
         "Height": 34,
         "Max": 3600,
         "Min": 0,
-        "Value": 5,
+        "Value": 30,
         "Width": 110,
         "X": 400,
         "Y": 34

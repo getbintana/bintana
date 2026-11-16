@@ -2,11 +2,15 @@
  * A download manager: several downloads at once, each in a `Task`, and the
  * two ways of stopping them.
  *
- *     t.Start(msg, { Timeout: ms }, this.all);
+ *     t.Start(msg, this.all);
  *
  *     ✕ on a row       t.Stop()          ends that download alone
- *     its Timeout      the guard         ends that download alone
+ *     a stall          Http's Timeout    ends that download alone
  *     Cancel all       this.all.Cancel() ends every download holding the token
+ *
+ * Each download is written to its file as it arrives (`SaveTo`, in
+ * `Fetcher`), so a 4 GB image costs a block of memory and not 4 GB, and its
+ * row shows how far it got (`Progress`, handed over with `this.Report`).
  *
  * ## The token goes one way
  *
@@ -32,9 +36,11 @@
  * ## Telling the endings apart
  *
  * Every task answers exactly once, `Done` or `Error`, and how it ended is read
- * off `TimedOut` and `Cancelled` rather than by matching the message. Try it
- * with a slow URL (`https://httpbin.org/delay/8`) and a timeout of five
- * seconds, and with a large file and the ✕.
+ * off fields rather than by matching the message: `Cancelled` on the task, and
+ * `stalled` on what `Fetcher` answers when nothing arrived for the seconds the
+ * window asked. A download that keeps arriving is never cut, however long it
+ * takes. Try it with a slow URL (`https://httpbin.org/delay/8`) and a stall of
+ * five seconds, and with a large file, its bar and the ✕.
  *
  * Run it with `./build/bintana examples/downloads`. The files go to
  * `~/Downloads/bintana-downloads`.
@@ -98,23 +104,25 @@ class DownloadsForm extends Form {
         }
         Directory.Make(this.dir);
 
-        const t   = new Fetcher();
-        const row = this.row(url, t);
-        const ms  = this.SpnTimeout.Value * 1000;
+        const t     = new Fetcher();
+        const row   = this.row(url, t);
+        const stall = this.SpnTimeout.Value * 1000;   /* 0: wait for ever */
 
-        t.Done  = (r) => this.ended(row, Locale.Text("done, {0}", size(r.size)));
+        t.Progress = (p) => this.moved(row, p);
+        t.Done  = (r) => this.ended(row, r.stalled
+            ? Locale.Text("stalled: nothing arrived for {0} s", this.SpnTimeout.Value)
+            : Locale.Text("done, {0}", size(r.size)), !r.stalled);
         t.Error = (m) => this.ended(row,
-            t.TimedOut  ? Locale.Text("timed out") :
             t.Cancelled ? Locale.Text("cancelled") :
-                          Locale.Text("failed: {0}", m));
+                          Locale.Text("failed: {0}", m), false);
 
         this.made++;
         /* Counted once it is running: a `Start` that throws -- over
          * `Task.Max`, say -- owes no answer, and a count taken before it
          * would keep Clear disabled for a download that never began. */
         try {
-            t.Start({ url, path: File.Join(this.dir, nameOf(url, this.made)) },
-                    { Timeout: ms > 0 ? ms : undefined }, this.all);
+            t.Start({ url, stall, path: File.Join(this.dir, nameOf(url, this.made)) },
+                    this.all);
         } catch (e) {
             row.state.Text   = Locale.Text("failed: {0}", e.message);
             row.stop.Enabled = false;
@@ -124,7 +132,7 @@ class DownloadsForm extends Form {
         this.idle();
     }
 
-    /* One row: the address, what became of it, and its own ✕. */
+    /* One row: the address, how far it got, what became of it, and its own ✕. */
     row(url, t) {
         const row = new Panel();
         row.Arrangement = "Horizontal";
@@ -138,6 +146,11 @@ class DownloadsForm extends Form {
         name.Ellipsize = true;
         row.Add(name);
 
+        const bar = new ProgressBar();
+        bar.Width  = 120;
+        bar.VAlign = "Center";
+        row.Add(bar);
+
         const state = new Label();
         state.Text  = Locale.Text("downloading…");
         state.Style = "dim-label";
@@ -150,10 +163,24 @@ class DownloadsForm extends Form {
         stop.On("Click", () => t.Stop());
         row.Add(stop);
 
-        return { state, stop };
+        return { bar, state, stop };
     }
 
-    ended(row, text) {
+    /* How far a download got. With no declared length there is no fraction to
+     * show, so the bar pulses and the text says what arrived. */
+    moved(row, p) {
+        if (p.total > 0) {
+            row.bar.Value  = p.received * 100 / p.total;
+            row.state.Text = Locale.Text("{0} of {1}", size(p.received), size(p.total));
+        } else {
+            row.bar.Pulse();
+            row.state.Text = size(p.received);
+        }
+    }
+
+    ended(row, text, whole) {
+        if (whole)
+            row.bar.Value = 100;
         row.state.Text   = text;
         row.stop.Enabled = false;
         this.running--;

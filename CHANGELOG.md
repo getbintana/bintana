@@ -30,6 +30,15 @@ one-page answer to *what is new since the release I have*.
 - `TableView.SetCell`, `SetIcon` and `SetStyle` report a value whose
   conversion throws, and leave the cell as it was; they used to empty it and
   leave the exception pending for the next call.
+- **`Http.Get`, `GetWait`, `Request` and `RequestWait` take `SaveTo: path`**:
+  the answer is written to that file as it arrives, one 64 KiB block in memory
+  whatever its size, through a `.part` beside it that is renamed at the end and
+  removed on any other end. The record says `Saved` and `Length`; a non-2xx is
+  answered into `Body` with no file made. `Progress(received, total, handle)`
+  reports it at most ten times a second and once at the end, and with `SaveTo`
+  **`Timeout` is the silence allowed, not the length**, so a download that keeps
+  arriving is never cut -- a blocking one used to die at 30 s, and held the
+  whole answer in memory twice.
 - **A `TableView` cell setter has a ceiling**: `SetCell`, `SetIcon`, `SetUri`,
   `SetStyle` and `SetEditable` reach a declared column or a cell the row
   already holds, and `SetCell` the one right after its last, which adds it.

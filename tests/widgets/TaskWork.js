@@ -333,6 +333,18 @@ class TaskWork extends Task {
             return { status: r.Status, body: r.Body.ToText() };
         }
 
+        /* A download to a file, its progress handed to the window: what
+         * `examples/downloads` does. `Progress` runs here, inside the wait. */
+        if (msg.mode === "save") {
+            const r = Http.GetWait(msg.url, {
+                Timeout:  5000,
+                SaveTo:   msg.path,
+                Progress: (received, total) => this.Report({ received, total }),
+            });
+
+            return { saved: r.Saved, length: r.Length, body: r.Body.Length };
+        }
+
         /* The three directory verbs take the job's signal, handed over. */
         if (msg.mode === "dir") {
             const said = {};

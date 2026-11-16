@@ -145,9 +145,43 @@ typedef struct {
 
 static JSClassID http_client_class_id;
 
+/*
+ * An answer written to a file as it arrives (`SaveTo`), shared by the callback
+ * verbs and the blocking ones: read a block, write it to `<path>.<hex>.part`,
+ * read the next; at the end close, rename over `path`, and say so. Memory is one
+ * block whatever the size of the file -- the buffered road held the whole body
+ * twice (soup's `GBytes` and the `Bytes` copied out of it), which for a 4 GB
+ * image is 8 GB.
+ *
+ * **The chain owns itself.** Every step has one operation outstanding with this
+ * as its data, so it is freed by the step that ends it and never by its owner:
+ * an owner that goes first (`Stop`, teardown) sets `orphan` and cancels, and the
+ * next completion cleans the `.part` up and frees without calling anybody.
+ */
+typedef struct HttpSave HttpSave;
+typedef void (*HttpSaveTick)(HttpSave *s, bool report, gpointer data);
+typedef void (*HttpSaveEnd)(HttpSave *s, GError *err, bool local, gpointer data);
+
+struct HttpSave {
+    GInputStream  *in;        /* soup's body */
+    GOutputStream *out;       /* the `.part`, while it is open */
+    GFile         *dest;
+    GFile         *part;      /* NULL until made, and again once renamed */
+    GBytes        *chunk;     /* the block being written */
+    GCancellable  *cancel;    /* the flight's own */
+    goffset        received;  /* bytes written so far */
+    goffset        total;     /* the declared length, or -1 */
+    gint64         reported;  /* monotonic time of the last report */
+    bool           orphan;
+    HttpSaveTick   tick;      /* after every block; `report` at most ten a second */
+    HttpSaveEnd    end;       /* once: NULL error is the file in place */
+    gpointer       data;
+};
+
 typedef struct {
     JSContext    *ctx;
     JSValue       on_line;   /* Stream's per-line callback; UNDEFINED on the rest */
+    JSValue       on_progress; /* `Progress`, with `SaveTo`; UNDEFINED otherwise */
     JSValue       on_done;
     JSValue       on_error;
     JSValue       handle;
@@ -184,6 +218,14 @@ typedef struct {
     /* What this flight was told to trust, referenced -- the client can be gone
      * before the answer lands, so the job cannot read its fields. */
     HttpTlsTrust *tls;
+    /* `SaveTo`: where the answer goes, the chain writing it while it runs,
+     * and what it wrote once it has. `guard_ms` is the silence a download is
+     * allowed: its guard is armed again by every block. */
+    char         *save_path;
+    HttpSave     *save;
+    goffset       saved_len;
+    bool          saved;
+    int           guard_ms;
 } HttpJob;
 
 static GList *http_jobs;
@@ -212,6 +254,14 @@ static void http_job_free(HttpJob *job)
     if (job->guard)
         g_source_remove(job->guard);
 
+    /* A download still writing is told it has nobody to answer: its next
+     * completion removes the `.part` and frees it (`HttpSave`). */
+    if (job->save) {
+        job->save->orphan = true;
+        g_cancellable_cancel(job->save->cancel);
+        job->save = NULL;
+    }
+
     /* The line reader first: it holds a ref of its own on soup's stream, and
      * a GFilterInputStream closes its base, which is what drops a feed that
      * is still talking instead of leaving the socket held. */
@@ -219,6 +269,7 @@ static void http_job_free(HttpJob *job)
     g_clear_object(&job->sink);
 
     JS_FreeValue(job->ctx, job->on_line);
+    JS_FreeValue(job->ctx, job->on_progress);
     JS_FreeValue(job->ctx, job->on_done);
     JS_FreeValue(job->ctx, job->on_error);
     JS_FreeValue(job->ctx, job->handle);
@@ -228,6 +279,7 @@ static void http_job_free(HttpJob *job)
         g_object_unref(job->sess);
     g_free(job->who);
     g_free(job->url);
+    g_free(job->save_path);
     http_tls_unref(job->tls);
     g_free(job);
 }
@@ -496,7 +548,7 @@ static bool http_bool_opt(JSContext *ctx, JSValueConst opts, const char *key,
  * it was only in the async list. */
 static const char *const HTTP_OPT_KEYS[] = {
     "Query", "Headers", "Timeout", "FollowRedirects", "ContentType", "Body", "Auth",
-    "Http1",
+    "Http1", "SaveTo", "Progress",
     /* Not an option any more -- the token is the last argument -- but named
      * here so `PostWait(url, { Cancellable: c })` is read as the options it
      * was meant as and refused, instead of being posted as the body. */
@@ -1230,17 +1282,32 @@ static char *http_error_text(const char *who, const char *url, const char *detai
     return g_strdup_printf("%s: cannot reach '%s': %s", who, url, detail);
 }
 
-static JSValue http_error_object(JSContext *ctx, const char *who, const char *url,
-                                 const char *kind, const char *detail, int status)
+/* The record a callback is handed, from a sentence already made. */
+static JSValue http_error_record(JSContext *ctx, const char *msg, const char *kind,
+                                 int status)
 {
     JSValue e = JS_NewObject(ctx);
-    char    *msg = http_error_text(who, url, detail);
 
     JS_SetPropertyStr(ctx, e, "Message", JS_NewString(ctx, msg));
     JS_SetPropertyStr(ctx, e, "Kind", JS_NewString(ctx, kind));
     JS_SetPropertyStr(ctx, e, "Status", JS_NewInt32(ctx, status));
-    g_free(msg);
     return e;
+}
+
+/* The thrown twin of the record, from a sentence already made -- through
+ * `bta_throw_text`, since one with a URL and a path in it outgrows 255 bytes. */
+static JSValue http_throw_text(JSContext *ctx, const char *msg, const char *kind,
+                               int status)
+{
+    JSValue ex;
+
+    bta_throw_text(ctx, "%s", msg);
+    ex = JS_GetException(ctx);
+    if (JS_IsObject(ex)) {
+        JS_SetPropertyStr(ctx, ex, "Kind", JS_NewString(ctx, kind));
+        JS_SetPropertyStr(ctx, ex, "Status", JS_NewInt32(ctx, status));
+    }
+    return JS_Throw(ctx, ex);
 }
 
 /* The blocking twin: a Wait throws where the callbacks would have been handed
@@ -1264,6 +1331,291 @@ static JSValue http_throw_error(JSContext *ctx, const char *who, const char *url
     return JS_Throw(ctx, ex);
 }
 
+/* ------------------------------------------------------- saving to a file */
+
+#define HTTP_SAVE_CHUNK     (64 * 1024)
+#define HTTP_SAVE_REPORT_US (100 * 1000)   /* `Progress` at most ten times a second */
+
+/* A failure on our side of the download -- the disk, not the network -- is
+ * said as one: "cannot reach" about a URL that answered would send the reader
+ * looking at the wrong end. */
+static char *http_save_error_text(const char *who, const char *url,
+                                  const char *path, const char *detail)
+{
+    return g_strdup_printf("%s: cannot save '%s' to '%s': %s", who, url, path, detail);
+}
+
+/*
+ * `SaveTo` and `Progress`, read and refused before anything is sent: a folder
+ * that is not there is a mistake to report now, not after the download.
+ * `*path` is NULL when the answer goes to memory as always.
+ */
+static bool http_save_opts(JSContext *ctx, JSValueConst opts, const char *method,
+                           bool stream, const char *who,
+                           char **path, JSValue *progress)
+{
+    *path     = NULL;
+    *progress = JS_UNDEFINED;
+    if (!JS_IsObject(opts))
+        return true;
+
+    JSValue sv = JS_GetPropertyStr(ctx, opts, "SaveTo");
+    JSValue pv = JS_GetPropertyStr(ctx, opts, "Progress");
+    bool    saving  = !JS_IsUndefined(sv) && !JS_IsNull(sv);
+    bool    tracked = !JS_IsUndefined(pv) && !JS_IsNull(pv);
+    bool    ok      = false;
+
+    if (tracked && !JS_IsFunction(ctx, pv)) {
+        JS_ThrowTypeError(ctx, "%s: Progress is a function (received, total)", who);
+    } else if (!saving && tracked) {
+        JS_ThrowTypeError(ctx, "%s: Progress goes with SaveTo -- it counts what is "
+                          "written to the file", who);
+    } else if (!saving) {
+        ok = true;
+    } else if (!JS_IsString(sv)) {
+        JS_ThrowTypeError(ctx, "%s: SaveTo is a path, as a string", who);
+    } else if (stream) {
+        JS_ThrowTypeError(ctx, "%s: SaveTo writes a whole answer to a file; "
+                          "Stream hands it over line by line", who);
+    } else if (!strcmp(method, "HEAD")) {
+        JS_ThrowTypeError(ctx, "%s: a HEAD answer has no body to save", who);
+    } else {
+        const char *p = JS_ToCString(ctx, sv);
+
+        if (p && !*p) {
+            JS_ThrowTypeError(ctx, "%s: SaveTo is empty", who);
+        } else if (p) {
+            char *dir = g_path_get_dirname(p);
+
+            if (!g_file_test(dir, G_FILE_TEST_IS_DIR))
+                bta_throw_text(ctx, "%s: SaveTo: there is no folder '%s'", who, dir);
+            else if (g_file_test(p, G_FILE_TEST_IS_DIR))
+                bta_throw_text(ctx, "%s: SaveTo: '%s' is a folder", who, p);
+            else {
+                *path     = g_strdup(p);
+                *progress = tracked ? JS_DupValue(ctx, pv) : JS_UNDEFINED;
+                ok        = true;
+            }
+            g_free(dir);
+        }
+        JS_FreeCString(ctx, p);
+    }
+    JS_FreeValue(ctx, sv);
+    JS_FreeValue(ctx, pv);
+    return ok;
+}
+
+/* What `Progress` is told the whole will be: the declared length, or -1.
+ * A compressed answer is decoded on the way in, so its `Content-Length` is
+ * the size of something else and is not passed off as this one's. */
+static goffset http_save_total(SoupMessage *msg)
+{
+    SoupMessageHeaders *h   = soup_message_get_response_headers(msg);
+    const char         *enc = soup_message_headers_get_one(h, "Content-Encoding");
+
+    if (enc && g_ascii_strcasecmp(enc, "identity"))
+        return -1;
+    if (soup_message_headers_get_encoding(h) != SOUP_ENCODING_CONTENT_LENGTH)
+        return -1;
+    return soup_message_headers_get_content_length(h);
+}
+
+static HttpSave *http_save_new(GInputStream *in, const char *path, GCancellable *cancel,
+                               goffset total, HttpSaveTick tick, HttpSaveEnd end,
+                               gpointer data)
+{
+    HttpSave *s = g_new0(HttpSave, 1);
+
+    s->in       = in;                       /* taken */
+    s->dest     = g_file_new_for_path(path);
+    s->cancel   = g_object_ref(cancel);
+    s->total    = total;
+    s->reported = g_get_monotonic_time();
+    s->tick     = tick;
+    s->end      = end;
+    s->data     = data;
+    return s;
+}
+
+static void http_save_free(HttpSave *s)
+{
+    g_clear_object(&s->in);
+    g_clear_object(&s->out);
+    g_clear_object(&s->dest);
+    g_clear_object(&s->part);
+    g_clear_pointer(&s->chunk, g_bytes_unref);
+    g_clear_object(&s->cancel);
+    g_free(s);
+}
+
+/* Whatever was written goes: a download that did not finish leaves nothing
+ * behind under any name, the promise `File.SaveBytes` makes. */
+static void http_save_discard(HttpSave *s)
+{
+    if (s->out) {
+        g_output_stream_close(s->out, NULL, NULL);
+        g_clear_object(&s->out);
+    }
+    if (s->part) {
+        g_file_delete(s->part, NULL, NULL);
+        g_clear_object(&s->part);
+    }
+}
+
+/* The end of the chain on a failure: `local` is the disk's (the reason is
+ * ours to say), anything else the flight's (cancelled, timed out, the network). */
+static void http_save_fail(HttpSave *s, GError *err, bool local)
+{
+    http_save_discard(s);
+    if (!s->orphan)
+        s->end(s, err, local, s->data);
+    http_save_free(s);
+}
+
+static void http_save_read(HttpSave *s);
+
+static void on_http_save_closed(GObject *src, GAsyncResult *res, gpointer data)
+{
+    HttpSave *s   = data;
+    GError   *err = NULL;
+    bool      ok  = g_output_stream_close_finish(G_OUTPUT_STREAM(src), res, &err);
+
+    g_clear_object(&s->out);
+    if (!ok || s->orphan) {
+        http_save_fail(s, err, !g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED));
+        g_clear_error(&err);
+        return;
+    }
+    /* Beside its destination, so this is a rename: the file appears whole
+     * under its name or not at all. */
+    if (!g_file_move(s->part, s->dest, G_FILE_COPY_OVERWRITE, NULL, NULL, NULL, &err)) {
+        http_save_fail(s, err, true);
+        g_clear_error(&err);
+        return;
+    }
+    g_clear_object(&s->part);
+    s->end(s, NULL, false, s->data);
+    http_save_free(s);
+}
+
+static void on_http_save_written(GObject *src, GAsyncResult *res, gpointer data)
+{
+    HttpSave *s   = data;
+    GError   *err = NULL;
+    gsize     n   = 0;
+
+    g_clear_pointer(&s->chunk, g_bytes_unref);
+    if (!g_output_stream_write_all_finish(G_OUTPUT_STREAM(src), res, &n, &err)) {
+        http_save_fail(s, err, !g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED));
+        g_clear_error(&err);
+        return;
+    }
+    if (s->orphan) {
+        http_save_fail(s, NULL, false);
+        return;
+    }
+    s->received += (goffset)n;
+
+    gint64 now    = g_get_monotonic_time();
+    bool   report = now - s->reported >= HTTP_SAVE_REPORT_US;
+
+    if (report)
+        s->reported = now;
+    s->tick(s, report, s->data);
+    /* The tick runs the program's `Progress`, which may have stopped the
+     * download or let go of everything; the cancel shows on the next read. */
+    if (s->orphan) {
+        http_save_fail(s, NULL, false);
+        return;
+    }
+    http_save_read(s);
+}
+
+static void on_http_save_read(GObject *src, GAsyncResult *res, gpointer data)
+{
+    HttpSave *s   = data;
+    GError   *err = NULL;
+    GBytes   *b   = g_input_stream_read_bytes_finish(G_INPUT_STREAM(src), res, &err);
+
+    if (!b) {
+        http_save_fail(s, err, false);
+        g_clear_error(&err);
+        return;
+    }
+    if (s->orphan) {
+        g_bytes_unref(b);
+        http_save_fail(s, NULL, false);
+        return;
+    }
+    if (g_bytes_get_size(b) == 0) {
+        /* The end: one last report, so a bar reaches the end it is drawing,
+         * and then the file is closed and put in place. */
+        g_bytes_unref(b);
+        s->tick(s, true, s->data);
+        if (s->orphan) {
+            http_save_fail(s, NULL, false);
+            return;
+        }
+        g_output_stream_close_async(s->out, G_PRIORITY_DEFAULT, s->cancel,
+                                    on_http_save_closed, s);
+        return;
+    }
+
+    gsize         len;
+    const guint8 *p = g_bytes_get_data(b, &len);
+
+    s->chunk = b;
+    g_output_stream_write_all_async(s->out, p, len, G_PRIORITY_DEFAULT, s->cancel,
+                                    on_http_save_written, s);
+}
+
+static void http_save_read(HttpSave *s)
+{
+    g_input_stream_read_bytes_async(s->in, HTTP_SAVE_CHUNK, G_PRIORITY_DEFAULT,
+                                    s->cancel, on_http_save_read, s);
+}
+
+/*
+ * The `.part` is made beside the destination -- the same folder, so the end is
+ * a rename and not a copy across filesystems -- with a name nobody else has:
+ * `G_FILE_CREATE` refuses one that exists, and a few tries with another
+ * suffix settle it.
+ */
+static void http_save_start(HttpSave *s)
+{
+    char   *dest = g_file_get_path(s->dest);
+    GError *err  = NULL;
+
+    for (int i = 0; i < 8 && !s->out; i++) {
+        char  *name = g_strdup_printf("%s.%06x.part", dest,
+                                      (unsigned)g_random_int_range(0, 0xFFFFFF));
+        GFile *part = g_file_new_for_path(name);
+        GFileOutputStream *out = g_file_create(part, G_FILE_CREATE_NONE, s->cancel, &err);
+
+        g_free(name);
+        if (out) {
+            s->out  = G_OUTPUT_STREAM(out);
+            s->part = part;
+            break;
+        }
+        g_object_unref(part);
+        if (!g_error_matches(err, G_IO_ERROR, G_IO_ERROR_EXISTS))
+            break;
+        g_clear_error(&err);
+    }
+    g_free(dest);
+    if (!s->out) {
+        /* Eight names taken in a row still has to be a failure: a NULL error
+         * is what the end reads as the file in place. */
+        if (!err)
+            err = g_error_new_literal(G_IO_ERROR, G_IO_ERROR_EXISTS, "exists");
+        http_save_fail(s, err, !g_error_matches(err, G_IO_ERROR, G_IO_ERROR_CANCELLED));
+        g_clear_error(&err);
+        return;
+    }
+    http_save_read(s);
+}
+
 /* ------------------------------------------------------- async delivery */
 
 /* The handle rides along as the second argument, in both callbacks: a form
@@ -1271,11 +1623,22 @@ static JSValue http_throw_error(JSContext *ctx, const char *who, const char *url
  * air, and `Stop()` asks rather than undoes -- the cancelled one still
  * answers, a turn later. Without something to compare, a handler cannot tell
  * the answer it is waiting for from the one it gave up on. */
+/* What a saved answer adds to the record: where it went and how much went
+ * there. `Body` stays, empty -- the record has one shape whatever the road. */
+static void http_record_saved(JSContext *ctx, JSValueConst res, const char *path,
+                              goffset len)
+{
+    JS_SetPropertyStr(ctx, res, "Saved", JS_NewString(ctx, path));
+    JS_SetPropertyStr(ctx, res, "Length", JS_NewInt64(ctx, (int64_t)len));
+}
+
 static void http_deliver_done(HttpJob *job, GBytes *bytes)
 {
     JSValue args[2];
 
     args[0] = http_response_object(job->ctx, job->msg, bytes);
+    if (job->saved)
+        http_record_saved(job->ctx, args[0], job->save_path, job->saved_len);
     args[1] = job->handle;
     job->finished = true;
     if (JS_IsObject(job->handle)) {
@@ -1293,11 +1656,23 @@ static void http_deliver_done(HttpJob *job, GBytes *bytes)
     http_job_free(job);
 }
 
+static void http_deliver_failure(HttpJob *job, const char *kind, const char *msg);
+
 static void http_deliver_error(HttpJob *job, const char *kind, const char *detail)
+{
+    char *msg = http_error_text(job->who, job->url, detail);
+
+    http_deliver_failure(job, kind, msg);
+    g_free(msg);
+}
+
+/* The error callback, with the sentence already made: "cannot reach" from
+ * the one above, "cannot save" from a download whose disk said no. */
+static void http_deliver_failure(HttpJob *job, const char *kind, const char *msg)
 {
     JSValue args[2];
 
-    args[0] = http_error_object(job->ctx, job->who, job->url, kind, detail, 0);
+    args[0] = http_error_record(job->ctx, msg, kind, 0);
     args[1] = job->handle;
     job->finished = true;
     if (JS_IsObject(job->handle)) {
@@ -1522,6 +1897,113 @@ static void on_http_stream_headers(GObject *src, GAsyncResult *res, gpointer dat
                                  G_PRIORITY_DEFAULT, job->cancellable,
                                  on_http_stream_spliced, job);
     g_object_unref(in);
+}
+
+static gboolean on_http_guard(gpointer data);
+
+/*
+ * **A download's `Timeout` is silence, not length.** A 4 GB image takes as long
+ * as the line takes, and what a caller needs to hear is that it stopped
+ * arriving -- `curl --speed-time`, a browser's stalled download. So the guard is
+ * armed again by the headers and by every block written; one that fires means
+ * that many milliseconds with nothing.
+ */
+static void http_job_rearm(HttpJob *job)
+{
+    if (job->guard_ms <= 0)
+        return;
+    if (job->guard)
+        g_source_remove(job->guard);
+    job->guard = g_timeout_add((guint)job->guard_ms, on_http_guard, job);
+}
+
+static void on_http_save_tick(HttpSave *s, bool report, gpointer data)
+{
+    HttpJob *job = data;
+
+    http_job_rearm(job);
+    if (!report || !JS_IsFunction(job->ctx, job->on_progress))
+        return;
+
+    JSContext *ctx     = job->ctx;
+    JSValue    argv[3] = { JS_NewInt64(ctx, (int64_t)s->received),
+                           JS_NewInt64(ctx, (int64_t)s->total), job->handle };
+
+    /* The `Stream` bargain: a `Stop` or anything else from inside the callback
+     * finds the job alive, and a free asked for in there is done here. */
+    job->calling = true;
+
+    JSValue r = JS_Call(ctx, job->on_progress, JS_UNDEFINED, 3, (JSValueConst *)argv);
+
+    if (JS_IsException(r))
+        bta_dump_error(ctx);
+    JS_FreeValue(ctx, r);
+    bta_drain_jobs(JS_GetRuntime(ctx));
+    job->calling = false;
+    if (job->dead)
+        http_job_free(job);          /* orphans `s`, which sees it on return */
+}
+
+static void on_http_save_end(HttpSave *s, GError *err, bool local, gpointer data)
+{
+    HttpJob *job = data;
+
+    job->save = NULL;                /* the chain frees itself */
+    if (!err) {
+        job->saved     = true;
+        job->saved_len = s->received;
+        http_deliver_done(job, NULL);
+        return;
+    }
+    if (local) {
+        char *msg = http_save_error_text(job->who, job->url, job->save_path,
+                                         bta_gerror_text(err));
+
+        http_deliver_failure(job, "Error", msg);
+        g_free(msg);
+        return;
+    }
+    http_deliver_send_error(job, err);
+}
+
+/* The headers of a download. A 2xx goes to the file; anything else is an
+ * answer -- a 404's page -- and is read whole into `Body` with no file made,
+ * exactly as `Stream` treats one. */
+static void on_http_save_headers(GObject *src, GAsyncResult *res, gpointer data)
+{
+    HttpJob      *job = data;
+    GError       *err = NULL;
+    GInputStream *in;
+
+    if (!http_job_alive(job)) {
+        in = soup_session_send_finish(SOUP_SESSION(src), res, NULL);
+        g_clear_object(&in);
+        return;
+    }
+
+    in = soup_session_send_finish(job->sess, res, &err);
+    if (!in) {
+        http_deliver_send_error(job, err);
+        g_clear_error(&err);
+        return;
+    }
+    http_job_rearm(job);
+
+    if (!SOUP_STATUS_IS_SUCCESSFUL(soup_message_get_status(job->msg))) {
+        job->sink = g_memory_output_stream_new_resizable();
+        g_output_stream_splice_async(job->sink, in,
+                                     G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
+                                     G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
+                                     G_PRIORITY_DEFAULT, job->cancellable,
+                                     on_http_stream_spliced, job);
+        g_object_unref(in);
+        return;
+    }
+
+    job->save = http_save_new(in, job->save_path, job->cancellable,
+                              http_save_total(job->msg),
+                              on_http_save_tick, on_http_save_end, job);
+    http_save_start(job->save);
 }
 
 static gboolean on_http_guard(gpointer data)
@@ -2433,12 +2915,23 @@ static JSValue http_start(JSContext *ctx, HttpClientData *c, SoupSession *sess,
 
     if (!streaming && !JS_IsFunction(ctx, on_done) && !JS_IsFunction(ctx, on_error))
         return JS_ThrowTypeError(ctx, "%s: a callback is required: http is async", who);
-    if (!http_build(ctx, c, method, url, body, opts, who, false, &msg, &full))
+
+    char   *save_path = NULL;
+    JSValue progress  = JS_UNDEFINED;
+
+    if (!http_save_opts(ctx, opts, method, streaming, who, &save_path, &progress))
         return JS_EXCEPTION;
+    if (!http_build(ctx, c, method, url, body, opts, who, false, &msg, &full)) {
+        g_free(save_path);
+        JS_FreeValue(ctx, progress);
+        return JS_EXCEPTION;
+    }
 
     HttpJob *job = g_new0(HttpJob, 1);
 
     job->ctx = ctx;
+    job->save_path = save_path;
+    job->on_progress = progress;          /* taken */
     job->on_line = JS_DupValue(ctx, on_line);
     job->on_done = JS_DupValue(ctx, on_done);
     job->on_error = JS_DupValue(ctx, on_error);
@@ -2480,16 +2973,25 @@ static JSValue http_start(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         http_job_free(job);
         return JS_ThrowRangeError(ctx, "%s: Timeout %d is negative", who, timeout);
     }
-    if (timeout > 0)
+    /* A download's Timeout is the silence it is allowed (`http_job_rearm`);
+     * everything else's is its whole length. */
+    if (job->save_path) {
+        job->guard_ms = timeout;
+        http_job_rearm(job);
+    } else if (timeout > 0) {
         job->guard = g_timeout_add((guint)timeout, on_http_guard, job);
+    }
 
-    /* Only a streamed request changes road: everything else keeps the one
-     * call it has always made, so redirects, auth, cookies, the logger and
-     * the multipart bodies carry no regression risk -- and the stream gets
-     * all of them for free, since `http_build` above is the same. */
+    /* Only a streamed request and a download change road: everything else
+     * keeps the one call it has always made, so redirects, auth, cookies, the
+     * logger and the multipart bodies carry no regression risk -- and both
+     * get all of them for free, since `http_build` above is the same. */
     if (streaming)
         soup_session_send_async(job->sess, job->msg, G_PRIORITY_DEFAULT,
                                 job->cancellable, on_http_stream_headers, job);
+    else if (job->save_path)
+        soup_session_send_async(job->sess, job->msg, G_PRIORITY_DEFAULT,
+                                job->cancellable, on_http_save_headers, job);
     else
         soup_session_send_and_read_async(job->sess, job->msg, G_PRIORITY_DEFAULT,
                                          job->cancellable, on_http_done, job);
@@ -2699,6 +3201,21 @@ typedef struct {
     GBytes      *bytes;
     GError      *err;
     SoupMessage *msg;
+    /* `SaveTo`: the body as a stream once the headers are in, the chain
+     * writing it, and how it ended. */
+    GInputStream *in;
+    bool          saving;
+    bool          save_done;
+    bool          save_local;
+    goffset       saved_len;
+    JSContext    *ctx;
+    JSValue       progress;
+    /* The guard, kept here so a download can arm it again on every block:
+     * its Timeout is the silence it is allowed, not its length. */
+    GMainContext *priv;
+    GSource      *guard;
+    int           timeout;
+    bool          late;
 } HttpWaitState;
 
 static void on_http_wait_done(GObject *src, GAsyncResult *res, gpointer data)
@@ -2710,12 +3227,75 @@ static void on_http_wait_done(GObject *src, GAsyncResult *res, gpointer data)
     w->done = true;
 }
 
+static void on_http_wait_sent(GObject *src, GAsyncResult *res, gpointer data)
+{
+    HttpWaitState *w = data;
+
+    w->in   = soup_session_send_finish(SOUP_SESSION(src), res, &w->err);
+    w->done = true;
+}
+
+static void on_http_wait_spliced(GObject *src, GAsyncResult *res, gpointer data)
+{
+    HttpWaitState *w = data;
+
+    if (g_output_stream_splice_finish(G_OUTPUT_STREAM(src), res, &w->err) >= 0)
+        w->bytes = g_memory_output_stream_steal_as_bytes(G_MEMORY_OUTPUT_STREAM(src));
+    w->save_done = true;
+}
+
 static gboolean on_http_wait_late(gpointer data)
 {
     bool *late = data;
 
     *late = true;
     return G_SOURCE_REMOVE;
+}
+
+static void http_wait_arm(HttpWaitState *w)
+{
+    if (w->guard) {
+        g_source_destroy(w->guard);
+        g_source_unref(w->guard);
+        w->guard = NULL;
+    }
+    if (w->timeout <= 0)
+        return;
+    w->guard = g_timeout_source_new((guint)w->timeout);
+    g_source_set_callback(w->guard, on_http_wait_late, &w->late, NULL);
+    g_source_attach(w->guard, w->priv);
+}
+
+/* Every block of a blocking download: the guard again, and `Progress` --
+ * called on this thread, inside the wait, which in a task is where
+ * `this.Report` hands it to the window. */
+static void on_http_wait_save_tick(HttpSave *s, bool report, gpointer data)
+{
+    HttpWaitState *w = data;
+
+    if (w->saving)
+        http_wait_arm(w);
+    if (!report || !JS_IsFunction(w->ctx, w->progress))
+        return;
+
+    JSValue argv[2] = { JS_NewInt64(w->ctx, (int64_t)s->received),
+                        JS_NewInt64(w->ctx, (int64_t)s->total) };
+    JSValue r = JS_Call(w->ctx, w->progress, JS_UNDEFINED, 2, (JSValueConst *)argv);
+
+    if (JS_IsException(r))
+        bta_dump_error(w->ctx);
+    JS_FreeValue(w->ctx, r);
+}
+
+static void on_http_wait_save_end(HttpSave *s, GError *err, bool local, gpointer data)
+{
+    HttpWaitState *w = data;
+
+    w->save_done  = true;
+    w->saved_len  = s->received;
+    w->save_local = local;
+    if (err)
+        w->err = g_error_copy(err);
 }
 
 /* Blocking sibling: the same message, sent with nobody to call back. */
@@ -2726,12 +3306,20 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
 {
     SoupMessage *msg;
     char        *full;
+    char        *save_path = NULL;
+    JSValue      progress  = JS_UNDEFINED;
+
+    if (!http_save_opts(ctx, opts, method, false, who, &save_path, &progress))
+        return JS_EXCEPTION;
 
     /* Fresh connection: a Wait borrows no pooled one, since one made under an
      * earlier call's private context is not dispatchable from this one's, and
      * a reused TLS connection wedges past the guard instead of answering. */
-    if (!http_build(ctx, c, method, url, body, opts, who, true, &msg, &full))
+    if (!http_build(ctx, c, method, url, body, opts, who, true, &msg, &full)) {
+        g_free(save_path);
+        JS_FreeValue(ctx, progress);
         return JS_EXCEPTION;
+    }
     g_free(full);
 
     /* The same trust the async road gets, held here for the length of the
@@ -2755,17 +3343,23 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
                       &timeout)) {
         g_object_unref(msg);
         http_tls_unref(tls);
+        g_free(save_path);
+        JS_FreeValue(ctx, progress);
         return JS_EXCEPTION;
     }
     if (timeout < 0) {
         g_object_unref(msg);
         http_tls_unref(tls);
+        g_free(save_path);
+        JS_FreeValue(ctx, progress);
         return JS_ThrowRangeError(ctx, "%s: Timeout %d is negative", who, timeout);
     }
 
     if (!bta_cancellable_not_option(ctx, opts, who)) {
         g_object_unref(msg);
         http_tls_unref(tls);
+        g_free(save_path);
+        JS_FreeValue(ctx, progress);
         return JS_EXCEPTION;
     }
 
@@ -2782,8 +3376,13 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     GCancellable *hard        = bta_task_hard_cancellable(ctx);
     gulong        opt_link    = bta_cancellable_link(opt_cancel, canc);
     gulong        hard_link   = bta_cancellable_link(hard, canc);
-    HttpWaitState w = { false, NULL, NULL, NULL };
+    HttpWaitState w = { 0 };
     bool jar_borrowed = false;
+
+    w.ctx      = ctx;
+    w.progress = progress;
+    w.priv     = priv;
+    w.timeout  = timeout;
 
     /* The jar visits for the flight: one feature instance on two sessions at
      * once corrupts the heap on the way out, so it lives on the async
@@ -2799,30 +3398,66 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
      * silent server, never).  Not forced away here: an application that needs
      * prompt cancelling asks `Http1` -- docs/agents/network.md. */
     w.msg = msg;
-    soup_session_send_and_read_async(sess, msg, G_PRIORITY_DEFAULT, canc,
-                                     on_http_wait_done, &w);
+    if (save_path)
+        soup_session_send_async(sess, msg, G_PRIORITY_DEFAULT, canc,
+                                on_http_wait_sent, &w);
+    else
+        soup_session_send_and_read_async(sess, msg, G_PRIORITY_DEFAULT, canc,
+                                         on_http_wait_done, &w);
 
-    bool late = false;
-    GSource *guard = NULL;
+    http_wait_arm(&w);
 
-    if (timeout > 0) {
-        guard = g_timeout_source_new((guint)timeout);
-        g_source_set_callback(guard, on_http_wait_late, &late, NULL);
-        g_source_attach(guard, priv);
-    }
-
-    while (!w.done && !late)
+    while (!w.done && !w.late)
         g_main_context_iteration(priv, TRUE);
 
-    if (late) {
+    if (w.late) {
         g_cancellable_cancel(canc);
         while (!w.done)
             g_main_context_iteration(priv, TRUE);
     }
 
-    if (guard) {
-        g_source_destroy(guard);
-        g_source_unref(guard);
+    /*
+     * **A download's body, once the headers are in.** A 2xx goes to the file
+     * through the chain the callback verbs use; anything else is an answer --
+     * a 404's page -- and is read whole into `Body` with no file made, the
+     * way `Stream` treats one. The guard is armed again here and by every
+     * block, so a `Timeout` that ends this means that long with nothing.
+     */
+    if (save_path && w.in && !w.err) {
+        GInputStream *in = w.in;
+
+        w.in = NULL;
+        http_wait_arm(&w);
+        if (SOUP_STATUS_IS_SUCCESSFUL(soup_message_get_status(msg))) {
+            w.saving = true;
+            http_save_start(http_save_new(in, save_path, canc, http_save_total(msg),
+                                          on_http_wait_save_tick,
+                                          on_http_wait_save_end, &w));
+        } else {
+            GOutputStream *sink = g_memory_output_stream_new_resizable();
+
+            g_output_stream_splice_async(sink, in,
+                                         G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
+                                         G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
+                                         G_PRIORITY_DEFAULT, canc,
+                                         on_http_wait_spliced, &w);
+            g_object_unref(sink);
+            g_object_unref(in);
+        }
+        while (!w.save_done) {
+            if (w.late && !g_cancellable_is_cancelled(canc))
+                g_cancellable_cancel(canc);
+            g_main_context_iteration(priv, TRUE);
+        }
+        w.saving = false;
+    }
+    g_clear_object(&w.in);
+
+    bool late = w.late;
+
+    if (w.guard) {
+        g_source_destroy(w.guard);
+        g_source_unref(w.guard);
     }
     g_main_context_pop_thread_default(priv);
     g_main_context_unref(priv);
@@ -2833,33 +3468,46 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     g_object_unref(canc);
     if (jar_borrowed && c->jar)
         soup_session_remove_feature(sess, SOUP_SESSION_FEATURE(c->jar));
+    JS_FreeValue(ctx, progress);
 
     if (w.err) {
         const char *kind = late ? "Timeout" :
             (g_error_matches(w.err, G_IO_ERROR, G_IO_ERROR_CANCELLED) ? "Cancelled" :
-             http_kind_for(w.err));
-        char *detail = g_strdup(bta_gerror_text(w.err));
+             w.save_local ? "Error" : http_kind_for(w.err));
+        JSValue     ex;
 
+        if (w.save_local) {
+            char *msgtext = http_save_error_text(who, url, save_path,
+                                                 bta_gerror_text(w.err));
+
+            ex = http_throw_text(ctx, msgtext, kind, 0);
+            g_free(msgtext);
+        } else {
+            char *detail = g_strdup(bta_gerror_text(w.err));
+
+            ex = http_throw_error(ctx, who, url, kind, detail, 0);
+            g_free(detail);
+        }
         g_clear_error(&w.err);
         if (w.bytes)
             g_bytes_unref(w.bytes);
         g_object_unref(msg);
         http_tls_unref(tls);
-
-        JSValue ex = http_throw_error(ctx, who, url, kind, detail, 0);
-
-        g_free(detail);
+        g_free(save_path);
         return ex;
     }
 
     JSValue res = http_response_object(ctx, msg, w.bytes);
 
+    if (save_path && SOUP_STATUS_IS_SUCCESSFUL(soup_message_get_status(msg)))
+        http_record_saved(ctx, res, save_path, w.saved_len);
     if (late)
         JS_SetPropertyStr(ctx, res, "TimedOut", JS_TRUE);
     if (w.bytes)
         g_bytes_unref(w.bytes);
     g_object_unref(msg);
     http_tls_unref(tls);
+    g_free(save_path);
     return res;
 }
 
@@ -3133,7 +3781,16 @@ static const JSCFunctionListEntry http_client_props[] = {
      */
     JS_CFUNC_DEF("Request",     5, http_client_request),
     /* Get(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
-     *   the ordinary read
+     *   the ordinary read. **`{ SaveTo: path }` writes the answer to that file as it
+     *   arrives**, one block in memory whatever its size: the record then has
+     *   `Saved` (the path) and `Length` (the bytes written) and an empty
+     *   `Body`, and nothing is left under any name if it does not finish. A
+     *   2xx goes to the file; anything else is answered into `Body` with no
+     *   file made. `Progress(received, total, handle)` beside it is told how
+     *   far it got, at most ten times a second and once at the end (`total`
+     *   `-1` with no declared length), and **`Timeout` is then the silence
+     *   allowed, not the length** -- a download that keeps arriving is never
+     *   cut. `Request` takes the same, with any verb but `HEAD`
      */
     JS_CFUNC_DEF("Get",         4, http_client_get),
     /* Post(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
@@ -3176,7 +3833,10 @@ static const JSCFunctionListEntry http_client_props[] = {
     JS_CFUNC_DEF("RequestWait", 5, http_client_requestwait),
     /* GetWait(url, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
      *   the blocking `Get`. **With no `Timeout` it gives up after 30 s**, and
-     *   `{ Timeout: 0 }` waits forever
+     *   `{ Timeout: 0 }` waits forever. `SaveTo` and `Progress` as on `Get`: the
+     *   download goes to the file, `Progress` is called on this thread --
+     *   in a task, `this.Report` hands it to the window -- and the 30 s are
+     *   then 30 s with nothing arriving
      */
     JS_CFUNC_DEF("GetWait",     3, http_client_getwait),
     /* PostWait(url, body, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
@@ -3614,7 +4274,16 @@ static const JSCFunctionListEntry http_props[] = {
      */
     JS_CFUNC_DEF("Request",     5, js_http_request),
     /* Get(url, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
-     *   the ordinary read
+     *   the ordinary read. **`{ SaveTo: path }` writes the answer to that file as it
+     *   arrives**, one block in memory whatever its size: the record then has
+     *   `Saved` (the path) and `Length` (the bytes written) and an empty
+     *   `Body`, and nothing is left under any name if it does not finish. A
+     *   2xx goes to the file; anything else is answered into `Body` with no
+     *   file made. `Progress(received, total, handle)` beside it is told how
+     *   far it got, at most ten times a second and once at the end (`total`
+     *   `-1` with no declared length), and **`Timeout` is then the silence
+     *   allowed, not the length** -- a download that keeps arriving is never
+     *   cut. `Request` takes the same, with any verb but `HEAD`
      */
     JS_CFUNC_DEF("Get",         4, js_http_get),
     /* Post(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
@@ -3655,7 +4324,8 @@ static const JSCFunctionListEntry http_props[] = {
      */
     JS_CFUNC_DEF("RequestWait", 5, js_http_requestwait),
     /* GetWait(url, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
-     *   the blocking `Get`
+     *   the blocking `Get`. `SaveTo` and `Progress` as on `Get`; in a task,
+     *   `Progress` runs on the worker and `this.Report` hands it on
      */
     JS_CFUNC_DEF("GetWait",     3, js_http_getwait),
     /* PostWait(url, body, [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
