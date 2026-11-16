@@ -4,6 +4,8 @@ What changed in each release, in the terms an application author and whoever
 runs the runtime care about. The full history is `git log`; this file is the
 one-page answer to *what is new since the release I have*.
 
+## Unreleased
+
 ## 0.4.0-rc1 — 2026-11-16
 
 [Compare with 0.3.0](https://github.com/getbintana/bintana/compare/v0.3.0...v0.4.0-rc1)

@@ -477,9 +477,10 @@ old version into `api.json` and `tests/api.sh` then fails; the order is
 - **`flatpak/io.github.getbintana.Hello.yml`** and **`...Ide.yml`** --
   `base-version` follows that branch.
 - **`docs/installing.md`** -- `BaseApp//x.y` and the downloadable tarball's name.
-- **`tools/windows-portable.sh`**, **`tools/windows-build-tree.sh`** and
-  **`windows/ci/README.md`** -- the version in their examples, so a reader does
-  not copy the previous release.
+- **`tools/windows-portable.sh`** and **`tools/windows-build-tree.sh`** -- the
+  version in their examples, so a reader does not copy the previous release.
+  (`windows/ci/README.md` names `myapp-1.2.3rc1` and not this release's tag: it
+  is about an application's version, which is the project's own.)
 
 **`tests/pack.sh` is the guard for all of the Flatpak half**: it reads the
 BaseApp branch, every other `flatpak/*.yml`'s `base-version` and
@@ -488,7 +489,10 @@ BaseApp branch, every other `flatpak/*.yml`'s `base-version` and
 (`tools/apijson.sh`) and `llms-full.txt` (`tools/llms.sh`); neither is edited
 by hand, and `tests/api.sh` fails while either is stale.
 
-Then:
+**`tools/release.sh <version>` does all of it**, and the list above is its
+contract: it refuses a tree that is not clean, a branch that is not `main`, a
+tag that exists, an empty `## Unreleased` (the notes are the one part a person
+writes) and a file whose line it cannot find. It then runs, in this order:
 
 ```sh
 cmake --build build -j
@@ -496,11 +500,15 @@ cmake --build build -j
 ./tools/llms.sh
 ./tests/api.sh
 ./tests/pack.sh
+./tests/check.sh
 ./tests/install.sh
 ./tests/run.sh
 ```
 
-Commit as `Bintana x.y.z` and tag `vx.y.z` (the existing tags are lightweight).
+and commits `Bintana x.y.z` and tags `vx.y.z`. `--dry-run` says what it would
+change and writes nothing; `--quick` skips the last three. **It stops before
+`git push`**, which is the owner's, and it is a Linux-side command: the rebuild
+replaces the binary that is running it.
 **The push and the tag's push are the owner's**, and a published tag is never
 moved. A tag with a letter in it (`v0.4.0-rc1`) is a **pre-release**: the
 package and windows jobs pass `--prerelease`, so the repository's *latest* --

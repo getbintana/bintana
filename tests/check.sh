@@ -8,6 +8,10 @@
 # every `project.btp`, every `.form` and every source, and exits 1 on an error.
 # Warnings are printed and do not fail the run, exactly as `bintana check` does.
 #
+# **`tools/` is in the list.** A desk tool is a project like any other, and
+# `bintana check` is what catches a name that is not there -- before the tool is
+# run at a moment that matters, which for `tools/release` is a release.
+#
 # **`tests/ide` is skipped when its `.form` files are not real symlinks.** The
 # project's forms are symlinks to `ide/forms/`; a Windows checkout without
 # Developer Mode (or without `core.symlinks=true` and the privilege to make
@@ -29,7 +33,7 @@ checked=0
 skipped=0
 failed=0
 
-for project in examples/* tests/*; do
+for project in examples/* tests/* tools/*; do
     [[ -f "$project/project.btp" ]] || continue
 
     if [[ $project == tests/ide && ! -L tests/ide/MainForm.form ]]; then
