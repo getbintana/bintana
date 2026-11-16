@@ -4173,10 +4173,15 @@ static JSValue table_set_icon(JSContext *ctx, JSValueConst this_val,
         g_object_unref(row);
         return JS_ThrowRangeError(ctx, "SetIcon: %d is not a column", c);
     }
+    /* Converted before anything is touched: a value whose conversion throws
+     * leaves the row as it was and the exception reported, not pending. */
+    const char *s = JS_ToCString(ctx, argv[2]);
+    if (!s) {
+        g_object_unref(row);
+        return JS_EXCEPTION;
+    }
     if (!st->tree)
         JS_ToInt32(ctx, &at, argv[0]);
-
-    const char *s = JS_ToCString(ctx, argv[2]);
 
     row_pad(&row->icons, (guint)c);
     g_free(row->icons->pdata[c]);
@@ -4320,10 +4325,13 @@ static JSValue table_set_style(JSContext *ctx, JSValueConst this_val,
         g_object_unref(row);
         return JS_ThrowTypeError(ctx, "SetStyle: style is a theme class name");
     }
+    const char *s = JS_ToCString(ctx, argv[2]);
+    if (!s) {
+        g_object_unref(row);
+        return JS_EXCEPTION;
+    }
     if (!st->tree)
         JS_ToInt32(ctx, &at, argv[0]);
-
-    const char *s = JS_ToCString(ctx, argv[2]);
 
     row_pad(&row->styles, (guint)c);
     g_free(row->styles->pdata[c]);
@@ -7242,10 +7250,15 @@ static JSValue table_set_cell(JSContext *ctx, JSValueConst this_val,
         g_object_unref(row);
         return JS_ThrowRangeError(ctx, "SetCell: %d is not a column", c);
     }
+    /* Converted before anything is touched: a value whose conversion throws
+     * leaves the row as it was and the exception reported, not pending. */
+    const char *s = JS_ToCString(ctx, argv[2]);
+    if (!s) {
+        g_object_unref(row);
+        return JS_EXCEPTION;
+    }
     if (!table_state(w)->tree)
         JS_ToInt32(ctx, &at, argv[0]);
-
-    const char *s = JS_ToCString(ctx, argv[2]);
 
     /* A row shorter than the column being written grows to reach it, filled
      * with empties: the alternative is refusing a cell the table plainly has. */

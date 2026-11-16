@@ -1347,7 +1347,7 @@ static JSValue video_save(JSContext *ctx, JSValueConst this_val,
     if (argc < 1)
         return JS_ThrowTypeError(ctx, "Save expects (path)");
 
-    const char *path = JS_ToCString(ctx, argv[0]);
+    const char *path = bta_file_path(ctx, argv[0], "Video.Save");
 
     if (!path)
         return JS_EXCEPTION;
@@ -1398,7 +1398,7 @@ static JSValue video_save(JSContext *ctx, JSValueConst this_val,
         }
     }
     if (!gdk_texture_save_to_png(tex, path))
-        r = JS_ThrowPlainError(ctx, "Save: cannot write '%s'", path);
+        r = bta_throw_text(ctx, "Save: cannot write '%s'", path);
 
 out:
     if (tex)

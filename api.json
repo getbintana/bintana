@@ -6662,7 +6662,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "the path. What `GdkTexture` reads: PNG, JPEG, WebP, TIFF, BMP. **SVG is not among them** — a scalable icon is the pixbuf loaders' business, which is why an [`Image`](docs/reference/widgets/Image.md) draws one and this does not. Setting it clears `Source`",
+          "Doc": "the path. What `GdkTexture` reads: PNG, JPEG, WebP, TIFF, BMP. **SVG is not among them** — a scalable icon is the pixbuf loaders' business, which is why an [`Image`](docs/reference/widgets/Image.md) draws one and this does not. Setting it clears `Source`; `\"\"` or `null` takes the picture off",
           "Native": true
         },
         {

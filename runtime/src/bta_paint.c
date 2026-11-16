@@ -1080,8 +1080,10 @@ static cairo_surface_t *surface_of_pixbuf(JSContext *ctx, GdkPixbuf *pb,
     const guchar  *src     = gdk_pixbuf_get_pixels(pb);
 
     for (int y = 0; y < h; y++) {
-        guint32       *row = (guint32 *)(dst + y * dstride);
-        const guchar  *p   = src + y * sstride;
+        /* `size_t` before the multiply: a 32767-pixel-wide picture passes
+         * INT_MAX at row 16384, and an `int` product would land before `dst`. */
+        guint32       *row = (guint32 *)(dst + (size_t)y * (size_t)dstride);
+        const guchar  *p   = src + (size_t)y * (size_t)sstride;
 
         for (int x = 0; x < w; x++, p += 4) {
             guint a = p[3];
@@ -1296,7 +1298,9 @@ static JSValue painter_image(JSContext *ctx, JSValueConst this_val,
         if (!img)
             return JS_EXCEPTION;
     } else {
-        path = JS_ToCString(ctx, argv[0]);
+        /* Only a string is a file: `Image(undefined)` or a number is a
+         * mistake, not a file called "undefined" in the current folder. */
+        path = bta_file_path(ctx, argv[0], "Painter.Image");
         if (!path)
             return JS_EXCEPTION;
 
@@ -2505,8 +2509,8 @@ static bool png_write(JSContext *ctx, const char *who, cairo_surface_t *surface,
     cairo_status_t status = cairo_surface_write_to_png(surface, path);
 
     if (status != CAIRO_STATUS_SUCCESS) {
-        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
-                           who, path, cairo_status_to_string(status));
+        bta_throw_text(ctx, "%s: cannot write '%s': %s",
+                       who, path, cairo_status_to_string(status));
         return false;
     }
     return true;
@@ -2570,8 +2574,8 @@ static bool pdf_write(JSContext *ctx, const char *who, const char *path,
     cairo_status_t   status  = cairo_surface_status(surface);
 
     if (status != CAIRO_STATUS_SUCCESS) {
-        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
-                           who, path, cairo_status_to_string(status));
+        bta_throw_text(ctx, "%s: cannot write '%s': %s",
+                       who, path, cairo_status_to_string(status));
         cairo_surface_destroy(surface);
         return false;
     }
@@ -2617,8 +2621,8 @@ static bool pdf_write(JSContext *ctx, const char *who, const char *path,
         return false;
     }
     if (status != CAIRO_STATUS_SUCCESS) {
-        JS_ThrowPlainError(ctx, "%s: cannot write '%s': %s",
-                           who, path, cairo_status_to_string(status));
+        bta_throw_text(ctx, "%s: cannot write '%s': %s",
+                       who, path, cairo_status_to_string(status));
         return false;
     }
     return true;

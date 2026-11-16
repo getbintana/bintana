@@ -3952,7 +3952,7 @@ static void on_ws_error(SoupWebsocketConnection *conn, GError *err, gpointer dat
         return;
 
     JSValue e = websocket_error_object(w->ctx, websocket_kind_for(err),
-                                       err ? err->message : "the WebSocket failed");
+                                       err ? bta_gerror_text(err) : "the WebSocket failed");
 
     websocket_emit(w, w->on_error, 1, &e);
     JS_FreeValue(w->ctx, e);
@@ -4014,7 +4014,7 @@ static void on_ws_connect(GObject *src, GAsyncResult *res, gpointer data)
 
     if (!conn) {
         JSValue e = websocket_error_object(w->ctx, websocket_kind_for(err),
-                                           err ? err->message : "the WebSocket did not connect");
+                                           err ? bta_gerror_text(err) : "the WebSocket did not connect");
 
         websocket_emit(w, w->on_error, 1, &e);
         JS_FreeValue(w->ctx, e);

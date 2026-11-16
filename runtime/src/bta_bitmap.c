@@ -55,9 +55,9 @@ static GdkPixbuf *pixbuf_from_surface(cairo_surface_t *surface)
     int           sstride = cairo_image_surface_get_stride(surface) / 4;
 
     for (int y = 0; y < h; y++) {
-        guchar *row = dst + y * dstride;
+        guchar *row = dst + (size_t)y * (size_t)dstride;
         for (int x = 0; x < w; x++) {
-            guint32 v = src[y * sstride + x];
+            guint32 v = src[(size_t)y * (size_t)sstride + x];
             guint   a = v >> 24;
             guint   r = (v >> 16) & 0xFF;
             guint   g = (v >> 8) & 0xFF;

@@ -5101,6 +5101,15 @@ class Form1 extends Form {
         eq("clearing it empties the frame", pic.File, "");
         eq("and there is nothing left to measure", pic.SourceWidth, 0);
 
+        /* `null` takes it off the same way; a number is a mistake, not a file
+         * called "42" in the current folder. */
+        pic.File = File.Join(dir, "wide.png");
+        pic.File = null;
+        eq("null clears it too", pic.File, "");
+        eq("and the frame is empty", pic.SourceWidth, 0);
+        eq("a number is refused, not looked for",
+           refusal(() => { pic.File = 42; }), "Picture.File expects a path, as a string");
+
         /*
          * --- the same picture, out of memory ---------------------------------
          *
@@ -5454,6 +5463,10 @@ class Form1 extends Form {
         throws("Seek with nothing loaded", () => { v.Seek(1); });
         throws("Save with nothing decoded",
                () => { v.Save(File.Join(Environment.TempDirectory, "bta-no-frame.png")); });
+        let saveSaid = null;
+        try { v.Save(undefined); } catch (e) { saveSaid = e.message; }
+        eq("and a path is text, not a file called undefined",
+           saveSaid, "Video.Save expects a path, as a string");
 
         v.Fit = "Cover";
         eq("Fit round-trips", v.Fit, "Cover");
@@ -10576,6 +10589,13 @@ function Main() {
               errors.length === 1 && errors[0].includes("there-is-no-such-file"),
               JSON.stringify(errors));
 
+        /* Only a string is a file: `Image(undefined)` is a mistake, not a
+         * file called "undefined" in the current folder. */
+        this.plotWhat = "image undefined";
+        area.Save(File.Join(SCRATCH, "image-undefined.png"), 40, 40);
+        eq("Image(undefined) is refused as a path",
+           this.plotImageUndef, "Painter.Image expects a path, as a string");
+
         /*
          * **`SavePdf` is the same `Draw`, once per page, into one file.** The
          * page size is in points and the handler is told those numbers.
@@ -11019,6 +11039,11 @@ function Main() {
         }
         if (this.plotWhat === "bad image") {
             p.Image(File.Join(IMAGES, "there-is-no-such-file.png"), 0, 0);
+            return;
+        }
+        if (this.plotWhat === "image undefined") {
+            try { p.Image(undefined, 0, 0); this.plotImageUndef = "NOT REFUSED"; }
+            catch (e) { this.plotImageUndef = e.message; }
             return;
         }
         if (this.plotWhat === "metrics") {
@@ -22162,6 +22187,20 @@ class Form1 extends Form {
         throws("an address is text or null", () => t.SetUri(0, 1, 5));
         throws("a row that is not there is refused", () => t.SetUri(9, 1, ""));
 
+        /* A value whose conversion throws is reported, and the cell is the one
+         * it was: SetCell, SetIcon and SetStyle convert before they touch. */
+        const noText = { toString() { throw new Error("no text here"); } };
+        t.SetIcon(0, 0, "folder");
+        t.SetStyle(0, 0, "heading");
+        check("SetCell reports a conversion that throws",
+              (refusal(() => t.SetCell(0, 0, noText)) || "").includes("no text here"));
+        eq("and leaves the cell as it was", t.Cell(0, 0), "uno");
+        check("SetIcon too",
+              (refusal(() => t.SetIcon(0, 0, noText)) || "").includes("no text here"));
+        check("SetStyle refuses what is not a class name",
+              refusal(() => t.SetStyle(0, 0, noText)) !== null);
+        eq("and nothing lingers for the next call", t.Cell(0, 1), "https://example.org/");
+
         this.cellLinks = [];
         t.On("CellLink", (row, column, uri) => {
             this.cellLinks.push([row, column, uri]);
@@ -26239,6 +26278,12 @@ class Form1 extends Form {
         throws("entering a directory that is not there is an error",
                () => { Environment.CurrentDirectory = File.Join(SCRATCH, "no-such-dir"); });
         eq("and it stayed where it was", Environment.CurrentDirectory, SCRATCH);
+        /* A number is a mistake, not a folder called "42" beside this one. */
+        Directory.Make(File.Join(SCRATCH, "42"));
+        eq("a number is refused, not entered",
+           refusal(() => { Environment.CurrentDirectory = 42; }),
+           "Environment.CurrentDirectory expects a path, as a string");
+        eq("and it still stayed", Environment.CurrentDirectory, SCRATCH);
 
         Environment.CurrentDirectory = was;
 

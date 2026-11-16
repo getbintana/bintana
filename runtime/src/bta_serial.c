@@ -286,7 +286,7 @@ static void serial_read(SerialData *s)
     }
     if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)
         return;
-    bta_serial_fail(s, "Error", g_strerror(errno));
+    bta_serial_fail(s, "Error", bta_errno_text(errno));
 }
 
 /* --------------------------------------------------------------- writing */
@@ -315,7 +315,7 @@ static bool serial_write_some(SerialData *s)
         if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK ||
                       errno == EINTR))
             return true;
-        bta_serial_fail(s, "Error", g_strerror(errno));
+        bta_serial_fail(s, "Error", bta_errno_text(errno));
         return true;
     }
 
@@ -507,7 +507,7 @@ static bool serial_configure(SerialData *s, int fd, char **why)
 
     if (tcgetattr(fd, &tio) != 0) {
         *why = g_strdup_printf("%s is not a serial port: %s",
-                               s->port, g_strerror(errno));
+                               s->port, bta_errno_text(errno));
         return false;
     }
 
@@ -518,7 +518,7 @@ static bool serial_configure(SerialData *s, int fd, char **why)
     }
     if (cfsetispeed(&tio, code) != 0 || cfsetospeed(&tio, code) != 0) {
         *why = g_strdup_printf("%s: cannot set Speed %d: %s",
-                               s->port, s->speed, g_strerror(errno));
+                               s->port, s->speed, bta_errno_text(errno));
         return false;
     }
 
@@ -599,7 +599,7 @@ static bool serial_configure(SerialData *s, int fd, char **why)
 
     if (tcsetattr(fd, TCSANOW, &tio) != 0) {
         *why = g_strdup_printf("%s: cannot configure the port: %s",
-                               s->port, g_strerror(errno));
+                               s->port, bta_errno_text(errno));
         return false;
     }
     return true;
@@ -658,7 +658,7 @@ static JSValue serial_open(JSContext *ctx, JSValueConst this_val,
     int fd = open(s->port, flags);
     if (fd < 0)
         return JS_ThrowPlainError(ctx, "SerialPort.Open: cannot open %s: %s",
-                                  s->port, g_strerror(errno));
+                                  s->port, bta_errno_text(errno));
 
     char *why = NULL;
     if (!serial_configure(s, fd, &why)) {
@@ -666,7 +666,7 @@ static JSValue serial_open(JSContext *ctx, JSValueConst this_val,
 
         close(fd);
         JSValue e = JS_ThrowPlainError(ctx, "SerialPort.Open: %s",
-                                       why ? why : g_strerror(saved));
+                                       why ? why : bta_errno_text(saved));
         g_free(why);
         return e;
     }

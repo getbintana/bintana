@@ -1027,7 +1027,7 @@ static int form_build(JSContext *ctx, JSValueConst form_obj,
     size_t len;
     char  *src = bta_read_file(path, &len);
     if (!src) {
-        JS_ThrowPlainError(ctx, "cannot read %s", path);
+        bta_throw_text(ctx, "cannot read %s", path);
         g_free(path);
         return -1;
     }

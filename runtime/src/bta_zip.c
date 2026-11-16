@@ -248,10 +248,15 @@ static char *zip_parse(BtaZip *z)
         x->dir  = nlen > 0 && c[46 + nlen - 1] == '/';
         x->nul  = memchr(c + 46, '\0', nlen) != NULL;
 
-        if (g_hash_table_contains(z->byname, x->name))
-            return g_strdup_printf("the name '%s' is listed twice, and which one an "
-                                   "application reads is not something to leave to "
-                                   "chance", x->name);
+        /* `z->n` does not count this entry yet, so `zip_release` would not free
+         * its name: the refusal frees it here. */
+        if (g_hash_table_contains(z->byname, x->name)) {
+            char *why = g_strdup_printf("the name '%s' is listed twice, and which one "
+                                        "an application reads is not something to "
+                                        "leave to chance", x->name);
+            g_clear_pointer(&x->name, g_free);
+            return why;
+        }
         g_hash_table_insert(z->byname, x->name, GUINT_TO_POINTER(i + 1));
 
         at += 46 + nlen + xlen + clen;
@@ -286,8 +291,8 @@ static JSValue zip_open(JSContext *ctx, JSValueConst this_val,
     GStatBuf st;
 
     if (g_stat(path, &st) != 0) {
-        JSValue r = JS_ThrowPlainError(ctx, "Zip.Open: cannot read '%s': %s",
-                                       path, bta_errno_text(errno));
+        JSValue r = bta_throw_text(ctx, "Zip.Open: cannot read '%s': %s",
+                                   path, bta_errno_text(errno));
         g_free(z);
         JS_FreeCString(ctx, path);
         return r;
@@ -298,8 +303,8 @@ static JSValue zip_open(JSContext *ctx, JSValueConst this_val,
         gchar *buf = NULL;
 
         if (!g_file_get_contents(path, &buf, &n, &err)) {
-            JSValue r = JS_ThrowPlainError(ctx, "Zip.Open: cannot read '%s': %s",
-                                           path, bta_errno_text(errno));
+            JSValue r = bta_throw_text(ctx, "Zip.Open: cannot read '%s': %s",
+                                       path, bta_gerror_text(err));
             g_clear_error(&err);
             g_free(z);
             JS_FreeCString(ctx, path);
@@ -311,8 +316,8 @@ static JSValue zip_open(JSContext *ctx, JSValueConst this_val,
     } else {
         z->map = g_mapped_file_new(path, FALSE, &err);
         if (!z->map) {
-            JSValue r = JS_ThrowPlainError(ctx, "Zip.Open: cannot read '%s': %s",
-                                           path, bta_errno_text(errno));
+            JSValue r = bta_throw_text(ctx, "Zip.Open: cannot read '%s': %s",
+                                       path, bta_gerror_text(err));
             g_clear_error(&err);
             g_free(z);
             JS_FreeCString(ctx, path);
@@ -325,7 +330,7 @@ static JSValue zip_open(JSContext *ctx, JSValueConst this_val,
     char *why = zip_parse(z);
 
     if (why) {
-        JSValue r = JS_ThrowPlainError(ctx, "Zip.Open: '%s' is %s", path, why);
+        JSValue r = bta_throw_text(ctx, "Zip.Open: '%s' is %s", path, why);
         g_free(why);
         zip_release(z);
         g_free(z);
@@ -608,7 +613,7 @@ static JSValue zip_read(JSContext *ctx, JSValueConst this_val, int argc, JSValue
     JSValue r;
 
     if (!x) {
-        r = JS_ThrowPlainError(ctx, "ZipArchive.Read: there is no entry '%s'", name);
+        r = bta_throw_text(ctx, "ZipArchive.Read: there is no entry '%s'", name);
     } else if (x->dir) {
         r = JS_ThrowPlainError(ctx, "ZipArchive.Read: '%s' is a folder", name);
     } else {
@@ -616,7 +621,7 @@ static JSValue zip_read(JSContext *ctx, JSValueConst this_val, int argc, JSValue
         GByteArray *b   = zip_read_entry(z, x, max, &why);
 
         if (!b) {
-            r = JS_ThrowPlainError(ctx, "ZipArchive.Read: %s", why);
+            r = bta_throw_text(ctx, "ZipArchive.Read: %s", why);
             g_free(why);
         } else {
             r = bta_bytes_new(ctx, b->data, b->len);
@@ -732,7 +737,7 @@ static bool zip_write_file(const char *dest, const guint8 *data, gsize n, char *
 
     if (!g_file_set_contents(dest, (const gchar *)(data ? data : (const guint8 *)""),
                              (gssize)n, &err)) {
-        *why = g_strdup_printf("cannot write '%s': %s", dest, bta_errno_text(errno));
+        *why = g_strdup_printf("cannot write '%s': %s", dest, bta_gerror_text(err));
         g_clear_error(&err);
         return false;
     }
@@ -783,7 +788,7 @@ static JSValue zip_extract(JSContext *ctx, JSValueConst this_val, int argc, JSVa
         }
     }
     if (why) {
-        r = JS_ThrowPlainError(ctx, "ZipArchive.Extract: %s", why);
+        r = bta_throw_text(ctx, "ZipArchive.Extract: %s", why);
         g_free(why);
     }
     JS_FreeCString(ctx, name);
@@ -869,7 +874,7 @@ static JSValue zip_extract_all_in(JSContext *ctx, JSValueConst this_val,
     JSValue r;
 
     if (why) {
-        r = JS_ThrowPlainError(ctx, "ZipArchive.ExtractAll: %s", why);
+        r = bta_throw_text(ctx, "ZipArchive.ExtractAll: %s", why);
         g_free(why);
     } else {
         r = JS_NewFloat64(ctx, files);
@@ -1357,7 +1362,7 @@ static JSValue zipw_add(JSContext *ctx, JSValueConst this_val, int argc, JSValue
     JSValue r;
 
     if (why) {
-        r = JS_ThrowPlainError(ctx, "ZipWriter.Add: %s", why);
+        r = bta_throw_text(ctx, "ZipWriter.Add: %s", why);
         g_free(why);
     } else {
         r = JS_DupValue(ctx, this_val);                /* for chaining */
@@ -1542,7 +1547,7 @@ static JSValue zipw_add_file(JSContext *ctx, JSValueConst this_val, int argc, JS
     JSValue r;
 
     if (why) {
-        r = JS_ThrowPlainError(ctx, "ZipWriter.AddFile: %s", why);
+        r = bta_throw_text(ctx, "ZipWriter.AddFile: %s", why);
         g_free(why);
     } else {
         r = JS_DupValue(ctx, this_val);
@@ -1623,7 +1628,7 @@ static JSValue zipw_finish(JSContext *ctx, JSValueConst this_val, int argc, JSVa
     if (why) {
         zipw_discard(w);
         w->done = true;
-        r = JS_ThrowPlainError(ctx, "ZipWriter.Finish: %s", why);
+        r = bta_throw_text(ctx, "ZipWriter.Finish: %s", why);
         g_free(why);
     } else {
         g_free(w->tmp);
@@ -1658,8 +1663,8 @@ static JSValue zip_create(JSContext *ctx, JSValueConst this_val, int argc, JSVal
     int   fd  = g_mkstemp(tmp);
 
     if (fd < 0) {
-        JSValue r = JS_ThrowPlainError(ctx, "Zip.Create: cannot write beside '%s': %s",
-                                       path, bta_errno_text(errno));
+        JSValue r = bta_throw_text(ctx, "Zip.Create: cannot write beside '%s': %s",
+                                   path, bta_errno_text(errno));
         g_free(tmp);
         JS_FreeCString(ctx, path);
         return r;

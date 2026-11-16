@@ -1333,9 +1333,9 @@ static JSValue database_sqlite(JSContext *ctx, JSValueConst this_val,
                              SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
 
     if (rc != SQLITE_OK) {
-        JSValue e = JS_ThrowPlainError(ctx, "cannot open %s: %s", path,
-                                       db ? sqlite3_errmsg(db)
-                                          : sqlite3_errstr(rc));
+        JSValue e = bta_throw_text(ctx, "cannot open %s: %s", path,
+                                   db ? sqlite3_errmsg(db)
+                                      : sqlite3_errstr(rc));
         sqlite3_close(db);
         JS_FreeCString(ctx, path);
         return e;

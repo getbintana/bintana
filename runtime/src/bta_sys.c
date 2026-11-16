@@ -118,8 +118,8 @@ static JSValue sys_file_load_in(JSContext *ctx, JSValueConst this_val,
 
     if (!g_file_load_contents(file, cancel,
                               &data, &len, NULL, &err)) {
-        JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
-                                       bta_gerror_text(err));
+        JSValue e = bta_throw_text(ctx, "cannot read %s: %s", path,
+                                   bta_gerror_text(err));
         g_clear_error(&err);
         g_object_unref(file);
         JS_FreeCString(ctx, path);
@@ -135,7 +135,7 @@ static JSValue sys_file_load_in(JSContext *ctx, JSValueConst this_val,
 
     g_free(data);
     if (!text) {
-        JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: out of memory", path);
+        JSValue e = bta_throw_text(ctx, "cannot read %s: out of memory", path);
 
         JS_FreeCString(ctx, path);
         return e;
@@ -216,8 +216,8 @@ static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
 
     JS_FreeCString(ctx, text);
     if (!ok) {
-        JSValue e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
-                                       bta_gerror_text(err));
+        JSValue e = bta_throw_text(ctx, "cannot write %s: %s", path,
+                                   bta_gerror_text(err));
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;
@@ -267,18 +267,18 @@ static JSValue sys_file_append(JSContext *ctx, JSValueConst this_val,
     JSValue           e     = JS_UNDEFINED;
 
     if (!out) {
-        e = JS_ThrowPlainError(ctx, "cannot append to %s: %s", path,
-                               bta_gerror_text(error));
+        e = bta_throw_text(ctx, "cannot append to %s: %s", path,
+                           bta_gerror_text(error));
     } else {
         gsize written = 0;
 
         if (!g_output_stream_write_all(G_OUTPUT_STREAM(out), text, len,
                                        &written, NULL, &error))
-            e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
-                                   bta_gerror_text(error));
+            e = bta_throw_text(ctx, "cannot write %s: %s", path,
+                               bta_gerror_text(error));
         else if (!g_output_stream_close(G_OUTPUT_STREAM(out), NULL, &error))
-            e = JS_ThrowPlainError(ctx, "cannot close %s: %s", path,
-                                   bta_gerror_text(error));
+            e = bta_throw_text(ctx, "cannot close %s: %s", path,
+                               bta_gerror_text(error));
         g_object_unref(out);
     }
 
@@ -913,7 +913,7 @@ static JSValue sys_file_open(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowTypeError(ctx, "File.Open(path) needs a path");
 
     if (!g_file_test(path, G_FILE_TEST_EXISTS)) {
-        JSValue e = JS_ThrowPlainError(ctx, "there is no %s to open", path);
+        JSValue e = bta_throw_text(ctx, "there is no %s to open", path);
         JS_FreeCString(ctx, path);
         return e;
     }
@@ -1195,8 +1195,8 @@ static JSValue sys_file_watch(JSContext *ctx, JSValueConst this_val,
     g_object_unref(file);
 
     if (!monitor) {
-        JSValue e = JS_ThrowPlainError(ctx, "cannot watch %s: %s", path,
-                                       bta_gerror_text(error));
+        JSValue e = bta_throw_text(ctx, "cannot watch %s: %s", path,
+                                   bta_gerror_text(error));
         g_clear_error(&error);
         JS_FreeCString(ctx, path);
         return e;
@@ -1236,7 +1236,7 @@ static JSValue sys_file_delete(JSContext *ctx, JSValueConst this_val,
 
     bool ok = g_remove(path) == 0;
     JSValue e = ok ? JS_UNDEFINED
-                   : JS_ThrowPlainError(ctx, "cannot delete %s", path);
+                   : bta_throw_text(ctx, "cannot delete %s", path);
     JS_FreeCString(ctx, path);
     return e;
 }
@@ -1273,8 +1273,8 @@ static JSValue sys_file_trash_in(JSContext *ctx, JSValueConst this_val,
     JSValue e     = JS_UNDEFINED;
 
     if (!g_file_trash(file, cancel, &error))
-        e = JS_ThrowPlainError(ctx, "cannot trash %s: %s", path,
-                               bta_gerror_text(error));
+        e = bta_throw_text(ctx, "cannot trash %s: %s", path,
+                           bta_gerror_text(error));
 
     g_clear_error(&error);
     g_object_unref(file);
@@ -1426,8 +1426,8 @@ static JSValue sys_dir_delete(JSContext *ctx, JSValueConst this_val,
 
     bool    ok = g_rmdir(path) == 0;
     JSValue e  = ok ? JS_UNDEFINED
-                    : JS_ThrowPlainError(ctx, "cannot delete %s: %s", path,
-                                         bta_errno_text(errno));
+                    : bta_throw_text(ctx, "cannot delete %s: %s", path,
+                                     bta_errno_text(errno));
     JS_FreeCString(ctx, path);
     return e;
 }
@@ -1443,14 +1443,14 @@ static JSValue sys_dir_delete_tree_in(JSContext *ctx, JSValueConst this_val,
     if (!g_file_test(path, G_FILE_TEST_IS_DIR)) {
         /* A file handed to a recursive delete is a path that was computed
          * wrong, and taking it would be doing the wrong thing quietly. */
-        e = JS_ThrowPlainError(ctx, "%s is not a folder", path);
+        e = bta_throw_text(ctx, "%s is not a folder", path);
     } else {
         GFile  *dir   = g_file_new_for_path(path);
         GError *error = NULL;
 
         if (!delete_tree(dir, cancel, &error))
-            e = JS_ThrowPlainError(ctx, "cannot delete %s: %s", path,
-                                   bta_gerror_text(error));
+            e = bta_throw_text(ctx, "cannot delete %s: %s", path,
+                               bta_gerror_text(error));
         g_clear_error(&error);
         g_object_unref(dir);
     }
@@ -1480,8 +1480,8 @@ static JSValue sys_dir_list_in(JSContext *ctx, JSValueConst this_val,
 
     g_object_unref(dir);
     if (!walk) {
-        JSValue e = JS_ThrowPlainError(ctx, "cannot list %s: %s", path,
-                                       bta_gerror_text(err));
+        JSValue e = bta_throw_text(ctx, "cannot list %s: %s", path,
+                                   bta_gerror_text(err));
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         JS_FreeCString(ctx, pattern);
@@ -1520,9 +1520,9 @@ static JSValue sys_dir_list_in(JSContext *ctx, JSValueConst this_val,
      * reason -- an I/O error, a share that went away -- on the floor.
      */
     if (failed) {
-        JSValue e = JS_ThrowPlainError(ctx, "cannot list %s: %s", path,
-                                       g_cancellable_is_cancelled(cancel)
-                                           ? "cancelled" : bta_gerror_text(err));
+        JSValue e = bta_throw_text(ctx, "cannot list %s: %s", path,
+                                   g_cancellable_is_cancelled(cancel)
+                                       ? "cancelled" : bta_gerror_text(err));
         g_clear_error(&err);
         g_ptr_array_unref(names);
         JS_FreeCString(ctx, path);
@@ -1552,7 +1552,7 @@ static JSValue sys_dir_make(JSContext *ctx, JSValueConst this_val,
 
     bool    ok = g_mkdir_with_parents(path, 0755) == 0;
     JSValue e  = ok ? JS_UNDEFINED
-                    : JS_ThrowPlainError(ctx, "cannot create %s", path);
+                    : bta_throw_text(ctx, "cannot create %s", path);
     JS_FreeCString(ctx, path);
     return e;
 }
@@ -1734,8 +1734,8 @@ static JSValue sys_dir_walk(JSContext *ctx, JSValueConst this_val,
         if (spec)
             g_pattern_spec_free(spec);
         JSValue e = err
-            ? JS_ThrowPlainError(ctx, "cannot list %s: %s", path,
-                                 bta_gerror_text(err))
+            ? bta_throw_text(ctx, "cannot list %s: %s", path,
+                             bta_gerror_text(err))
             : JS_ThrowPlainError(ctx, "%s: cancelled",
                                  magic ? "Directory.Folders"
                                        : "Directory.Files");
@@ -4397,7 +4397,7 @@ static JSValue env_cwd_get(JSContext *ctx, JSValueConst this_val)
 
 static JSValue env_cwd_set(JSContext *ctx, JSValueConst this_val, JSValueConst val)
 {
-    const char *path = JS_ToCString(ctx, val);
+    const char *path = bta_file_path(ctx, val, "Environment.CurrentDirectory");
     if (!path)
         return JS_EXCEPTION;
 
@@ -4406,8 +4406,8 @@ static JSValue env_cwd_set(JSContext *ctx, JSValueConst this_val, JSValueConst v
      * later, in whatever tried to read a file. */
     int rc = g_chdir(path);
     if (rc != 0) {
-        JSValue e = JS_ThrowPlainError(ctx, "cannot enter %s: %s",
-                                       path, bta_errno_text(errno));
+        JSValue e = bta_throw_text(ctx, "cannot enter %s: %s",
+                                   path, bta_errno_text(errno));
         JS_FreeCString(ctx, path);
         return e;
     }
@@ -5437,8 +5437,8 @@ static JSValue sys_file_load_bytes_in(JSContext *ctx, JSValueConst this_val,
 
     if (!g_file_load_contents(file, cancel,
                               &data, &len, NULL, &err)) {
-        JSValue e = JS_ThrowPlainError(ctx, "cannot read %s: %s", path,
-                                       bta_gerror_text(err));
+        JSValue e = bta_throw_text(ctx, "cannot read %s: %s", path,
+                                   bta_gerror_text(err));
         g_clear_error(&err);
         g_object_unref(file);
         JS_FreeCString(ctx, path);
@@ -5476,8 +5476,8 @@ static JSValue sys_file_save_bytes(JSContext *ctx, JSValueConst this_val,
     bool    ok  = bta_save_contents(path, (const char *)bytes, (gssize)len, &err);
 
     if (!ok) {
-        JSValue e = JS_ThrowPlainError(ctx, "cannot write %s: %s", path,
-                                       bta_gerror_text(err));
+        JSValue e = bta_throw_text(ctx, "cannot write %s: %s", path,
+                                   bta_gerror_text(err));
         g_clear_error(&err);
         JS_FreeCString(ctx, path);
         return e;

@@ -143,7 +143,7 @@ static PopplerDocument *read_document(JSContext *ctx, const char *path,
                                  "PdfDocument.Load(path, password)",
                            who, path);
     else
-        JS_ThrowPlainError(ctx, "%s: '%s' is not a PDF this machine reads", who, path);
+        bta_throw_text(ctx, "%s: '%s' is not a PDF this machine reads", who, path);
     g_clear_error(&err);
     return NULL;
 }
@@ -187,7 +187,7 @@ static JSValue pdfdoc_open(JSContext *ctx, JSValueConst this_val,
     }
 
     if (!g_file_test(path, G_FILE_TEST_IS_REGULAR)) {
-        JS_ThrowPlainError(ctx, "PdfDocument.Load: there is no file '%s'", path);
+        bta_throw_text(ctx, "PdfDocument.Load: there is no file '%s'", path);
         JS_FreeCString(ctx, path);
         g_free(password);
         return JS_EXCEPTION;

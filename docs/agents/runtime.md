@@ -577,7 +577,22 @@ icon when the theme has one by that name (`gtkapplication.c`).
   the length of the scratch directory's name. `bta_throw_text` (bta_sys.c)
   builds the `Error` with `JS_NewError` and sets `message` from a
   `g_strdup_vprintf`; use it wherever the text can grow -- a path, a URI, a
-  list of names.
+  list of names. **2026-11-16: 45 `JS_ThrowPlainError` that quoted a path or a
+  zip entry's name were still cut** (`File.Load`/`Save`, `Directory`,
+  `Zip`, `Desktop`, `Database.Sqlite`, `PdfDocument.Load`, the painter's
+  `Save*`) and go through it now. Found with
+  `grep -nE 'JS_ThrowPlainError\(ctx, "[^"]*%s[^"]*", *(.*\b(path|dir|dest|…)\b)'`
+  plus a look at every `'%s'`. What is left are `TypeError`/`RangeError`
+  refusals that quote a path (`Picture.File`'s "cannot show", the painter's
+  "cannot read"): `bta_throw_text` makes a plain `Error`, and changing the
+  class of a refusal is an API change, so they wait for a typed variant.
+- **A path through `JS_ToCString` is still found by reading.** Four setters and
+  verbs took one that way after `bta_file_path` existed: `Video.Save(undefined)`
+  wrote `./undefined`, `Painter.Image(42)` looked for a file called `42`,
+  `Environment.CurrentDirectory = 42` entered `./42`, and `Picture.File = null`
+  looked for `null` -- which now clears the picture, like `""`. The test is
+  `refusal(...)` equal to `"<Who> expects a path, as a string"`; a local
+  variable called `refusal` (as in `testMedia`) shadows the helper.
 - **A geometry is the display's range, not `int32`'s.** `bta_to_int` accepts
   anything an integer holds, and two failures were a long way from the
   assignment: `Width = 2147483000` grew the window past what X can allocate and

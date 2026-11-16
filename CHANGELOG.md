@@ -22,6 +22,19 @@ one-page answer to *what is new since the release I have*.
   suite, the sanitizer and the submodule pin before they publish.
 - The quickstart names `RelWithDebInfo`; the build is no longer silently
   three times slower for a first-time reader.
+- **A path is text.** `Video.Save(undefined)`, `Painter.Image(42)` and
+  `Environment.CurrentDirectory = 42` are refused (`… expects a path, as a
+  string`) instead of writing `./undefined`, reading a file called `42` or
+  entering `./42`. `Picture.File = null` takes the picture off, like `""`,
+  instead of looking for a file called `null`.
+- `TableView.SetCell`, `SetIcon` and `SetStyle` report a value whose
+  conversion throws, and leave the cell as it was; they used to empty it and
+  leave the exception pending for the next call.
+- A refusal that quotes a path or a zip entry is no longer cut at 255 bytes
+  (`File`, `Directory`, `Zip`, `Database.Sqlite`, `PdfDocument`, desktop
+  entries, a drawing's `Save`).
+- `WebSocket` and `SerialPort` failures are in the runtime's own words, like
+  every other failure, instead of the desktop's language.
 
 ## 0.4.0-rc1 — 2026-11-16
 

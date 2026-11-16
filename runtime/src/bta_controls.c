@@ -6545,11 +6545,14 @@ static JSValue picture_set_file(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    const char *path = JS_ToCString(ctx, val);
-    if (!path)
+    /* `null` takes the picture off, like `""`; any other value that is not
+     * text is a mistake, not a file called "null" or "42". */
+    bool        off  = JS_IsNull(val) || JS_IsUndefined(val);
+    const char *path = off ? NULL : bta_file_path(ctx, val, "Picture.File");
+    if (!off && !path)
         return JS_EXCEPTION;
 
-    if (!*path) {
+    if (off || !*path) {
         g_object_set_data(G_OBJECT(w->gtk), PIC_TEXTURE_KEY, NULL);
         g_object_set_data(G_OBJECT(w->gtk), PIC_FILE_KEY, NULL);
         g_object_set_data(G_OBJECT(w->gtk), PIC_BITMAP_KEY, NULL);
@@ -6772,7 +6775,8 @@ static const JSCFunctionListEntry picture_props[] = {
      *   the path. What `GdkTexture` reads: PNG, JPEG, WebP, TIFF, BMP. **SVG
      *   is not among them** — a scalable icon is the pixbuf loaders'
      *   business, which is why an [`Image`](docs/reference/widgets/Image.md)
-     *   draws one and this does not. Setting it clears `Source`
+     *   draws one and this does not. Setting it clears `Source`;
+     *   `""` or `null` takes the picture off
      */
     JS_CGETSET_DEF("File", picture_get_file, picture_set_file),
     /* LoadBytes(bytes)
