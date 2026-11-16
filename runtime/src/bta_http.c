@@ -141,6 +141,7 @@ typedef struct {
     int           idle_ms;   /* 0 is soup's own default (60 s) */
     int           max_conns;     /* constructor-only: soup takes them once */
     int           max_per_host;
+    goffset       max_size;  /* `MaxSize`: what an answer may hold in memory; 0 none */
 } HttpClientData;
 
 static JSClassID http_client_class_id;
@@ -169,11 +170,13 @@ struct HttpSave {
     GFile         *part;      /* NULL until made, and again once renamed */
     GBytes        *chunk;     /* the block being written */
     GCancellable  *cancel;    /* the flight's own */
+    GByteArray    *mem;       /* the answer, when it goes to memory (no `dest`) */
+    goffset        max;       /* what memory may hold; 0 is no ceiling */
     goffset        received;  /* bytes written so far */
     goffset        total;     /* the declared length, or -1 */
     gint64         reported;  /* monotonic time of the last report */
     bool           orphan;
-    HttpSaveTick   tick;      /* after every block; `report` at most ten a second */
+    HttpSaveTick   tick;      /* after every block, `report` at most ten a second; may be NULL */
     HttpSaveEnd    end;       /* once: NULL error is the file in place */
     gpointer       data;
 };
@@ -188,11 +191,15 @@ typedef struct {
     SoupSession  *sess;      /* referenced for the flight */
     SoupMessage  *msg;
     GCancellable *cancellable;
-    /* A streamed 2xx is read line by line off this; a streamed anything-else
-     * is spliced whole into `sink` instead, because an error page is an
-     * answer and not a feed. Both NULL on the buffered road. */
-    GDataInputStream *lines;
-    GOutputStream    *sink;
+    /* A streamed 2xx is read off `feed` a block at a time and cut into lines
+     * out of `pending` (`after_cr`: the last block ended on a `\r`, so a `\n`
+     * opening the next one is the same line end); a streamed anything-else is
+     * read whole into `Body` instead (`http_job_read_body`), because an error
+     * page is an answer and not a feed. NULL on the buffered road. */
+    GInputStream *feed;
+    GByteArray   *pending;
+    bool          after_cr;
+    goffset       max_size;  /* `MaxSize`: what `Body` may hold; 0 is no ceiling */
     guint         guard;
     int           id;
     bool          timed_out;
@@ -262,11 +269,14 @@ static void http_job_free(HttpJob *job)
         job->save = NULL;
     }
 
-    /* The line reader first: it holds a ref of its own on soup's stream, and
-     * a GFilterInputStream closes its base, which is what drops a feed that
-     * is still talking instead of leaving the socket held. */
-    g_clear_object(&job->lines);
-    g_clear_object(&job->sink);
+    /* A feed still talking is let go of: its read is cancelled -- it holds the
+     * stream, and comes back to find the job gone (`http_job_alive`) -- and
+     * the stream closes as it goes, instead of leaving the socket held. */
+    if (job->feed) {
+        g_cancellable_cancel(job->cancellable);
+        g_clear_object(&job->feed);
+    }
+    g_clear_pointer(&job->pending, g_byte_array_unref);
 
     JS_FreeValue(job->ctx, job->on_line);
     JS_FreeValue(job->ctx, job->on_progress);
@@ -548,7 +558,7 @@ static bool http_bool_opt(JSContext *ctx, JSValueConst opts, const char *key,
  * it was only in the async list. */
 static const char *const HTTP_OPT_KEYS[] = {
     "Query", "Headers", "Timeout", "FollowRedirects", "ContentType", "Body", "Auth",
-    "Http1", "SaveTo", "Progress",
+    "Http1", "SaveTo", "Progress", "MaxSize",
     /* Not an option any more -- the token is the last argument -- but named
      * here so `PostWait(url, { Cancellable: c })` is read as the options it
      * was meant as and refused, instead of being posted as the body. */
@@ -1336,6 +1346,57 @@ static JSValue http_throw_error(JSContext *ctx, const char *who, const char *url
 #define HTTP_SAVE_CHUNK     (64 * 1024)
 #define HTTP_SAVE_REPORT_US (100 * 1000)   /* `Progress` at most ten times a second */
 
+/*
+ * **What an answer may hold in memory: 256 MiB unless asked** (`MaxSize`, per
+ * call or on the client; `0` is no ceiling). The buffered verbs read into
+ * `Body`, and a server that never stops -- or a small gzip that inflates to
+ * gigabytes -- grew the process until the system killed it; `Gzip`, `Zip` and
+ * the server's `MaxBody` already had their ceilings. A declared length past it
+ * is refused before a byte is read; anything else is counted as it arrives,
+ * decoded. `SaveTo` is not counted: it goes to the disk, a block at a time.
+ */
+#define HTTP_MAX_SIZE_DEFAULT ((goffset)256 * 1024 * 1024)
+
+G_DEFINE_QUARK(bta-http-too-large, http_too_large)
+
+static char *http_too_large_text(const char *who, const char *url, goffset max)
+{
+    return g_strdup_printf("%s: the answer from '%s' is larger than MaxSize (%"
+                           G_GINT64_FORMAT " bytes) -- raise it with { MaxSize }, "
+                           "or write it to a file with { SaveTo }",
+                           who, url, (gint64)max);
+}
+
+/* `MaxSize` as the call asks, else `fallback` (the client's, or the default).
+ * A number of bytes; `0` and `Infinity` are no ceiling, which is `*max` 0. */
+static bool http_max_opt(JSContext *ctx, JSValueConst opts, goffset fallback,
+                         const char *who, goffset *max)
+{
+    *max = fallback;
+    if (!JS_IsObject(opts))
+        return true;
+
+    JSValue v = JS_GetPropertyStr(ctx, opts, "MaxSize");
+    double  d = 0;
+
+    if (JS_IsUndefined(v) || JS_IsNull(v)) {
+        JS_FreeValue(ctx, v);
+        return true;
+    }
+
+    bool ok = bta_to_number(ctx, v, "MaxSize", &d);
+
+    JS_FreeValue(ctx, v);
+    if (!ok)
+        return false;
+    if (!(d >= 0)) {
+        JS_ThrowRangeError(ctx, "%s: MaxSize is a number of bytes, 0 or more", who);
+        return false;
+    }
+    *max = d >= 9.0e18 ? 0 : (goffset)d;
+    return true;
+}
+
 /* A failure on our side of the download -- the disk, not the network -- is
  * said as one: "cannot reach" about a URL that answered would send the reader
  * looking at the wrong end. */
@@ -1420,14 +1481,18 @@ static goffset http_save_total(SoupMessage *msg)
     return soup_message_headers_get_content_length(h);
 }
 
-static HttpSave *http_save_new(GInputStream *in, const char *path, GCancellable *cancel,
-                               goffset total, HttpSaveTick tick, HttpSaveEnd end,
-                               gpointer data)
+/* `path` NULL reads the answer into memory instead, up to `max` (0: no
+ * ceiling) -- the buffered verbs' road, and an error page's on the others. */
+static HttpSave *http_save_new(GInputStream *in, const char *path, goffset max,
+                               GCancellable *cancel, goffset total,
+                               HttpSaveTick tick, HttpSaveEnd end, gpointer data)
 {
     HttpSave *s = g_new0(HttpSave, 1);
 
     s->in       = in;                       /* taken */
-    s->dest     = g_file_new_for_path(path);
+    s->dest     = path ? g_file_new_for_path(path) : NULL;
+    s->mem      = path ? NULL : g_byte_array_new();
+    s->max      = max;
     s->cancel   = g_object_ref(cancel);
     s->total    = total;
     s->reported = g_get_monotonic_time();
@@ -1444,6 +1509,7 @@ static void http_save_free(HttpSave *s)
     g_clear_object(&s->dest);
     g_clear_object(&s->part);
     g_clear_pointer(&s->chunk, g_bytes_unref);
+    g_clear_pointer(&s->mem, g_byte_array_unref);
     g_clear_object(&s->cancel);
     g_free(s);
 }
@@ -1521,7 +1587,8 @@ static void on_http_save_written(GObject *src, GAsyncResult *res, gpointer data)
 
     if (report)
         s->reported = now;
-    s->tick(s, report, s->data);
+    if (s->tick)
+        s->tick(s, report, s->data);
     /* The tick runs the program's `Progress`, which may have stopped the
      * download or let go of everything; the cancel shows on the next read. */
     if (s->orphan) {
@@ -1551,9 +1618,20 @@ static void on_http_save_read(GObject *src, GAsyncResult *res, gpointer data)
         /* The end: one last report, so a bar reaches the end it is drawing,
          * and then the file is closed and put in place. */
         g_bytes_unref(b);
-        s->tick(s, true, s->data);
+        /* Closed now, before anybody is told: closing is what ends the
+         * message for soup, and its logger prints the body only then --
+         * `send_and_read` did it before its callback, and a `Log: "body"`
+         * that arrived after `onDone` would be a log of the past. */
+        g_input_stream_close(s->in, NULL, NULL);
+        if (s->tick)
+            s->tick(s, true, s->data);
         if (s->orphan) {
             http_save_fail(s, NULL, false);
+            return;
+        }
+        if (s->mem) {                     /* the answer is all in memory */
+            s->end(s, NULL, false, s->data);
+            http_save_free(s);
             return;
         }
         g_output_stream_close_async(s->out, G_PRIORITY_DEFAULT, s->cancel,
@@ -1563,6 +1641,30 @@ static void on_http_save_read(GObject *src, GAsyncResult *res, gpointer data)
 
     gsize         len;
     const guint8 *p = g_bytes_get_data(b, &len);
+
+    if (s->mem) {
+        /* Counted decoded, past any declared length: a compressed answer and
+         * one that says nothing about its size are held to the same ceiling. */
+        if (s->max > 0 && s->received + (goffset)len > s->max) {
+            GError *big = g_error_new_literal(http_too_large_quark(), 0, "too large");
+
+            g_bytes_unref(b);
+            http_save_fail(s, big, false);
+            g_error_free(big);
+            return;
+        }
+        g_byte_array_append(s->mem, p, (guint)len);
+        g_bytes_unref(b);
+        s->received += (goffset)len;
+        if (s->tick)
+            s->tick(s, false, s->data);
+        if (s->orphan) {
+            http_save_fail(s, NULL, false);
+            return;
+        }
+        http_save_read(s);
+        return;
+    }
 
     s->chunk = b;
     g_output_stream_write_all_async(s->out, p, len, G_PRIORITY_DEFAULT, s->cancel,
@@ -1583,6 +1685,11 @@ static void http_save_read(HttpSave *s)
  */
 static void http_save_start(HttpSave *s)
 {
+    if (s->mem) {
+        http_save_read(s);
+        return;
+    }
+
     char   *dest = g_file_get_path(s->dest);
     GError *err  = NULL;
 
@@ -1656,23 +1763,27 @@ static void http_deliver_done(HttpJob *job, GBytes *bytes)
     http_job_free(job);
 }
 
-static void http_deliver_failure(HttpJob *job, const char *kind, const char *msg);
+static void http_deliver_failure(HttpJob *job, const char *kind, const char *msg,
+                                 int status);
 
 static void http_deliver_error(HttpJob *job, const char *kind, const char *detail)
 {
     char *msg = http_error_text(job->who, job->url, detail);
 
-    http_deliver_failure(job, kind, msg);
+    http_deliver_failure(job, kind, msg, 0);
     g_free(msg);
 }
 
 /* The error callback, with the sentence already made: "cannot reach" from
- * the one above, "cannot save" from a download whose disk said no. */
-static void http_deliver_failure(HttpJob *job, const char *kind, const char *msg)
+ * the one above, "cannot save" from a download whose disk said no, "larger
+ * than MaxSize" -- with the status the server did answer -- from an answer
+ * that would not fit. */
+static void http_deliver_failure(HttpJob *job, const char *kind, const char *msg,
+                                 int status)
 {
     JSValue args[2];
 
-    args[0] = http_error_record(job->ctx, msg, kind, 0);
+    args[0] = http_error_record(job->ctx, msg, kind, status);
     args[1] = job->handle;
     job->finished = true;
     if (JS_IsObject(job->handle)) {
@@ -1721,20 +1832,76 @@ static void http_deliver_send_error(HttpJob *job, GError *err)
     g_free(detail);
 }
 
-static void on_http_done(GObject *src, GAsyncResult *res, gpointer data)
+/* The answer read whole into `Body`, as far as `MaxSize` lets it. */
+static void on_http_body_end(HttpSave *s, GError *err, bool local, gpointer data)
 {
     HttpJob *job = data;
-    GError  *err = NULL;
-    GBytes  *bytes = soup_session_send_and_read_finish(job->sess, res, &err);
 
-    if (!bytes) {
+    (void)local;
+    job->save = NULL;                /* the chain frees itself */
+    if (!err) {
+        GBytes *bytes = g_byte_array_free_to_bytes(s->mem);
+
+        s->mem = NULL;
+        http_deliver_done(job, bytes);
+        g_bytes_unref(bytes);
+        return;
+    }
+    if (g_error_matches(err, http_too_large_quark(), 0)) {
+        char *msg = http_too_large_text(job->who, job->url, job->max_size);
+
+        http_deliver_failure(job, "TooLarge", msg,
+                             (int)soup_message_get_status(job->msg));
+        g_free(msg);
+        return;
+    }
+    http_deliver_send_error(job, err);
+}
+
+/*
+ * The body of an answer, into memory: the buffered verbs' `Body`, and the
+ * error page a stream or a download is answered with. **A declared length
+ * past `MaxSize` is refused before a byte is read**; the rest is counted as
+ * it arrives (`HttpSave`, memory mode). Takes `in`.
+ */
+static void http_job_read_body(HttpJob *job, GInputStream *in)
+{
+    goffset declared = http_save_total(job->msg);
+
+    if (job->max_size > 0 && declared > job->max_size) {
+        char *msg = http_too_large_text(job->who, job->url, job->max_size);
+
+        g_object_unref(in);
+        http_deliver_failure(job, "TooLarge", msg,
+                             (int)soup_message_get_status(job->msg));
+        g_free(msg);
+        return;
+    }
+    job->save = http_save_new(in, NULL, job->max_size, job->cancellable, declared,
+                              NULL, on_http_body_end, job);
+    http_save_start(job->save);
+}
+
+/* The headers of a buffered request: the body follows into memory. This was
+ * `send_and_read` -- one call, and no way to stop reading at a ceiling. */
+static void on_http_body_headers(GObject *src, GAsyncResult *res, gpointer data)
+{
+    HttpJob      *job = data;
+    GError       *err = NULL;
+    GInputStream *in;
+
+    if (!http_job_alive(job)) {
+        in = soup_session_send_finish(SOUP_SESSION(src), res, NULL);
+        g_clear_object(&in);
+        return;
+    }
+    in = soup_session_send_finish(job->sess, res, &err);
+    if (!in) {
         http_deliver_send_error(job, err);
         g_clear_error(&err);
         return;
     }
-
-    http_deliver_done(job, bytes);
-    g_bytes_unref(bytes);
+    http_job_read_body(job, in);
 }
 
 /* ------------------------------------------------------------- streaming */
@@ -1756,57 +1923,161 @@ static void http_stream_read_next(HttpJob *job);
  * EOF: this is the streamed twin of `Bytes.ToText()`, which refuses what is
  * not text instead of handing back mojibake.
  */
-static void on_http_stream_line(GObject *src, GAsyncResult *res, gpointer data)
+/*
+ * **A line may be 1 MiB, and no more**, the ceiling `Socket` and `SerialPort`
+ * put on theirs. `GDataInputStream` grew one with no newline in it until the
+ * process died -- a server that sends a megabyte of base64 and never ends the
+ * line, or one that is not a feed at all -- so the lines are cut here, from
+ * blocks, and one that outgrows this ends the flight as `TooLarge`.
+ */
+#define HTTP_STREAM_LINE_MAX (1024 * 1024)
+
+/* One line to `onLine`. False when the job went with it -- freed from inside
+ * its own callback, and freed here now that the call is over. */
+static bool http_stream_call_line(HttpJob *job, const guint8 *s, gsize n)
+{
+    if (!JS_IsFunction(job->ctx, job->on_line))
+        return true;
+
+    JSContext *ctx     = job->ctx;   /* read before the call: the job may not survive it */
+    JSValue    argv[2] = { JS_NewStringLen(ctx, (const char *)s, n), job->handle };
+
+    job->calling = true;
+
+    JSValue r = JS_Call(ctx, job->on_line, JS_UNDEFINED, 2, (JSValueConst *)argv);
+
+    if (JS_IsException(r))
+        bta_dump_error(ctx);
+    JS_FreeValue(ctx, r);
+    JS_FreeValue(ctx, argv[0]);
+    bta_drain_jobs(JS_GetRuntime(ctx));   /* which can also stop this stream */
+    job->calling = false;
+    if (job->dead) {   /* freed while we were in there: now it is ours to do */
+        http_job_free(job);
+        return false;
+    }
+    return true;
+}
+
+/* A line that is not UTF-8 ends the flight, in the words the line reader
+ * used to give it: the streamed twin of `Bytes.ToText()`. */
+static bool http_stream_text(HttpJob *job, const guint8 *s, gsize n)
+{
+    if (g_utf8_validate((const char *)s, (gssize)n, NULL))
+        return true;
+
+    GError *err = g_error_new_literal(G_CONVERT_ERROR, G_CONVERT_ERROR_ILLEGAL_SEQUENCE,
+                                      "not UTF-8");
+
+    http_deliver_send_error(job, err);
+    g_error_free(err);
+    return false;
+}
+
+/*
+ * The whole lines `pending` holds, one call each -- `\n`, `\r\n` and a lone
+ * `\r` all end one (HTTP is a CRLF protocol, and a conforming SSE server may
+ * use any of the three). Stops at a `Stop()` from inside a call: the next read
+ * then completes CANCELLED and *that* answers, a turn later, as promised.
+ * False when the job is gone.
+ */
+static bool http_stream_lines(HttpJob *job)
+{
+    GByteArray *p = job->pending;
+
+    for (;;) {
+        if (job->after_cr && p->len > 0) {
+            if (p->data[0] == '\n')
+                g_byte_array_remove_range(p, 0, 1);
+            job->after_cr = false;
+        }
+        if (g_cancellable_is_cancelled(job->cancellable))
+            return true;
+
+        guint i = 0;
+
+        while (i < p->len && p->data[i] != '\n' && p->data[i] != '\r')
+            i++;
+        if (i == p->len)
+            return true;                  /* no whole line yet */
+
+        guint end = i + 1;
+
+        if (p->data[i] == '\r') {
+            if (end < p->len && p->data[end] == '\n')
+                end++;
+            else if (end == p->len)
+                job->after_cr = true;     /* its `\n` may open the next block */
+        }
+        if (!http_stream_text(job, p->data, i) ||
+            !http_stream_call_line(job, p->data, i))
+            return false;
+        g_byte_array_remove_range(p, 0, end);
+    }
+}
+
+static void on_http_stream_block(GObject *src, GAsyncResult *res, gpointer data)
 {
     HttpJob *job = data;
     GError  *err = NULL;
-    gsize    len = 0;
-    char    *line;
+    GBytes  *b;
 
-    if (!http_job_alive(job))
+    if (!http_job_alive(job)) {
+        b = g_input_stream_read_bytes_finish(G_INPUT_STREAM(src), res, NULL);
+        if (b)
+            g_bytes_unref(b);
         return;
-
-    line = g_data_input_stream_read_line_finish_utf8(G_DATA_INPUT_STREAM(src),
-                                                     res, &len, &err);
-    if (err) {
-        g_free(line);
+    }
+    b = g_input_stream_read_bytes_finish(G_INPUT_STREAM(src), res, &err);
+    if (!b) {
         http_deliver_send_error(job, err);
         g_clear_error(&err);
         return;
     }
-    if (!line) {
-        /* EOF. The record as always, and an empty `Body`: what already went
-         * out line by line is not sent a second time. */
+
+    gsize         n;
+    const guint8 *d = g_bytes_get_data(b, &n);
+
+    if (n == 0) {
+        g_bytes_unref(b);
+        /* EOF. What is left is the last line, newline or not -- what the line
+         * reader handed over too -- and then the record as always, with an
+         * empty `Body`: what went out line by line is not sent a second time. */
+        if (job->pending->len > 0 &&
+            (!http_stream_text(job, job->pending->data, job->pending->len) ||
+             !http_stream_call_line(job, job->pending->data, job->pending->len)))
+            return;
+        g_input_stream_close(job->feed, NULL, NULL);
+        if (g_cancellable_is_cancelled(job->cancellable)) {
+            GError *stop = g_error_new_literal(G_IO_ERROR, G_IO_ERROR_CANCELLED,
+                                               "cancelled");
+
+            http_deliver_send_error(job, stop);
+            g_error_free(stop);
+            return;
+        }
         http_deliver_done(job, NULL);
         return;
     }
 
-    if (JS_IsFunction(job->ctx, job->on_line)) {
-        JSContext *ctx = job->ctx;   /* read before the call: the job may not survive it */
-        JSValue    argv[2] = { JS_NewString(ctx, line), job->handle };
+    g_byte_array_append(job->pending, d, (guint)n);
+    g_bytes_unref(b);
+    if (!http_stream_lines(job))
+        return;
+    if (job->pending->len > HTTP_STREAM_LINE_MAX && !g_cancellable_is_cancelled(job->cancellable)) {
+        char *msg = g_strdup_printf("%s: a line from '%s' is longer than %d bytes",
+                                    job->who, job->url, HTTP_STREAM_LINE_MAX);
 
-        job->calling = true;
-
-        JSValue r = JS_Call(ctx, job->on_line, JS_UNDEFINED, 2, (JSValueConst *)argv);
-
-        if (JS_IsException(r))
-            bta_dump_error(ctx);
-        JS_FreeValue(ctx, r);
-        JS_FreeValue(ctx, argv[0]);
-        bta_drain_jobs(JS_GetRuntime(ctx));   /* which can also stop this stream */
-        job->calling = false;
-        if (job->dead) {   /* freed while we were in there: now it is ours to do */
-            http_job_free(job);
-            g_free(line);
-            return;
-        }
+        http_deliver_failure(job, "TooLarge", msg,
+                             (int)soup_message_get_status(job->msg));
+        g_free(msg);
+        return;
     }
-    g_free(line);
 
     /*
      * Re-armed last, and that is the back-pressure: there is never more than
      * one read outstanding, so a slow handler slows the feed instead of
-     * queueing it. A `Stop()` from inside the callback leaves the cancellable
+     * queueing it. A `Stop()` from inside a callback leaves the cancellable
      * cancelled, so this read completes CANCELLED on the next turn of the loop
      * and *that* frame answers -- which keeps the published promise that a
      * cancelled request still answers a turn later.
@@ -1816,32 +2087,10 @@ static void on_http_stream_line(GObject *src, GAsyncResult *res, gpointer data)
 
 static void http_stream_read_next(HttpJob *job)
 {
-    g_data_input_stream_read_line_async(job->lines, G_PRIORITY_DEFAULT,
-                                        job->cancellable, on_http_stream_line, job);
+    g_input_stream_read_bytes_async(job->feed, HTTP_SAVE_CHUNK, G_PRIORITY_DEFAULT,
+                                    job->cancellable, on_http_stream_block, job);
 }
 
-/* The non-2xx body, read whole. */
-static void on_http_stream_spliced(GObject *src, GAsyncResult *res, gpointer data)
-{
-    HttpJob *job = data;
-    GError  *err = NULL;
-    GBytes  *bytes;
-
-    if (!http_job_alive(job)) {
-        g_output_stream_splice_finish(G_OUTPUT_STREAM(src), res, NULL);
-        return;
-    }
-    if (g_output_stream_splice_finish(G_OUTPUT_STREAM(src), res, &err) < 0) {
-        http_deliver_send_error(job, err);
-        g_clear_error(&err);
-        return;
-    }
-
-    bytes = g_memory_output_stream_steal_as_bytes(G_MEMORY_OUTPUT_STREAM(job->sink));
-    g_clear_object(&job->sink);   /* before delivering: delivering frees the job */
-    http_deliver_done(job, bytes);
-    g_bytes_unref(bytes);
-}
 
 /*
  * The headers are in, and the body has not been read yet -- which is the one
@@ -1874,29 +2123,21 @@ static void on_http_stream_headers(GObject *src, GAsyncResult *res, gpointer dat
     }
 
     if (SOUP_STATUS_IS_SUCCESSFUL(soup_message_get_status(job->msg))) {
-        job->lines = g_data_input_stream_new(in);
         /*
          * **HTTP is a CRLF protocol and GLib's default newline is LF.** `Exec`
          * never had to know, because a pipe ends its lines with `\n`; a
-         * conforming SSE server is allowed `\r\n`, and with the default every
-         * line would arrive with a carriage return still on the end of it --
-         * `JSON.parse` failing on the last character, and the blank line that
-         * separates two events never comparing equal to "".
+         * conforming SSE server is allowed `\r\n`, and a line that kept its
+         * carriage return would fail `JSON.parse` on the last character, and
+         * the blank line between two events would never compare equal to "".
+         * `http_stream_lines` takes all three ends.
          */
-        g_data_input_stream_set_newline_type(job->lines,
-                                             G_DATA_STREAM_NEWLINE_TYPE_ANY);
-        g_object_unref(in);
+        job->feed    = in;                /* taken */
+        job->pending = g_byte_array_new();
         http_stream_read_next(job);
         return;
     }
 
-    job->sink = g_memory_output_stream_new_resizable();
-    g_output_stream_splice_async(job->sink, in,
-                                 G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
-                                 G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
-                                 G_PRIORITY_DEFAULT, job->cancellable,
-                                 on_http_stream_spliced, job);
-    g_object_unref(in);
+    http_job_read_body(job, in);
 }
 
 static gboolean on_http_guard(gpointer data);
@@ -1959,7 +2200,7 @@ static void on_http_save_end(HttpSave *s, GError *err, bool local, gpointer data
         char *msg = http_save_error_text(job->who, job->url, job->save_path,
                                          bta_gerror_text(err));
 
-        http_deliver_failure(job, "Error", msg);
+        http_deliver_failure(job, "Error", msg, 0);
         g_free(msg);
         return;
     }
@@ -1990,17 +2231,11 @@ static void on_http_save_headers(GObject *src, GAsyncResult *res, gpointer data)
     http_job_rearm(job);
 
     if (!SOUP_STATUS_IS_SUCCESSFUL(soup_message_get_status(job->msg))) {
-        job->sink = g_memory_output_stream_new_resizable();
-        g_output_stream_splice_async(job->sink, in,
-                                     G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
-                                     G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
-                                     G_PRIORITY_DEFAULT, job->cancellable,
-                                     on_http_stream_spliced, job);
-        g_object_unref(in);
+        http_job_read_body(job, in);
         return;
     }
 
-    job->save = http_save_new(in, job->save_path, job->cancellable,
+    job->save = http_save_new(in, job->save_path, 0, job->cancellable,
                               http_save_total(job->msg),
                               on_http_save_tick, on_http_save_end, job);
     http_save_start(job->save);
@@ -2129,6 +2364,30 @@ static JSValue http_client_set_timeout(JSContext *ctx, JSValueConst this_val, JS
     if (n < 0)
         return JS_ThrowRangeError(ctx, "Timeout: %d is negative", n);
     c->timeout_ms = n;
+    return JS_UNDEFINED;
+}
+
+static JSValue http_client_get_maxsize(JSContext *ctx, JSValueConst this_val)
+{
+    HttpClientData *c = http_client_data(this_val);
+
+    if (!c)
+        return JS_ThrowTypeError(ctx, "MaxSize: not an Http client");
+    return JS_NewInt64(ctx, (int64_t)c->max_size);
+}
+
+static JSValue http_client_set_maxsize(JSContext *ctx, JSValueConst this_val, JSValueConst v)
+{
+    HttpClientData *c = http_client_data(this_val);
+    double          d = 0;
+
+    if (!c)
+        return JS_ThrowTypeError(ctx, "MaxSize: not an Http client");
+    if (!bta_to_number(ctx, v, "MaxSize", &d))
+        return JS_EXCEPTION;
+    if (!(d >= 0))
+        return JS_ThrowRangeError(ctx, "MaxSize is a number of bytes, 0 or more");
+    c->max_size = d >= 9.0e18 ? 0 : (goffset)d;
     return JS_UNDEFINED;
 }
 
@@ -2982,19 +3241,23 @@ static JSValue http_start(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         job->guard = g_timeout_add((guint)timeout, on_http_guard, job);
     }
 
-    /* Only a streamed request and a download change road: everything else
-     * keeps the one call it has always made, so redirects, auth, cookies, the
-     * logger and the multipart bodies carry no regression risk -- and both
-     * get all of them for free, since `http_build` above is the same. */
-    if (streaming)
-        soup_session_send_async(job->sess, job->msg, G_PRIORITY_DEFAULT,
-                                job->cancellable, on_http_stream_headers, job);
-    else if (job->save_path)
-        soup_session_send_async(job->sess, job->msg, G_PRIORITY_DEFAULT,
-                                job->cancellable, on_http_save_headers, job);
-    else
-        soup_session_send_and_read_async(job->sess, job->msg, G_PRIORITY_DEFAULT,
-                                         job->cancellable, on_http_done, job);
+    if (!http_max_opt(ctx, opts, c ? c->max_size : HTTP_MAX_SIZE_DEFAULT, who,
+                      &job->max_size)) {
+        JS_FreeValue(ctx, handle);
+        http_job_free(job);
+        return JS_EXCEPTION;
+    }
+
+    /* Every road sends and then reads what it was answered with as it decides:
+     * a stream line by line, a download into its file, anything else into
+     * `Body` up to `MaxSize`. Redirects, auth, cookies, the logger and the
+     * multipart bodies are `http_build`'s, the same for all three. */
+    GAsyncReadyCallback headers = streaming       ? on_http_stream_headers
+                                : job->save_path  ? on_http_save_headers
+                                                  : on_http_body_headers;
+
+    soup_session_send_async(job->sess, job->msg, G_PRIORITY_DEFAULT,
+                            job->cancellable, headers, job);
     return handle;
 }
 
@@ -3218,15 +3481,6 @@ typedef struct {
     bool          late;
 } HttpWaitState;
 
-static void on_http_wait_done(GObject *src, GAsyncResult *res, gpointer data)
-{
-    HttpWaitState *w = data;
-    SoupSession   *sess = SOUP_SESSION(src);
-
-    w->bytes = soup_session_send_and_read_finish(sess, res, &w->err);
-    w->done = true;
-}
-
 static void on_http_wait_sent(GObject *src, GAsyncResult *res, gpointer data)
 {
     HttpWaitState *w = data;
@@ -3235,13 +3489,19 @@ static void on_http_wait_sent(GObject *src, GAsyncResult *res, gpointer data)
     w->done = true;
 }
 
-static void on_http_wait_spliced(GObject *src, GAsyncResult *res, gpointer data)
+/* A blocking answer read whole into `Body`, up to `MaxSize`. */
+static void on_http_wait_body_end(HttpSave *s, GError *err, bool local, gpointer data)
 {
     HttpWaitState *w = data;
 
-    if (g_output_stream_splice_finish(G_OUTPUT_STREAM(src), res, &w->err) >= 0)
-        w->bytes = g_memory_output_stream_steal_as_bytes(G_MEMORY_OUTPUT_STREAM(src));
+    (void)local;
     w->save_done = true;
+    if (err) {
+        w->err = g_error_copy(err);
+        return;
+    }
+    w->bytes = g_byte_array_free_to_bytes(s->mem);
+    s->mem   = NULL;
 }
 
 static gboolean on_http_wait_late(gpointer data)
@@ -3355,7 +3615,11 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
         return JS_ThrowRangeError(ctx, "%s: Timeout %d is negative", who, timeout);
     }
 
-    if (!bta_cancellable_not_option(ctx, opts, who)) {
+    goffset max_size = 0;
+
+    if (!bta_cancellable_not_option(ctx, opts, who) ||
+        !http_max_opt(ctx, opts, c ? c->max_size : HTTP_MAX_SIZE_DEFAULT, who,
+                      &max_size)) {
         g_object_unref(msg);
         http_tls_unref(tls);
         g_free(save_path);
@@ -3398,12 +3662,8 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
      * silent server, never).  Not forced away here: an application that needs
      * prompt cancelling asks `Http1` -- docs/agents/network.md. */
     w.msg = msg;
-    if (save_path)
-        soup_session_send_async(sess, msg, G_PRIORITY_DEFAULT, canc,
-                                on_http_wait_sent, &w);
-    else
-        soup_session_send_and_read_async(sess, msg, G_PRIORITY_DEFAULT, canc,
-                                         on_http_wait_done, &w);
+    soup_session_send_async(sess, msg, G_PRIORITY_DEFAULT, canc,
+                            on_http_wait_sent, &w);
 
     http_wait_arm(&w);
 
@@ -3417,32 +3677,33 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     }
 
     /*
-     * **A download's body, once the headers are in.** A 2xx goes to the file
-     * through the chain the callback verbs use; anything else is an answer --
-     * a 404's page -- and is read whole into `Body` with no file made, the
-     * way `Stream` treats one. The guard is armed again here and by every
-     * block, so a `Timeout` that ends this means that long with nothing.
+     * **The body, once the headers are in.** A download's 2xx goes to the file
+     * through the chain the callback verbs use, with the guard armed again here
+     * and by every block, so a `Timeout` that ends it means that long with
+     * nothing. Anything else -- every other answer, and a download's 404 page
+     * -- is read into `Body` up to `MaxSize`, refused before a byte when the
+     * declared length is past it, with the guard counting the whole flight.
      */
-    if (save_path && w.in && !w.err) {
-        GInputStream *in = w.in;
+    if (w.in && !w.err) {
+        GInputStream *in       = w.in;
+        bool          to_file  = save_path &&
+                                 SOUP_STATUS_IS_SUCCESSFUL(soup_message_get_status(msg));
+        goffset       declared = http_save_total(msg);
 
         w.in = NULL;
-        http_wait_arm(&w);
-        if (SOUP_STATUS_IS_SUCCESSFUL(soup_message_get_status(msg))) {
+        if (to_file) {
             w.saving = true;
-            http_save_start(http_save_new(in, save_path, canc, http_save_total(msg),
+            http_wait_arm(&w);
+            http_save_start(http_save_new(in, save_path, 0, canc, declared,
                                           on_http_wait_save_tick,
                                           on_http_wait_save_end, &w));
-        } else {
-            GOutputStream *sink = g_memory_output_stream_new_resizable();
-
-            g_output_stream_splice_async(sink, in,
-                                         G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
-                                         G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
-                                         G_PRIORITY_DEFAULT, canc,
-                                         on_http_wait_spliced, &w);
-            g_object_unref(sink);
+        } else if (max_size > 0 && declared > max_size) {
             g_object_unref(in);
+            w.err       = g_error_new_literal(http_too_large_quark(), 0, "too large");
+            w.save_done = true;
+        } else {
+            http_save_start(http_save_new(in, NULL, max_size, canc, declared,
+                                          NULL, on_http_wait_body_end, &w));
         }
         while (!w.save_done) {
             if (w.late && !g_cancellable_is_cancelled(canc))
@@ -3471,12 +3732,19 @@ static JSValue http_wait(JSContext *ctx, HttpClientData *c, SoupSession *sess,
     JS_FreeValue(ctx, progress);
 
     if (w.err) {
-        const char *kind = late ? "Timeout" :
+        bool        big  = g_error_matches(w.err, http_too_large_quark(), 0);
+        const char *kind = late ? "Timeout" : big ? "TooLarge" :
             (g_error_matches(w.err, G_IO_ERROR, G_IO_ERROR_CANCELLED) ? "Cancelled" :
              w.save_local ? "Error" : http_kind_for(w.err));
         JSValue     ex;
 
-        if (w.save_local) {
+        if (big && !late) {
+            char *msgtext = http_too_large_text(who, url, max_size);
+
+            ex = http_throw_text(ctx, msgtext, kind,
+                                 (int)soup_message_get_status(msg));
+            g_free(msgtext);
+        } else if (w.save_local) {
             char *msgtext = http_save_error_text(who, url, save_path,
                                                  bta_gerror_text(w.err));
 
@@ -3701,6 +3969,16 @@ static const JSCFunctionListEntry http_client_props[] = {
      *   forever*
      */
     JS_CGETSET_DEF("Timeout",         http_client_get_timeout, http_client_set_timeout),
+    /* MaxSize
+     *   bytes an answer may hold in memory: **256 MiB when nothing is said**,
+     *   `0` (or `Infinity`) for no ceiling, and a request's own `MaxSize`
+     *   speaks for that request. A declared length past it is refused before
+     *   the body is read, and anything else once it passes it -- counted
+     *   decoded, so a small gzip that inflates is held to it too -- with
+     *   `Kind: "TooLarge"` and the status the server answered. An answer
+     *   written to a file with `SaveTo` is not counted
+     */
+    JS_CGETSET_DEF("MaxSize",         http_client_get_maxsize, http_client_set_maxsize),
     /* FollowRedirects
      *   follow a `3xx`. Default `true`
      */
@@ -3790,7 +4068,9 @@ static const JSCFunctionListEntry http_client_props[] = {
      *   far it got, at most ten times a second and once at the end (`total`
      *   `-1` with no declared length), and **`Timeout` is then the silence
      *   allowed, not the length** -- a download that keeps arriving is never
-     *   cut. `Request` takes the same, with any verb but `HEAD`
+     *   cut. `Request` takes the same, with any verb but `HEAD`.
+     *   **`MaxSize`** (256 MiB unless asked, `0` no ceiling) is what `Body`
+     *   may hold: past it the answer is `Kind: "TooLarge"`
      */
     JS_CFUNC_DEF("Get",         4, http_client_get),
     /* Post(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
@@ -3819,7 +4099,9 @@ static const JSCFunctionListEntry http_client_props[] = {
      *   the answer **as it arrives**: `onLine(line, handle)` once per text
      *   line, the newline stripped, blank lines included. Method-first like
      *   `Request`, so a `POST` whose answer comes in pieces needs no second
-     *   name
+     *   name. **A line may be 1 MiB**: one that grows past it with no end
+     *   ends the stream with `Kind: "TooLarge"`, and an answer that is not a
+     *   2xx is read into `Body` up to `MaxSize`
      */
     JS_CFUNC_DEF("Stream",      6, http_client_stream),
     /* RequestWait(method, url, [body], [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }
@@ -3895,6 +4177,7 @@ static JSValue http_client_new(JSContext *ctx, int max_conns, int max_per_host)
     c->headers = JS_UNDEFINED;
     c->timeout_ms = 0;
     c->follow = true;
+    c->max_size = HTTP_MAX_SIZE_DEFAULT;
     c->max_conns = max_conns;
     c->max_per_host = max_per_host;
     JS_SetOpaque(obj, c);
@@ -3983,6 +4266,11 @@ static JSValue js_http_client(JSContext *ctx, JSValueConst this_val,
         }
         JS_FreeValue(ctx, h);
 
+        if (!http_max_opt(ctx, opts, HTTP_MAX_SIZE_DEFAULT, "Http.Client",
+                          &c->max_size)) {
+            JS_FreeValue(ctx, obj);
+            return JS_EXCEPTION;
+        }
         if (!http_int_opt(ctx, opts, "Timeout", 0, &c->timeout_ms)) {
             JS_FreeValue(ctx, obj);
             return JS_EXCEPTION;
@@ -4259,7 +4547,8 @@ static const JSCFunctionListEntry http_props[] = {
      *   `0` waits forever for the callback verbs), `FollowRedirects` (default
      *   `true`), `Http1` (default `false`), `Language`,
      *   `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`,
-     *   `MaxPerHost`. The options are an object — a bare URL is refused
+     *   `MaxPerHost`, `MaxSize` (bytes an answer may hold in memory, 256 MiB
+     *   unless asked). The options are an object — a bare URL is refused
      */
     JS_CFUNC_DEF("Client",      1, js_http_client),
     /* Server([opts]) -> HttpServer
@@ -4283,7 +4572,9 @@ static const JSCFunctionListEntry http_props[] = {
      *   far it got, at most ten times a second and once at the end (`total`
      *   `-1` with no declared length), and **`Timeout` is then the silence
      *   allowed, not the length** -- a download that keeps arriving is never
-     *   cut. `Request` takes the same, with any verb but `HEAD`
+     *   cut. `Request` takes the same, with any verb but `HEAD`.
+     *   **`MaxSize`** (256 MiB unless asked, `0` no ceiling) is what `Body`
+     *   may hold: past it the answer is `Kind: "TooLarge"`
      */
     JS_CFUNC_DEF("Get",         4, js_http_get),
     /* Post(url, body, [opts], onDone, [onError]) -> { Running, TimedOut, Url, Method, Stop }
@@ -4312,7 +4603,9 @@ static const JSCFunctionListEntry http_props[] = {
      *   the answer **as it arrives**: `onLine(line, handle)` once per text
      *   line, the newline stripped, blank lines included. Method-first like
      *   `Request`, so a `POST` whose answer comes in pieces needs no second
-     *   name
+     *   name. **A line may be 1 MiB**: one that grows past it with no end
+     *   ends the stream with `Kind: "TooLarge"`, and an answer that is not a
+     *   2xx is read into `Body` up to `MaxSize`
      */
     JS_CFUNC_DEF("Stream",      6, js_http_stream),
     /* RequestWait(method, url, [body], [opts], [cancellable]) -> { Status, Reason, Headers, Body, Url }

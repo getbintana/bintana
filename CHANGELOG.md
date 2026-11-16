@@ -39,6 +39,14 @@ one-page answer to *what is new since the release I have*.
   **`Timeout` is the silence allowed, not the length**, so a download that keeps
   arriving is never cut -- a blocking one used to die at 30 s, and held the
   whole answer in memory twice.
+- **An answer read into memory has a ceiling, which can break a program that
+  downloads more than 256 MiB into `Body`**: `MaxSize` (per request or on
+  `Http.Client`, 256 MiB unless asked, `0` for none). A declared length past it
+  is refused before the body is read, anything else once it passes it --
+  counted decoded, so a small gzip that inflates is held to it too -- with the
+  new `Kind: "TooLarge"` and the status the server answered. A `Stream` line
+  may be 1 MiB; one with no end past that ends the stream as `TooLarge` instead
+  of growing until the process dies. `SaveTo` is not counted.
 - **A `TableView` cell setter has a ceiling**: `SetCell`, `SetIcon`, `SetUri`,
   `SetStyle` and `SetEditable` reach a declared column or a cell the row
   already holds, and `SetCell` the one right after its last, which adds it.

@@ -30424,9 +30424,13 @@ class Form1 extends Form {
         if (noSoup)
             return;
 
+        /* A token of this run, which the server answers with: a server left
+         * on the port by a run that was cut short would otherwise be the one
+         * this talks to, with the routes it had then. */
+        const token = Random.Uuid();
         const srv = Exec(["python3", "-u", "-c", [
             "from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer",
-            "import hashlib, time",
+            "import hashlib, sys, time",
             "class H(BaseHTTPRequestHandler):",
             "    def body(self, n, pieces, gap, length=True, stall=0):",
             "        data = bytes(i % 251 for i in range(n))",
@@ -30453,16 +30457,46 @@ class Form1 extends Form {
             "            return self.body(20000, 20, 0.1)",
             "        if self.path == \"/stall\":",
             "            return self.body(100000, 10, 0, stall=3)",
+            "        if self.path == \"/gzip\":",
+            "            import gzip",
+            "            z = gzip.compress(bytes(1000000))",
+            "            self.send_response(200)",
+            "            self.send_header(\"Content-Encoding\", \"gzip\")",
+            "            self.send_header(\"Content-Length\", str(len(z)))",
+            "            self.end_headers()",
+            "            self.wfile.write(z)",
+            "            return",
+            "        if self.path == \"/longline\":",
+            "            self.send_response(200)",
+            "            self.send_header(\"Content-Type\", \"text/plain\")",
+            "            self.end_headers()",
+            "            try:",
+            "                for i in range(32):",
+            "                    self.wfile.write(b'x' * 65536)",
+            "                    self.wfile.flush()",
+            "            except (BrokenPipeError, ConnectionResetError):",
+            "                pass",
+            "            return",
+            "        if self.path == \"/ends\":",
+            "            self.send_response(200)",
+            "            self.send_header(\"Content-Type\", \"text/plain\")",
+            "            self.end_headers()",
+            "            self.wfile.write(b'a\\rb\\r\\nc\\nx\\r')",
+            "            self.wfile.flush()",
+            "            time.sleep(0.2)",
+            "            self.wfile.write(b'\\ny\\nlast')",
+            "            return",
             "        b = b'{\"error\": \"no such file\"}'",
             "        self.send_response(404)",
             "        self.send_header(\"Content-Type\", \"application/json\")",
+            "        self.send_header(\"X-Token\", sys.argv[1])",
             "        self.send_header(\"Content-Length\", str(len(b)))",
             "        self.end_headers()",
             "        self.wfile.write(b)",
             "    def log_message(self, *a):",
             "        pass",
             "ThreadingHTTPServer((\"127.0.0.1\", 8475), H).serve_forever()",
-        ].join("\n")]);
+        ].join("\n"), token]);
 
         const dir = File.Join(SCRATCH, "httpsave");
         Directory.Make(dir);
@@ -30639,6 +30673,85 @@ class Form1 extends Form {
                 eq("nothing anywhere left a .part", parts().length, 0);
                 steps[7]();
             },
+            /*
+             * **What an answer may hold in memory** (`MaxSize`, 256 MiB unless
+             * asked): a declared length past it refused before the body, a
+             * small gzip that inflates past it caught as it is decoded, the
+             * blocking spelling the same, `0` no ceiling, and `SaveTo` not
+             * counted at all.
+             */
+            () => {
+                eq("a client holds 256 MiB in memory unless asked",
+                   Http.Client().MaxSize, 268435456);
+                const roomy = Http.Client({ MaxSize: 0 });
+                eq("MaxSize 0 is no ceiling, said at construction", roomy.MaxSize, 0);
+                roomy.MaxSize = Infinity;
+                eq("...and Infinity is the same", roomy.MaxSize, 0);
+                throws("a negative MaxSize is refused", () => { roomy.MaxSize = -1; });
+                throws("...per request too",
+                       () => api.Get("/blob", { MaxSize: -1 }, () => 0));
+
+                api.Get("/blob", { MaxSize: 100000 }, () => {
+                    failures.push("an answer past MaxSize was delivered");
+                    steps[8]();
+                }, (e) => {
+                    eq("an answer that declares more than MaxSize is TooLarge", e.Kind, "TooLarge");
+                    eq("...with the status the server answered", e.Status, 200);
+                    check("...and says what to do about it",
+                          e.Message.includes("MaxSize (100000 bytes)") &&
+                          e.Message.includes("SaveTo"), e.Message);
+                    steps[8]();
+                });
+            },
+            () => {
+                api.Get("/gzip", { MaxSize: 100000 }, () => {
+                    failures.push("an inflating answer past MaxSize was delivered");
+                    steps[9]();
+                }, (e) => {
+                    eq("a small gzip that inflates past MaxSize is caught as it is decoded",
+                       e.Kind, "TooLarge");
+                    steps[9]();
+                });
+            },
+            () => {
+                let said = null;
+                try {
+                    Http.GetWait("http://127.0.0.1:8475/blob", { MaxSize: 1000 });
+                } catch (e) {
+                    said = `${e.Kind} ${e.Status}`;
+                }
+                eq("the blocking spelling throws TooLarge too", said, "TooLarge 200");
+                eq("MaxSize 0 lets the whole answer in",
+                   Http.GetWait("http://127.0.0.1:8475/gzip", { MaxSize: 0 }).Body.Length,
+                   1000000);
+                eq("a download to a file is not counted",
+                   Http.GetWait("http://127.0.0.1:8475/blob",
+                                { SaveTo: at("roomy.bin"), MaxSize: 1000 }).Length, 300000);
+                steps[10]();
+            },
+            /* A stream's line ends, and its ceiling. */
+            () => {
+                const got = [];
+                api.Stream("GET", "/ends", (line) => got.push(line), () => {
+                    eq("\\r, \\r\\n and \\n each end a line -- a \\r\\n split across two blocks once",
+                       JSON.stringify(got), '["a","b","c","x","y","last"]');
+                    steps[11]();
+                }, (e) => {
+                    failures.push(`the line ends errored: ${e.Message}`);
+                    steps[11]();
+                });
+            },
+            () => {
+                let lines = 0;
+                api.Stream("GET", "/longline", () => lines++, () => {
+                    failures.push("a line with no end was read to the end");
+                    steps[12]();
+                }, (e) => {
+                    eq("a line longer than 1 MiB ends the stream as TooLarge", e.Kind, "TooLarge");
+                    eq("...with no line handed over", lines, 0);
+                    steps[12]();
+                });
+            },
             () => {
                 srv.Stop();
                 steps.length = 0;
@@ -30650,8 +30763,8 @@ class Form1 extends Form {
 
         until("the download server answers", () => {
             try {
-                Http.GetWait("http://127.0.0.1:8475/missing", { Timeout: 200 });
-                return true;
+                const r = Http.GetWait("http://127.0.0.1:8475/missing", { Timeout: 200 });
+                return r.Headers["x-token"] === token;
             } catch (e) {
                 return false;
             }

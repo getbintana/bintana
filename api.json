@@ -15528,7 +15528,7 @@
           "Params": 1,
           "Signature": "([opts])",
           "Returns": "HttpClient",
-          "Doc": "a client with its own session: `BaseUrl`, `Headers`, `Timeout` (ms, `0` waits forever for the callback verbs), `FollowRedirects` (default `true`), `Http1` (default `false`), `Language`, `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`, `MaxPerHost`. The options are an object — a bare URL is refused",
+          "Doc": "a client with its own session: `BaseUrl`, `Headers`, `Timeout` (ms, `0` waits forever for the callback verbs), `FollowRedirects` (default `true`), `Http1` (default `false`), `Language`, `UserAgent`, `Proxy`, `Auth`, `Cookies`, `IdleTimeout`, `MaxConns`, `MaxPerHost`, `MaxSize` (bytes an answer may hold in memory, 256 MiB unless asked). The options are an object — a bare URL is refused",
           "Native": true
         },
         {
@@ -15555,7 +15555,7 @@
           "Params": 4,
           "Signature": "(url, [opts], onDone, [onError])",
           "Returns": "{ Running, TimedOut, Url, Method, Stop }",
-          "Doc": "the ordinary read. **`{ SaveTo: path }` writes the answer to that file as it arrives**, one block in memory whatever its size: the record then has `Saved` (the path) and `Length` (the bytes written) and an empty `Body`, and nothing is left under any name if it does not finish. A 2xx goes to the file; anything else is answered into `Body` with no file made. `Progress(received, total, handle)` beside it is told how far it got, at most ten times a second and once at the end (`total` `-1` with no declared length), and **`Timeout` is then the silence allowed, not the length** -- a download that keeps arriving is never cut. `Request` takes the same, with any verb but `HEAD`",
+          "Doc": "the ordinary read. **`{ SaveTo: path }` writes the answer to that file as it arrives**, one block in memory whatever its size: the record then has `Saved` (the path) and `Length` (the bytes written) and an empty `Body`, and nothing is left under any name if it does not finish. A 2xx goes to the file; anything else is answered into `Body` with no file made. `Progress(received, total, handle)` beside it is told how far it got, at most ten times a second and once at the end (`total` `-1` with no declared length), and **`Timeout` is then the silence allowed, not the length** -- a download that keeps arriving is never cut. `Request` takes the same, with any verb but `HEAD`. **`MaxSize`** (256 MiB unless asked, `0` no ceiling) is what `Body` may hold: past it the answer is `Kind: \"TooLarge\"`",
           "Native": true
         },
         {
@@ -15672,7 +15672,7 @@
           "Params": 6,
           "Signature": "(method, url, [body], [opts], onLine, [onDone], [onError])",
           "Returns": "{ Running, TimedOut, Url, Method, Stop }",
-          "Doc": "the answer **as it arrives**: `onLine(line, handle)` once per text line, the newline stripped, blank lines included. Method-first like `Request`, so a `POST` whose answer comes in pieces needs no second name",
+          "Doc": "the answer **as it arrives**: `onLine(line, handle)` once per text line, the newline stripped, blank lines included. Method-first like `Request`, so a `POST` whose answer comes in pieces needs no second name. **A line may be 1 MiB**: one that grows past it with no end ends the stream with `Kind: \"TooLarge\"`, and an answer that is not a 2xx is read into `Body` up to `MaxSize`",
           "Native": true
         }
       ]
@@ -19541,7 +19541,7 @@
           "Params": 1,
           "Signature": "(url, [opts], onDone, [onError])",
           "Returns": "{ Running, TimedOut, Url, Method, Stop }",
-          "Doc": "the ordinary read. **`{ SaveTo: path }` writes the answer to that file as it arrives**, one block in memory whatever its size: the record then has `Saved` (the path) and `Length` (the bytes written) and an empty `Body`, and nothing is left under any name if it does not finish. A 2xx goes to the file; anything else is answered into `Body` with no file made. `Progress(received, total, handle)` beside it is told how far it got, at most ten times a second and once at the end (`total` `-1` with no declared length), and **`Timeout` is then the silence allowed, not the length** -- a download that keeps arriving is never cut. `Request` takes the same, with any verb but `HEAD`",
+          "Doc": "the ordinary read. **`{ SaveTo: path }` writes the answer to that file as it arrives**, one block in memory whatever its size: the record then has `Saved` (the path) and `Length` (the bytes written) and an empty `Body`, and nothing is left under any name if it does not finish. A 2xx goes to the file; anything else is answered into `Body` with no file made. `Progress(received, total, handle)` beside it is told how far it got, at most ten times a second and once at the end (`total` `-1` with no declared length), and **`Timeout` is then the silence allowed, not the length** -- a download that keeps arriving is never cut. `Request` takes the same, with any verb but `HEAD`. **`MaxSize`** (256 MiB unless asked, `0` no ceiling) is what `Body` may hold: past it the answer is `Kind: \"TooLarge\"`",
           "Native": true
         },
         {
@@ -19635,6 +19635,15 @@
           "Native": true
         },
         {
+          "Name": "MaxSize",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "bytes an answer may hold in memory: **256 MiB when nothing is said**, `0` (or `Infinity`) for no ceiling, and a request's own `MaxSize` speaks for that request. A declared length past it is refused before the body is read, and anything else once it passes it -- counted decoded, so a small gzip that inflates is held to it too -- with `Kind: \"TooLarge\"` and the status the server answered. An answer written to a file with `SaveTo` is not counted",
+          "Native": true
+        },
+        {
           "Name": "Patch",
           "Kind": "Method",
           "Params": 2,
@@ -19721,7 +19730,7 @@
           "Params": 2,
           "Signature": "(method, url, [body], [opts], onLine, [onDone], [onError])",
           "Returns": "{ Running, TimedOut, Url, Method, Stop }",
-          "Doc": "the answer **as it arrives**: `onLine(line, handle)` once per text line, the newline stripped, blank lines included. Method-first like `Request`, so a `POST` whose answer comes in pieces needs no second name",
+          "Doc": "the answer **as it arrives**: `onLine(line, handle)` once per text line, the newline stripped, blank lines included. Method-first like `Request`, so a `POST` whose answer comes in pieces needs no second name. **A line may be 1 MiB**: one that grows past it with no end ends the stream with `Kind: \"TooLarge\"`, and an answer that is not a 2xx is read into `Body` up to `MaxSize`",
           "Native": true
         },
         {

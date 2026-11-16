@@ -72,6 +72,34 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   a file that is not there is read through `hashOf`, which does not throw. The
   `HttpSave` test is red in 22 assertions with the C taken out, and clean under
   ASan.
+- **The client had no ceiling at all, on any road.** `send_and_read` filled
+  a `GBytes` with whatever came, an error page was spliced whole into memory,
+  and `GDataInputStream` grew a line with no newline until the process died --
+  while `Socket`, `SerialPort`, `Gzip`, `Zip` and the server's `MaxBody` all
+  had one. Every answer that goes to memory now goes through `HttpSave` in
+  memory mode (`dest` NULL, `mem` filled, `max` checked per block, decoded):
+  the buffered verbs, `Stream`'s and `SaveTo`'s error pages, and the `…Wait`
+  spellings, so `send_and_read` is gone and every road is `send` and then a
+  decision. `MaxSize` is 256 MiB unless asked and `0` is none (`MaxBody`'s
+  spelling, not `Gzip`'s, where `0` is zero bytes and `Infinity` none -- the
+  client takes `Infinity` as none too). A declared length past it is refused
+  before a byte is read (`http_save_total`, which says -1 for a compressed
+  answer, so the count catches those). **Two traps the change walked into**:
+  soup ends a message, and its logger prints the response body, when the body
+  stream is *closed* -- `send_and_read` did that before its callback, and with
+  the chain the close came with the free, after `onDone`, so `Log: "body"`
+  printed nothing in time (`testHttp`'s logger assertion went red); the chain
+  closes `in` at EOF now, before anybody is told. And `Stream` cuts its own
+  lines from 64 KiB blocks (`http_stream_lines`): `\n`, `\r\n` and a lone `\r`,
+  with a `\r` that ends one block and a `\n` that opens the next counted once
+  (`after_cr`), a `Stop()` inside `onLine` leaving the rest of the block unread
+  so the next read answers `Cancelled` a turn later, and the last line handed
+  over at EOF newline or not -- what `GDataInputStream` in `ANY` mode did, and
+  what `testHttpSave`'s `/ends` route holds. **A test server left on its port
+  by a run that was cut short answered the next run's probe** with the routes
+  it had then: four assertions went red for routes that were not there.
+  `testHttpSave` hands its server a per-run token and waits for that token
+  back.
 - **libsoup3 has no session `authenticate` signal, and connecting one is a
   `GLib-GObject-CRITICAL`, not a `NULL` or a no-op.** The plan assumed the
   soup2 shape; measured, the signal is in neither `soup-session.h` nor any
