@@ -8,9 +8,10 @@
 # every `project.btp`, every `.form` and every source, and exits 1 on an error.
 # Warnings are printed and do not fail the run, exactly as `bintana check` does.
 #
-# **`tools/` is in the list.** A desk tool is a project like any other, and
-# `bintana check` is what catches a name that is not there -- before the tool is
-# run at a moment that matters, which for `tools/release` is a release.
+# **`tools/`, `lib/` and `ide/` are in the list.** A desk tool is a project like
+# any other, and `bintana check` is what catches a name that is not there -- and
+# `lib/` is what gets shipped: `lib/propertygrid` passed every run while the
+# check called its form unloadable, because nothing checked it.
 #
 # **`tests/ide` is skipped when its `.form` files are not real symlinks.** The
 # project's forms are symlinks to `ide/forms/`; a Windows checkout without
@@ -33,7 +34,7 @@ checked=0
 skipped=0
 failed=0
 
-for project in examples/* tests/* tools/*; do
+for project in examples/* tests/* tools/* lib/* ide; do
     [[ -f "$project/project.btp" ]] || continue
 
     if [[ $project == tests/ide && ! -L tests/ide/MainForm.form ]]; then

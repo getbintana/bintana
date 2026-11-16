@@ -2338,6 +2338,15 @@ icon when the theme has one by that name (`gtkapplication.c`).
   is refused, with `TypeError: 'Fill' is read-only`. The suite had two that
   had passed for months: a test assigning `split.Fill = true` (laying out
   nothing) and a label named `On` (its form lost `On()`).
+- **A name collision is asked of the `.form`'s own class, not of `Form`.**
+  `Component` extends `Container` and has no `Rows`, so a component's `Rows`
+  panel binds -- and `lib/check` reported `lib/propertygrid` as
+  `error: Rows is also a method of Form: the form will not load` for a library
+  that loads and runs, while the loader (which refuses a *form* with such a
+  name, with a `TypeError`) accepted it. `Check.formBase` walks the project's
+  `class X extends Y` declarations (`Names.classTree`) to the first class the
+  runtime answers for, and the row is about that class. `tests/check.sh` walks
+  `lib/` and `ide/` now, which is what would have caught it.
 - **A subclass method that shadows a base one is a verb the base loses, and
   `api.sh` cannot see it.** Six controls -- `ListBox`, `RowList`, `TreeView`,
   `TableView`, `Notebook`, `Switcher` -- answered `Remove(index)`/`Remove(key)`
