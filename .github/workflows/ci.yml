@@ -723,12 +723,19 @@ jobs:
         run: |
           set -euo pipefail
           file=$(cat tarball-name.txt)
+          # **A tag with a letter in it is a pre-release** (`v0.4.0-rc1`). The
+          # repository's *latest* -- what somebody who downloads without
+          # looking gets -- stays on the last final release. Both jobs create
+          # the release when it is not there yet, so both decide the same way.
+          pre=""
+          if [[ $GITHUB_REF_NAME == *[A-Za-z]* ]]; then pre="--prerelease"; fi
           # `|| true` on the create, because the *other* job that attaches an
           # asset to this tag may have made the release first -- and a race that
           # ends with the asset uploaded is a race nothing needs to report.
+          # `$pre` is unquoted on purpose: it is the flag or nothing.
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
             || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
-                               --generate-notes || true
+                               $pre --generate-notes || true
           gh release upload "$GITHUB_REF_NAME" "$file" --clobber
 
           # And the public surface as data, which the documentation
@@ -1073,10 +1080,14 @@ jobs:
         run: |
           set -euo pipefail
           file=$(cat zip-name.txt)
-          # The same race as the Linux tarball's, from the other side.
+          # The same race as the Linux tarball's, from the other side, and the
+          # same pre-release rule: a tag with a letter in it is not *latest*.
+          pre=""
+          if [[ $GITHUB_REF_NAME == *[A-Za-z]* ]]; then pre="--prerelease"; fi
+          # `$pre` is unquoted on purpose: it is the flag or nothing.
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
             || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
-                               --generate-notes || true
+                               $pre --generate-notes || true
           gh release upload "$GITHUB_REF_NAME" "$file" --clobber
           # The setup beside the zip, when the installer step built one -- a
           # tag without it is the warning that step left in the log.

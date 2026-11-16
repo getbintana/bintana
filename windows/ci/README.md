@@ -84,7 +84,7 @@ application, and the build environment's recipe hash. On every run:
 
 ## What it publishes
 
-A release named `<app>-<version>` (`project-0.3.1rc1`), the version being the
+A release named `<app>-<version>` (`project-0.4.0rc1`), the version being the
 project's own `project.btp`, with
 `<command>-<version>-windows-x86_64.exe` attached. A version with a letter in
 it is a **prerelease**, so the repository's *latest* stays on the last final

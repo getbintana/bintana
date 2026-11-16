@@ -499,7 +499,12 @@ cmake --build build -j
 
 Commit as `Bintana x.y.z` and tag `vx.y.z` (the existing tags are lightweight).
 **The push and the tag's push are the owner's**, and a published tag is never
-moved. The `package` job runs on every push and, on a tag, creates the release
+moved. A tag with a letter in it (`v0.4.0-rc1`) is a **pre-release**: the
+package and windows jobs pass `--prerelease`, so the repository's *latest* --
+what somebody who downloads without looking gets -- stays on the last final
+release. `CMakeLists.txt` stays numeric (0.4.0); the letter is the tag's, and
+the BaseApp manifest's `tag:` follows it because that is what the Flatpak
+workflow fetches. The `package` job runs on every push and, on a tag, creates the release
 with generated notes and attaches the Linux tarball and `api.json`; the
 `windows` job attaches the portable zip and the setup when its toolchain can
 build it. The Flatpak repository is a separate workflow with a manual or
