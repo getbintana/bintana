@@ -30,6 +30,12 @@ one-page answer to *what is new since the release I have*.
 - `TableView.SetCell`, `SetIcon` and `SetStyle` report a value whose
   conversion throws, and leave the cell as it was; they used to empty it and
   leave the exception pending for the next call.
+- **A `TableView` cell setter has a ceiling**: `SetCell`, `SetIcon`, `SetUri`,
+  `SetStyle` and `SetEditable` reach a declared column or a cell the row
+  already holds, and `SetCell` the one right after its last, which adds it.
+  Anything further is a `RangeError` naming the two numbers; it used to grow
+  the row to reach it, so `SetCell(0, 2e9, …)` took the process down and a
+  swapped row and column wrote a cell no column shows.
 - A refusal that quotes a path or a zip entry is no longer cut at 255 bytes
   (`File`, `Directory`, `Zip`, `Database.Sqlite`, `PdfDocument`, desktop
   entries, a drawing's `Save`).

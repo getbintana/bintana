@@ -22201,6 +22201,31 @@ class Form1 extends Form {
               refusal(() => t.SetStyle(0, 0, noText)) !== null);
         eq("and nothing lingers for the next call", t.Cell(0, 1), "https://example.org/");
 
+        /*
+         * **How far a setter reaches**: a declared column, a cell the row
+         * holds, and for SetCell the one right after its last. There was no
+         * ceiling: `SetCell(0, 2e9, …)` grew the row to two thousand million
+         * cells, and a swapped `SetCell(column, row, …)` wrote a cell no column
+         * shows, without a word.
+         */
+        eq("a column far past the row is refused with the two numbers",
+           refusal(() => t.SetCell(0, 2e9, "x")),
+           "SetCell: column 2000000000 is past this row's 2 cells and the table's 2 columns");
+        eq("and the row did not grow", t.Row(0).length, 2);
+        t.SetCell(0, 2, "id-7");
+        eq("the cell right after the last is added, past the columns",
+           JSON.stringify(t.Row(0)), '["uno","https://example.org/","id-7"]');
+        t.SetCell(0, 2, "id-8");
+        eq("and a cell the row holds is written again", t.Cell(0, 2), "id-8");
+        throws("but not two past it", () => t.SetCell(0, 4, "x"));
+        throws("SetIcon only decorates a cell that is there",
+               () => t.SetIcon(0, 3, "folder"));
+        throws("so does SetStyle", () => t.SetStyle(0, 3, "heading"));
+        throws("and SetUri", () => t.SetUri(0, 3, "https://example.org/"));
+        throws("and SetEditable", () => t.SetEditable(0, 3, false));
+        t.SetIcon(0, 2, "folder");
+        eq("while one the row holds takes it", t.Row(0).length, 3);
+
         this.cellLinks = [];
         t.On("CellLink", (row, column, uri) => {
             this.cellLinks.push([row, column, uri]);

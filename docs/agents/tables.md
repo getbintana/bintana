@@ -18,6 +18,17 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   satisfy it. And a `Data` answer whose `Text` or `Icon` failed to convert left
   the exception pending inside a bind -- reported now like a `Data` that throws,
   with `null` meaning no icon rather than the icon named `null`.
+- **A cell setter reaches a declared column or a cell the row holds, and no
+  further** (`table_cell_reachable`). There was no ceiling: `SetCell(0, 2e9, …)`
+  grew the row to two thousand million empty strings until the process died,
+  `SetIcon` the same with a 16 GB pointer array, and a swapped
+  `SetCell(column, row, …)` wrote a cell no column shows without a word.
+  *The declared columns* alone would have been the wrong rule: a row may carry
+  values past them (an id riding along, given back by `Row`), so the reach is
+  `max(columns, the row's cells)`, plus one for `SetCell`, which is how such a
+  value is added after `Add`. The refusal names the two numbers. **Do not put
+  the old code back with `2e9` in the test** to watch it go red: it allocates
+  until the machine swaps -- 50 shows the same failure (2026-11-16).
 - **`CellEdit` read everything after the handler it had just called, and the
   row index was never there.** `on_cell_edited` passed `row->index`, which only
   `bta_table_model_item` ever writes -- so in a flat table built with `Add`

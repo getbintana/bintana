@@ -146,6 +146,33 @@ static bool row_locked(BtaTableRow *row, guint i)
     return row && row->locked && i < row->locked->len && row->locked->data[i];
 }
 
+/*
+ * Whether column `c` is a cell a setter may write on `row`: a declared column
+ * (hidden ones included), a cell the row already holds -- a row may carry
+ * values past the columns, which `Row` gives back -- or, with `append`, the
+ * one right after the last. Anything further is refused with the two numbers.
+ *
+ * **There used to be no ceiling at all**, and the row grew to reach whatever
+ * was asked: `SetCell(0, 2e9, …)` allocated two thousand million empty strings
+ * and the process died, and a swapped `SetCell(column, row, …)` wrote row 2's
+ * five-thousandth cell, which no column shows, without a word. `c` is known
+ * not to be negative here; the caller owns `row` and lets go of it on false.
+ */
+static bool table_cell_reachable(JSContext *ctx, BtaWidget *w, BtaTableRow *row,
+                                 int c, bool append, const char *who)
+{
+    guint cols  = g_list_model_get_n_items(
+                      gtk_column_view_get_columns(GTK_COLUMN_VIEW(w->inner)));
+    guint have  = row->cells ? row->cells->len : 0;
+    guint reach = MAX(cols, have) + (append ? 1 : 0);
+
+    if ((guint)c < reach)
+        return true;
+    JS_ThrowRangeError(ctx, "%s: column %d is past this row's %u cells and the "
+                       "table's %u columns", who, c, have, cols);
+    return false;
+}
+
 /* Grows a lazily made list to reach `i`, so a table with one icon on one row
  * does not carry an empty string per cell. */
 static void row_pad(GPtrArray **list, guint i)
@@ -4173,6 +4200,10 @@ static JSValue table_set_icon(JSContext *ctx, JSValueConst this_val,
         g_object_unref(row);
         return JS_ThrowRangeError(ctx, "SetIcon: %d is not a column", c);
     }
+    if (!table_cell_reachable(ctx, w, row, c, false, "SetIcon")) {
+        g_object_unref(row);
+        return JS_EXCEPTION;
+    }
     /* Converted before anything is touched: a value whose conversion throws
      * leaves the row as it was and the exception reported, not pending. */
     const char *s = JS_ToCString(ctx, argv[2]);
@@ -4239,6 +4270,10 @@ static JSValue table_set_uri(JSContext *ctx, JSValueConst this_val,
     if (c < 0) {
         g_object_unref(row);
         return JS_ThrowRangeError(ctx, "SetUri: %d is not a column", c);
+    }
+    if (!table_cell_reachable(ctx, w, row, c, false, "SetUri")) {
+        g_object_unref(row);
+        return JS_EXCEPTION;
     }
 
     /* Converted before anything is touched: a refusal leaves the row as it was. */
@@ -4321,6 +4356,10 @@ static JSValue table_set_style(JSContext *ctx, JSValueConst this_val,
         g_object_unref(row);
         return JS_ThrowRangeError(ctx, "SetStyle: %d is not a column", c);
     }
+    if (!table_cell_reachable(ctx, w, row, c, false, "SetStyle")) {
+        g_object_unref(row);
+        return JS_EXCEPTION;
+    }
     if (!JS_IsString(argv[2])) {
         g_object_unref(row);
         return JS_ThrowTypeError(ctx, "SetStyle: style is a theme class name");
@@ -4392,6 +4431,10 @@ static JSValue table_set_editable(JSContext *ctx, JSValueConst this_val,
     if (c < 0) {
         g_object_unref(row);
         return JS_ThrowRangeError(ctx, "SetEditable: %d is not a column", c);
+    }
+    if (!table_cell_reachable(ctx, w, row, c, false, "SetEditable")) {
+        g_object_unref(row);
+        return JS_EXCEPTION;
     }
     if (!st->tree)
         JS_ToInt32(ctx, &at, argv[0]);
@@ -7250,6 +7293,10 @@ static JSValue table_set_cell(JSContext *ctx, JSValueConst this_val,
         g_object_unref(row);
         return JS_ThrowRangeError(ctx, "SetCell: %d is not a column", c);
     }
+    if (!table_cell_reachable(ctx, w, row, c, true, "SetCell")) {
+        g_object_unref(row);
+        return JS_EXCEPTION;
+    }
     /* Converted before anything is touched: a value whose conversion throws
      * leaves the row as it was and the exception reported, not pending. */
     const char *s = JS_ToCString(ctx, argv[2]);
@@ -8408,32 +8455,38 @@ static const JSCFunctionListEntry table_props[] = {
      */
     JS_CFUNC_DEF("Cell",    2, table_cell),
     /* SetCell(row, column, value)
-     *   one cell, in place. The selection stays where it is
+     *   one cell, in place. The selection stays where it is. `column` is a
+     *   declared one, a cell the row already holds, or the one right after its
+     *   last, which adds it; anything further is a `RangeError`
      */
     JS_CFUNC_DEF("SetCell", 3, table_set_cell),
     /* SetIcon(row, column, name)
      *   an icon from the theme beside a cell's text. `""` takes it off.
-     *   Refused on an on-demand table
+     *   Refused on an on-demand table. The column is a declared one or a cell
+     *   the row holds
      */
     JS_CFUNC_DEF("SetIcon", 3, table_set_icon),
     /* SetUri(row, column, uri)
      *   where a `Link` cell goes when that is not its text. `""` makes the
      *   cell not a link, `null` goes back to opening its text. Refused on an
-     *   on-demand table
+     *   on-demand table. The column is a declared one or a cell the
+     *   row holds
      */
     JS_CFUNC_DEF("SetUri", 3, table_set_uri),
     /* SetStyle(row, column, style)
      *   the theme class a cell wears -- a name like `"heading"`, the way
      *   `Style` takes one on a control, not a colour. `""` takes it off, and
      *   recycling a cell takes it off too. Refused on an on-demand table,
-     *   whose `Data` answers `{ Text, Style }`
+     *   whose `Data` answers `{ Text, Style }`. The column is a declared one or a
+     *   cell the row holds
      */
     JS_CFUNC_DEF("SetStyle", 3, table_set_style),
     /* SetEditable(row, column, editable)
      *   whether this row's cell edits, in a column with an `Editor`: `false`
      *   draws it dim and opens nothing, **before** anything is typed -- a
      *   summary's dates, which are its children's. Refused on an on-demand
-     *   table, whose `Data` answers `{ Text, Editable: false }`
+     *   table, whose `Data` answers `{ Text, Editable: false }`. The column is a
+     *   declared one or a cell the row holds
      */
     JS_CFUNC_DEF("SetEditable", 3, table_set_editable),
     /* SetRange(fromRow, fromColumn, toRow, toColumn) -> TableView

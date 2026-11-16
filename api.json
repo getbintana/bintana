@@ -10177,7 +10177,7 @@
           "Params": 3,
           "Signature": "(row, column, value)",
           "Returns": "",
-          "Doc": "one cell, in place. The selection stays where it is",
+          "Doc": "one cell, in place. The selection stays where it is. `column` is a declared one, a cell the row already holds, or the one right after its last, which adds it; anything further is a `RangeError`",
           "Native": true
         },
         {
@@ -10186,7 +10186,7 @@
           "Params": 3,
           "Signature": "(row, column, editable)",
           "Returns": "",
-          "Doc": "whether this row's cell edits, in a column with an `Editor`: `false` draws it dim and opens nothing, **before** anything is typed -- a summary's dates, which are its children's. Refused on an on-demand table, whose `Data` answers `{ Text, Editable: false }`",
+          "Doc": "whether this row's cell edits, in a column with an `Editor`: `false` draws it dim and opens nothing, **before** anything is typed -- a summary's dates, which are its children's. Refused on an on-demand table, whose `Data` answers `{ Text, Editable: false }`. The column is a declared one or a cell the row holds",
           "Native": true
         },
         {
@@ -10195,7 +10195,7 @@
           "Params": 3,
           "Signature": "(row, column, name)",
           "Returns": "",
-          "Doc": "an icon from the theme beside a cell's text. `\"\"` takes it off. Refused on an on-demand table",
+          "Doc": "an icon from the theme beside a cell's text. `\"\"` takes it off. Refused on an on-demand table. The column is a declared one or a cell the row holds",
           "Native": true
         },
         {
@@ -10213,7 +10213,7 @@
           "Params": 3,
           "Signature": "(row, column, style)",
           "Returns": "",
-          "Doc": "the theme class a cell wears -- a name like `\"heading\"`, the way `Style` takes one on a control, not a colour. `\"\"` takes it off, and recycling a cell takes it off too. Refused on an on-demand table, whose `Data` answers `{ Text, Style }`",
+          "Doc": "the theme class a cell wears -- a name like `\"heading\"`, the way `Style` takes one on a control, not a colour. `\"\"` takes it off, and recycling a cell takes it off too. Refused on an on-demand table, whose `Data` answers `{ Text, Style }`. The column is a declared one or a cell the row holds",
           "Native": true
         },
         {
@@ -10222,7 +10222,7 @@
           "Params": 3,
           "Signature": "(row, column, uri)",
           "Returns": "",
-          "Doc": "where a `Link` cell goes when that is not its text. `\"\"` makes the cell not a link, `null` goes back to opening its text. Refused on an on-demand table",
+          "Doc": "where a `Link` cell goes when that is not its text. `\"\"` makes the cell not a link, `null` goes back to opening its text. Refused on an on-demand table. The column is a declared one or a cell the row holds",
           "Native": true
         },
         {
