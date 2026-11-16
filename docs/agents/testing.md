@@ -113,6 +113,11 @@ settled one (938) and the assertion failed. The same way, twice out of three.
 It is the second time a **wall-clock window** has been the culprit, after the
 one `docs/testing.md` records above, and the rule is the same: a window is a
 bet, and the way to make it a good one is to measure what it has to outlast.
+The settle's floor is **sixty** readings now (twenty was not long enough under
+a loaded full run on 2026-11-16), and the map's two effects are asserted by
+waiting for the direction itself -- taller with the map, shorter without --
+instead of a second generic settle. The editor removes the map from its box
+when `ShowMap` goes false; hiding it kept the map's column on Windows.
 
 **And the sharper version: never assert that something has *not* happened yet.**
 `until` fixes waiting for a frame; nothing fixes racing one. `tests/widgets`
@@ -408,14 +413,13 @@ save will edit `examples/hello` for real.
   (2026-11-11): `tests/smoke` 171/0, `tests/markdown` 171/0, `tests/qr`
   120/0, `tests/report` 259/0 and `tests/xlsx` 57/0 on that desktop.
   `tests/widgets` runs natively there with `testClipboard`'s round trip
-  skipped (the clipboard SEGV below): 6372 assertions, of which the two or
-  three crowding failures below are the red ones (the last run was 6370
-  passed, 2 failed on 2026-11-13). What is left is the suite's own crowding,
-  none of it seen alone: `testHttpServer`'s TLS restart on an ephemeral port
-  another socket took, `testNetwork`'s probe of a stopped server answering
-  `Error` (both in [`network.md`](network.md)), and a timing check that comes
-  and goes -- `Http.Stream`'s first line inside 700 ms, or within 1 s, or the
-  lines `Exec` kept before a deadline. `tests/check.sh` is the no-display pass the Windows CI
+  skipped (the clipboard SEGV below): 6517 assertions (the last idle run was
+  6517 passed, 0 failed on 2026-11-16). What is left is the suite's own
+  crowding, none of it seen alone: `testHttpServer`'s TLS restart on an
+  ephemeral port another socket took, `testNetwork`'s probe of a stopped
+  server answering `Error` (both in [`network.md`](network.md)), and a timing
+  check that comes and goes -- `Http.Stream`'s first-to-last gap (400 ms now,
+  1500 ms deadline), or the lines `Exec` kept before a deadline. `tests/check.sh` is the no-display pass the Windows CI
   runs; it skips `tests/ide` with a sentence when Git wrote the project's
   `.form` symlinks as text files, which is what a checkout without Developer
   Mode does. The runner does the same now, so `tests/run.sh` continues with the

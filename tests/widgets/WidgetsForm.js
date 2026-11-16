@@ -2215,8 +2215,9 @@ class WidgetsForm extends Form {
          * compares lengths tells them apart: a step of six readings and the
          * final plateau of six readings are the same thing by that measure.
          * What tells them apart is that the final one **never ends** -- so the
-         * settle has to be long enough to cover more than one step, and the
-         * floor is twenty readings against a longest measured step of six.
+         * settle has to be long enough to cover more than one step. The floor
+         * is sixty readings: twenty was enough alone, and a loaded full run
+         * showed a step lasting past it (`442 -> 694` on 2026-11-16).
          *
          * On top of that floor, two things that need no constant at all:
          *
@@ -2253,7 +2254,7 @@ class WidgetsForm extends Form {
                 /* **Strictly longer than the longest plateau before it**: the
                  * last one is the one that never ends, and a step that is as
                  * long as the one before it is a step and not the end. */
-                return agreed >= 20 && agreed > longest;
+                return agreed >= 60 && agreed > longest;
             }, () => then(ed.ScrollMaxY));
         };
 
@@ -2264,9 +2265,13 @@ class WidgetsForm extends Form {
 
             ed.ShowMap = true;
             eq("ShowMap reads back", ed.ShowMap, true);
-            /* **Anchored**: the room has to have moved, because the map takes
-             * the width away and the text wraps again. */
-            stable((beside) => {
+            /* **Wait for the effect, not for a settle.** Hiding or showing the
+             * map changes the width the text wraps in; under load the layout
+             * can pass through a taller intermediate reading, and a generic
+             * "stopped changing" check can land on it. The assertion is the
+             * direction: taller with the map, shorter without. */
+            until("the map takes room from the text", () => ed.ScrollMaxY > alone, () => {
+                const beside = ed.ScrollMaxY;
                 check("a map beside the text leaves less to wrap in, so it is taller",
                       beside > alone, `${alone} -> ${beside}`);
                 ed.ScrollY = 40;
@@ -2274,14 +2279,13 @@ class WidgetsForm extends Form {
 
                 ed.ShowMap = false;
                 eq("turned off, it reads off", ed.ShowMap, false);
-                /* And anchored again: the room comes back, and the reading
-                 * that says so is one that moved. */
-                stable((again) => {
+                until("the text gets its room back", () => ed.ScrollMaxY < beside, () => {
+                    const again = ed.ScrollMaxY;
                     check("without the map the text has its room back",
                           again < beside, `${beside} -> ${again}`);
                     ed.Delete();
-                }, beside);
-            }, alone);
+                }, 400);
+            }, 400);
         });
     }
 
@@ -30185,8 +30189,13 @@ class Form1 extends Form {
                 }, (r) => {
                     check("the first line arrives long before the answer is finished",
                           first >= 0 && first < 1000, `${first}ms`);
+                    /* **Four hundred, not six**: the server sleeps between
+                     * lines, and a loaded Windows run measured 541 ms from
+                     * the first to the last (2026-11-16) while still proving
+                     * the point -- a buffered answer would show them all at
+                     * once, a difference near zero. */
                     check("...and the last one much later, so it was read as it arrived",
-                          last - first > 600, `${first}ms then ${last}ms`);
+                          last - first > 400, `${first}ms then ${last}ms`);
                     eq("every line arrives", got.filter((l) => l !== "").length, 5);
                     eq("...in order", got.filter((l) => l !== "").join("|"),
                        "data: 0|data: 1|data: 2|data: 3|data: 4");
@@ -30260,7 +30269,10 @@ class Form1 extends Form {
              * give before. */
             () => {
                 const kept = [];
-                api.Stream("GET", "/forever", { Timeout: 700 },
+                /* A loaded Windows run can take longer than 700 ms to get the
+                 * first chunk out of the Python server; the point is that the
+                 * lines that did arrive stay, not the exact deadline. */
+                api.Stream("GET", "/forever", { Timeout: 1500 },
                            (line) => { if (line !== "") kept.push(line); }, () => {
                     failures.push("a timed-out stream must not answer onDone");
                     steps[5]();

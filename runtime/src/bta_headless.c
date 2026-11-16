@@ -1537,12 +1537,60 @@ static int run_test_command(int argc, char **argv)
     return run_project(1, one, true, json, filter);
 }
 
+static void usage_to(FILE *to)
+{
+    fputs("usage: bintana [run] <project-dir|project.btp> [args...]\n"
+          "       bintana test [--json] <project-dir|project.btp> [filter]\n"
+          "       bintana check [--json] [--strict] [--components <file>] [--fix] <project-dir|project.btp>\n"
+          "       bintana --version\n"
+          "\n"
+          "This is the console core.  It runs a project's \"main\" with no\n"
+          "display, and hands a project that declares \"startup\" to\n"
+          "bintana-gui beside it.  A project.btp file may be given instead of\n"
+          "the directory it sits in; the words after the project are\n"
+          "Application.Arguments.\n"
+          "\n"
+          "  --version print the runtime's own release and exit.  An\n"
+          "            application's version is Application.Version.\n"
+          "  --debug   stop and wait for a debugger before the project runs.\n"
+          "            Events go out on descriptor 3 and commands come in on\n"
+          "            stdin; the IDE is what speaks it.\n"
+          "  --strict  a control refuses a property its class does not have;\n"
+          "            for a console project it is accepted and has nothing\n"
+          "            to make strict.\n"
+          "  --profile <file>  write a Sysprof capture of the runtime's own\n"
+          "            marks to <file>, with no Sysprof installed.  Running\n"
+          "            under `sysprof-cli` or Sysprof needs no flag.\n"
+          "  --form <Class>  open that form instead of project.btp's\n"
+          "            \"startup\" -- passed to bintana-gui for a window\n"
+          "            project.\n"
+          "  --theme dark|light  the theme's dark or light variant.\n"
+          "  --text-scale <factor>  text as the desktop's Large Text makes\n"
+          "            it: 1.25, 1.5, 2.  Between 0.5 and 4.\n"
+          "  --rtl     lay out right to left, as an Arabic or Hebrew\n"
+          "            desktop would.\n"
+          "\n"
+          "`bintana test` runs the project's tests/*Test.js instead: each\n"
+          "file a class extending Test, each method named test... one test.\n"
+          "Only the tests whose Class.method contains <filter> run.  It ends\n"
+          "0 when every test passed and 1 when one did not.  --json writes\n"
+          "one JSON line per test and one at the end.\n"
+          "\n"
+          "`bintana check` reads the project and opens no window.  --strict\n"
+          "makes a warning fail too; --json writes one line per finding;\n"
+          "--fix applies the unambiguous Label.For repairs.\n"
+#ifdef G_OS_WIN32
+          "  --register-event-source  register the `Bintana` source in the\n"
+          "            Application log, with this executable as its message\n"
+          "            file.  Needs an elevated prompt.\n"
+#endif
+          , to);
+    fflush(to);
+}
+
 static void usage(void)
 {
-    fputs("usage: bintana [run] <project> [args...]\n"
-          "       bintana test [--json] <project> [filter]\n"
-          "       bintana check [options] <project>\n"
-          "       bintana --version\n", stderr);
+    usage_to(stderr);
 }
 
 /* What an option before the project means to a `main`. `--debug`, `--strict`
@@ -1617,10 +1665,7 @@ int main(int argc, char **argv)
         return 0;
     }
     if (argc >= 2 && (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))) {
-        fputs("usage: bintana [run] <project> [args...]\n"
-              "       bintana test [--json] <project> [filter]\n"
-              "       bintana check [options] <project>\n"
-              "       bintana --version\n", stdout);
+        usage_to(stdout);
         return 0;
     }
     if (argc >= 2 && !strcmp(argv[1], "check"))

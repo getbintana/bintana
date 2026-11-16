@@ -353,8 +353,19 @@ static JSValue ed_set_flag(JSContext *ctx, JSValueConst this_val,
             gtk_box_append(GTK_BOX(w->gtk), map);
             g_object_set_data(G_OBJECT(w->gtk), MAP_KEY, map);
         }
-        if (map)
-            gtk_widget_set_visible(map, b);
+        if (map && b) {
+            gtk_widget_set_visible(map, TRUE);
+        } else if (map) {
+            /* **Removed, not hidden.** A hidden `GtkSourceMap` kept its
+             * column's width in a full Windows run: the text stayed wrapped
+             * at the narrower map width after `ShowMap = false`, for hundreds
+             * of frames. Taking it out of the box is the layout change the
+             * parent cannot miss; showing it again builds a new one. */
+            g_object_set_data(G_OBJECT(w->gtk), MAP_KEY, NULL);
+            gtk_box_remove(GTK_BOX(w->gtk), map);
+        }
+        /* A toggle that did not change anything still asks for the frame. */
+        gtk_widget_queue_resize(w->gtk);
         break;
     }
     default:
