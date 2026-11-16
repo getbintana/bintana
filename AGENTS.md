@@ -90,6 +90,7 @@ BINTANA_PROFILE=/tmp/caps ./tests/run.sh          # a Sysprof capture per projec
 tests/try.sh <project> [args...]                  # run any project on a virtual display
 ./tests/api.sh                                    # is the documented surface the real one, is api.json current, do links land
 ./tests/check.sh                                  # every project's `bintana check`, no window
+./tests/check-strict.sh                           # the IDE and examples with warnings failing too
 ./tests/keyring.sh                                # the File provider: 0600 under 0700, no temporary
 ./tests/odbc.sh                                   # Database.Odbc through sqliteodbc, and psqlODBC on a postgres:16 in Docker
 ./tools/apijson.sh                                # rewrite api.json

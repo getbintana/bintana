@@ -501,6 +501,7 @@ cmake --build build -j
 ./tests/api.sh
 ./tests/pack.sh
 ./tests/check.sh
+./tests/check-strict.sh
 ./tests/install.sh
 ./tests/run.sh
 ```
@@ -516,9 +517,10 @@ what somebody who downloads without looking gets -- stays on the last final
 release. `CMakeLists.txt` stays numeric (0.4.0); the letter is the tag's, and
 the BaseApp manifest's `tag:` follows it because that is what the Flatpak
 workflow fetches. The `package` job runs on every push and, on a tag, creates the release
-with generated notes and attaches the Linux tarball and `api.json`; the
-`windows` job attaches the portable zip and the setup when its toolchain can
-build it. The Flatpak repository is a separate workflow with a manual or
+with generated notes and attaches the Linux tarball, its `.sha256` and
+`api.json`; the `windows` job attaches the portable zip, its `.sha256`, and
+the setup with its own `.sha256` when its toolchain can build it. Both jobs
+`needs: [test, sanitizer, pin]`, so a tag that fails one publishes nothing. The Flatpak repository is a separate workflow with a manual or
 scheduled trigger -- tag first, then dispatch it, so its planner sees the new
 tag and rebuilds the BaseApp and every application. The notes a changelog
 earns are in `CHANGELOG.md`; the generated release notes are the fallback.

@@ -6,6 +6,23 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+**0.4.0 is the 0.4.0-rc1 section below plus the fixes since it:**
+
+- `cmake --install` lays down `LICENSE-QuickJS`, and the Windows zip and setup
+  carry the licences of the third-party binaries they bundle under
+  `share/licenses/bintana`; `THIRD-PARTY-NOTICES.md` maps them.
+- `bintana check` asks the `.form`'s own runtime class about a name collision
+  instead of always asking `Form`; `lib/` and `ide/` are part of the check now.
+- The Windows executables carry a version resource, so Explorer, Task Manager
+  and the UAC prompt show `0.4.0` instead of a blank.
+- The setup refuses a non-empty folder it did not install, and its uninstaller
+  leaves a folder without the marker alone rather than deleting it.
+- `bintana --help` lists the whole command line, not four usage lines.
+- Release assets carry a `.sha256`, and the package/windows jobs wait for the
+  suite, the sanitizer and the submodule pin before they publish.
+- The quickstart names `RelWithDebInfo`; the build is no longer silently
+  three times slower for a first-time reader.
+
 ## 0.4.0-rc1 — 2026-11-16
 
 [Compare with 0.3.0](https://github.com/getbintana/bintana/compare/v0.3.0...v0.4.0-rc1)

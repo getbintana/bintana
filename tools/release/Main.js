@@ -318,6 +318,10 @@ function planRelease(v) {
     step("the packaging invariants", [File.Join(ROOT, "tests/pack.sh")]);
     if (!v.quick) {
         step("the project check", [File.Join(ROOT, "tests/check.sh")]);
+        /* The ordinary pass accepts the warnings the tests and tools carry on
+         * purpose; the IDE and the examples are what a release is judged by,
+         * and CI already runs them with --strict. */
+        step("the strict project check", [File.Join(ROOT, "tests/check-strict.sh")]);
         step("the install", [File.Join(ROOT, "tests/install.sh")]);
         step("the suite", [File.Join(ROOT, "tests/run.sh")]);
     }

@@ -653,6 +653,12 @@ jobs:
   package:
     runs-on: ubuntu-24.04
 
+    # A release asset waits for the suite, the sanitizer and the submodule pin:
+    # a tag that fails any of them publishes nothing. The local release tool
+    # runs the same gate before it tags; this is the one that cannot be skipped
+    # with `--quick`.
+    needs: [test, sanitizer, pin]
+
     # The default token is read-only on a new repository, and `gh release
     # create` needs to write. Only this job asks for it.
     permissions:
@@ -702,14 +708,15 @@ jobs:
 
           cmake --install build --prefix "$PWD/stage/$name"
           tar -C "stage/$name" -czf "$name.tar.gz" .
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
 
           echo "$name.tar.gz" > tarball-name.txt
-          ls -l "$name.tar.gz"
+          ls -l "$name.tar.gz" "$name.tar.gz.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
           name: bintana-linux
-          path: bintana-*.tar.gz
+          path: bintana-*.tar.gz*
           if-no-files-found: error
 
       # And, when the push is a tag, the same file where a person looks for a
@@ -736,7 +743,7 @@ jobs:
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
             || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
                                $pre --generate-notes || true
-          gh release upload "$GITHUB_REF_NAME" "$file" --clobber
+          gh release upload "$GITHUB_REF_NAME" "$file" "$file.sha256" --clobber
 
           # And the public surface as data, which the documentation
           # repositories fetch: at a tag it is easier to point at the release
@@ -769,6 +776,10 @@ jobs:
   # poppler is the reading half of `PdfDocument`.
   windows:
     runs-on: windows-latest
+
+    # The same gate as the Linux tarball: a tag whose suite, sanitizer or
+    # submodule pin failed does not get a Windows asset either.
+    needs: [test, sanitizer, pin]
 
     defaults:
       run:
@@ -891,8 +902,9 @@ jobs:
           test -d "stage/$name/share/poppler"
           (cd "stage/$name" && cmake -E tar cf "$GITHUB_WORKSPACE/$name.zip" \
                                               --format=zip -- .)
+          sha256sum "$name.zip" > "$name.zip.sha256"
           echo "$name.zip" > zip-name.txt
-          ls -l "$name.zip"
+          ls -l "$name.zip" "$name.zip.sha256"
 
       # The compiler the IDE builds Windows installers with: the subset of the
       # official NSIS distribution `makensis` needs beside itself, staged
@@ -969,8 +981,9 @@ jobs:
               --prefix "$PWD/stage/$name" \
               --with share/bintana/examples --with share/doc/bintana \
               --with share/bintana/tools/nsis; then
+            sha256sum "$name-setup.exe" > "$name-setup.exe.sha256"
             echo "$name-setup.exe" > setup-name.txt
-            ls -l "$name-setup.exe"
+            ls -l "$name-setup.exe" "$name-setup.exe.sha256"
           else
             echo "installer build failed -- the release ships the zip only" >&2
           fi
@@ -1064,7 +1077,9 @@ jobs:
           name: bintana-windows
           path: |
             bintana-*.zip
+            bintana-*.zip.sha256
             bintana-*-setup.exe
+            bintana-*-setup.exe.sha256
           if-no-files-found: error
 
       - name: Attach it to the release, when this is a tag
@@ -1088,11 +1103,12 @@ jobs:
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
             || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
                                $pre --generate-notes || true
-          gh release upload "$GITHUB_REF_NAME" "$file" --clobber
+          gh release upload "$GITHUB_REF_NAME" "$file" "$file.sha256" --clobber
           # The setup beside the zip, when the installer step built one -- a
           # tag without it is the warning that step left in the log.
           if [ -f setup-name.txt ]; then
-            gh release upload "$GITHUB_REF_NAME" "$(cat setup-name.txt)" --clobber
+            setup=$(cat setup-name.txt)
+            gh release upload "$GITHUB_REF_NAME" "$setup" "$setup.sha256" --clobber
           else
             echo "no setup built -- the release ships the zip only"
           fi
