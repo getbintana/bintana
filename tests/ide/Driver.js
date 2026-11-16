@@ -14786,6 +14786,24 @@ function* p_check(ide) {
               "const holder = {};\n" +
               "holder.Name = \"Elsewhere\";\n");
 
+    /*
+     * And a **component**, whose chain reaches `Component` -- and so
+     * `Container` -- and not `Form`. Its `Rows` panel is the name of a `Form`
+     * method and binds here, which is what `lib/propertygrid` does. The pass
+     * asked every `.form` about `Form` and reported this one as an error for a
+     * form that loads: the library in this tree, checked by nobody until
+     * `tests/check.sh` walked `lib/`.
+     */
+    File.Save(File.Join(TMP, "Comp.form"), JSON.stringify({
+        format: "bintana-form/1",
+        class: "Comp",
+        properties: { Width: 200, Height: 120 },
+        children: [{ type: "Panel", name: "Rows", properties: {} }],
+    }, null, 2));
+
+    File.Save(File.Join(TMP, "Comp.js"),
+              "export class Comp extends Component {\n}\n");
+
     ide.listFiles();
     pass.run();
 
@@ -14835,6 +14853,11 @@ function* p_check(ide) {
           has("two controls are called ActDup"), JSON.stringify(said));
     check("a menu item whose name is a member of Form is reported",
           has("Actions is also a read-only member of Form"), JSON.stringify(said));
+    /* And a **component's** `.form` is asked about its own class: `Rows` is a
+     * method of `Form`, and no member of `Component` at all. */
+    check("a component's panel named after a Form method is not a collision",
+          !rows().some((r) => r.file === "Comp.form" && r.text.includes("Rows")),
+          JSON.stringify(rows().filter((r) => r.file === "Comp.form")));
     /*
      * And as an **error**, which is the half that changed: `Actions` is
      * read-only, so the bind fails and the runtime refuses the form -- for a
@@ -15076,6 +15099,8 @@ function* p_check(ide) {
 
     File.Delete(File.Join(TMP, "Bad.form"));
     File.Delete(File.Join(TMP, "Bad.js"));
+    File.Delete(File.Join(TMP, "Comp.form"));
+    File.Delete(File.Join(TMP, "Comp.js"));
     File.Delete(File.Join(TMP, "Broken.js"));
     File.Delete(File.Join(TMP, "Other.js"));
     File.Delete(File.Join(TMP, "Taken.js"));
