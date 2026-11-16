@@ -5462,6 +5462,43 @@ function* p_watch(ide) {
 
     ide.BtnReloadHide_Click();
 
+    /*
+     * --- Save All does not write over it ------------------------------------
+     *
+     * The notice is for the tab on screen, so a file a `git pull` changed under
+     * a tab in the background used to be written over by Save All without a
+     * word. It is skipped and named now; answering the notice lets it save.
+     */
+    ide.Editor.Text = was + "\n/* mine */\n";
+    yield* settled(ide);
+    /* Words of its own: the "theirs" version was taken from disk above, so
+     * the watch would rightly call that file unchanged. */
+    File.Save(path, was + "\n/* pulled */\n");
+    yield* until(() => tab.changedOnDisk, 80);
+    check("the change on disk is seen", tab.changedOnDisk);
+
+    const warned   = [];
+    const realWarn = Message.Warning;
+    let   savedAll;
+    Message.Warning = (...args) => { warned.push(Locale.Text(...args)); };
+    try {
+        savedAll = ide.tabs.saveAllDirty();
+    } finally {
+        Message.Warning = realWarn;
+    }
+    eq("Save All does not write over a file changed on disk", savedAll, false);
+    check("so the other version is still there",
+          File.Load(path).includes("/* pulled */"), File.Load(path));
+    check("and it says which file",
+          warned.length === 1 && warned[0].includes(name), JSON.stringify(warned));
+    check("while this version is still in the tab, unsaved",
+          ide.Editor.Text.includes("/* mine */") &&
+          ide.tabs.dirtyNames().includes(name));
+
+    ide.BtnReloadHide_Click();
+    eq("once the notice is answered, it saves", ide.tabs.saveAllDirty(), true);
+    check("this version", File.Load(path).includes("/* mine */"));
+
     /* Put the project back the way the phases after this one expect it. */
     ide.Editor.Text = was;
     ide.save();
@@ -11456,7 +11493,18 @@ function* p_strings(ide) {
         check("and says which file", ask.LblMessage.Text.includes("es.po"),
               ask.LblMessage.Text);
         ask.BtnNo.Click();
+
+        /* Quitting asks about it too: `Application.Quit` asks no window, so
+         * the IDE's own question is the only one the catalogue would get. */
+        const quitAsk = ide.confirmQuit();
+        check("quitting with a dirty catalogue asks", !!quitAsk);
+        check("and names it among the unsaved",
+              !!quitAsk && quitAsk.LblMessage.Text.includes("po/es.po"),
+              quitAsk && quitAsk.LblMessage.Text);
+        if (quitAsk) quitAsk.BtnNo.Click();
         po.dirty = false;
+        check("a clean catalogue is not among them",
+              !PoForm.unsavedFiles.includes("po/es.po"));
     } finally {
         po.closing = true;
         po.Close();
@@ -15979,6 +16027,18 @@ function* p_git(ide) {
      */
     check("asking again raises the same window", GitForm.open(ide) === win);
 
+    /* A change that is only staged has nothing in the worktree to throw away:
+     * `git restore` leaves it as it is, so Discard does not count it in its
+     * question -- the window and the panel ask through one `Git.askDiscard`. */
+    win.Which.Current = 1;
+    win.table().Index = 0;
+    const stagedOnly = win.paths[1][0];
+    const stagedRec  = git.changes().find((c) => c.path === stagedOnly);
+    check("the staged file has nothing else in the worktree",
+          !!stagedRec && stagedRec.tree === " ", JSON.stringify(stagedRec));
+    eq("so Discard on it has nothing to ask", win.BtnDiscard_Click(), null);
+    win.Which.Current = 0;
+
     /*
      * --- and the panes take the window ---------------------------------------
      *
@@ -18040,6 +18100,41 @@ function* p_recovery(ide) {
           ide.tabs.dirtyNames().join(","));
     eq("and still without touching the file", File.Load(path), SOURCE);
     check("the answered snapshot is gone", !File.Exists(file));
+
+    /*
+     * **A file that does not come back is not answered by "Recover".** It was
+     * deleted since the crash: the snapshot is its only copy, so what did not
+     * reopen stays, and is offered again. The warning is a modal nothing here
+     * dismisses, so it is caught for the length of the gesture.
+     */
+    File.SaveJson(file, { project: ide.project, when: "",
+                          files: [{ name: "Gone.js", mode: "edit",
+                                    text: "/* only here */\n" }] });
+    const saidWarn = [];
+    const realWarn = Message.Warning;
+    Message.Warning = (...args) => { saidWarn.push(Locale.Text(...args)); };
+    try {
+        const gone = ide.recovery.offer(ide.project);
+        gone.BtnYes.Emit("Click");
+        yield* settled(ide);
+    } finally {
+        Message.Warning = realWarn;
+    }
+    const still = ide.recovery.pending(ide.project);
+    check("a file that could not be reopened keeps its copy",
+          !!still && still.files.length === 1 && still.files[0].name === "Gone.js"
+                  && still.files[0].text === "/* only here */\n",
+          JSON.stringify(still));
+    check("and the user is told so",
+          saidWarn.length === 1 && saidWarn[0].includes("Gone.js"),
+          JSON.stringify(saidWarn));
+    ide.recovery.snapshot();
+    check("a tick keeps it too", !!ide.recovery.pending(ide.project));
+    /* "Discard" is the answer that lets it go. */
+    const again = ide.recovery.offer(ide.project);
+    again.BtnOther.Emit("Click");
+    yield* settled(ide);
+    check("and Discard lets it go", !File.Exists(file));
 
     /* A form tab travels as its tree, which is the half of what the IDE edits
      * that a text snapshot could not have carried. */

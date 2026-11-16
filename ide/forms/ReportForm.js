@@ -201,7 +201,7 @@ export class ReportForm extends Form {
             return;
         }
 
-        this.LblBandHint.Text = "Drag an element on the page. Drag a band's bottom edge to make it taller.";
+        this.LblBandHint.Text = Locale.Text("Drag an element on the page. Drag a band's bottom edge to make it taller.");
 
         const points = doc.DesignLayout();
         this.layoutPoints = points;
@@ -720,7 +720,7 @@ export class ReportForm extends Form {
     BtnGroupAdd_Click() {
         const on = this.TxtGroup.Text.trim();
         if (!on) {
-            this.LblBandHint.Text = "Group by needs a field name.";
+            this.LblBandHint.Text = Locale.Text("Group by needs a field name.");
             return;
         }
 
@@ -743,7 +743,7 @@ export class ReportForm extends Form {
     BtnGroupDel_Click() {
         const at = this.groupAt(this.bandName);
         if (at < 0) {
-            this.LblBandHint.Text = "Select a group band first.";
+            this.LblBandHint.Text = Locale.Text("Select a group band first.");
             return;
         }
         this.removeGroup(at);
@@ -769,7 +769,7 @@ export class ReportForm extends Form {
     BtnAdd_Click() {
         const band = this.bandByName(this.bandName) || this.sections.Detail;
         if (!band) {
-            this.LblBandHint.Text = "Add a Detail band first.";
+            this.LblBandHint.Text = Locale.Text("Add a Detail band first.");
             return;
         }
 

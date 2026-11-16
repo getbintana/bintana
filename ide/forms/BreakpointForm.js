@@ -35,7 +35,6 @@ export class BreakpointForm extends Form {
     static edit(where, condition, message, hits, onAccept) {
         const dlg = new BreakpointForm();
 
-        dlg.Text              = "Breakpoint";
         dlg.LblWhere.Text     = where;
         dlg.TxtCondition.Text = condition || "";
         dlg.TxtMessage.Text   = message || "";

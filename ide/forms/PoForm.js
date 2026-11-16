@@ -74,6 +74,21 @@ export class PoForm extends Form {
     static get busy() { return openCatalogues.size > 0; }
     static get openFiles() { return [...openCatalogues.keys()]; }
 
+    /* The catalogues with unsaved changes. Quitting asks about these with the
+     * tabs: `Application.Quit` asks no window, so a translator's work in a
+     * window of its own would go without a word. */
+    static get unsavedFiles() {
+        return [...openCatalogues.values()].filter((d) => d.dirty).map((d) => d.file);
+    }
+
+    /* Saves every one of them; false when any refused, which has said why. */
+    static saveUnsaved() {
+        let ok = true;
+        for (const dlg of [...openCatalogues.values()])
+            if (dlg.dirty && !dlg.save()) ok = false;
+        return ok;
+    }
+
     Form_Open() {
         this.entries  = [];
         this.shown    = [];      /* indices into `entries`, as the list shows them */

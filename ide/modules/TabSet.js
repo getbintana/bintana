@@ -1344,14 +1344,22 @@ export class TabSet {
         this.render();
     }
 
-    /* Walks every dirty tab and saves it.  Run and MnuSaveAll use it: a .form
-     * and its .js travel together, and one cannot run with either unsaved. */
-    /* Saves every dirty tab, or only those of `only`, and answers whether all
+    /*
+     * Saves every dirty tab, or only those of `only`, and answers whether all
      * of them were saved -- which is what lets "save and close" not close the
-     * one that failed. */
+     * one that failed. Run and Save All use it: a .form and its .js travel
+     * together, and one cannot run with either unsaved.
+     *
+     * **A file somebody else changed is not written over in passing.** The
+     * notice about it is shown for the tab on screen only, so a `git pull`
+     * under a tab in the background would be undone by Save All with nothing
+     * said. Such a tab is skipped, brought to the front where its notice is,
+     * and named; saving it from there, or hiding the notice, is the answer.
+     */
     saveAllDirty(only) {
-        const wasActive = this.ide.activeFile;
+        let   wasActive = this.ide.activeFile;
         let   ok        = true;
+        const newer     = [];
 
         for (const name of [...this.tabOrder]) {
             if (only && !only.includes(name)) continue;
@@ -1359,6 +1367,7 @@ export class TabSet {
             if (!state) continue;
             if (!this.dirtyOf(name, state)) continue;
             if (state.foreign) { this.warnForeign(name); ok = false; continue; }
+            if (state.changedOnDisk) { newer.push(name); ok = false; continue; }
             this.switchTo(name);
             if (state.mode === "design") {
                 if (!this.ide.designer.save()) { ok = false; continue; }
@@ -1380,6 +1389,13 @@ export class TabSet {
                 this.ide.debugger_.saved(name, state.editor.Text);
             }
             state.dirty = false;
+        }
+        if (newer.length) {
+            wasActive = newer[0];
+            Message.Warning("{0}", Locale.Plural(
+                "{1} changed on disk and was not saved over. Save it from its tab to keep your version, or reload it.",
+                "{0} files changed on disk and were not saved over: {1}. Save each from its tab to keep your version, or reload it.",
+                newer.length, newer.join(", ")));
         }
         if (wasActive && this.ide.activeFile !== wasActive) this.switchTo(wasActive);
         this.render();

@@ -1074,7 +1074,9 @@ export class MainForm extends Form {
      * for whoever is driving the IDE rather than using it.
      */
     confirmQuit() {
-        const dirty = this.dirtyNames();
+        /* The tabs, and the catalogues open in the translation editor: a window
+         * of its own, which `Application.Quit` would close without asking. */
+        const dirty = [...this.dirtyNames(), ...PoForm.unsavedFiles];
         if (!dirty.length) return null;
 
         const list = dirty.join(", ");
@@ -1086,7 +1088,13 @@ export class MainForm extends Form {
             Locale.Text("Quit without saving"),
             () => this.quit(),
             { Text: Locale.Text("Save all and quit"),
-              Run:  () => { if (this.saveAllDirty()) this.quit(); } });
+              Run:  () => {
+                  /* Both halves are tried before deciding, so a tab that
+                   * refused does not leave a catalogue unsaved as well. */
+                  const tabs = this.saveAllDirty();
+                  const cats = PoForm.saveUnsaved();
+                  if (tabs && cats) this.quit();
+              } });
     }
 
     /* **The page at the index and not `tabOrder[index]`**: a drag can move a tab

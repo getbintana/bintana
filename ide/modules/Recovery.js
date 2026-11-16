@@ -316,15 +316,47 @@ export class Recovery {
      */
     restore(shot) {
         let done = 0;
-        for (const one of shot.files)
+        const left = [];
+        for (const one of shot.files) {
             if (this.ide.tabs.restore(one)) done++;
+            else left.push(one);
+        }
 
         this.ide.log(`Recovered ${done} of ${shot.files.length}\n`);
 
-        /* Answered, so the file goes -- and the tabs are dirty again, so the
-         * next tick writes a fresh one. The net is back up within a tick of the
-         * recovery, which is the same guarantee it gives the rest of the time. */
-        this.drop();
+        if (!left.length) {
+            /* Answered, so the file goes -- and the tabs are dirty again, so
+             * the next tick writes a fresh one. The net is back up within a
+             * tick of the recovery, which is the same guarantee it gives the
+             * rest of the time. */
+            this.drop();
+            this.ide.refresh();
+            return done;
+        }
+
+        /*
+         * **A file that did not come back is still somebody's only copy.** It
+         * was renamed or deleted since, or is no longer what the snapshot says
+         * it was: "Recover" was not an answer about it, so it stays in the
+         * snapshot as an unanswered offer -- riding along in every tick, written
+         * back by the doors out, and asked about the next time the project
+         * opens, where "Discard" is the answer that lets it go.
+         */
+        const kept = { project: shot.project || this.ide.project,
+                       when:    shot.when,
+                       files:   left };
+        this.unanswered = { project: this.ide.project, shot: kept };
+        this.last = "";
+        try {
+            File.SaveJson(this.fileFor(this.ide.project), kept);
+        } catch (e) {
+            this.ide.log(`Recovery: ${e.message}\n`);
+        }
+        /* Through `{0}`, so a file name is never read as a hole of its own. */
+        Message.Warning("{0}", Locale.Plural(
+            "{1} could not be reopened. Its copy is kept and will be offered again.",
+            "{0} files could not be reopened: {1}. Their copies are kept and will be offered again.",
+            left.length, left.map((f) => f.name).join(", ")));
         this.ide.refresh();
         return done;
     }

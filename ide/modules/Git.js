@@ -664,6 +664,58 @@ export class Git {
         }
     }
 
+    /*
+     * Which of these have something in the worktree to throw away: a file git
+     * has never been told about, or one whose worktree differs from the index.
+     * A change that is only staged has nothing to discard -- `git restore`
+     * leaves it as it is -- so it is not counted in the question either.
+     */
+    discardable(paths) {
+        const live = new Map(this.changes().map((c) => [c.path, c]));
+        return paths.filter((p) => {
+            const c = live.get(p);
+            return !!c && (c.untracked || c.tree !== " ");
+        });
+    }
+
+    /*
+     * Throwing work away, which is the one command here with no undo: asked
+     * first, by name and by count, and the one place both the window and the
+     * panel ask it -- so the wording, the count and the work agree. An
+     * untracked file is **deleted** and not restored, which is a different
+     * sentence and is said as one.
+     *
+     * `after` runs once whatever went has gone, error or not: a view left
+     * showing the rows it had would offer to discard them again. Answers the
+     * question it put, or null when nothing chosen had anything to discard.
+     */
+    askDiscard(paths, after) {
+        const files = this.discardable(paths);
+        if (!files.length) return null;
+
+        const fresh = this.untracked(files);
+        return ConfirmForm.ask(
+            Locale.Text("Discard changes"),
+            fresh.length
+                ? Locale.Plural("Throw away {0} file, and delete it if it is new?",
+                                "Throw away {0} files, deleting the new ones?",
+                                files.length)
+                : Locale.Plural("Throw away what was written in {0} file?",
+                                "Throw away what was written in {0} files?",
+                                files.length),
+            Locale.Text("Discard"),
+            () => {
+                try {
+                    this.discard(files);
+                } finally {
+                    /* The files changed underneath whatever is open: each tab
+                     * is watching its own, and the reload bar is what that
+                     * looks like. */
+                    if (after) after();
+                }
+            });
+    }
+
     /* Which of these git has never been told about, so a caller can say
      * *deleted* rather than *restored* about them. */
     untracked(paths) {

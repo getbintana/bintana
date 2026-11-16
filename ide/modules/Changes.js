@@ -387,41 +387,19 @@ export class Changes {
      * Throwing work away -- *rollback*, in the vocabulary of the tool this
      * panel is shaped after.
      *
-     * Asked first, by name and by count, because it is the one command here
-     * with no undo. An untracked file is **deleted** and not restored, which is
-     * a different sentence and is said as one; which files those are is
-     * `Git.untracked`, so the wording and the work agree by construction. Only
-     * what the worktree holds is a subject: a row whose change is staged and
-     * nothing else keeps its place in the index.
+     * The question is `Git.askDiscard`, the same one the Git window puts: an
+     * untracked file is **deleted** and not restored, which is a different
+     * sentence, and only what the worktree holds is a subject -- a row whose
+     * change is staged and nothing else keeps its place in the index.
      */
     discard() {
         const what = this.chosen().filter((r) => r.untracked || r.tree !== " ");
         if (!what.length) return;
 
-        const files = this.paths(what);
-        const fresh = this.ide.git.untracked(files);
-
-        this.ask = ConfirmForm.ask(
-            Locale.Text("Discard changes"),
-            fresh.length
-                ? Locale.Plural("Throw away {0} file, and delete it if it is new?",
-                                "Throw away {0} files, deleting the new ones?",
-                                files.length)
-                : Locale.Plural("Throw away what was written in {0} file?",
-                                "Throw away what was written in {0} files?",
-                                files.length),
-            Locale.Text("Discard"),
-            () => {
-                try {
-                    this.ide.git.discard(files);
-                } finally {
-                    /* The files changed underneath whatever is open: each tab
-                     * is watching its own and the reload bar is what that
-                     * looks like -- and what did go has gone, error or not. */
-                    this.after();
-                    this.ide.listFiles();
-                }
-            });
+        this.ask = this.ide.git.askDiscard(this.paths(what), () => {
+            this.after();
+            this.ide.listFiles();
+        });
     }
 
     /*

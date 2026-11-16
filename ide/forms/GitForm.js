@@ -297,44 +297,20 @@ export class GitForm extends Form {
     }
 
     /*
-     * Throwing work away, which is the one thing here with no undo.
-     *
-     * Asked first and by name, because *Discard* beside *Unstage* is one row
-     * over from something harmless. An untracked file is not restored but
-     * deleted -- `git restore` has nothing to restore it from -- which is a
-     * different sentence and is said as one.
+     * Throwing work away, which is the one thing here with no undo -- asked
+     * first and by name, because *Discard* beside *Unstage* is one row over
+     * from something harmless. `Git.askDiscard` is the question, shared with
+     * the panel; a row that is only staged has nothing to throw away and is
+     * not counted. Answers the question, or null when there was none.
      */
     BtnDiscard_Click() {
         const files = this.chosen();
-        if (!files.length) return;
+        if (!files.length) return null;
 
-        const git   = this.ide.git;
-        const fresh = git.untracked(files);
-
-        ConfirmForm.ask(
-            Locale.Text("Discard changes"),
-            fresh.length
-                ? Locale.Plural("Throw away {0} file, and delete it if it is new?",
-                                "Throw away {0} files, deleting the new ones?",
-                                files.length)
-                : Locale.Plural("Throw away what was written in {0} file?",
-                                "Throw away what was written in {0} files?",
-                                files.length),
-            Locale.Text("Discard"),
-            () => {
-                /* `finally`, because whatever of the list did go has gone: a
-                 * window left showing the rows it had would offer to discard
-                 * them again. */
-                try {
-                    git.discard(files);
-                } finally {
-                    /* The worktree changed underneath: the tabs are watching
-                     * their files and will offer to reload, which is what that
-                     * bar is for. */
-                    this.reload();
-                    this.ide.listFiles();
-                }
-            });
+        return this.ide.git.askDiscard(files, () => {
+            this.reload();
+            this.ide.listFiles();
+        });
     }
 
     /*

@@ -35,6 +35,14 @@ one-page answer to *what is new since the release I have*.
   entries, a drawing's `Save`).
 - `WebSocket` and `SerialPort` failures are in the runtime's own words, like
   every other failure, instead of the desktop's language.
+- **The IDE:** *Recover* keeps the copy of a file that could not be reopened
+  and offers it again, instead of deleting the only copy. *Save all* does not
+  write over a file that changed on disk while its tab was in the background;
+  it names it and leaves it to be answered from its tab. Quitting asks about
+  catalogues open in the translation editor, and *Save all and quit* saves
+  them. Discarding from the Git window counts only what is there to throw
+  away. A few report designer hints and the breakpoint dialog's title stay in
+  the IDE's language.
 
 ## 0.4.0-rc1 — 2026-11-16
 

@@ -688,7 +688,27 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   and it rides along in every snapshot of that project until Recover or
   Discard -- so a phase that opens a project with a pending snapshot leaves the
   offer held for the phases after it, and one that asserts exact snapshot
-  contents calls `ide.recovery.drop()` first.
+  contents calls `ide.recovery.drop()` first. **And "Recover" answers only
+  for what came back**: a file of the snapshot that no longer opens (deleted,
+  renamed, become something else) used to be dropped with the rest, its only
+  copy gone and the log saying "Recovered 1 of 2". What did not reopen stays
+  as the unanswered offer and a `Message.Warning` says so; Discard lets it go.
+- **Save All does not write over a file somebody else changed.** The reload
+  bar is shown for the tab on screen only, so a `git pull` under a tab in the
+  background was undone by Save All without a word. `saveAllDirty` skips a tab
+  with `changedOnDisk`, brings the first such tab to the front where its bar
+  is, names them in a warning and answers `false` -- so *Save all and quit*
+  does not quit. Saving that tab from its own tab, or hiding the bar, is the
+  answer; `save()` on the active tab still writes, since its bar is in view.
+- **Quitting asks about windows that are not tabs.** `Application.Quit` asks
+  no window, so the catalogue editor's unsaved work went with Ctrl+Q while
+  `confirmQuit` counted tabs only. It counts `PoForm.unsavedFiles` too, and
+  *Save all and quit* saves both halves before deciding. A new window with
+  unsaved state of its own needs the same two lines.
+- **Discard is asked in one place.** `Git.askDiscard` is the question for both
+  the Git window and the Changes panel, and it counts only what the worktree
+  holds (`discardable`): the window's copy had drifted and counted files whose
+  change was only staged, where `git restore` does nothing.
 - **`-z` rename records carry two paths in either column.** Consume the old
   name and still read both letters: filing `R?` as staged-only hid the edit in
   an `RM`, which could then be neither staged nor discarded. And **push asks
