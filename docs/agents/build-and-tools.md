@@ -207,7 +207,11 @@ editing anything under `ide/`, `tests/`, or `examples/`.
 baked into the binary (`bta_prelude.h`), so editing it and running the suite tests
 the *previous* one — silently, and every assertion that should have failed passes.
 `tests/run.sh` warns when a source is newer than the binary; invoking `./build/bintana`
-by hand skips that warning, which is how it bites. `runtime/js/forms.js` and
+by hand skips that warning, which is how it bites. The comparison is against the
+**newest** of the two hosts and `bintana-drawing`, because they do not compile
+the same files (`bta_runtime.c` is the graphical host's; the core answers those
+symbols from `bta_headless.c`), and a per-binary comparison calls a touched
+source stale in the host that never built it. `runtime/js/forms.js` and
 `runtime/css/base.css` are baked the same way (`bta_forms.h`, `bta_base_css.h`),
 so they need the same rebuild for the same silent reason.
 

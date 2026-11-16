@@ -52,8 +52,16 @@ const BUILD = File.Directory(Application.Executable);
  * `GSK_RENDERER=cairo` has had any say -- and that line is the driver clearing
  * its throat, not the IDE.  It arrived with a Mesa that started warning; the
  * check is about what the *application* says, and a filter that let this
- * through reports a failure about nothing the install controls. */
-const NOISE = /Gdk-WARNING|Gtk-WARNING|libEGL warning|MESA-EGL|Gtk-Message/;
+ * through reports a failure about nothing the install controls.
+ *
+ * `libva` is the fifth, for the same reason: something in the stack probes
+ * VA-API, libva's own driver init reports what it found, and the lines arrive
+ * before the window does.  It is intermittent -- one run in five on a machine
+ * with the iHD driver, none of the four after it -- which is exactly what a
+ * check about the install must not turn into a red line.  A driver *error* is
+ * the same chatter: the IDE is not what loads VA-API, and a machine that
+ * cannot use it still draws. */
+const NOISE = /Gdk-WARNING|Gtk-WARNING|libEGL warning|MESA-EGL|Gtk-Message|libva (?:info|error):/;
 
 /* How long the IDE gets to put a window up, in quarter seconds. Generous: this
  * runs after a cold install, on a virtual display, and the cost of it being too

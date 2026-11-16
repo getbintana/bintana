@@ -351,11 +351,22 @@ function isTestProject(name) {
  * including at a sanitizer build that takes two minutes to link.
  */
 function warnIfStale() {
-    /* **Both hosts.** The suite runs in the core and the projects in the
-     * graphical host; one can be rebuilt and the other left behind, and a
-     * stale one is worse than no binary. */
-    const binaries = [BINTANA, BINTANA_GUI].filter(
-        (path, i, all) => File.Exists(path) && all.indexOf(path) === i);
+    /* **Both hosts, and the drawing module.** The suite runs in the core and
+     * the projects in the graphical host, and `main` projects draw through the
+     * module loaded beside them; one can be rebuilt and another left behind,
+     * and a stale one is worse than no binary.
+     *
+     * **They do not compile the same sources, so the comparison is against the
+     * newest of them.** `bta_runtime.c` is the graphical host's and the core
+     * answers those symbols from `bta_headless.c` (`BTA_HEADLESS_SOURCES` in
+     * CMakeLists.txt), so comparing each source with each binary in turn called
+     * a touched `bta_runtime.c` stale in the core -- which never builds it --
+     * and said "rebuild first" after a rebuild that had nothing left to do.
+     * One `cmake --build build` relinks all three: a source older than the
+     * newest is one an earlier build of this tree included. */
+    const binaries = [BINTANA, BINTANA_GUI, File.Join(File.Directory(BINTANA),
+        Environment.OS === "Windows" ? "bintana-drawing.dll" : "bintana-drawing.so")]
+        .filter((path, i, all) => File.Exists(path) && all.indexOf(path) === i);
 
     /* Everything a binary is made of: the C, the headers, and rad.js, which is
      * the one that does not look like a source. */
@@ -364,15 +375,18 @@ function warnIfStale() {
         for (const dir of [File.Join(ROOT, "runtime"), File.Join(ROOT, "vendor")])
             sources.push(...Directory.Files(dir, { Pattern: pattern, Recursive: true }));
 
+    let built = null;
     for (const binary of binaries) {
-        const built = File.Info(binary);
-        if (!built) continue;
-
-        const newer = sources.find((path) => {
-            const info = File.Info(path);
-            return info && info.Modified > built.Modified;
-        });
-        if (newer)
-            Logger.Warning(`${newer} is newer than ${binary} -- rebuild first: cmake --build build`);
+        const info = File.Info(binary);
+        if (info && (!built || info.Modified > built.info.Modified))
+            built = { path: binary, info };
     }
+    if (!built) return;
+
+    const newer = sources.find((path) => {
+        const info = File.Info(path);
+        return info && info.Modified > built.info.Modified;
+    });
+    if (newer)
+        Logger.Warning(`${newer} is newer than ${built.path} -- rebuild first: cmake --build build`);
 }

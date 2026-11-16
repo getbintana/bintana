@@ -72,9 +72,6 @@ over through a hatch the runtime deletes.
 - **`Application.Executable` in the graphical host** answers the graphical
   binary, so the IDE's *Run* starts `bintana-gui` for a `main` and maps GTK.
   Answer the console host when it is beside it, or accept the cost and say so.
-- **The runner's freshness check** (`tests/run.sh` warns when a source is
-  newer than the binary) has to look at both binaries and the drawing module.
-
 ## 6. Acceptance not yet run
 
 - `./tests/asan.sh` and `./tests/alone.sh` on this work.
