@@ -1103,6 +1103,9 @@ old version into `api.json` and `tests/api.sh` then fails; the order is
 - **`CMakeLists.txt`** -- `project(bintana VERSION x.y.z)`.
 - **`ide/project.btp`** -- the IDE's own version, which `AboutBox` shows. It is
   not `BTA_VERSION`.
+- **`ide/io.github.getbintana.Ide.metainfo.xml`** -- its `<release version>` is
+  what `flatpak info` and *Installed apps* show for the packaged IDE, and
+  nothing derives it from `project.btp`: it said `0.1.0` until 0.4.0.
 - **`flatpak/io.github.getbintana.BaseApp.yml`** -- `branch` is the major.minor
   of `BTA_VERSION`, and the comment above it names the tag. `Package.defaults`
   derives `base-version` from the same two numbers, so a runtime bump without
