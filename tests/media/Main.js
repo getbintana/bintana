@@ -309,12 +309,26 @@ function recorder() {
         try {
             const b = File.LoadBytes(path);
             const d = data_chunk(b);
+            const riff  = u32(b, 4);
+            const said  = u32(b, d + 4);
+            const real  = b.Length - d - 8;
+            /* **GStreamer 1.24's `wavenc` counts 12 bytes short.** Measured
+             * with no Bintana in it -- `gst-launch-1.0 audiotestsrc
+             * num-buffers=1000 ! audioconvert ! wavenc ! filesink` on the
+             * runner's 1.24.2 writes 8192000 where the data is 8192012 -- and
+             * exact on 1.28 here. The RIFF size is right either way, so the
+             * file *was* finalized; this check is about our EOS ordering, not
+             * about the encoder's arithmetic, and a runner that inherits the
+             * bug must not fail it. */
+            const short = real - said === 12;
 
             check("a recorder flushes on Eos",
-                  d > 0 && u32(b, 4) === b.Length - 8 &&
-                  u32(b, d + 4) === b.Length - d - 8,
-                  "header says " + u32(b, 4) + "/" + u32(b, d + 4) +
-                  ", the file is " + (b.Length - 8) + "/" + (b.Length - d - 8));
+                  d > 0 && riff === b.Length - 8 && (said === real || short),
+                  "header says " + riff + "/" + said +
+                  ", the file is " + (b.Length - 8) + "/" + real);
+            if (short)
+                print("  note  the data chunk's size is 12 bytes short: " +
+                      "GStreamer 1.24's wavenc, measured without the runtime");
         } catch (e) {
             fail("a recorder flushes on Eos", e.message);
         }

@@ -237,6 +237,13 @@ Each of these was measured while building it, and each one shaped a rule.
   `audiotestsrc`.** The media test's first conversion builds it, so a runner
   with only base and good stops there with "there is no element type
   'textoverlay'" (CI, 2026-11-15); the elements test needs all three packages.
+- **GStreamer 1.24's `wavenc` writes the `data` chunk's size 12 bytes short.**
+  Measured with no Bintana in it -- `gst-launch-1.0 audiotestsrc
+  num-buffers=1000 ! audioconvert ! wavenc ! filesink` on 1.24.2 gives 8192000
+  where the data is 8192012 -- and exact on 1.28. The RIFF size is right on
+  both, so the file was finalized. `tests/media`'s recorder accepts the 12 and
+  prints a note naming the encoder, because the check is about the EOS
+  ordering and not about wavenc's arithmetic.
 
 ### Cameras: `Media.Devices` and `Video.Attach`
 
