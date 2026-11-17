@@ -1370,6 +1370,11 @@ export class MainForm extends Form {
         this.MnuAppInstall.Enabled = open;
         this.MnuMetainfo.Enabled = open;
         this.MnuInstaller.Enabled = open;
+        /* An NSIS setup is a Windows tree compiled on Windows: anywhere else
+         * the item could only write a script with no payload beside it, which
+         * nothing compiles. Hidden rather than grey, since there is nothing
+         * to wait for here. */
+        this.MnuInstaller.Visible = Environment.OS === "Windows";
         this.launch.show();
 
         /* Searching needs text: a form tab is a tree, and Ctrl+F loses its

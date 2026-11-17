@@ -3,9 +3,11 @@
  *
  * *Project → Windows installer…* stages the project the way `Package` packs
  * it -- metainfo first, refusals before anything is written -- and compiles
- * the result with `makensis` on Windows. Anywhere else the script is still
- * written (it is text) and the second half is named: compiling is Windows,
- * because the payload is a Windows tree and proving it runs means running it.
+ * the result with `makensis`. **The item is Windows only** (`MainForm` hides
+ * it elsewhere): the payload is a Windows runtime tree and proving it runs
+ * means running it. It used to write the bare `.nsi` on Linux and say
+ * "compile it on Windows", but that script installs a `payload/` only `Stage`
+ * on Windows makes, so nothing could compile it.
  *
  * The halves are separate methods because a chooser is a modal surface nothing
  * can close from JS: `run` asks, and everything worth asserting -- the script
@@ -32,16 +34,6 @@ export class Installer {
          * disk while something is unsaved installs a project other than the
          * one on screen. The same reason Run and Export save first. */
         ide.saveAllDirty();
-
-        /* Outside Windows there is no payload to stage and no compiler to
-         * run: the script is written into a chosen folder, and the sentence
-         * with it says where it compiles. */
-        if (Environment.OS !== "Windows") {
-            Dialog.SelectFolder(Locale.Text("Write installer script"),
-                                { Folder: File.Directory(File.Absolute(ide.project)) },
-                                (dir) => this.scriptTo(dir));
-            return;
-        }
 
         /* The suggestion is best-effort: a project with no id yet still
          * reaches the chooser, and `Script` refuses with the sentence when it
@@ -92,28 +84,5 @@ export class Installer {
         ide.log(`Windows installer: ${exe}\n`);
         Message.Info("Installer written to {0}", exe);
         return exe;
-    }
-
-    /*
-     * The script half, on any desktop: the `.nsi` (and the `.ico`, when the
-     * project ships a PNG icon) into a chosen folder, without staging and
-     * without compiling. `project` is the open one unless a caller hands one
-     * over, which is what lets a test try this on a scratch project instead
-     * of the one on screen.
-     */
-    scriptTo(dir, project) {
-        const ide = this.ide;
-        let ctx;
-        try {
-            ctx = Nsis.Script(project || ide.project, dir);
-        } catch (e) {
-            Message.Error(e.message);
-            return null;
-        }
-
-        ide.log(`Installer script: ${ctx.Script}\n`);
-        Message.Info("Installer script written to {0} -- compile it on Windows with makensis.",
-                     ctx.Script);
-        return ctx;
     }
 }

@@ -13041,103 +13041,40 @@ function* p_export(ide) {
 /*
  * --- the open project as a Windows installer --------------------------------
  *
- * *Project → Windows installer…* writes an NSIS script out of the project's
- * metainfo and, on Windows, stages the payload and compiles it. Compiling is
- * Windows -- the payload is a Windows tree -- so what runs on every desktop
- * is the menu item through to what it would ask, and the script half on a
- * scratch project with a metainfo and an icon. The runtime's half -- the
- * mapping, the payload, the refusals -- is `tests/pack`'s `checkNsis`, the
- * same split the export and apps phases make with tar and the entry.
+ * *Project → Windows installer…* stages the payload and compiles an NSIS setup
+ * on Windows, and is **not in the menu anywhere else**: a script with no
+ * payload beside it is nothing `makensis` can compile. On Windows the item is
+ * driven through to what it would ask; elsewhere what is asserted is that it
+ * is hidden, not grey. The runtime's half -- the script, the payload, the
+ * refusals -- is `tests/pack`'s `checkNsis`.
  */
 function* p_installer(ide) {
-    check("with a project open, the installer is offered", ide.MnuInstaller.Enabled);
+    check("with a project open, the installer is enabled", ide.MnuInstaller.Enabled);
 
-    /* --- the menu item, through to what it would ask ------------------------
-     *
-     * The suggestion is best-effort (a project with no id yet still reaches
-     * the chooser), so this holds whatever the project on screen declares.
-     */
-    if (Environment.OS === "Windows") {
-        const real  = Dialog.SaveFile;
-        let   asked = null;
-        Dialog.SaveFile = (title, opts, cb) => { asked = { title, opts, cb }; };
-        try {
-            ide.MnuInstaller_Click();
-        } finally {
-            Dialog.SaveFile = real;
-        }
-
-        check("the item reaches the chooser", asked !== null);
-        check("suggesting a setup executable",
-              asked !== null && asked.opts.Name.endsWith("-windows-x86_64.exe"),
-              asked && asked.opts.Name);
-        eq("and the first filter is the one it writes",
-           asked.opts.Filters[0][1], "*.exe");
-    } else {
-        const real  = Dialog.SelectFolder;
-        let   asked = null;
-        Dialog.SelectFolder = (title, opts, cb) => { asked = { title, opts, cb }; };
-        try {
-            ide.MnuInstaller_Click();
-        } finally {
-            Dialog.SelectFolder = real;
-        }
-
-        check("the item reaches the chooser", asked !== null);
-        check("opening beside the project, not inside it",
-              asked !== null &&
-              asked.opts.Folder === File.Directory(File.Absolute(TMP)),
-              asked && asked.opts.Folder);
+    if (Environment.OS !== "Windows") {
+        eq("outside Windows the installer is not in the menu",
+           ide.MnuInstaller.Visible, false);
+        return;
     }
+    eq("on Windows it is in the menu", ide.MnuInstaller.Visible, true);
 
-    /* --- the script half, on a scratch project -------------------------------
-     *
-     * With a metainfo and an icon, so what is exercised is the whole path from
-     * the module down -- with the modal surfaces on it held back the way the
-     * export phase holds the chooser.
-     */
-    const dir = File.Join(Environment.TempDirectory,
-                          `bta-ide-nsis-${Environment.ProcessId}`);
-    if (File.IsDir(dir)) Directory.DeleteTree(dir);
-    const scratch = File.Join(dir, "ScratchSetup");
-    const sid     = "io.github.getbintana.ScratchSetup";
-    Directory.Make(File.Join(scratch, "icons"));
-    File.SaveJson(File.Join(scratch, "project.btp"),
-                  { name: "ScratchSetup", id: sid, version: "0.4", main: "Main" });
-    File.Save(File.Join(scratch, "Main.js"), "\"use strict\";\nfunction Main() {}\n");
-    const be = (n) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
-    File.SaveBytes(File.Join(scratch, "icons", `${sid}.png`),
-                   new Bytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-                              0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]
-                                 .concat(be(128), be(128), [8, 6, 0, 0, 0],
-                                         [0, 0, 0, 0])));
-    Metainfo.create(scratch, { Id: sid, Name: "ScratchSetup",
-                               Description: "A scratch setup." });
-
-    const realInfo = Message.Info, realError = Message.Error;
-    const said = [];
-    Message.Info = (...args) => { said.push(Locale.Text(...args)); };
-    Message.Error = (...args) => { said.push(Locale.Text(...args)); };
-    let ctx = null;
+    /* The suggestion is best-effort (a project with no id yet still reaches
+     * the chooser), so this holds whatever the project on screen declares. */
+    const real  = Dialog.SaveFile;
+    let   asked = null;
+    Dialog.SaveFile = (title, opts, cb) => { asked = { title, opts, cb }; };
     try {
-        ctx = ide.installer.scriptTo(File.Join(dir, "out"), scratch);
+        ide.MnuInstaller_Click();
     } finally {
-        Message.Info = realInfo;
-        Message.Error = realError;
+        Dialog.SaveFile = real;
     }
 
-    check("the script is written",
-          ctx !== null && File.Exists(ctx.Script), ctx && ctx.Script);
-    if (ctx) {
-        const nsi = File.Load(ctx.Script);
-        check("naming the application from its metainfo",
-              nsi.includes(`Name "ScratchSetup"`) && nsi.includes(sid),
-              nsi.slice(0, 300));
-        check("and the run is reported, not dialogued",
-              said.some((s) => s.includes("Installer script written to")),
-              said.join(" | "));
-    }
-    Directory.DeleteTree(dir);
+    check("the item reaches the chooser", asked !== null);
+    check("suggesting a setup executable",
+          asked !== null && asked.opts.Name.endsWith("-windows-x86_64.exe"),
+          asked && asked.opts.Name);
+    eq("and the first filter is the one it writes",
+       asked.opts.Filters[0][1], "*.exe");
 }
 
 /*

@@ -5963,6 +5963,18 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 ## Popover, menus and accelerators
 
+- **`MenuItem.Visible` is the action leaving its group** (2026-11-17). GMenu has
+  no visibility; GTK's `hidden-when: action-missing` attribute, set on every
+  plain and check item, drops the row while the action is not in the group,
+  and an accelerator names the action, so the shortcut goes too -- one
+  mechanism, no second state to keep in step. `Enabled` is the action's own
+  flag and survives the trip. Two guards: only the action *this* wrapper added
+  is removed, and it is put back only into an empty name, because a menu
+  rebuilt under the same names fills the same group and an old wrapper still
+  alive must not take the new item away. A `dynamic` item is a submenu with no
+  action for GTK to look for, so it refuses. Measured: on Xvfb the opened menu
+  loses the row, and `tests/widgets` `MenuVisible` presses the shortcut through
+  xdotool (red when the remove is skipped: the hidden item heard Ctrl+1).
 - **`Popover` is a verb, and the control that used to carry the name is gone --
   every trap this list had about it came from living in the form's tree.**
   `Popover.Show(content, anchor, [{ Rect, Position, Arrow, Autohide, Closed }])`,

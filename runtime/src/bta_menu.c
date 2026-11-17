@@ -101,6 +101,11 @@ typedef struct {
      * labels last assigned, which is also what a Click reports back. */
     GMenu         *sub;
     JSValue        items;     /* array; duplicated, reported via gc_mark */
+
+    /* The group the action was added to, held so `Visible` can take the
+     * action out of it and put it back, and whether it is out. */
+    GSimpleActionGroup *group;
+    bool           hidden;
 } BtaMenuItem;
 
 static bool action_name_ok(const char *prefix, const char *name);
@@ -540,6 +545,7 @@ static void menuitem_finalizer(JSRuntime *rt, JSValue val)
         g_signal_handlers_disconnect_by_data(mi->action, mi);
     g_clear_object(&mi->action);
     g_clear_object(&mi->sub);
+    g_clear_object(&mi->group);
     g_free(mi->path);
     g_free(mi->name);
     g_free(mi);
@@ -687,6 +693,61 @@ static JSValue menuitem_set_items(JSContext *ctx, JSValueConst this_val,
     return JS_UNDEFINED;
 }
 
+static JSValue menuitem_get_visible(JSContext *ctx, JSValueConst this_val)
+{
+    BtaMenuItem *mi = menuitem_this(ctx, this_val);
+    if (!mi)
+        return JS_EXCEPTION;
+    return JS_NewBool(ctx, !mi->hidden);
+}
+
+/*
+ * **Hiding is the action leaving its group.** Every plain and check item is
+ * built with `hidden-when: action-missing`, so GTK drops the row from the menu
+ * the moment its action is gone and brings it back when it returns -- and an
+ * accelerator names the action, so the shortcut goes with it. `Enabled` is the
+ * action's own flag and survives the trip untouched.
+ *
+ * Only the action this item put there is taken out, and only into an empty
+ * name is it put back: the form's group is the menu bar's, and a menu rebuilt
+ * under the same names has put *its* actions there -- an old wrapper still
+ * alive must not take the new item away, or restore itself over it.
+ *
+ * A dynamic item is a submenu, which has no action of its own for GTK to look
+ * for, so it is refused rather than accepted and ignored.
+ */
+static JSValue menuitem_set_visible(JSContext *ctx, JSValueConst this_val,
+                                    JSValueConst val)
+{
+    BtaMenuItem *mi = menuitem_this(ctx, this_val);
+    if (!mi)
+        return JS_EXCEPTION;
+
+    int b = JS_ToBool(ctx, val);
+    if (b < 0)
+        return JS_EXCEPTION;
+
+    if (mi->sub)
+        return JS_ThrowTypeError(ctx, "%s is a dynamic item, which cannot be "
+                                      "hidden: Visible hides one command, and "
+                                      "an empty Items empties its submenu",
+                                 mi->name);
+    if (!mi->group || b == !mi->hidden)
+        return JS_UNDEFINED;
+
+    GActionMap *map = G_ACTION_MAP(mi->group);
+    GAction    *now = g_action_map_lookup_action(map, mi->name);
+
+    if (b) {
+        if (!now)
+            g_action_map_add_action(map, G_ACTION(mi->action));
+    } else if (now == G_ACTION(mi->action)) {
+        g_action_map_remove_action(map, mi->name);
+    }
+    mi->hidden = !b;
+    return JS_UNDEFINED;
+}
+
 /* Presses the item from code, exactly as choosing it would. */
 static JSValue menuitem_click(JSContext *ctx, JSValueConst this_val,
                               int argc, JSValueConst *argv)
@@ -695,7 +756,9 @@ static JSValue menuitem_click(JSContext *ctx, JSValueConst this_val,
     if (!mi)
         return JS_EXCEPTION;
 
-    if (!g_action_get_enabled(G_ACTION(mi->action)))
+    /* Nothing the reader could not do: a hidden item is not there to choose,
+     * as a disabled one cannot be chosen. */
+    if (mi->hidden || !g_action_get_enabled(G_ACTION(mi->action)))
         return JS_UNDEFINED;
 
     /* A dynamic item is not one command but many, so which entry has to be
@@ -792,6 +855,14 @@ static const JSCFunctionListEntry menuitem_props[] = {
      *   unavailable
      */
     JS_CGETSET_DEF("Enabled", menuitem_get_enabled, menuitem_set_enabled),
+    /* Visible
+     *   whether it is in the menu at all. **A hidden item takes its shortcut
+     *   with it** and `Click()` does nothing, and `Enabled` is kept for when it
+     *   comes back -- for a command that does not exist here (a Windows-only
+     *   one on Linux), where `Enabled = false` would be a grey row nobody can
+     *   explain. Plain and `check` items; a `dynamic` one is refused
+     */
+    JS_CGETSET_DEF("Visible", menuitem_get_visible, menuitem_set_visible),
     /* Items
      *   on a `dynamic` item, the entries the application assigns -- reassign
      *   whenever they change. `Click(index, text)` says which was chosen
@@ -1296,6 +1367,7 @@ static BtaMenuItem *make_item(JSContext *ctx, JSValueConst form, const char *nam
 
     g_signal_connect(mi->action, "activate", G_CALLBACK(on_menu_activate), mi);
     g_action_map_add_action(G_ACTION_MAP(group), G_ACTION(mi->action));
+    mi->group = g_object_ref(group);
 
     /*
      * A spec may declare the item disabled, which is the state a command's
@@ -1501,7 +1573,14 @@ static bool append_item(JSContext *ctx, JSValueConst form, GMenu *section,
         mi->sub = g_menu_new();
         g_menu_append_submenu(section, text ? text : name, G_MENU_MODEL(mi->sub));
     } else {
-        g_menu_append(section, text ? text : name, mi->path);
+        /* `hidden-when` is what makes `Visible` a row that leaves the menu
+         * rather than one that greys: GTK hides the row while the action is
+         * missing from its group, which is the whole of what hiding does. */
+        GMenuItem *item = g_menu_item_new(text ? text : name, mi->path);
+
+        g_menu_item_set_attribute(item, "hidden-when", "s", "action-missing");
+        g_menu_append_item(section, item);
+        g_object_unref(item);
     }
     ok = true;
 

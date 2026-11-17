@@ -693,7 +693,7 @@ const TESTS = [
     "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "DesktopShortcut", "Bitmap", "Picture", "Media", "MediaAttach", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeWindows", "ThemeForced", "LoadQuiet", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "DatabaseOdbc", "Action", "Groups",
-    "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Pdf", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "HandlerRemakes",
+    "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Pdf", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "MenuVisible", "HandlerRemakes",
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
@@ -14141,6 +14141,119 @@ class Form1 extends Form {
         throws("a plain item has no Value",   () => this.MnuOne.Value);
         throws("...and cannot be given one",  () => { this.MnuOne.Value = true; });
         throws("a check item has no Items",   () => { this.MnuTick.Items = ["a"]; });
+    }
+
+    /* --- a menu item that is not there ---------------------------------
+     *
+     * `Visible` takes the item's action out of its group, and GTK drops the row
+     * (`hidden-when: action-missing`) and the accelerator with it. What can be
+     * asserted from here is the state and `Click()`; **the shortcut is asserted
+     * through the X server**, in a child, because a call to the handler proves
+     * nothing about whether GTK can still reach it.
+     */
+    testMenuVisible() {
+        this.oneSaid = 0;
+        this.MnuOne_Click = () => { this.oneSaid++; };
+        try {
+            eq("an item starts visible", this.MnuOne.Visible, true);
+            this.MnuOne.Visible = false;
+            eq("and can be hidden", this.MnuOne.Visible, false);
+            this.MnuOne.Click();
+            eq("a hidden item does nothing when clicked from code", this.oneSaid, 0);
+
+            this.MnuOne.Enabled = false;
+            this.MnuOne.Visible = true;
+            eq("Enabled survives being hidden", this.MnuOne.Enabled, false);
+            this.MnuOne.Enabled = true;
+            this.MnuOne.Click();
+            eq("and a shown, enabled item answers again", this.oneSaid, 1);
+
+            this.MnuTick.Visible = false;
+            eq("a check item can be hidden", this.MnuTick.Visible, false);
+            this.MnuTick.Visible = true;
+            throws("a dynamic item cannot", () => { this.MnuMany.Visible = false; });
+            eq("and stays visible", this.MnuMany.Visible, true);
+        } finally {
+            this.MnuOne.Visible = true;
+            this.MnuOne.Enabled = true;
+            delete this.MnuOne_Click;
+        }
+
+        /* A menu rebuilt under the same names puts its own actions in the
+         * group: the old wrapper must not take the new item away. */
+        const host = new Button();
+        this.Fixed1.Add(host);
+        host.Menu = [{ name: "MnuGone", text: "first" }];
+        const old = this.MnuGone;
+        host.Menu = [{ name: "MnuGone", text: "second" }];
+        this.goneSaid = 0;
+        this.MnuGone_Click = () => { this.goneSaid++; };
+        old.Visible = false;
+        this.MnuGone.Click();
+        eq("hiding a replaced item leaves the new one alone", this.goneSaid, 1);
+        old.Visible = true;
+        delete this.MnuGone_Click;
+        host.Delete();
+
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the real shortcut: it needs xdotool)");
+            return;
+        }
+
+        /* Ctrl+1 is the hidden item's; Ctrl+2 shows it; Ctrl+1 again; Ctrl+3
+         * writes what was heard and quits. One press heard is the answer: the
+         * first went nowhere and the second arrived. */
+        const proj = File.Join(SCRATCH, "menu-visible");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.btp"),
+                      { name: "menuvisible", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 400, Height: 240 },
+                        menus: [{ name: "MnuFile", text: "_File", children: [
+                            { name: "MnuOne",  text: "One",  shortcut: "<Control>1" },
+                            { name: "MnuShow", text: "Show", shortcut: "<Control>2" },
+                            { name: "MnuEnd",  text: "End",  shortcut: "<Control>3" }] }] });
+        File.Save(File.Join(proj, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        this.heard = [];\n" +
+                  "        this.MnuOne.Visible = false;\n" +
+                  "        Timer.After(800, () => File.Save(Application.Directory + '/ready', '1'));\n" +
+                  "    }\n" +
+                  "    MnuOne_Click()  { this.heard.push('one:' + this.MnuOne.Visible); }\n" +
+                  "    MnuShow_Click() { this.MnuOne.Visible = true; this.heard.push('show'); }\n" +
+                  "    MnuEnd_Click()  {\n" +
+                  "        File.SaveJson(Application.Directory + '/out.json', this.heard);\n" +
+                  "        Application.Quit(0);\n" +
+                  "    }\n" +
+                  "}\n");
+        for (const gone of ["ready", "out.json"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "export GTK_A11Y=none\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/ready\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "xdotool mousemove 120 120 click 1; sleep 0.3\n" +
+                  "xdotool key ctrl+1; sleep 0.3\n" +
+                  "xdotool key ctrl+2; sleep 0.3\n" +
+                  "xdotool key ctrl+1; sleep 0.3\n" +
+                  "xdotool key ctrl+3\n" +
+                  "wait $child; echo \"child=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        check("the menu child ended by itself", ran.Output.includes("child=0"), ran.Output);
+        const got = File.Exists(File.Join(proj, "out.json"))
+            ? File.LoadJson(File.Join(proj, "out.json")) : null;
+        check("and said what it heard", got !== null, ran.Output);
+        if (!got) return;
+        eq("the hidden item's shortcut went nowhere, and came back with it",
+           got.join(), "show,one:true");
     }
 
     Ex1_Toggle() { this.expanderSaid++; }

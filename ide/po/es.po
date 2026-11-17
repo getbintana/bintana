@@ -27,7 +27,7 @@ msgstr "Agregar"
 #: forms/ActionForm.form: BtnDelete.Text forms/ColumnForm.form: BtnColDel.Text
 #: forms/ConfirmForm.form: BtnYes.Text forms/MenuForm.form:
 #: forms/RecordForm.form: BtnRecDel.Text forms/ReportForm.form:
-#: forms/MainForm.js:3349 modules/FormFiles.js:726
+#: forms/MainForm.js:3354 modules/FormFiles.js:726
 msgid "Delete"
 msgstr "Eliminar"
 
@@ -423,7 +423,7 @@ msgid "Connect to the server now and say what it answers"
 msgstr "Conectar al servidor ahora y decir qué responde"
 
 #: forms/GitForm.form: GitForm.Text forms/MainForm.form: menu MnuGitChanges
-#: SideStack.Tabs forms/MainForm.js:3183 modules/Changes.js:73
+#: SideStack.Tabs forms/MainForm.js:3188 modules/Changes.js:73
 #: modules/Data.js:757
 msgid "Changes"
 msgstr "Cambios"
@@ -500,7 +500,7 @@ msgid "Commit what is staged, with the message above"
 msgstr "Commitear lo que está en el commit, con el mensaje de arriba"
 
 #: forms/HelpForm.form: HelpForm.Text forms/MainForm.form: menu MnuReference
-#: forms/HelpForm.js:192 forms/HelpForm.js:201
+#: forms/HelpForm.js:188 forms/HelpForm.js:197
 msgid "Reference"
 msgstr "Referencia"
 
@@ -598,7 +598,7 @@ msgid "New configurations start with these two as they are now."
 msgstr "Las nuevas configuraciones arrancan con estos dos como están ahora."
 
 #: forms/LogForm.form: LogForm.Text forms/MainForm.form: menu MnuGitLog
-#: forms/MainForm.js:3357 modules/History.js:36 modules/History.js:101
+#: forms/MainForm.js:3362 modules/History.js:36 modules/History.js:101
 msgid "History"
 msgstr "Historia"
 
@@ -944,7 +944,7 @@ msgstr "Escribir un manejador"
 msgid "_Help"
 msgstr "Ay_uda"
 
-#: forms/MainForm.form: menu MnuAbout forms/MainForm.js:3693
+#: forms/MainForm.form: menu MnuAbout forms/MainForm.js:3698
 msgid "About Bintana"
 msgstr "Acerca de Bintana"
 
@@ -1199,7 +1199,7 @@ msgstr "Depurar (Ctrl+F9)"
 msgid "Stop (Shift+F9)"
 msgstr "Detener (Mayús+F9)"
 
-#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:1476
+#: forms/MainForm.form: LblStatus.Text forms/MainForm.js:1481
 msgid "No project"
 msgstr "Sin proyecto"
 
@@ -1281,7 +1281,7 @@ msgstr ""
 "Commitear lo que está en el próximo commit con el botón de abajo. Enter "
 "escribe una línea"
 
-#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:2736
+#: forms/MainForm.form: BtnTakeDisk.Text forms/MainForm.js:2741
 msgid "Reload"
 msgstr "Recargar"
 
@@ -1661,7 +1661,7 @@ msgstr ""
 msgid "Base folder:"
 msgstr "Carpeta base:"
 
-#: forms/NewProjectForm.form: BtnCreate.Text forms/MainForm.js:3209
+#: forms/NewProjectForm.form: BtnCreate.Text forms/MainForm.js:3214
 msgid "Create"
 msgstr "Crear"
 
@@ -2071,7 +2071,7 @@ msgid "Images"
 msgstr "Imágenes"
 
 #: forms/AppForm.js:103 forms/ConnectionForm.js:234 modules/Exporter.js:63
-#: modules/Installer.js:63
+#: modules/Installer.js:55
 msgid "All files"
 msgstr "Todos los archivos"
 
@@ -2275,11 +2275,11 @@ msgstr "Un commit necesita un mensaje."
 msgid "Nothing is staged."
 msgstr "No hay nada en el próximo commit."
 
-#: forms/HelpForm.js:166
+#: forms/HelpForm.js:162
 msgid "The reference is not installed beside this build."
 msgstr "La referencia no está instalada junto a esta compilación."
 
-#: forms/HelpForm.js:194
+#: forms/HelpForm.js:190
 msgid ""
 "The reference pages are not installed beside this build, so what the tree "
 "shows is built from the runtime itself: every member, and the sentence that "
@@ -2289,23 +2289,23 @@ msgstr ""
 "así que lo que muestra el árbol se construye desde el propio runtime: cada "
 "miembro y la frase que lo describe."
 
-#: forms/HelpForm.js:196
+#: forms/HelpForm.js:192
 msgid "The long form, with examples, is online:"
 msgstr "La versión completa, con ejemplos, está en línea:"
 
-#: forms/HelpForm.js:217
+#: forms/HelpForm.js:213
 msgid "Controls"
 msgstr "Controles"
 
-#: forms/HelpForm.js:218
+#: forms/HelpForm.js:214
 msgid "Globals"
 msgstr "Globales"
 
-#: forms/HelpForm.js:219
+#: forms/HelpForm.js:215
 msgid "Libraries"
 msgstr "Bibliotecas"
 
-#: forms/HelpForm.js:264 forms/HelpForm.js:295
+#: forms/HelpForm.js:260 forms/HelpForm.js:291
 msgid "Reference -- {0}"
 msgstr "Referencia -- {0}"
 
@@ -2407,130 +2407,130 @@ msgstr "Terminal"
 msgid "the shell ended"
 msgstr "el shell terminó"
 
-#: forms/MainForm.js:1481
+#: forms/MainForm.js:1486
 msgid "{0}   double click to edit"
 msgstr "{0}   doble clic para editar"
 
-#: forms/MainForm.js:1483
+#: forms/MainForm.js:1488
 msgid "{0}   double click to edit its fields"
 msgstr "{0}   doble clic para editar sus campos"
 
-#: forms/MainForm.js:1486
+#: forms/MainForm.js:1491
 msgid "{0}   double click to show its tables"
 msgstr "{0}   doble clic para ver sus tablas"
 
-#: forms/MainForm.js:1498
+#: forms/MainForm.js:1503
 msgid "   read-only: not UTF-8"
 msgstr "   solo lectura: no es UTF-8"
 
-#: forms/MainForm.js:1508
+#: forms/MainForm.js:1513
 msgid "   form {0}x{1}"
 msgstr "   formulario {0}x{1}"
 
-#: forms/MainForm.js:1511
+#: forms/MainForm.js:1516
 msgid "   Ln {0}, Col {1}"
 msgstr "   Lín {0}, Col {1}"
 
-#: forms/MainForm.js:2048
+#: forms/MainForm.js:2053
 msgid "Checking the project..."
 msgstr "Comprobando el proyecto..."
 
-#: forms/MainForm.js:2712
+#: forms/MainForm.js:2717
 msgid "{0} is no longer on disk."
 msgstr "{0} ya no está en el disco."
 
-#: forms/MainForm.js:2714
+#: forms/MainForm.js:2719
 msgid "{0} changed on disk, and there are unsaved changes here."
 msgstr "{0} cambió en el disco, y acá hay cambios sin guardar."
 
-#: forms/MainForm.js:2716
+#: forms/MainForm.js:2721
 msgid "{0} changed on disk."
 msgstr "{0} cambió en el disco."
 
-#: forms/MainForm.js:2737
+#: forms/MainForm.js:2742
 msgid "{0} changed on disk. Take the newer file and lose what is unsaved here?"
 msgstr ""
 "{0} cambió en el disco. ¿Tomar el archivo nuevo y perder lo que no está "
 "guardado acá?"
 
-#: forms/MainForm.js:2738
+#: forms/MainForm.js:2743
 msgid "Reload without saving"
 msgstr "Recargar sin guardar"
 
-#: forms/MainForm.js:3068 forms/MainForm.js:3090 modules/Navigator.js:72
+#: forms/MainForm.js:3073 forms/MainForm.js:3095 modules/Navigator.js:72
 msgid "Put the cursor on a name first."
 msgstr "Poné el cursor sobre un nombre primero."
 
-#: forms/MainForm.js:3095 forms/RefsForm.js:105
+#: forms/MainForm.js:3100 forms/RefsForm.js:105
 msgid "Rename symbol"
 msgstr "Renombrar símbolo"
 
-#: forms/MainForm.js:3095 forms/RefsForm.js:105
+#: forms/MainForm.js:3100 forms/RefsForm.js:105
 msgid "New name:"
 msgstr "Nombre nuevo:"
 
-#: forms/MainForm.js:3207
+#: forms/MainForm.js:3212
 msgid "Start a repository"
 msgstr "Empezar un repositorio"
 
-#: forms/MainForm.js:3208
+#: forms/MainForm.js:3213
 msgid "Create a git repository in {0}?"
 msgstr "¿Crear un repositorio git en {0}?"
 
-#: forms/MainForm.js:3267
+#: forms/MainForm.js:3272
 msgid "(no branches yet)"
 msgstr "(todavía no hay ramas)"
 
-#: forms/MainForm.js:3274
+#: forms/MainForm.js:3279
 msgid "(no other branch)"
 msgstr "(no hay otra rama)"
 
-#: forms/MainForm.js:3308
+#: forms/MainForm.js:3313
 msgid "Switch branch"
 msgstr "Cambiar de rama"
 
-#: forms/MainForm.js:3312
+#: forms/MainForm.js:3317
 msgid "Switch"
 msgstr "Cambiar"
 
-#: forms/MainForm.js:3327
+#: forms/MainForm.js:3332
 msgid "New branch"
 msgstr "Rama nueva"
 
-#: forms/MainForm.js:3327
+#: forms/MainForm.js:3332
 msgid "Called"
 msgstr "Se llama"
 
-#: forms/MainForm.js:3347
+#: forms/MainForm.js:3352
 msgid "Delete a branch"
 msgstr "Borrar una rama"
 
-#: forms/MainForm.js:3348
+#: forms/MainForm.js:3353
 msgid ""
 "Delete {0}? Anything committed only there would be refused rather than lost."
 msgstr "¿Borrar {0}? Lo que esté commiteado sólo ahí se rechaza, no se pierde."
 
-#: forms/MainForm.js:3446
+#: forms/MainForm.js:3451
 msgid "Clone a repository"
 msgstr "Clonar un repositorio"
 
-#: forms/MainForm.js:3446
+#: forms/MainForm.js:3451
 msgid "From"
 msgstr "Desde"
 
-#: forms/MainForm.js:3454
+#: forms/MainForm.js:3459
 msgid "Clone into"
 msgstr "Dónde clonarlo"
 
-#: forms/MainForm.js:3696
+#: forms/MainForm.js:3701
 msgid "Version {0}, on Bintana {1}"
 msgstr "Versión {0}, sobre Bintana {1}"
 
-#: forms/MainForm.js:3698
+#: forms/MainForm.js:3703
 msgid "On Bintana {0}"
 msgstr "Sobre Bintana {0}"
 
-#: forms/MainForm.js:3700
+#: forms/MainForm.js:3705
 msgid ""
 "A RAD environment in the spirit of Visual Basic and Gambas: QuickJS embedded "
 "in a GTK4 runtime. The IDE is written in Bintana and runs on it with no "
@@ -2540,7 +2540,7 @@ msgstr ""
 "runtime GTK4. El IDE está escrito en Bintana y corre sobre él sin "
 "privilegios propios."
 
-#: forms/MainForm.js:3701
+#: forms/MainForm.js:3706
 msgid "Copyright © 2026 Matias De lellis — MIT License"
 msgstr "Copyright © 2026 Matias De lellis — Licencia MIT"
 
@@ -2554,13 +2554,13 @@ msgstr[1] ""
 "{0} archivos tienen cambios sin guardar:\n"
 "{1}"
 
-#: forms/MainForm.js:1489 forms/QuickForm.js:265
+#: forms/MainForm.js:1494 forms/QuickForm.js:265
 msgid "{0} file"
 msgid_plural "{0} files"
 msgstr[0] "{0} archivo"
 msgstr[1] "{0} archivos"
 
-#: forms/MainForm.js:3309
+#: forms/MainForm.js:3314
 msgid ""
 "There is {0} change here. Switching keeps it, unless the two branches "
 "disagree about the same file."
@@ -2574,12 +2574,12 @@ msgstr[1] ""
 "Hay {0} cambios acá. Cambiar de rama los conserva, salvo que las dos ramas "
 "no coincidan en el mismo archivo."
 
-#: forms/MainForm.js:932 forms/MainForm.js:1718 modules/Exporter.js:38
-#: modules/Installer.js:27
+#: forms/MainForm.js:932 forms/MainForm.js:1723 modules/Exporter.js:38
+#: modules/Installer.js:29
 msgid "Open a project first."
 msgstr "Abrí un proyecto primero."
 
-#: forms/MainForm.js:2008
+#: forms/MainForm.js:2013
 msgid ""
 "There is no template yet. Run Project > Update translations first: it "
 "gathers every string the project shows and writes the .pot a translation "
@@ -2597,7 +2597,7 @@ msgstr ""
 "{0} no tiene project.btp.\n"
 "Se puede editar igual, pero no va a poder ejecutarse."
 
-#: forms/MainForm.js:1560
+#: forms/MainForm.js:1565
 msgid ""
 "{0}\n"
 "is not there any more."
@@ -2605,19 +2605,19 @@ msgstr ""
 "{0}\n"
 "ya no está."
 
-#: forms/MainForm.js:3594
+#: forms/MainForm.js:3599
 msgid "Open a form to preview it."
 msgstr "Abrí un formulario para verlo en vista previa."
 
-#: forms/MainForm.js:3617
+#: forms/MainForm.js:3622
 msgid "Open a form's design to edit its menus."
 msgstr "Abrí el diseño de un formulario para editar sus menús."
 
-#: forms/MainForm.js:3636
+#: forms/MainForm.js:3641
 msgid "Open a form's design to edit its commands."
 msgstr "Abrí el diseño de un formulario para editar sus comandos."
 
-#: forms/MainForm.js:3672
+#: forms/MainForm.js:3677
 msgid "Open a form's design to edit its tab order."
 msgstr "Abrí el diseño de un formulario para editar su orden de tabulación."
 
@@ -2637,7 +2637,7 @@ msgstr "{0} ya existe y no es una carpeta."
 msgid "{0} is already a project."
 msgstr "{0} ya es un proyecto."
 
-#: forms/MainForm.js:1875
+#: forms/MainForm.js:1880
 msgid ""
 "Cannot open {0}:\n"
 "{1}"
@@ -2645,7 +2645,7 @@ msgstr ""
 "No se pudo abrir {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:1895 forms/MainForm.js:1926 forms/MetainfoForm.js:58
+#: forms/MainForm.js:1900 forms/MainForm.js:1931 forms/MetainfoForm.js:58
 msgid ""
 "Cannot read {0}:\n"
 "{1}"
@@ -2653,7 +2653,7 @@ msgstr ""
 "No se pudo leer {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:1906 forms/MainForm.js:1930 forms/MainForm.js:1938
+#: forms/MainForm.js:1911 forms/MainForm.js:1935 forms/MainForm.js:1943
 msgid ""
 "Cannot edit {0}:\n"
 "{1}"
@@ -2661,7 +2661,7 @@ msgstr ""
 "No se pudo editar {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:1954
+#: forms/MainForm.js:1959
 msgid ""
 "Cannot write {0}:\n"
 "{1}"
@@ -2669,7 +2669,7 @@ msgstr ""
 "No se pudo escribir {0}:\n"
 "{1}"
 
-#: forms/MainForm.js:3471 modules/FormFiles.js:429 modules/FormFiles.js:610
+#: forms/MainForm.js:3476 modules/FormFiles.js:429 modules/FormFiles.js:610
 #: modules/Tests.js:83
 msgid "{0} already exists."
 msgstr "{0} ya existe."
@@ -3678,26 +3678,17 @@ msgstr ""
 "{0} usa un campo privado (#), que pertenece a la clase con que empezó el "
 "programa; volvé a iniciarlo para usarlo"
 
-#: modules/Installer.js:40
-msgid "Write installer script"
-msgstr "Escribir el script del instalador"
-
-#: modules/Installer.js:56
+#: modules/Installer.js:48
 msgid "Windows installer"
 msgstr "Instalador de Windows"
 
-#: modules/Installer.js:62
+#: modules/Installer.js:54
 msgid "Windows installers"
 msgstr "Instaladores de Windows"
 
-#: modules/Installer.js:93
+#: modules/Installer.js:85
 msgid "Installer written to {0}"
 msgstr "Instalador escrito en {0}"
-
-#: modules/Installer.js:115
-msgid "Installer script written to {0} -- compile it on Windows with makensis."
-msgstr ""
-"Script del instalador escrito en {0} -- compilalo en Windows con makensis."
 
 #: modules/Launch.js:215
 msgid "(none declared)"
@@ -3940,7 +3931,9 @@ msgid "{1} could not be reopened. Its copy is kept and will be offered again."
 msgid_plural ""
 "{0} files could not be reopened: {1}. Their copies are kept and will be "
 "offered again."
-msgstr[0] "No se pudo volver a abrir {1}. Su copia se conserva y se va a ofrecer de nuevo."
+msgstr[0] ""
+"No se pudo volver a abrir {1}. Su copia se conserva y se va a ofrecer de "
+"nuevo."
 msgstr[1] ""
 "No se pudieron volver a abrir {0} archivos: {1}. Sus copias se conservan y "
 "se van a ofrecer de nuevo."
@@ -4009,8 +4002,8 @@ msgid_plural ""
 "{0} files changed on disk and were not saved over: {1}. Save each from its "
 "tab to keep your version, or reload it."
 msgstr[0] ""
-"{1} cambió en el disco y no se guardó encima. Guardalo desde su pestaña "
-"para quedarte con tu versión, o recargalo."
+"{1} cambió en el disco y no se guardó encima. Guardalo desde su pestaña para "
+"quedarte con tu versión, o recargalo."
 msgstr[1] ""
 "{0} archivos cambiaron en el disco y no se guardaron encima: {1}. Guardá "
 "cada uno desde su pestaña para quedarte con tu versión, o recargalo."
@@ -4146,6 +4139,14 @@ msgstr "Eventos"
 #: modules/Workspace.js:453
 msgid "Outline"
 msgstr "Contenido"
+
+#~ msgid "Write installer script"
+#~ msgstr "Escribir el script del instalador"
+
+#~ msgid ""
+#~ "Installer script written to {0} -- compile it on Windows with makensis."
+#~ msgstr ""
+#~ "Script del instalador escrito en {0} -- compilalo en Windows con makensis."
 
 #~ msgid "Choose a change or a commit."
 #~ msgstr "Elegí un cambio o un commit."

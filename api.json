@@ -20085,6 +20085,15 @@
           "Returns": "",
           "Doc": "the tick of a `check` item, or the chosen index of a `radio` one. **Assigning it does not fire `Click`**, so restoring a saved setting raises nothing",
           "Native": true
+        },
+        {
+          "Name": "Visible",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether it is in the menu at all. **A hidden item takes its shortcut with it** and `Click()` does nothing, and `Enabled` is kept for when it comes back -- for a command that does not exist here (a Windows-only one on Linux), where `Enabled = false` would be a grey row nobody can explain. Plain and `check` items; a `dynamic` one is refused",
+          "Native": true
         }
       ],
       "Events": [

@@ -14,6 +14,10 @@ one-page answer to *what is new since the release I have*.
   was built from. `THIRD-PARTY-NOTICES.md` maps them, and says plainly that a
   release does not attach the third-party source and that every GStreamer
   plugin is copied, FFmpeg, the DVD libraries and FDK AAC included.
+- **`MenuItem.Visible`**: a hidden item leaves the menu and takes its
+  shortcut with it, and keeps its `Enabled` for when it comes back. The IDE
+  uses it to show *Windows installer…* only on Windows: elsewhere it wrote an
+  `.nsi` with no payload beside it, which nothing could compile.
 - **`lib/package` refuses an `id` that is not an application id** before it
   writes anything. It went unquoted into the Flatpak build commands and into
   file names, so a hand-edited `project.btp` with `../x` wrote outside the
