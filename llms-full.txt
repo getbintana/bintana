@@ -12104,7 +12104,14 @@ to the program name (X11's `WM_CLASS`), so it is the window's class; the
 project's `<id>.metainfo.xml` declares the same string; and a package installs
 under it. The IDE asks for it when a project is created, *Project settings*
 renames the metainfo when it changes, and the runtime refuses one that is not an
-application id **at load**, naming the key.
+application id **at load**, naming the key. **Packaging refuses it too**, in
+`Package.configOf`, which every road goes through (`Write`, `Nsis`, the IDE's
+user install): the id lands unquoted in the Flatpak `build-commands`, in file
+names under `out` and in the setup's registry key, and packaging neither starts
+the application nor runs `check` -- before the refusal, `"id": "../x"` wrote
+outside `out` and `"a.b;c"` ran `c` in the build. The regex is
+`ProjectFile.idValid`'s, copied because `Package.js` is a script and a library
+names no other; `tests/pack` puts one list of ids through both.
 
 The packaging step is [`lib/package`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/package.md) — `Metainfo`, the
 AppStream file, and `Package`, which writes the four artefacts and the Flatpak

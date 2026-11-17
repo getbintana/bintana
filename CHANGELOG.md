@@ -14,6 +14,10 @@ one-page answer to *what is new since the release I have*.
   was built from. `THIRD-PARTY-NOTICES.md` maps them, and says plainly that a
   release does not attach the third-party source and that every GStreamer
   plugin is copied, FFmpeg, the DVD libraries and FDK AAC included.
+- **`lib/package` refuses an `id` that is not an application id** before it
+  writes anything. It went unquoted into the Flatpak build commands and into
+  file names, so a hand-edited `project.btp` with `../x` wrote outside the
+  output folder and one with `a.b;c` ran `c` in the build.
 - `cmake --install` no longer copies `docs/` -- the contributors' notes,
   plans and audit -- into `share/doc/bintana`; it installs the README, this
   CHANGELOG and the notices. The reference is the `bintana-docs` package.

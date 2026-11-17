@@ -152,6 +152,38 @@ function Main() {
     throws("a project with no id is refused",
            () => Package.Write(noid, File.Join(root, "out-noid")), "no id");
 
+    /* An id that is not one: it goes unquoted into the manifest's shell
+     * commands and into file names under `out`. Refused before anything is
+     * written, and by the same rule as `ProjectFile.idValid` -- each id goes
+     * through both, so the copy in `configOf` cannot drift from it. */
+    const ids = [
+        ["io.github.getbintana.Ok", true], ["a.b", true], ["_x.-y_2", true],
+        ["../../escaped", false], ["a.b;touch pwned", false], ["a.b$(id)", false],
+        ["Mi App.Prueba", false], ["noDot", false], ["io.1bad", false],
+        ["a..b", false], ["a.b/c", false], ["a.b\"c", false],
+    ];
+    const badId = File.Join(root, "badid");
+    Directory.Make(badId);
+    for (const [id, valid] of ids) {
+        File.SaveJson(File.Join(badId, "project.btp"), { name: "BadId", id, main: "Main" });
+        let said = "";
+        try { Package.configOf(badId); } catch (e) { said = e.message; }
+        eq(`configOf and ProjectFile.idValid agree on ${JSON.stringify(id)}`,
+           said === "", ProjectFile.idValid(id));
+        eq(`and configOf answers ${JSON.stringify(id)} as listed`, said === "", valid);
+        if (!valid) {
+            const out = File.Join(root, "out-badid");
+            throws(`packaging ${JSON.stringify(id)} is refused`,
+                   () => Package.Write(badId, out), "not an application id");
+            check(`and writes nothing for ${JSON.stringify(id)}`,
+                  !File.Exists(out) && !File.Exists(File.Join(root, "escaped.desktop")) &&
+                  !File.Exists(File.Join(File.Directory(root), "escaped.desktop")));
+        }
+    }
+    throws("an id that is not text is refused",
+           () => { File.SaveJson(File.Join(badId, "project.btp"), { name: "BadId", id: 42 });
+                   Package.configOf(badId); }, "not an application id");
+
     /* No metainfo: a package without one is a package nothing can describe. */
     const nometa = File.Join(root, "nometa");
     Directory.Make(nometa);
