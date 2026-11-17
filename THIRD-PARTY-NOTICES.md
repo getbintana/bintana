@@ -1,8 +1,9 @@
 # Third-party notices
 
 Bintana itself is MIT; see [`LICENSE`](LICENSE). The runtime embeds QuickJS,
-and the Windows download also carries third-party binaries. This file is the
-map to their notices.
+and the Windows download also carries third-party binaries. This file says
+what those are, what their licenses ask for, and **what this project does and
+does not yet do about it**.
 
 ## QuickJS
 
@@ -15,44 +16,61 @@ travels with every binary that embeds the engine.
 The Linux tarball and the Flatpak BaseApp link against the distribution's
 libraries (and, in a Flatpak, the GNOME runtime's): GTK, GtkSourceView,
 GStreamer, poppler and the rest. Those libraries are **not copied** into the
-artifact; their licenses and source belong to the distribution or the runtime,
-which is where a packager should look.
+artifact; their licenses and source belong to the distribution or the runtime.
 
 ## The Windows portable zip and the Windows setup
 
-`tools/windows-portable.sh` copies the MSYS2 UCRT64 DLLs the executables
-import, plus the data GTK, GStreamer and poppler open at run time. The
-installer built by `tools/pack.sh --nsis` installs that same tree. Those
-binaries are third-party works under their own licenses, and they are
-redistributed here.
+**This project distributes these binaries.** The `windows` job in
+`.github/workflows/ci.yml` builds against MSYS2 UCRT64 packages, and a tag
+attaches the zip and the setup to the GitHub release. Whoever passes a copy on
+redistributes the same binaries.
 
-- Every package's license text is copied to
-  `share/licenses/bintana/msys2/<package>/`, **where MSYS2 ships one**. The file
-  `share/licenses/bintana/MSYS2-PACKAGES.md` names the packages; a package
-  without a license directory is listed with its source URL instead. The
-  script copies what the environment provides and cannot invent a text the
-  package does not carry.
-- The source of each package is published at
-  <https://packages.msys2.org/> and by the upstream project. A distributor who
-  ships a binary from that tree is responsible for the source offer the
-  package's license asks for.
+How the tree is filled:
 
-What is in the bundle, and what its license asks to be carried:
+- `tools/windows-portable.sh` copies the DLLs the executables import, plus the
+  data GTK, GStreamer and poppler open at run time. The setup built by
+  `tools/pack.sh --nsis` installs that same tree.
+- **Every GStreamer plugin MSYS2 installed is copied, not only the ones
+  Bintana uses**, with the DLLs they import. The job installs
+  gst-plugins-base, -good, -bad, gst-libav and gst-plugins-rs, so the bundle
+  carries FFmpeg, the DVD libraries and the FDK AAC encoder even though no
+  Bintana API reaches them.
 
-| component | license | what travels |
-|---|---|---|
-| GTK 4, GtkSourceView 5, GLib, GIO, Pango, Cairo | LGPL-2.1-or-later | license text in `msys2/gtk4`, `msys2/gtksourceview5`, `msys2/glib2`, `msys2/pango`, `msys2/cairo`; source at packages.msys2.org |
-| GStreamer and its plugins, including gst-plugins-rs | LGPL-2.0-or-later, with some plugins under other licenses | the Rust plugins' text is in `msys2/gst-plugins-rs`; MSYS2 does not package a license directory for the C core, whose LGPL text and source are at <https://gstreamer.freedesktop.org/> |
-| poppler, poppler-glib | GPL-2.0-or-later | MSYS2 does not package a poppler license directory; the GPL text and source are at <https://poppler.freedesktop.org/> |
-| libdvdread, libdvdnav, libdvdcss | GPL-2.0-or-later | license text in `msys2/libdvdread`, `msys2/libdvdnav`, `msys2/libdvdcss`; source at packages.msys2.org |
-| libfdk-aac | Fraunhofer FDK AAC license | `msys2/libfdk-aac/`; the license requires the complete source of the library to accompany binary redistribution |
-| OpenSSL | Apache-2.0 | license text in `msys2/openssl/` |
-| Adwaita and AdwaitaLegacy icon themes | CC-BY-SA-3.0 | attribution: GNOME Project, <https://www.gnome.org> |
-| libvterm | MIT | license text in `msys2/` |
-| NSIS, when the compiler is bundled | zlib/libpng | its `COPYING` travels inside the NSIS directory |
+What travels with the binaries:
 
-**A distributor must review this list before publishing a build.** In
-particular, the GPL and LGPL source offers and the FDK AAC source obligation
-are not satisfied by copying the license text alone: ship the corresponding
-sources (or a valid written offer), or leave those components out of the
-bundle. Bintana's own MIT license does not relicense them.
+- The license text of every package in the build environment, copied to
+  `share/licenses/bintana/msys2/<package>/` **where MSYS2 ships one**. A
+  package without a license directory has no text there.
+- `share/licenses/bintana/MSYS2-PACKAGES.md`, naming those directories and
+  the exact version of every UCRT64 package installed when the tree was built
+  (a superset of what the bundle holds).
+
+What does **not** travel with them:
+
+- **The source.** A release attaches no source of the third-party components
+  and makes no written offer for it. The source of each version is published
+  by MSYS2 (<https://repo.msys2.org/mingw/sources/>, the recipe at
+  <https://github.com/msys2/MINGW-packages>) and by each upstream project, but
+  this project does not host it or guarantee it stays there. For the GPL and
+  LGPL components that pointer alone may not be what their licenses ask of a
+  distributor, and for libfdk-aac it is not: its license asks for the source to
+  accompany the binary.
+
+The components, and what each license asks:
+
+| component | license | in the bundle because | text in `msys2/` |
+|---|---|---|---|
+| GTK 4, GtkSourceView 5, GLib, GIO, Pango, Cairo | LGPL-2.1-or-later | every window | `gtk4`, `gtksourceview5`, `glib2`, `pango`, `cairo` |
+| GStreamer and its plugins | LGPL-2.0-or-later, some plugins under other licenses | `Video`, `AudioPlayer`, `Media` | the Rust plugins' in `gst-plugins-rs`; MSYS2 packages none for the C core, whose text and source are at <https://gstreamer.freedesktop.org/> |
+| poppler, poppler-glib | GPL-2.0-or-later | `PdfDocument`; linked by `bintana-gui.exe` | MSYS2 packages none; text and source at <https://poppler.freedesktop.org/> |
+| FFmpeg | LGPL-2.1-or-later, GPL with the GPL parts MSYS2's build enables | gst-libav, copied with the plugins; decoders for patented codecs | where MSYS2 packages one |
+| libdvdread, libdvdnav, libdvdcss | GPL-2.0-or-later | gst-plugins-bad's DVD plugin, copied with the plugins | `libdvdread`, `libdvdnav`, `libdvdcss` |
+| libfdk-aac | Fraunhofer FDK AAC license (not GPL-compatible; AAC is patented) | gst-plugins-bad's `fdkaac`, copied with the plugins | `libfdk-aac` |
+| OpenSSL | Apache-2.0 | a dependency of the bundled DLLs | `openssl` |
+| libvterm | MIT | `Terminal` | in `msys2/` |
+| Adwaita and AdwaitaLegacy icon themes | CC-BY-SA-3.0 | icons | attribution: GNOME Project, <https://www.gnome.org> |
+| NSIS, when the compiler is bundled | zlib/libpng | `lib/package` building a setup | its `COPYING` travels inside the NSIS directory |
+
+Bintana's own MIT license does not relicense any of them. A binary that links
+poppler is distributed under the GPL's terms as a whole, which MIT permits;
+Bintana's own source is public at <https://github.com/getbintana/bintana>.

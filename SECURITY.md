@@ -27,8 +27,8 @@ the libraries in `lib/`, the IDE in `ide/`, and the packaging tools in
 Third-party libraries (GTK, GtkSourceView, GStreamer, poppler, OpenSSL and the
 rest) keep their own security policies. A bug in one of them is still worth
 telling us about when Bintana's use of it is part of the path, but the fix may
-belong upstream; the Windows bundle's versions are named in
-`THIRD-PARTY-NOTICES.md`.
+belong upstream; the Windows bundle's versions are listed in its
+`share/licenses/bintana/MSYS2-PACKAGES.md`.
 
 ## What to expect
 

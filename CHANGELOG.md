@@ -10,7 +10,10 @@ one-page answer to *what is new since the release I have*.
 
 - `cmake --install` lays down `LICENSE-QuickJS`, and the Windows zip and setup
   carry the licences of the third-party binaries they bundle under
-  `share/licenses/bintana`; `THIRD-PARTY-NOTICES.md` maps them.
+  `share/licenses/bintana`, with the version of every MSYS2 package the tree
+  was built from. `THIRD-PARTY-NOTICES.md` maps them, and says plainly that a
+  release does not attach the third-party source and that every GStreamer
+  plugin is copied, FFmpeg, the DVD libraries and FDK AAC included.
 - `bintana check` asks the `.form`'s own runtime class about a name collision
   instead of always asking `Form`; `lib/` and `ide/` are part of the check now.
 - The Windows executables carry a version resource, so Explorer, Task Manager

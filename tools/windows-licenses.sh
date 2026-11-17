@@ -35,6 +35,22 @@ cp -R "$src"/. "$out"/
         [ -d "$dir" ] || continue
         printf -- '- %s\n' "$(basename "$dir")"
     done
+    # The versions are what makes the source findable: MSYS2 keeps every
+    # version's source package under repo.msys2.org/mingw/sources. pacman
+    # answers for the whole environment, a superset of the bundle, and the
+    # notices say so; no pacman, no list, and the section says that instead.
+    echo
+    echo "## Versions installed when this tree was built"
+    echo
+    echo "Source: https://repo.msys2.org/mingw/sources/"
+    echo
+    if command -v pacman >/dev/null; then
+        echo '```'
+        pacman -Q | grep '^mingw-w64-ucrt-' || true
+        echo '```'
+    else
+        echo "(no pacman in the build environment: versions not recorded)"
+    fi
 } > "$dest/share/licenses/bintana/MSYS2-PACKAGES.md"
 
 count=$(find "$out" -mindepth 1 -maxdepth 1 -type d | wc -l)

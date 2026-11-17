@@ -79,7 +79,7 @@ that embeds it.
 UCRT64 runtime they need -- GTK, GtkSourceView, GStreamer, poppler and their
 data -- and those keep their own licences. Their texts, where MSYS2 packages
 them, are installed under `share/licenses/bintana`, and
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) explains what each one asks
-for, including the source offer a distributor has to honour. The Linux tarball
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) says what each one asks for
+and what a release does not carry yet: their source, which MSYS2 publishes. The Linux tarball
 and the Flatpak BaseApp link against the distribution's or the GNOME runtime's
 libraries instead, so they do not copy those.
