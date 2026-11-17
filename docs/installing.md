@@ -130,7 +130,7 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/share/applications/` + `share/icons/` | the menu entry and its icon |
 | `<prefix>/share/mime/packages/bintana.xml` | `application/x-bintana-project`, the type of a `project.btp` |
 | `<prefix>/share/icons/hicolor/scalable/mimetypes/` | the type's icon, under the same drawing as the IDE |
-| `<prefix>/share/doc/bintana/` | the README, the documentation under `docs/`, and the two notices: this tree's `LICENSE` and `LICENSE-QuickJS` for the embedded engine |
+| `<prefix>/share/doc/bintana/` | the README, the CHANGELOG and the notices: this tree's `LICENSE`, `LICENSE-QuickJS` for the embedded engine, `THIRD-PARTY-NOTICES.md`. Not `docs/`, which is for working on the runtime; the reference is the `bintana-docs` package |
 | `<prefix>/share/licenses/bintana/` | the same notices in the place a package keeps them -- and, in the Windows tree, `msys2/` with the license of every bundled MSYS2 package and `THIRD-PARTY-NOTICES.md` saying what that means |
 
 A packager who installs somewhere else stages it first, which needs no second
@@ -236,8 +236,8 @@ tar xzf bintana-0.4.0-linux-x86_64.tar.gz
 ```
 
 **The IDE is in there because the IDE is data.** The runtime, the `ide/`
-project directory, the shipped libraries, the examples and the documentation
-under `share/doc/` all resolve from the binary by *relative* hops — and the
+project directory, the shipped libraries and the examples all resolve from the
+binary by *relative* hops — and the
 reference pages `F1` reads are a package of their own,
 [`bintana-docs`](https://github.com/getbintana/bintana-docs), which is why
 moving the tree after the fact changes nothing. On Windows the same is true and

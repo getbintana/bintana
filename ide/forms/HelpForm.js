@@ -26,7 +26,8 @@
  * `share/` move together under a prefix and under a packager's DESTDIR, where a
  * path baked in at configure time does not. In the source tree the first
  * candidate is `<repo>/docs/reference`; installed, the IDE lives in
- * `share/bintana/ide` and the documents in `share/doc/bintana/docs`.
+ * `share/bintana/ide` and the pages in the `bintana-docs` package's
+ * `share/doc/bintana-docs/docs`.
  */
 function candidates() {
     const ide = Application.Directory;
@@ -41,16 +42,11 @@ function candidates() {
          * it: <repo>/build/bintana -> <repo>/docs. It is what makes the help
          * findable from a project that is not the IDE, and from the suite */
         File.Join(File.Directory(bin), "docs", "reference"),
-        /* installed, and **the package the pages come from first**: the old
-         * `share/doc/bintana/docs/reference` is kept for installs and checkouts
-         * that still carry it, but a machine with both must not read a stale
-         * copy of a page that moved. */
+        /* installed: the `bintana-docs` package. The runtime installs no
+         * `docs/` of its own any more, so `share/doc/bintana` is not asked. */
         File.Join(File.Directory(File.Directory(ide)), "doc", "bintana-docs", "docs", "reference"),
         File.Join(File.Directory(bin), "share", "doc", "bintana-docs", "docs", "reference"),
-        File.Join(File.Directory(File.Directory(ide)), "doc", "bintana", "docs", "reference"),
-        File.Join(File.Directory(bin), "share", "doc", "bintana", "docs", "reference"),
         "/usr/share/doc/bintana-docs/docs/reference",
-        "/usr/share/doc/bintana/docs/reference",
     ];
 }
 

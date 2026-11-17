@@ -629,7 +629,8 @@ jobs:
   # finds everything relative to its own executable: the IDE at
   # `<bin>/../share/bintana/ide` (that is what the `bintana-ide` launcher execs),
   # the shipped libraries at `<bin>/../share/bintana/lib`, and the reference F1
-  # reads at `<bin>/../share/doc/bintana/docs/reference`. So the tarball *is* the
+  # reads, when the `bintana-docs` package is beside it, at
+  # `<bin>/../share/doc/bintana-docs/docs/reference`. So the tarball *is* the
   # install prefix, extracted anywhere:
   #
   #     tar xzf bintana-<version>-linux-<arch>.tar.gz
@@ -993,7 +994,7 @@ jobs:
           name=$(basename "$(cat zip-name.txt)" .zip)
           rm -f setup-name.txt
           export PATH="$PATH:/c/Program Files (x86)/NSIS"
-          # `--with`: the examples, the runtime's documentation and the bundled
+          # `--with`: the examples, the README/CHANGELOG/notices and the bundled
           # NSIS, which is what makes the setup the zip's equal -- the same
           # three `windows/ci/apps/ide` names.
           if BINTANA="$PWD/stage/$name/bin/bintana.exe" tools/pack.sh --nsis ide \

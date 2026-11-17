@@ -14,6 +14,9 @@ one-page answer to *what is new since the release I have*.
   was built from. `THIRD-PARTY-NOTICES.md` maps them, and says plainly that a
   release does not attach the third-party source and that every GStreamer
   plugin is copied, FFmpeg, the DVD libraries and FDK AAC included.
+- `cmake --install` no longer copies `docs/` -- the contributors' notes,
+  plans and audit -- into `share/doc/bintana`; it installs the README, this
+  CHANGELOG and the notices. The reference is the `bintana-docs` package.
 - `bintana check` asks the `.form`'s own runtime class about a name collision
   instead of always asking `Form`; `lib/` and `ide/` are part of the check now.
 - The Windows executables carry a version resource, so Explorer, Task Manager

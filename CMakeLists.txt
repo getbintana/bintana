@@ -993,7 +993,7 @@ set_target_properties(testplug-abi1 PROPERTIES
 #   <datadir>/bintana/examples/                 the same examples, to open
 #   <datadir>/applications/bintana-ide.desktop      the menu entry
 #   <datadir>/icons/hicolor/scalable/apps/       its icon
-#   <docdir>/                                    README.md, LICENSE, docs/
+#   <docdir>/                                    README.md, CHANGELOG.md, the notices
 #
 # **The IDE is installed as a project directory and not as a payload**, which is
 # the rule of this repository showing up in the packaging: `bintana <dir>` is how
@@ -1108,14 +1108,18 @@ install(FILES tools/bintana-ide.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/mimetypes
         RENAME application-x-bintana-project.svg)
 
-install(FILES README.md LICENSE THIRD-PARTY-NOTICES.md
+# **What somebody who installed Bintana reads, and not `docs/`.** That tree is
+# for whoever works *on* the runtime -- the agents' notes, the plans, the
+# audit, the open issues -- and an install that carried it shipped unfinished
+# plans beside a release. The reference an application author reads is the
+# `bintana-docs` package; the rest is on GitHub.
+install(FILES README.md CHANGELOG.md LICENSE THIRD-PARTY-NOTICES.md
         DESTINATION ${CMAKE_INSTALL_DOCDIR})
 # **The engine is embedded, so its notice travels with the binary.** QuickJS is
 # MIT beside this tree's own; a package that ships `bin/bintana` without this
 # file ships a notice it does not give.
 install(FILES vendor/quickjs/LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR}
         RENAME LICENSE-QuickJS)
-install(DIRECTORY docs/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/docs)
 
 # And the same notices under `share/licenses`, **outside `share/doc`**, because
 # the Flatpak BaseApp cleans that directory away and the Windows setup carries

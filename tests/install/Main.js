@@ -173,11 +173,14 @@ function contents(prefix) {
                        "share/mime/packages/bintana.xml",
                        "share/icons/hicolor/scalable/mimetypes/application-x-bintana-project.svg",
                        "share/doc/bintana/README.md",
-                       /* The runtime's own documentation, which is what the
-                        * install carries; the reference pages are the
-                        * `bintana-docs` package. */
-                       "share/doc/bintana/docs/ide-internals.md"])
+                       "share/doc/bintana/CHANGELOG.md",
+                       "share/doc/bintana/LICENSE-QuickJS"])
         check(`installed ${rel}`, File.Exists(File.Join(prefix, rel)));
+
+    /* `docs/` is for working on the runtime -- notes, plans, the audit -- and
+     * is not installed; the reference pages are the `bintana-docs` package. */
+    check("did not install the contributors' docs/",
+          !File.Exists(File.Join(prefix, "share", "doc", "bintana", "docs")));
 
     for (const tree of ["ide", "examples", "lib"])
         whole(tree, File.Join(ROOT, tree), File.Join(prefix, "share", "bintana", tree));
