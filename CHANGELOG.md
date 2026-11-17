@@ -20,6 +20,10 @@ one-page answer to *what is new since the release I have*.
 - `bintana --help` lists the whole command line, not four usage lines.
 - Release assets carry a `.sha256`, and the package/windows jobs wait for the
   suite, the sanitizer and the submodule pin before they publish.
+- **The final 0.4.0 is the repository's *latest***: the CI took any letter in
+  the tag for a pre-release, and the `v` of `v0.4.0` is one. A tag is now
+  checked before anything is built (`tools/release-tag.sh`): `vX.Y.Z` or
+  `vX.Y.Z-rcN` matching `CMakeLists.txt`, or nothing is published.
 - The quickstart names `RelWithDebInfo`; the build is no longer silently
   three times slower for a first-time reader.
 - **A path is text.** `Video.Save(undefined)`, `Painter.Image(42)` and

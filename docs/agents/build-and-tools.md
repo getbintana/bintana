@@ -511,12 +511,25 @@ change and writes nothing; `--quick` skips the last three. **It stops before
 `git push`**, which is the owner's, and it is a Linux-side command: the rebuild
 replaces the binary that is running it.
 **The push and the tag's push are the owner's**, and a published tag is never
-moved. A tag with a letter in it (`v0.4.0-rc1`) is a **pre-release**: the
-package and windows jobs pass `--prerelease`, so the repository's *latest* --
-what somebody who downloads without looking gets -- stays on the last final
-release. `CMakeLists.txt` stays numeric (0.4.0); the letter is the tag's, and
-the BaseApp manifest's `tag:` follows it because that is what the Flatpak
-workflow fetches. The `package` job runs on every push and, on a tag, creates the release
+moved. **A version never carries a `v`; a public tag is `v` and the
+version**, and only what *names the tag* writes the `v` -- the CHANGELOG's
+compare links and the BaseApp manifest's `tag:`, which is what the Flatpak
+workflow fetches. `CMakeLists.txt`, `--version`, `project.btp`, the metainfo,
+the Flatpak branch, the CHANGELOG headings and the asset names all say
+`0.4.0`. A tag is `vX.Y.Z` (a release) or `vX.Y.Z-rcN` (a **pre-release** of
+it, whose binary still says `X.Y.Z`, since CMake cannot carry the suffix) --
+the two shapes `tools/release` makes. `tools/release-tag.sh TAG` is the one
+place that says which, or refuses: the package and windows jobs run it before
+they build, so a tag without the `v`, or one pushed without the CMake bump,
+publishes nothing, and again to decide `--prerelease`, so the repository's
+*latest* -- what somebody who downloads without looking gets -- stays on the
+last final release. **The rule used to be "a letter anywhere in the tag"**,
+and the `v` of `v0.4.0` is a letter: the final release would have been
+published as a pre-release and *latest* would have stayed on 0.3.0 (found
+2026-11-17, before 0.4.0 was tagged). A failed `gh release create` is a
+failure unless the release is there after it -- the other job may have made
+it first, which `|| true` used to excuse along with every real failure. The
+`package` job runs on every push and, on a tag, creates the release
 with generated notes and attaches the Linux tarball, its `.sha256` and
 `api.json`; the `windows` job attaches the portable zip, its `.sha256`, and
 the setup with its own `.sha256` when its toolchain can build it. Both jobs
