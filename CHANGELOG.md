@@ -6,6 +6,10 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+## 0.4.0-rc2 — 2026-11-18
+
+[Compare with 0.4.0-rc1](https://github.com/getbintana/bintana/compare/v0.4.0-rc1...v0.4.0-rc2)
+
 **What changed since 0.4.0-rc1:**
 
 - `cmake --install` lays down `LICENSE-QuickJS`, and the Windows zip and setup
