@@ -133,6 +133,15 @@ same thing as a certainty (`reference/widgets/Editor.md`, `plans/git-plan.md`)
 say *may* now. **A negative about timing is not a property of the code; it is a
 bet on the scheduler.**
 
+**An upper bound is the same bet, made tighter than it looks.** `testTask`
+held a stopped task to 2.5 s (the child sleeps 10) and passed every time
+`widgets` ran alone; at the end of a whole `run.sh`, after the IDE's four
+minutes on a machine in use, the end crossing from the worker to the main loop
+measured 3.1, 3.2 and 3.5 s in three runs and stopped a release
+(2026-11-17). The bound is 6 s now: still nowhere near the child's own end,
+which is the thing the test is about. Bound a duration by what it must not
+reach, not by what it usually takes.
+
 **A test that cannot run says so, in a line or in an assertion.** The optional
 dependencies fork the suite (`no-vte`, `no-gstreamer`, `no-libxml` …), and the
 house style is to assert the refusal branch so the total stays the same in

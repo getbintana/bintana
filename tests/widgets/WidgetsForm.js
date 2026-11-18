@@ -33092,6 +33092,15 @@ class Form1 extends Form {
         }
 
         /*
+         * **The three bounds below are 6 s, against a child that sleeps 10.**
+         * What they prove is that the task does not wait for the child; the
+         * end itself crosses from the worker to the main loop, and at the end
+         * of a whole `run.sh` (after the IDE's four minutes, on a loaded
+         * machine) that crossing measured 3.1 to 3.5 s three runs in a row,
+         * against 2.5 s bounds that pass every time `widgets` runs alone
+         * (2026-11-17). A bound nearer the deadline tests the machine.
+         */
+        /*
          * **A deadline ends the task even through a call handed nothing.**
          * The token is explicit so a `Run` winding down after `Stopping` can
          * still do I/O; but `Timeout` and `KillAfter` mean *end now*, and
@@ -33108,7 +33117,7 @@ class Form1 extends Form {
                 check("a Timeout ends a call handed no token",
                       String(m).includes("timed out"), String(m));
                 check("...at the deadline, not when the call ends",
-                      Date.now() - from < 3000, String(Date.now() - from));
+                      Date.now() - from < 6000, String(Date.now() - from));
                 next();
             };
             t.Start({ mode: "block-plain" }, { Timeout: 1000 });
@@ -33123,7 +33132,7 @@ class Form1 extends Form {
                 check("KillAfter ends a call handed no token",
                       String(m).includes("cancelled"), String(m));
                 check("...at KillAfter, not when the call ends",
-                      Date.now() - from < 2500, String(Date.now() - from));
+                      Date.now() - from < 6000, String(Date.now() - from));
                 next();
             };
             t.Start({ mode: "block-plain" });
@@ -33139,7 +33148,7 @@ class Form1 extends Form {
                 check("a stopped task cancels Exec.Wait",
                       String(m).includes("cancelled"), String(m));
                 check("...without waiting for the child",
-                      Date.now() - from < 2500, String(Date.now() - from));
+                      Date.now() - from < 6000, String(Date.now() - from));
                 next();
             };
             t.Start({ mode: "block" });
