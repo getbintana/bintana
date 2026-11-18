@@ -17,6 +17,9 @@ one-page answer to *what is new since the release I have*.
   see a library's class (a lexical binding), so the fallback reference had no
   Libraries section; and `Doc_Link` knew only `xdg-open`, so *More detail* was a
   dead address in the corner on a Windows install.
+- On Windows, a window maximized from the system title bar stays maximized when
+  a menu or any other restyle asks for a layout: the runtime keeps GTK's
+  toplevel layout in step with the state the desktop set.
 
 ## 0.4.0-rc2 — 2026-11-18
 
@@ -100,9 +103,6 @@ one-page answer to *what is new since the release I have*.
   them. Discarding from the Git window counts only what is there to throw
   away. A few report designer hints and the breakpoint dialog's title stay in
   the IDE's language.
-- On Windows, a window maximized from the system title bar stays maximized when
-  a menu or any other restyle asks for a layout: the runtime keeps GTK's
-  toplevel layout in step with the state the desktop set.
 
 ## 0.4.0-rc1 — 2026-11-16
 
