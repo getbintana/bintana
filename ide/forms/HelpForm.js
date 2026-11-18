@@ -60,32 +60,24 @@ const SECTIONS = [
 ];
 
 /*
- * Handing an address to the desktop.
+ * Handing an address to the desktop, through `Desktop.OpenUri` -- the
+ * runtime's verb, which every application has.
  *
- * `xdg-open` is the Unix road and `start` the Windows one, which is the pair
- * `Translations`' editor list already knows. **Without the second the online
- * reference was a dead link on a Windows install**: there is no `xdg-open`
- * there, so `More detail` only put the address in the corner, and the one road
- * an installation with no reference package has was shut. Windows is asked
- * first, because an MSYS2 shell may put an `xdg-open` on the PATH of a machine
- * whose own opener is the shell's.
+ * **It was two commands here before**: `xdg-open`, and on Windows
+ * `cmd /c start "" <address>`, which made the online reference reachable from
+ * a Windows install but handed the address to `cmd`, whose command line splits
+ * on `&`. The IDE has no privileged API, so the cure was the runtime's.
  *
  * Answers whether the request was made. It says nothing about the page opening:
- * that is somebody else's program, as `File.Open` says of a file. `Exec` starts
- * the child through `bintana-exec.exe`, so no console flashes.
+ * that is somebody else's program, as `File.Open` says of a file.
  */
 function openAddress(href) {
-    if (Environment.OS === "Windows" && Application.HasCommand("cmd")) {
-        /* `start` is a builtin of `cmd`, and the empty title is what keeps a
-         * quoted address from being taken for one. */
-        Exec(["cmd", "/c", "start", "", href], () => {}, () => {});
+    try {
+        Desktop.OpenUri(href);
         return true;
+    } catch (e) {
+        return false;
     }
-    if (Application.HasCommand("xdg-open")) {
-        Exec(["xdg-open", href], () => {}, () => {});
-        return true;
-    }
-    return false;
 }
 
 /* Where the long form of every page is, for the reader of a build with no pages

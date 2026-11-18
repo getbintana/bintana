@@ -14400,6 +14400,15 @@
           "Native": true
         },
         {
+          "Name": "OpenUri",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(uri)",
+          "Returns": "",
+          "Doc": "hands the address to whatever the desktop opens that kind with — a browser for `https:`, the mail program for `mailto:`. **It answers before anything is open**: the request was made, and a failure after it goes to the log. An address with no scheme is refused here, since a path is `File.Open`'s; so is any address under a `main`, which has no desktop in either host",
+          "Native": true
+        },
+        {
           "Name": "Shortcut",
           "Kind": "Property",
           "Params": -1,

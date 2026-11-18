@@ -6,6 +6,12 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+- **`Desktop.OpenUri(uri)`** hands an address to whatever the desktop opens it
+  with -- a browser for `https:`, the mail program for `mailto:` -- through
+  `GtkUriLauncher`, so it goes through the portal where there is one. There was
+  no verb for it: `File.Open` is for files, and `LinkButton` opens only its own
+  `Uri`. It answers once the request is made; an address with no scheme is
+  refused (a path is `File.Open`'s), and so is any address under a `main`.
 - **A Windows setup's `.cmd` launcher starts the host the project asks for.**
   `bintana.exe` for a project with a `main`, whose output is the window the
   `.cmd` is run in, and `bintana-gui.exe` through `start ""` for one that opens
@@ -16,7 +22,8 @@ one-page answer to *what is new since the release I have*.
   its links to the long form open on Windows. `Application.Globals()` cannot
   see a library's class (a lexical binding), so the fallback reference had no
   Libraries section; and `Doc_Link` knew only `xdg-open`, so *More detail* was a
-  dead address in the corner on a Windows install.
+  dead address in the corner on a Windows install. It opens through
+  `Desktop.OpenUri` now.
 - On Windows, a window maximized from the system title bar stays maximized when
   a menu or any other restyle asks for a layout: the runtime keeps GTK's
   toplevel layout in step with the state the desktop set.

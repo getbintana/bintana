@@ -1,0 +1,5 @@
+{
+  "name": "headless-openuri",
+  "main": "Main",
+  "description": "Desktop.OpenUri refuses the same way in both hosts when a main is running: a bad address by name, a good one because there is no desktop"
+}

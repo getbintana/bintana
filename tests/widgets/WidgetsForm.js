@@ -613,6 +613,9 @@ const TESTS = [
      * armed a deadline (see the note above ExecWait). Its last assertions are a
      * launch landing on a later turn, which `until` counts. */
     "Desktop",
+    /* Beside it, and for the same reason: an `Exec.Wait` up front, then a
+     * child whose handler lands on a later turn, which `waiting` counts. */
+    "DesktopOpenUri",
     /* Blocking too, and in the same group: it runs children with `Exec.Wait`
      * to see a project's own id answered, and a bad one refused. */
     "ApplicationId",
@@ -26660,6 +26663,104 @@ class Form1 extends Form {
                File.Load(said), "a b\n100%\na\"b\na$b\na\\b\ncafé\n");
             Desktop.Entries.Uninstall(probe);
         });
+    }
+
+    /* --- an address handed to the desktop -----------------------------------
+     *
+     * `Desktop.OpenUri` answers before anything is open, so what can be
+     * asserted in this process is what it refuses. The round trip -- the
+     * address reaching the program the desktop chose, byte for byte -- runs in
+     * a child, because **a real launch from here would reach the person's own
+     * desktop**: GTK 4.22 goes through the OpenURI portal even outside a
+     * sandbox, and the portal on the session bus draws its chooser on the
+     * session's display, not on this Xvfb. So the child has no session bus at
+     * all (no portal can be reached even by a GTK that stopped reading
+     * `no-portals`), `GDK_DEBUG=no-portals` (GTK hands the address to GIO), and
+     * data and config directories of its own, where the only handler for a
+     * scheme nobody else has is a script that writes down what it was given.
+     */
+    testDesktopOpenUri() {
+        throws("OpenUri needs an address", () => Desktop.OpenUri());
+        throws("and refuses one that is not text", () => Desktop.OpenUri(5));
+        throws("and the empty one", () => Desktop.OpenUri(""));
+        throws("and a path, which is File.Open's", () => Desktop.OpenUri("/etc/hosts"));
+        throws("and a Windows path, which would read as the scheme `c`",
+               () => Desktop.OpenUri("C:\\x"));
+
+        if (Environment.OS === "Windows") {
+            print("  (skipping the OpenUri round trip: the handler is an XDG desktop entry)");
+            return;
+        }
+
+        const root   = File.Join(SCRATCH, "openuri");
+        const data   = File.Join(root, "data");
+        const config = File.Join(root, "config");
+        const proj   = File.Join(root, "child");
+        const said   = File.Join(root, "said.txt");
+        const script = File.Join(root, "handler.sh");
+        if (File.IsDir(root)) Directory.DeleteTree(root);
+        Directory.Make(config);
+        Directory.Make(proj);
+
+        File.Save(script, "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"" + said + "\"\n");
+        Exec.Wait(["chmod", "+x", script], { Timeout: 20000 });
+
+        Desktop.Entries.Write(File.Join(data, "applications", "bta-uri-probe.desktop"), {
+            "Desktop Entry": {
+                Type:      "Application",
+                Name:      "Bta uri probe",
+                Exec:      Desktop.Entries.Exec([script]) + " %u",
+                MimeType:  "x-scheme-handler/bta-uri-probe;",
+                NoDisplay: "true",
+            },
+        });
+        File.Save(File.Join(config, "mimeapps.list"),
+                  "[Default Applications]\n" +
+                  "x-scheme-handler/bta-uri-probe=bta-uri-probe.desktop\n");
+
+        /* `&` is what `cmd /c start` would have split the IDE's address on, and
+         * `%20` and `#` are what a careless quoting would decode or cut. */
+        const address = "bta-uri-probe:page?a=1&b=two%20words#part";
+        File.SaveJson(File.Join(proj, "project.btp"),
+                      { name: "UriChild", id: "io.github.getbintana.UriChild",
+                        startup: "UriChild" });
+        File.Save(File.Join(proj, "UriChild.js"), `"use strict";
+export class UriChild extends Form {
+    Form_Open() {
+        this.Visible = false;
+        Desktop.OpenUri(${JSON.stringify(address)});
+        print("requested");
+        /* The launch is asynchronous: stay until the handler has written. */
+        let left = 1000;
+        const wait = () => {
+            if (File.Exists(${JSON.stringify(said)}) || --left <= 0) Application.Quit(0);
+            else Timer.After(10, wait);
+        };
+        wait();
+    }
+}
+`);
+
+        const lines = [];
+        Exec([Application.Executable, proj],
+             { Environment: { XDG_DATA_HOME: data, XDG_CONFIG_HOME: config,
+                              GDK_DEBUG: "no-portals",
+                              DBUS_SESSION_BUS_ADDRESS: "unix:path=" + File.Join(root, "no-bus") },
+               Timeout: 30000 },
+             (line) => lines.push(line),
+             (code) => {
+                 eq("a program that opens an address runs", code, 0);
+                 check("the request was made, not refused",
+                       lines.includes("requested"), lines.join("\n"));
+                 check("the desktop's handler for the scheme ran",
+                       File.Exists(said), lines.join("\n"));
+                 if (File.Exists(said))
+                     eq("and it was given the address exactly", File.Load(said),
+                        address + "\n");
+                 if (File.IsDir(root)) Directory.DeleteTree(root);
+                 waiting--;
+             });
+        waiting++;
     }
 
     /* --- Shortcut ------------------------------------------------------------

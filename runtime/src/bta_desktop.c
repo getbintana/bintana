@@ -1100,6 +1100,94 @@ static JSValue shortcut_remove(JSContext *ctx, JSValueConst this_val,
     return out;
 }
 
+/* ------------------------------------------------------------------- OpenUri
+ *
+ * `Desktop.OpenUri(uri)` -- hand an address to whatever the desktop opens that
+ * kind with: a browser for `https:`, the mail program for `mailto:`.
+ *
+ * **There was no verb for this**, and what a program did instead was worse than
+ * the gap. `File.Open` is for a file and says so; `LinkButton` opens its own
+ * `Uri` and nothing else. The IDE's help, whose links are in a markdown view,
+ * ran `xdg-open` and then `cmd /c start "" <uri>` -- and `cmd` reads its whole
+ * command line, so an address with `&` in it was two commands. The fix the
+ * IDE's rule asks for is this, which every application then has.
+ *
+ * `GtkUriLauncher`, for the reason `File.Open` is a `GtkFileLauncher`: it goes
+ * through the desktop's portal when there is one, which is what works inside a
+ * sandbox, and it is the road `LinkButton` itself takes.
+ *
+ * **It answers before anything is open**, as `File.Open` does: launching is
+ * asynchronous and the program is somebody else's. What is refused here is
+ * what a caller can do something about -- no address, or one with no scheme,
+ * which is a path and `File.Open`'s. A one-letter scheme is refused too: no
+ * registered scheme has one, and `C:\x` is a Windows path that `g_uri` would
+ * read as scheme `c`. Anything after the request goes to the log, named.
+ */
+#ifndef BTA_HEADLESS
+static void on_uri_launched(GObject *source, GAsyncResult *result, gpointer data)
+{
+    GError *error = NULL;
+    char   *uri   = data;
+
+    if (!gtk_uri_launcher_launch_finish(GTK_URI_LAUNCHER(source), result, &error) &&
+        !g_error_matches(error, GTK_DIALOG_ERROR, GTK_DIALOG_ERROR_DISMISSED))
+        g_warning("cannot open %s: %s", uri,
+                  error ? bta_gerror_text(error) : "no application for it");
+
+    g_clear_error(&error);
+    g_free(uri);
+    g_object_unref(source);
+}
+#endif
+
+static JSValue desktop_open_uri(JSContext *ctx, JSValueConst this_val,
+                                int argc, JSValueConst *argv)
+{
+    if (argc < 1 || !JS_IsString(argv[0]))
+        return JS_ThrowTypeError(ctx, "Desktop.OpenUri(uri) needs an address");
+
+    const char *uri = JS_ToCString(ctx, argv[0]);
+    if (!uri)
+        return JS_EXCEPTION;
+
+    /* Interned and lent (transfer none, GLib 2.66): nothing to free. */
+    const char *scheme = g_uri_peek_scheme(uri);
+    if (!scheme || strlen(scheme) < 2) {
+        JSValue e = bta_throw_text(ctx,
+            "Desktop.OpenUri: \"%s\" is not an address with a scheme "
+            "(https:, mailto: ...) -- a file is File.Open's", uri);
+        JS_FreeCString(ctx, uri);
+        return e;
+    }
+
+#ifndef BTA_HEADLESS
+    /* A `main` runs in this host too, and never initialises GTK: there is no
+     * display to launch on, and the refusal is the console host's own. */
+    if (!gdk_display_get_default()) {
+        JS_FreeCString(ctx, uri);
+        return JS_ThrowPlainError(ctx, "Desktop.OpenUri needs a desktop, and a "
+                                       "project's main has none");
+    }
+
+    GtkUriLauncher *launcher = gtk_uri_launcher_new(uri);
+
+    /* Transient for whatever window is up, so a portal's chooser is a child of
+     * the application rather than a stray dialog. */
+    BtaApp    *app    = bta_current_app();
+    GtkWindow *parent = app && app->gapp
+                            ? gtk_application_get_active_window(app->gapp) : NULL;
+
+    gtk_uri_launcher_launch(launcher, parent, NULL, on_uri_launched, g_strdup(uri));
+    JS_FreeCString(ctx, uri);
+    return JS_UNDEFINED;
+#else
+    (void)this_val;
+    JS_FreeCString(ctx, uri);
+    return JS_ThrowPlainError(ctx, "Desktop.OpenUri needs a desktop, and a "
+                                   "project's main has none");
+#endif
+}
+
 /* ---------------------------------------------------------------------- init */
 
 void bta_desktop_init(JSContext *ctx, JSValue global)
@@ -1252,5 +1340,15 @@ void bta_desktop_init(JSContext *ctx, JSValue global)
      *   the Windows `.lnk` object below; `Available` says whether it is there
      */
     JS_SetPropertyStr(ctx, desktop, "Shortcut", shortcut);
+    /* OpenUri(uri)
+     *   hands the address to whatever the desktop opens that kind with — a
+     *   browser for `https:`, the mail program for `mailto:`. **It answers
+     *   before anything is open**: the request was made, and a failure after
+     *   it goes to the log. An address with no scheme is refused here, since a
+     *   path is `File.Open`'s; so is any address under a `main`, which has no
+     *   desktop in either host
+     */
+    JS_SetPropertyStr(ctx, desktop, "OpenUri",
+                      JS_NewCFunction(ctx, desktop_open_uri, "OpenUri", 1));
     JS_SetPropertyStr(ctx, global, "Desktop", desktop);
 }

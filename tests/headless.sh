@@ -684,6 +684,24 @@ if [[ $(id -u) -ne 0 ]]; then
 fi
 [[ $priv_ok == 1 ]] && echo "Privilege is the same in both hosts, and a helper is not a source"
 
+# --- Desktop.OpenUri under a main ---------------------------------------------
+#
+# The graphical host runs a `main` too, and never initialises GTK for one: an
+# address must be refused there with the console host's sentence, not handed to
+# a launcher with no display. A bad address is refused first, the same in both.
+uri_ok=1
+for host in "$BINTANA_CORE" "$BINTANA"; do
+    if ! "$host" tests/headless/projects/openuri >"$tmp/uri.out" 2>"$tmp/uri.err" ||
+       ! diff -u tests/headless/projects/openuri/expected.txt "$tmp/uri.out" \
+            >"$tmp/uri.diff"; then
+        echo "Desktop.OpenUri under $host does not refuse as expected:" >&2
+        cat "$tmp/uri.diff" "$tmp/uri.err" >&2
+        uri_ok=0
+        fail=1
+    fi
+done
+[[ $uri_ok == 1 ]] && echo "Desktop.OpenUri refuses a main's address the same way in both hosts"
+
 if command -v ldd >/dev/null; then
     if ldd "$BINTANA_CORE" | grep -Eiq 'libgtk|libgtksource|libvte'; then
         echo "the core host links a toolkit:" >&2

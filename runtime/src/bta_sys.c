@@ -868,8 +868,9 @@ BTA_CANCEL_SCOPED(sys_file_info, "File.Info")
  * the failure a caller can do something about; anything after that goes to the
  * log, named.
  *
- * A web address is not this: `LinkButton` is what hands a URI to the desktop,
- * and giving a *file* verb two meanings would be the wrong place to put it.
+ * A web address is not this: `Desktop.OpenUri` hands an address to the desktop
+ * (and `LinkButton` its own), and giving a *file* verb two meanings would be the
+ * wrong place to put it.
  */
 #ifndef BTA_HEADLESS
 static void on_launched(GObject *source, GAsyncResult *result, gpointer data)

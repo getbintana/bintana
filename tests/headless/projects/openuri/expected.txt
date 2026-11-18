@@ -1,0 +1,2 @@
+Desktop.OpenUri: "no scheme" is not an address with a scheme (https:, mailto: ...) -- a file is File.Open's
+Desktop.OpenUri needs a desktop, and a project's main has none

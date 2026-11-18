@@ -340,6 +340,23 @@ rest is JavaScript over the elements API.
   nobody looked at, and this one is invisible where it is written: any
   `GKeyFile` a program means to write back loads with the flag. Caught by the
   first CI run that got as far as the suite (`tests/widgets`'s `Desktop`).
+- **`GtkUriLauncher` goes through the OpenURI portal outside a sandbox too**
+  (GTK 4.22.5 here), so a test that calls `Desktop.OpenUri` -- or
+  `File.Open`, which is `GtkFileLauncher` -- reaches the **person's own
+  desktop**: the suite shares the user's session bus, and the portal behind it
+  draws its chooser on the session's display, not on the Xvfb. Measured by
+  running a probe under a private `dbus-run-session` started outside `try.sh`:
+  `xdg-desktop-portal-gtk` was activated with the shell's `DISPLAY=:0.0` and
+  tried to put an application chooser there. `GDK_DEBUG=no-portals` sends GTK
+  to `g_app_info_launch_default_for_uri_async` instead. `testDesktopOpenUri`
+  runs its launch in a child with that, **no session bus at all**
+  (`DBUS_SESSION_BUS_ADDRESS` at a socket that is not there, so no portal is
+  reachable even by a GTK that stopped reading the flag), and `XDG_DATA_HOME`/
+  `XDG_CONFIG_HOME` of its own whose only handler for `x-scheme-handler/
+  bta-uri-probe` is a script that writes down its argument. A real `https:` is
+  never launched by the suite. The same holds for `Document.follow` in the
+  IDE, which only logs an address because `tests/ide` follows
+  `https://example.org` through it.
 
 ## Keyring: the vault, and what it does not promise
 
