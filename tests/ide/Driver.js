@@ -6514,7 +6514,8 @@ function* p_document(ide) {
     ide.tabs.switchTo(readme);
     yield;
 
-    check("a web address is nobody's here", ide.Doc_Link("https://example.org", "x"));
+    check("a web address is the desktop's to open, and opens no tab",
+          ide.Doc_Link("https://example.org", "x"));
     eq("and opens no tab", ide.activeFile, readme);
     check("a link to a file that is not there says so",
           ide.Doc_Link("no-such-file.md", "x"));
@@ -6625,9 +6626,20 @@ function* p_help(ide) {
     check("with no package the tree is built from the runtime",
           bare.Pages.Exists("topic:Button") && bare.Pages.Exists("topic:File") &&
           bare.Pages.Exists("cat:widgets") && bare.Pages.Exists("cat:globals"));
+    /* **And the classes the libraries it uses declare**, which the global object
+     * cannot see: a library's class is a lexical binding. Without them the
+     * fallback reference had no Libraries section at all. The project the suite
+     * has open offers `Dial` and `Gadget` from its own `lib/`. */
+    check("and from the libraries the project uses",
+          bare.Pages.Exists("cat:libraries") &&
+          bare.Pages.Exists("topic:Dial") && bare.Pages.Exists("topic:Gadget"),
+          `${bare.Pages.Exists("cat:libraries")} ${bare.Pages.Exists("topic:Dial")}` +
+          ` ${bare.Pages.Exists("topic:Gadget")}`);
     eq("and the page it opens on is the index", bare.current, "index:");
     check("which says where the long form is", bare.LblWhere.Text.includes("bintana-docs"),
           bare.LblWhere.Text);
+    eq("and whose title is the reference's, not Reference -- Reference",
+       bare.Text, Locale.Text("Reference"));
     bare.Close();
     HelpForm.root = realRoot;
 

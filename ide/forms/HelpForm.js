@@ -59,6 +59,35 @@ const SECTIONS = [
     { key: "libraries" },
 ];
 
+/*
+ * Handing an address to the desktop.
+ *
+ * `xdg-open` is the Unix road and `start` the Windows one, which is the pair
+ * `Translations`' editor list already knows. **Without the second the online
+ * reference was a dead link on a Windows install**: there is no `xdg-open`
+ * there, so `More detail` only put the address in the corner, and the one road
+ * an installation with no reference package has was shut. Windows is asked
+ * first, because an MSYS2 shell may put an `xdg-open` on the PATH of a machine
+ * whose own opener is the shell's.
+ *
+ * Answers whether the request was made. It says nothing about the page opening:
+ * that is somebody else's program, as `File.Open` says of a file. `Exec` starts
+ * the child through `bintana-exec.exe`, so no console flashes.
+ */
+function openAddress(href) {
+    if (Environment.OS === "Windows" && Application.HasCommand("cmd")) {
+        /* `start` is a builtin of `cmd`, and the empty title is what keeps a
+         * quoted address from being taken for one. */
+        Exec(["cmd", "/c", "start", "", href], () => {}, () => {});
+        return true;
+    }
+    if (Application.HasCommand("xdg-open")) {
+        Exec(["xdg-open", href], () => {}, () => {});
+        return true;
+    }
+    return false;
+}
+
 /* Where the long form of every page is, for the reader of a build with no pages
  * beside it. */
 const REFERENCE_ONLINE = "https://github.com/getbintana/bintana-docs/tree/main/docs/reference";
@@ -122,7 +151,7 @@ export class HelpForm extends Form {
 
         const help = HelpForm.window;
         help.Show();
-        if (!help.root && HelpForm.source) help.index();
+        if (!help.root) help.index();
         return help;
     }
 
@@ -154,13 +183,11 @@ export class HelpForm extends Form {
 
         if (!this.root) {
             /* No pages: the runtime describes itself, which is the whole of what
-             * a build with nothing but the runtime has. */
-            if (HelpForm.source) {
-                this.fillBuilt();
-                this.index();
-            } else {
-                this.LblWhere.Text = Locale.Text("The reference is not installed beside this build.");
-            }
+             * a build with nothing but the runtime has. The index says so either
+             * way -- a window that opens on a label and a blank page reads as a
+             * help that is broken rather than one that is not installed. */
+            if (HelpForm.source) this.fillBuilt();
+            this.index();
             return;
         }
         this.fill();
@@ -173,10 +200,15 @@ export class HelpForm extends Form {
         this.Pages.Clear();
 
         const names = HelpForm.source.referenceNames();
-        for (const key of ["widgets", "globals"]) {
-            this.Pages.Add(`cat:${key}`, this.sectionTitle(key), "", "folder-documents-symbolic");
-            for (const name of names[key])
-                this.Pages.Add(`topic:${name}`, name, `cat:${key}`, "text-x-generic-symbolic");
+        for (const section of SECTIONS) {
+            const list = names[section.key] || [];
+            if (!list.length) continue;
+
+            this.Pages.Add(`cat:${section.key}`, this.sectionTitle(section.key), "",
+                           "folder-documents-symbolic");
+            for (const name of list)
+                this.Pages.Add(`topic:${name}`, name, `cat:${section.key}`,
+                               "text-x-generic-symbolic");
         }
         this.Pages.ExpandAll();
     }
@@ -187,7 +219,11 @@ export class HelpForm extends Form {
         const text = [
             "# " + Locale.Text("Reference"),
             "",
-            Locale.Text("The reference pages are not installed beside this build, so what the tree shows is built from the runtime itself: every member, and the sentence that describes it."),
+            /* With a source the tree has something in it; without one this is a
+             * window that would otherwise be a label and a blank page. */
+            HelpForm.source
+                ? Locale.Text("The reference pages are not installed beside this build, so what the tree shows is built from the runtime itself: every member, and the sentence that describes it.")
+                : Locale.Text("The reference is not installed beside this build."),
             "",
             Locale.Text("The long form, with examples, is online:"),
             "",
@@ -195,6 +231,10 @@ export class HelpForm extends Form {
         ].join("\n");
 
         this.generated({ Name: Locale.Text("Reference"), Text: text, Where: REFERENCE_ONLINE }, "index:");
+        /* The topic's name and the window's are the same word here, and
+         * `generated` composes a title out of the name: "Reference --
+         * Reference" is what the index came up with. */
+        this.Text = Locale.Text("Reference");
     }
 
     /* A built topic by name, in this window.  `false` when the runtime has
@@ -336,11 +376,11 @@ export class HelpForm extends Form {
         if (href.startsWith("topic:"))
             return this.showTopic(href.slice("topic:".length));
 
-        /* The web, for the long form: handed to whatever the desktop opens links
-         * with, and where that cannot be had the address is shown, as it was. */
-        if ((href.startsWith("https://") || href.startsWith("http://")) &&
-            Application.HasCommand("xdg-open")) {
-            Exec(["xdg-open", href], () => {}, () => {});
+        /* The web, for the long form: handed to whatever opens addresses on
+         * this machine, and where that cannot be had the address is shown, as
+         * it was. */
+        if (href.startsWith("https://") || href.startsWith("http://")) {
+            if (!openAddress(href)) this.LblWhere.Text = `${text} -> ${href}`;
             return true;
         }
 

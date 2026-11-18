@@ -683,21 +683,73 @@ export class Completion {
 
     /*
      * Every name the runtime can describe, for a reference with no package
-     * beside it: the controls and the globals that have members, sorted.  Asked
-     * of the runtime and not listed here, so a class added to it is in the list
-     * the day it is built; a name with nothing to say (a global that is a bare
-     * function) is left out rather than opening an empty page.
-     * The controls are globals too, and are listed once, as controls.
+     * beside it: the controls, the globals that have members, and the classes
+     * the libraries this project `uses` declare -- each sorted.  Asked of the
+     * runtime and of the libraries' own sources, and not listed here, so a
+     * class added to either is in the list the day it is built; a name with
+     * nothing to say (a global that is a bare function) is left out rather than
+     * opening an empty page. The controls are globals too, and are listed once,
+     * as controls.
      */
     referenceNames() {
         const speaks = (name) => {
             try { return this.rawMembers(name).length > 0; } catch (e) { return false; }
         };
 
-        return {
-            widgets: [...this.widgets].filter(speaks).sort(),
-            globals: Application.Globals().filter((n) => !this.widgets.has(n) && speaks(n)).sort(),
-        };
+        const widgets = [...this.widgets].filter(speaks).sort();
+        const globals = Application.Globals()
+                          .filter((n) => !this.widgets.has(n) && speaks(n)).sort();
+        /* **A library's class is a lexical binding and not a property of the
+         * global object** (`Chart`, `Package`, a component's `Confirm`), so
+         * `Application.Globals` cannot see one -- and without this the reference
+         * built from the runtime had no Libraries section, and no way to browse
+         * what the libraries a project uses offer. The control and global
+         * filters are belt and braces: both were asked first, and a name is one
+         * row. */
+        const libraries = this.libraryClasses()
+                              .filter((n) => !this.widgets.has(n) &&
+                                             !globals.includes(n) && speaks(n));
+
+        return { widgets, globals, libraries };
+    }
+
+    /*
+     * The classes the libraries this project `uses` declare, read out of their
+     * sources -- the same six-place resolution `uses` goes through, asked
+     * through `Classes.libraries` (`Application.Uses`), so a library the
+     * project does not load is not offered.
+     *
+     * **Every class they declare, the internal helpers included**: what is
+     * public is a fact about the documentation and not about the source, and a
+     * list of the public ones here would be the hand-written table this module
+     * exists without. The tree is "what this program can name", as its controls
+     * already are.
+     *
+     * Kept under the libraries array it was read for: a project being opened
+     * elsewhere is a different set, and that array is made again by the rescan
+     * that finds it, so the cache cannot outlive it.
+     */
+    libraryClasses() {
+        const dirs = (this.ide.classes && this.ide.classes.libraries) || [];
+        if (this._libraryCache && this._libraryCache.dirs === dirs)
+            return this._libraryCache.names;
+
+        const out = new Set();
+        for (const { dir } of dirs) {
+            for (const file of Directory.Files(dir, { Pattern: "*.js",
+                                                      Recursive: true })) {
+                let symbols = [];
+                try { symbols = Application.Symbols(File.Load(file)); }
+                catch (e) { continue; }
+                for (const s of symbols)
+                    if (s.Kind === "Class" && s.Name !== "Component")
+                        out.add(s.Name);
+            }
+        }
+
+        const names = [...out].sort();
+        this._libraryCache = { dirs, names };
+        return names;
     }
 
     topicPage(name, member, lines) {

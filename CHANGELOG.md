@@ -12,6 +12,11 @@ one-page answer to *what is new since the release I have*.
   a form -- so the IDE's own launcher no longer opens with a console behind it
   for as long as it runs. The rule is the core's own (`bta_project_has_main`),
   and the Start Menu shortcut was already the graphical host.
+- **The reference the runtime builds lists the libraries a project uses**, and
+  its links to the long form open on Windows. `Application.Globals()` cannot
+  see a library's class (a lexical binding), so the fallback reference had no
+  Libraries section; and `Doc_Link` knew only `xdg-open`, so *More detail* was a
+  dead address in the corner on a Windows install.
 
 ## 0.4.0-rc2 — 2026-11-18
 

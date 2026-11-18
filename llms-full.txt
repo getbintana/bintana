@@ -9229,6 +9229,29 @@ list are those that are not controls. The no-package path cannot be run where th
 package is installed, so `p_help` stands `HelpForm.root` in for `""` and opens a
 window of its own, and is red with the tree not built.
 
+**A library's class is a lexical binding, so the built tree had no Libraries
+section.** `Application.Globals()` cannot see `Chart`, `Package` or a component's
+`Confirm`, so a build with no reference package could browse the controls and the
+runtime's own globals and nothing else -- and the libraries are half of what a
+program author reaches for. `Completion.libraryClasses` reads the classes the
+libraries this project `uses` declare (`Classes.libraries`, which is
+`Application.Uses`, so a library the project does not load is not offered), and
+they are the third section of `fillBuilt`. **Every class they declare, the
+internal helpers included**: which ones are public is a fact about the
+documentation and not about the source, and a list of the public ones here would
+be the hand-written table this module exists without.
+
+**And the road to the long form was shut on Windows.** `Doc_Link` knew only
+`xdg-open`, which a Windows install does not have, so *More detail* -- the last
+line of every built topic, and the last line of the index -- only put the address
+in the corner. `openAddress` is one function with the two spellings, and asks the
+Windows one first, because an MSYS2 shell can put an `xdg-open` on the PATH of a
+machine whose own opener is the shell's. The index is also what a window with no
+`source` opens on now (a label and a blank page read as a broken help rather than
+as one that is not installed), and its title is `Reference` and not
+`Reference -- Reference`, which is what composing a title out of the index's own
+name came up with.
+
 **The accessibility check is a pure function over a `.form`'s JSON, and every
 row is one severity.** `Accessibility.findings(root)` (`lib/check/Accessibility.js`)
 is called from `Check.form`, so it runs in the pass that already reads every
@@ -12258,6 +12281,17 @@ its argument -- read back from the `.lnk` and launched -- and the uninstaller
 removes the directory, the Start Menu folder and the `HKCU` uninstall key.
 `bin\bintana-exec.exe` travels too: every `Exec` starts its child through it,
 so the console tools an application runs have no window of their own.
+
+**The `.cmd` beside the executable starts a host by the project's kind, and the
+shortcut does not.** `Nsis.Stage` writes one launcher per application, and which
+host it starts is the rule the core dispatches on (`bta_project_has_main`): a
+project with a `main` runs in `bintana.exe`, and the window the `.cmd` is run in
+is its output; one that opens a form -- every application with a `startup`, and
+everything that declares neither -- starts `bintana-gui.exe` through
+`start ""`, so a double-clicked launcher does not leave a `cmd.exe` behind the
+window for as long as it runs. It used to be `bintana.exe` for both, which was
+the IDE's own launcher opening with a console behind it; the shortcut was
+always the graphical host, which is what a menu entry needs.
 The bundled compiler was checked too: the official NSIS 3.12 tree under
 `share/bintana/tools/nsis` answered `v3.12` from the installed directory, so a
 setup can be built without NSIS installed. There is no `tools/check` beside an
