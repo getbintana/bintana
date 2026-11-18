@@ -20,6 +20,11 @@ one-page answer to *what is new since the release I have*.
 - On Windows, a window maximized from the system title bar stays maximized when
   a menu or any other restyle asks for a layout: the runtime keeps GTK's
   toplevel layout in step with the state the desktop set.
+- `Widget.Members` refuses a qualified name that resolves to nothing
+  (`Nope.Thing`, `Desktop.Nope`) as it refuses a bare one, instead of answering
+  `[]`. The empty answer made the graphical host's `check` -- the one the IDE's
+  Problems panel shows -- report a false error on a component of a namespace
+  (`class: "Gadgets.Stepper"`) that the console `bintana check` passed.
 
 ## 0.4.0-rc2 — 2026-11-18
 

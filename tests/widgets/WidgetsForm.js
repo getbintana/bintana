@@ -25039,6 +25039,18 @@ class Form1 extends Form {
            (() => { try { Widget.Members("NoSuchThingHere"); return ""; }
                     catch (e) { return e.message; } })(),
            "Members: 'NoSuchThingHere' is not a class");
+        /* A qualified name walks an object, and an object that is not there
+         * walked to `undefined` and answered `[]` -- which `bintana check`
+         * took for a class, so the graphical check refused a namespaced
+         * component's `.form` that the console check passed. */
+        eq("and a qualified name whose namespace is nothing, the same way",
+           (() => { try { Widget.Members("NoSuchSpace.Thing"); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: 'NoSuchSpace.Thing' is not a class");
+        eq("as it does one whose last step is nothing",
+           (() => { try { Widget.Members("Desktop.NoSuchThing"); return ""; }
+                    catch (e) { return e.message; } })(),
+           "Members: 'Desktop.NoSuchThing' is not a class");
         eq("and a number is not a class either",
            (() => { try { Widget.Members(8); return ""; }
                     catch (e) { return e.message; } })(),

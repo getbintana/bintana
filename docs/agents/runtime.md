@@ -1048,6 +1048,19 @@ every global the runtime installs beat the project's own declaration, and the
 program did not start. Found by adding the global `Probe`, which two
 `tests/widgets` fixtures were already called (they are `Showcase` and `Slab`).
 
+**And a qualified name it cannot walk is `undefined`, not a throw**: `Nope`
+throws a `ReferenceError`, `Nope.Thing` (or `Desktop.Nope`) answers
+`undefined`. `Widget.Members` took that `undefined` for a class with no
+members and answered `[]` -- and `Check.formBase` in `lib/check` asks
+`if (Widget.Members(at))`, which an empty array passes. So in the graphical
+host, where the check never runs `Gadgets/Stepper.js`, a `.form` of class
+`Gadgets.Stepper` got that class as its base, `Widget.Member` refused it, and
+`bintana-gui check tests/widgets` exited 1 while the console check said 0:
+`tests/headless.sh` was red on 0.4.0-rc2. `Members` now treats a resolved
+`undefined` or `null` as not defined (the catalogue still answers a type no
+global holds). A caller of `bta_lookup_global` with a dotted name checks for
+`undefined` itself.
+
 **It failed two different ways, and the second one points nowhere near the
 cause.** A global written in C (`File`, `Probe`, `Field`) gave `startup class
 'File' not found`, for a class that was there, loaded and evaluated. A global

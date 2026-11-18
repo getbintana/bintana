@@ -5769,6 +5769,13 @@ static JSValue w_members_by_type(JSContext *ctx, JSValueConst this_val,
      * widget, and this question does not care. */
     if (!sources || !g_hash_table_contains(index, type)) {
         JSValue klass = lookup_beside_sources(ctx, type, sources);
+        /* **A qualified name nothing holds resolves to `undefined`**, where a
+         * bare one throws: `Gadgets.Stepper` in a process that never ran the
+         * file declaring `Gadgets` walked to nothing and answered `[]` -- a
+         * class with no members, which `bintana check`'s `formBase` took for a
+         * class, and `Widget.Member` then refused. Nothing is not a class. */
+        if (JS_IsUndefined(klass) || JS_IsNull(klass))
+            klass = JS_ThrowReferenceError(ctx, "%s is not defined", type);
         if (!JS_IsException(klass)) {
             take_members_of_resolved(ctx, klass, type, all, own_only,
                                      out, names, &n);

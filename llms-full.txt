@@ -163,6 +163,7 @@ Three repositories, and a change crosses them in one direction:
 | how a widget, property or event is added | [`docs/extending.md`](docs/extending.md) |
 | an intrinsic of the language | `llm/language.md` in `bintana-llm` |
 | a gap reported in `docs/issues/` | **delete the issue file** and its rows in `docs/issues/README.md` and `docs/llm/issues.md` |
+| an upstream defect the runtime works around | a file in `docs/issues/` under **Upstream**, naming the dependency and version, and its rows in `docs/issues/README.md` and `docs/llm/issues.md`; **keep the workaround and the file** until the dependency is fixed |
 | anything a test now proves | [`docs/testing.md`](docs/testing.md), and the counts it quotes |
 | a trap you walked into | the file of its area in [`docs/agents/`](docs/agents/); a line here only if it is a rule for every change |
 
@@ -180,7 +181,9 @@ The rest of the rule:
   (a new `bta_emit*` spelling, a table its parser cannot read) goes quiet, not
   red; the total moving is the only sign.
 - **An answered issue is deleted, not archived** — a refusal is an answer, and
-  a finished plan goes the same way. Git keeps the history.
+  a finished plan goes the same way. Git keeps the history. **An upstream
+  defect is the exception**: a workaround is not the answer, so the file and
+  the workaround both stay until the dependency fixes it.
 - **The numbers in a document are part of it.** A stale count reads as
   authoritative as a fresh one; `./tests/run.sh` prints the three that matter.
 - **If you had to read the C to find something out, or were surprised, write
@@ -497,6 +500,7 @@ reference. Three repositories, and a change crosses them in one direction:
 | how a widget, property or event is added | [`docs/extending.md`](../extending.md) |
 | the native plugin ABI or loader (`bta_plugin.h`, `bta_plugin.c`, a `.so` in a library) | [`docs/plugins.md`](../plugins.md), plus [`docs/formats.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/formats.md) and [`docs/llm/forms.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/forms.md) for the `uses` half — and `tests/plugins/testplug.c` is the reference every verb is held to |
 | **filling a gap `docs/issues/` reported** | **delete the issue file**, and the row for it in [`docs/issues/README.md`](../issues/README.md) and in [`docs/llm/issues.md`](../llm/issues.md)'s *what is known to be missing* — see below. `llm/issues.md` stays here, so an answer is one repository and one commit |
+| **an upstream defect the runtime works around** | a file under [`docs/issues/`](../issues/README.md)'s **Upstream**, naming the dependency and version, and its row there and in [`docs/llm/issues.md`](../llm/issues.md)'s **Upstream** — the workaround is not an answer, so both stay until the dependency is fixed |
 | anything a test now proves | [`docs/testing.md`](../testing.md), and the counts it quotes |
 
 **An answered issue is deleted, not archived — and a refusal is an answer.** `docs/issues/` is the list of what
@@ -513,7 +517,9 @@ A refusal goes the same way, with the argument written into *what is deliberatel
 not here* in `llm/controls.md` — an issue whose answer is *no* is not a gap
 either, and leaving the file there is how it gets argued a second time. The one
 exception is the worked example inside `llm/issues.md`, which is quoted there to
-teach the form and says so.
+teach the form and says so. **An upstream issue is the other exception**: the
+runtime's workaround is not an answer from the dependency, so the file and the
+workaround both stay until the dependency fixes it.
 
 **And the numbers in a document are part of it.** Assertion totals, phase lists,
 class counts, per-test timings: every one of those was stale at some point in this
@@ -2495,6 +2501,19 @@ top-level `class` is a lexical binding and not a property of `globalThis`, so
 every global the runtime installs beat the project's own declaration, and the
 program did not start. Found by adding the global `Probe`, which two
 `tests/widgets` fixtures were already called (they are `Showcase` and `Slab`).
+
+**And a qualified name it cannot walk is `undefined`, not a throw**: `Nope`
+throws a `ReferenceError`, `Nope.Thing` (or `Desktop.Nope`) answers
+`undefined`. `Widget.Members` took that `undefined` for a class with no
+members and answered `[]` -- and `Check.formBase` in `lib/check` asks
+`if (Widget.Members(at))`, which an empty array passes. So in the graphical
+host, where the check never runs `Gadgets/Stepper.js`, a `.form` of class
+`Gadgets.Stepper` got that class as its base, `Widget.Member` refused it, and
+`bintana-gui check tests/widgets` exited 1 while the console check said 0:
+`tests/headless.sh` was red on 0.4.0-rc2. `Members` now treats a resolved
+`undefined` or `null` as not defined (the catalogue still answers a type no
+global holds). A caller of `bta_lookup_global` with a dotted name checks for
+`undefined` itself.
 
 **It failed two different ways, and the second one points nowhere near the
 cause.** A global written in C (`File`, `Probe`, `Field`) gave `startup class
@@ -6235,6 +6254,27 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `.form` never hits it -- the loader parents before applying properties -- and
   ordinary code does, because build-then-add is the natural order. Anything that
   needs a window is attached on `realize`, not in the setter.
+- **A maximize from the system title bar is not a maximize GTK knows.** The
+  runtime forces `GTK_CSD=0` on Windows, so the button is the desktop's and
+  `gtk_window_maximize` is never called: GDK's `GdkToplevelLayout` still says
+  restored. Open a menu and its item is selected, a restyle asks GDK for a
+  layout, and the window is laid out at its natural size -- still `IsZoomed`,
+  no longer filling the screen. `form_sync_maximized` in `bta_controls.c`
+  writes the state the desktop set back through GTK, which is what updates that
+  layout; `form_set_state` marks the layout it is about to set, so a program's
+  own `Maximized` is not presented twice. Full screen clears the mark because
+  it owns the layout. Measured on Windows 11 with GTK 4.24.1.
+  **Both directions have to be synced, and the restore costs a rectangle.**
+  Syncing only the maximize leaves the layout saying maximized after the
+  desktop restores, and the next menu grows the restored window to the work
+  area (700x500 became 1920x1103). Syncing the restore through
+  `gtk_window_unmaximize` reaches GDK's present, which issues `SW_RESTORE`
+  unconditionally: Win+Left from maximized restores and snaps in one go, and
+  that `SW_RESTORE` threw the snapped window back to its pre-maximize
+  rectangle (416x339 instead of 974x1071). So the restored branch reads the
+  window's rectangle first and puts it back if the present moved it. Checked
+  with a Win32 driver (`WM_SYSCOMMAND`, `SetWindowPos`, a real Win+Left by
+  `SendInput`) against a build with and without the workaround.
 
 ## Properties, serialisation and the designer surface
 
@@ -15367,7 +15407,7 @@ and a TagLib wrapper worked through.
 ./tests/check-strict.sh                 # ...and the IDE and examples with warnings failing too
 ./tests/keyring.sh                      # the File provider: 0600 under 0700, no temporary
 ./tests/odbc.sh                         # Database.Odbc through real drivers: 187 checks, and examples/invoices on both engines
-./tests/pack.sh                         # lib/package, the packaging step's output: 130 assertions
+./tests/pack.sh                         # lib/package, the packaging step's output: 179 assertions
 ./tests/headless.sh                     # the metadata host: no toolkit in the link, the same Widget.* answers
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
@@ -17246,8 +17286,19 @@ needed and what it did instead.
 | A released application cannot change its schema — `Model.Ensure` creates a table and never alters one | [`docs/plans/migrations-plan.md`](../plans/migrations-plan.md) |
 | A library cannot be published, versioned or installed — `uses` resolves a directory, and there is no registry, lock or `bintana add`; a project also starts from an empty form rather than a template | [`docs/plans/ecosystem-plan.md`](../plans/ecosystem-plan.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md), with the design in [distribution-plan.md](../plans/distribution-plan.md) |
-| On Windows, text on the clipboard replaced at once by an image can crash the program when another program reads the clipboard -- a GTK 4.24.1 defect | [ISSUE-windows-clipboard-crash](../issues/ISSUE-windows-clipboard-crash.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
+
+## Upstream
+
+These are defects in something the runtime sits on, not words it is missing.
+The runtime carries a workaround where it can; the issue stays until the
+dependency is fixed, and a workaround is not an answer. Before reporting one as
+a runtime gap, check here and name the project and version.
+
+| Upstream defect | Where it is written down |
+|---|---|
+| On Windows, replacing clipboard text with an image can crash the program when another program reads the clipboard -- GTK 4.24.1's Win32 clipboard render | [ISSUE-windows-clipboard-crash](../issues/ISSUE-windows-clipboard-crash.md) |
+| On Windows, a window maximized from the system title bar shrinks when a menu opens -- GTK 4.24.1's Win32 backend does not read the actual maximized state when it lays the window out | [ISSUE-windows-maximize-restyle](../issues/ISSUE-windows-maximize-restyle.md) |
 
 ## One more thing
 
