@@ -6,7 +6,7 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
-**0.4.0 is the 0.4.0-rc1 section below plus the fixes since it:**
+**What changed since 0.4.0-rc1:**
 
 - `cmake --install` lays down `LICENSE-QuickJS`, and the Windows zip and setup
   carry the licences of the third-party binaries they bundle under
