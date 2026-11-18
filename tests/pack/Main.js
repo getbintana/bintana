@@ -58,6 +58,7 @@ function Main() {
      * the packaging step makes. */
     const shape = Package.configOf(project);
     eq("the manifest's id is read", shape.Id, "io.github.getbintana.Notes");
+    eq("and a project with no main is not one", shape.HasMain, false);
 
     Metainfo.create(project, shape);
 
@@ -715,6 +716,23 @@ function checkNsis(root) {
     check("a project that opens a form starts the graphical host, and does not wait",
           formLauncher.includes(`start "" "%HERE%bintana-gui.exe"`) &&
           formLauncher.includes("share\\bintana\\apps\\bintana-formapp"), formLauncher);
+
+    /* The runtime's rule and not a reading of it: `"main": ""` is a
+     * declaration to `bta_project_has_main`, so the core runs it (and says the
+     * function is not there). A launcher that read the empty name as "opens a
+     * form" would start the other host than the one the runtime dispatches to. */
+    const empty = File.Join(root, "EmptyMain");
+    Directory.Make(empty);
+    File.SaveJson(File.Join(empty, "project.btp"),
+                  { name: "EmptyMain", id: "io.github.getbintana.EmptyMain", main: "" });
+    File.Save(File.Join(empty, "Main.js"), "\"use strict\";\n");
+    eq("an empty main is still a main, as the runtime reads it",
+       Package.configOf(empty).HasMain, true);
+    const emptied = Nsis.Stage(empty, File.Join(root, "out-stage-empty"), { Prefix: prefix });
+    const emptyLauncher = File.Load(File.Join(emptied, "bin", "bintana-emptymain.cmd"));
+    check("and its launcher runs the core, as the runtime would",
+          emptyLauncher.includes(`"%HERE%bintana.exe"`) &&
+          !emptyLauncher.includes("bintana-gui.exe"), emptyLauncher);
 
     check("and nothing of the tree it was not asked for",
           !File.IsDir(File.Join(staged, "share", "bintana", "examples")) &&

@@ -10,7 +10,7 @@
 ./tests/check-strict.sh                 # ...and the IDE and examples with warnings failing too
 ./tests/keyring.sh                      # the File provider: 0600 under 0700, no temporary
 ./tests/odbc.sh                         # Database.Odbc through real drivers: 187 checks, and examples/invoices on both engines
-./tests/pack.sh                         # lib/package, the packaging step's output: 130 assertions
+./tests/pack.sh                         # lib/package, the packaging step's output: 179 assertions
 ./tests/headless.sh                     # the metadata host: no toolkit in the link, the same Widget.* answers
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
