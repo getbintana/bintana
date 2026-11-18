@@ -68,6 +68,7 @@ reference. Three repositories, and a change crosses them in one direction:
 | how a widget, property or event is added | [`docs/extending.md`](../extending.md) |
 | the native plugin ABI or loader (`bta_plugin.h`, `bta_plugin.c`, a `.so` in a library) | [`docs/plugins.md`](../plugins.md), plus [`docs/formats.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/formats.md) and [`docs/llm/forms.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/forms.md) for the `uses` half — and `tests/plugins/testplug.c` is the reference every verb is held to |
 | **filling a gap `docs/issues/` reported** | **delete the issue file**, and the row for it in [`docs/issues/README.md`](../issues/README.md) and in [`docs/llm/issues.md`](../llm/issues.md)'s *what is known to be missing* — see below. `llm/issues.md` stays here, so an answer is one repository and one commit |
+| **an upstream defect the runtime works around** | a file under [`docs/issues/`](../issues/README.md)'s **Upstream**, naming the dependency and version, and its row there and in [`docs/llm/issues.md`](../llm/issues.md)'s **Upstream** — the workaround is not an answer, so both stay until the dependency is fixed |
 | anything a test now proves | [`docs/testing.md`](../testing.md), and the counts it quotes |
 
 **An answered issue is deleted, not archived — and a refusal is an answer.** `docs/issues/` is the list of what
@@ -84,7 +85,9 @@ A refusal goes the same way, with the argument written into *what is deliberatel
 not here* in `llm/controls.md` — an issue whose answer is *no* is not a gap
 either, and leaving the file there is how it gets argued a second time. The one
 exception is the worked example inside `llm/issues.md`, which is quoted there to
-teach the form and says so.
+teach the form and says so. **An upstream issue is the other exception**: the
+runtime's workaround is not an answer from the dependency, so the file and the
+workaround both stay until the dependency fixes it.
 
 **And the numbers in a document are part of it.** Assertion totals, phase lists,
 class counts, per-test timings: every one of those was stale at some point in this

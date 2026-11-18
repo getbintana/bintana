@@ -153,6 +153,7 @@ Three repositories, and a change crosses them in one direction:
 | how a widget, property or event is added | [`docs/extending.md`](docs/extending.md) |
 | an intrinsic of the language | `llm/language.md` in `bintana-llm` |
 | a gap reported in `docs/issues/` | **delete the issue file** and its rows in `docs/issues/README.md` and `docs/llm/issues.md` |
+| an upstream defect the runtime works around | a file in `docs/issues/` under **Upstream**, naming the dependency and version, and its rows in `docs/issues/README.md` and `docs/llm/issues.md`; **keep the workaround and the file** until the dependency is fixed |
 | anything a test now proves | [`docs/testing.md`](docs/testing.md), and the counts it quotes |
 | a trap you walked into | the file of its area in [`docs/agents/`](docs/agents/); a line here only if it is a rule for every change |
 
@@ -170,7 +171,9 @@ The rest of the rule:
   (a new `bta_emit*` spelling, a table its parser cannot read) goes quiet, not
   red; the total moving is the only sign.
 - **An answered issue is deleted, not archived** — a refusal is an answer, and
-  a finished plan goes the same way. Git keeps the history.
+  a finished plan goes the same way. Git keeps the history. **An upstream
+  defect is the exception**: a workaround is not the answer, so the file and
+  the workaround both stay until the dependency fixes it.
 - **The numbers in a document are part of it.** A stale count reads as
   authoritative as a fresh one; `./tests/run.sh` prints the three that matter.
 - **If you had to read the C to find something out, or were surprised, write

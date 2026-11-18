@@ -10,6 +10,10 @@
 #include <math.h>
 #include <string.h>
 
+#ifdef G_OS_WIN32
+#include <gdk/win32/gdkwin32.h>
+#endif
+
 /* Every control lands in a GtkFixed, so RAD coordinates are literal. */
 #define FIXED_SLOT(w) ((w)->slot)
 
@@ -324,6 +328,72 @@ static void on_form_active(GObject *win, GParamSpec *spec, gpointer data)
 }
 
 /*
+ * **A window the desktop maximized is not a window GTK maximized.** The
+ * runtime asks for the system title bar on Windows (`GTK_CSD=0`), so the
+ * maximize button belongs to the desktop and GTK never hears
+ * `gtk_window_maximize`; the `GdkToplevelLayout` it keeps for the window still
+ * says it is restored. Any restyle then asks GDK for a layout -- opening a
+ * menu marks its item selected -- and GDK lays the window out at its natural
+ * size: still `IsZoomed` to Windows, no longer filling the screen.
+ *
+ * Saying the state back is what keeps the two notions in step. Calling
+ * `gtk_window_maximize`/`unmaximize` is the only way to tell GDK's Win32
+ * backend about the new layout (`gdk_win32_toplevel_present` is the one
+ * writer of it). Maximizing a window already maximized does nothing else;
+ * restoring does -- see the restored branch below.
+ *
+ * The key is the bit that layout currently carries: `1` maximized, `2`
+ * restored, absent while full screen owns the layout. The program's own
+ * `Maximized` sets it before calling GTK (`form_set_state`), so the
+ * notification that follows does not present the window a second time; a
+ * state the desktop set is synced here.
+ */
+#define FORM_MAX_STATE_KEY "bta-form-max-state"
+
+#ifdef G_OS_WIN32
+static void form_sync_maximized(BtaWidget *w, gboolean maximized)
+{
+    GtkWindow *win  = GTK_WINDOW(w->gtk);
+    int        want = maximized ? 1 : 2;
+
+    if (GPOINTER_TO_INT(g_object_get_data(G_OBJECT(win),
+                                          FORM_MAX_STATE_KEY)) == want)
+        return;
+
+    /* Before the call, not after: presenting the window can notify again. */
+    g_object_set_data(G_OBJECT(win), FORM_MAX_STATE_KEY,
+                      GINT_TO_POINTER(want));
+
+    if (maximized) {
+        gtk_window_maximize(win);
+        return;
+    }
+
+    /*
+     * Restored is the delicate direction. The layout must stop saying
+     * maximized, or the next restyle takes GDK's maximized branch and grows
+     * the window to the work area. But GDK's present issues `SW_RESTORE`
+     * unconditionally, and on a window the desktop has just placed -- Win+Left
+     * from maximized restores and snaps in one go -- that puts the window back
+     * at its pre-maximize rectangle. So the rectangle the desktop chose is read
+     * first and put back if the present moved it.
+     */
+    GdkSurface *surface = gtk_native_get_surface(GTK_NATIVE(win));
+    HWND        hwnd    = surface ? gdk_win32_surface_get_handle(surface) : NULL;
+    RECT        before, after;
+    gboolean    known   = hwnd && GetWindowRect(hwnd, &before);
+
+    gtk_window_unmaximize(win);
+
+    if (known && GetWindowRect(hwnd, &after) &&
+        !EqualRect(&before, &after) && !IsZoomed(hwnd) && !IsIconic(hwnd))
+        SetWindowPos(hwnd, NULL, before.left, before.top,
+                     before.right - before.left, before.bottom - before.top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+}
+#endif
+
+/*
  * It was maximized, restored or put in full screen -- by the title bar, a
  * keyboard shortcut or the program's own `Maximized`/`FullScreen`. The event
  * carries nothing: the handler reads the two properties, so one that fires for
@@ -336,6 +406,28 @@ static void on_form_state(GObject *win, GParamSpec *spec, gpointer data)
 
     if (!gtk_widget_get_mapped(GTK_WIDGET(win)))
         return;
+
+#ifdef G_OS_WIN32
+    /*
+     * Full screen owns the layout: there is no maximized bit to keep in it,
+     * and unmaximizing on the way in would take the window out of it. On the
+     * way out, what the desktop returns to is the state to encode -- GTK's own
+     * unfullscreen put the base layout back, whatever the window is now.
+     */
+    if (!g_strcmp0(spec->name, "fullscreened")) {
+        g_object_set_data(win, FORM_MAX_STATE_KEY, NULL);
+        /* Restored, the base layout unfullscreen put back is already right. */
+        if (!gtk_window_is_fullscreen(GTK_WINDOW(win)) &&
+            gtk_window_is_maximized(GTK_WINDOW(win)))
+            form_sync_maximized(w, TRUE);
+    } else if (!g_strcmp0(spec->name, "maximized")) {
+        if (gtk_window_is_fullscreen(GTK_WINDOW(win)))
+            g_object_set_data(win, FORM_MAX_STATE_KEY, NULL);
+        else
+            form_sync_maximized(w, gtk_window_is_maximized(GTK_WINDOW(win)));
+    }
+#endif
+
     bta_emit(w, "StateChange", 0, NULL);
 }
 
@@ -790,6 +882,10 @@ static JSValue form_set_state(JSContext *ctx, JSValueConst this_val,
         gtk_window_set_resizable(win, b);
         break;
     case WIN_FULLSCREEN:
+#ifdef G_OS_WIN32
+        /* Full screen owns the layout now; see form_sync_maximized. */
+        g_object_set_data(G_OBJECT(win), FORM_MAX_STATE_KEY, NULL);
+#endif
         if (b) gtk_window_fullscreen(win); else gtk_window_unfullscreen(win);
         break;
     case WIN_HIDEONCLOSE:
@@ -805,6 +901,11 @@ static JSValue form_set_state(JSContext *ctx, JSValueConst this_val,
         g_object_set_data(G_OBJECT(win), FORM_REMEMBER_KEY, b ? GINT_TO_POINTER(1) : NULL);
         break;
     default:
+#ifdef G_OS_WIN32
+        /* The layout this call is about to set; see form_sync_maximized. */
+        g_object_set_data(G_OBJECT(win), FORM_MAX_STATE_KEY,
+                          GINT_TO_POINTER(b ? 1 : 2));
+#endif
         if (b) gtk_window_maximize(win);   else gtk_window_unmaximize(win);
         break;
     }

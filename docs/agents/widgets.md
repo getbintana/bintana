@@ -374,6 +374,27 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   `.form` never hits it -- the loader parents before applying properties -- and
   ordinary code does, because build-then-add is the natural order. Anything that
   needs a window is attached on `realize`, not in the setter.
+- **A maximize from the system title bar is not a maximize GTK knows.** The
+  runtime forces `GTK_CSD=0` on Windows, so the button is the desktop's and
+  `gtk_window_maximize` is never called: GDK's `GdkToplevelLayout` still says
+  restored. Open a menu and its item is selected, a restyle asks GDK for a
+  layout, and the window is laid out at its natural size -- still `IsZoomed`,
+  no longer filling the screen. `form_sync_maximized` in `bta_controls.c`
+  writes the state the desktop set back through GTK, which is what updates that
+  layout; `form_set_state` marks the layout it is about to set, so a program's
+  own `Maximized` is not presented twice. Full screen clears the mark because
+  it owns the layout. Measured on Windows 11 with GTK 4.24.1.
+  **Both directions have to be synced, and the restore costs a rectangle.**
+  Syncing only the maximize leaves the layout saying maximized after the
+  desktop restores, and the next menu grows the restored window to the work
+  area (700x500 became 1920x1103). Syncing the restore through
+  `gtk_window_unmaximize` reaches GDK's present, which issues `SW_RESTORE`
+  unconditionally: Win+Left from maximized restores and snaps in one go, and
+  that `SW_RESTORE` threw the snapped window back to its pre-maximize
+  rectangle (416x339 instead of 974x1071). So the restored branch reads the
+  window's rectangle first and puts it back if the present moved it. Checked
+  with a Win32 driver (`WM_SYSCOMMAND`, `SetWindowPos`, a real Win+Left by
+  `SendInput`) against a build with and without the workaround.
 
 ## Properties, serialisation and the designer surface
 

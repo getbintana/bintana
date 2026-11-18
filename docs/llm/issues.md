@@ -180,8 +180,19 @@ needed and what it did instead.
 | A released application cannot change its schema — `Model.Ensure` creates a table and never alters one | [`docs/plans/migrations-plan.md`](../plans/migrations-plan.md) |
 | A library cannot be published, versioned or installed — `uses` resolves a directory, and there is no registry, lock or `bintana add`; a project also starts from an empty form rather than a template | [`docs/plans/ecosystem-plan.md`](../plans/ecosystem-plan.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md), with the design in [distribution-plan.md](../plans/distribution-plan.md) |
-| On Windows, text on the clipboard replaced at once by an image can crash the program when another program reads the clipboard -- a GTK 4.24.1 defect | [ISSUE-windows-clipboard-crash](../issues/ISSUE-windows-clipboard-crash.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
+
+## Upstream
+
+These are defects in something the runtime sits on, not words it is missing.
+The runtime carries a workaround where it can; the issue stays until the
+dependency is fixed, and a workaround is not an answer. Before reporting one as
+a runtime gap, check here and name the project and version.
+
+| Upstream defect | Where it is written down |
+|---|---|
+| On Windows, replacing clipboard text with an image can crash the program when another program reads the clipboard -- GTK 4.24.1's Win32 clipboard render | [ISSUE-windows-clipboard-crash](../issues/ISSUE-windows-clipboard-crash.md) |
+| On Windows, a window maximized from the system title bar shrinks when a menu opens -- GTK 4.24.1's Win32 backend does not read the actual maximized state when it lays the window out | [ISSUE-windows-maximize-restyle](../issues/ISSUE-windows-maximize-restyle.md) |
 
 ## One more thing
 

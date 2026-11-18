@@ -1,31 +1,47 @@
 # Reported issues
 
-Gaps in the runtime, each written in the form [`llm/issues.md`](../llm/issues.md)
-asks for: what the application needed, what was written instead, the code the
-author wished existed, why the current words do not cover it, prior art, and how
-much it mattered.
+Gaps in the runtime and defects in what it sits on, each written in the form
+[`llm/issues.md`](../llm/issues.md) asks for: what the application needed, what
+was written instead, the code the author wished existed, why the current words
+do not cover it, prior art, and how much it mattered.
 
 Each file is **what is missing, never how to add it** — the implementation is
 someone else's call. If a gap here blocks the application you were asked for,
 refer to the file rather than re-reporting it; if you found a new one, write it
 in the same form.
 
+## Runtime
+
 | Issue | The missing capability |
 |---|---|
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
-| [ISSUE-windows-clipboard-crash.md](ISSUE-windows-clipboard-crash.md) | On Windows, replacing text on the clipboard can crash the program (GTK 4.24.1) |
 
-Seventeen of them came out of the October audit
+## Upstream
+
+Not gaps the runtime can fill by growing: the defect is in GTK, GLib, Windows or
+another dependency, and what the runtime carries is a workaround. The issue
+stays until the dependency fixes it, and the workaround goes with the row when
+it does.
+
+| Issue | The upstream defect | The runtime's workaround |
+|---|---|---|
+| [ISSUE-windows-clipboard-crash.md](ISSUE-windows-clipboard-crash.md) | On Windows, replacing clipboard text with an image can crash when another program reads it — GTK 4.24.1's Win32 clipboard render | `Clipboard.Copy("")` empties the clipboard instead of offering empty text; the crash itself has no fix |
+| [ISSUE-windows-maximize-restyle.md](ISSUE-windows-maximize-restyle.md) | A maximize from the system title bar is not in GTK's toplevel layout, so a menu's restyle lays the window out at its natural size — GTK 4.24.1's Win32 backend | `form_sync_maximized` writes the state back, putting back the rectangle a restore's `SW_RESTORE` moves; a key on the window keeps a program's own `Maximized` from presenting it twice |
+
+Seventeen of the runtime gaps came out of the October audit
 ([`audit-2026-10.md`](../audit-2026-10.md)), which found the gaps in the
 runtime and in the IDE and had them written in this form. The audit keeps the
 argument; these files keep the gap.
 
-**A gap that is filled is deleted, not archived.** What the runtime can do is in
+**A runtime gap that is filled is deleted, not archived.** What the runtime can
+do is in
 [`llm/`](https://github.com/getbintana/bintana-llm/blob/main/docs/llm/README.md), which is where anybody looks for it; an issue kept
 past its answer is a second description of the same feature, written by somebody
-who did not have it yet, in the directory of things that are missing.
+who did not have it yet, in the directory of things that are missing. **An
+upstream issue is not answered by a workaround**: it stays until the dependency
+fixes it, because deleting it would hide the reason the workaround exists.
 
-Forty-seven issues have left this directory, answering forty-eight gaps —
+Forty-seven runtime issues have left this directory, answering forty-eight gaps —
 forty-two filled, two refused, three that were never missing, and one that is
 now a plan ([`postgres-plan.md`](../plans/postgres-plan.md), not yet built).
 Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
