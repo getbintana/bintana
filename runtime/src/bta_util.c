@@ -453,6 +453,36 @@ const char *bta_errno_text(int errnum)
 }
 
 /*
+ * Throws an Error whose message is a sentence of any length.
+ *
+ * QuickJS's `JS_Throw*Error` formats into 256 bytes and cuts the rest without a
+ * word: a refusal listing two `pkcs11:` URIs lost the second one, and a message
+ * quoting a long path loses its end.
+ *
+ * **Here and not in `bta_sys.c`, where it started**, because this is the file
+ * every target links: `bintana-meta` takes `bta_form.c` on Windows (MinGW keeps
+ * the widget bodies the metadata rows name) and needs this symbol, which a
+ * toolkit-free metadata link has no other reason to carry.
+ */
+JSValue bta_throw_text(JSContext *ctx, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    char *text = g_strdup_vprintf(fmt, ap);
+    va_end(ap);
+
+    JSValue err = JS_NewError(ctx);
+    if (JS_IsException(err)) {
+        g_free(text);
+        return JS_EXCEPTION;
+    }
+    JS_DefinePropertyValueStr(ctx, err, "message", JS_NewString(ctx, text),
+                              JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
+    g_free(text);
+    return JS_Throw(ctx, err);
+}
+
+/*
  * `Text.LineOf(text, index)`: the line a JavaScript string index falls on,
  * over `bta_line_of_utf16`. Here and not in bta_paint.c because the core
  * answers it for `check` without the drawing module, and the core's copy and

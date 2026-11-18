@@ -1163,7 +1163,7 @@ const char *bta_file_path(JSContext *ctx, JSValueConst v, const char *who);
  * `JS_Throw*Error` formats into 256 bytes and cuts the rest without a word:
  * a refusal listing two `pkcs11:` URIs lost the second one, and a message
  * quoting a long path loses its end. Use this where the text can grow --
- * paths, URIs, lists -- (bta_sys.c). */
+ * paths, URIs, lists -- (bta_util.c, which every target links). */
 JSValue     bta_throw_text(JSContext *ctx, const char *fmt, ...) G_GNUC_PRINTF(2, 3);
 
 /* A number from a property setter, or false with a TypeError naming the value.

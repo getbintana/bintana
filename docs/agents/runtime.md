@@ -574,13 +574,17 @@ icon when the theme has one by that name (`gtkapplication.c`).
   end of a long message. Found by `testKey`: refusing a token URI that names
   two keys listed the first key's `pkcs11:` URI (about 140 bytes) and half of
   the second, and the assertion looking for the second passed or failed with
-  the length of the scratch directory's name. `bta_throw_text` (bta_sys.c)
-  builds the `Error` with `JS_NewError` and sets `message` from a
-  `g_strdup_vprintf`; use it wherever the text can grow -- a path, a URI, a
-  list of names. **2026-11-16: 45 `JS_ThrowPlainError` that quoted a path or a
-  zip entry's name were still cut** (`File.Load`/`Save`, `Directory`,
-  `Zip`, `Desktop`, `Database.Sqlite`, `PdfDocument.Load`, the painter's
-  `Save*`) and go through it now. Found with
+  the length of the scratch directory's name. `bta_throw_text` builds the
+  `Error` with `JS_NewError` and sets `message` from a `g_strdup_vprintf`; use
+  it wherever the text can grow -- a path, a URI, a list of names. **It lives
+  in `bta_util.c`, the file every target links.** `bta_sys.c` was its first
+  home, and the Windows `bintana-meta` takes `bta_form.c` (MinGW keeps the
+  widget bodies the metadata rows name) without linking `bta_sys.c`: an
+  undefined reference the Linux build could not see, since there `bta_form.c`
+  is not in that target at all. **2026-11-16: 45 `JS_ThrowPlainError` that
+  quoted a path or a zip entry's name were still cut** (`File.Load`/`Save`,
+  `Directory`, `Zip`, `Desktop`, `Database.Sqlite`, `PdfDocument.Load`, the
+  painter's `Save*`) and go through it now. Found with
   `grep -nE 'JS_ThrowPlainError\(ctx, "[^"]*%s[^"]*", *(.*\b(path|dir|dest|…)\b)'`
   plus a look at every `'%s'`. What is left are `TypeError`/`RangeError`
   refusals that quote a path (`Picture.File`'s "cannot show", the painter's
