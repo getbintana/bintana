@@ -6,6 +6,12 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+**0.4.0 is 0.4.0-rc2 with what follows.** Everything new since 0.3.0 -- the
+two hosts, and the rest -- is in the 0.4.0-rc1 and 0.4.0-rc2 sections below,
+and this release carries all of it.
+
+**What changed since 0.4.0-rc2:**
+
 - **`Desktop.OpenUri(uri)`** hands an address to whatever the desktop opens it
   with -- a browser for `https:`, the mail program for `mailto:` -- through
   `GtkUriLauncher`, so it goes through the portal where there is one. There was
