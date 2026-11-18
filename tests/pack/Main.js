@@ -695,9 +695,26 @@ function checkNsis(root) {
           File.Exists(File.Join(staged, "share", "bintana", "apps",
                                 "bintana-setup", "Main.js")));
     const launcher = File.Load(File.Join(staged, "bin", "bintana-setup.cmd"));
-    check("with a launcher that runs the runtime on it",
-          launcher.includes("bintana.exe") &&
+    check("with a launcher that runs the core on it, in the window it is run in",
+          launcher.includes(`"%HERE%bintana.exe"`) &&
           launcher.includes("share\\bintana\\apps\\bintana-setup"), launcher);
+
+    /* A project that opens a form goes through the graphical host -- the one
+     * the shortcut starts -- and `start` is what keeps the `cmd.exe` of a
+     * double-click from waiting behind it, which is the console the shortcut
+     * exists to avoid. */
+    const form = File.Join(root, "FormApp");
+    Directory.Make(form);
+    File.SaveJson(File.Join(form, "project.btp"),
+                  { name: "FormApp", id: "io.github.getbintana.FormApp",
+                    startup: "MainForm" });
+    File.Save(File.Join(form, "Main.js"),
+              "\"use strict\";\nexport class MainForm extends Form {}\n");
+    const formed = Nsis.Stage(form, File.Join(root, "out-stage-form"), { Prefix: prefix });
+    const formLauncher = File.Load(File.Join(formed, "bin", "bintana-formapp.cmd"));
+    check("a project that opens a form starts the graphical host, and does not wait",
+          formLauncher.includes(`start "" "%HERE%bintana-gui.exe"`) &&
+          formLauncher.includes("share\\bintana\\apps\\bintana-formapp"), formLauncher);
 
     check("and nothing of the tree it was not asked for",
           !File.IsDir(File.Join(staged, "share", "bintana", "examples")) &&

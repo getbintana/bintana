@@ -252,12 +252,17 @@ printf '[Settings]\ngtk-font-name=Segoe UI 9\n' > "$dest/etc/gtk-4.0/settings.in
 # unzipped anywhere.  Nothing here has to name the window -- the runtime takes
 # the class from the project's own id -- so this only starts the right project
 # and hands the arguments over.
+#
+# **`start ""`, so the launcher does not wait.**  A double-clicked `.cmd` is run
+# by a `cmd.exe` that stays for as long as its child does, which is a console
+# window behind the IDE -- the one the graphical host exists not to open.  The
+# empty pair is its title, which a quoted program would otherwise be taken for.
 cat > "$dest/bin/bintana-ide.cmd" <<'EOF'
 @echo off
 rem The IDE, from wherever this tree was unzipped to.
 setlocal
 set "HERE=%~dp0"
-"%HERE%bintana-gui.exe" "%HERE%..\share\bintana\ide" %*
+start "" "%HERE%bintana-gui.exe" "%HERE%..\share\bintana\ide" %*
 EOF
 
 # --- what it came to ---------------------------------------------------------

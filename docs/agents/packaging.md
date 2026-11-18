@@ -143,6 +143,17 @@ its argument -- read back from the `.lnk` and launched -- and the uninstaller
 removes the directory, the Start Menu folder and the `HKCU` uninstall key.
 `bin\bintana-exec.exe` travels too: every `Exec` starts its child through it,
 so the console tools an application runs have no window of their own.
+
+**The `.cmd` beside the executable starts a host by the project's kind, and the
+shortcut does not.** `Nsis.Stage` writes one launcher per application, and which
+host it starts is the rule the core dispatches on (`bta_project_has_main`): a
+project with a `main` runs in `bintana.exe`, and the window the `.cmd` is run in
+is its output; one that opens a form -- every application with a `startup`, and
+everything that declares neither -- starts `bintana-gui.exe` through
+`start ""`, so a double-clicked launcher does not leave a `cmd.exe` behind the
+window for as long as it runs. It used to be `bintana.exe` for both, which was
+the IDE's own launcher opening with a console behind it; the shortcut was
+always the graphical host, which is what a menu entry needs.
 The bundled compiler was checked too: the official NSIS 3.12 tree under
 `share/bintana/tools/nsis` answered `v3.12` from the installed directory, so a
 setup can be built without NSIS installed. There is no `tools/check` beside an

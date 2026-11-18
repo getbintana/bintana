@@ -6,6 +6,13 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+- **A Windows setup's `.cmd` launcher starts the host the project asks for.**
+  `bintana.exe` for a project with a `main`, whose output is the window the
+  `.cmd` is run in, and `bintana-gui.exe` through `start ""` for one that opens
+  a form -- so the IDE's own launcher no longer opens with a console behind it
+  for as long as it runs. The rule is the core's own (`bta_project_has_main`),
+  and the Start Menu shortcut was already the graphical host.
+
 ## 0.4.0-rc2 — 2026-11-18
 
 [Compare with 0.4.0-rc1](https://github.com/getbintana/bintana/compare/v0.4.0-rc1...v0.4.0-rc2)
