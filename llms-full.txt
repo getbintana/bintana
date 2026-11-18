@@ -11264,6 +11264,24 @@ rest is JavaScript over the elements API.
   never launched by the suite. The same holds for `Document.follow` in the
   IDE, which only logs an address because `tests/ide` follows
   `https://example.org` through it.
+- **And with no session bus, GTK 4.14's launcher crashes.** The first push of
+  `Desktop.OpenUri` was red on CI's `no-libxml` job: the child exited -1 with
+  nothing printed. Reproduced in `ubuntu:24.04` with that job's packages
+  (GTK 4.14.5, GLib 2.80.0) and read under gdb: SIGSEGV in
+  `gtk_show_uri_full` under `gtk_uri_launcher_launch`, after its own
+  "Cannot connect to session bus when initializing OpenURI portal", with
+  `GDK_DEBUG=no-portals` or without, with the bus address at a missing socket
+  or unset. 4.22.5 falls back to GIO by itself. So `desktop_open_uri` asks
+  `g_bus_get_sync` first (not on Windows, whose launcher has no portal and
+  whose GLib could try to start a `dbus-daemon`) and, with no bus, calls
+  `g_app_info_launch_default_for_uri_async` itself. The child's lost
+  `print("requested")` was stdout in a pipe, buffered, in a process that
+  crashed: an empty output from a dead child says nothing about how far it got.
+  Kept as an upstream issue, `ISSUE-gtk-uri-launcher-no-bus.md`. **Reproducing
+  a CI job in Docker here** takes `--security-opt label=disable` (SELinux
+  refuses the bind mount otherwise; `:Z` would relabel the checkout), and the
+  container lacks the runner's locales, so `testLocaleOrder`'s "a locale that
+  collates" fails there and only there.
 
 ## Keyring: the vault, and what it does not promise
 
@@ -17322,6 +17340,7 @@ a runtime gap, check here and name the project and version.
 |---|---|
 | On Windows, replacing clipboard text with an image can crash the program when another program reads the clipboard -- GTK 4.24.1's Win32 clipboard render | [ISSUE-windows-clipboard-crash](../issues/ISSUE-windows-clipboard-crash.md) |
 | On Windows, a window maximized from the system title bar shrinks when a menu opens -- GTK 4.24.1's Win32 backend does not read the actual maximized state when it lays the window out | [ISSUE-windows-maximize-restyle](../issues/ISSUE-windows-maximize-restyle.md) |
+| With no session bus, opening an address crashes inside GTK -- GTK 4.14.5's `GtkUriLauncher` looks for the OpenURI portal anyway; `Desktop.OpenUri` goes to GIO directly when there is no bus | [ISSUE-gtk-uri-launcher-no-bus](../issues/ISSUE-gtk-uri-launcher-no-bus.md) |
 
 ## One more thing
 

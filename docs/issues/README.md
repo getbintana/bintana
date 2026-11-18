@@ -27,6 +27,7 @@ it does.
 |---|---|---|
 | [ISSUE-windows-clipboard-crash.md](ISSUE-windows-clipboard-crash.md) | On Windows, replacing clipboard text with an image can crash when another program reads it — GTK 4.24.1's Win32 clipboard render | `Clipboard.Copy("")` empties the clipboard instead of offering empty text; the crash itself has no fix |
 | [ISSUE-windows-maximize-restyle.md](ISSUE-windows-maximize-restyle.md) | A maximize from the system title bar is not in GTK's toplevel layout, so a menu's restyle lays the window out at its natural size — GTK 4.24.1's Win32 backend | `form_sync_maximized` writes the state back, putting back the rectangle a restore's `SW_RESTORE` moves; a key on the window keeps a program's own `Maximized` from presenting it twice |
+| [ISSUE-gtk-uri-launcher-no-bus.md](ISSUE-gtk-uri-launcher-no-bus.md) | With no session bus, `GtkUriLauncher` crashes looking for the OpenURI portal -- GTK 4.14.5 (fine on 4.22.5) | `Desktop.OpenUri` asks for the session bus first, and with none goes to `g_app_info_launch_default_for_uri_async` directly |
 
 Seventeen of the runtime gaps came out of the October audit
 ([`audit-2026-10.md`](../audit-2026-10.md)), which found the gaps in the

@@ -18,6 +18,8 @@ and this release carries all of it.
   no verb for it: `File.Open` is for files, and `LinkButton` opens only its own
   `Uri`. It answers once the request is made; an address with no scheme is
   refused (a path is `File.Open`'s), and so is any address under a `main`.
+  With no session bus it goes to GIO directly: GTK 4.14's launcher crashes
+  looking for the portal there (an upstream issue in `docs/issues/`).
 - **A Windows setup's `.cmd` launcher starts the host the project asks for.**
   `bintana.exe` for a project with a `main`, whose output is the window the
   `.cmd` is run in, and `bintana-gui.exe` through `start ""` for one that opens

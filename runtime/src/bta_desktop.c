@@ -1122,6 +1122,18 @@ static JSValue shortcut_remove(JSContext *ctx, JSValueConst this_val,
  * which is a path and `File.Open`'s. A one-letter scheme is refused too: no
  * registered scheme has one, and `C:\x` is a Windows path that `g_uri` would
  * read as scheme `c`. Anything after the request goes to the log, named.
+ *
+ * **With no session bus it does not go near GTK** (Unix only; on Windows the
+ * launcher never uses a portal). GTK 4.14.5's `gtk_uri_launcher_launch`
+ * crashes there -- SIGSEGV inside `gtk_show_uri_full`, right after its own
+ * "Cannot connect to session bus when initializing OpenURI portal" -- and
+ * `GDK_DEBUG=no-portals` does not keep it off that road; 4.22.5 falls back to
+ * GIO by itself. No bus means no portal to go through, so the address goes to
+ * `g_app_info_launch_default_for_uri_async` directly, which is what a GTK that
+ * does not crash does in that case. Found on CI's `no-libxml` job (Ubuntu
+ * 24.04, no session bus) and reproduced in that image under gdb;
+ * `docs/issues/ISSUE-gtk-uri-launcher-no-bus.md` keeps it until the GTK floor
+ * passes the fix.
  */
 #ifndef BTA_HEADLESS
 static void on_uri_launched(GObject *source, GAsyncResult *result, gpointer data)
@@ -1138,6 +1150,35 @@ static void on_uri_launched(GObject *source, GAsyncResult *result, gpointer data
     g_free(uri);
     g_object_unref(source);
 }
+
+#ifndef G_OS_WIN32
+static void on_uri_launched_gio(GObject *source, GAsyncResult *result, gpointer data)
+{
+    GError *error = NULL;
+    char   *uri   = data;
+
+    (void)source;
+    if (!g_app_info_launch_default_for_uri_finish(result, &error))
+        g_warning("cannot open %s: %s", uri,
+                  error ? bta_gerror_text(error) : "no application for it");
+
+    g_clear_error(&error);
+    g_free(uri);
+}
+
+/* Whether there is a session bus, which is whether a portal can be reached.
+ * `g_bus_get_sync` keeps the connection it made, so after the first answer
+ * this is a lookup -- and GApplication already asked at startup. */
+static gboolean session_bus_reachable(void)
+{
+    GDBusConnection *bus = g_bus_get_sync(G_BUS_TYPE_SESSION, NULL, NULL);
+
+    if (!bus)
+        return FALSE;
+    g_object_unref(bus);
+    return TRUE;
+}
+#endif
 #endif
 
 static JSValue desktop_open_uri(JSContext *ctx, JSValueConst this_val,
@@ -1168,6 +1209,21 @@ static JSValue desktop_open_uri(JSContext *ctx, JSValueConst this_val,
         return JS_ThrowPlainError(ctx, "Desktop.OpenUri needs a desktop, and a "
                                        "project's main has none");
     }
+
+#ifndef G_OS_WIN32
+    /* No bus, no portal -- and GTK 4.14 crashes looking for one. See above. */
+    if (!session_bus_reachable()) {
+        GdkAppLaunchContext *launch =
+            gdk_display_get_app_launch_context(gdk_display_get_default());
+
+        g_app_info_launch_default_for_uri_async(uri, G_APP_LAUNCH_CONTEXT(launch),
+                                                NULL, on_uri_launched_gio,
+                                                g_strdup(uri));
+        g_object_unref(launch);
+        JS_FreeCString(ctx, uri);
+        return JS_UNDEFINED;
+    }
+#endif
 
     GtkUriLauncher *launcher = gtk_uri_launcher_new(uri);
 

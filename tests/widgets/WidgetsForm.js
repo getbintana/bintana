@@ -26674,10 +26674,13 @@ class Form1 extends Form {
      * desktop**: GTK 4.22 goes through the OpenURI portal even outside a
      * sandbox, and the portal on the session bus draws its chooser on the
      * session's display, not on this Xvfb. So the child has no session bus at
-     * all (no portal can be reached even by a GTK that stopped reading
-     * `no-portals`), `GDK_DEBUG=no-portals` (GTK hands the address to GIO), and
-     * data and config directories of its own, where the only handler for a
-     * scheme nobody else has is a script that writes down what it was given.
+     * all, and data and config directories of its own, where the only handler
+     * for a scheme nobody else has is a script that writes down what it was
+     * given. **With no bus the runtime does not use GTK's launcher** -- GTK
+     * 4.14 crashed there, which is how CI's `no-libxml` job found it
+     * (`docs/issues/ISSUE-gtk-uri-launcher-no-bus.md`) -- so what this
+     * round-trips is the GIO branch, on every GTK. `GDK_DEBUG=no-portals` stays
+     * as a second lock on the door to the person's desktop.
      */
     testDesktopOpenUri() {
         throws("OpenUri needs an address", () => Desktop.OpenUri());
