@@ -15,6 +15,7 @@ in the same form.
 | Issue | The missing capability |
 |---|---|
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
+| [ISSUE-resize-lost-in-flight.md](ISSUE-resize-lost-in-flight.md) | A shown form's `Resize` is lost when the configure of an earlier size change lands after it |
 
 ## Upstream
 

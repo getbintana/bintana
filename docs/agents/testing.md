@@ -536,9 +536,16 @@ save will edit `examples/hello` for real.
   settles and read `gap 16` back as `0` about one run in three. Not a new bug:
   `testFileDialog`'s choosers did it first, and the guard there waits for two
   equal readings, which two polls can both satisfy before the second layout pass.
-  `DefaultButton`/`ActivatesDefault` are early in `TESTS` for this, and the real
-  fix is a stronger guard in that test rather than an ordering that has to be
-  remembered.
+  `DefaultButton`/`ActivatesDefault` are early in `TESTS` for this.
+  **The stronger guard is in now** (2026-11-19): `testAnchorsPushed` waits for
+  a steady width *and* the pusher's far margin, which only the second pass
+  gives. Measured first in CI's image on two CPUs (4 failures in 26 full runs,
+  the same two lines CI showed): the first pass's 558 held for two polls 13 ms
+  apart, the second pass's 574 came 12-35 ms later -- the layout runs on the
+  frame clock, below the timers `until` polls with. And the second red line,
+  "survives a resize: never became true", was a runtime defect the weak guard
+  exposed: the `Resize` it issued then was overwritten by the second pass's
+  configure (`docs/issues/ISSUE-resize-lost-in-flight.md`).
 - **Submitting a modal with an xdotool key can haunt the run.** `key` sends
   down, waits 12 ms, sends up; a dialog that submits and closes inside that gap
   takes the up down with it -- `BadWindow` on the send, the release never

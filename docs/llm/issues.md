@@ -180,6 +180,7 @@ needed and what it did instead.
 | A released application cannot change its schema — `Model.Ensure` creates a table and never alters one | [`docs/plans/migrations-plan.md`](../plans/migrations-plan.md) |
 | A library cannot be published, versioned or installed — `uses` resolves a directory, and there is no registry, lock or `bintana add`; a project also starts from an empty form rather than a template | [`docs/plans/ecosystem-plan.md`](../plans/ecosystem-plan.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md), with the design in [distribution-plan.md](../plans/distribution-plan.md) |
+| A shown form's `Resize` is lost when an earlier size change is still in flight -- right after `Show()`, or two calls a frame apart, the window can stay at the earlier size | [ISSUE-resize-lost-in-flight](../issues/ISSUE-resize-lost-in-flight.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 
 ## Upstream

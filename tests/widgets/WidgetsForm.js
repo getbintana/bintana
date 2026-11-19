@@ -34319,9 +34319,26 @@ export class UriChild extends Form {
          * Settled, not merely allocated. A form whose contents pushed it is
          * measured twice -- the first pass has no design size to know what gap a
          * stretched control was drawn with, and latching one asks for another --
-         * so `Width > 1` is true a frame before the answer is. Waiting for two
-         * readings that agree is the only general signal there is.
+         * so `Width > 1` is true a frame before the answer is.
+         *
+         * **Two readings that agree are not enough here.** The layout runs on
+         * the frame clock, below the timers `until` polls with, so on a busy
+         * loop the first pass's width -- 558, the pusher flush against the edge
+         * -- held for two polls 13 ms apart and was taken for the answer; the
+         * second pass landed 12-35 ms later at 574 (CI's runners, and two CPUs
+         * in their image: 4 runs in 26). And the `Resize` below, issued while
+         * that second pass's configure was still in flight, was then lost
+         * (`docs/issues/ISSUE-resize-lost-in-flight.md`). So the wait is for
+         * what the second pass brings: a steady width *and* the pusher's far
+         * margin. A runtime that stopped keeping the margin times this out --
+         * "never became true" -- and the assertion below says by how much.
          */
+        /* Read fresh every time: the surface is about to grow, and a gap
+         * measured against the width it used to have is not a gap. */
+        const gapOf = (c) =>
+            win.Bounds().Width - (c.Bounds().X + c.Bounds().Width);
+        const margin = 300 - (16 + 268);
+
         let seen = -1;
         const still = () => {
             const now = win.Bounds().Width;
@@ -34330,12 +34347,8 @@ export class UriChild extends Form {
             return same;
         };
 
-        until("the pushed form settles", still, () => {
-            /* Read fresh every time: the surface is about to grow, and a gap
-             * measured against the width it used to have is not a gap. */
-            const gapOf = (c) =>
-                win.Bounds().Width - (c.Bounds().X + c.Bounds().Width);
-
+        until("the pushed form settles, with the margin it was drawn inside",
+              () => still() && gapOf(pusher) === margin, () => {
             const surface = win.Bounds().Width;
 
             check("a control wider than it declared pushes the surface out",
