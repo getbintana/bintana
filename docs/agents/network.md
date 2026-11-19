@@ -72,6 +72,23 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   a file that is not there is read through `hashOf`, which does not throw. The
   `HttpSave` test is red in 22 assertions with the C taken out, and clean under
   ASan.
+- **A guard that expires is confirmed before it cancels** (`on_http_guard`).
+  The guard and the reads it measures are sources of one main loop: a loop the
+  program holds past the `Timeout` comes back to an expired guard *and* a block
+  waiting in the socket, both ready, and GLib dispatched whichever came first in
+  its list -- the guard, since the read is started after `Progress` returns.
+  CI's runners lost `testHttpSave`'s `/slow` (a block every 100 ms, Timeout
+  500) at random once the suite was busy; here it took two CPUs (`docker
+  --cpus=2`, the `no-libxml` job's packages): 7 failures in 10 full runs, never
+  alone. A trace of every arm, free and fire settled it: the guard dispatched
+  70 ms past its own deadline, the loop having been held, with the stream's
+  next block already sent. Now the first expiry queues a confirmation at
+  `G_PRIORITY_DEFAULT_IDLE`, below the I/O, and a block that arrives rearms the
+  guard and removes it (0 in 12 runs). The last `HttpSave` step makes the race
+  certain -- 800 ms of spinning in `Progress` against a Timeout of 300 -- and
+  fails 3 in 3 without the confirmation. Rearming when a block *arrives* rather
+  than once it is written was tried first, because the write goes through
+  GIO's thread pool; it is right and stays, but alone it still lost 2 in 6.
 - **The client had no ceiling at all, on any road.** `send_and_read` filled
   a `GBytes` with whatever came, an error page was spliced whole into memory,
   and `GDataInputStream` grew a line with no newline until the process died --

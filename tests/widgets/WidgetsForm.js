@@ -30981,6 +30981,35 @@ export class UriChild extends Form {
                     steps[12]();
                 });
             },
+            /*
+             * A program that holds its own loop past the Timeout has not heard
+             * silence: the blocks kept arriving in the socket. The first
+             * Progress spins for 800 ms against a Timeout of 300, so when the
+             * loop comes back the guard has expired *and* the next block is
+             * waiting -- the race CI's runners lost at random, made certain.
+             * The guard rearmed just before Progress ran, and the read is
+             * started after it returns, so without the confirmation in
+             * `on_http_guard` the guard is dispatched first every time.
+             */
+            () => {
+                let held = false;
+                api.Get("/slow", { SaveTo: at("held.bin"), Timeout: 300,
+                                   Progress: () => {
+                                       if (held) return;
+                                       held = true;
+                                       const until = Date.now() + 800;
+                                       while (Date.now() < until) { /* the program, busy */ }
+                                   } }, (r) => {
+                    check("the loop was held", held);
+                    eq("a loop held past the Timeout does not time out a download that kept arriving",
+                       r.Length, 20000);
+                    steps[13]();
+                }, (e) => {
+                    failures.push("a download timed out while its program held the loop: " +
+                                  `${e.Kind} ${e.Message}`);
+                    steps[13]();
+                });
+            },
             () => {
                 srv.Stop();
                 steps.length = 0;

@@ -176,7 +176,7 @@ struct HttpSave {
     goffset        total;     /* the declared length, or -1 */
     gint64         reported;  /* monotonic time of the last report */
     bool           orphan;
-    HttpSaveTick   tick;      /* after every block, `report` at most ten a second; may be NULL */
+    HttpSaveTick   tick;      /* when a block arrives and after it is written, `report` at most ten a second; may be NULL */
     HttpSaveEnd    end;       /* once: NULL error is the file in place */
     gpointer       data;
 };
@@ -201,6 +201,8 @@ typedef struct {
     bool          after_cr;
     goffset       max_size;  /* `MaxSize`: what `Body` may hold; 0 is no ceiling */
     guint         guard;
+    /* `guard` is the confirmation idle, not the timer (`on_http_guard`). */
+    bool          guard_confirming;
     int           id;
     bool          timed_out;
     /* Answered already: the callbacks run before the job is freed (so a
@@ -1666,6 +1668,18 @@ static void on_http_save_read(GObject *src, GAsyncResult *res, gpointer data)
         return;
     }
 
+    /*
+     * **Arrived, before it is written**: the guard a download's `Timeout`
+     * arms measures silence from the line, and the write below goes through
+     * GIO's thread pool, which every other asynchronous file operation shares
+     * -- a slow disk or a busy pool is not the server going quiet. Not a
+     * report: no `Progress` runs from here, so nothing the program does can
+     * intervene before the write. (This alone did not cure `testHttpSave` on
+     * two CPUs; the confirmation in `on_http_guard` did.)
+     */
+    if (s->tick)
+        s->tick(s, false, s->data);
+
     s->chunk = b;
     g_output_stream_write_all_async(s->out, p, len, G_PRIORITY_DEFAULT, s->cancel,
                                     on_http_save_written, s);
@@ -2154,7 +2168,8 @@ static void http_job_rearm(HttpJob *job)
     if (job->guard_ms <= 0)
         return;
     if (job->guard)
-        g_source_remove(job->guard);
+        g_source_remove(job->guard);     /* the timer, or its confirmation */
+    job->guard_confirming = false;
     job->guard = g_timeout_add((guint)job->guard_ms, on_http_guard, job);
 }
 
@@ -2241,10 +2256,34 @@ static void on_http_save_headers(GObject *src, GAsyncResult *res, gpointer data)
     http_save_start(job->save);
 }
 
+/*
+ * **A guard that expires is confirmed before it cancels.** The guard and the
+ * reads it measures are sources of one main loop, so a loop the program kept
+ * busy -- half a second in somebody's handler -- comes back to an expired guard
+ * *and* a block waiting in the socket, both ready, and whichever GLib
+ * dispatched first decided. The guard won often enough to kill a download that
+ * never went quiet: `testHttpSave`'s `/slow` (a block every 100 ms, Timeout
+ * 500) failed in the full suite on CI's runners and on two CPUs here, never
+ * alone. Traced: the guard dispatched 70 ms after its own deadline, the loop
+ * having been held, with the stream's next block already sent.
+ *
+ * So the first expiry only queues a confirmation at `G_PRIORITY_DEFAULT_IDLE`,
+ * below the I/O: anything already waiting is read first, and a block that
+ * arrives rearms the guard, which removes the confirmation. Only a guard still
+ * expired once the loop has nothing more urgent times the flight out. A
+ * whole-flight Timeout is treated alike: an answer that arrived during the
+ * stall completes, and its free removes the confirmation.
+ */
 static gboolean on_http_guard(gpointer data)
 {
     HttpJob *job = data;
 
+    if (!job->guard_confirming) {
+        job->guard_confirming = true;
+        job->guard = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, on_http_guard, job, NULL);
+        return G_SOURCE_REMOVE;
+    }
+    job->guard_confirming = false;
     job->guard = 0;
     job->timed_out = true;
     if (JS_IsObject(job->handle))

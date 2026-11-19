@@ -20,6 +20,12 @@ and this release carries all of it.
   refused (a path is `File.Open`'s), and so is any address under a `main`.
   With no session bus it goes to GIO directly: GTK 4.14's launcher crashes
   looking for the portal there (an upstream issue in `docs/issues/`).
+- **An `Http` `Timeout` no longer fires because the program was busy.** A
+  program that held its own main loop longer than the `Timeout` -- a long
+  handler, a blocking call -- could come back to a download cut as silent while
+  its blocks were waiting in the socket. The guard now lets what already
+  arrived be read first, and a download's silence is counted from when a block
+  arrives, not from when it is written to disk.
 - **A Windows setup's `.cmd` launcher starts the host the project asks for.**
   `bintana.exe` for a project with a `main`, whose output is the window the
   `.cmd` is run in, and `bintana-gui.exe` through `start ""` for one that opens
