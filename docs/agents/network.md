@@ -82,13 +82,23 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   --cpus=2`, the `no-libxml` job's packages): 7 failures in 10 full runs, never
   alone. A trace of every arm, free and fire settled it: the guard dispatched
   70 ms past its own deadline, the loop having been held, with the stream's
-  next block already sent. Now the first expiry queues a confirmation at
-  `G_PRIORITY_DEFAULT_IDLE`, below the I/O, and a block that arrives rearms the
-  guard and removes it (0 in 12 runs). The last `HttpSave` step makes the race
-  certain -- 800 ms of spinning in `Progress` against a Timeout of 300 -- and
-  fails 3 in 3 without the confirmation. Rearming when a block *arrives* rather
-  than once it is written was tried first, because the write goes through
-  GIO's thread pool; it is right and stays, but alone it still lost 2 in 6.
+  next block already sent. Now the first expiry queues a confirmation, and a
+  block that arrives rearms the guard and removes it (0 in 12 runs). The last
+  `HttpSave` step makes the race certain -- 800 ms of spinning in `Progress`
+  against a Timeout of 300 -- and fails 3 in 3 without the confirmation.
+  Rearming when a block *arrives* rather than once it is written was tried
+  first, because the write goes through GIO's thread pool; it is right and
+  stays, but alone it still lost 2 in 6.
+  **The confirmation is a 100 ms timeout, and the first version was a
+  `G_PRIORITY_DEFAULT_IDLE` source -- which an always-ready source starves.**
+  A `Timer` of 0 ms keeps the loop from ever going idle, so the confirmation
+  ran after the server's 3 s stall, the answer arrived, and the stalled
+  download completed instead of timing out: CI's sanitizer run on `v0.4.0`
+  (2026-11-20) failed exactly that way. Measured in a project with nothing else
+  in it -- a 0 ms `Timer` and `/stall` with `Timeout` 500 finished with its
+  100000 bytes, the same program with a 1 ms `Timer` timed out. The grace is a
+  delay, not a priority; `HttpSave`'s `starved.bin` step keeps the 0 ms timer
+  and fails on the idle revision.
 - **The client had no ceiling at all, on any road.** `send_and_read` filled
   a `GBytes` with whatever came, an error page was spliced whole into memory,
   and `GDataInputStream` grew a line with no newline until the process died --

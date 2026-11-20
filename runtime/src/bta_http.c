@@ -201,7 +201,7 @@ typedef struct {
     bool          after_cr;
     goffset       max_size;  /* `MaxSize`: what `Body` may hold; 0 is no ceiling */
     guint         guard;
-    /* `guard` is the confirmation idle, not the timer (`on_http_guard`). */
+    /* `guard` is the confirmation timeout, not the guard (`on_http_guard`). */
     bool          guard_confirming;
     int           id;
     bool          timed_out;
@@ -1347,6 +1347,9 @@ static JSValue http_throw_error(JSContext *ctx, const char *who, const char *url
 
 #define HTTP_SAVE_CHUNK     (64 * 1024)
 #define HTTP_SAVE_REPORT_US (100 * 1000)   /* `Progress` at most ten times a second */
+/* How long an expired guard waits for what may already be in the socket before
+ * it times the flight out; see `on_http_guard`. */
+#define HTTP_GUARD_CONFIRM_MS 100
 
 /*
  * **What an answer may hold in memory: 256 MiB unless asked** (`MaxSize`, per
@@ -2267,12 +2270,21 @@ static void on_http_save_headers(GObject *src, GAsyncResult *res, gpointer data)
  * alone. Traced: the guard dispatched 70 ms after its own deadline, the loop
  * having been held, with the stream's next block already sent.
  *
- * So the first expiry only queues a confirmation at `G_PRIORITY_DEFAULT_IDLE`,
- * below the I/O: anything already waiting is read first, and a block that
- * arrives rearms the guard, which removes the confirmation. Only a guard still
- * expired once the loop has nothing more urgent times the flight out. A
- * whole-flight Timeout is treated alike: an answer that arrived during the
- * stall completes, and its free removes the confirmation.
+ * So the first expiry only queues a confirmation 100 ms later: anything already
+ * waiting is read first, and a block that arrives rearms the guard, which
+ * removes the confirmation. Only a guard still expired once that grace is over
+ * times the flight out. A whole-flight Timeout is treated alike: an answer that
+ * arrived during the stall completes, and its free removes the confirmation.
+ *
+ * **A timeout and not an idle.** The first version of this was `g_idle_add`, on
+ * the reasoning that an idle runs when the loop has nothing more urgent. A
+ * program with a source that is *always* ready -- a `Timer` of 0 ms, which the
+ * widget suite's sanitizer run had -- never lets the loop idle, so the
+ * confirmation ran after the stall itself and the download completed instead
+ * of timing out. Measured: a stalled download with `Timeout` 500 and a 0 ms
+ * `Timer` finished with its 100000 bytes and no confirmation at all; the same
+ * program with a 1 ms `Timer` times out. The grace is what the I/O needed, and
+ * its length is a delay, not a priority.
  */
 static gboolean on_http_guard(gpointer data)
 {
@@ -2280,7 +2292,7 @@ static gboolean on_http_guard(gpointer data)
 
     if (!job->guard_confirming) {
         job->guard_confirming = true;
-        job->guard = g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, on_http_guard, job, NULL);
+        job->guard = g_timeout_add(HTTP_GUARD_CONFIRM_MS, on_http_guard, job);
         return G_SOURCE_REMOVE;
     }
     job->guard_confirming = false;

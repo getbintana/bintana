@@ -31010,6 +31010,31 @@ export class UriChild extends Form {
                     steps[13]();
                 });
             },
+            /*
+             * **A loop that never goes idle.** The confirmation was a
+             * `G_PRIORITY_DEFAULT_IDLE` source for one day, and an idle runs
+             * only when nothing more urgent is ready: a `Timer` of 0 ms is
+             * always ready, so the confirmation never ran, the server's stall
+             * ended and the download completed instead of timing out (CI's
+             * sanitizer run, 2026-11-20). A 100 ms confirmation timeout cannot
+             * be starved by priority, and this step fails on that revision.
+             */
+            () => {
+                let ticks = 0;
+                const spin = new Timer(0, () => ticks++);
+                spin.Start();
+                api.Get("/stall", { SaveTo: at("starved.bin"), Timeout: 300 }, () => {
+                    spin.Stop();
+                    failures.push("a stalled download finished with a loop that never idles");
+                    steps[14]();
+                }, (e) => {
+                    spin.Stop();
+                    eq("a loop that never idles does not hide a stall", e.Kind, "Timeout");
+                    check("...with the timer really spinning", ticks > 0, String(ticks));
+                    check("...and leaves no file", !File.Exists(at("starved.bin")));
+                    steps[14]();
+                });
+            },
             () => {
                 srv.Stop();
                 steps.length = 0;

@@ -6,6 +6,18 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+### Runtime and libraries
+
+- **A stalled `Http` download times out again when the program never lets the
+  loop go idle.** The confirmation a `Timeout` gets before it cancels was a
+  `G_PRIORITY_DEFAULT_IDLE` source, and an always-ready source -- a `Timer` of
+  0 ms -- starves it: the server's stall ended, the whole answer arrived, and a
+  download silent for six `Timeout`s completed instead of timing out (CI's
+  sanitizer run on 0.4.0). It is a 100 ms timeout now, which priority cannot
+  starve. Measured with nothing else in the program: a 0 ms `Timer` and a
+  stalled download finished with its 100000 bytes before and times out now;
+  `tests/widgets`' `HttpSave` holds it with `starved.bin`.
+
 ## 0.4.0 — 2026-11-20
 
 [Compare with 0.4.0-rc2](https://github.com/getbintana/bintana/compare/v0.4.0-rc2...v0.4.0)
