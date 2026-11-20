@@ -106,6 +106,7 @@ cairo_t *bta_painter_cairo(JSContext *ctx, JSValueConst painter)
 /* One line of `Dump()`.  Recorded always: it is some tens of nanoseconds a call
  * against a frame budget of tens of thousands, and a Dump that only answers when
  * something was turned on is a Dump nobody reaches for. */
+static void note(BtaPainter *p, const char *fmt, ...) G_GNUC_PRINTF(2, 3);
 static void note(BtaPainter *p, const char *fmt, ...)
 {
     if (!p->dump || p->dump->len > DUMP_CAP)

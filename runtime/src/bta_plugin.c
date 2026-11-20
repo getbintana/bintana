@@ -420,6 +420,7 @@ static bool already_loaded(BtaApp *app, const char *path)
  * a `fprintf` first, which is right for a project started from a shell and
  * invisible for one started from a menu: the program simply did not open.
  */
+static bool plugin_fatal(BtaApp *app, const char *fmt, ...) G_GNUC_PRINTF(2, 3);
 static bool plugin_fatal(BtaApp *app, const char *fmt, ...)
 {
     va_list args;
