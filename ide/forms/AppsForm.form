@@ -1,0 +1,94 @@
+{
+  "format": "bintana-form/1",
+  "class": "AppsForm",
+  "properties": {
+    "Text": "Installed applications",
+    "Width": 560,
+    "Height": 368
+  },
+  "children": [
+    {
+      "type": "Label",
+      "name": "LblAppsHint",
+      "properties": {
+        "X": 12,
+        "Y": 10,
+        "Width": 536,
+        "Height": 38,
+        "Text": "Applications installed for this user from the IDE. Removing one takes it out of the menu; the project and its files are not touched.",
+        "Wrap": true,
+        "Style": "dim-label",
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "ListBox",
+      "name": "LstApps",
+      "properties": {
+        "X": 12,
+        "Y": 54,
+        "Width": 536,
+        "Height": 220,
+        "HAlign": "Fill",
+        "VAlign": "Fill",
+        "Expand": true
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblAppsNone",
+      "properties": {
+        "X": 12,
+        "Y": 54,
+        "Width": 536,
+        "Height": 24,
+        "Text": "No application installed from the IDE.",
+        "Style": "dim-label",
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblAppsWhere",
+      "properties": {
+        "X": 12,
+        "Y": 282,
+        "Width": 536,
+        "Height": 40,
+        "Text": "",
+        "Wrap": true,
+        "Style": "dim-label",
+        "HAlign": "Fill",
+        "VAlign": "End"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnAppsRemove",
+      "properties": {
+        "X": 12,
+        "Y": 328,
+        "Width": 110,
+        "Height": 32,
+        "Text": "Uninstall…",
+        "HAlign": "Start",
+        "VAlign": "End"
+      }
+    },
+    {
+      "type": "Button",
+      "name": "BtnAppsClose",
+      "properties": {
+        "X": 458,
+        "Y": 328,
+        "Width": 90,
+        "Height": 32,
+        "Text": "Close",
+        "HAlign": "End",
+        "VAlign": "End",
+        "Cancel": true,
+        "Default": true
+      }
+    }
+  ]
+}

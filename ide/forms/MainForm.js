@@ -942,6 +942,16 @@ export class MainForm extends Form {
         this.metainfoEditor = MetainfoForm.open(this);
     }
 
+    /*
+     * The other half of the same door: the entries the IDE installed, with the
+     * ones whose project is open nowhere -- which is what left them lost. The
+     * list is `Apps.list`, the removal `Apps.uninstall`, and the dialog asks
+     * first; nothing here repeats either.
+     */
+    installedApps() {
+        this.appsBrowser = AppsForm.open(() => this.refresh());
+    }
+
     /* --- creating, renaming and deleting ------------------------------------
      *
      * All of it is `FormFiles`, which knows that a form is two files: what stays
@@ -1700,6 +1710,7 @@ export class MainForm extends Form {
     MnuTidy_Click()   { this.tidyProject(); }
     MnuExport_Click() { this.exporter.run(); }
     MnuAppInstall_Click() { this.installAsApp(); }
+    MnuAppsInstalled_Click() { this.installedApps(); }
     MnuInstaller_Click() { this.installer.run(); }
 
     /*

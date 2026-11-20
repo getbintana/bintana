@@ -46,6 +46,13 @@ and this release carries all of it.
   `[]`. The empty answer made the graphical host's `check` -- the one the IDE's
   Problems panel shows -- report a false error on a component of a namespace
   (`class: "Gadgets.Stepper"`) that the console `bintana check` passed.
+- **The IDE lists and removes the applications it installed.** *Project →
+  Installed applications…* is the other half of *Install as user
+  application…*: it lists the entries that carry the project path -- a packaged
+  application's are not listed and not touched -- says where each one points,
+  and removes the selected entry after asking. An entry whose project had been
+  moved, renamed or deleted could only be removed from that project, which is
+  what left it in the menu for good.
 
 ## 0.4.0-rc2 — 2026-11-18
 

@@ -678,6 +678,10 @@
           "text": "Install as user application..."
         },
         {
+          "name": "MnuAppsInstalled",
+          "text": "Installed applications..."
+        },
+        {
           "name": "MnuMetainfo",
           "text": "Application info..."
         },

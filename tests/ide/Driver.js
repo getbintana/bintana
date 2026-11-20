@@ -13168,6 +13168,14 @@ function* p_appsWindows(ide) {
     check("and a .lnk in the Start Menu folder",
           File.Exists(File.Join(Desktop.Shortcut.Directory,
                                 "io.github.getbintana.IdeChild.devel.lnk")));
+
+    /* The list reads the same marker off the shortcut -- `Project` -- which is
+     * what makes it the IDE's rather than any `.lnk` in the folder. */
+    const listed = Apps.list().filter((e) => e.Project === ide.project);
+    eq("the list finds the shortcut the IDE wrote", listed.length, 1);
+    eq("...under the name the menu shows",
+       listed.length ? listed[0].Name : "", "Bta Suite App");
+
     check("the dialog closed when it was done", !dlg.Visible);
 
     ide.MnuAppInstall.Click();
@@ -13375,6 +13383,52 @@ function* p_apps(ide) {
     ide.appEditor.BtnAppUninstall.Click();
     yield;
     check("and Uninstall takes the moved one too", at() === null);
+
+    /* --- the list, and the way out -----------------------------------------
+     *
+     * *Installed applications…* is the other half of the same door: the entries
+     * the IDE wrote, including the ones whose project is open nowhere -- which
+     * is what left an entry "lost" in the menu. What it must not list is
+     * somebody else's entry: a packaged application exports its own `.desktop`
+     * into the same folder.
+     */
+    Apps.install(ide.project, { Name: "Bta Listed",
+                                AppId: "io.github.getbintana.IdeChild" });
+    Desktop.Entries.Install("org.example.NotOurs", {
+        "Desktop Entry": { Type: "Application", Name: "Not ours",
+                           Exec: "true", Terminal: "false" } });
+
+    ide.MnuAppsInstalled.Click();
+    yield;
+
+    const browser = ide.appsBrowser;
+    check("the menu opens the list", !!browser);
+    if (!browser) return;
+
+    const names = browser.LstApps.Items;
+    check("it lists the entry the IDE installed",
+          names.includes("Bta Listed"), JSON.stringify(names));
+    check("and not one it did not write",
+          !names.includes("Not ours"), JSON.stringify(names));
+    eq("with the project it points at",
+       browser.LblAppsWhere.Text, Locale.Text("Project: {0}", ide.project));
+    check("and something to remove", browser.BtnAppsRemove.Enabled);
+
+    browser.BtnAppsRemove.Click();
+    yield;
+
+    check("removing asks first", !!browser.confirm);
+    if (!browser.confirm) return;
+    browser.confirm.BtnYes.Click();
+    yield;
+
+    check("the entry is gone from the menu", at() === null);
+    check("...and from the list", browser.LstApps.Items.length === 0,
+          JSON.stringify(browser.LstApps.Items));
+    check("...which says it is empty", browser.LblAppsNone.Visible);
+
+    browser.BtnAppsClose.Click();
+    Desktop.Entries.Uninstall("org.example.NotOurs");
 }
 
 function* p_errors(ide) {

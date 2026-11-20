@@ -152,6 +152,42 @@ export class Apps {
     }
 
     /*
+     * Every entry this user has that the IDE installed, sorted by the name the
+     * menu shows.
+     *
+     * The marker is what makes an entry ours: `X-Bintana-Project` on Linux,
+     * `Project` on Windows. Everything else in the folder is somebody else's --
+     * a packaged application exports its own `.desktop` there -- and is neither
+     * listed nor removed from this dialog. The name falls back to the id so an
+     * entry written by hand without one is still reachable.
+     */
+    static list() {
+        const out = [];
+
+        if (Apps.isWindows()) {
+            for (const id of Desktop.Shortcut.Installed()) {
+                const held = Desktop.Shortcut.Read(id);
+                if (held && held.Project)
+                    out.push({ Id: id, Name: held.Name || id,
+                               Project: held.Project, Entry: held });
+            }
+        } else {
+            for (const id of Desktop.Entries.Installed()) {
+                const data = Desktop.Entries.Read(id);
+                const held = data && data["Desktop Entry"];
+                const project = held && held["X-Bintana-Project"];
+
+                if (project)
+                    out.push({ Id: id, Name: held.Name || id,
+                               Project: project, Entry: held });
+            }
+        }
+
+        out.sort((a, b) => Locale.Compare(a.Name, b.Name));
+        return out;
+    }
+
+    /*
      * Installs, replacing an entry that is already this project's under another
      * id -- which is what a rename produces, and leaving the old one behind
      * would offer the same application in the menu twice.

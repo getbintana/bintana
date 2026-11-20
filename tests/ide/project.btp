@@ -33,6 +33,7 @@
     "../../ide/forms/ProjectForm.js",
     "../../ide/modules/Apps.js",
     "../../ide/forms/AppForm.js",
+    "../../ide/forms/AppsForm.js",
     "../../ide/forms/MetainfoForm.js",
     "../../ide/modules/Classes.js",
     "../../ide/modules/CheckJob.js",
