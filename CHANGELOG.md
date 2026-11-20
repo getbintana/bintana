@@ -6,6 +6,10 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+## 0.4.0 — 2026-11-20
+
+[Compare with 0.4.0-rc2](https://github.com/getbintana/bintana/compare/v0.4.0-rc2...v0.4.0)
+
 **0.4.0 is 0.4.0-rc2 with what follows.** Everything new since 0.3.0 -- the
 two hosts, and the rest -- is in the 0.4.0-rc1 and 0.4.0-rc2 sections below,
 and this release carries all of it.
