@@ -125,6 +125,7 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/share/bintana/examples/` | the examples, to open and copy |
 | `<prefix>/share/bintana/lib/` | the shipped libraries, `check` among them |
 | `<prefix>/share/bintana/tools/check/` | the console project behind `bintana check` |
+| `<prefix>/share/bintana/tools/apps/` | the console project behind `bintana apps`, which lists and removes the user's own entries |
 | `<prefix>/include/bintana/bta_plugin.h` | the only header a native plugin compiles against |
 | `<prefix>/lib*/pkgconfig/bintana.pc` | what points a compiler at that header |
 | `<prefix>/share/applications/` + `share/icons/` | the menu entry and its icon |
@@ -194,6 +195,14 @@ application…* — which writes one `.desktop` file under
 no prefix, and nothing here (`Desktop.Entries` is the runtime's own door to
 those files, in [`llm/library.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/library.md#desktopentries); the IDE's
 half is in [`ide.md`](https://github.com/getbintana/bintana-docs/blob/main/docs/ide.md#installing-it-in-the-menu)).
+
+**And they are listed and removed from the same two places.** *Project →
+Installed applications…* in the IDE, and `bintana apps` from a terminal, walk
+the entries that say which project they point at: `bintana apps` lists them,
+`bintana apps files <id>` says what one installed, and `bintana apps remove
+<id>…` takes them out of the menu (the IDE asks first; a command is the
+answer). Neither lists nor touches an entry a packager exported, the project's
+files, or anything under the prefix.
 
 `./tests/install.sh` does all of the above into a staging prefix under `/tmp`
 and starts the *installed* IDE through the installed launcher on a display of

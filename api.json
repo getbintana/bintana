@@ -21545,6 +21545,99 @@
   ],
   "Libraries": [
     {
+      "Name": "apps",
+      "Classes": [
+        {
+          "Name": "Apps",
+          "Parent": "",
+          "Members": [
+            {
+              "Name": "DefaultIcon",
+              "Kind": "Static",
+              "Params": 2,
+              "Signature": "(project, id)",
+              "Returns": "",
+              "Doc": "what the icon field starts on: the project's own drawing, or a theme name",
+              "Native": false
+            },
+            {
+              "Name": "Entry",
+              "Kind": "Static",
+              "Params": 2,
+              "Signature": "(project, fields)",
+              "Returns": "",
+              "Doc": "the entry as the platform's installer takes it: a `.desktop` shape, or a target and an argv",
+              "Native": false
+            },
+            {
+              "Name": "EntryId",
+              "Kind": "Static",
+              "Params": 2,
+              "Signature": "(appId, name)",
+              "Returns": "",
+              "Doc": "the name an entry is installed under: `<id>.devel`, or a slug of the name",
+              "Native": false
+            },
+            {
+              "Name": "Files",
+              "Kind": "Static",
+              "Params": 1,
+              "Signature": "(id)",
+              "Returns": "",
+              "Doc": "the files one entry installed: its entry, and the `.ico` on Windows",
+              "Native": false
+            },
+            {
+              "Name": "IdFor",
+              "Kind": "Static",
+              "Params": 1,
+              "Signature": "(name)",
+              "Returns": "",
+              "Doc": "the id for a name -- letters, digits, `-`, `_` and `.` -- made from what was typed",
+              "Native": false
+            },
+            {
+              "Name": "Install",
+              "Kind": "Static",
+              "Params": 2,
+              "Signature": "(project, fields)",
+              "Returns": "",
+              "Doc": "writes the entry, replacing this project's old one under another id; answers its path",
+              "Native": false
+            },
+            {
+              "Name": "Installed",
+              "Kind": "Static",
+              "Params": 1,
+              "Signature": "(project)",
+              "Returns": "",
+              "Doc": "the entry that points at this project, or `null`",
+              "Native": false
+            },
+            {
+              "Name": "List",
+              "Kind": "Static",
+              "Params": 0,
+              "Signature": "()",
+              "Returns": "",
+              "Doc": "every entry this user has that the IDE installed, sorted by the name the menu shows",
+              "Native": false
+            },
+            {
+              "Name": "Uninstall",
+              "Kind": "Static",
+              "Params": 1,
+              "Signature": "(id)",
+              "Returns": "",
+              "Doc": "removes the entry, answering whether there was one",
+              "Native": false
+            }
+          ],
+          "Events": []
+        }
+      ]
+    },
+    {
       "Name": "charts",
       "Classes": [
         {

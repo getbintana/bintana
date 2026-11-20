@@ -99,6 +99,7 @@ tests/try.sh <project> [args...]                  # run any project on a virtual
 ./tests/styles.sh                                 # which style classes the theme defines
 ./tests/install.sh                                # stage `cmake --install` and run a plugin against it
 ./tests/pack.sh                                   # what lib/package writes, read back
+./tests/apps.sh                                   # `bintana apps`: list, files, remove
 ./tests/bench.sh                                  # interpreter benchmarks (not part of run.sh)
 ```
 

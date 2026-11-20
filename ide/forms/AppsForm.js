@@ -10,7 +10,7 @@
  * menu with nothing in the IDE that named it, and the only door out was the
  * project it came from.
  *
- * **It lists what the IDE installed, not everything in the menu.** `Apps.list`
+ * **It lists what the IDE installed, not everything in the menu.** `Apps.List`
  * keeps the entries that carry the project path, which is what makes an entry
  * ours to remove; a packaged application's is the packager's. Say so in the
  * hint, because a person looking for a menu entry that is not here will
@@ -49,7 +49,7 @@ export class AppsForm extends Form {
     /* What is installed, as it is now: the list is filled from the directory
      * every time, because the menu is somebody else's to change too. */
     fill() {
-        this.entries = Apps.list();
+        this.entries = Apps.List();
 
         this.LstApps.Items      = this.entries.map((e) => e.Name);
         this.LstApps.Visible    = this.entries.length > 0;
@@ -64,9 +64,9 @@ export class AppsForm extends Form {
         }
     }
 
-    /* Where the selected one points: the project path, which is what tells two
-     * entries of the same name apart and what a person needs to know before
-     * removing one. */
+    /* Where the selected one points, and what it installed: the project path is
+     * what tells two entries of the same name apart, and the files are what a
+     * person deletes by hand if they would rather do that. */
     showWhere() {
         const at = this.LstApps.Index;
         const entry = at >= 0 && at < this.entries.length ? this.entries[at] : null;
@@ -74,6 +74,10 @@ export class AppsForm extends Form {
         this.LblAppsWhere.Text = entry
             ? Locale.Text("Project: {0}", entry.Project) : "";
         this.BtnAppsRemove.Enabled = entry !== null;
+
+        const files = entry ? Apps.Files(entry.Id) : [];
+        this.LblAppsFiles.Text = files.length
+            ? `${Locale.Text("Installed files:")}\n${files.join("\n")}` : "";
     }
 
     LstApps_Select() { this.showWhere(); }
@@ -90,7 +94,7 @@ export class AppsForm extends Form {
             Locale.Text("Uninstall"),
             () => {
                 try {
-                    Apps.uninstall(entry.Id);
+                    Apps.Uninstall(entry.Id);
                 } catch (e) {
                     /* The menu is unchanged and the person is told why, the
                      * same bargain the install dialog makes. */

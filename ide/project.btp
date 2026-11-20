@@ -32,7 +32,6 @@
     "modules/Launch.js",
     "forms/LaunchForm.js",
     "forms/ProjectForm.js",
-    "modules/Apps.js",
     "forms/AppForm.js",
     "forms/AppsForm.js",
     "forms/MetainfoForm.js",
@@ -86,6 +85,7 @@
     "forms/MainForm.js"
   ],
   "uses": [
+    "apps",
     "check",
     "dialog",
     "markdown",

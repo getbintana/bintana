@@ -154,7 +154,7 @@ msgid "The application is offered in this user's menu. Nothing is installed syst
 msgstr ""
 
 #: forms/AppForm.form: BtnAppUninstall.Text
-#: forms/AppsForm.js:90
+#: forms/AppsForm.js:94
 msgid "Uninstall"
 msgstr ""
 
@@ -2143,11 +2143,15 @@ msgstr ""
 msgid "Project: {0}"
 msgstr ""
 
-#: forms/AppsForm.js:87
+#: forms/AppsForm.js:80
+msgid "Installed files:"
+msgstr ""
+
+#: forms/AppsForm.js:91
 msgid "Uninstall application"
 msgstr ""
 
-#: forms/AppsForm.js:88
+#: forms/AppsForm.js:92
 msgid "Remove {0} from the menu? The project and its files are not touched."
 msgstr ""
 

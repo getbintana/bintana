@@ -4,7 +4,7 @@
   "properties": {
     "Text": "Installed applications",
     "Width": 560,
-    "Height": 368
+    "Height": 420
   },
   "children": [
     {
@@ -26,12 +26,10 @@
       "name": "LstApps",
       "properties": {
         "X": 12,
-        "Y": 54,
+        "Y": 52,
         "Width": 536,
-        "Height": 220,
-        "HAlign": "Fill",
-        "VAlign": "Fill",
-        "Expand": true
+        "Height": 200,
+        "HAlign": "Fill"
       }
     },
     {
@@ -39,7 +37,7 @@
       "name": "LblAppsNone",
       "properties": {
         "X": 12,
-        "Y": 54,
+        "Y": 52,
         "Width": 536,
         "Height": 24,
         "Text": "No application installed from the IDE.",
@@ -52,14 +50,27 @@
       "name": "LblAppsWhere",
       "properties": {
         "X": 12,
-        "Y": 282,
+        "Y": 258,
         "Width": 536,
-        "Height": 40,
+        "Height": 34,
         "Text": "",
         "Wrap": true,
         "Style": "dim-label",
-        "HAlign": "Fill",
-        "VAlign": "End"
+        "HAlign": "Fill"
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblAppsFiles",
+      "properties": {
+        "X": 12,
+        "Y": 294,
+        "Width": 536,
+        "Height": 76,
+        "Text": "",
+        "Wrap": true,
+        "Style": "dim-label",
+        "HAlign": "Fill"
       }
     },
     {
@@ -67,7 +78,7 @@
       "name": "BtnAppsRemove",
       "properties": {
         "X": 12,
-        "Y": 328,
+        "Y": 376,
         "Width": 110,
         "Height": 32,
         "Text": "Uninstall…",
@@ -80,7 +91,7 @@
       "name": "BtnAppsClose",
       "properties": {
         "X": 458,
-        "Y": 328,
+        "Y": 376,
         "Width": 90,
         "Height": 32,
         "Text": "Close",

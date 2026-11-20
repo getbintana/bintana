@@ -1,0 +1,5 @@
+{
+  "name": "apps",
+  "uses": ["package"],
+  "description": "The applications a user installs for themselves: the entry as the desktop takes it, and where it came from"
+}

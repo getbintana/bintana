@@ -1066,6 +1066,12 @@ install(DIRECTORY lib/ DESTINATION ${BTA_DATADIR}/lib
 install(DIRECTORY tools/check DESTINATION ${BTA_DATADIR}/tools
         PATTERN "*.pot" EXCLUDE)
 
+# And `bintana apps`, the user's own entries: the same road as `check`, a
+# project beside it. What it needs from the runtime -- `Desktop.Entries` -- the
+# core links, so it answers with no display and no project open.
+install(DIRECTORY tools/apps DESTINATION ${BTA_DATADIR}/tools
+        PATTERN "*.pot" EXCLUDE)
+
 # The console host's check data: the generated metadata and the script that
 # answers `Widget.*` over it. No binary; `bintana` loads both only for `check`,
 # on both platforms.

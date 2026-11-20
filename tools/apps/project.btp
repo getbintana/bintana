@@ -1,0 +1,8 @@
+{
+  "name": "apps",
+  "main": "main",
+  "version": "1.0",
+  "description": "The applications a user installed for themselves: list them, what each one wrote, and take them out of the menu",
+  "uses": ["apps"],
+  "sources": ["Main.js"]
+}

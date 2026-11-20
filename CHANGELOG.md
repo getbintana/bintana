@@ -52,7 +52,12 @@ and this release carries all of it.
   application's are not listed and not touched -- says where each one points,
   and removes the selected entry after asking. An entry whose project had been
   moved, renamed or deleted could only be removed from that project, which is
-  what left it in the menu for good.
+  what left it in the menu for good. It shows the files the entry installed --
+  the menu entry, and the `.ico` on Windows -- and **`bintana apps` is the same
+  list from a terminal**: `bintana apps`, `files <id>`, `remove <id>…`, with
+  `--json` for a script. Both refuse an entry a packager exported, because the
+  folder is the desktop's and not this project's. The three of them are
+  `lib/apps`, one answer: `Apps.List`, `Apps.Files`, `Apps.Uninstall`.
 
 ## 0.4.0-rc2 — 2026-11-18
 

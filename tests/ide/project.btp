@@ -31,7 +31,6 @@
     "../../ide/modules/Launch.js",
     "../../ide/forms/LaunchForm.js",
     "../../ide/forms/ProjectForm.js",
-    "../../ide/modules/Apps.js",
     "../../ide/forms/AppForm.js",
     "../../ide/forms/AppsForm.js",
     "../../ide/forms/MetainfoForm.js",
@@ -86,6 +85,7 @@
     "Driver.js"
   ],
   "uses": [
+    "apps",
     "check",
     "dialog",
     "markdown",

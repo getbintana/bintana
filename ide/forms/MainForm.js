@@ -945,7 +945,7 @@ export class MainForm extends Form {
     /*
      * The other half of the same door: the entries the IDE installed, with the
      * ones whose project is open nowhere -- which is what left them lost. The
-     * list is `Apps.list`, the removal `Apps.uninstall`, and the dialog asks
+     * list is `Apps.List`, the removal `Apps.Uninstall`, and the dialog asks
      * first; nothing here repeats either.
      */
     installedApps() {

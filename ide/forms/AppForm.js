@@ -25,7 +25,7 @@ export class AppForm extends Form {
      */
     static edit(project, config, onChanged) {
         const dlg   = new AppForm();
-        const found = Apps.installed(project);
+        const found = Apps.Installed(project);
 
         dlg.project   = project;
         dlg.appId     = config.Id || "";
@@ -41,7 +41,7 @@ export class AppForm extends Form {
         dlg.TxtAppComment.Text = entry ? (entry.Comment || "")
                                        : (config.Description || "");
         dlg.TxtAppIcon.Text    = entry ? (entry.Icon || "")
-                                       : Apps.defaultIcon(project, config.Id);
+                                       : Apps.DefaultIcon(project, config.Id);
 
         dlg.showState();
         dlg.Show();
@@ -58,7 +58,7 @@ export class AppForm extends Form {
      * so here is cheaper than a complaint after the click.
      */
     showState() {
-        const id  = Apps.entryId(this.appId, this.TxtAppName.Text);
+        const id  = Apps.EntryId(this.appId, this.TxtAppName.Text);
         const win = Apps.isWindows();
         const dir = win ? Desktop.Shortcut.Directory : Desktop.Entries.Directory;
         let   where = this.installed
@@ -92,7 +92,7 @@ export class AppForm extends Form {
      * The chooser starts in the project's `icons/`, when it has one: that is
      * where a project's own drawings live, and what it draws is what a menu
      * should show.  The path comes back absolute, which is what the entry needs
-     * -- see `Apps.defaultIcon`.
+     * -- see `Apps.DefaultIcon`.
      */
     BtnAppIcon_Click() {
         const icons = File.Join(this.project, "icons");
@@ -111,7 +111,7 @@ export class AppForm extends Form {
         }
 
         try {
-            Apps.install(this.project, this.fields());
+            Apps.Install(this.project, this.fields());
         } catch (e) {
             Message.Error("{0}", e.message);
             return;
@@ -123,7 +123,7 @@ export class AppForm extends Form {
         if (!this.installed) return;
 
         try {
-            Apps.uninstall(this.installed);
+            Apps.Uninstall(this.installed);
         } catch (e) {
             Message.Error("{0}", e.message);
             return;

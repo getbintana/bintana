@@ -1,0 +1,5 @@
+{
+  "name": "apps",
+  "main": "main",
+  "sources": ["Main.js"]
+}

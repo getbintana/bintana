@@ -13115,23 +13115,23 @@ function* p_installer(ide) {
  * changes between them is only which string names the file.
  */
 function* p_appsWindows(ide) {
-    const at = () => Apps.installed(ide.project);
+    const at = () => Apps.Installed(ide.project);
 
     const old = at();
-    if (old) Apps.uninstall(old.Id);
+    if (old) Apps.Uninstall(old.Id);
     check("this project is not installed yet", at() === null);
 
-    eq("the id is a slug of the name", Apps.idFor("My App 2"), "my-app-2");
+    eq("the id is a slug of the name", Apps.IdFor("My App 2"), "my-app-2");
     eq("a name of punctuation still gets one",
-       Apps.idFor("!!!"), "bintana-app");
+       Apps.IdFor("!!!"), "bintana-app");
 
     const slugproj = File.Join(TEMP, "bta-test-ide-slugproj");
-    Apps.install(slugproj, { Name: "My App 2", AppId: "" });
-    const slugged = Apps.installed(slugproj);
+    Apps.Install(slugproj, { Name: "My App 2", AppId: "" });
+    const slugged = Apps.Installed(slugproj);
     check("a project with no id installs under the slug", !!slugged);
     if (slugged)
         eq("...with the slug as the file's name", slugged.Id, "my-app-2");
-    Apps.uninstall("my-app-2");
+    Apps.Uninstall("my-app-2");
 
     check("with a project open, installing is on offer", ide.MnuAppInstall.Enabled);
     ide.MnuAppInstall.Click();
@@ -13171,7 +13171,7 @@ function* p_appsWindows(ide) {
 
     /* The list reads the same marker off the shortcut -- `Project` -- which is
      * what makes it the IDE's rather than any `.lnk` in the folder. */
-    const listed = Apps.list().filter((e) => e.Project === ide.project);
+    const listed = Apps.List().filter((e) => e.Project === ide.project);
     eq("the list finds the shortcut the IDE wrote", listed.length, 1);
     eq("...under the name the menu shows",
        listed.length ? listed[0].Name : "", "Bta Suite App");
@@ -13221,12 +13221,12 @@ function* p_apps(ide) {
         return;
     }
 
-    const at = () => Apps.installed(ide.project);
+    const at = () => Apps.Installed(ide.project);
 
     /* Not a state this phase may inherit: a previous run stopped between the
      * install and the uninstall, or a hand-run with no runner to isolate it. */
     const old = at();
-    if (old) Apps.uninstall(old.Id);
+    if (old) Apps.Uninstall(old.Id);
     check("this project is not installed yet", at() === null);
 
     /*
@@ -13234,9 +13234,9 @@ function* p_apps(ide) {
      * specification allows letters, digits, dashes, underscores and periods,
      * and the runtime refuses anything else by name.
      */
-    eq("the id is a slug of the name", Apps.idFor("My App 2"), "my-app-2");
+    eq("the id is a slug of the name", Apps.IdFor("My App 2"), "my-app-2");
     eq("a name of punctuation still gets one",
-       Apps.idFor("!!!"), "bintana-app");
+       Apps.IdFor("!!!"), "bintana-app");
 
     /*
      * A project with no application id takes that slug as the entry's name and
@@ -13244,15 +13244,15 @@ function* p_apps(ide) {
      * claiming otherwise is one the dock can never match.
      */
     const slugproj = File.Join(TEMP, "bta-test-ide-slugproj");
-    Apps.install(slugproj, { Name: "My App 2", AppId: "" });
-    const slugged = Apps.installed(slugproj);
+    Apps.Install(slugproj, { Name: "My App 2", AppId: "" });
+    const slugged = Apps.Installed(slugproj);
     check("a project with no id installs under the slug", !!slugged);
     if (slugged) {
         eq("...with the slug as the file's name", slugged.Id, "my-app-2");
         check("...and no window class claimed",
               !("StartupWMClass" in slugged.Entry), slugged.Entry.StartupWMClass);
     }
-    Apps.uninstall("my-app-2");
+    Apps.Uninstall("my-app-2");
 
     /* --- the dialog, through the menu item --------------------------------- */
     check("with a project open, installing is on offer", ide.MnuAppInstall.Enabled);
@@ -13363,7 +13363,7 @@ function* p_apps(ide) {
      * and not its name, which is why Update moves it and Uninstall takes it.
      */
     const bare = "io.github.getbintana.IdeChild";
-    Desktop.Entries.Install(bare, Apps.entry(ide.project,
+    Desktop.Entries.Install(bare, Apps.Entry(ide.project,
         { Name: "Old Entry", AppId: bare }));
     eq("an entry under the bare id is found as this project's", at() && at().Id, bare);
 
@@ -13392,7 +13392,7 @@ function* p_apps(ide) {
      * somebody else's entry: a packaged application exports its own `.desktop`
      * into the same folder.
      */
-    Apps.install(ide.project, { Name: "Bta Listed",
+    Apps.Install(ide.project, { Name: "Bta Listed",
                                 AppId: "io.github.getbintana.IdeChild" });
     Desktop.Entries.Install("org.example.NotOurs", {
         "Desktop Entry": { Type: "Application", Name: "Not ours",
@@ -13412,6 +13412,11 @@ function* p_apps(ide) {
           !names.includes("Not ours"), JSON.stringify(names));
     eq("with the project it points at",
        browser.LblAppsWhere.Text, Locale.Text("Project: {0}", ide.project));
+    check("...and the file it wrote",
+          browser.LblAppsFiles.Text.includes(
+              File.Join(Desktop.Entries.Directory,
+                        "io.github.getbintana.IdeChild.devel.desktop")),
+          browser.LblAppsFiles.Text);
     check("and something to remove", browser.BtnAppsRemove.Enabled);
 
     browser.BtnAppsRemove.Click();

@@ -387,7 +387,10 @@ static bool load_prelude(JSContext *ctx)
 
 /* --------------------------------------------------------------- the CLI */
 
-static char *find_check_project(void)
+/* Where a console tool lives: `tools/<name>` in a build tree, and
+ * `<prefix>/share/bintana/tools/<name>` installed -- the two hops the rest of
+ * this file makes. `check` and `apps` are the two that are words of the CLI. */
+static char *find_tools_project(const char *name)
 {
     GPtrArray *tried = g_ptr_array_new_with_free_func(g_free);
     char      *exe   = bta_exe_path();
@@ -395,15 +398,15 @@ static char *find_check_project(void)
     if (exe) {
         char *bin = g_path_get_dirname(exe);
         char *up  = g_path_get_dirname(bin);
-        g_ptr_array_add(tried, g_build_filename(up, "tools", "check", NULL));
+        g_ptr_array_add(tried, g_build_filename(up, "tools", name, NULL));
         g_ptr_array_add(tried, g_build_filename(up, "share", "bintana",
-                                                "tools", "check", NULL));
+                                                "tools", name, NULL));
         g_free(up);
         g_free(bin);
         g_free(exe);
     }
     g_ptr_array_add(tried, g_build_filename("/usr", "share", "bintana",
-                                            "tools", "check", NULL));
+                                            "tools", name, NULL));
 
     char *found = NULL;
     for (guint i = 0; i < tried->len && !found; i++) {
@@ -467,7 +470,7 @@ static int run_check(int argc, char **argv)
         return 2;
     }
 
-    char *tools = find_check_project();
+    char *tools = find_tools_project("check");
     if (!tools) {
         fprintf(stderr, "bintana: tools/check is not beside the binary\n");
         return 2;
@@ -1542,6 +1545,7 @@ static void usage_to(FILE *to)
     fputs("usage: bintana [run] <project-dir|project.btp> [args...]\n"
           "       bintana test [--json] <project-dir|project.btp> [filter]\n"
           "       bintana check [--json] [--strict] [--components <file>] [--fix] <project-dir|project.btp>\n"
+          "       bintana apps [list] [--json] | files <id> | remove <id>...\n"
           "       bintana --version\n"
           "\n"
           "This is the console core.  It runs a project's \"main\" with no\n"
@@ -1670,6 +1674,24 @@ int main(int argc, char **argv)
     }
     if (argc >= 2 && !strcmp(argv[1], "check"))
         return run_check(argc - 2, argv + 2);
+
+    /*
+     * `bintana apps ...` is `bintana tools/apps ...`: the word is replaced by
+     * the project's path and the rest is the tool's, so the ordinary runner
+     * resolves its `uses` (`apps`, which uses `package`), evaluates `main`,
+     * hands it the words as `Application.Arguments` and answers its exit code.
+     * A subcommand of the CLI and a project are the same road, which is what
+     * keeps this from growing a second interpreter. */
+    if (argc >= 2 && !strcmp(argv[1], "apps")) {
+        char *tool = find_tools_project("apps");
+
+        if (!tool) {
+            fprintf(stderr, "bintana: tools/apps is not beside the binary\n");
+            return 2;
+        }
+        argv[1] = tool;
+    }
+
     if (argc >= 2 && !strcmp(argv[1], "test"))
         return run_test_command(argc - 2, argv + 2);
 

@@ -124,7 +124,7 @@ msgstr ""
 "La aplicación se ofrece en el menú de este usuario. No se instala nada para "
 "todo el sistema y no se pide contraseña."
 
-#: forms/AppForm.form: BtnAppUninstall.Text forms/AppsForm.js:90
+#: forms/AppForm.form: BtnAppUninstall.Text forms/AppsForm.js:94
 msgid "Uninstall"
 msgstr "Desinstalar"
 
@@ -2114,11 +2114,15 @@ msgstr "{0}"
 msgid "Project: {0}"
 msgstr "Proyecto: {0}"
 
-#: forms/AppsForm.js:87
+#: forms/AppsForm.js:80
+msgid "Installed files:"
+msgstr "Archivos instalados:"
+
+#: forms/AppsForm.js:91
 msgid "Uninstall application"
 msgstr "Desinstalar aplicación"
 
-#: forms/AppsForm.js:88
+#: forms/AppsForm.js:92
 msgid "Remove {0} from the menu? The project and its files are not touched."
 msgstr "¿Quitar {0} del menú? El proyecto y sus archivos no se tocan."
 
