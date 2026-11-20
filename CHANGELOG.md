@@ -588,7 +588,7 @@ something different, so a program meant for both reads them once.
 
 ## 0.3.0 — 2026-11-04
 
-[Compare with 0.2.1](https://github.com/getbintana/bintana/compare/v0.2.1...v0.3.0)
+[Compare with 0.2.1](https://github.com/getbintana/bintana/compare/v0.2.1...06cca0a74b52ecec7f3e774ec801a37ae52eedc3)
 
 ### Language
 

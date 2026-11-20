@@ -24461,12 +24461,11 @@ class Form1 extends Form {
             /*
              * **The first question is also the version check.** Whether a
              * programmatic show reaches the providers turns on the library and
-             * not on this runtime: `gtk_source_completion_show` asked them on
-             * this machine's GtkSourceView 5.20 and did not on the ubuntu-24.04
-             * runner's 5.12, where four red assertions would be four ways of
-             * saying "5.12". The path a person uses -- typing the trigger --
-             * is not this one. So one case is asked quietly; if nothing
-             * answers, it is said out loud and the four are skipped.
+             * not on this runtime -- `gtk_source_completion_show` asked them on
+             * one GtkSourceView and not on another -- and the path a person
+             * uses, typing the trigger, is not this one. So one case is asked
+             * quietly; if nothing answers, it is said out loud and the four are
+             * skipped.
              */
             const probe = CASES[0];
             ed.Text = probe.text;
@@ -24477,7 +24476,8 @@ class Form1 extends Form {
                 if (!asked) {
                     print("  (skipping the completion round trip: this GtkSourceView " +
                           "does not ask its providers when the completion is shown " +
-                          "from code -- 5.12 on the runner does not, 5.20 here does)");
+                          "from code -- a programmatic show is not the path a person " +
+                          "types through)");
                     ed.Delete();
                     return;
                 }
