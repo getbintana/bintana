@@ -8366,7 +8366,7 @@
           "Params": 0,
           "Signature": "()",
           "Returns": "",
-          "Doc": "opens the completion popup from code",
+          "Doc": "asks the completion to show itself from code, and answers whether it was asked — `false` when the editor has no window yet, is not visible, does not have the focus, or has a selection, which are the states the library refuses in. The popover is built on its own time, so `true` is \"asked\" and not \"shown\"",
           "Native": true
         },
         {

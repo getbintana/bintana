@@ -8,6 +8,17 @@ one-page answer to *what is new since the release I have*.
 
 ### Runtime and libraries
 
+- **`SourceEditor.ShowCompletion()` answers whether it asked.** It answered
+  `true` whenever the editor had a window, and `gtk_source_completion_show` is
+  `void` and returns silently when the library considers the completion
+  blocked -- no focus, a selection, a paste in flight. So a program (and the
+  suite's round-trip test) was told "asked" for a show that never happened. It
+  answers `false` for the states this side can see: no window, not visible, no
+  focus, a selection. The popover is still built on its own time, so `true` is
+  *asked*, not *shown*. The test had been skipping twelve assertions whenever
+  the window was inactive -- which on a display with no window manager is the
+  ordinary state -- and now waits on the verb instead.
+
 - **A stalled `Http` download times out again when the program never lets the
   loop go idle.** The confirmation a `Timeout` gets before it cancels was a
   `G_PRIORITY_DEFAULT_IDLE` source, and an always-ready source -- a `Timer` of

@@ -24459,31 +24459,43 @@ class Form1 extends Form {
             };
 
             /*
-             * **The first question is also the version check.** Whether a
-             * programmatic show reaches the providers turns on the library and
-             * not on this runtime -- `gtk_source_completion_show` asked them on
-             * one GtkSourceView and not on another -- and the path a person
-             * uses, typing the trigger, is not this one. So one case is asked
-             * quietly; if nothing answers, it is said out loud and the four are
-             * skipped.
+             * **The first question is a focus check as much as a version one.**
+             * Whether a programmatic show reaches the providers depends on the
+             * library *and* on the view having the global input focus:
+             * `gtk_widget_has_focus` is false on an inactive toplevel even
+             * though `Focused` -- the focus *within* the control -- says true,
+             * and the library's `show` is then a silent no-op. That is what the
+             * old skip was really seeing, and the sentence blamed a version.
+             *
+             * `ShowCompletion()` answers whether it could ask, so asking again
+             * until it answers `true` waits for exactly that state, and each
+             * refusal asks nothing. The suite's display has no window manager,
+             * so the activation arrives in the display's own time: a window
+             * that never becomes active fails here by name instead of dropping
+             * the four cases in silence.
              */
+            ed.SetFocus();
+
             const probe = CASES[0];
             ed.Text = probe.text;
             ed.Select(1, probe.text.length + 1);
-            ed.ShowCompletion();
 
-            waitsFor(() => this.completions.length > 0, (asked) => {
-                if (!asked) {
-                    print("  (skipping the completion round trip: this GtkSourceView " +
-                          "does not ask its providers when the completion is shown " +
-                          "from code -- a programmatic show is not the path a person " +
-                          "types through)");
-                    ed.Delete();
-                    return;
-                }
-                this.completions = [];
-                step(0);
-            });
+            /* Six seconds, not the ordinary two: under the sanitizer every turn
+             * of the loop is slower, and what it waits for is the display
+             * focusing the window. */
+            until("the completion could be asked", () => ed.ShowCompletion(), () => {
+                waitsFor(() => this.completions.length > 0, (got) => {
+                    if (!got) {
+                        print("  (skipping the completion round trip: the show " +
+                              "was asked and no provider answered; visible=" +
+                              ed.Visible + " focused=" + ed.Focused + ")");
+                        ed.Delete();
+                        return;
+                    }
+                    this.completions = [];
+                    step(0);
+                });
+            }, 600);
         });
     }
 

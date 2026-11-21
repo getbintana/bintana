@@ -6734,6 +6734,21 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
 
 ## Focus, keys and gestures
 
+- **`has_focus` is false while the toplevel is inactive, and `Focused` is not
+  that question.** `gtk_widget_has_focus` is the *global* input focus;
+  `Focused` is the focus controller's `contains_focus`, "the focus is somewhere
+  inside this control" -- which on a `Form` is also whether the window is the
+  one the user is in. On a display with no window manager -- which is what
+  `tests/run.sh`'s `xvfb-run` is -- a window is inactive until the display
+  focuses it, so `Focused` says `true`, the window's focus widget is the view,
+  and `gtk_widget_has_focus` still says no. Measured with a print in
+  `ed_show_completion`: `active=0 view_focus=0 can=1 window_focus=view`.
+  **`gtk_source_completion_show` refuses on exactly that, silently and with no
+  return value** (it is `void`), which is why `SourceEditor.ShowCompletion()`
+  answers whether it *asked*: poll it until `true` and the machinery has the
+  state it needs. A dialog shown and closed earlier leaves the suite's window
+  unactivated on such a display, and only the display's own time gives it back.
+
 - **`Focusable` reaches `inner` and the editable's delegate, and the *getter* has
   to ask the same three.** A `TextBox`'s focus sits on the `GtkText` *inside* its
   entry and an editor's on the view inside its scroller -- the same *contains*

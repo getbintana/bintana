@@ -1202,9 +1202,34 @@ static JSValue ed_show_completion(JSContext *ctx, JSValueConst this_val,
     if (!w)
         return JS_EXCEPTION;
 
-    /* Nothing to show a popover on: a view in no window has no surface, and
-     * asking for one there is the bug that trap is about. */
+    /*
+     * **`false` is "it could not be asked", and the reasons are the ones this
+     * side can see.** `gtk_source_completion_show` is `void` and returns early,
+     * with nothing said, when the library considers the completion blocked: no
+     * view, no providers, a view that is not visible or does not have the
+     * focus, a buffer with a selection, a paste or an activation in flight, a
+     * show already showing. The verb answered `true` for a request that went
+     * nowhere, which is how a test of the round trip came to trust it.
+     *
+     * The library's list is wider than this one: `providers` is ours to know
+     * (the provider below is attached before the call) and the rest of its
+     * private state is not. So `true` means *asked*, not *shown* -- the popover
+     * is built on its own time -- and a caller that needs the difference waits
+     * for the `Complete` event, which is the question that matters.
+     *
+     * Not an exception: a selection or a window not yet presented are states a
+     * program legitimately asks in, and the IDE's menu item calls this with
+     * whatever state the editor is in.
+     */
     if (!gtk_widget_get_root(w->inner))
+        return JS_FALSE;
+    if (!gtk_widget_get_visible(w->inner))
+        return JS_FALSE;
+    if (!gtk_widget_has_focus(w->inner))
+        return JS_FALSE;
+
+    GtkSourceBuffer *buffer = buffer_of(w);
+    if (buffer && gtk_text_buffer_get_has_selection(GTK_TEXT_BUFFER(buffer)))
         return JS_FALSE;
 
     editor_attach_provider(w);
@@ -3002,7 +3027,11 @@ static const JSCFunctionListEntry source_props[] = {
      */
     JS_CGETSET_MAGIC_DEF("Completion",      ed_get_flag, ed_set_flag, ED_COMPLETION),
     /* ShowCompletion()
-     *   opens the completion popup from code
+     *   asks the completion to show itself from code, and answers whether it
+     *   was asked — `false` when the editor has no window yet, is not visible,
+     *   does not have the focus, or has a selection, which are the states the
+     *   library refuses in. The popover is built on its own time, so `true` is
+     *   "asked" and not "shown"
      */
     JS_CFUNC_DEF("ShowCompletion", 0, ed_show_completion),
     /* Mark(line, kind, [text])
