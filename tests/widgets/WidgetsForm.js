@@ -12,6 +12,17 @@
 const SCRATCH = File.Join(Environment.TempDirectory,
     `bta-test-widgets${Application.Arguments[0] ? `-${Application.Arguments[0]}` : ""}`);
 
+/*
+ * **How much slower this run is allowed to be than the machine the numbers
+ * were written on.** `BTA_TEST_SLOW=3` is what `tests/asan.sh` sets: a
+ * sanitized build is about twice as slow, and under load a `Stop` that reaches
+ * the C loop in milliseconds took 3051 ms against a 3000 ms bound, and an
+ * editor's layout settling took longer than the two seconds a wait allows.
+ * The waits and the one performance bound scale, so a slow machine reports
+ * *slow* and not *broken* -- a red line is still a red line on a normal run.
+ */
+const SLOW = Math.max(1, Number(Environment.Get("BTA_TEST_SLOW") || 1));
+
 /* **A request to one of the suite's own servers waits a minute**, which a
  * loopback answer never reaches. Tests overlap, and a later test's `*Wait`
  * blocks the main loop: an answer and a timeout that both came due during the
@@ -36,8 +47,18 @@ let partial = false;
 let listed = false;
 
 function check(name, cond, detail) {
+    assertTrace(name);
     if (cond) passed++;
     else failures.push(detail ? `${name}: ${detail}` : name);
+}
+
+/* **`BTA_TEST_ASSERT_TRACE=1` writes each assertion's name as it is made**, one
+ * per line.  A total that moved by one says an assertion stopped running, and
+ * the number alone does not say which: sorting two runs' traces and diffing
+ * them names it.  It is the only way to see a check that went quiet without a
+ * red line -- a callback that never came, a branch that took the other arm. */
+function assertTrace(name) {
+    if (Environment.Get("BTA_TEST_ASSERT_TRACE") === "1") print(`ASSERT ${name}`);
 }
 
 function eq(name, got, want) {
@@ -149,6 +170,7 @@ function sameJson(a, b) {
 }
 
 function throws(name, fn) {
+    assertTrace(name);
     try {
         fn();
         failures.push(`${name}: expected a throw, none happened`);
@@ -212,6 +234,13 @@ let waiting = 0;
 let lastWaitTrace = 0;
 
 function until(name, cond, then, tries = 200) {
+    /* `tries` is counted in turns of the ordinary loop, so `BTA_TEST_SLOW`
+     * multiplies it: a wait written as six seconds is six seconds on a normal
+     * build and longer where every turn of the timer is slower.  Written here
+     * and not in each call, because the one that needed it was an explicit
+     * 600 -- the completion's window, waiting for the display to focus it --
+     * and a call site is what gets forgotten. */
+    tries = Math.round(tries * SLOW);
     waiting++;
 
     /* One place counts and one place stops counting: the walk is the inner
@@ -241,6 +270,8 @@ function until(name, cond, then, tries = 200) {
  * have not run, which is a smaller total and not a red line.
  */
 function waitsFor(cond, then, tries = 50) {
+    /* Scaled exactly as `until` is: see there. */
+    tries = Math.round(tries * SLOW);
     waiting++;
 
     const step = (left) => {
@@ -2238,10 +2269,19 @@ class WidgetsForm extends Form {
          * Measured: without these this test went red twice out of three on a
          * loaded machine, always the same way -- a reading came back at a
          * step's value.
+         *
+         * **Every side of the map waits for its own settle, and the floor is
+         * scaled by `SLOW`.** `BTA_TEST_SLOW=3` is what the sanitizer sets,
+         * and under it a step is not just slower to reach but lasts longer in
+         * readings -- sixty readings of stillness were a step there, and the
+         * map's room was read at 506 and then "not given back" when the text
+         * went on to 938.  A fixed floor written for a normal build is one
+         * more number that only holds on the machine it was measured on.
          */
-        const stable = (then, changedFrom) => {
+        const floor = Math.round(60 * SLOW);
+        const stable = (name, then, changedFrom) => {
             let last = -1, agreed = 0, longest = 0;
-            until("the editor's room has stopped changing", () => {
+            until(name, () => {
                 if (ed.Bounds().Width <= 0 || ed.ScrollMaxY <= 0) return false;
                 const value = ed.ScrollMaxY;
                 /* **The plateau is counted even when the value is refused**:
@@ -2260,24 +2300,24 @@ class WidgetsForm extends Form {
                 /* **Strictly longer than the longest plateau before it**: the
                  * last one is the one that never ends, and a step that is as
                  * long as the one before it is a step and not the end. */
-                return agreed >= 60 && agreed > longest;
-            }, () => then(ed.ScrollMaxY));
+                return agreed >= floor && agreed > longest;
+            }, () => then(ed.ScrollMaxY), 400);
         };
 
-        stable((alone) => {
+        stable("the editor's room has stopped changing", (alone) => {
             ed.ScrollY = Math.min(40, alone);
             eq("scrolling reaches through the box it wears", ed.ScrollY, Math.min(40, alone));
             ed.ScrollY = 0;
 
             ed.ShowMap = true;
             eq("ShowMap reads back", ed.ShowMap, true);
-            /* **Wait for the effect, not for a settle.** Hiding or showing the
-             * map changes the width the text wraps in; under load the layout
-             * can pass through a taller intermediate reading, and a generic
-             * "stopped changing" check can land on it. The assertion is the
-             * direction: taller with the map, shorter without. */
-            until("the map takes room from the text", () => ed.ScrollMaxY > alone, () => {
-                const beside = ed.ScrollMaxY;
+            /* **The map's room is a settled reading of its own**, not the
+             * first one that is bigger: the reading just after the switch is
+             * still the text's old convergence, and a step of it can be
+             * taller than where that convergence started.  The direction is
+             * the assertion; the settle is what makes the two numbers the
+             * ones to compare. */
+            stable("the map has taken its room", (beside) => {
                 check("a map beside the text leaves less to wrap in, so it is taller",
                       beside > alone, `${alone} -> ${beside}`);
                 ed.ScrollY = 40;
@@ -2285,13 +2325,12 @@ class WidgetsForm extends Form {
 
                 ed.ShowMap = false;
                 eq("turned off, it reads off", ed.ShowMap, false);
-                until("the text gets its room back", () => ed.ScrollMaxY < beside, () => {
-                    const again = ed.ScrollMaxY;
+                stable("the text gets its room back", (again) => {
                     check("without the map the text has its room back",
                           again < beside, `${beside} -> ${again}`);
                     ed.Delete();
-                }, 400);
-            }, 400);
+                }, beside);
+            }, alone);
         });
     }
 
@@ -24480,9 +24519,9 @@ class Form1 extends Form {
             ed.Text = probe.text;
             ed.Select(1, probe.text.length + 1);
 
-            /* Six seconds, not the ordinary two: under the sanitizer every turn
-             * of the loop is slower, and what it waits for is the display
-             * focusing the window. */
+            /* Six seconds of ordinary turns, and `BTA_TEST_SLOW` stretches it:
+             * what it waits for is the display focusing the window, which on
+             * a loaded sanitized run took longer than six. */
             until("the completion could be asked", () => ed.ShowCompletion(), () => {
                 waitsFor(() => this.completions.length > 0, (got) => {
                     if (!got) {
@@ -33261,7 +33300,7 @@ export class UriChild extends Form {
                 t.Error = (m) => {
                     check(`Stop ends an endless ${verb === "hash" ? "File.Hash" : "Gzip.CompressFile"}`,
                           String(m).includes("cancelled"), String(m));
-                    check("...at once, not at KillAfter", Date.now() - from < 3000,
+                    check("...at once, not at KillAfter", Date.now() - from < 3000 * SLOW,
                           String(Date.now() - from));
                     if (verb === "gzip")
                         check("...leaving no file and no temporary",

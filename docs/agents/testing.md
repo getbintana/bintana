@@ -113,11 +113,30 @@ settled one (938) and the assertion failed. The same way, twice out of three.
 It is the second time a **wall-clock window** has been the culprit, after the
 one `docs/testing.md` records above, and the rule is the same: a window is a
 bet, and the way to make it a good one is to measure what it has to outlast.
-The settle's floor is **sixty** readings now (twenty was not long enough under
-a loaded full run on 2026-11-16), and the map's two effects are asserted by
-waiting for the direction itself -- taller with the map, shorter without --
-instead of a second generic settle. The editor removes the map from its box
-when `ShowMap` goes false; hiding it kept the map's column on Windows.
+
+**A floor in readings is a number for the machine it was measured on.**
+`BTA_TEST_SLOW` (set to 3 by `tests/asan.sh`) multiplies the settle's floor,
+the turn counts of `until` and `waitsFor`, and the one wall-clock
+performance bound, so a sanitized run reports *slow* and not *broken*; a normal
+run reads 1 and is unchanged. Under it the floor of sixty was **a step**: the map's room
+was read at 506, and with the map gone the text went on to 938, so "the text
+gets its room back" failed against a number that was never the map's. And
+**each side of the map waits for its own settled reading** -- requiring the
+value to have moved from the one before it and to have been still longer than
+any plateau of its own -- instead of a plain "the first reading bigger than the
+last": the reading just after the switch is still the text's old convergence,
+and a step of it can be taller than where that convergence started. The
+direction (taller with the map, shorter without) is the assertion; the settle
+is what makes the two numbers worth comparing. The editor removes the map from
+its box when `ShowMap` goes false; hiding it kept the map's column on Windows.
+
+**When a total moves and nothing is red, three traces ask why.** They are
+`tests/widgets`' own, read from the environment: `BTA_TEST_TRACE=1` says which
+test began, `BTA_TEST_WAIT_TRACE=1` says once a second what `finish` is still
+waiting for, and `BTA_TEST_ASSERT_TRACE=1` writes each assertion's name as it is
+made -- sort two runs' traces and diff them, and the missing line is the check
+that went quiet without a red line (a callback that never came, a branch that
+took the other arm).
 
 **And the sharper version: never assert that something has *not* happened yet.**
 `until` fixes waiting for a frame; nothing fixes racing one. `tests/widgets`

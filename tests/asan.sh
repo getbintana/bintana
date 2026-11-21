@@ -64,6 +64,16 @@ export HEADLESS=${HEADLESS-1}
 # the ordinary guard's own margin, doubled.
 export TIMEOUT=${TIMEOUT:-2400}
 
+# **And the waits inside a project scale too.** `TIMEOUT` is the guard for a
+# project that hangs; the per-assertion waits (`until`, `waitsFor`), the settle
+# floors and the one performance bound are the suite's own numbers, written for
+# a normal build. Under the sanitizer a `Stop` that lands in milliseconds took
+# 3051 ms against a 3000 ms bound, an editor's layout settling outlived a
+# two-second wait, and a step of its convergence outlived the sixty readings
+# that tell a step from the end: red lines that were the run being slow.
+# `tests/widgets` reads this.
+export BTA_TEST_SLOW=${BTA_TEST_SLOW:-3}
+
 BINTANA="$BUILD/bintana" ./tests/run.sh
 status=$?
 

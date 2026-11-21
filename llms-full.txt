@@ -4464,11 +4464,30 @@ settled one (938) and the assertion failed. The same way, twice out of three.
 It is the second time a **wall-clock window** has been the culprit, after the
 one `docs/testing.md` records above, and the rule is the same: a window is a
 bet, and the way to make it a good one is to measure what it has to outlast.
-The settle's floor is **sixty** readings now (twenty was not long enough under
-a loaded full run on 2026-11-16), and the map's two effects are asserted by
-waiting for the direction itself -- taller with the map, shorter without --
-instead of a second generic settle. The editor removes the map from its box
-when `ShowMap` goes false; hiding it kept the map's column on Windows.
+
+**A floor in readings is a number for the machine it was measured on.**
+`BTA_TEST_SLOW` (set to 3 by `tests/asan.sh`) multiplies the settle's floor,
+the turn counts of `until` and `waitsFor`, and the one wall-clock
+performance bound, so a sanitized run reports *slow* and not *broken*; a normal
+run reads 1 and is unchanged. Under it the floor of sixty was **a step**: the map's room
+was read at 506, and with the map gone the text went on to 938, so "the text
+gets its room back" failed against a number that was never the map's. And
+**each side of the map waits for its own settled reading** -- requiring the
+value to have moved from the one before it and to have been still longer than
+any plateau of its own -- instead of a plain "the first reading bigger than the
+last": the reading just after the switch is still the text's old convergence,
+and a step of it can be taller than where that convergence started. The
+direction (taller with the map, shorter without) is the assertion; the settle
+is what makes the two numbers worth comparing. The editor removes the map from
+its box when `ShowMap` goes false; hiding it kept the map's column on Windows.
+
+**When a total moves and nothing is red, three traces ask why.** They are
+`tests/widgets`' own, read from the environment: `BTA_TEST_TRACE=1` says which
+test began, `BTA_TEST_WAIT_TRACE=1` says once a second what `finish` is still
+waiting for, and `BTA_TEST_ASSERT_TRACE=1` writes each assertion's name as it is
+made -- sort two runs' traces and diff them, and the missing line is the check
+that went quiet without a red line (a callback that never came, a branch that
+took the other arm).
 
 **And the sharper version: never assert that something has *not* happened yet.**
 `until` fixes waiting for a frame; nothing fixes racing one. `tests/widgets`
@@ -5808,6 +5827,22 @@ is drawn.
   one being swapped out; the default labels come back, renumbered, when the
   strip is shown. Explicit labels keep their handler and are not touched.
   `G_DEBUG=fatal-criticals` over the whole `tests/widgets` project is clean now.
+- **The `BtaFixed ... reports a minimum width of 162, but minimum width for
+  height of 1048576 is 255` criticals are GTK 4.14's, 30 of them in one
+  `tests/ide` run, and there is nothing on this side to answer.** They are
+  `GtkBoxLayout`'s own sanity check (`gtk/gtkboxlayout.c`,
+  `distribute_remaining_size`): when the box's width-for-height loop passes
+  `MAX_ALLOWED_SIZE` (`1 << 20`) it stops and re-measures each child at that
+  height and at `-1`, then warns if the two minima disagree — the loop is what
+  diverged, and the warning is GTK saying its two probes did. The child it
+  names is a `BtaFixed` wearing a `GtkBoxLayout` because `Arrangement` made it
+  a box, so the measure is GTK's: instrumenting
+  `bta_fixed_layout_measure` showed it **never receives the `1 << 20`**, only
+  the box's own allocation. Nothing is mislaid on screen (`tests/ide` passes,
+  the designer and workspace draw), the two heights are ones no allocation ever
+  offers, and the check is not reproduced on 4.22 here. Recorded so a run that
+  greps stderr does not chase it: the 162/255 pair is a box surface whose
+  height-for-width child makes its min width depend on the height offered.
 
 ## Laying out a form: which of the two models
 
@@ -15505,6 +15540,7 @@ and a TagLib wrapper worked through.
 ./tests/headless.sh                     # the metadata host: no toolkit in the link, the same Widget.* answers
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
+BTA_TEST_SLOW=3 ./tests/run.sh          # ...and the waits inside a project scaled too
 BINTANA_PROFILE=/tmp/caps ./tests/run.sh
                                         # a Sysprof capture per project, under /tmp/caps
 HEADLESS= ./tests/run.sh                # ...on your own screen; see below
@@ -16610,6 +16646,23 @@ The reports go to files rather than the terminal because the child project the
 IDE test runs writes to a pty that the test then reads, and a leak summary in
 there looks exactly like the child misbehaving -- which is a false failure I
 walked into.
+
+**The suite's own numbers are for a normal build, and the sanitizer makes them
+wrong rather than finding anything.** A `Task.Stop` that lands in milliseconds
+took 3051 ms against a 3000 ms bound, and an editor's scroll range stayed a
+step longer than the sixty readings that tell a step from a settle. `asan.sh`
+sets `BTA_TEST_SLOW=3`, which `tests/widgets` applies to `until`, `waitsFor`,
+the settles and that one performance bound: a sanitized run then reports *slow*
+and not *broken*. A normal run reads 1 and every number is the one written down;
+raise it by hand (`BTA_TEST_SLOW=3 ./tests/run.sh`) on a machine that is simply
+slower than the one the numbers came from, instead of editing them.
+
+**And one assertion is skipped there on purpose**, so `tests/widgets` counts
+**6957** under the sanitizer and 6958 without it: "checking a module's text
+forty times keeps nothing" reads its own process's RSS, and ASan's quarantine
+holds what was freed -- 296 MB with the fix in, 4 KB with
+`quarantine_size_mb=0`. It is the one place whose verdict the sanitizer
+inverts, and it says so at the condition.
 
 ## Asking instead of looking
 

@@ -438,6 +438,22 @@ is drawn.
   one being swapped out; the default labels come back, renumbered, when the
   strip is shown. Explicit labels keep their handler and are not touched.
   `G_DEBUG=fatal-criticals` over the whole `tests/widgets` project is clean now.
+- **The `BtaFixed ... reports a minimum width of 162, but minimum width for
+  height of 1048576 is 255` criticals are GTK 4.14's, 30 of them in one
+  `tests/ide` run, and there is nothing on this side to answer.** They are
+  `GtkBoxLayout`'s own sanity check (`gtk/gtkboxlayout.c`,
+  `distribute_remaining_size`): when the box's width-for-height loop passes
+  `MAX_ALLOWED_SIZE` (`1 << 20`) it stops and re-measures each child at that
+  height and at `-1`, then warns if the two minima disagree — the loop is what
+  diverged, and the warning is GTK saying its two probes did. The child it
+  names is a `BtaFixed` wearing a `GtkBoxLayout` because `Arrangement` made it
+  a box, so the measure is GTK's: instrumenting
+  `bta_fixed_layout_measure` showed it **never receives the `1 << 20`**, only
+  the box's own allocation. Nothing is mislaid on screen (`tests/ide` passes,
+  the designer and workspace draw), the two heights are ones no allocation ever
+  offers, and the check is not reproduced on 4.22 here. Recorded so a run that
+  greps stderr does not chase it: the 162/255 pair is a box surface whose
+  height-for-width child makes its min width depend on the height offered.
 
 ## Laying out a form: which of the two models
 

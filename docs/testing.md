@@ -14,6 +14,7 @@
 ./tests/headless.sh                     # the metadata host: no toolkit in the link, the same Widget.* answers
 BINTANA=/other/bintana ./tests/run.sh
 TIMEOUT=2400 ./tests/run.sh             # a slower machine than the one this was written on
+BTA_TEST_SLOW=3 ./tests/run.sh          # ...and the waits inside a project scaled too
 BINTANA_PROFILE=/tmp/caps ./tests/run.sh
                                         # a Sysprof capture per project, under /tmp/caps
 HEADLESS= ./tests/run.sh                # ...on your own screen; see below
@@ -1119,6 +1120,23 @@ The reports go to files rather than the terminal because the child project the
 IDE test runs writes to a pty that the test then reads, and a leak summary in
 there looks exactly like the child misbehaving -- which is a false failure I
 walked into.
+
+**The suite's own numbers are for a normal build, and the sanitizer makes them
+wrong rather than finding anything.** A `Task.Stop` that lands in milliseconds
+took 3051 ms against a 3000 ms bound, and an editor's scroll range stayed a
+step longer than the sixty readings that tell a step from a settle. `asan.sh`
+sets `BTA_TEST_SLOW=3`, which `tests/widgets` applies to `until`, `waitsFor`,
+the settles and that one performance bound: a sanitized run then reports *slow*
+and not *broken*. A normal run reads 1 and every number is the one written down;
+raise it by hand (`BTA_TEST_SLOW=3 ./tests/run.sh`) on a machine that is simply
+slower than the one the numbers came from, instead of editing them.
+
+**And one assertion is skipped there on purpose**, so `tests/widgets` counts
+**6957** under the sanitizer and 6958 without it: "checking a module's text
+forty times keeps nothing" reads its own process's RSS, and ASan's quarantine
+holds what was freed -- 296 MB with the fix in, 4 KB with
+`quarantine_size_mb=0`. It is the one place whose verdict the sanitizer
+inverts, and it says so at the condition.
 
 ## Asking instead of looking
 
