@@ -29,6 +29,19 @@ one-page answer to *what is new since the release I have*.
   stalled download finished with its 100000 bytes before and times out now;
   `tests/widgets`' `HttpSave` holds it with `starved.bin`.
 
+- **A `Resize` on a form that is already on screen is no longer lost.** GTK
+  writes a configure's size back into the window's default size -- that is how
+  a person's own resize is remembered -- so a configure still in flight for the
+  size *before* the request (a form growing to fit what it holds, or two
+  `Resize` calls a frame apart) landed after it and replaced it, and the next
+  layout computed the old size. GTK 4 removed `gtk_window_resize` and has no
+  way to ask again. The request is repeated over the next frames now, until the
+  window has it or ten frames pass: bounded, so a person's own drag is not
+  fought for longer than a moment. Measured on GTK 4.14.5 with two CPUs,
+  `tests/widgets`' "survives a resize" went red 4 runs in 26 with the window at
+  574 where 648 was asked; with the retry it does not, and this machine's 4.22
+  never lost it.
+
 ## 0.4.0 — 2026-11-20
 
 [Compare with 0.4.0-rc2](https://github.com/getbintana/bintana/compare/v0.4.0-rc2...v0.4.0)

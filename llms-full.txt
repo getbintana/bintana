@@ -4911,10 +4911,13 @@ save will edit `examples/hello` for real.
   gives. Measured first in CI's image on two CPUs (4 failures in 26 full runs,
   the same two lines CI showed): the first pass's 558 held for two polls 13 ms
   apart, the second pass's 574 came 12-35 ms later -- the layout runs on the
-  frame clock, below the timers `until` polls with. And the second red line,
-  "survives a resize: never became true", was a runtime defect the weak guard
-  exposed: the `Resize` it issued then was overwritten by the second pass's
-  configure (`docs/issues/ISSUE-resize-lost-in-flight.md`).
+  frame clock, below the timers `until` polls with. The second line it showed,
+  "survives a resize: never became true", was a runtime defect: the `Resize`
+  issued there was overwritten by the second pass's configure, which GTK writes
+  back into the default size. That is fixed -- `bta_widget_relayout` repeats a
+  shown form's request over the next frames -- and the test now asks **while
+  that pass is in flight** and asserts the size arrives; the steady-width wait
+  stays, because the margin it checks is the second pass's.
 - **Submitting a modal with an xdotool key can haunt the run.** `key` sends
   down, waits 12 ms, sends up; a dialog that submits and closes inside that gap
   takes the up down with it -- `BadWindow` on the send, the release never
@@ -5474,6 +5477,20 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   (broken at that size) to 1100, which is what `SideBar` 260, `SidePanel` 280 and
   the rest add up to. Lowering it means expressing those as split **positions**
   rather than child widths, which is a separate piece of work.
+- **A configure's size is written back into the window's default size, and that
+  is what loses a `Resize`.** `gtk_window_set_default_size` is honoured on the
+  next layout -- but GTK stores every configure's actual size as the default
+  (`surface_size_changed`), which is how a person's own resize is remembered. A
+  configure still in flight for the size *before* a shown form's `Resize` lands
+  after it and replaces it, so the next layout computes the old size; GTK 4
+  removed `gtk_window_resize` and has no way to ask again. `bta_widget_relayout`
+  repeats the request over the next ten frames, until the window has it -- a
+  tick callback whose bound is what keeps a person's drag from being fought, and
+  a different mechanism from Windows', where the default size is ignored once
+  the surface exists and `Resize` goes through `SetWindowPos`. Measured in CI's
+  GTK 4.14 image on two CPUs: `tests/widgets`' `testAnchorsPushed` lost the
+  `Resize` it issued during the form's second layout pass in 4 runs of 26, and
+  the first pass's width was a number a program had no way to see.
 - **`MinWidth`/`MinHeight` mean nothing in a box -- unless the axis says
   `Fill`.** They are the floor for a *stretched* control on a surface; in a box,
   with the alignment left `Auto`, the floor is `Height`/`Width` itself, and
@@ -15527,7 +15544,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11631 assertions
+./tests/run.sh                          # all seven projects, 11632 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -16658,7 +16675,7 @@ raise it by hand (`BTA_TEST_SLOW=3 ./tests/run.sh`) on a machine that is simply
 slower than the one the numbers came from, instead of editing them.
 
 **And one assertion is skipped there on purpose**, so `tests/widgets` counts
-**6957** under the sanitizer and 6958 without it: "checking a module's text
+**6958** under the sanitizer and 6959 without it: "checking a module's text
 forty times keeps nothing" reads its own process's RSS, and ASan's quarantine
 holds what was freed -- 296 MB with the fix in, 4 KB with
 `quarantine_size_mb=0`. It is the one place whose verdict the sanitizer
@@ -17439,7 +17456,6 @@ needed and what it did instead.
 | A released application cannot change its schema — `Model.Ensure` creates a table and never alters one | [`docs/plans/migrations-plan.md`](../plans/migrations-plan.md) |
 | A library cannot be published, versioned or installed — `uses` resolves a directory, and there is no registry, lock or `bintana add`; a project also starts from an empty form rather than a template | [`docs/plans/ecosystem-plan.md`](../plans/ecosystem-plan.md) |
 | No AppImage, no deb or rpm, no signing, no updates | [ISSUE-appimage-packaging](../issues/ISSUE-appimage-packaging.md), with the design in [distribution-plan.md](../plans/distribution-plan.md) |
-| A shown form's `Resize` is lost when an earlier size change is still in flight -- right after `Show()`, or two calls a frame apart, the window can stay at the earlier size | [ISSUE-resize-lost-in-flight](../issues/ISSUE-resize-lost-in-flight.md) |
 | A control laid onto a page — `Print` sends what a `Draw` paints, so a form with real widgets on it still has no path to paper except drawing it by hand | [controls.md](https://github.com/getbintana/bintana-docs/blob/main/docs/llm/controls.md#drawingarea) |
 
 ## Upstream

@@ -15,7 +15,6 @@ in the same form.
 | Issue | The missing capability |
 |---|---|
 | [ISSUE-appimage-packaging.md](ISSUE-appimage-packaging.md) | No AppImage, no deb or rpm, no signing, no updates |
-| [ISSUE-resize-lost-in-flight.md](ISSUE-resize-lost-in-flight.md) | A shown form's `Resize` is lost when the configure of an earlier size change lands after it |
 
 ## Upstream
 
@@ -43,8 +42,8 @@ who did not have it yet, in the directory of things that are missing. **An
 upstream issue is not answered by a workaround**: it stays until the dependency
 fixes it, because deleting it would hide the reason the workaround exists.
 
-Forty-seven runtime issues have left this directory, answering forty-eight gaps —
-forty-two filled, two refused, three that were never missing, and one that is
+Forty-eight runtime issues have left this directory, answering forty-nine gaps —
+forty-three filled, two refused, three that were never missing, and one that is
 now a plan ([`postgres-plan.md`](../plans/postgres-plan.md), not yet built).
 Filled: a drawing that could not carry an image, text that could not be measured outside a `Draw`, a
 document that could only leave as one PNG per page, a program that had to run
@@ -86,6 +85,9 @@ to construct every widget type there is, and a column heading that could offer
 nothing: `HeaderMenu` declares its menu and `HeaderClick(column, button, ctrl,
 shift)` is the press — the one surface of a column view GTK reports nothing
 for — with every item told the column it was opened over.
+And a shown form's `Resize` that the configure of an earlier size change
+overwrote: the request is asked again over the next few frames, until the window
+has it, so the size a program asks for is the size it gets.
 And four more in one sitting, all of them "the runtime has no word for this":
 `Probe.Image(path)` measures a picture from its header with no widget and no
 display, so a report can lay a logo out before anything is drawn and a console

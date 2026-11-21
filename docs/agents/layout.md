@@ -85,6 +85,20 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   (broken at that size) to 1100, which is what `SideBar` 260, `SidePanel` 280 and
   the rest add up to. Lowering it means expressing those as split **positions**
   rather than child widths, which is a separate piece of work.
+- **A configure's size is written back into the window's default size, and that
+  is what loses a `Resize`.** `gtk_window_set_default_size` is honoured on the
+  next layout -- but GTK stores every configure's actual size as the default
+  (`surface_size_changed`), which is how a person's own resize is remembered. A
+  configure still in flight for the size *before* a shown form's `Resize` lands
+  after it and replaces it, so the next layout computes the old size; GTK 4
+  removed `gtk_window_resize` and has no way to ask again. `bta_widget_relayout`
+  repeats the request over the next ten frames, until the window has it -- a
+  tick callback whose bound is what keeps a person's drag from being fought, and
+  a different mechanism from Windows', where the default size is ignored once
+  the surface exists and `Resize` goes through `SetWindowPos`. Measured in CI's
+  GTK 4.14 image on two CPUs: `tests/widgets`' `testAnchorsPushed` lost the
+  `Resize` it issued during the form's second layout pass in 4 runs of 26, and
+  the first pass's width was a number a program had no way to see.
 - **`MinWidth`/`MinHeight` mean nothing in a box -- unless the axis says
   `Fill`.** They are the floor for a *stretched* control on a surface; in a box,
   with the alignment left `Auto`, the floor is `Height`/`Width` itself, and

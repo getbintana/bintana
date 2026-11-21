@@ -12923,7 +12923,7 @@
           "Params": 2,
           "Signature": "(width, height)",
           "Returns": "",
-          "Doc": "sets `Width` and `Height` together",
+          "Doc": "sets `Width` and `Height` together; on a shown `Form` it is the window's size, asked again for a few frames so that a configure for an earlier size cannot undo it",
           "Native": true
         },
         {

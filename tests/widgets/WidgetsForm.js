@@ -34397,17 +34397,18 @@ export class UriChild extends Form {
          * stretched control was drawn with, and latching one asks for another --
          * so `Width > 1` is true a frame before the answer is.
          *
-         * **Two readings that agree are not enough here.** The layout runs on
-         * the frame clock, below the timers `until` polls with, so on a busy
-         * loop the first pass's width -- 558, the pusher flush against the edge
-         * -- held for two polls 13 ms apart and was taken for the answer; the
-         * second pass landed 12-35 ms later at 574 (CI's runners, and two CPUs
-         * in their image: 4 runs in 26). And the `Resize` below, issued while
-         * that second pass's configure was still in flight, was then lost
-         * (`docs/issues/ISSUE-resize-lost-in-flight.md`). So the wait is for
-         * what the second pass brings: a steady width *and* the pusher's far
-         * margin. A runtime that stopped keeping the margin times this out --
-         * "never became true" -- and the assertion below says by how much.
+         * **And it is exactly here that a `Resize` used to be lost.** Asking
+         * for a size while the second pass is still in flight is the case
+         * that made this test flaky: that pass's configure carries the width
+         * of the first one, lands after the request, and GTK writes a
+         * configure's size back into the default size -- so the next layout
+         * computed the old width and the 648 never arrived. CI's runners met it
+         * in 4 runs of 26, this test read 558, asked for 648, and the window
+         * stayed at 574 for the 1.5 s it was watched; in GTK 4.14 on two CPUs
+         * it is 1 run in 6. The runtime repeats the request over the next
+         * frames now (`bta_widget_relayout`), and the test asks in the same
+         * place on purpose: what it asserts is the contract, that the size
+         * asked for arrives.
          */
         /* Read fresh every time: the surface is about to grow, and a gap
          * measured against the width it used to have is not a gap. */
@@ -34423,46 +34424,62 @@ export class UriChild extends Form {
             return same;
         };
 
-        until("the pushed form settles, with the margin it was drawn inside",
-              () => still() && gapOf(pusher) === margin, () => {
-            const surface = win.Bounds().Width;
+        /* The first pass's width, kept: it is the evidence that the contents
+         * pushed the surface, and the number the request is measured from. */
+        let first = -1;
+        const measured = () => {
+            if (first < 0 && win.Bounds().Width > 1) first = win.Bounds().Width;
+            return first > 0;
+        };
 
-            check("a control wider than it declared pushes the surface out",
-                  surface > 300, `${surface} against a declared 300`);
-            check("and it is the text that did it, so nothing is clipped",
-                  pusher.Bounds().Width > 268, `${pusher.Bounds().Width}`);
+        until("the pushed form is measured once", measured, () => {
+            const asked = first + 90;
 
-            /*
-             * The one that pushed keeps the gap it was drawn with on the *far*
-             * side too. It used to push by exactly its own growth and end up
-             * flush against the edge while everything beside it kept the margin,
-             * which is what the IDE's "New translation" dialog looked like: a
-             * prompt touching the frame over an input that stopped short.
-             */
-            /* 300 - (16 + 268): the margin it was drawn inside. Compared
-             * against that number and not against another control's, because
-             * `Bounds()` is what a control is *drawn* as -- a Label matches its
-             * allocation and a TextBox is inset by the theme, so the two are not
-             * the same measurement. */
-            eq("what pushed the surface keeps its own far margin",
-               gapOf(pusher), 300 - (16 + 268));
+            win.Resize(asked, 160);
+            until("the size asked for while the second pass was in flight arrives",
+                  () => still() && win.Bounds().Width >= asked
+                        && gapOf(pusher) === margin, () => {
+                const surface = win.Bounds().Width;
 
-            const fillGap  = gapOf(filler);
-            const endGap   = gapOf(trailer);
-            const stayLeft = stayer.Bounds().X;
+                check("a control wider than it declared pushes the surface out",
+                      first > 300, `${first} against a declared 300`);
+                eq("and the resize asked for on top of that arrived",
+                   surface, asked);
+                check("and it is the text that did it, so nothing is clipped",
+                      pusher.Bounds().Width > 268, `${pusher.Bounds().Width}`);
 
-            win.Resize(surface + 90, 160);
-            until("and it survives a resize on top of that",
-                  () => win.Bounds().Width >= surface + 80, () => {
-                eq("Fill keeps its distance to the far edge", gapOf(filler), fillGap);
-                eq("and so does End",                         gapOf(trailer), endGap);
-                eq("while Start stays where it was drawn",    stayer.Bounds().X, stayLeft);
+                /*
+                 * The one that pushed keeps the gap it was drawn with on the *far*
+                 * side too. It used to push by exactly its own growth and end up
+                 * flush against the edge while everything beside it kept the margin,
+                 * which is what the IDE's "New translation" dialog looked like: a
+                 * prompt touching the frame over an input that stopped short.
+                 */
+                /* 300 - (16 + 268): the margin it was drawn inside. Compared
+                 * against that number and not against another control's, because
+                 * `Bounds()` is what a control is *drawn* as -- a Label matches its
+                 * allocation and a TextBox is inset by the theme, so the two are not
+                 * the same measurement. */
+                eq("what pushed the surface keeps its own far margin",
+                   gapOf(pusher), 300 - (16 + 268));
 
-                check("Fill really did stretch, rather than staying put",
-                      filler.Bounds().Width > 268, `${filler.Bounds().Width}`);
+                const fillGap  = gapOf(filler);
+                const endGap   = gapOf(trailer);
+                const stayLeft = stayer.Bounds().X;
 
-                win.Close();
-                this.testSplitFloor(done);
+                win.Resize(surface + 90, 160);
+                until("and it survives a resize on top of that",
+                      () => win.Bounds().Width >= surface + 80, () => {
+                    eq("Fill keeps its distance to the far edge", gapOf(filler), fillGap);
+                    eq("and so does End",                         gapOf(trailer), endGap);
+                    eq("while Start stays where it was drawn",    stayer.Bounds().X, stayLeft);
+
+                    check("Fill really did stretch, rather than staying put",
+                          filler.Bounds().Width > 268, `${filler.Bounds().Width}`);
+
+                    win.Close();
+                    this.testSplitFloor(done);
+                });
             });
         });
     }

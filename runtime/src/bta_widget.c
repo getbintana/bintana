@@ -304,6 +304,79 @@ static void win32_resize_shown(GtkWidget *window, int width, int height)
     gtk_window_set_resizable(GTK_WINDOW(window), TRUE);
     gtk_widget_add_tick_callback(window, fixed_resize_tick, r, g_free);
 }
+#else
+/*
+ * **A configure for an earlier size overwrites the one just asked for.**
+ *
+ * On Linux a shown form's `Resize` is `gtk_window_set_default_size`, which GTK
+ * honours on the next layout -- but GTK also writes a configure's size *back*
+ * into the default size (`surface_size_changed`), because that is how a
+ * person's own resize is remembered.  So a configure still in flight for the
+ * size before the request -- a form growing to fit what it holds, which is laid
+ * out in two passes, or two `Resize` calls a frame apart -- lands after it and
+ * replaces it, and the next layout computes the old size again.  GTK 4 removed
+ * `gtk_window_resize` and has no way to ask a second time.
+ *
+ * So the request is repeated over the next frames: until the window has it, or
+ * until the retries run out.  Bounded on purpose -- a person resizing by hand
+ * has the window at once, and the retry only says the same number again for a
+ * moment.  `docs/issues/ISSUE-resize-lost-in-flight.md` is the report;
+ * `tests/widgets`' `testAnchorsPushed` asks for a size while the second pass is
+ * still in flight, which is the window where this was lost.
+ */
+#define RESIZE_RETRY_KEY "bta-resize-retry"
+
+/* Ten frames: the configure that loses the race is one the previous layout has
+ * already sent, so it lands within a frame or two; the rest is margin for a
+ * busy machine. */
+#define RESIZE_RETRY_FRAMES 10
+
+typedef struct {
+    int width, height;                  /* what the program asked; -1 is unasked */
+    int left;
+} ResizeRetry;
+
+static gboolean resize_retry_tick(GtkWidget *window, GdkFrameClock *clock,
+                                  gpointer data)
+{
+    ResizeRetry *r = data;
+
+    (void)clock;
+    /* The allocation is the content box, which is what `Resize` means. */
+    bool there = (r->width  <= 0 || gtk_widget_get_width(window)  == r->width)
+              && (r->height <= 0 || gtk_widget_get_height(window) == r->height);
+    if (there || --r->left <= 0) {
+        /* Cleared before the tick goes: the record is freed by the tick's own
+         * destroy notify, and this key carries none -- a second `Resize` is
+         * the only thing that finds it. */
+        g_object_set_data(G_OBJECT(window), RESIZE_RETRY_KEY, NULL);
+        return G_SOURCE_REMOVE;
+    }
+    gtk_window_set_default_size(GTK_WINDOW(window), r->width, r->height);
+    return G_SOURCE_CONTINUE;
+}
+
+static void resize_retry_arm(GtkWidget *window, int width, int height)
+{
+    ResizeRetry *pending = g_object_get_data(G_OBJECT(window), RESIZE_RETRY_KEY);
+
+    /* A second request inside those frames only changes the size the first one
+     * is asking for, the way the Win32 path does. */
+    if (pending) {
+        pending->width  = width;
+        pending->height = height;
+        pending->left   = RESIZE_RETRY_FRAMES;
+        return;
+    }
+
+    ResizeRetry *r = g_new0(ResizeRetry, 1);
+
+    r->width  = width;
+    r->height = height;
+    r->left   = RESIZE_RETRY_FRAMES;
+    g_object_set_data(G_OBJECT(window), RESIZE_RETRY_KEY, r);
+    gtk_widget_add_tick_callback(window, resize_retry_tick, r, g_free);
+}
 #endif
 
 void bta_widget_relayout(BtaWidget *w)
@@ -327,6 +400,10 @@ void bta_widget_relayout(BtaWidget *w)
                 win32_resize_shown(w->gtk,
                                    w->w > 0 ? w->w : gtk_widget_get_width(w->gtk),
                                    w->h > 0 ? w->h : gtk_widget_get_height(w->gtk));
+#else
+                /* Here the default size *is* the road, and it is the configure
+                 * in flight that undoes it: see `resize_retry_arm`. */
+                resize_retry_arm(w->gtk, w->w, w->h);
 #endif
             }
         }
@@ -8673,7 +8750,9 @@ static const JSCFunctionListEntry widget_props[] = {
      */
     JS_CFUNC_DEF("Move",     2, w_move),
     /* Resize(width, height)
-     *   sets `Width` and `Height` together
+     *   sets `Width` and `Height` together; on a shown `Form` it is the
+     *   window's size, asked again for a few frames so that a configure for an
+     *   earlier size cannot undo it
      */
     JS_CFUNC_DEF("Resize",   2, w_resize),
     /* SizeRequest()

@@ -561,10 +561,13 @@ save will edit `examples/hello` for real.
   gives. Measured first in CI's image on two CPUs (4 failures in 26 full runs,
   the same two lines CI showed): the first pass's 558 held for two polls 13 ms
   apart, the second pass's 574 came 12-35 ms later -- the layout runs on the
-  frame clock, below the timers `until` polls with. And the second red line,
-  "survives a resize: never became true", was a runtime defect the weak guard
-  exposed: the `Resize` it issued then was overwritten by the second pass's
-  configure (`docs/issues/ISSUE-resize-lost-in-flight.md`).
+  frame clock, below the timers `until` polls with. The second line it showed,
+  "survives a resize: never became true", was a runtime defect: the `Resize`
+  issued there was overwritten by the second pass's configure, which GTK writes
+  back into the default size. That is fixed -- `bta_widget_relayout` repeats a
+  shown form's request over the next frames -- and the test now asks **while
+  that pass is in flight** and asserts the size arrives; the steady-width wait
+  stays, because the margin it checks is the second pass's.
 - **Submitting a modal with an xdotool key can haunt the run.** `key` sends
   down, waits 12 ms, sends up; a dialog that submits and closes inside that gap
   takes the up down with it -- `BadWindow` on the send, the release never
