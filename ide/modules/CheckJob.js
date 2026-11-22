@@ -219,8 +219,9 @@ export class CheckJob {
         this.ide.problems.report("project", this.findings);
 
         if (this.findings.length)
-            this.ide.log(Locale.Text("Check: {0} findings\n",
-                                     String(this.findings.length)));
+            this.ide.log(Locale.Plural("Check: {0} finding\n",
+                                       "Check: {0} findings\n",
+                                       this.findings.length));
         else
             this.ide.log(Locale.Text("Check: nothing wrong with the project\n"));
 

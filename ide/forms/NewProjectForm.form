@@ -125,6 +125,7 @@
               "name": "LblHint",
               "properties": {
                 "ColumnSpan": 2,
+                "Ellipsize": true,
                 "HAlign": "Fill",
                 "Text": ""
               }

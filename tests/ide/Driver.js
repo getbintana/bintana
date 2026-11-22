@@ -344,6 +344,26 @@ function* p_welcome(ide) {
           ide.WelcomeRecent.Count === Math.max(1, ide.recent.length),
           `${ide.WelcomeRecent.Count} rows for ${ide.recent.length} projects`);
 
+    /*
+     * A first run has nothing to go back to, and *Open* was the suggested
+     * button anyway -- the one door that needs a project to exist first.
+     * Saying so is the whole of what the page can do about it.
+     */
+    const wasRecent = ide.recent;
+    ide.recent = [];
+    ide.showRecent();
+    eq("with nothing to go back to, starting one is what is suggested",
+       ide.BtnWelcomeNew.Style, "suggested-action");
+    eq("and the empty list is not a box on the page",
+       ide.WelcomeRecent.Visible, false);
+    ide.recent = ["/tmp"];
+    ide.showRecent();
+    check("once there is one, opening is suggested again",
+          ide.BtnWelcomeOpen.Style === "suggested-action" &&
+          ide.WelcomeRecent.Visible, ide.BtnWelcomeOpen.Style);
+    ide.recent = wasRecent;
+    ide.showRecent();
+
     eq("no file, no pages", ide.Tabs.Count, 0);
     eq("and no strip either", ide.Tabs.Visible, false);
     eq("and an empty view that says so, not a blank panel", ide.EmptyBox.Visible, true);
@@ -8962,6 +8982,30 @@ function* p_projects(ide) {
 
     check("asking for a console project answers so", asked !== null);
     eq("and says which kind", asked.console, true);
+
+    /*
+     * The first project of a first run: with no folder named it starts at
+     * home, and never at `Application.Directory` -- the IDE's own folder, the
+     * installed one under a package, where a project cannot be written or is
+     * not found again.  `MainForm` passes the remembered folder when it has
+     * one, so this is the fallback under that.
+     *
+     * The hint carries a full path, so it is declared `Ellipsize`: a label
+     * asking for its natural width made this non-resizable dialog widen with
+     * every key and walk down the screen (measured by hand, a letter at a
+     * time).  The whole sentence stays reachable as a tooltip.
+     */
+    const npHome = NewProjectForm.ask("", () => {});
+    eq("with no folder named it starts at home",
+       npHome.TxtBase.Text, Environment.HomeDirectory);
+    eq("and the hint is one line, so a path cannot widen the dialog",
+       npHome.LblHint.Ellipsize, true);
+    npHome.TxtName.Text = "AVeryLongProjectNameThatWouldOtherwiseStretchIt";
+    check("while the whole sentence stays reachable as a tooltip",
+          npHome.LblHint.Tooltip === npHome.LblHint.Text &&
+          npHome.LblHint.Tooltip.includes(Environment.HomeDirectory),
+          npHome.LblHint.Tooltip);
+    npHome.dismiss();
 
     /* The description goes into project.btp, and with no description the key is
      * not written: a project has no reason to carry empty fields. */

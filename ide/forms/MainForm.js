@@ -188,6 +188,11 @@ const README = "README.md";
 const RECENT_MAX = 8;
 const RECENT_KEY = "recent";
 
+/* Where the last *New project* wrote, so the next one starts beside it instead
+ * of at home again.  `MainForm` asks it only with no project open; inside one,
+ * the project's own parent is the answer. */
+const NEW_BASE_KEY = "new.base";
+
 /*
  * What marks an entry of *Write handler*.  Two characters wide either way, so the
  * event names line up in a column -- the same reason `PoForm`'s marks are.
@@ -645,7 +650,16 @@ export class MainForm extends Form {
          * away from a window that has nothing else to offer. */
         this.WelcomeRecent.Items = empty ? [Locale.Text("(none yet)")] : entries;
         this.LblWelcomeRecent.Visible = !empty;
+        this.WelcomeRecent.Visible    = !empty;
         this.WelcomeRecent.Enabled    = !empty;
+
+        /* **With nothing to go back to, the door to suggest is the other one.**
+         * A first run is a new project, and a welcome page whose blue button is
+         * *Open* asks it to find one first -- leaving the only useful action as
+         * the second, grey one.  Once there are recents, opening is what most
+         * visits are. */
+        this.BtnWelcomeOpen.Style = empty ? "" : "suggested-action";
+        this.BtnWelcomeNew.Style  = empty ? "suggested-action" : "";
     }
 
     /*
@@ -751,13 +765,26 @@ export class MainForm extends Form {
      * The folder chooser only lets one pick a folder that already exists, so the
      * directory had to be created outside the IDE.  Now it asks for the name and
      * the base folder, and the IDE creates the folder.
+     *
+     * **The base is never `Application.Directory`**: with no project open that
+     * is the IDE's own folder, which under a package is the place it was
+     * installed -- a project written into it is one the user cannot create, or
+     * cannot find again.  With no project open the answer is the last folder a
+     * project was created in, and home the first time.
      */
     newProject() {
-        const base = this.project ? File.Directory(this.project) : Application.Directory;
+        let base = this.project ? File.Directory(this.project) : "";
+        if (!base) {
+            const saved = Settings.Get(NEW_BASE_KEY, "");
+            base = typeof saved === "string" && saved && File.IsDir(saved)
+                 ? saved : Environment.HomeDirectory;
+        }
 
-        this.leaveProject(() => NewProjectForm.ask(base, (info) =>
+        this.leaveProject(() => NewProjectForm.ask(base, (info) => {
+            Settings.Set(NEW_BASE_KEY, info.base);
             this.startProject(File.Join(info.base, info.name), info.description,
-                              info.console, info.id)));
+                              info.console, info.id);
+        }));
     }
 
     /*

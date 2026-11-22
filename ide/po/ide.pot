@@ -2727,20 +2727,24 @@ msgstr ""
 msgid "This project declares no application id, so it has no application info yet. Set one in Project settings, and this dialog writes the file."
 msgstr ""
 
-#: forms/NewProjectForm.js:93
+#: forms/NewProjectForm.js:106
 msgid "Base folder"
 msgstr ""
 
-#: forms/NewProjectForm.js:63
+#: forms/NewProjectForm.js:62
+msgid "Will create {0}, starting at {1}"
+msgstr ""
+
+#: forms/NewProjectForm.js:76
 msgid "\"{0}\" is not usable as a folder name."
 msgstr ""
 
-#: forms/NewProjectForm.js:70
+#: forms/NewProjectForm.js:83
 #: forms/ProjectForm.js:307
 msgid "\"{0}\" is not an application id. Use a reverse-DNS name like io.github.you.App."
 msgstr ""
 
-#: forms/NewProjectForm.js:74
+#: forms/NewProjectForm.js:87
 msgid ""
 "The base folder does not exist:\n"
 "{0}"
@@ -3079,10 +3083,13 @@ msgstr ""
 
 #: modules/CheckJob.js:222
 msgid ""
+"Check: {0} finding\n"
+msgid_plural ""
 "Check: {0} findings\n"
-msgstr ""
+msgstr[0] ""
+msgstr[1] ""
 
-#: modules/CheckJob.js:225
+#: modules/CheckJob.js:226
 msgid ""
 "Check: nothing wrong with the project\n"
 msgstr ""

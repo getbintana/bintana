@@ -2750,15 +2750,19 @@ msgstr ""
 "información de la aplicación. Poné uno en Propiedades del proyecto y este "
 "diálogo escribe el archivo."
 
-#: forms/NewProjectForm.js:93
+#: forms/NewProjectForm.js:106
 msgid "Base folder"
 msgstr "Carpeta base"
 
-#: forms/NewProjectForm.js:63
+#: forms/NewProjectForm.js:62
+msgid "Will create {0}, starting at {1}"
+msgstr "Se creará {0}, empezando en {1}"
+
+#: forms/NewProjectForm.js:76
 msgid "\"{0}\" is not usable as a folder name."
 msgstr "\"{0}\" no sirve como nombre de carpeta."
 
-#: forms/NewProjectForm.js:70 forms/ProjectForm.js:307
+#: forms/NewProjectForm.js:83 forms/ProjectForm.js:307
 msgid ""
 "\"{0}\" is not an application id. Use a reverse-DNS name like "
 "io.github.you.App."
@@ -2766,7 +2770,7 @@ msgstr ""
 "\"{0}\" no es un id de aplicación. Usá un nombre en DNS invertido como "
 "io.github.vos.App."
 
-#: forms/NewProjectForm.js:74
+#: forms/NewProjectForm.js:87
 msgid ""
 "The base folder does not exist:\n"
 "{0}"
@@ -3122,11 +3126,16 @@ msgstr ""
 "Comprobación: el proyecto cambió mientras corría; volvé a ejecutarla.\n"
 
 #: modules/CheckJob.js:222
-msgid "Check: {0} findings\n"
-msgstr "Comprobación: {0} hallazgos\n"
+msgid ""
+"Check: {0} finding\n"
+msgid_plural ""
+"Check: {0} findings\n"
+msgstr[0] "Comprobación: {0} hallazgo\n"
+msgstr[1] "Comprobación: {0} hallazgos\n"
 
-#: modules/CheckJob.js:225
-msgid "Check: nothing wrong with the project\n"
+#: modules/CheckJob.js:226
+msgid ""
+"Check: nothing wrong with the project\n"
 msgstr "Comprobación: nada mal en el proyecto\n"
 
 #: modules/Classes.js:363

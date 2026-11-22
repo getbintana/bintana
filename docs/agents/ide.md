@@ -1008,6 +1008,21 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   somewhere; 200 stays the depth, so a normal form is unchanged. The measure
   and the bound are `tests/ide`'s `undomemory` phase, whose synthetic snapshots
   are then thrown away and the real stacks put back.
+- **A sentence built while a fixed dialog is open is a sentence that sizes the
+  dialog.** *New project*'s hint carries the whole folder path and the dialog
+  declares `Resizable: false`; the label asked for its natural width, so every
+  letter typed widened the window and the window manager moved it -- measured
+  on XFCE, a name typed a letter at a time walked the dialog down the screen.
+  The label is `Ellipsize`d and declares its full text as the tooltip. Text a
+  dialog gets when it is built may be as wide as it likes; text assigned later,
+  in a form whose size is a promise, cannot be.
+- **The first project is not created in the IDE's own folder.**
+  `Application.Directory` is the folder the program was started from -- the
+  installed app's under a package -- and *New project* used it with no project
+  open. The base folder is now the last one a project was created in, home the
+  first time; it is written down under `new.base` beside the recent list.
+  `Environment.HomeDirectory` is the global; `File` has no such member, and a
+  first draft of this fix put the literal text `undefined` in the field.
 
 ## The designer's pages: the page shown is a design value
 

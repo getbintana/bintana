@@ -24,7 +24,11 @@ export class NewProjectForm extends Form {
     static ask(baseDir, onAccept) {
         const dlg = new NewProjectForm();
 
-        dlg.TxtBase.Text = baseDir || Application.Directory;
+        /* Home and not `Application.Directory`: that is the IDE's own folder --
+         * the installed app's when it came from a package -- and a first
+         * project written there is one the user cannot create, or cannot find
+         * afterwards. `MainForm` passes the remembered folder when it has one. */
+        dlg.TxtBase.Text = baseDir || Environment.HomeDirectory;
         dlg.CmbKind.Index = Kind.Form;      /* what most projects are */
         dlg.onAccept     = onAccept;
         dlg.Modal        = true;
@@ -36,7 +40,14 @@ export class NewProjectForm extends Form {
     }
 
     /* Showing the path that will be created avoids the surprise of finding it out
-     * afterwards. */
+     * afterwards.
+     *
+     * **One line, and `Ellipsize` in the form.** The text carries a full path,
+     * so the label's natural width grows with what the person types; a label
+     * that asks for it makes this non-resizable dialog widen, and a window that
+     * changes size under the pointer is a window that moves -- measured with a
+     * name typed a letter at a time, the dialog walked down the screen. The
+     * tooltip keeps the whole sentence reachable. */
     updateHint() {
         const name = this.TxtName.Text.trim();
         const base = this.TxtBase.Text.trim();
@@ -48,8 +59,10 @@ export class NewProjectForm extends Form {
                                                           : "forms/Form1.form";
 
         this.LblHint.Text = name && base
-            ? `Will create ${File.Join(base, name)}, starting at ${first}`
+            ? Locale.Text("Will create {0}, starting at {1}",
+                          File.Join(base, name), first)
             : "";
+        this.LblHint.Tooltip = this.LblHint.Text;
         this.BtnCreate.Enabled = name !== "" && base !== "";
     }
 
