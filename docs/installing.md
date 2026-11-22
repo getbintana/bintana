@@ -427,6 +427,14 @@ its headers, so `Database.Odbc` is in every Windows build.
 libsystemd, sysprof-capture and PoDoFo have no UCRT64 package; `Keyring` uses
 the Windows Credential Manager, so libsecret is not needed there.
 
+**`Zone` needs the IANA time zone database at run time, not at build time.**
+Linux and macOS have it (`tzdata` on Fedora and Debian, in every Flatpak
+runtime); a minimal container may not, and then `Zone.Directory` is `""` and
+the members that read a zone refuse saying so. Windows has none, so the
+portable tree and the setup carry MSYS2's in `share/zoneinfo`:
+`mingw-w64-ucrt-x86_64-tzdata` must be installed where
+`tools/windows-portable.sh` runs, which warns when it is not.
+
 ## Profiling
 
 Two ways in, neither of which needs the runtime built specially:

@@ -2480,6 +2480,526 @@ GLOBAL.Stopwatch = class Stopwatch {
 };
 
 /* ------------------------------------------------------------------------
+ * Zone -- what the clock reads in a place at an instant.
+ *
+ * bta_zone.c installs `Zone` with what only C can ask: where the IANA
+ * database is (`Directory`), which zone this machine is set to (`Local`) and
+ * which release it is (`Version`). Everything else is here, on top of a
+ * reader of the database's compiled files -- TZif, RFC 8536 -- and the POSIX
+ * TZ rule at the end of each one, which carries a zone past its last stored
+ * transition. Why the runtime reads them itself rather than asking GLib or
+ * ICU is the comment at the top of bta_zone.c.
+ *
+ * **Instants are `Date`s**, the way `File.Info().Modified` is one, and a
+ * number of milliseconds is taken too. What a place reads is a `Day` and a
+ * `Time` -- text, with no zone in it -- so `Locale.Date(Zone.Day(id, when),
+ * "Weekday")` names the weekday in Tokyo in the reader's language, with no
+ * `Date` pretending to be local somewhere it is not.
+ *
+ * **Offsets are minutes east of Greenwich**: Buenos Aires is -180, Kathmandu
+ * 345. That is `-getTimezoneOffset()`, whose sign is the one nobody guesses;
+ * this one reads like the `-03:00` an ISO date is written with.
+ * ---------------------------------------------------------------------- */
+
+const zoneReader = (() => {
+    /* Parsed zones by path, and the tables by directory: a zone is read once
+     * per process, and a new release lands on the next start. */
+    const zones  = new Map();
+    let   tables = null;
+    let   tablesDir = null;
+
+    /* bta_zone.c's `zone_id_ok`, said again: an id is also a path inside the
+     * database, so `..` and a leading `/` are refused before it is joined. */
+    function idOk(id) {
+        if (typeof id !== "string" || id.length === 0 || id.length > 255 || id[0] === "/")
+            return false;
+        for (let i = 0; i < id.length; i++) {
+            const c = id[i];
+            if (c === "/" && (i + 1 === id.length || id[i + 1] === "/"))
+                return false;
+            if (!((c >= "a" && c <= "z") || (c >= "A" && c <= "Z") || (c >= "0" && c <= "9") ||
+                  c === "/" || c === "_" || c === "-" || c === "+"))
+                return false;
+        }
+        return true;
+    }
+
+    function directory(who) {
+        const dir = Zone.Directory;
+        if (!dir)
+            throw new Error(who + ": there is no time zone database on this machine -- " +
+                            "install tzdata, or point TZDIR at one");
+        return dir;
+    }
+
+    function checkId(who, id) {
+        if (!idOk(id))
+            throw new TypeError(who + ": " + JSON.stringify(id) + " is not a time zone id -- " +
+                                "an IANA name such as \"America/New_York\"");
+    }
+
+    /* ---- TZif -------------------------------------------------------- */
+
+    function u32(b, o) { return ((b.At(o) << 24) >>> 0) + (b.At(o + 1) << 16) + (b.At(o + 2) << 8) + b.At(o + 3); }
+    function i32(b, o) { return u32(b, o) | 0; }
+    /* Exact while |t| < 2^53 seconds, which every stored transition is; the
+     * "big bang" sentinel some builds write (-2^59) is too. */
+    function i64(b, o) { return i32(b, o) * 4294967296 + u32(b, o + 4); }
+
+    /*
+     * The transitions, the local time types and the footer. A version 1 file
+     * has one 32-bit block; a version 2+ file repeats it with 64-bit times
+     * and a footer, and the first block is skipped -- it exists for readers
+     * that predate 2005, and it stops at 2038.
+     */
+    function parseTzif(b) {
+        if (b.Length < 44 || b.At(0) !== 0x54 || b.At(1) !== 0x5A || b.At(2) !== 0x69 || b.At(3) !== 0x66)
+            return null;
+        const version = b.At(4);
+        const counts = (o) => ({ isut: u32(b, o + 20), isstd: u32(b, o + 24), leap: u32(b, o + 28),
+                                 time: u32(b, o + 32), type: u32(b, o + 36), chars: u32(b, o + 40) });
+        let c = counts(0), o = 44, size = 4;
+
+        if (version >= 0x32) {
+            o += c.time * 5 + c.type * 6 + c.chars + c.leap * 8 + c.isstd + c.isut;
+            if (o + 44 > b.Length)
+                return null;
+            c = counts(o);
+            o += 44;
+            size = 8;
+        }
+        const end = o + c.time * (size + 1) + c.type * 6 + c.chars + c.leap * (size + 4) + c.isstd + c.isut;
+        if (c.type === 0 || end > b.Length)
+            return null;
+
+        const times = [], index = [], types = [];
+        for (let i = 0; i < c.time; i++)
+            times.push(size === 8 ? i64(b, o + i * 8) : i32(b, o + i * 4));
+        o += c.time * size;
+        for (let i = 0; i < c.time; i++)
+            index.push(b.At(o + i));
+        o += c.time;
+        const typeAt = o;
+        o += c.type * 6;
+        let chars = "";
+        for (let i = 0; i < c.chars; i++)
+            chars += String.fromCharCode(b.At(o + i));
+        o += c.chars + c.leap * (size + 4) + c.isstd + c.isut;
+        for (let i = 0; i < c.type; i++) {
+            const p = typeAt + i * 6, a = b.At(p + 5), stop = chars.indexOf("\0", a);
+            types.push({ off: i32(b, p), dst: b.At(p + 4) === 1,
+                         abbr: chars.substring(a, stop < 0 ? chars.length : stop) });
+        }
+        for (const k of index)
+            if (k >= types.length)
+                return null;
+
+        let footer = "";
+        if (size === 8 && o < b.Length && b.At(o) === 10)
+            for (o++; o < b.Length && b.At(o) !== 10; o++)
+                footer += String.fromCharCode(b.At(o));
+        return { times, index, types, rule: footer ? parsePosix(footer) : null };
+    }
+
+    /*
+     * A POSIX TZ string: `EST5EDT,M3.2.0,M11.1.0`,
+     * `<+1030>-10:30<+11>-11,M10.1.0,M4.1.0`, `<-01>1<+00>,M3.5.0/-1,M10.5.0/0`.
+     * The sign is POSIX's -- hours *west* -- and is turned round here. The
+     * date forms are `Mm.w.d` (what tzdata writes today), `Jn` (1-365, no
+     * February 29th) and `n` (0-365, counting it). Null for a string this
+     * cannot read, so the zone falls back to its last stored type.
+     */
+    function parsePosix(s) {
+        let i = 0;
+        const digit = (ch) => ch >= "0" && ch <= "9";
+        function name() {
+            if (s[i] === "<") {
+                const j = s.indexOf(">", i);
+                if (j < 0) return null;
+                const n = s.substring(i + 1, j);
+                i = j + 1;
+                return n;
+            }
+            const j = i;
+            while (i < s.length && ((s[i] >= "A" && s[i] <= "Z") || (s[i] >= "a" && s[i] <= "z")))
+                i++;
+            return i > j ? s.substring(j, i) : null;
+        }
+        function int() {
+            const j = i;
+            while (i < s.length && digit(s[i])) i++;
+            return i > j ? +s.substring(j, i) : NaN;
+        }
+        function hms() {
+            let sign = 1;
+            if (s[i] === "+" || s[i] === "-") { if (s[i] === "-") sign = -1; i++; }
+            const h = int();
+            let m = 0, sec = 0;
+            if (s[i] === ":") { i++; m = int(); if (s[i] === ":") { i++; sec = int(); } }
+            return sign * (h * 3600 + m * 60 + sec);
+        }
+        function date() {
+            let d;
+            if (s[i] === "M") {
+                i++; const month = int();
+                i++; const week = int();
+                i++; const wday = int();
+                d = { kind: "M", month, week, wday };
+            } else if (s[i] === "J") {
+                i++; d = { kind: "J", day: int() };
+            } else {
+                d = { kind: "n", day: int() };
+            }
+            d.time = 7200;
+            if (s[i] === "/") { i++; d.time = hms(); }
+            return d;
+        }
+
+        const std = name();
+        if (std === null) return null;
+        const stdOff = -hms();
+        if (!Number.isFinite(stdOff)) return null;
+        if (i >= s.length) return { std, stdOff };
+
+        const dst = name();
+        if (dst === null) return null;
+        let dstOff = stdOff + 3600;
+        if (s[i] !== ",") dstOff = -hms();
+        if (s[i] !== ",") return null;
+        i++;
+        const start = date();
+        if (s[i] !== ",") return null;
+        i++;
+        const end = date();
+        const read = (d) => d.kind === "M"
+            ? Number.isFinite(d.month) && Number.isFinite(d.week) && Number.isFinite(d.wday)
+            : Number.isFinite(d.day);
+        if (!Number.isFinite(dstOff) || !Number.isFinite(start.time) || !Number.isFinite(end.time) ||
+            !read(start) || !read(end))
+            return null;
+        return { std, stdOff, dst, dstOff, start, end };
+    }
+
+    const isLeap = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+    /* The instant a rule date falls on in `year`, given the offset in force
+     * until then: the rule's time is local time *before* the change. */
+    function ruleUtc(d, year, offBefore) {
+        let day;
+        if (d.kind === "M") {
+            const first = new Date(Date.UTC(year, d.month - 1, 1)).getUTCDay();
+            const last  = new Date(Date.UTC(year, d.month, 0)).getUTCDate();
+            day = 1 + (d.wday - first + 7) % 7 + (d.week - 1) * 7;
+            while (day > last) day -= 7;               /* week 5 is "the last" */
+            return Date.UTC(year, d.month - 1, day) / 1000 + d.time - offBefore;
+        }
+        /* Jn never counts February 29th; n always does. */
+        const n = d.kind === "J" ? d.day - 1 + (isLeap(year) && d.day >= 60 ? 1 : 0) : d.day;
+        return Date.UTC(year, 0, 1) / 1000 + n * 86400 + d.time - offBefore;
+    }
+
+    const yearOf = (t) => new Date(t * 1000).getUTCFullYear();
+    const stdType = (r) => ({ off: r.stdOff, dst: false, abbr: r.std });
+    const dstType = (r) => ({ off: r.dstOff, dst: true,  abbr: r.dst });
+
+    /* The rule's changes around `t`, in order: three years of them, so that a
+     * change on New Year's Eve in local time -- New Year's Day in UTC, or the
+     * other way -- is never on the wrong side of a year boundary. */
+    function ruleEvents(r, t) {
+        const y = yearOf(t), out = [];
+        for (const yy of [y - 1, y, y + 1, y + 2]) {
+            out.push({ at: ruleUtc(r.start, yy, r.stdOff), dst: true });
+            out.push({ at: ruleUtc(r.end,   yy, r.dstOff), dst: false });
+        }
+        out.sort((a, b) => a.at - b.at);
+        return out;
+    }
+
+    function ruleAt(r, t) {
+        if (!r.dst) return stdType(r);
+        let state = null;
+        for (const e of ruleEvents(r, t))
+            if (e.at <= t) state = e.dst;
+        return state ? dstType(r) : stdType(r);
+    }
+
+    /* The local time type in force at `t` seconds. Before the first stored
+     * transition it is type 0, RFC 8536 3.2; after the last, the footer. */
+    function typeAt(z, t) {
+        const n = z.times.length;
+        if (n === 0) return z.rule ? ruleAt(z.rule, t) : z.types[0];
+        if (t < z.times[0]) return z.types[0];
+        if (t >= z.times[n - 1] && z.rule) return ruleAt(z.rule, t);
+        let lo = 0, hi = n - 1;
+        while (lo < hi) {
+            const m = (lo + hi + 1) >> 1;
+            if (z.times[m] <= t) lo = m; else hi = m - 1;
+        }
+        return z.types[z.index[lo]];
+    }
+
+    /*
+     * The first instant after `t` at which the offset changes, or null.
+     *
+     * **The offset, not the abbreviation**: Grand Turk went from EDT to AST
+     * in 2015 at -04:00 both sides, and no clock moved. The stored
+     * transitions are tried first; the footer only governs after the last of
+     * them, so it is asked from there -- asking it from `t` instead invents a
+     * change in a year the file already describes, which is what a slim file
+     * (one that stores nothing the footer can say) made visible.
+     */
+    function nextChange(z, t) {
+        const now = typeAt(z, t).off, n = z.times.length;
+        let lo = 0, hi = n;
+        while (lo < hi) {
+            const m = (lo + hi) >> 1;
+            if (z.times[m] > t) hi = m; else lo = m + 1;
+        }
+        for (let i = lo; i < n; i++)
+            if (typeAt(z, z.times[i]).off !== now)
+                return z.times[i];
+
+        const r = z.rule;
+        if (!r || !r.dst) return null;
+        const from = n > 0 ? Math.max(t, z.times[n - 1]) : t;
+        for (const e of ruleEvents(r, from))
+            if (e.at > from && ruleAt(r, e.at).off !== ruleAt(r, e.at - 1).off)
+                return e.at;
+        return null;
+    }
+
+    function load(who, id) {
+        checkId(who, id);
+        const dir  = directory(who);
+        const path = File.Join(dir, id);
+        let z = zones.get(path);
+        if (z) return z;
+
+        if (!File.Exists(path) || File.IsDir(path))
+            throw new TypeError(who + ": \"" + id + "\" is not a time zone this machine knows");
+        z = parseTzif(File.LoadBytes(path));
+        if (!z)
+            throw new Error(who + ": \"" + id + "\" is not a TZif file -- the database at " + dir +
+                            " may be damaged");
+        zones.set(path, z);
+        return z;
+    }
+
+    /* An instant as whole seconds: a valid `Date`, or a finite number of
+     * milliseconds. */
+    function seconds(who, when) {
+        let ms = NaN;
+        if (when instanceof Date) ms = when.getTime();
+        else if (typeof when === "number") ms = when;
+        if (!Number.isFinite(ms))
+            throw new TypeError(who + ": " + String(when) + " is not an instant -- a Date, " +
+                                "or milliseconds since 1970");
+        return Math.floor(ms / 1000);
+    }
+
+    const two = (n) => (n < 10 ? "0" : "") + n;
+
+    /* The wall clock `t` reads at offset `off`, as a Day and a Time. */
+    function wall(who, t, off) {
+        const d = new Date((t + off) * 1000), y = d.getUTCFullYear();
+        if (y < 1 || y > 9999)
+            throw new RangeError(who + ": the year " + y + " is outside the calendar a Day holds");
+        return {
+            day:  String(y).padStart(4, "0") + "-" + two(d.getUTCMonth() + 1) + "-" + two(d.getUTCDate()),
+            time: two(d.getUTCHours()) + ":" + two(d.getUTCMinutes()) + ":" + two(d.getUTCSeconds()),
+        };
+    }
+
+    const reading = (type) => ({ Offset: type.off / 60, Abbreviation: type.abbr, Dst: type.dst });
+
+    /* ---- the tables: which zones are places, and where ---------------- */
+
+    /* ISO 6709 as the tables write it: +DDMM[SS]+DDDMM[SS], no separator. */
+    function coordinate(text, degreeDigits) {
+        const sign = text[0] === "-" ? -1 : 1, digits = text.substring(1);
+        const deg = +digits.substring(0, degreeDigits);
+        const min = +digits.substring(degreeDigits, degreeDigits + 2);
+        const sec = digits.length > degreeDigits + 2 ? +digits.substring(degreeDigits + 2) : 0;
+        return sign * (deg + min / 60 + sec / 3600);
+    }
+
+    function rows(dir, name) {
+        const path = File.Join(dir, name);
+        if (!File.Exists(path)) return [];
+        return File.Load(path).split("\n")
+            .filter((l) => l.length > 0 && l[0] !== "#")
+            .map((l) => l.split("\t"));
+    }
+
+    /*
+     * zone.tab names one country per zone and is the table every zone has a
+     * row in; zone1970.tab is the maintained one, and it leaves out the zones
+     * that have agreed with another since 1970 (Europe/Vatican, Africa/Accra),
+     * which a person still looks for by their own city. So both, zone.tab
+     * first. iso3166.tab spells the codes out, in English: a name to search
+     * by, not one to show translated. tzdata.zi's `L` lines are the links --
+     * America/Buenos_Aires to America/Argentina/Buenos_Aires.
+     */
+    function loadTables(dir) {
+        if (tables && tablesDir === dir) return tables;
+        const countries = new Map(), places = new Map(), links = new Map();
+
+        for (const r of rows(dir, "iso3166.tab"))
+            if (r.length >= 2) countries.set(r[0], r[1].trim());
+
+        for (const file of ["zone.tab", "zone1970.tab"])
+            for (const r of rows(dir, file)) {
+                if (r.length < 3) continue;
+                const id = r[2].trim();
+                if (places.has(id)) continue;
+                const at = r[1], cut = Math.max(at.lastIndexOf("+"), at.lastIndexOf("-"));
+                const code = r[0].split(",")[0];
+                places.set(id, {
+                    Id: id,
+                    Country: code,
+                    CountryName: (countries.get(code) || ""),
+                    Latitude: coordinate(at.substring(0, cut), 2),
+                    Longitude: coordinate(at.substring(cut), 3),
+                    Comment: r.length > 3 ? r[3].trim() : "",
+                });
+            }
+
+        const zi = File.Join(dir, "tzdata.zi");
+        if (File.Exists(zi))
+            for (const l of File.Load(zi).split("\n"))
+                if (l.startsWith("L ")) {
+                    const p = l.split(" ");
+                    if (p.length >= 3) links.set(p[2], p[1]);
+                }
+
+        tables = { places, links };
+        tablesDir = dir;
+        return tables;
+    }
+
+    return {
+        load, seconds, wall, reading, typeAt, nextChange, checkId, directory, loadTables,
+    };
+})();
+
+/**
+ * every zone that is a place a person picks -- the rows of `zone.tab` and
+ * `zone1970.tab`, about four hundred, sorted. `UTC` and the `Etc/` zones are
+ * not places and are not in it, though `At` and the rest take them
+ * @returns {string[]}
+ */
+Zone.List = function () {
+    const t = zoneReader.loadTables(zoneReader.directory("Zone.List"));
+    const out = [];
+    for (const id of t.places.keys()) out.push(id);
+    return out.sort();
+};
+
+/**
+ * where a zone is: `{ Id, Country, CountryName, Latitude, Longitude, Comment }`
+ * -- the ISO 3166 code and its English name, the principal city's position in
+ * degrees (north and east positive) and the table's note on what the zone
+ * covers. A retired name (`America/Buenos_Aires`) answers for the zone it
+ * links to, under that zone's `Id`. `null` for a zone that is no place
+ * (`UTC`); a refusal for one the machine does not have
+ * @returns {{ Id, Country, CountryName, Latitude, Longitude, Comment }}
+ */
+Zone.Info = function (id) {
+    zoneReader.load("Zone.Info", id);
+    const t = zoneReader.loadTables(zoneReader.directory("Zone.Info"));
+    let name = id;
+    for (let hops = 0; hops < 8 && !t.places.has(name) && t.links.has(name); hops++)
+        name = t.links.get(name);
+    const p = t.places.get(name);
+    return p ? { Id: p.Id, Country: p.Country, CountryName: p.CountryName,
+                 Latitude: p.Latitude, Longitude: p.Longitude, Comment: p.Comment } : null;
+};
+
+/**
+ * what the clock in `id` is doing at the instant `when` (a `Date`, or
+ * milliseconds): `{ Offset, Abbreviation, Dst }` -- the offset in **minutes
+ * east of Greenwich** (Buenos Aires `-180`, Kathmandu `345`), the abbreviation
+ * the database gives (`"JST"`, or `"-03"` where there is none in use), and
+ * whether it is daylight saving time
+ * @returns {{ Offset, Abbreviation, Dst }}
+ */
+Zone.At = function (id, when) {
+    const z = zoneReader.load("Zone.At", id);
+    return zoneReader.reading(zoneReader.typeAt(z, zoneReader.seconds("Zone.At", when)));
+};
+
+/**
+ * the next time the clocks in `id` move after `when`: `{ When, Before, After }`,
+ * a `Date` and the two readings `At` gives either side of it -- so "clocks go
+ * back an hour, EDT to EST" is `Before` and `After`. Only a change of
+ * **offset** counts: a new abbreviation at the same offset moves no clock.
+ * `null` for a zone that does not change
+ * @returns {{ When, Before, After }}
+ */
+Zone.Next = function (id, when) {
+    const z = zoneReader.load("Zone.Next", id);
+    const at = zoneReader.nextChange(z, zoneReader.seconds("Zone.Next", when));
+    if (at === null) return null;
+    return {
+        When: new Date(at * 1000),
+        Before: zoneReader.reading(zoneReader.typeAt(z, at - 1)),
+        After: zoneReader.reading(zoneReader.typeAt(z, at)),
+    };
+};
+
+/**
+ * the date it is in `id` at the instant `when`, as a [`Day`](docs/llm/library.md#day)
+ * (`"YYYY-MM-DD"`) -- what `Locale.Date` writes in the reader's language
+ * @returns {string}
+ */
+Zone.Day = function (id, when) {
+    const z = zoneReader.load("Zone.Day", id), t = zoneReader.seconds("Zone.Day", when);
+    return zoneReader.wall("Zone.Day", t, zoneReader.typeAt(z, t).off).day;
+};
+
+/**
+ * the time of day it is in `id` at the instant `when`, as a
+ * [`Time`](docs/llm/library.md#time) with seconds (`"21:03:58"`), the way
+ * `Time.Now` answers
+ * @returns {string}
+ */
+Zone.Time = function (id, when) {
+    const z = zoneReader.load("Zone.Time", id), t = zoneReader.seconds("Zone.Time", when);
+    return zoneReader.wall("Zone.Time", t, zoneReader.typeAt(z, t).off).time;
+};
+
+/**
+ * the instant at which the clock in `id` reads `day` and `time`
+ * (`"YYYY-MM-DD"`, `"HH:MM"` or `"HH:MM:SS"`, midnight when left out), as a
+ * `Date`. Twice a year a reading is ambiguous and once it does not exist:
+ * **an hour that happens twice is the first of them, and one the clocks
+ * skipped is moved forward by the gap** (02:30 on the morning New York springs
+ * forward is 03:30 EDT) -- the rule Temporal calls `"compatible"`
+ * @returns {Date}
+ */
+Zone.Instant = function (id, day, time = "00:00") {
+    const who = "Zone.Instant";
+    const z = zoneReader.load(who, id);
+    let days, secs;
+    try { days = Day.Between("1970-01-01", day); }
+    catch (e) { throw new TypeError(who + ": " + String(day) + " is not a date -- YYYY-MM-DD"); }
+    try { secs = Time.Seconds(time); }
+    catch (e) { throw new TypeError(who + ": " + String(time) + " is not a time -- HH:MM or HH:MM:SS"); }
+
+    const local = days * 86400 + secs;
+    const before = zoneReader.typeAt(z, local - 86400).off;
+    const after  = zoneReader.typeAt(z, local + 86400).off;
+    let best = null;
+    for (const off of [before, after, zoneReader.typeAt(z, local - before).off,
+                       zoneReader.typeAt(z, local - after).off]) {
+        const u = local - off;
+        if (zoneReader.typeAt(z, u).off === off && (best === null || u < best))
+            best = u;
+    }
+    return new Date((best === null ? local - before : best) * 1000);
+};
+
+/* ------------------------------------------------------------------------
  * UndoStack -- what Edit > Undo takes back.
  *
  * Every editor an application writes -- a drawing, a board of cards, a sheet --

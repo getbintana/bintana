@@ -70,6 +70,15 @@ The components, and what each license asks:
 | libvterm | MIT | `Terminal` | in `msys2/` |
 | Adwaita and AdwaitaLegacy icon themes | CC-BY-SA-3.0 | icons | attribution: GNOME Project, <https://www.gnome.org> |
 | NSIS, when the compiler is bundled | zlib/libpng | `lib/package` building a setup | its `COPYING` travels inside the NSIS directory |
+| IANA time zone database (`share/zoneinfo`) | public domain | `Zone`: Windows has no copy of its own | `tzdata`, if MSYS2 packages one; the data itself carries no license terms |
+
+And one table in the runtime's own source, on every platform:
+
+- **`runtime/src/bta_zone.c`'s `WINDOWS_ZONES`**, the registry's zone names
+  to IANA ids, is taken from CLDR's `windowsZones.xml` (Unicode License v3,
+  <https://www.unicode.org/license.txt>): 142 rows, compiled into the Windows
+  build only. The license asks for its notice to accompany copies of the data;
+  this paragraph and the comment above the table are that notice.
 
 Bintana's own MIT license does not relicense any of them. A binary that links
 poppler is distributed under the GPL's terms as a whole, which MIT permits;

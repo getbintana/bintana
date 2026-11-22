@@ -18970,6 +18970,101 @@
           "Native": true
         }
       ]
+    },
+    {
+      "Name": "Zone",
+      "Members": [
+        {
+          "Name": "At",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(id, when)",
+          "Returns": "{ Offset, Abbreviation, Dst }",
+          "Doc": "what the clock in `id` is doing at the instant `when` (a `Date`, or milliseconds): `{ Offset, Abbreviation, Dst }` -- the offset in **minutes east of Greenwich** (Buenos Aires `-180`, Kathmandu `345`), the abbreviation the database gives (`\"JST\"`, or `\"-03\"` where there is none in use), and whether it is daylight saving time",
+          "Native": false
+        },
+        {
+          "Name": "Day",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(id, when)",
+          "Returns": "string",
+          "Doc": "the date it is in `id` at the instant `when`, as a [`Day`](docs/llm/library.md#day) (`\"YYYY-MM-DD\"`) -- what `Locale.Date` writes in the reader's language",
+          "Native": false
+        },
+        {
+          "Name": "Directory",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "where the time zone database is read from: `TZDIR` when it is set, then the system's (`/usr/share/zoneinfo`), then the copy beside the runtime (`share/zoneinfo`, which is what Windows has), then `zoneinfo` in the desktop's data directories. `\"\"` when there is none, and then every member that reads a zone refuses",
+          "Native": true
+        },
+        {
+          "Name": "Info",
+          "Kind": "Method",
+          "Params": 1,
+          "Signature": "(id)",
+          "Returns": "{ Id, Country, CountryName, Latitude, Longitude, Comment }",
+          "Doc": "where a zone is: `{ Id, Country, CountryName, Latitude, Longitude, Comment }` -- the ISO 3166 code and its English name, the principal city's position in degrees (north and east positive) and the table's note on what the zone covers. A retired name (`America/Buenos_Aires`) answers for the zone it links to, under that zone's `Id`. `null` for a zone that is no place (`UTC`); a refusal for one the machine does not have",
+          "Native": false
+        },
+        {
+          "Name": "Instant",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(id, day, [time])",
+          "Returns": "Date",
+          "Doc": "the instant at which the clock in `id` reads `day` and `time` (`\"YYYY-MM-DD\"`, `\"HH:MM\"` or `\"HH:MM:SS\"`, midnight when left out), as a `Date`. Twice a year a reading is ambiguous and once it does not exist: **an hour that happens twice is the first of them, and one the clocks skipped is moved forward by the gap** (02:30 on the morning New York springs forward is 03:30 EDT) -- the rule Temporal calls `\"compatible\"`",
+          "Native": false
+        },
+        {
+          "Name": "List",
+          "Kind": "Method",
+          "Params": 0,
+          "Signature": "()",
+          "Returns": "string[]",
+          "Doc": "every zone that is a place a person picks -- the rows of `zone.tab` and `zone1970.tab`, about four hundred, sorted. `UTC` and the `Etc/` zones are not places and are not in it, though `At` and the rest take them",
+          "Native": false
+        },
+        {
+          "Name": "Local",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "the zone this machine is set to, as an IANA id (`\"America/Argentina/Buenos_Aires\"`): `TZ` when it names a zone, else `/etc/localtime`, else on Windows the registry's zone through CLDR's table -- and `\"UTC\"` when the machine cannot say",
+          "Native": true
+        },
+        {
+          "Name": "Next",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(id, when)",
+          "Returns": "{ When, Before, After }",
+          "Doc": "the next time the clocks in `id` move after `when`: `{ When, Before, After }`, a `Date` and the two readings `At` gives either side of it -- so \"clocks go back an hour, EDT to EST\" is `Before` and `After`. Only a change of **offset** counts: a new abbreviation at the same offset moves no clock. `null` for a zone that does not change",
+          "Native": false
+        },
+        {
+          "Name": "Time",
+          "Kind": "Method",
+          "Params": 2,
+          "Signature": "(id, when)",
+          "Returns": "string",
+          "Doc": "the time of day it is in `id` at the instant `when`, as a [`Time`](docs/llm/library.md#time) with seconds (`\"21:03:58\"`), the way `Time.Now` answers",
+          "Native": false
+        },
+        {
+          "Name": "Version",
+          "Kind": "ReadOnly",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "string",
+          "Doc": "which release of the IANA database is being read (`\"2026f\"`), from its `tzdata.zi` or `+VERSION`; `\"\"` when the copy does not say",
+          "Native": true
+        }
+      ]
     }
   ],
   "Types": [

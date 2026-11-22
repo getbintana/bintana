@@ -476,4 +476,8 @@ void bta_day_init(JSContext *ctx, JSValue global)
 
     JS_SetPropertyFunctionList(ctx, time, time_props, G_N_ELEMENTS(time_props));
     JS_SetPropertyStr(ctx, global, "Time", time);
+
+    /* The third of the family, and installed here so that no host can have
+     * a Day and a Time and no Zone to say which day and time it is where. */
+    bta_zone_init(ctx, global);
 }

@@ -717,7 +717,7 @@ const TESTS = [
     "ClassNamedLikeAGlobal",
     /* Children too: a file with `export` is a module. */
     "Modules", "FreeNames", "Imports", "Records", "DataBinding", "SettableCache",
-    "Time",
+    "Time", "Zone",
     "Stopwatch", "UndoStack", "TestEq", "Network", "Sockets", "SerialPort", "Udp", "WebSocket", "Inhibit",
     "Shortcut", "Decimal", "FieldDecimal",
     /* Early on purpose: they show windows of their own, and the pushed-surface
@@ -11322,6 +11322,124 @@ function Main() {
                 filled.Delete();
             });
         });
+    }
+
+
+    /* --- Zone: what the clock reads in a place --------------------------------
+     *
+     * The reader is ours (rad.js), so it is tested against a database this test
+     * writes byte by byte -- a TZif file is a header, the transitions and a
+     * POSIX rule -- and not against the machine's tzdata, which changes with
+     * every release and is not on every builder. `TZDIR` points `Zone` at it.
+     *
+     * "Test/Here" is one stored change into -03:00 (OLD to STX, 2000), one at
+     * the same offset (STX to STD, 2010: a new name, no clock moves) and a
+     * footer that springs to -02:00 on the second Sunday of March and back on
+     * the first of November. **The second stored change is the trap**: a
+     * reader that asks the footer from the instant it was given rather than
+     * from the last stored change answers the November of 2005 -- a change the
+     * file says did not happen. That is the bug a slim file made visible.
+     */
+    testZone() {
+        const hex32 = (n) => (n >>> 0).toString(16).padStart(8, "0");
+        const text  = (s) => new Bytes(s).ToHex();
+        /* A TZif version 2 file: a minimal version 1 block, then the real one. */
+        function tzif(times, index, types, footer) {
+            let chars = "", ttinfo = "";
+            for (const t of types) {
+                ttinfo += hex32(t[0]) + (t[1] ? "01" : "00") + (chars.length).toString(16).padStart(2, "0");
+                chars += t[2] + "\0";
+            }
+            const head = (v, nt, nty, nch) => "545a6966" + v + "00".repeat(15) +
+                hex32(0) + hex32(0) + hex32(0) + hex32(nt) + hex32(nty) + hex32(nch);
+            const v1 = head("32", 0, 1, 4) + hex32(types[0][0]) + "0000" + text(types[0][2] + "\0").padEnd(8, "0");
+            const v2 = head("32", times.length, types.length, chars.length) +
+                times.map((t) => "00000000" + hex32(t)).join("") +
+                index.map((i) => i.toString(16).padStart(2, "0")).join("") +
+                ttinfo + text(chars) + text("\n" + footer + "\n");
+            return Bytes.FromHex(v1 + v2);
+        }
+
+        const dir = File.Join(SCRATCH, "zoneinfo");
+        Directory.Make(File.Join(dir, "Test"));
+        const here = tzif([946684800, 1262304000], [1, 2],
+                          [[3600, false, "OLD"], [-10800, false, "STX"], [-10800, false, "STD"]],
+                          "STD3DST,M3.2.0,M11.1.0");
+        File.SaveBytes(File.Join(dir, "Test", "Here"), here);
+        File.SaveBytes(File.Join(dir, "Test", "Alias"), here);
+        File.SaveBytes(File.Join(dir, "UTC"), tzif([], [], [[0, false, "UTC"]], "UTC0"));
+        File.Save(File.Join(dir, "zone.tab"), "# a comment\nXX\t-3436-05827\tTest/Here\tthe whole test\n");
+        File.Save(File.Join(dir, "iso3166.tab"), "XX\tTestland\n");
+        File.Save(File.Join(dir, "tzdata.zi"), "# version 2099z\nL Test/Here Test/Alias\n");
+
+        const was = Environment.Get("TZDIR"), wasTz = Environment.Get("TZ");
+        Environment.Set("TZDIR", dir);
+        try {
+            eq("the database is the one TZDIR names", Zone.Directory, dir);
+            eq("and its release is read from tzdata.zi", Zone.Version, "2099z");
+            eq("List is the places zone.tab names", JSON.stringify(Zone.List()), '["Test/Here"]');
+
+            const info = Zone.Info("Test/Here");
+            eq("Info names the country", info.Country + " " + info.CountryName, "XX Testland");
+            eq("and the comment", info.Comment, "the whole test");
+            check("and where it is, south and west negative",
+                  Math.abs(info.Latitude - -34.6) < 1e-9 && Math.abs(info.Longitude - -58.45) < 1e-9,
+                  `${info.Latitude} ${info.Longitude}`);
+            eq("a link answers for the zone it links to", Zone.Info("Test/Alias").Id, "Test/Here");
+            eq("and a zone that is no place has no Info", Zone.Info("UTC"), null);
+
+            const at = (iso) => { const a = Zone.At("Test/Here", new Date(iso)); return a.Offset + " " + a.Abbreviation + " " + a.Dst; };
+            eq("before the first change, type 0",      at("1999-06-01T00:00:00Z"), "60 OLD false");
+            eq("between the stored changes",           at("2005-06-01T00:00:00Z"), "-180 STX false");
+            eq("after them, the footer's summer",      at("2026-07-01T00:00:00Z"), "-120 DST true");
+            eq("and its winter",                       at("2026-12-01T00:00:00Z"), "-180 STD false");
+            eq("milliseconds are an instant too",
+               Zone.At("Test/Here", Date.UTC(2026, 6, 1)).Offset, -120);
+            /* The footer's change is local time before it: 02:00 at -03:00. */
+            eq("the second before spring",             at("2026-03-08T04:59:59Z"), "-180 STD false");
+            eq("and the second of it",                 at("2026-03-08T05:00:00Z"), "-120 DST true");
+
+            const next = (iso) => { const n = Zone.Next("Test/Here", new Date(iso));
+                return n ? n.When.toISOString() + " " + n.Before.Abbreviation + ">" + n.After.Abbreviation : "none"; };
+            eq("Next finds a stored change",           next("1999-06-01T00:00:00Z"), "2000-01-01T00:00:00.000Z OLD>STX");
+            eq("and passes over one that moves no clock, to the footer's first",
+               next("2005-06-01T00:00:00Z"), "2010-03-14T05:00:00.000Z STD>DST");
+            eq("and the footer's changes after that",  next("2026-07-01T00:00:00Z"), "2026-11-01T04:00:00.000Z DST>STD");
+            eq("a zone that never changes has no Next", Zone.Next("UTC", new Date()), null);
+
+            const w = new Date("2026-11-23T01:30:00Z");
+            eq("Day is the date there",                Zone.Day("Test/Here", w), "2026-11-22");
+            eq("and Time the time there, with seconds", Zone.Time("Test/Here", w), "22:30:00");
+
+            const inst = (d, t) => Zone.Instant("Test/Here", d, t).toISOString();
+            eq("Instant is the reverse",               inst("2026-11-22", "22:30"), "2026-11-23T01:30:00.000Z");
+            eq("midnight when no time is given",       inst("2026-11-22"), "2026-11-22T03:00:00.000Z");
+            eq("an hour the clocks skipped moves forward by the gap",
+               inst("2026-03-08", "02:30"), "2026-03-08T05:30:00.000Z");
+            eq("an hour that happens twice is the first of them",
+               inst("2026-11-01", "00:30"), "2026-11-01T02:30:00.000Z");
+
+            throws("an id that leaves the database is refused", () => Zone.At("../zone.tab", 0));
+            throws("and an absolute one",              () => Zone.At("/etc/passwd", 0));
+            check("a zone the database lacks is refused, by name",
+                  (refusal(() => Zone.At("Mars/Olympus", 0)) || "").includes("Mars/Olympus"));
+            throws("and something that is not an instant", () => Zone.At("UTC", "yesterday"));
+            throws("and an invalid Date",              () => Zone.At("UTC", new Date("nonsense")));
+            throws("and a date the calendar lacks",    () => Zone.Instant("UTC", "2026-02-30"));
+
+            Environment.Set("TZ", "Test/Here");
+            eq("Local is TZ when it names a zone",     Zone.Local, "Test/Here");
+            Environment.Set("TZ", ":" + File.Join(dir, "Test", "Here"));
+            eq("and when it is a path into the database", Zone.Local, "Test/Here");
+        } finally {
+            /* `null` unsets, which is not `""`: an empty TZ is UTC to the C
+             * library, and every later test that reads the local clock would
+             * be in Greenwich. */
+            Environment.Set("TZ", wasTz);
+            Environment.Set("TZDIR", was);
+        }
+        check("Local is always a zone the database has", Zone.Directory === "" ||
+              Zone.At(Zone.Local, new Date()).Abbreviation.length > 0, Zone.Local);
     }
 
 

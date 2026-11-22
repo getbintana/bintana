@@ -216,6 +216,7 @@ jobs:
             mingw-w64-ucrt-x86_64-gst-plugins-rs
             mingw-w64-ucrt-x86_64-poppler
             mingw-w64-ucrt-x86_64-libvterm
+            mingw-w64-ucrt-x86_64-tzdata
             mingw-w64-ucrt-x86_64-toolchain
             mingw-w64-ucrt-x86_64-make
             git

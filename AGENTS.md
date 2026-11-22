@@ -416,3 +416,4 @@ Design narratives — why something is the way it is — in `docs/notes/`:
 - [`zip-xlsx.md`](docs/notes/zip-xlsx.md) — the zip reader and the `.xlsx` writer.
 - [`charts.md`](docs/notes/charts.md) — `lib/charts`: the kinds, the format, the document's window.
 - [`task-threads.md`](docs/notes/task-threads.md) — `Task`: what a thread costs here.
+- [`time-zones.md`](docs/notes/time-zones.md) — `Zone`: why the runtime reads tzdata itself, and what GLib and ICU answered on Windows.

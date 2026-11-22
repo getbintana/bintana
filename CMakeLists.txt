@@ -429,6 +429,7 @@ add_executable(${BTA_GUI_TARGET}
     runtime/src/bta_bitmap.c
     runtime/src/bta_decimal.c
     runtime/src/bta_day.c
+    runtime/src/bta_zone.c
     runtime/src/bta_form.c
     runtime/src/bta_http.c
     runtime/src/bta_media.c
@@ -778,6 +779,7 @@ set(BTA_HEADLESS_SOURCES
         runtime/src/bta_network.c
         runtime/src/bta_decimal.c
         runtime/src/bta_day.c
+        runtime/src/bta_zone.c
         runtime/src/bta_bytes.c
         runtime/src/bta_cancellable.c
         runtime/src/bta_task.c

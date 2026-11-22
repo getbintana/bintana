@@ -6,6 +6,28 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+### Runtime and libraries
+
+- **`Zone`, a new global: the IANA time zones.** `Day` is a date and `Time` a
+  time of day, neither with a zone; `Zone` turns an instant into the `Day` and
+  `Time` a place reads, and back. `Zone.At(id, when)` is the offset (minutes
+  east of Greenwich), the abbreviation and whether it is daylight saving time;
+  `Zone.Next` the next time the clocks move, with both readings;
+  `Zone.Day`/`Zone.Time` the wall clock there; `Zone.Instant(id, day, time)`
+  the reverse, with an hour that happens twice read as the first and one the
+  clocks skipped moved forward; `Zone.List` and `Zone.Info` the zones that are
+  places, with country and coordinates; `Zone.Local` this machine's zone as
+  an IANA id, on Windows too. QuickJS has no `Intl`, so until now
+  `toLocaleString({ timeZone })` silently answered the local zone.
+- **The runtime reads the TZif files itself**, on every platform:
+  `/usr/share/zoneinfo` on Linux and macOS (or `TZDIR`), and on Windows a copy
+  the portable tree and the setup now carry in `share/zoneinfo` (about 0.9 MB,
+  from MSYS2's `tzdata`). GLib was measured on Windows and takes no IANA id
+  there, and the ICU in `System32` carries tzdata 2022g, which answers wrong
+  today for Cairo, Almaty, Asunción and Nuuk. The reader was checked against
+  Python's zoneinfo and `zdump` over 418 zones, 1850-2099, the second before
+  and the second of every transition, in the fat and the slim TZif forms.
+
 ## 0.4.1 — 2026-11-22
 
 [Compare with 0.4.0](https://github.com/getbintana/bintana/compare/v0.4.0...v0.4.1)

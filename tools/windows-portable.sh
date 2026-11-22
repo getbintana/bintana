@@ -240,6 +240,21 @@ if [ -d "$ucrt/share/mime" ]; then
     cp -R "$ucrt/share/mime" "$dest/share/"
 fi
 
+# The IANA time zone database, which `Zone` reads (bta_zone.c): Windows has no
+# copy of its own -- GLib takes only the registry's names there, and the ICU in
+# System32 carries tzdata 2022g, frozen. `<prefix>/share/zoneinfo` is where
+# `Zone.Directory` looks on Windows. Without `posix/` and `right/` (copies of
+# the same zones, and leap-second variants nothing here reads): 0.9 MB instead
+# of 2.6. A tree without it still runs; every `Zone` member but `Local`,
+# `Directory` and `Version` refuses, saying the database is missing.
+if [ -d "$ucrt/share/zoneinfo" ]; then
+    mkdir -p "$dest/share/zoneinfo"
+    (cd "$ucrt/share/zoneinfo" && tar cf - --exclude=./posix --exclude=./right .) \
+        | (cd "$dest/share/zoneinfo" && tar xf -)
+else
+    echo "warning: no $ucrt/share/zoneinfo -- install mingw-w64-ucrt-x86_64-tzdata; Zone will have no database" >&2
+fi
+
 # The font GTK draws with on Windows, which has no Cantarell: the setting the
 # GTK project's own Windows notes name.
 mkdir -p "$dest/etc/gtk-4.0"

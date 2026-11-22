@@ -1988,6 +1988,11 @@ GdkPixbuf *bta_bitmap_pixbuf(JSValueConst v);
  * correctly. */
 void bta_day_init(JSContext *ctx, JSValue global);
 
+/* Zone: the IANA time zones -- where the database is, which zone this machine
+ * is in; the reader and the rest of the global are rad.js's. bta_day_init
+ * installs it, so every host that has Day and Time has Zone. */
+void bta_zone_init(JSContext *ctx, JSValue global);
+
 /*
  * A Decimal's digits, for Locale to format without a double in the way: `units`
  * in the smallest place and `scale` places, e.g. 1999 and 2 for 19.99.  `want`
