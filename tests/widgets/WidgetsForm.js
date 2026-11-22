@@ -264,10 +264,11 @@ function until(name, cond, then, tries = 200) {
  * And the same wait where giving up is an *answer* rather than a failure:
  * `then(true)` when it happened and `then(false)` when it did not.
  *
- * For the one question in this file that turns on a library's version rather
- * than on this runtime. Counted exactly as `until` is, and for the same
- * reason: a wait nobody counts lets `finish()` report while its assertions
- * have not run, which is a smaller total and not a red line.
+ * For the questions that turn on the machine rather than on this runtime: a
+ * library that is only there with a version, a display that never activates a
+ * window. Counted exactly as `until` is, and for the same reason: a wait
+ * nobody counts lets `finish()` report while its assertions have not run,
+ * which is a smaller total and not a red line.
  */
 function waitsFor(cond, then, tries = 50) {
     /* Scaled exactly as `until` is: see there. */
@@ -24521,8 +24522,26 @@ class Form1 extends Form {
 
             /* Six seconds of ordinary turns, and `BTA_TEST_SLOW` stretches it:
              * what it waits for is the display focusing the window, which on
-             * a loaded sanitized run took longer than six. */
-            until("the completion could be asked", () => ed.ShowCompletion(), () => {
+             * a loaded sanitized run took longer than six.
+             *
+             * **`waitsFor` and not `until`, because some displays never give
+             * the window the focus at all.** CI's `xvfb-run` is one: measured
+             * there, `visible=true focused=false` for every turn, and
+             * GtkSourceView refuses to be asked -- silently, as it always
+             * does -- so a failure here would be blaming the runtime for the
+             * display. Nothing can be done from a program's side: the library
+             * has no show that ignores the focus, and `xvfb-run` starts no
+             * window manager to give it. The skip names the display, which is
+             * what the old one never did.
+             */
+            waitsFor(() => ed.ShowCompletion(), (asked) => {
+                if (!asked) {
+                    print("  (skipping the completion round trip: the window is " +
+                          "not the active one on this display; visible=" +
+                          ed.Visible + " focused=" + ed.Focused + ")");
+                    ed.Delete();
+                    return;
+                }
                 waitsFor(() => this.completions.length > 0, (got) => {
                     if (!got) {
                         print("  (skipping the completion round trip: the show " +

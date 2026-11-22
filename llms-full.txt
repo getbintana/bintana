@@ -6818,6 +6818,12 @@ control; a program drawing for paper pins its ink, as `lib/report` does and
   answers whether it *asked*: poll it until `true` and the machinery has the
   state it needs. A dialog shown and closed earlier leaves the suite's window
   unactivated on such a display, and only the display's own time gives it back.
+  **On some displays it never comes back**: CI's `xvfb-run` was measured with
+  `visible=true focused=false` on every turn of a six-second poll, so the
+  library cannot be asked there at all -- the completion round trip in
+  `tests/widgets` skips with that sentence, and no program can do better: the
+  library has no show that ignores the focus, and `xvfb-run` starts no window
+  manager to give it. The runtime is not the one refusing.
 
 - **`Focusable` reaches `inner` and the editable's delegate, and the *getter* has
   to ask the same three.** A `TextBox`'s focus sits on the `GtkText` *inside* its
