@@ -1,4 +1,4 @@
-# ISSUE: GTK 4.14 crashes opening an address when there is no session bus
+# UPSTREAM: GTK 4.14 crashes opening an address when there is no session bus
 
 ## What the application needed
 

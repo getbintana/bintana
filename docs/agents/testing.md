@@ -518,7 +518,7 @@ save will edit `examples/hello` for real.
      clipboard on Windows instead (`sys_clip_copy`), three runs in three
      survive. The image race has no runtime fix short of a patched GTK, so
      `testClipboard` skips its round trip on Windows;
-     [`ISSUE-windows-clipboard-crash`](../issues/ISSUE-windows-clipboard-crash.md)
+     [`UPSTREAM-windows-clipboard-crash`](../issues/UPSTREAM-windows-clipboard-crash.md)
      keeps the gap.
   `GTK_IM_MODULE=none` only removes the first. **It is not the `Exec` chain**:
   a run stopped at `ExecCloseInput` still crashed. Two processes do not help either:

@@ -1,4 +1,4 @@
-# ISSUE: on Windows, a window maximized by the system title bar shrinks when a menu opens
+# UPSTREAM: on Windows, a window maximized by the system title bar shrinks when a menu opens
 
 ## What the application needed
 

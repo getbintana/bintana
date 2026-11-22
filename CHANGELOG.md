@@ -621,7 +621,7 @@ something different, so a program meant for both reads them once.
   server on Windows.
 - **Known crash**: replacing text on the clipboard with an image while another
   program reads it can end the process inside GTK 4.24.1
-  ([`docs/issues/ISSUE-windows-clipboard-crash.md`](docs/issues/ISSUE-windows-clipboard-crash.md)).
+  ([`docs/issues/UPSTREAM-windows-clipboard-crash.md`](docs/issues/UPSTREAM-windows-clipboard-crash.md)).
 
 ## 0.3.0 — 2026-11-04
 

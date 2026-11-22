@@ -186,16 +186,17 @@ needed and what it did instead.
 
 These are defects in something the runtime sits on, not words it is missing.
 The runtime carries a workaround where it can; the issue stays until the
-dependency is fixed, and a workaround is not an answer. Before reporting one as
+dependency is fixed, and a workaround is not an answer. Their files are named
+`UPSTREAM-`, apart from the runtime's own `ISSUE-`. Before reporting one as
 a runtime gap, check here and name the project and version.
 
 | Upstream defect | Where it is written down |
 |---|---|
-| On Windows, replacing clipboard text with an image can crash the program when another program reads the clipboard -- GTK 4.24.1's Win32 clipboard render | [ISSUE-windows-clipboard-crash](../issues/ISSUE-windows-clipboard-crash.md) |
-| Unmapping a scrolled window whose adjustment is animating makes GTK 4.22.5 print two criticals and lose count of a frame-clock update -- the runtime's own trigger is only a `Notebook` page switch | [ISSUE-gtk-animation-reentry](../issues/ISSUE-gtk-animation-reentry.md), no workaround that keeps smooth scrolling |
-| A window that loses its focus while an autohide popover is visible makes GTK print `gtk_widget_is_ancestor: assertion 'GTK_IS_WIDGET (widget)' failed` -- the popover's focus vfunc passes a NULL focus | [ISSUE-gtk-popover-null-focus](../issues/ISSUE-gtk-popover-null-focus.md), the same code in 4.14 and 4.22, no workaround |
-| On Windows, a window maximized from the system title bar shrinks when a menu opens -- GTK 4.24.1's Win32 backend does not read the actual maximized state when it lays the window out | [ISSUE-windows-maximize-restyle](../issues/ISSUE-windows-maximize-restyle.md) |
-| With no session bus, opening an address crashes inside GTK -- GTK 4.14.5's `GtkUriLauncher` looks for the OpenURI portal anyway; `Desktop.OpenUri` goes to GIO directly when there is no bus | [ISSUE-gtk-uri-launcher-no-bus](../issues/ISSUE-gtk-uri-launcher-no-bus.md) |
+| On Windows, replacing clipboard text with an image can crash the program when another program reads the clipboard -- GTK 4.24.1's Win32 clipboard render | [UPSTREAM-windows-clipboard-crash](../issues/UPSTREAM-windows-clipboard-crash.md) |
+| Unmapping a scrolled window whose adjustment is animating makes GTK 4.22.5 print two criticals and lose count of a frame-clock update -- the runtime's own trigger is only a `Notebook` page switch | [UPSTREAM-gtk-animation-reentry](../issues/UPSTREAM-gtk-animation-reentry.md), no workaround that keeps smooth scrolling |
+| A window that loses its focus while an autohide popover is visible makes GTK print `gtk_widget_is_ancestor: assertion 'GTK_IS_WIDGET (widget)' failed` -- the popover's focus vfunc passes a NULL focus | [UPSTREAM-gtk-popover-null-focus](../issues/UPSTREAM-gtk-popover-null-focus.md), the same code in 4.14 and 4.22, no workaround |
+| On Windows, a window maximized from the system title bar shrinks when a menu opens -- GTK 4.24.1's Win32 backend does not read the actual maximized state when it lays the window out | [UPSTREAM-windows-maximize-restyle](../issues/UPSTREAM-windows-maximize-restyle.md) |
+| With no session bus, opening an address crashes inside GTK -- GTK 4.14.5's `GtkUriLauncher` looks for the OpenURI portal anyway; `Desktop.OpenUri` goes to GIO directly when there is no bus | [UPSTREAM-gtk-uri-launcher-no-bus](../issues/UPSTREAM-gtk-uri-launcher-no-bus.md) |
 
 ## One more thing
 

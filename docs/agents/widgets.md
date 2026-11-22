@@ -403,7 +403,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   the value is NULL: measured in an `ubuntu:24.04` container with GTK 4.14.2's
   symbols, `gtk_widget_is_ancestor (widget=0x0, ancestor=0x...)`. The two lines
   are the same in 4.14.5 and 4.22.5; ours on 4.22 simply does not reach the
-  state. `docs/issues/ISSUE-gtk-popover-null-focus.md` has the stack, and why
+  state. `docs/issues/UPSTREAM-gtk-popover-null-focus.md` has the stack, and why
   no autohide popover change would be a fix.
 
 ## Properties, serialisation and the designer surface

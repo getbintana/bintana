@@ -1,4 +1,4 @@
-# ISSUE: on Windows, replacing text on the clipboard can crash the program
+# UPSTREAM: on Windows, replacing text on the clipboard can crash the program
 
 ## What the application needed
 

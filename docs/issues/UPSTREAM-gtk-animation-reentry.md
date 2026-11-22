@@ -1,4 +1,4 @@
-# ISSUE: GTK 4.22.5 warns twice when a scrolled window that is animating is unmapped
+# UPSTREAM: GTK 4.22.5 warns twice when a scrolled window that is animating is unmapped
 
 ## What the application needed
 

@@ -1,4 +1,4 @@
-# ISSUE: GTK's popover focus passes a NULL focus widget to `gtk_widget_is_ancestor`
+# UPSTREAM: GTK's popover focus passes a NULL focus widget to `gtk_widget_is_ancestor`
 
 ## What the application needed
 

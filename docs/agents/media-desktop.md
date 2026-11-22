@@ -370,7 +370,7 @@ rest is JavaScript over the elements API.
   `g_app_info_launch_default_for_uri_async` itself. The child's lost
   `print("requested")` was stdout in a pipe, buffered, in a process that
   crashed: an empty output from a dead child says nothing about how far it got.
-  Kept as an upstream issue, `ISSUE-gtk-uri-launcher-no-bus.md`. **Reproducing
+  Kept as an upstream issue, `UPSTREAM-gtk-uri-launcher-no-bus.md`. **Reproducing
   a CI job in Docker here** takes `--security-opt label=disable` (SELinux
   refuses the bind mount otherwise; `:Z` would relabel the checkout), and the
   container lacks the runner's locales, so `testLocaleOrder`'s "a locale that

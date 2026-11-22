@@ -13542,10 +13542,10 @@ class Form1 extends Form {
          * every run of this test, but every run of the suite: text replaced by
          * an image at once leaves GDK 4.24.1 promising text it can no longer
          * write, and when another program on the machine asks for it GTK
-         * converts a NULL buffer. docs/issues/ISSUE-windows-clipboard-crash.md
+         * converts a NULL buffer. docs/issues/UPSTREAM-windows-clipboard-crash.md
          * has the evidence; the refusals above are still asserted. */
         if (Environment.OS === "Windows") {
-            print("  (skipping the clipboard round trip: GTK's Win32 clipboard crashes, see ISSUE-windows-clipboard-crash)");
+            print("  (skipping the clipboard round trip: GTK's Win32 clipboard crashes, see UPSTREAM-windows-clipboard-crash)");
             return;
         }
 
@@ -20847,7 +20847,7 @@ class Form1 extends Form {
         /* **The chooser is modal and nothing in JS can close it**, so it stays
          * up until the run ends. It runs on Windows too: it was once skipped
          * there as "the font preview crashes in `g_utf8_to_utf16`", and that
-         * crash was the clipboard's (ISSUE-windows-clipboard-crash) -- on its
+         * crash was the clipboard's (UPSTREAM-windows-clipboard-crash) -- on its
          * own the chooser survived four runs in four, and the suite with it
          * did not crash (2026-11-12). */
 
@@ -26748,7 +26748,7 @@ class Form1 extends Form {
      * for a scheme nobody else has is a script that writes down what it was
      * given. **With no bus the runtime does not use GTK's launcher** -- GTK
      * 4.14 crashed there, which is how CI's `no-libxml` job found it
-     * (`docs/issues/ISSUE-gtk-uri-launcher-no-bus.md`) -- so what this
+     * (`docs/issues/UPSTREAM-gtk-uri-launcher-no-bus.md`) -- so what this
      * round-trips is the GIO branch, on every GTK. `GDK_DEBUG=no-portals` stays
      * as a second lock on the door to the person's desktop.
      */

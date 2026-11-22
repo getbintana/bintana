@@ -116,7 +116,7 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   for one -- measured, two criticals with it. Not asking GTK to animate at all
   means computing the scroll target ourselves in `Append`/`GotoLine`/`Select`,
   which costs every application its smooth scroll for two warnings that change
-  no value. `docs/issues/ISSUE-gtk-animation-reentry.md` has both gdb stacks.
+  no value. `docs/issues/UPSTREAM-gtk-animation-reentry.md` has both gdb stacks.
 - **`MinWidth`/`MinHeight` mean nothing in a box -- unless the axis says
   `Fill`.** They are the floor for a *stretched* control on a surface; in a box,
   with the alignment left `Auto`, the floor is `Height`/`Width` itself, and

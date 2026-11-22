@@ -316,7 +316,7 @@ suite has been up for a few minutes. No test types IME text on Windows, so the
 suite runs without one; that is a workaround for a GTK bug and not a runtime
 setting. The other crash a native run used to take, a `g_utf8_to_utf16`-with-NULL
 segmentation fault near the end, was GTK 4.24.1's clipboard
-([`ISSUE-windows-clipboard-crash.md`](issues/ISSUE-windows-clipboard-crash.md)):
+([`UPSTREAM-windows-clipboard-crash.md`](issues/UPSTREAM-windows-clipboard-crash.md)):
 with `testClipboard`'s round trip skipped on Windows, no run has crashed since
 (2026-11-12).
 
