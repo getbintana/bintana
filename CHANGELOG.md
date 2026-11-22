@@ -6,6 +6,10 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+## 0.4.1 — 2026-11-22
+
+[Compare with 0.4.0](https://github.com/getbintana/bintana/compare/v0.4.0...v0.4.1)
+
 ### Runtime and libraries
 
 - **`SourceEditor.ShowCompletion()` answers whether it asked.** It answered
