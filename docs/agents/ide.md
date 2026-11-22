@@ -998,6 +998,16 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   `F11` are the keys, and the toggles, both submenus, the editor settings and
   the focus commands are all driven in that phase, each through the roads it
   has.
+- **A history bounded by a count is blind to the size of what it counts.** The
+  designer kept 200 snapshots of the whole form and nothing said how big one
+  was: measured with the runtime's own serializer, a form of 300 controls is
+  34,726 characters a snapshot and one of 3,000 is 355,298 -- 68 MB of history,
+  135 MB with the redo stack beside it, for a form nobody would call unusual.
+  `Designer.trimHistory` bounds each stack by `Designer.undoBytes` (16 MB) as
+  well, keeping the newest always, since the state the form is in has to be
+  somewhere; 200 stays the depth, so a normal form is unchanged. The measure
+  and the bound are `tests/ide`'s `undomemory` phase, whose synthetic snapshots
+  are then thrown away and the real stacks put back.
 
 ## The designer's pages: the page shown is a design value
 

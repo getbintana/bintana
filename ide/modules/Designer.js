@@ -587,6 +587,31 @@ export class Designer {
         });
     }
 
+    /*
+     * **The history is bounded by what it holds, not only by how many steps.**
+     * 200 is the depth, and a snapshot is the whole form: measured, 34,726
+     * characters for a form of 300 controls and 355,298 for one of 3,000, so
+     * 200 of the biggest is 68 MB of history -- and with the redo stack beside
+     * it, 135 MB. The count said nothing about that. 16 MB is where a stack
+     * stops keeping more; the newest is always kept, since the state the form
+     * is in has to be somewhere.
+     */
+    static get undoSteps() { return 200; }
+    static get undoBytes() { return 16 * 1024 * 1024; }
+
+    /*
+     * A QuickJS string is a byte a character unless the form's text is not
+     * Latin-1, where it is two: the count is a lower bound, so the bound is a
+     * little generous and never a little tight.
+     */
+    static trimHistory(stack) {
+        let chars = 0;
+        for (const s of stack) chars += s.length;
+        while (stack.length > 1 && chars > Designer.undoBytes)
+            chars -= stack.shift().length;
+        return stack;
+    }
+
     /* `before` allows pushing a state captured before the action, which is what
      * a drag needs: the useful snapshot is the one from mouseDown. */
     pushUndo(before, merge) {
@@ -604,7 +629,8 @@ export class Designer {
         this.undoMerge = merge;
 
         this.undoStack.push(before !== undefined ? before : this.snapshot());
-        if (this.undoStack.length > 200) this.undoStack.shift();
+        if (this.undoStack.length > Designer.undoSteps) this.undoStack.shift();
+        Designer.trimHistory(this.undoStack);
         this.redoStack = [];
     }
 
@@ -650,6 +676,7 @@ export class Designer {
         const current = this.snapshot();
         this.restore(this.undoStack.pop());
         this.redoStack.push(current);
+        Designer.trimHistory(this.redoStack);
         this.undoMerge = undefined;   /* a nudge after this is a new edit */
         this.touch();
     }
@@ -659,6 +686,7 @@ export class Designer {
         const current = this.snapshot();
         this.restore(this.redoStack.pop());
         this.undoStack.push(current);
+        Designer.trimHistory(this.undoStack);
         this.undoMerge = undefined;
         this.touch();
     }

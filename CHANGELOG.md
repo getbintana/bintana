@@ -42,6 +42,15 @@ one-page answer to *what is new since the release I have*.
   574 where 648 was asked; with the retry it does not, and this machine's 4.22
   never lost it.
 
+### IDE
+
+- **The designer's undo history is bounded by memory, not only by a step
+  count.** It kept 200 JSON snapshots of the whole form, and a snapshot is the
+  form: measured with the runtime's own serializer, 34,726 characters for a form
+  of 300 controls and 355,298 for one of 3,000 -- 68 MB of history, 135 MB with
+  the redo stack beside it. Each stack stops at 16 MB now and always keeps the
+  newest; 200 stays the depth, so a form of ordinary size is unchanged.
+
 ## 0.4.0 — 2026-11-20
 
 [Compare with 0.4.0-rc2](https://github.com/getbintana/bintana/compare/v0.4.0-rc2...v0.4.0)

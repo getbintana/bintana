@@ -2132,6 +2132,41 @@ function* p_designer(ide) {
  * rows are there, the base's properties are in the grid, editing one reaches
  * the live control, and the file still writes the subclass's own type.
  */
+/* --- the undo history has a size, not only a depth ----------------------
+ *
+ * The stack kept 200 snapshots and nothing said how big they were: measured
+ * with the runtime's own serializer, a form of 300 controls is 34,726
+ * characters a snapshot and one of 3,000 is 355,298 -- 68 MB for the second,
+ * 135 MB with the redo stack beside it. The bound is `Designer.undoBytes` now,
+ * and this is what keeps it one: forty megabytes asked for, sixteen kept, the
+ * newest among them.
+ */
+function* p_undomemory(ide) {
+    ide.FileTree.Key = "form:Child";
+    yield;
+    yield* until(() => ide.designing && ide.CanvasScroll.Bounds().Height > 0);
+    eq("a form is open to try the history on", ide.activeFile, "Child.form");
+
+    const d = ide.designer;
+    const undone = d.undoStack.slice();
+    const redone = d.redoStack.slice();
+    const merge  = d.undoMerge;
+
+    const big = "x".repeat(2 * 1024 * 1024);
+    for (let i = 0; i < 20; i++) d.pushUndo(big);
+
+    const held = d.undoStack.reduce((n, s) => n + s.length, 0);
+    check("twenty two-megabyte snapshots do not keep forty megabytes",
+          held <= Designer.undoBytes, `${(held / 1048576).toFixed(1)} MB`);
+    check("the oldest went, and the newest stayed",
+          d.undoStack.length < 20 && d.undoStack[d.undoStack.length - 1] === big,
+          `${d.undoStack.length} of 20`);
+
+    d.undoStack = undone;
+    d.redoStack = redone;
+    d.undoMerge = merge;
+}
+
 function* p_subclass(ide) {
     const dir = File.Join(TMP, "subclass");
     if (File.IsDir(dir)) Directory.DeleteTree(dir);
@@ -19332,6 +19367,7 @@ const PHASES = [
     { name: "welcome", run: p_welcome },
     { name: "files", run: p_files },
     { name: "designer", run: p_designer },
+    { name: "undomemory", run: p_undomemory },
     { name: "subclass", run: p_subclass },
     { name: "palette", run: p_palette },
     { name: "pages", run: p_pages },
