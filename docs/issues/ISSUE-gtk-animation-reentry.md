@@ -99,6 +99,6 @@ a notebook should do the same.
 
 Two lines of noise per IDE run, and an abort for anybody who runs the suite with
 `G_DEBUG=fatal-criticals` -- which is why the suite does not. No wrong behaviour
-was measured: `tests/ide` passes 3885 assertions with them, and the scroll
+was measured: `tests/ide` passes 3888 assertions with them, and the scroll
 positions are right. The file stays until the GTK floor (4.10 today) passes a
 version that ends the update once.
