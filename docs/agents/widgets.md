@@ -395,6 +395,16 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   window's rectangle first and puts it back if the present moved it. Checked
   with a Win32 driver (`WM_SYSCOMMAND`, `SetWindowPos`, a real Win+Left by
   `SendInput`) against a build with and without the workaround.
+- **`gtk_widget_is_ancestor: assertion 'GTK_IS_WIDGET (widget)' failed`, once
+  per `tests/widgets` run on CI, is GTK's popover focus and not this runtime's
+  -- do not chase it here.** `gtk_popover_focus` reads the root's focus and
+  passes it to `gtk_widget_is_ancestor` without checking it, and on an
+  after-paint that has just unset the focus (`maybe_unset_focus_and_default`)
+  the value is NULL: measured in an `ubuntu:24.04` container with GTK 4.14.2's
+  symbols, `gtk_widget_is_ancestor (widget=0x0, ancestor=0x...)`. The two lines
+  are the same in 4.14.5 and 4.22.5; ours on 4.22 simply does not reach the
+  state. `docs/issues/ISSUE-gtk-popover-null-focus.md` has the stack, and why
+  no autohide popover change would be a fix.
 
 ## Properties, serialisation and the designer surface
 
