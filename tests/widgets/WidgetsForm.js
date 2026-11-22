@@ -34433,7 +34433,15 @@ export class UriChild extends Form {
         };
 
         until("the pushed form is measured once", measured, () => {
-            const asked = first + 90;
+            /* **A window is never wider than the monitor it is on**, so a
+             * request past it is the display's answer and not the runtime's:
+             * GTK clamps it, and a run on a 640-wide virtual display would
+             * read that as a lost resize (measured: asking 641 on `xvfb-run`'s
+             * own 640 default came back 640). `tests/runner` gives 1280 wide. */
+            const asked = Math.min(first + 90, Screen.Width - 20);
+
+            check("the display leaves room for a bigger window",
+                  asked > first, `${asked} of ${Screen.Width} wide`);
 
             win.Resize(asked, 160);
             until("the size asked for while the second pass was in flight arrives",
@@ -34467,9 +34475,10 @@ export class UriChild extends Form {
                 const endGap   = gapOf(trailer);
                 const stayLeft = stayer.Bounds().X;
 
-                win.Resize(surface + 90, 160);
+                const more = Math.min(surface + 90, Screen.Width - 20);
+                win.Resize(more, 160);
                 until("and it survives a resize on top of that",
-                      () => win.Bounds().Width >= surface + 80, () => {
+                      () => win.Bounds().Width >= more, () => {
                     eq("Fill keeps its distance to the far edge", gapOf(filler), fillGap);
                     eq("and so does End",                         gapOf(trailer), endGap);
                     eq("while Start stays where it was drawn",    stayer.Bounds().X, stayLeft);

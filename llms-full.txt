@@ -5491,6 +5491,24 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   GTK 4.14 image on two CPUs: `tests/widgets`' `testAnchorsPushed` lost the
   `Resize` it issued during the form's second layout pass in 4 runs of 26, and
   the first pass's width was a number a program had no way to see.
+- **The two `CRITICAL`s every `tests/ide` run prints are GTK 4.22.5's,
+  and the runtime cannot stand in front of them.** `gtk_scrolled_window_unmap`
+  finishes an animation by setting its adjustment to the target *after* the
+  widget is unmapped; that emission reaches `GtkTextView`'s own `value-changed`
+  handler, which sets the value back, so the animation ends from inside
+  `gtk_adjustment_enable_animation` -- which then disconnects handler 0 and ends
+  a frame-clock update it had already ended. `Notebook.Current` (and a tab
+  click) unmapping the IDE's log is the occasion, not the cause: with
+  `on_scroller_moved` instrumented, the emission arrived with the scrolled
+  window already unmapped and `bta_scroll_set` was never called. The second
+  critical, 12-30 s later, is the frame's CSS validation ending the update the
+  first one unbalanced. **The obvious workaround does not work**: `unmap` is
+  `G_SIGNAL_RUN_FIRST`, so a handler of ours that ends the animation by
+  assigning the value it already has runs *after* the class handler that looks
+  for one -- measured, two criticals with it. Not asking GTK to animate at all
+  means computing the scroll target ourselves in `Append`/`GotoLine`/`Select`,
+  which costs every application its smooth scroll for two warnings that change
+  no value. `docs/issues/ISSUE-gtk-animation-reentry.md` has both gdb stacks.
 - **`MinWidth`/`MinHeight` mean nothing in a box -- unless the axis says
   `Fill`.** They are the floor for a *stretched* control on a surface; in a box,
   with the alignment left `Auto`, the floor is `Height`/`Width` itself, and
@@ -15544,7 +15562,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11632 assertions
+./tests/run.sh                          # all seven projects, 11633 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -16675,7 +16693,7 @@ raise it by hand (`BTA_TEST_SLOW=3 ./tests/run.sh`) on a machine that is simply
 slower than the one the numbers came from, instead of editing them.
 
 **And one assertion is skipped there on purpose**, so `tests/widgets` counts
-**6958** under the sanitizer and 6959 without it: "checking a module's text
+**6959** under the sanitizer and 6960 without it: "checking a module's text
 forty times keeps nothing" reads its own process's RSS, and ASan's quarantine
 holds what was freed -- 296 MB with the fix in, 4 KB with
 `quarantine_size_mb=0`. It is the one place whose verdict the sanitizer
@@ -17468,6 +17486,7 @@ a runtime gap, check here and name the project and version.
 | Upstream defect | Where it is written down |
 |---|---|
 | On Windows, replacing clipboard text with an image can crash the program when another program reads the clipboard -- GTK 4.24.1's Win32 clipboard render | [ISSUE-windows-clipboard-crash](../issues/ISSUE-windows-clipboard-crash.md) |
+| Unmapping a scrolled window whose adjustment is animating makes GTK 4.22.5 print two criticals and lose count of a frame-clock update -- the runtime's own trigger is only a `Notebook` page switch | [ISSUE-gtk-animation-reentry](../issues/ISSUE-gtk-animation-reentry.md), no workaround that keeps smooth scrolling |
 | On Windows, a window maximized from the system title bar shrinks when a menu opens -- GTK 4.24.1's Win32 backend does not read the actual maximized state when it lays the window out | [ISSUE-windows-maximize-restyle](../issues/ISSUE-windows-maximize-restyle.md) |
 | With no session bus, opening an address crashes inside GTK -- GTK 4.14.5's `GtkUriLauncher` looks for the OpenURI portal anyway; `Desktop.OpenUri` goes to GIO directly when there is no bus | [ISSUE-gtk-uri-launcher-no-bus](../issues/ISSUE-gtk-uri-launcher-no-bus.md) |
 

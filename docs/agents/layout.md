@@ -99,6 +99,24 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   GTK 4.14 image on two CPUs: `tests/widgets`' `testAnchorsPushed` lost the
   `Resize` it issued during the form's second layout pass in 4 runs of 26, and
   the first pass's width was a number a program had no way to see.
+- **The two `CRITICAL`s every `tests/ide` run prints are GTK 4.22.5's,
+  and the runtime cannot stand in front of them.** `gtk_scrolled_window_unmap`
+  finishes an animation by setting its adjustment to the target *after* the
+  widget is unmapped; that emission reaches `GtkTextView`'s own `value-changed`
+  handler, which sets the value back, so the animation ends from inside
+  `gtk_adjustment_enable_animation` -- which then disconnects handler 0 and ends
+  a frame-clock update it had already ended. `Notebook.Current` (and a tab
+  click) unmapping the IDE's log is the occasion, not the cause: with
+  `on_scroller_moved` instrumented, the emission arrived with the scrolled
+  window already unmapped and `bta_scroll_set` was never called. The second
+  critical, 12-30 s later, is the frame's CSS validation ending the update the
+  first one unbalanced. **The obvious workaround does not work**: `unmap` is
+  `G_SIGNAL_RUN_FIRST`, so a handler of ours that ends the animation by
+  assigning the value it already has runs *after* the class handler that looks
+  for one -- measured, two criticals with it. Not asking GTK to animate at all
+  means computing the scroll target ourselves in `Append`/`GotoLine`/`Select`,
+  which costs every application its smooth scroll for two warnings that change
+  no value. `docs/issues/ISSUE-gtk-animation-reentry.md` has both gdb stacks.
 - **`MinWidth`/`MinHeight` mean nothing in a box -- unless the axis says
   `Fill`.** They are the floor for a *stretched* control on a surface; in a box,
   with the alignment left `Auto`, the floor is `Height`/`Width` itself, and

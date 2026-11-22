@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11632 assertions
+./tests/run.sh                          # all seven projects, 11633 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -1132,7 +1132,7 @@ raise it by hand (`BTA_TEST_SLOW=3 ./tests/run.sh`) on a machine that is simply
 slower than the one the numbers came from, instead of editing them.
 
 **And one assertion is skipped there on purpose**, so `tests/widgets` counts
-**6958** under the sanitizer and 6959 without it: "checking a module's text
+**6959** under the sanitizer and 6960 without it: "checking a module's text
 forty times keeps nothing" reads its own process's RSS, and ASan's quarantine
 holds what was freed -- 296 MB with the fix in, 4 KB with
 `quarantine_size_mb=0`. It is the one place whose verdict the sanitizer
