@@ -251,9 +251,15 @@ static void editor_sync_completion(BtaWidget *w)
          *
          * The provider builds its word index in idle batches, and the default is
          * 50 lines -- so a 1500 line source is thirty trips through the main loop
-         * before the first proposal can appear, which reads as *the first time is
-         * slow and then it is fine*. It is: the index is built once and kept up
-         * to date by the buffer's own changes.
+         * before the first proposal can appear. The index is built once and
+         * kept up to date by the buffer's own changes.
+         *
+         * **That is the smaller half of "a new word is not offered yet".** The
+         * scan of changed text starts five seconds after the change -- a fixed
+         * `INITIATE_SCAN_TIMEOUT` in GtkSourceView, with no property -- and
+         * every proposal list built puts it back to zero, so a word just written
+         * is offered about five seconds after the typing stops.
+         * docs/issues/UPSTREAM-gtksourceview-words-delay.md has the code.
          *
          * 1000 lines a batch puts an ordinary source file in one or two turns.
          * The cost is the other side of the same coin -- one longer idle callback
