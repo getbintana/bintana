@@ -41,6 +41,81 @@ export class Runner {
         this.capture      = null;
         this.lastCapture  = null;
         this.openCaptures = true;
+        /* A traceback being read as it arrives, and what this run has already
+         * reported: see `heard`. */
+        this.trace    = null;
+        this.reported = [];
+    }
+
+    /*
+     * A line from the child: into the pane, and **read for a traceback as it
+     * arrives**.
+     *
+     * The traceback used to be looked for only when the run ended, and only
+     * if it ended badly. A form project does not end when a handler throws:
+     * the runtime prints the error and keeps the window up, so the click that
+     * failed said where in the output pane and nowhere else -- no row in
+     * Problems, no editor at the line -- until the program was closed by hand.
+     * That is the first thing a new project does wrong, and the person is
+     * looking at their program, not at the pane.
+     *
+     * The runtime writes a blank line, `Bintana error: <message>`, a hint
+     * line when it has one, the stack one `at` frame a line, and a blank line
+     * (`bta_error.c`). So a traceback starts at its announcement and ends at
+     * the first empty line after it -- or at the next announcement, or at the
+     * exit, for an error thrown with no stack.
+     */
+    heard(line) {
+        this.log(`${line}\n`);
+
+        const plain = line.replace(/\x1b\[[0-9;]*m/g, "");
+        if (plain.includes("Bintana error:")) {
+            this.endTrace();
+            this.trace = [plain];
+        } else if (this.trace) {
+            if (plain.trim() === "") this.endTrace();
+            else                     this.trace.push(plain);
+        }
+    }
+
+    /* The traceback being read is complete: report it, once. */
+    endTrace() {
+        if (!this.trace) return;
+        const text = `${this.trace.join("\n")}\n`;
+        this.trace = null;
+        this.reportError(text);
+    }
+
+    /*
+     * One traceback, into Problems and the editor -- **unless this run has
+     * already said the same thing**. A timer that throws every tick would
+     * otherwise move the editor on every tick, and a program that dies of the
+     * error it just reported (a throw in `Form_Open` ends the run) would be
+     * reported twice: once as it was printed, once at the exit.
+     *
+     * The rows accumulate for the length of the run, since several handlers
+     * may fail and each is a place to go; `start` empties them.
+     */
+    reportError(text) {
+        const where = this.errorLocation(text);
+        if (!where) return false;
+
+        const row = {
+            kind: "Error",
+            file: this.relative(where.path),
+            line: where.line,
+            text: this.errorMessage(text),
+        };
+        if (this.reported.some((r) => r.file === row.file && r.line === row.line &&
+                                      r.text === row.text))
+            return false;
+
+        this.reported.push(row);
+        this.ide.problems.report("run", this.reported.slice());
+        /* The traceback in the pane before the line `open` writes under it. */
+        this.flushLog();
+        this.open(where.path, where.line);
+        return true;
     }
 
     /*
@@ -84,12 +159,6 @@ export class Runner {
          * execute something other than what is on screen. */
         ide.saveAllDirty();
 
-        ide.clearLog();
-        this.pending.length = 0;
-        /* The console is cleared, and what the last run said about itself goes
-         * with it: a place a program died at two runs ago is not a fact about
-         * the program on screen now. */
-        ide.problems.clear("run");
         const plan = ide.launch.plan();
         /* In the temporary directory and not the project: a capture is a
          * measurement of one run, not a file of the program. */
@@ -100,8 +169,28 @@ export class Runner {
         const options = this.capture ? [...this.options(), "--profile", this.capture]
                                      : this.options();
 
-        ide.log(`> bintana ${[...options, ide.project,
-                             ...plan.arguments].join(" ")}\n`);
+        this.spawn([...options, ide.project, ...plan.arguments], plan.options);
+    }
+
+    /*
+     * The child itself, from the arguments after the executable on: the log
+     * line that says what ran, the buttons, and the two callbacks every run
+     * reads its output and its exit through. Split out of `start` so a test
+     * can run a project of its own through the same road.
+     */
+    spawn(args, options) {
+        const ide = this.ide;
+
+        ide.clearLog();
+        this.pending.length = 0;
+        /* The console is cleared, and what the last run said about itself goes
+         * with it: a place a program died at two runs ago is not a fact about
+         * the program on screen now. */
+        ide.problems.clear("run");
+        this.trace    = null;
+        this.reported = [];
+
+        ide.log(`> bintana ${args.join(" ")}\n`);
         ide.running = true;
         ide.refresh();
 
@@ -117,10 +206,9 @@ export class Runner {
          * environment. A project that declares none plans an empty run, which
          * is exactly what this line was before there were any.
          */
-        this.job = Exec([Application.Executable, ...options, ide.project,
-                         ...plan.arguments],
-                        plan.options,
-                        (line) => this.log(`${line}\n`),
+        this.job = Exec([Application.Executable, ...args],
+                        options,
+                        (line) => this.heard(line),
                         (code) => this.finished(code));
     }
 
@@ -216,8 +304,10 @@ export class Runner {
 
         this.job = null;
         /* Whatever arrived in the same turn as the exit, before the traceback
-         * below is read out of the pane. */
+         * below is read out of the pane -- and a traceback the exit cut short,
+         * which has no blank line to end it. */
         this.flushLog();
+        this.endTrace();
         ide.log(code === 0 ? "\n[finished ok]\n"
                            : `\n[finished with code ${code}]\n`);
         ide.running = false;
@@ -411,20 +501,12 @@ export class Runner {
      * pty left to wait for.
      *
      * Giving up quietly is still the right answer when the program died of
-     * something that named no line at all.
+     * something that named no line at all. Most tracebacks have been reported
+     * by now, as they arrived (`heard`); this is the net under that, and
+     * `reportError` says nothing twice.
      */
     findErrorLine() {
-        const text  = this.ide.LogView.Text;
-        const where = this.errorLocation(text);
-        if (!where) return;
-
-        this.ide.problems.report("run", [{
-            kind: "Error",
-            file: this.relative(where.path),
-            line: where.line,
-            text: this.errorMessage(text),
-        }]);
-        this.open(where.path, where.line);
+        this.reportError(this.ide.LogView.Text);
     }
 
     /*

@@ -1584,6 +1584,31 @@ this pass is what says it while the line is typed.
   value is not iterable* about `tests/widgets` -- with every other finding of
   that file gone. Check a name against the fields before adding a method here.
 
+## A run's error, while it runs
+
+`Runner.heard` reads each line of the child as it arrives, and a traceback
+goes to Problems and the editor goes to its line **then** -- not at the exit.
+Before, `findErrorLine` ran only when the run ended with a code that was not
+0, and a form project does not end when a handler throws: the runtime prints
+the traceback and keeps the window up. So the commonest first failure -- click
+a button, the handler throws -- said where in the pane and nowhere else until
+the program was closed by hand. Measured 2026-11-23, walking a new project.
+
+- **The shape is `bta_error.c`'s**: a blank line, `Bintana error: <message>`,
+  a hint line when there is one (not indented, so "frames are `at` lines" is
+  not the rule), the stack, a blank line. A traceback is the announcement up
+  to the first empty line after it, or the next announcement, or the exit
+  (an error thrown with no stack has no blank line of its own).
+- **Said once per run** (`reportError` keeps `reported`): a timer that throws
+  every tick would otherwise move the editor every tick, and a program that
+  dies of the error it just printed (a throw in `Form_Open`) would be reported
+  as it was printed and again at the exit. The rows accumulate, since several
+  handlers can fail in one run; `spawn` empties them.
+- **`spawn(args, options)` is the child**, split out of `start` so
+  `tests/ide`'s `errors` phase runs a console project of its own through the
+  same callbacks: it throws on a timer and waits for a file the test writes,
+  which is what makes *still running* a fact rather than a race.
+
 ## Breakpoints: on, off, kept
 
 **The marks are the state, both kinds.** A breakpoint on is a `Bookmark`

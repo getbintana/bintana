@@ -13743,6 +13743,51 @@ function* p_errors(ide) {
           ide.runner.errorMessage("hello from tabs\n").length > 0);
 
     /*
+     * **A program that keeps running after an error.** A form project does
+     * not end when a handler throws: the runtime prints the traceback and the
+     * window stays up. The traceback used to be read only at the exit, so the
+     * click that failed said where in the pane and nowhere else until the
+     * program was closed. A real child, through the road `start` takes: a
+     * console project whose timer throws and which then waits for a file this
+     * test writes, so "still running" is a fact and not a race.
+     */
+    const boom = File.Join(TMP, "boom");
+    if (File.Exists(boom)) Directory.DeleteTree(boom);
+    Directory.Make(boom);
+    const go = File.Join(boom, "go");
+    File.Save(File.Join(boom, "project.btp"),
+              '{ "main": "Main", "sources": ["Main.js"] }\n');
+    File.Save(File.Join(boom, "Main.js"),
+              "function Main() {\n" +
+              "    Timer.After(10, () => { Database.Open(\"x\"); });\n" +
+              `    const t = Timer.Every(20, () => { if (File.Exists(${JSON.stringify(go)})) t.Stop(); });\n` +
+              "}\n");
+    ide.listFiles();
+
+    ide.runner.spawn([boom], {});
+    yield* until(() => ide.problems.of("run").length > 0, 600);
+    const live = ide.problems.of("run");
+    eq("an error while the program runs is a row in Problems", live.length, 1);
+    check("...while it is still running", ide.runner.job !== null && ide.running);
+    eq("the row is the place", live[0] && `${live[0].file}:${live[0].line}`,
+       "boom/Main.js:2");
+    eq("...and what it died of", live[0] && live[0].text,
+       "TypeError: Database has no function Open");
+    eq("the editor goes there without waiting for the exit",
+       `${ide.activeFile}:${ide.Editor && ide.Editor.Line}`, "boom/Main.js:2");
+
+    File.Save(go, "");
+    yield* until(() => ide.runner.job === null, 600);
+    check("the program then ends", ide.runner.job === null);
+    eq("and the exit does not report the same error again",
+       ide.problems.of("run").length, 1);
+
+    ide.closeTabByName("boom/Main.js", true);
+    ide.problems.clear("run");
+    Directory.DeleteTree(boom);
+    ide.listFiles();
+
+    /*
      * And what this run *is*, as against what the project is.
      *
      * `--strict` makes a control refuse a property its class does not have, so

@@ -155,6 +155,13 @@ one-page answer to *what is new since the release I have*.
   project does, and the first thing it had to undo. They now go down a column
   from the corner, 8 px apart, and to the next column when the form is full;
   dragging from the palette still drops where the pointer is.
+- **An error while the program runs goes to its line then.** A handler that
+  throws does not end a form project -- the runtime prints the traceback and
+  the window stays up -- and the IDE read the traceback only at the exit, so
+  the click that failed said where in the output pane and nowhere else until
+  the program was closed. Each traceback is now read as it arrives: a row in
+  Problems and the editor at the line, while the program is still running.
+  The same error is said once per run, however often it is thrown.
 - **The editor underlines a member a runtime global does not have.**
   `Database.Open(path)`, `File.Read(p)`, `Message.Show(t)` -- the name another
   library taught -- went through every check and failed at the first run as
