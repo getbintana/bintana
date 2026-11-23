@@ -27575,6 +27575,8 @@ export class UriChild extends Form {
                   '    print(Locale.Number(3));\n' +
                   '    print(Locale.Date(d));\n' +
                   '    print(Locale.Date(d, "Time"));\n' +
+                  '    print(Locale.Date(d, "Weekday"));\n' +
+                  '    print(Locale.Date(d, "Month"));\n' +
                   '    Application.Quit(0);\n' +
                   '}\n');
 
@@ -27597,6 +27599,31 @@ export class UriChild extends Form {
         eq("and C's date is month first, with the year in four digits",
            said[2], "08/31/2026");
         eq("with its time unchanged", said[3], "14:05:09");
+        eq("and the day's name in English", said[4], "Monday");
+        eq("and the month's", said[5], "August");
+
+        /*
+         * **And a language, which is the half Windows got wrong.** There GLib
+         * does not ask the system: with no `nl_langinfo` its `%x`, `%A` and `%B`
+         * come from its own catalogue, so a Spanish desktop read `22/11/26` and
+         * `Domingo` -- and `11/22/26` before the setup carried the catalogue.
+         * Windows now writes them itself (`GetDateFormatEx`), in the regional
+         * format, or in the one `LC_ALL` names, as glibc does on Linux: the two
+         * must say the same thing. A Linux without the locale installed answers
+         * C's, and that is said and skipped, not failed.
+         */
+        const es = Exec.Wait([Application.Executable, dir],
+                             { Environment: { LC_ALL: "es_ES.UTF-8", LANG: "es_ES.UTF-8" },
+                               Timeout: 20000 });
+        const dicho = outputLines(es.Output.trim());
+        if (dicho[2] === "08/31/2026") {
+            print("  SKIP  es_ES.UTF-8 is not installed: Locale.Date in Spanish not checked");
+        } else {
+            eq("in Spanish the day comes first, with the year in four digits",
+               dicho[2], "31/08/2026");
+            eq("the day's name is lower case, as Spanish writes it", dicho[4], "lunes");
+            eq("and the month's", dicho[5], "agosto");
+        }
     }
 
     /* --- Stopwatch ----------------------------------------------------------

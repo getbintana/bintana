@@ -27,6 +27,16 @@ one-page answer to *what is new since the release I have*.
   today for Cairo, Almaty, Asunción and Nuuk. The reader was checked against
   Python's zoneinfo and `zdump` over 418 zones, 1850-2099, the second before
   and the second of every transition, in the fat and the slim TZif forms.
+- **`Locale.Date` on Windows writes what Windows writes.** GLib does not ask
+  Windows for `%x`, `%A` or `%B`: with no `nl_langinfo` it takes them from its
+  own catalogue, so every Windows date was `11/22/26` -- month first, two
+  digits, in any language -- and with the catalogue a Spanish desktop read
+  `22/11/26` and `Domingo`, while the regional format the person chose was never
+  read. Windows now writes them itself (`GetDateFormatEx`, `GetTimeFormatEx`):
+  the short date with the year widened to four digits, the day's and the
+  month's names, in the user's regional format, or in the locale `LC_ALL`,
+  `LC_TIME` or `LANG` names, `C` being the invariant one -- so a Spanish
+  desktop reads `31/08/2026`, `lunes`, `agosto` on Windows and on Linux alike.
 - **Windows speaks the desktop's language in GLib's and GTK's words.** The
   portable tree and the setup carry the `glib20`, `gtk40` and
   `gtksourceview-5` catalogues, every language (about 7 MB compressed): a

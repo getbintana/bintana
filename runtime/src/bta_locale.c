@@ -25,6 +25,8 @@
 #include <locale.h>
 #ifndef G_OS_WIN32
 #include <langinfo.h>  /* D_FMT, the desktop's own date pattern */
+#else
+#include <windows.h>   /* GetDateFormatEx: the user's own regional format */
 #endif
 #include <math.h>      /* isfinite, for a value Number will not write */
 #include <stdio.h>
@@ -2059,42 +2061,14 @@ static GDateTime *locale_when(JSContext *ctx, JSValueConst v)
 }
 
 /*
- * The default date: the locale's own `%x` with the year spelled in four digits.
- *
- * `%x` is the one the desktop defines -- order, separators and all -- and on a
- * Spanish desktop glibc's is `%d/%m/%y`, so the first second of 1970 was
- * `31/12/69`: a date nobody reads twice without asking which century.  There
- * is no four-digit `%x`, so the **pattern** is asked for (`D_FMT`) and the year
- * field widened -- the pattern and not the output, because replacing two digits
- * in the text would have to guess which pair is the year.
- *
- * Windows keeps `%x`: the CRT's short date is four digits in the locales it
- * ships, and there is no `nl_langinfo` there to ask.
+ * A strftime pattern with its year widened to four digits: `%y` (and glibc's
+ * `%Ey`/`%Oy`) becomes `%Y`. The pattern and not the output, because
+ * replacing two digits in the text would have to guess which pair is the year.
  */
-static char *locale_date_default(GDateTime *when)
+static char *widen_year(const char *pattern)
 {
-#ifdef G_OS_WIN32
-    /* The CRT's `%x` under the C locale is `%m/%d/%y` -- two digits, which is
-     * the same trap the POSIX branch widens.  The C locale has a known order,
-     * so name it; other Windows locales keep `%x`, whose short date is four
-     * digits in the ones the CRT ships. */
-    const char *lc_all = g_getenv("LC_ALL");
-    const char *lang   = g_getenv("LANG");
-    const char *want   = (lc_all && *lc_all) ? lc_all : lang;
+    GString *fmt = g_string_new(pattern);
 
-    if (want && (!g_ascii_strcasecmp(want, "C") ||
-                 !g_ascii_strcasecmp(want, "POSIX")))
-        return g_date_time_format(when, "%m/%d/%Y");
-    return g_date_time_format(when, "%x");
-#else
-    const char *pattern = nl_langinfo(D_FMT);
-    GString    *fmt;
-    char       *shown;
-
-    if (!pattern || !*pattern)
-        return g_date_time_format(when, "%x");
-
-    fmt = g_string_new(pattern);
     for (gsize i = 0; i + 1 < fmt->len; i++) {
         if (fmt->str[i] != '%')
             continue;
@@ -2108,14 +2082,188 @@ static char *locale_date_default(GDateTime *when)
         if (j < fmt->len && fmt->str[j] == 'y')
             fmt->str[j] = 'Y';
     }
+    return g_string_free(fmt, FALSE);
+}
 
-    shown = g_date_time_format(when, fmt->str);
-    g_string_free(fmt, TRUE);
+/*
+ * The default date: the locale's own `%x` with the year spelled in four digits.
+ *
+ * `%x` is the one the desktop defines -- order, separators and all -- and on a
+ * Spanish desktop glibc's is `%d/%m/%y`, so the first second of 1970 was
+ * `31/12/69`: a date nobody reads twice without asking which century.  There
+ * is no four-digit `%x`, so the **pattern** is asked for (`D_FMT`) and the year
+ * field widened.
+ *
+ * On Windows this is only the fallback for a date Windows will not write (one
+ * before 1601): `win_date_text` asks the user's regional format first. There
+ * GLib's `%x` is not the system's at all -- with no `nl_langinfo`, GLib takes
+ * it from its own catalogue, `glib20`'s translation of `%m/%d/%y` -- so that
+ * pattern is the one widened.
+ */
+static char *locale_date_default(GDateTime *when)
+{
+#ifdef G_OS_WIN32
+    const char *pattern = g_dpgettext2("glib20", "GDateTime", "%m/%d/%y");
+#else
+    const char *pattern = nl_langinfo(D_FMT);
+#endif
+    if (!pattern || !*pattern)
+        return g_date_time_format(when, "%x");
+
+    char *fmt   = widen_year(pattern);
+    char *shown = g_date_time_format(when, fmt);
+    g_free(fmt);
 
     /* A desktop that does not spell its own pattern answers `%x` as before. */
     return shown ? shown : g_date_time_format(when, "%x");
-#endif
 }
+
+#ifdef G_OS_WIN32
+/*
+ * Which of Windows' locales writes the dates: the user's own regional format
+ * -- what Settings > Time & language says, and what every other program on the
+ * machine writes with -- unless the environment names one, the way `LC_TIME`
+ * does on Linux: `LC_ALL`, then `LC_TIME`, then `LANG`. `C`, `POSIX` and
+ * `C.UTF-8` are the invariant locale (`MM/dd/yyyy`, English names), which is
+ * what a test or a script that wants a known answer asks for; `es_AR.UTF-8` is
+ * `es-AR`. A name Windows does not know is the user's format, not a refusal.
+ *
+ * The answer is NULL for the user's own, or a name the caller frees.
+ */
+static gunichar2 *win_time_locale(void)
+{
+    const char *names[] = { "LC_ALL", "LC_TIME", "LANG" };
+    const char *want    = NULL;
+
+    for (unsigned i = 0; i < G_N_ELEMENTS(names) && !want; i++) {
+        const char *v = g_getenv(names[i]);
+        if (v && *v)
+            want = v;
+    }
+    if (!want)
+        return NULL;
+
+    if (!strcmp(want, "C") || !strcmp(want, "POSIX") || !strncmp(want, "C.", 2))
+        return g_new0(gunichar2, 1);            /* LOCALE_NAME_INVARIANT: "" */
+
+    char *tag = g_strdup(want);
+    tag[strcspn(tag, ".@")] = '\0';             /* es_AR.UTF-8@euro -> es_AR */
+    g_strdelimit(tag, "_", '-');
+    gunichar2 *wide = g_utf8_to_utf16(tag, -1, NULL, NULL, NULL);
+    g_free(tag);
+
+    if (wide && IsValidLocaleName((LPCWSTR)wide))
+        return wide;
+    g_free(wide);
+    return NULL;
+}
+
+/* A Windows date picture with its year widened to four digits: a run of one or
+ * two `y` outside the quoted text becomes `yyyy`, as `widen_year` does for a
+ * strftime pattern. */
+static gunichar2 *win_widen_year(const wchar_t *pic)
+{
+    GString *out    = g_string_new(NULL);
+    gboolean quoted = FALSE;
+    char    *utf8   = g_utf16_to_utf8((const gunichar2 *)pic, -1, NULL, NULL, NULL);
+
+    for (const char *c = utf8 ? utf8 : ""; *c; ) {
+        if (*c == '\'') {
+            quoted = !quoted;
+            g_string_append_c(out, *c++);
+            continue;
+        }
+        if (!quoted && *c == 'y') {
+            gsize run = strspn(c, "y");
+            if (run < 4)
+                g_string_append(out, "yyyy");
+            else
+                g_string_append_len(out, c, (gssize)run);
+            c += run;
+            continue;
+        }
+        g_string_append_c(out, *c++);
+    }
+    g_free(utf8);
+
+    gunichar2 *wide = g_utf8_to_utf16(out->str, -1, NULL, NULL, NULL);
+    g_string_free(out, TRUE);
+    return wide;
+}
+
+/*
+ * One of `Locale.Date`'s kinds, written by Windows in the user's regional
+ * format -- or NULL, and the caller falls back to GLib.
+ *
+ * **GLib does not ask Windows.** With no `nl_langinfo`, its `%x`, `%A` and `%B`
+ * come from its own catalogue: before the setup carried `glib20.mo` every date
+ * was `11/22/26`, month first and two digits, in any language; with it, a
+ * Spanish desktop read `22/11/26` and `Domingo` -- and neither looked at the
+ * regional format the person had chosen. Linux asks glibc, which is the
+ * desktop's `LC_TIME`; this is the same question asked of the system that
+ * answers it here: the short-date picture (`LOCALE_SSHORTDATE`, year widened),
+ * `dddd`, `MMMM` and the time format. `kind` is the index in `js_locale_date`'s
+ * table: 0 Date, 1 Time, 2 DateTime, 4 Weekday, 5 Month.
+ */
+static char *win_date_text(GDateTime *when, int kind)
+{
+    int year = g_date_time_get_year(when);
+    if (year < 1601 || year > 30827)            /* SYSTEMTIME's range */
+        return NULL;
+
+    SYSTEMTIME st = { 0 };
+    st.wYear      = (WORD)year;
+    st.wMonth     = (WORD)g_date_time_get_month(when);
+    st.wDay       = (WORD)g_date_time_get_day_of_month(when);
+    st.wDayOfWeek = (WORD)(g_date_time_get_day_of_week(when) % 7);   /* 7 Sunday -> 0 */
+    st.wHour      = (WORD)g_date_time_get_hour(when);
+    st.wMinute    = (WORD)g_date_time_get_minute(when);
+    st.wSecond    = (WORD)g_date_time_get_second(when);
+
+    gunichar2 *loc  = win_time_locale();
+    LPCWSTR    name = loc ? (LPCWSTR)loc : LOCALE_NAME_USER_DEFAULT;
+    wchar_t    buf[256];
+    int        n    = 0;
+    char      *out  = NULL;
+
+    switch (kind) {
+    case 0: {
+        wchar_t pic[128];
+        if (GetLocaleInfoEx(name, LOCALE_SSHORTDATE, pic, G_N_ELEMENTS(pic)) > 0) {
+            gunichar2 *wide = win_widen_year(pic);
+            if (wide)
+                n = GetDateFormatEx(name, 0, &st, (LPCWSTR)wide, buf,
+                                    G_N_ELEMENTS(buf), NULL);
+            g_free(wide);
+        }
+        break;
+    }
+    case 1:
+        n = GetTimeFormatEx(name, 0, &st, NULL, buf, G_N_ELEMENTS(buf));
+        break;
+    case 2: {
+        char *date = win_date_text(when, 0);
+        char *time = date ? win_date_text(when, 1) : NULL;
+        if (date && time)
+            out = g_strconcat(date, " ", time, NULL);
+        g_free(date);
+        g_free(time);
+        break;
+    }
+    case 4:
+        n = GetDateFormatEx(name, 0, &st, L"dddd", buf, G_N_ELEMENTS(buf), NULL);
+        break;
+    case 5:
+        n = GetDateFormatEx(name, 0, &st, L"MMMM", buf, G_N_ELEMENTS(buf), NULL);
+        break;
+    }
+
+    if (n > 0)
+        out = g_utf16_to_utf8((const gunichar2 *)buf, -1, NULL, NULL, NULL);
+    g_free(loc);
+    return out;
+}
+#endif
 
 /*
  * Locale.Date(when, [format]) -- the desktop's own date, time, or both.
@@ -2193,10 +2341,18 @@ static JSValue js_locale_date(JSContext *ctx, JSValueConst this_val,
     if (!when)
         return JS_EXCEPTION;
 
-    char *shown = which == 0
-                ? locale_date_default(when)
-                : (kinds[which].fmt ? g_date_time_format(when, kinds[which].fmt)
-                                    : g_date_time_format_iso8601(when));
+    char *shown = NULL;
+#ifdef G_OS_WIN32
+    /* Windows writes its own dates in the user's regional format; GLib is the
+     * fallback for what it will not write. ISO is nobody's locale. */
+    if (which != 3)
+        shown = win_date_text(when, which);
+#endif
+    if (!shown)
+        shown = which == 0
+              ? locale_date_default(when)
+              : (kinds[which].fmt ? g_date_time_format(when, kinds[which].fmt)
+                                  : g_date_time_format_iso8601(when));
     g_date_time_unref(when);
 
     /* A format the locale does not define comes back NULL -- `%r` does, on a
