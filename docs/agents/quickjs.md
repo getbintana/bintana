@@ -2,11 +2,11 @@
 
 The traps and decisions of this area, each with what it cost and the rule it left. [`AGENTS.md`](../../AGENTS.md) states the rules that apply to every change; this file is the evidence behind them and the detail that only matters here.
 
-## The twenty patches in vendor/
+## The twenty-one patches in vendor/
 
 `vendor/quickjs` is a **submodule** of
 [`getbintana/quickjs`](https://github.com/getbintana/quickjs), branch `bintana`:
-upstream **v0.18.0** plus the twenty patches below, one commit each (the eighth
+upstream **v0.18.0** plus the twenty-one patches below, one commit each (the eighth
 carries a fix as a second commit until it is squashed into it). The fork's
 `BINTANA.md` is the recipe; what follows is what each patch does and what
 dropping it costs.
@@ -99,11 +99,11 @@ git push --force-with-lease origin bintana
 git submodule update --remote vendor/quickjs              # and commit the pin
 ```
 
-Then the suite. All twenty are marked `Bintana patch` in the source, and
+Then the suite. All twenty-one are marked `Bintana patch` in the source, and
 **dropping one does not fail to build** -- that is the property they share and
 the reason `tests/widgets` asserts each of them (`Decimal`, `JsonFiles`,
 `strictChecks`, `testDebugger`, `testCuratedLanguage`, `ReferenceHint`,
-`refs`, `LongAppend`, `StringSearch`, `Modules`, `Imports`) -- the
+`refs`, `LongAppend`, `StringSearch`, `Modules`, `Imports`, `NotAFunction`) -- the
 fifth of which carries the seventh, the eighth, the ninth and the thirteenth,
 the sixth the nineteenth, the seventh the twentieth, and the last two the
 fourteenth to the eighteenth. Grep the fork for the
@@ -824,6 +824,52 @@ editor renames the declaration and the `this.` uses of that class, leaving
 another class's `this.total` alone.
 
 **Dropping it does not fail to build**: `refs`' field assertions go red.
+
+### 21. A failed call says what it called
+
+`JS_ThrowTypeErrorNotCallable`, reached from `JS_CallInternal`'s
+`not_a_function`: **`Database has no function Open`** for a member that is not
+there, **`grid.rows.add is a number, not a function`** and **`local is
+undefined, not a function`** for a value that is there and cannot be called.
+The engine said `not a function` and nothing else, so a line with three calls
+sent the reader to guess which -- and `Database.Open(path)`, the name another
+library taught, is the first thing a new project writes. The wording was the
+owner's: *Open is not a function* reads as if there were an `Open` of some
+other kind.
+
+**The interpreter has only the value, so the name comes from the caller's
+bytecode, and only on the way to the error.** `js_callee_name` takes the
+calling frame's `cur_pc` (the instruction after the call), finds the call by
+a linear walk from the start, and asks `js_stack_levels` -- `compute_stack_size`'s
+walk, made to hand back its `stack_level_tab` -- how deep the stack was before
+each instruction. The function sits at `level - argc - 1` for every call
+spelling. `js_slot_writer` then answers **the last instruction before the call
+that left a value in that slot**: arguments are evaluated above it and never
+write below, so conditionals and nested calls in the arguments do not matter.
+`js_describe_slot` names what that instruction read -- a global, a local, an
+argument, a closure variable, `this` -- and for a property read recurses into
+the slot its object came from: `this.grid.Refresh`, `handlers[...]` (an index
+is not named). Anything else, a call's result or a literal, is no name, and
+the old sentence is kept.
+
+**Three guards, all about not naming the wrong thing.** The frame on top must
+be a bytecode function, the call found must take the same `argc` the failing
+call was given, and **`argv` must lie on that frame's own stack** -- a native
+function that calls a value (`g.call.call(5)`) passes an array of its own, and
+the call the JavaScript frame stopped at is the call *to* that function, not
+the failing one. Measured: `g.call.call(5)` and `[1].map(5)` (which `map`
+refuses itself, before calling) both keep `not a function`. The walk costs a
+pass over the function's bytecode per failure and nothing per call; a failure
+caught in a loop pays it every turn, which is a program already throwing on
+purpose.
+
+**Not covered**: `OP_apply` (a spread call, `f(...args)`) passes an array the
+engine built, so its `argv` is not on the stack and it keeps `not a function`;
+`new X()` is the constructor's own sentence; a value `js_describe_slot` cannot
+read through (`swap`, `perm`, an optional chain's merge) is no name.
+
+**Dropping it does not fail to build**: `tests/widgets`' `NotAFunction` goes
+red on five assertions, which is how it was watched to fail.
 
 ## The language: what the curation took and what it left
 

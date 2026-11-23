@@ -8,6 +8,15 @@ one-page answer to *what is new since the release I have*.
 
 ### Runtime and libraries
 
+- **A failed call says what it called.** The engine threw `TypeError: not a
+  function` and named nothing, so a line with three calls left the reader to
+  guess which. It now reads the caller's bytecode for what put the function on
+  the stack and says `Database has no function Open` for a member that is not
+  there, or `grid.rows.add is a number, not a function` and `local is
+  undefined, not a function` for a value that is there and cannot be called.
+  A call's own result (`f()()`) and a callback a native function calls keep
+  the old sentence, since neither has a name. Nothing is added to the ordinary
+  call: the walk happens only on the way to the error.
 - **`Zone`, a new global: the IANA time zones.** `Day` is a date and `Time` a
   time of day, neither with a zone; `Zone` turns an instant into the `Day` and
   `Time` a place reads, and back. `Zone.At(id, when)` is the offset (minutes
@@ -149,7 +158,8 @@ one-page answer to *what is new since the release I have*.
 - **The editor underlines a member a runtime global does not have.**
   `Database.Open(path)`, `File.Read(p)`, `Message.Show(t)` -- the name another
   library taught -- went through every check and failed at the first run as
-  `TypeError: not a function`, with no word of which. The live pass now says
+  `TypeError: not a function`, with no word of which (the run names it now,
+  above, but only once the line runs). The live pass now says
   `Database has no Open: it has Odbc, Sqlite`, or `Timer has no Aftr: did you
   mean Timer.After?`, from the same `Widget.Members` completion offers after the
   dot. The language's own globals (`Date`, `Math`, `JSON` ...), a class the

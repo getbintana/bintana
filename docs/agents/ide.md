@@ -1558,7 +1558,9 @@ and why `hasOwn` needed more than the photograph -- is in
 library taught, which `unresolved` cannot see (`Database` is answered by the
 runtime, so it is never free) and which the run reported only as `TypeError:
 not a function`. Measured 2026-11-23, while walking a new project's first
-fifteen minutes on Windows.
+fifteen minutes on Windows. The run says `Database has no function Open` now
+(QuickJS patch 21, [`quickjs.md`](quickjs.md)), but only when the line runs;
+this pass is what says it while the line is typed.
 
 - **The answer is `Widget.Members(name)`**, the verb completion asks after the
   dot: it answers for a global bag of functions (`File`, `Locale`) and for a

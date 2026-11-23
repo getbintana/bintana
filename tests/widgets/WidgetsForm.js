@@ -734,7 +734,7 @@ const TESTS = [
     "RowList", "RowFilter", "Reveal", "PropertyOptions", "CssNode", "TabAction", "Popover", "Image", "Switcher", "Reorder", "Aspect",
     "Removal", "AddMoves", "NumericSetters", "MissingArgs", "StrictArgs",
     "Caption", "LabelWrap", "LabelEllipsize", "ChildRefs", "DragDrop", "Errors", "Component", "Namespace",
-    "CuratedLanguage", "ReferenceHint", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Cipher", "Random", "Gzip", "Zlib", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Privilege", "Apply", "TimerShorthand", "Terminal",
+    "CuratedLanguage", "ReferenceHint", "NotAFunction", "LongAppend", "StringSearch", "StyleSameValue", "Dictionary", "Csv", "Regex", "Bytes", "Hash", "Cipher", "Random", "Gzip", "Zlib", "Zip", "ZipWrite", "Screen", "JsonFiles", "XmlFiles", "XmlWrite", "XmlRecord", "XmlOrder", "XmlSchema", "Keyring", "Log", "Privilege", "Apply", "TimerShorthand", "Terminal",
     "Settings", "Parts", "Timer", "ArgumentRefusals", "Icons", "Font", "Style", "Radius", "Padding", "Shadow", "StyleRule",
     "ColorButton",
     "ColorDialog", "FontDialog", "FileDialog", "Dialog", "IconList", "FormIcon", "ButtonClick",
@@ -19118,6 +19118,44 @@ class Form1 extends Form {
         catch (e) { plain = e.message; }
         eq("a name that was never here is unchanged", plain,
            "someUndefinedName is not defined");
+    }
+
+    /* --- a failed call says what it called -----------------------------------
+     *
+     * The engine's `not a function` named nothing, so a line with three calls
+     * sent the reader to guess which. The patch reads the caller's bytecode for
+     * the instruction that put the function on the stack, through arguments
+     * that are themselves calls and conditionals. A call made by a native
+     * function (`map`) and a call's own result have no name and keep the old
+     * sentence.
+     */
+    testNotAFunction() {
+        const said = (f) => {
+            try { f(); return "no throw"; } catch (e) { return e.message; }
+        };
+        const nothing = () => {};
+        const grid = { rows: { add: 1 } };
+        const handlers = [1];
+        let local;
+
+        eq("a member a global does not have is named as missing",
+           said(() => Database.Open("x")), "Database has no function Open");
+        eq("a member that is there and is not a function says what it is, " +
+           "through arguments that call and branch",
+           said(() => grid.rows.add(1, nothing(), grid ? 2 : 3)),
+           "grid.rows.add is a number, not a function");
+        eq("a local that holds nothing",
+           said(() => local()), "local is undefined, not a function");
+        eq("an element read by index",
+           said(() => handlers[0]()), "handlers[...] is a number, not a function");
+        eq("a member of this",
+           said(function () { this.nope(); }.bind({})), "this has no function nope");
+        eq("a call's result has no name",
+           said(() => nothing()()), "not a function");
+        check("a callback a native function refuses is not mistaken for its caller",
+              !said(() => [1].map(5)).includes("map"), said(() => [1].map(5)));
+        eq("nor a value a native function calls",
+           said(() => nothing.call.call(5)), "not a function");
     }
 
     /* --- the language a project actually gets --------------------------------
