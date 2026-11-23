@@ -27,6 +27,13 @@ one-page answer to *what is new since the release I have*.
   today for Cairo, Almaty, Asunción and Nuuk. The reader was checked against
   Python's zoneinfo and `zdump` over 418 zones, 1850-2099, the second before
   and the second of every transition, in the fat and the slim TZif forms.
+- **`Field.Bool` takes its default as the others do, and refuses the rest.**
+  `Field.Bool({ def: true, as: "on" })` is read now, beside `Field.Bool(true)`
+  and `Field.Bool(false, { as: "on" })`. Before, options handed first were
+  taken for the default and lost -- `as` and all, so the field read a key
+  nobody wrote -- and a `def` among the options was overwritten by the absent
+  first argument, both in silence. A default given both ways, or one that is
+  not `true` or `false`, is a `TypeError` where the field is declared.
 - **`bintana check` knows `singleInstance`.** The key the runtime reads to
   hand a second run to the first was reported as one "nothing reads", because
   `ProjectFile` never declared it -- so a project that used it could not pass

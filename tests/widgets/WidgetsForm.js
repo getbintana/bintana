@@ -3674,6 +3674,32 @@ class Form1 extends Form {
                () => Field.Enum(["a", "b"], "z"));
         throws("a list of nothing in particular", () => Field.List("text"));
 
+        /* A boolean's default comes first or among the options, as every other
+         * field takes it. The options handed first were taken for the default
+         * and lost -- `as` and all -- and a `def` among them was overwritten,
+         * both in silence. */
+        class Flags extends Record {
+            static Fields = {
+                First:   Field.Bool(true),
+                Option:  Field.Bool({ def: true }),
+                Renamed: Field.Bool({ as: "renamed_on" }),
+                Both:    Field.Bool(false, { as: "both_on" }),
+                After:   Field.Bool(undefined, { def: true }),
+                Plain:   Field.Bool(),
+            };
+        }
+        const flags = Flags.Load({ renamed_on: true, both_on: true });
+        eq("a default first", flags.First, true);
+        eq("a default among the options", flags.Option, true);
+        eq("options first keep their 'as'", flags.Renamed, true);
+        eq("a default and options", flags.Both, true);
+        eq("a 'def' option with nothing first", flags.After, true);
+        eq("no default is false", flags.Plain, false);
+        throws("a default given twice", () => Field.Bool(true, { def: false }));
+        throws("a default that is not a boolean", () => Field.Bool("yes"));
+        throws("a 'def' that is not a boolean", () => Field.Bool({ def: 1 }));
+        throws("two objects", () => Field.Bool({ as: "a" }, { as: "b" }));
+
         /*
          * **And a list of records, which used to be the wall.** `Field.List`
          * took a *field* for its entries and a `Record` was not one, so a record

@@ -14900,7 +14900,7 @@
           "Params": 2,
           "Signature": "(def, opts)",
           "Returns": "",
-          "Doc": "`true`/`false`, and SQL's `0`/`1`; `def` is where it starts",
+          "Doc": "`true`/`false`, and SQL's `0`/`1`. Where it starts is `def`: the first argument (`Field.Bool(true)`) or an option (`Field.Bool({ def: true })`), not both",
           "Native": false
         },
         {

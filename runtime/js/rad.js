@@ -4750,9 +4750,40 @@ GLOBAL.Field = {
      */
     Bytes:    (opts) => makeField("bytes",    opts),
 
-    /* The default first, because it is the whole of what a boolean field says. */
-    /** `true`/`false`, and SQL's `0`/`1`; `def` is where it starts */
-    Bool: (def, opts) => makeField("bool", opts, { def: def === true }),
+    /*
+     * The default may come first, because it is the whole of what a boolean
+     * field says -- `Field.Bool(true)` -- or among the options, as every other
+     * field takes it -- `Field.Bool({ def: true, as: "on" })`. Both are read,
+     * and what is neither is refused: the options handed first used to be
+     * taken for the default (`{...} === true` is false) and lost with it, so
+     * `Field.Bool({ as: "singleInstance" })` read a key nobody wrote, in
+     * silence; and a `def` among the options was overwritten by the absent
+     * first argument.
+     */
+    /**
+     * `true`/`false`, and SQL's `0`/`1`. Where it starts is `def`: the first
+     * argument (`Field.Bool(true)`) or an option (`Field.Bool({ def: true })`),
+     * not both
+     */
+    Bool: (def, opts) => {
+        if (def !== null && typeof def === "object" && !Array.isArray(def) &&
+            opts === undefined) {
+            opts = def;
+            def = undefined;
+        }
+        if (def !== undefined && typeof def !== "boolean")
+            throw new TypeError("Field.Bool: the default is true or false -- " +
+                                "Field.Bool(true), or Field.Bool({ def: true, ... })");
+        if (opts && opts.def !== undefined) {
+            if (def !== undefined)
+                throw new TypeError("Field.Bool: the default is given twice, " +
+                                    "first and as 'def'");
+            if (typeof opts.def !== "boolean")
+                throw new TypeError("Field.Bool: 'def' is true or it is false");
+            def = opts.def;
+        }
+        return makeField("bool", opts, { def: def === true });
+    },
 
     /* The values it accepts, which is also what PropertyOptions hands to
      * whoever is editing it -- the same thing BTA_CLASS_ENUM does in C, and for
