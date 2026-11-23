@@ -435,6 +435,14 @@ portable tree and the setup carry MSYS2's in `share/zoneinfo`:
 `mingw-w64-ucrt-x86_64-tzdata` must be installed where
 `tools/windows-portable.sh` runs, which warns when it is not.
 
+**GLib's and GTK's own words travel too.** Windows has no glibc, so the
+weekdays and months `Locale.Date` writes are GLib's catalogue's (`glib20`),
+and an entry's menu, the calendar and the choosers are GTK's (`gtk40`): the
+portable tree and the setup carry those two and `gtksourceview-5` from
+MSYS2's `share/locale`, every language and no other domain -- about 21 MB,
+7 MB compressed. Without them a Spanish desktop reads `Monday` and `Copy`.
+An application's own words are its `po/`, which the runtime reads itself.
+
 ## Profiling
 
 Two ways in, neither of which needs the runtime built specially:

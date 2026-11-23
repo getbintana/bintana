@@ -653,6 +653,10 @@ function checkNsis(root) {
     put(File.Join("libexec", "gstreamer-1.0", "gst-plugin-scanner.exe"), "MZ");
     put(File.Join("share", "gstreamer-1.0", "presets", "x.prs"), "preset");
     put(File.Join("share", "poppler", "cMap", "Adobe-Japan1"), "CMap");
+    put(File.Join("share", "zoneinfo", "America", "Argentina", "Buenos_Aires"), "TZif2");
+    for (const domain of ["glib20", "gtk40", "gtksourceview-5", "coreutils"])
+        put(File.Join("share", "locale", "es", "LC_MESSAGES", domain + ".mo"), "MO");
+    put(File.Join("share", "locale", "pt_BR", "LC_MESSAGES", "gtk40.mo"), "MO");
 
     const staged = Nsis.Stage(dir, File.Join(root, "out-stage"), { Prefix: prefix });
     check("the executable travels",
@@ -683,6 +687,18 @@ function checkNsis(root) {
           File.Exists(File.Join(staged, "libexec", "gstreamer-1.0", "gst-plugin-scanner.exe")) &&
           File.Exists(File.Join(staged, "share", "gstreamer-1.0", "presets", "x.prs")) &&
           File.Exists(File.Join(staged, "share", "poppler", "cMap", "Adobe-Japan1")));
+    check("and the time zone database Zone reads, which Windows has none of",
+          File.Exists(File.Join(staged, "share", "zoneinfo", "America", "Argentina",
+                                "Buenos_Aires")));
+    /* GLib's and GTK's own words: the weekdays Locale.Date writes on Windows
+     * are glib20's. Those three domains in every language, and not the rest
+     * of a prefix's share/locale, which in MSYS2 is every package's. */
+    const mo = (lang, domain) =>
+        File.Exists(File.Join(staged, "share", "locale", lang, "LC_MESSAGES", domain + ".mo"));
+    check("and GLib's, GTK's and GtkSourceView's catalogues",
+          mo("es", "glib20") && mo("es", "gtk40") && mo("es", "gtksourceview-5"));
+    check("in every language there is", mo("pt_BR", "gtk40"));
+    check("but no other package's", !mo("es", "coreutils"));
     check("and the shipped libraries the project's uses resolve from",
           File.Exists(File.Join(staged, "share", "bintana", "lib", "x.js")));
     check("with the notices of the binaries it redistributes",

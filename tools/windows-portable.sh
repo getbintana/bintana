@@ -255,6 +255,25 @@ else
     echo "warning: no $ucrt/share/zoneinfo -- install mingw-w64-ucrt-x86_64-tzdata; Zone will have no database" >&2
 fi
 
+# GLib's, GTK's and GtkSourceView's own words, every language: Windows has no
+# glibc, so the weekdays and months `Locale.Date` writes come from glib20, and
+# GTK's (an entry's menu, the calendar, the choosers) from gtk40 -- without
+# them a Spanish desktop gets `Monday` and `Copy`. Only these three domains:
+# `share/locale` in MSYS2 is every package's. About 21 MB, 7 MB compressed.
+# lib/package/Nsis.js copies the same files.
+if [ -d "$ucrt/share/locale" ]; then
+    for mo in "$ucrt"/share/locale/*/LC_MESSAGES/glib20.mo \
+              "$ucrt"/share/locale/*/LC_MESSAGES/gtk40.mo \
+              "$ucrt"/share/locale/*/LC_MESSAGES/gtksourceview-5.mo; do
+        [ -f "$mo" ] || continue
+        rel=${mo#"$ucrt"/}
+        mkdir -p "$dest/$(dirname "$rel")"
+        cp "$mo" "$dest/$rel"
+    done
+else
+    echo "warning: no $ucrt/share/locale -- GLib and GTK will speak English" >&2
+fi
+
 # The font GTK draws with on Windows, which has no Cantarell: the setting the
 # GTK project's own Windows notes name.
 mkdir -p "$dest/etc/gtk-4.0"

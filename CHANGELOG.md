@@ -27,6 +27,12 @@ one-page answer to *what is new since the release I have*.
   today for Cairo, Almaty, Asunción and Nuuk. The reader was checked against
   Python's zoneinfo and `zdump` over 418 zones, 1850-2099, the second before
   and the second of every transition, in the fat and the slim TZif forms.
+- **Windows speaks the desktop's language in GLib's and GTK's words.** The
+  portable tree and the setup carry the `glib20`, `gtk40` and
+  `gtksourceview-5` catalogues, every language (about 7 MB compressed): a
+  Spanish Windows got `Monday` from `Locale.Date(day, "Weekday")` -- the names
+  are GLib's there, with no glibc -- and GTK's own menus and dialogs in
+  English. Only those domains: MSYS2's `share/locale` is every package's.
 - **A partial `Painter.Font` keeps the surface's family.** `p.Font = "Bold 11"`
   replaced the whole description, so the missing family went to Pango's own
   default and drew serif beside a sans interface; it is said over the font
