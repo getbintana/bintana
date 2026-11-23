@@ -52,6 +52,7 @@ typedef struct {
     BtaWidget   *w;         /* the surface, for its font and its ink colour */
     cairo_t     *cr;        /* NULL between frames: the whole lifetime rule */
     PangoLayout *layout;    /* one, reused -- measuring is 40% of drawing */
+    PangoFontDescription *base;  /* the font it started with, under every `Font` */
     GString     *dump;      /* what this frame was asked to do */
     char        *color;     /* what Color was last set to: cairo has no getter */
     int          width, height;
@@ -66,6 +67,8 @@ static void painter_finalizer(JSRuntime *rt, JSValue val)
     /* Never the cairo_t: it belongs to whoever opened the frame. */
     if (p->layout)
         g_object_unref(p->layout);
+    if (p->base)
+        pango_font_description_free(p->base);
     if (p->dump)
         g_string_free(p->dump, TRUE);
     g_free(p->color);
@@ -818,6 +821,47 @@ static void note_opts(GString *out, const TextOpts *o)
 static char *metrics_default_font(void);
 static void  metrics_resolution(PangoLayout *layout);
 
+/*
+ * A font description said over another: what `spec` names wins, and what it
+ * leaves out comes from `base`. **A partial description is a change, not a
+ * font** -- `"Bold 11"` is the surface's own family in bold at 11, as a
+ * control's `Font` is -- where taking it alone handed the missing family to
+ * Pango's own default, which drew serif beside a sans interface. A `spec`
+ * that names its family is what it always was. The answer is the caller's.
+ */
+static PangoFontDescription *font_over(const PangoFontDescription *base,
+                                       const char *spec)
+{
+    PangoFontDescription *said = pango_font_description_from_string(spec);
+
+    if (!base)
+        return said;
+    PangoFontDescription *out = pango_font_description_copy(base);
+    pango_font_description_merge(out, said, TRUE);
+    pango_font_description_free(said);
+    return out;
+}
+
+/*
+ * Every frame starts at its surface's font. The layout is the painter's, kept
+ * for the frame's calls -- measuring is 40% of drawing -- and was kept across
+ * frames too, so a frame that set no `Font` drew in the last frame's, and the
+ * control's own font was read once, on its first frame: a `Font` assigned to
+ * the control later, a theme or a text scale did not reach the drawing. One
+ * layout a frame keeps the first and costs nothing the second needs.
+ */
+static void painter_fresh_text(BtaPainter *p)
+{
+    if (p->layout) {
+        g_object_unref(p->layout);
+        p->layout = NULL;
+    }
+    if (p->base) {
+        pango_font_description_free(p->base);
+        p->base = NULL;
+    }
+}
+
 static PangoLayout *painter_layout(BtaPainter *p)
 {
     if (!p->layout) {
@@ -846,6 +890,12 @@ static PangoLayout *painter_layout(BtaPainter *p)
             g_free(name);
             metrics_resolution(p->layout);
         }
+        /* Kept apart from the layout's, which every `Font` replaces: each one is
+         * said over this, never over the last -- `"Italic 9"` then `"Bold 11"`
+         * is bold at 11, not a bold italic nobody asked for. */
+        const PangoFontDescription *start = pango_layout_get_font_description(p->layout);
+        if (start)
+            p->base = pango_font_description_copy(start);
     } else {
         pango_cairo_update_layout(p->cr, p->layout);
     }
@@ -880,8 +930,9 @@ static JSValue painter_set_font(JSContext *ctx, JSValueConst this_val,
     if (!s)
         return JS_EXCEPTION;
 
-    PangoFontDescription *fd = pango_font_description_from_string(s);
-    pango_layout_set_font_description(painter_layout(p), fd);
+    PangoLayout          *layout = painter_layout(p);
+    PangoFontDescription *fd     = font_over(p->base, s);
+    pango_layout_set_font_description(layout, fd);
     pango_font_description_free(fd);
 
     note(p, "Font %s", s);
@@ -1466,6 +1517,9 @@ static PangoLayout *metrics_prepare(JSContext *ctx, const char *who,
     if (!text)
         return NULL;
 
+    /* The font given is said over the default one, as a painter's is over its
+     * surface's: a `Drawing` painter starts at this same default, so `"Bold
+     * 11"` measured here and drawn there is one font. */
     char *chosen = NULL;
     if (argc > 1 && !JS_IsUndefined(argv[1]) && !JS_IsNull(argv[1])) {
         const char *given = JS_ToCString(ctx, argv[1]);
@@ -1476,15 +1530,18 @@ static PangoLayout *metrics_prepare(JSContext *ctx, const char *who,
         chosen = g_strdup(given);
         JS_FreeCString(ctx, given);
     }
+    char *fallback = metrics_default_font();
     if (!chosen || !*chosen) {
         g_free(chosen);
-        chosen = metrics_default_font();
+        chosen = fallback;
+        fallback = NULL;
     }
 
     TextOpts o;
     if (!text_opts(ctx, argc > 2 ? argv[2] : JS_UNDEFINED, who, &o)) {
         JS_FreeCString(ctx, text);
         g_free(chosen);
+        g_free(fallback);
         return NULL;
     }
 
@@ -1495,13 +1552,18 @@ static PangoLayout *metrics_prepare(JSContext *ctx, const char *who,
      * font of the call before it, so `Text.Height("x")` after
      * `Text.Height("x", "Bold 18")` measured in Bold 18. */
     if (chosen && *chosen) {
-        PangoFontDescription *fd = pango_font_description_from_string(chosen);
+        PangoFontDescription *base = fallback && *fallback
+            ? pango_font_description_from_string(fallback) : NULL;
+        PangoFontDescription *fd = font_over(base, chosen);
         pango_layout_set_font_description(l, fd);
         pango_font_description_free(fd);
+        if (base)
+            pango_font_description_free(base);
     } else {
         pango_layout_set_font_description(l, NULL);
     }
     g_free(chosen);
+    g_free(fallback);
 
     bool ok = layout_text(ctx, l, text, &o, who);
     JS_FreeCString(ctx, text);
@@ -2280,8 +2342,10 @@ static const JSCFunctionListEntry painter_props[] = {
      */
     JS_CGETSET_DEF("LineJoin",   painter_get_join,       painter_set_join),
     /* Font
-     *   a Pango description (`"Cantarell Bold 10"`). Defaults to the
-     *   widget's, so a drawing follows the desktop's font and text scale
+     *   a Pango description (`"Cantarell Bold 10"`), or a partial one said
+     *   over the widget's: `"Bold 11"` is the widget's family in bold at 11.
+     *   Every frame starts at the widget's, so a drawing follows the desktop's
+     *   font and text scale
      */
     JS_CGETSET_DEF("Font",       painter_get_font,       painter_set_font),
     /* Foreground
@@ -2731,6 +2795,7 @@ static bool paint_frame_page(BtaWidget *w, cairo_t *cr, int width, int height,
     g_string_truncate(p->dump, 0);
     g_free(p->color);
     p->color = NULL;
+    painter_fresh_text(p);
 
     GdkRGBA ink;
     painter_ink(p, &ink);
@@ -3178,6 +3243,7 @@ static bool free_frame(void *data, cairo_t *cr, int width, int height, int page)
     g_string_truncate(p->dump, 0);
     g_free(p->color);
     p->color = NULL;
+    painter_fresh_text(p);
 
     GdkRGBA ink;
     painter_ink(p, &ink);

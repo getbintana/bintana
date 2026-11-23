@@ -11118,6 +11118,15 @@ function Main() {
             catch (e) { this.plotImageUndef = e.message; }
             return;
         }
+        if (this.plotWhat === "font") {
+            const seen = [p.Font];
+            for (const f of ["Bold 11", "Italic 9", "Bold 11", "Monospace 10", ""]) {
+                p.Font = f;
+                seen.push(p.Font);
+            }
+            this.fontSeen = seen;
+            return;
+        }
         if (this.plotWhat === "metrics") {
             p.Font = this.metricsFont;
             this.metricsPainter = { Width: p.TextWidth(this.metricsText),
@@ -13822,6 +13831,30 @@ class Form1 extends Form {
         check("the font argument is read",
               Text.Width(this.metricsText, "Cantarell 24") >
               Text.Width(this.metricsText, "Cantarell 8"));
+
+        /* **A partial font is said over the surface's**, as a control's `Font`
+         * is: `"Bold 11"` keeps the control's family. It used to replace the
+         * whole description, and the missing family went to Pango's own
+         * default -- serif beside a sans interface. Each one is said over the
+         * font the painter started with, never over the last. */
+        this.plotWhat = "font";
+        area.Save(png, 200, 100);
+        const [start, bold, italic, again, mono, empty] = this.fontSeen;
+        const family = start.replace(/\s+[\d.]+(px)?$/, "");
+        check("the painter starts at a font with a family", family.length > 0, start);
+        eq("a partial font keeps that family", bold, family + " Bold 11");
+        eq("and so does the next", italic, family + " Italic 9");
+        eq("each is said over the start, not the last", again, family + " Bold 11");
+        eq("a font that names its family is that family", mono, "Monospace 10");
+        eq("nothing said is the start again", empty, start);
+        eq("Text measures a partial font the same way",
+           Text.Width(this.metricsText, "Bold 11"),
+           Text.Width(this.metricsText, Text.Font.replace(/\s+[\d.]+(px)?$/, "") + " Bold 11"));
+        /* And a frame starts at the control's font, not at the last frame's. */
+        area.Save(png, 200, 100);
+        eq("the next frame starts at the control's font", this.fontSeen[0], start);
+        this.plotWhat = "metrics";
+        area.Save(png, 200, 100);        /* the dump below reads this frame */
 
         /* And with no font: the desktop's, which is what a control draws with. */
         check("Text.Font is a font description", typeof Text.Font === "string");

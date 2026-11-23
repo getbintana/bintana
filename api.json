@@ -16348,7 +16348,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "a Pango description (`\"Cantarell Bold 10\"`). Defaults to the widget's, so a drawing follows the desktop's font and text scale",
+          "Doc": "a Pango description (`\"Cantarell Bold 10\"`), or a partial one said over the widget's: `\"Bold 11\"` is the widget's family in bold at 11. Every frame starts at the widget's, so a drawing follows the desktop's font and text scale",
           "Native": true
         },
         {

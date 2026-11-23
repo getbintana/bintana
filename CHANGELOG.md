@@ -27,6 +27,15 @@ one-page answer to *what is new since the release I have*.
   today for Cairo, Almaty, Asunción and Nuuk. The reader was checked against
   Python's zoneinfo and `zdump` over 418 zones, 1850-2099, the second before
   and the second of every transition, in the fat and the slim TZif forms.
+- **A partial `Painter.Font` keeps the surface's family.** `p.Font = "Bold 11"`
+  replaced the whole description, so the missing family went to Pango's own
+  default and drew serif beside a sans interface; it is said over the font
+  the painter starts with now -- the control's, or the desktop's under
+  `Drawing` -- and each assignment over that start, not over the last.
+  `Text.Width` and the rest measure a partial font the same way. And every
+  frame starts at the control's font: the layout was kept across frames, so a
+  frame that set no `Font` drew in the last frame's, and a `Font`, theme or
+  text scale given to the control after its first frame never reached it.
 - **`Field.Bool` takes its default as the others do, and refuses the rest.**
   `Field.Bool({ def: true, as: "on" })` is read now, beside `Field.Bool(true)`
   and `Field.Bool(false, { as: "on" })`. Before, options handed first were
