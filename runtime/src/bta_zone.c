@@ -200,9 +200,12 @@ static char *zone_from_path(const char *path)
 /*
  * The registry's names for the zones, to IANA ids: CLDR's windowsZones.xml,
  * the rows for territory "001" (each Windows zone's principal place), with
- * the eight that CLDR spells with a retired id (`America/Buenos_Aires`,
+ * the seven that CLDR spells with a retired id (`America/Buenos_Aires`,
  * `Asia/Calcutta` ...) followed through tzdata's links to the id the
- * database names today. Generated from CLDR main, 2026-11-22: 142 rows.
+ * database names today -- except Greenwich Standard Time, which stays
+ * CLDR's `Atlantic/Reykjavik`: a link now, but Iceland's own row in zone.tab.
+ * From CLDR main, 2026-11-22: 142 rows, then the two the registry still has
+ * that CLDR dropped. A Windows 11 26H2 registry has 144 keys; all are here.
  *
  * The data is Unicode's: Copyright (c) 1991-2026 Unicode, Inc., distributed
  * under the Unicode License v3 (https://www.unicode.org/license.txt); see
@@ -219,6 +222,7 @@ static const struct {
     { "AUS Eastern Standard Time", "Australia/Sydney" },
     { "Afghanistan Standard Time", "Asia/Kabul" },
     { "Alaskan Standard Time", "America/Anchorage" },
+    { "Alberta Standard Time", "America/Edmonton" },
     { "Aleutian Standard Time", "America/Adak" },
     { "Altai Standard Time", "Asia/Barnaul" },
     { "Arab Standard Time", "Asia/Riyadh" },
@@ -234,6 +238,7 @@ static const struct {
     { "Bangladesh Standard Time", "Asia/Dhaka" },
     { "Belarus Standard Time", "Europe/Minsk" },
     { "Bougainville Standard Time", "Pacific/Bougainville" },
+    { "British Columbia Standard Time", "America/Vancouver" },
     { "Canada Central Standard Time", "America/Regina" },
     { "Cape Verde Standard Time", "Atlantic/Cape_Verde" },
     { "Caucasus Standard Time", "Asia/Yerevan" },
@@ -273,13 +278,13 @@ static const struct {
     { "Israel Standard Time", "Asia/Jerusalem" },
     { "Jordan Standard Time", "Asia/Amman" },
     { "Kaliningrad Standard Time", "Europe/Kaliningrad" },
-    { "Kamchatka Standard Time", "Asia/Kamchatka" },
     { "Korea Standard Time", "Asia/Seoul" },
     { "Libya Standard Time", "Africa/Tripoli" },
     { "Line Islands Standard Time", "Pacific/Kiritimati" },
     { "Lord Howe Standard Time", "Australia/Lord_Howe" },
     { "Magadan Standard Time", "Asia/Magadan" },
     { "Magallanes Standard Time", "America/Punta_Arenas" },
+    { "Manitoba Standard Time", "America/Winnipeg" },
     { "Marquesas Standard Time", "Pacific/Marquesas" },
     { "Mauritius Standard Time", "Indian/Mauritius" },
     { "Middle East Standard Time", "Asia/Beirut" },
@@ -355,6 +360,10 @@ static const struct {
     { "West Pacific Standard Time", "Pacific/Port_Moresby" },
     { "Yakutsk Standard Time", "Asia/Yakutsk" },
     { "Yukon Standard Time", "America/Whitehorse" },
+    /* Not CLDR's: two keys Windows still offers, as "(old)", that CLDR
+     * no longer lists. Mid-Atlantic is UTC-02 all year, as it was mapped. */
+    { "Kamchatka Standard Time", "Asia/Kamchatka" },
+    { "Mid-Atlantic Standard Time", "Etc/GMT+2" },
 };
 
 /* The registry key of the zone Windows is set to, as an IANA id, or NULL. */
