@@ -71,6 +71,15 @@ they store every transition up to 2037. `tests/widgets`' `testZone` builds such
 a zone byte by byte (an abbreviation-only change, then a footer) and fails on
 the old code with `2005-11-06T04:00:00.000Z STX>STX`.
 
+On Windows 11 26H2 the same build passed `testZone` and the widgets suite, and
+`Zone.Local` was asked once per registry key, each set with `tzutil /s` in a new
+process: all 142 keys `tzutil` accepts answer an IANA id, none falls back to
+`"UTC"`. That run is what found three of CLDR's rows (Alberta, British
+Columbia, Manitoba) missing from the first copy of the table. The other two
+keys, Kamchatka and Mid-Atlantic, are retired and `tzutil` refuses them; their
+rows are for a machine that kept one from before. The portable tree, started
+from `cmd.exe` with no MSYS2 on `PATH`, reads its own `share/zoneinfo`.
+
 ## What is not here
 
 - Formatting. `Locale.Date(Zone.Day(id, when), "Weekday")` names the day in the
