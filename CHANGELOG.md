@@ -27,6 +27,12 @@ one-page answer to *what is new since the release I have*.
   today for Cairo, Almaty, Asunción and Nuuk. The reader was checked against
   Python's zoneinfo and `zdump` over 418 zones, 1850-2099, the second before
   and the second of every transition, in the fat and the slim TZif forms.
+- **`bintana check` knows `singleInstance`.** The key the runtime reads to
+  hand a second run to the first was reported as one "nothing reads", because
+  `ProjectFile` never declared it -- so a project that used it could not pass
+  `--strict`. It is a field now, and the check says as errors the two
+  manifests the window's runtime refuses to start: a value that is not `true`
+  or `false`, and `true` with no `id`.
 
 ## 0.4.1 — 2026-11-22
 

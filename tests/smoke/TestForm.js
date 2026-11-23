@@ -491,6 +491,30 @@ class TestForm extends Form {
                   fixed.Output);
             eq("...leaving a clean pass", run(dir).ExitCode, 0);
 
+            /* `singleInstance` is a key the runtime reads, so it is not one
+             * "nothing reads" -- which is what the pass said of it while
+             * `ProjectFile` did not declare it -- and the two values the window's
+             * runtime refuses at load are errors here too. */
+            const manifest = (extra) => write("project.btp", JSON.stringify({
+                name: "smoke-check", startup: "Main", sources: ["Main.js"], ...extra,
+            }));
+            manifest({ id: "org.bintana.SmokeCheck", singleInstance: true });
+            const single = run(dir);
+            eq("singleInstance with an id passes", single.ExitCode, 0);
+            check("...and is not a key nothing reads", !single.Output.includes("singleInstance"),
+                  single.Output);
+            manifest({ singleInstance: true });
+            const noId = run(dir);
+            eq("singleInstance with no id is an error", noId.ExitCode, 1);
+            check("...that says what it needs", noId.Output.includes("singleInstance needs an id"),
+                  noId.Output);
+            manifest({ id: "org.bintana.SmokeCheck", singleInstance: "yes" });
+            const yes = run(dir);
+            eq("a singleInstance that is not a boolean is an error", yes.ExitCode, 1);
+            check("...that says so", yes.Output.includes("singleInstance is not true or false"),
+                  yes.Output);
+            manifest({});
+
             /* A `.form` a person edited can be any JSON at all. The pass reads
              * files it did not write, so a shape it cannot walk is a row about
              * that file and not a stack trace that stops the pass -- which is
