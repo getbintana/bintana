@@ -27624,6 +27624,33 @@ export class UriChild extends Form {
             eq("the day's name is lower case, as Spanish writes it", dicho[4], "lunes");
             eq("and the month's", dicho[5], "agosto");
         }
+
+        /*
+         * **Weekday and Month are the Gregorian calendar's**, whatever the
+         * locale's own calendar is: they are the halves of a sentence built
+         * around a day and a year the program holds, and those are Gregorian.
+         * ar-SA's default calendar on Windows is the Hijri, which named 31
+         * August 2026 Rabi' al-awwal. The 1st and the 31st of that August fall
+         * in two Hijri months and in one Gregorian one, so the two must have
+         * the same name -- asked without knowing how Arabic spells it. Only
+         * Windows has a non-Gregorian default to get wrong; glibc's ar_SA is
+         * Gregorian, and a Linux without the locale answers C's.
+         */
+        const months = File.Join(SCRATCH, "cmonths");
+        Directory.Make(months);
+        File.SaveJson(File.Join(months, "project.btp"), { name: "cmonths", main: "main" });
+        File.Save(File.Join(months, "Main.js"),
+                  'function main() {\n' +
+                  '    print(Locale.Date("2026-08-01", "Month"));\n' +
+                  '    print(Locale.Date("2026-08-31", "Month"));\n' +
+                  '    Application.Quit(0);\n' +
+                  '}\n');
+        const ar = Exec.Wait([Application.Executable, months],
+                             { Environment: { LC_ALL: "ar_SA.UTF-8", LANG: "ar_SA.UTF-8" },
+                               Timeout: 20000 });
+        const named = outputLines(ar.Output.trim());
+        check("the month child ran", ar.ExitCode === 0, ar.Output);
+        eq("a month's name is the Gregorian month's, in any calendar", named[0], named[1]);
     }
 
     /* --- Stopwatch ----------------------------------------------------------

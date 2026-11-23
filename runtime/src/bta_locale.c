@@ -2204,6 +2204,17 @@ static gunichar2 *win_widen_year(const wchar_t *pic)
  * answers it here: the short-date picture (`LOCALE_SSHORTDATE`, year widened),
  * `dddd`, `MMMM` and the time format. `kind` is the index in `js_locale_date`'s
  * table: 0 Date, 1 Time, 2 DateTime, 4 Weekday, 5 Month.
+ *
+ * **Weekday and Month are the Gregorian calendar's names, whatever the user's
+ * calendar is.** They exist to build a sentence around a day and a year the
+ * program holds -- `Locale.Text("{0} {1} de {2} de {3}", weekday, day, month,
+ * year)` -- and those are Gregorian (`Day`'s "YYYY-MM-DD"); a locale whose
+ * default calendar is another (ar-SA's is the Hijri, Umm al-Qura) answered
+ * `ربيع الأول` for 31 August, a month of a calendar the day and the year in
+ * the sentence are not of. So they are asked of the locale's Gregorian
+ * calendar (`GetCalendarInfoEx`, `CAL_GREGORIAN`). Date, Time and DateTime are
+ * whole spellings of a moment and stay what Windows writes for the person's
+ * calendar, as every other program on the machine does.
  */
 static char *win_date_text(GDateTime *when, int kind)
 {
@@ -2251,10 +2262,19 @@ static char *win_date_text(GDateTime *when, int kind)
         break;
     }
     case 4:
-        n = GetDateFormatEx(name, 0, &st, L"dddd", buf, G_N_ELEMENTS(buf), NULL);
+        /* Monday is CAL_SDAYNAME1, as GLib's day 1 is. */
+        n = GetCalendarInfoEx(name, CAL_GREGORIAN, NULL,
+                              CAL_SDAYNAME1 + (g_date_time_get_day_of_week(when) - 1),
+                              buf, G_N_ELEMENTS(buf), NULL);
+        if (n <= 0)
+            n = GetDateFormatEx(name, 0, &st, L"dddd", buf, G_N_ELEMENTS(buf), NULL);
         break;
     case 5:
-        n = GetDateFormatEx(name, 0, &st, L"MMMM", buf, G_N_ELEMENTS(buf), NULL);
+        n = GetCalendarInfoEx(name, CAL_GREGORIAN, NULL,
+                              CAL_SMONTHNAME1 + (st.wMonth - 1),
+                              buf, G_N_ELEMENTS(buf), NULL);
+        if (n <= 0)
+            n = GetDateFormatEx(name, 0, &st, L"MMMM", buf, G_N_ELEMENTS(buf), NULL);
         break;
     }
 

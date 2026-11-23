@@ -37,6 +37,10 @@ one-page answer to *what is new since the release I have*.
   month's names, in the user's regional format, or in the locale `LC_ALL`,
   `LC_TIME` or `LANG` names, `C` being the invariant one -- so a Spanish
   desktop reads `31/08/2026`, `lunes`, `agosto` on Windows and on Linux alike.
+  `Weekday` and `Month` are the Gregorian calendar's names in every locale --
+  they go in a sentence with a day and a year the program holds -- where ar-SA,
+  whose Windows calendar is the Hijri, named 31 August `ربيع الأول`; `Date`,
+  `Time` and `DateTime` stay in the person's calendar, as Windows writes them.
 - **Windows speaks the desktop's language in GLib's and GTK's words.** The
   portable tree and the setup carry the `glib20`, `gtk40` and
   `gtksourceview-5` catalogues, every language (about 7 MB compressed): a
