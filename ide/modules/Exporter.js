@@ -103,17 +103,41 @@ export class Exporter {
          * a tree over whoever's current directory -- the difference between an
          * archive somebody can open and one that is a small accident.
          */
-        /* A Windows path starts with `C:`, which GNU tar reads as a remote
-         * host unless told otherwise. */
-        const args = ["tar"];
-        if (Environment.OS === "Windows")
-            args.push("--force-local");
+        const args = Exporter.tar();
         args.push("-cf", abs, "-C", parent, this.name);
 
         this.ide.log(`> ${args.join(" ")}\n`);
         Exec(args,
              (line) => this.ide.log(`${line}\n`),
              (code) => this.finished(code, abs));
+    }
+
+    /*
+     * The command line's start for this machine's `tar`: `[tar]`, or
+     * `[tar, "--force-local"]` where that tar needs it.
+     *
+     * **Which tar it is decides, not which system.** A Windows path starts
+     * with `C:`, which GNU tar reads as a host to reach over the network unless
+     * told `--force-local`. But the `tar` a Windows machine has is the one in
+     * `System32`, which is bsdtar: it reads `C:` as a drive and **refuses**
+     * `--force-local` as an option it does not know. So Export failed on every
+     * Windows without MSYS or Git's shell ahead of it on the `PATH` -- which is
+     * every Windows a new user has -- while the suite, which runs under MSYS,
+     * saw GNU tar and passed. The tar is asked once, and remembered.
+     */
+    static tar(command = "tar") {
+        if (Environment.OS !== "Windows") return [command];
+
+        Exporter.flavours = Exporter.flavours || new Map();
+        if (!Exporter.flavours.has(command)) {
+            let gnu = false;
+            try {
+                const r = Exec.Wait([command, "--version"], { Timeout: 5000 });
+                gnu = String(r.Output).includes("GNU tar");
+            } catch (e) { /* not there: `run` says so before it gets here */ }
+            Exporter.flavours.set(command, gnu);
+        }
+        return Exporter.flavours.get(command) ? [command, "--force-local"] : [command];
     }
 
     finished(code, path) {

@@ -1271,6 +1271,19 @@ export class TabSet {
         });
     }
 
+    /*
+     * The IDE has just written this file itself: what is there now is ours, so
+     * the watch has nothing to report about it. Whoever writes a file an open
+     * tab shows says so here, or the watch takes the write for somebody else's.
+     */
+    wrote(name) {
+        const state = this.openTabs.get(name);
+        if (!state) return;
+        try { state.onDisk = File.Load(File.Join(this.ide.project, name)); }
+        catch (e) { return; }
+        state.changedOnDisk = false;
+    }
+
     unwatch(state) {
         if (state && state.watch) {
             state.watch.Stop();

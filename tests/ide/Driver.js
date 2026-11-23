@@ -5151,7 +5151,16 @@ function* p_handlers(ide) {
     check("...and so does the next one, with the first still there",
           !ide.Surface.Children.some((c) => c !== next && covers(next, c)),
           ide.Surface.Children.map((c) => `${c.Name}@${c.X},${c.Y} ${c.Width}x${c.Height}`).join(" "));
+    eq("a caption starts as the control's name", next.Text, next.Name);
     ide.designer.select(next);
+    ide.ActDelCtl_Execute();
+    /* A field's Text is what the program reads: `TextBox1` in a search box
+     * was a search for `TextBox1`, and a new project's list came up empty. */
+    palette(ide, "TextBox").Click();
+    yield;
+    const field = ide.designer.selected;
+    eq("a field from the palette starts empty", field && field.Text, "");
+    ide.designer.select(field);
     ide.ActDelCtl_Execute();
     ide.designer.select(byName(ide, doomed));
     yield;
@@ -6953,6 +6962,21 @@ function* p_forms(ide) {
     eq("creating the suggested name works",
        ide.createForm(ide.suggestFormName()), true);
     eq("the suggestion then skips it", ide.suggestFormName(), "forms/Form2");
+
+    /* File > New form offers the suggestion with only the name selected:
+     * focusing the field selected all of it, so a name typed over it took the
+     * folder away and a new project's second form landed in the root. */
+    {
+        const offered = ide.suggestFormName();
+        const asked   = ide.formFiles.newForm();
+        yield* until(() => asked.TxtValue.Selection !== "");
+        eq("New form selects the name and not its folder",
+           asked.TxtValue.Selection, File.Name(offered));
+        check("...with the folder still in the field",
+              asked.TxtValue.Text === offered, asked.TxtValue.Text);
+        asked.BtnCancel.Emit("Click");
+        yield;
+    }
 
     /* --- renaming ----------------------------------------------------------
      * Renaming a form moves both files and rewrites the class: if only the .form
@@ -13116,9 +13140,7 @@ function* p_export(ide) {
      */
     const members = [];
     let listed    = null;
-    const tarArgs = ["tar"];
-    if (Environment.OS === "Windows")
-        tarArgs.push("--force-local");
+    const tarArgs = Exporter.tar();
     tarArgs.push("-tf", out);
     Exec(tarArgs, (line) => members.push(line),
                   (code) => { listed = code; });
@@ -13147,6 +13169,26 @@ function* p_export(ide) {
 
     File.Delete(out);
     File.Delete(`${bare}.tar`);
+
+    /* --- the tar a Windows machine has ------------------------------------
+     *
+     * The suite runs under MSYS, so the `tar` above is GNU's and wants
+     * `--force-local` for a `C:` path. The one every Windows has is
+     * System32's bsdtar, which refuses that option: Export failed on a plain
+     * Windows and passed here. Driven with the real one, by its path.
+     */
+    const bsdtar = File.Join(Environment.Get("SystemRoot") || "C:\\Windows", "System32", "tar.exe");
+    if (Environment.OS === "Windows" && File.Exists(bsdtar)) {
+        const withIt = `${TMP}-bsdtar.tar`;
+        if (File.Exists(withIt)) File.Delete(withIt);
+        const args = Exporter.tar(bsdtar).concat(
+            ["-cf", withIt, "-C", File.Directory(File.Absolute(TMP)), File.Name(TMP)]);
+        const r = Exec.Wait(args, { Timeout: 60000 });
+        check("Windows' own tar writes the archive with the arguments Export gives it",
+              r.ExitCode === 0, `${r.ExitCode}: ${String(r.Output).slice(0, 300)}`);
+        check("...and it is there", File.Exists(withIt));
+        if (File.Exists(withIt)) File.Delete(withIt);
+    }
 }
 
 /*
@@ -13186,6 +13228,36 @@ function* p_installer(ide) {
           asked && asked.opts.Name);
     eq("and the first filter is the one it writes",
        asked.opts.Filters[0][1], "*.exe");
+
+    /* A project with no id -- what a new one usually is, since the id is
+     * optional when it is made -- is told so before any file is chosen, and
+     * Project settings opens where the id goes. It used to reach the chooser,
+     * suggest `bintana-app-0.0`, and refuse after a file was picked. */
+    const manifest = File.Join(TMP, "project.btp");
+    const kept     = File.Load(manifest);
+    const noId     = File.LoadJson(manifest);
+    delete noId.id;
+    File.SaveJson(manifest, noId);
+    const said = [];
+    const info = Message.Info;
+    let chosen = null;
+    Message.Info    = (...a) => { said.push(a.join(" ")); };
+    Dialog.SaveFile = (title, opts, cb) => { chosen = opts; };
+    try {
+        ide.MnuInstaller_Click();
+    } finally {
+        Message.Info    = info;
+        Dialog.SaveFile = real;
+        File.Save(manifest, kept);
+    }
+    eq("with no id the chooser is not offered", chosen, null);
+    check("...the id is asked for first", said.some((s) => s.includes("Project settings")),
+          JSON.stringify(said));
+    check("...and Project settings is open on it",
+          !!ide.projectEditor && ide.projectEditor.Visible);
+    if (ide.projectEditor) ide.projectEditor.Close();
+    ide.projectEditor = null;
+    yield;
 }
 
 /*
@@ -18444,6 +18516,14 @@ function* p_unsaved(ide) {
      * move; what it must not have is the old name. */
     check("while the file keeps no trace of the old name",
           !File.Load(File.Join(TMP, "Keep.js")).includes("Btn_"));
+    /* The rename saved the .form from the designer, not through the tab. The
+     * tab must know those bytes are its own, or its watch takes the write for
+     * somebody else's and Save All refuses everything designed after it --
+     * which is how a new project's first form lost every caption typed after
+     * naming its controls. What the watch compares with is asserted, since
+     * the watch's own event comes when it comes. */
+    eq("the .form tab knows the rename's write is its own",
+       ide.openTabs.get("Keep.form").onDisk, File.Load(File.Join(TMP, "Keep.form")));
 
     /* A name the code still answers for is not free. */
     ide.designer.select(byName(ide, "Ok"));

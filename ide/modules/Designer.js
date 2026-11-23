@@ -40,6 +40,9 @@ export const GRID = 4;                 // moves snap to this grid
  * a palette press both do it, and the number is the same question both times:
  * far enough to see there are two. */
 const PASTE_STEP = 12;
+/* The controls whose Text is what the person types, not a caption: a new one
+ * starts empty instead of reading its own name (`newControl`). */
+const VALUE_TEXT = ["TextBox", "TextEditor", "SourceEditor"];
 
 /*
  * What `arrangeSelection` tells `Arrange` about a control: a view of something
@@ -1734,6 +1737,15 @@ export class Designer {
         if (!this.path) return false;
 
         File.SaveJson(this.path, this.serializeForm());
+        /* **The tab is told what is on disk now, here and not by the caller.**
+         * The tab's watch compares the file with the last bytes it knows of,
+         * and renaming a control saves from here without going through the
+         * tab: the watch then took the IDE's own write for somebody else's,
+         * the tab said the file had changed on disk, and Save All refused to
+         * write it -- so everything designed after a rename was lost at the
+         * next save, with a notice that blamed nobody in particular. */
+        if (this.ide.project && File.Within(this.path, this.ide.project))
+            this.ide.tabs.wrote(File.Relative(this.path, this.ide.project));
         this.root  = this.serializeForm();
         this.dirty = false;
         this.refresh();
@@ -3278,8 +3290,14 @@ export class Designer {
 
         /* Only if its Text is something assignable: a ListBox's is read-only,
          * and a freshly created ComboBox's has to be one of its items, of which
-         * it has none yet. */
-        if (widget.PropertyNames().includes("Text")) {
+         * it has none yet.
+         *
+         * **And only if the Text is a caption.** A field's Text is what the
+         * person types and what the program reads, so `TextBox1` in a search
+         * box was a search for `TextBox1`: a new project's list came up empty
+         * on its first run, with the rows in the database, and the placeholder
+         * set beside it never showed. A field starts empty, as one does. */
+        if (widget.PropertyNames().includes("Text") && !VALUE_TEXT.includes(type)) {
             try { widget.Text = widget.Name; } catch (e) { /* no lo acepta */ }
         }
         this.seedPages(widget);

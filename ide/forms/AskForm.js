@@ -49,6 +49,22 @@ export class AskForm extends Form {
         return dlg;
     }
 
+    /*
+     * Only the name selected, after the folder it is offered in.
+     *
+     * Focusing a field selects all of it, so typing a name over
+     * `forms/Form2` replaced the folder too: a new project's second form,
+     * named by typing, landed beside `project.btp` while the first sat in
+     * `forms/`. A name is what one means to type; the folder stays unless it
+     * is taken away on purpose, which is still how a class goes to the root.
+     */
+    selectName() {
+        const text = this.TxtValue.Text;
+        const at   = text.lastIndexOf("/") + 1;
+        if (at > 0) this.TxtValue.Select(at, text.length - at);
+        return this;
+    }
+
     accept() {
         const value = this.TxtValue.Text.trim();
         if (!value) return;          // with no text there is nothing to accept

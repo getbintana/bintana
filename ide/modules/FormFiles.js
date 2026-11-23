@@ -139,10 +139,10 @@ export class FormFiles {
             return;
         }
         const suggested = this.ide.suggestFormName();
-        AskForm.prompt(Locale.Text("New form"),
-                       Locale.Text("Class name (a folder is allowed):"), suggested,
-                       (name, useNs) => this.createForm(name, "Form", useNs),
-                       this.ide.namespaceOption(suggested));
+        return AskForm.prompt(Locale.Text("New form"),
+                              Locale.Text("Class name (a folder is allowed):"), suggested,
+                              (name, useNs) => this.createForm(name, "Form", useNs),
+                              this.ide.namespaceOption(suggested)).selectName();
     }
 
     /* Writes both files and registers them.  Without touching the UI, so it
@@ -259,10 +259,10 @@ export class FormFiles {
             return;
         }
         const suggested = this.ide.suggestFormName("Module");
-        AskForm.prompt(Locale.Text("New module"),
-                       Locale.Text("Class name (a folder is allowed):"), suggested,
-                       (name, useNs) => this.createModule(name, useNs),
-                       this.ide.namespaceOption(suggested));
+        return AskForm.prompt(Locale.Text("New module"),
+                              Locale.Text("Class name (a folder is allowed):"), suggested,
+                              (name, useNs) => this.createModule(name, useNs),
+                              this.ide.namespaceOption(suggested)).selectName();
     }
 
     createModule(name, useNamespace) {
@@ -345,10 +345,10 @@ export class FormFiles {
             return;
         }
         const suggested = this.ide.suggestFormName("Part");
-        AskForm.prompt(Locale.Text("New component"),
-                       Locale.Text("Class name (a folder is allowed):"), suggested,
-                       (name, useNs) => this.createForm(name, "Component", useNs),
-                       this.ide.namespaceOption(suggested));
+        return AskForm.prompt(Locale.Text("New component"),
+                              Locale.Text("Class name (a folder is allowed):"), suggested,
+                              (name, useNs) => this.createForm(name, "Component", useNs),
+                              this.ide.namespaceOption(suggested)).selectName();
     }
 
     /*

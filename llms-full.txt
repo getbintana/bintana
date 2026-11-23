@@ -9782,6 +9782,43 @@ the program was closed by hand. Measured 2026-11-23, walking a new project.
   same callbacks: it throws on a timer and waits for a file the test writes,
   which is what makes *still running* a fact rather than a race.
 
+## A whole application, built as a newcomer would
+
+Walked 2026-11-23 on Windows: an expense list (a search box, a `TableView`, a
+total, an *add* dialog with a `ComboBox`, SQLite underneath), designed through
+the palette and the property grid, run, run again, then packaged. What it
+tripped on, each fixed and asserted in `tests/ide`:
+
+- **Whoever writes a file an open tab shows calls `TabSet.wrote(name)`.** The
+  tab's watch compares the disk with `state.onDisk`, and `Designer.save()` --
+  called directly by `renameControl` and by renaming actions -- wrote the
+  `.form` without updating it. The watch then flagged the IDE's own write as
+  foreign and Save All skipped the tab: everything designed after naming the
+  controls was lost, under a notice that blamed nobody. `Designer.save` now
+  says it wrote; `unsaved` asserts `onDisk` right after a rename, since the
+  watch's own event comes when it comes.
+- **A prompt that offers a folder selects only the name** (`AskForm.selectName`):
+  `SetFocus` selects all, and a name typed over `forms/Form2` made a root-level
+  form.
+- **A field's Text is data** (`VALUE_TEXT` in `Designer.js`): `newControl`
+  seeded every `Text` with the control's name, and a search box then filtered
+  by `TextBox1`.
+- **`tar` on Windows is bsdtar unless MSYS is ahead of it**, and bsdtar refuses
+  `--force-local`. The suite runs under MSYS and saw GNU tar, so Export was
+  green here and broken on every plain Windows. `Exporter.tar()` asks
+  `tar --version`; `export` drives `System32\tar.exe` by its path.
+- **The installer's refusal for no id came after the chooser.** A new project
+  usually has no id (it is optional in New project). `Installer.run` reads
+  `ide.manifest.read()` -- `Package.configOf` throws on exactly this -- and
+  opens Project settings on `TxtPrId`.
+
+Not changed, and why: `Application` has no `DataDirectory`, which is the first
+name a person writes for where a database goes (`ConfigDirectory` is
+documented as "anything the application remembers"; `Desktop.DataDirectory`
+is not per application). The live check catches it as a member `Application`
+does not have. Adding it is public surface across three repositories, and
+was left for the owner to decide.
+
 ## Breakpoints: on, off, kept
 
 **The marks are the state, both kinds.** A breakpoint on is a `Bookmark`
@@ -15724,7 +15761,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11660 assertions
+./tests/run.sh                          # all seven projects, 11670 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

@@ -155,6 +155,29 @@ one-page answer to *what is new since the release I have*.
   project does, and the first thing it had to undo. They now go down a column
   from the corner, 8 px apart, and to the next column when the form is full;
   dragging from the palette still drops where the pointer is.
+- **Designing after a rename is saved.** Renaming a control saves its `.form`
+  from the designer, and the tab was not told: its watch took the IDE's own
+  write for somebody else's, said the file had changed on disk, and Save All
+  refused to write it -- so every caption and property set after naming the
+  controls was lost at the next save. The designer now tells the tab what it
+  wrote, whoever calls it.
+- **A new form goes where the suggestion says.** File > New form offers
+  `forms/Form2` with only the name selected, so typing a name keeps the folder;
+  it used to select all of it, and a second form named by typing landed beside
+  `project.btp`. The same for a new module and a new component.
+- **A text field from the palette starts empty.** A `TextBox`, `TextEditor` or
+  `SourceEditor` used to start holding its own name, which is data and not a
+  caption: a search box filtered by `TextBox1` and a new application's list
+  came up empty with its rows in the database. Captions (`Label`, `Button`
+  ...) still start as the control's name.
+- **Export project works with the tar Windows has.** It passed GNU tar's
+  `--force-local` on every Windows, and the `tar` in `System32` is bsdtar,
+  which refuses it -- so Export failed everywhere but under MSYS or Git's
+  shell. The option now goes only to a tar that says it is GNU's.
+- **The Windows installer asks for an id before a file.** A new project
+  usually has none, and the installer offered `bintana-app-0.0-windows-x86_64.exe`
+  and refused only after a file was chosen. It now says so first and opens
+  Project settings on the id.
 - **An error while the program runs goes to its line then.** A handler that
   throws does not end a form project -- the runtime prints the traceback and
   the window stays up -- and the IDE read the traceback only at the exit, so

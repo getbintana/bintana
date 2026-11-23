@@ -35,7 +35,25 @@ export class Installer {
          * one on screen. The same reason Run and Export save first. */
         ide.saveAllDirty();
 
-        /* The suggestion is best-effort: a project with no id yet still
+        /*
+         * **No id is said before the chooser, and where to give one.** The id
+         * is optional when a project is made, so a new project usually has
+         * none -- and the chooser used to come first, suggest
+         * `bintana-app-0.0-windows-x86_64.exe` for a project called something
+         * else, and refuse only once a file had been picked. Now the sentence
+         * comes first and Project settings opens on the field.
+         */
+        /* The manifest's own reading and not `Package.configOf`, which
+         * throws on exactly this: what is wanted here is the answer. */
+        const manifest = ide.manifest.read();
+        if (manifest && !manifest.Id) {
+            Message.Info("A Windows installer is installed under the application's id, and this project has none yet. Give it one in Project settings (a reverse-DNS name like io.github.you.App), then choose Windows installer again.");
+            ide.editProject();
+            if (ide.projectEditor) ide.projectEditor.TxtPrId.SetFocus();
+            return;
+        }
+
+        /* The suggestion is best-effort: a manifest that will not read still
          * reaches the chooser, and `Script` refuses with the sentence when it
          * is asked to write. */
         let command = "bintana-app", version = "0.0";
