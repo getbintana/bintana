@@ -1552,6 +1552,36 @@ and why `hasOwn` needed more than the photograph -- is in
 - `tests/ide`'s `modules` phase holds the sentences, the columns, the caret and
   the live round trip (a row in Problems and the word underlined).
 
+## A member a runtime global does not have
+
+`Names.globalUses` is the fourth pass: `Database.Open(path)`, the name another
+library taught, which `unresolved` cannot see (`Database` is answered by the
+runtime, so it is never free) and which the run reported only as `TypeError:
+not a function`. Measured 2026-11-23, while walking a new project's first
+fifteen minutes on Windows.
+
+- **The answer is `Widget.Members(name)`**, the verb completion asks after the
+  dot: it answers for a global bag of functions (`File`, `Locale`) and for a
+  class with its statics (`Timer` lists `After` and `Every`). It throws for a
+  name it does not know (`Markdown`, a library's) and answers `[]` for `Math`
+  and `JSON`; both mean *say nothing*.
+- **It documents only what the runtime wrote a line for.** `Members("Date")`
+  is `["UTC"]`, so the first run over this tree reported 76 `Date.now` and
+  `Date.parse` -- the language's own globals are excluded by name
+  (`LANGUAGE_GLOBALS`), a list the specification fixes.
+- **It is silent in the console host**, which is `bintana check` and the IDE's
+  Check (a child): `widget-meta.js` answers from `widgets.json`, which holds the
+  widget classes only, and refuses `Database` as *not a widget class*. So a
+  run of `tests/check.sh` proves nothing about this pass; the false-positive
+  count above came from a graphical project that ran it over every `.js`. The
+  console half needs `bintana-meta --dump` to carry the globals, and
+  `bintana-meta` installs none of them.
+- **`Names` already had a field `this.globals`** (`nearby` caches
+  `Application.Globals()` in it). A method of that name replaced it, `nearby`
+  iterated a function, and `bintana check` said *the check could not read it:
+  value is not iterable* about `tests/widgets` -- with every other finding of
+  that file gone. Check a name against the fields before adding a method here.
+
 ## Breakpoints: on, off, kept
 
 **The marks are the state, both kinds.** A breakpoint on is a `Bookmark`

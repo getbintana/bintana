@@ -5135,6 +5135,26 @@ function* p_handlers(ide) {
     const doomed = ide.designer.selected.Name;
 
     check("a fresh control gets a fresh name", doomed.startsWith("Button"), doomed);
+
+    /* Where it lands: the first place nothing covers. It used to step
+     * diagonally only past a control with the very same corner, so a Label, a
+     * TextBox and a Button clicked in a row sat half on top of each other. */
+    const landed = ide.designer.selected;
+    const covers = (a, b) => a.X < b.X + b.Width && b.X < a.X + a.Width &&
+                             a.Y < b.Y + b.Height && b.Y < a.Y + a.Height;
+    check("a control from the palette lands where it covers nothing",
+          !ide.Surface.Children.some((c) => c !== landed && covers(landed, c)),
+          ide.Surface.Children.map((c) => `${c.Name}@${c.X},${c.Y} ${c.Width}x${c.Height}`).join(" "));
+    palette(ide, "Label").Click();
+    yield;
+    const next = ide.designer.selected;
+    check("...and so does the next one, with the first still there",
+          !ide.Surface.Children.some((c) => c !== next && covers(next, c)),
+          ide.Surface.Children.map((c) => `${c.Name}@${c.X},${c.Y} ${c.Width}x${c.Height}`).join(" "));
+    ide.designer.select(next);
+    ide.ActDelCtl_Execute();
+    ide.designer.select(byName(ide, doomed));
+    yield;
     check("with nothing written for it yet",
           FormFiles.handlersIn(File.Load(jsPath), doomed).length === 0);
 
@@ -14807,6 +14827,33 @@ function* p_modules(ide) {
     eq("the word under the caret is still being typed",
        [...ide.names.unresolved(files["ModTypo.js"], "ModTypo.js", typing)]
            .map((p) => p.text.split(" ")[0]).join(","), "MOD_IVA");
+
+    /* --- a member a runtime global does not have ------------------------------
+     *
+     * `Database.Open` is the first thing a person who used another library
+     * writes, and before this it went through every check and failed at the
+     * first run as `TypeError: not a function`, with no word of which one. */
+    const strays = (text, host) =>
+        [...(host || ide.names).globalUses(text, "Strays.js", -1)]
+            .map((p) => `${p.line}:${p.column}:${p.length} ${p.text}`);
+    eq("a member a global of the runtime lacks is a warning, saying what it has",
+       strays('const db = Database.Open("x.db");\n')[0],
+       "1:12:13 Database has no Open: it has Odbc, Sqlite");
+    eq("...with the member it was close to, when there is one",
+       strays("Timer.Aftr(10, () => {});\n")[0],
+       "1:1:10 Timer has no Aftr: did you mean Timer.After?");
+    eq("...and the members it has are not",
+       strays('Timer.After(10, () => {}); File.Exists("x"); Locale.Text("y");\n').length, 0);
+    eq("the language's own globals are the language's, whatever Members documents",
+       strays("const t = Date.now() + Math.floor(Date.parse(s));\n").length, 0);
+    eq("a member the file asks about, or defines, is not a mistake",
+       strays('if (typeof File.Slurp === "function") File.Slurp(p);\n' +
+              "Message.Shout = (t) => print(t);\nMessage.Shout(1);\n").length, 0);
+    eq("...nor is a member of a class the project declares under the same name",
+       strays("const t = Task.Load(raw);\n",
+              new Names({ answers: () => ({ known: new Set(["Task"]) }) })).length, 0);
+    eq("...nor one declared in the file itself",
+       strays("class Task { static Load() {} }\nTask.Load(1);\n").length, 0);
 
     /* The live pass, which is where a person meets it: a row in Problems and
      * the word underlined, on the tab being written. */

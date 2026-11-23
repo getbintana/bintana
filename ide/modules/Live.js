@@ -127,6 +127,7 @@ export class Live {
         const found = [...ide.names.curated(text, name, at),
                        ...ide.names.ambiguous(text, name, at),
                        ...ide.names.unresolved(text, name, at),
+                       ...ide.names.globalUses(text, name, at),
                        ...ide.names.shadowing(text, name, at)];
 
         /*

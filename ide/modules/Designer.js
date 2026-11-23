@@ -3353,15 +3353,65 @@ export class Designer {
         }
 
         /* In a box it goes at the end, which is where Add already put it. */
-        if (this.isFixed(target)) {
-            widget.Move(16, 16);
-            /* Shifted along until a free spot, so they do not pile up. */
-            while (this.overlapsAny(target, widget))
-                widget.Move(widget.X + PASTE_STEP, widget.Y + PASTE_STEP);
-        }
+        if (this.isFixed(target)) this.placeFree(target, widget, w, h);
 
         this.select(widget);
         this.touch();
+    }
+
+    /*
+     * Where a control from the palette lands on a form laid out by coordinates:
+     * **the first place nothing else covers**, down a column from the corner
+     * and then the next column over.
+     *
+     * It used to start at the corner and step diagonally only while another
+     * control had *the same corner* -- so a Label, a TextBox and a Button
+     * clicked in a row landed at (16,16), (28,28) and (40,40), each half on top
+     * of the last. Measured on a fresh project, it is the first thing a person
+     * does and the first thing they have to undo: three controls to drag apart
+     * before the form shows what they meant. Now the same three are a column,
+     * which is the shape most forms start as. When nothing is free -- a form
+     * already full -- it goes back to the diagonal, which at least shows that
+     * something arrived.
+     */
+    placeFree(container, widget, w, h) {
+        const MARGIN = 16, GAP = 8;
+        const others = container.Children.filter((c) => c !== widget && c.Visible)
+            .map((c) => {
+                let cw = c.Width, ch = c.Height;
+                if (!(cw > 0) || !(ch > 0)) {
+                    const b = c.Bounds();
+                    cw = cw > 0 ? cw : b.Width;
+                    ch = ch > 0 ? ch : b.Height;
+                }
+                return { x: c.X, y: c.Y, w: Math.max(cw, 1), h: Math.max(ch, 1) };
+            });
+        /* Onto the grid, and never back up it: rounding to the nearest step
+         * could put the next control inside the gap it is meant to leave. */
+        const up    = (v) => Math.ceil(v / GRID) * GRID;
+        const roomW = container.Width  > 0 ? container.Width  : 400;
+        const roomH = container.Height > 0 ? container.Height : 300;
+        const hits  = (x, y) => others.find((r) =>
+            x < r.x + r.w + GAP && r.x < x + w + GAP &&
+            y < r.y + r.h + GAP && r.y < y + h + GAP);
+
+        for (let x = MARGIN; x + w <= roomW - MARGIN || x === MARGIN; ) {
+            let widest = w;
+            for (let y = MARGIN; y + h <= roomH - MARGIN || y === MARGIN; ) {
+                const r = hits(x, y);
+                if (!r) {
+                    widget.Move(x, y);
+                    return;
+                }
+                widest = Math.max(widest, r.x + r.w - x);
+                y = up(r.y + r.h + GAP);
+            }
+            x = up(x + widest + GAP);
+        }
+
+        widget.Move(MARGIN, MARGIN);
+        while (this.overlapsAny(container, widget))
+            widget.Move(widget.X + PASTE_STEP, widget.Y + PASTE_STEP);
     }
 
     overlapsAny(container, widget) {

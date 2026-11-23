@@ -139,6 +139,23 @@ one-page answer to *what is new since the release I have*.
   of 300 controls and 355,298 for one of 3,000 -- 68 MB of history, 135 MB with
   the redo stack beside it. Each stack stops at 16 MB now and always keeps the
   newest; 200 stays the depth, so a form of ordinary size is unchanged.
+- **A control from the palette lands where nothing else is.** A click on the
+  palette put the control at the form's corner and stepped it diagonally only
+  past a control with the very same corner, so a Label, a TextBox and a Button
+  clicked in a row sat half on top of each other -- the first thing a new
+  project does, and the first thing it had to undo. They now go down a column
+  from the corner, 8 px apart, and to the next column when the form is full;
+  dragging from the palette still drops where the pointer is.
+- **The editor underlines a member a runtime global does not have.**
+  `Database.Open(path)`, `File.Read(p)`, `Message.Show(t)` -- the name another
+  library taught -- went through every check and failed at the first run as
+  `TypeError: not a function`, with no word of which. The live pass now says
+  `Database has no Open: it has Odbc, Sqlite`, or `Timer has no Aftr: did you
+  mean Timer.After?`, from the same `Widget.Members` completion offers after the
+  dot. The language's own globals (`Date`, `Math`, `JSON` ...), a class the
+  project declares under the same name, and a member the file defines or asks
+  about with `typeof` are left alone. `bintana check` does not report it yet:
+  its console host knows the widget classes' members and not the globals'.
 
 ## 0.4.0 — 2026-11-20
 
