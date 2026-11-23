@@ -688,6 +688,8 @@ const TESTS = [
     /* And a node folded with its arrow. */
     "TableNodeToggle",
     "SingleInstance",
+    /* Blocking too: a window child on Windows, which must start no session bus. */
+    "NoSessionBus",
     /* Blocking too: a console child under `--profile`, whose capture the
      * parent reads back. */
     "Profile",
@@ -28264,6 +28266,40 @@ export class UriChild extends Form {
      * second must exit `0` with no window of its own.  Skipped, never failed,
      * where there is no `dbus-run-session` to give them a bus.
      */
+    /*
+     * **A window on Windows starts no session bus.** GApplication asks for one
+     * while registering, whatever its flags, and GLib on Windows autolaunches
+     * it: a `gdbus.exe` daemon that outlives the program where the DLL has one
+     * beside it (an MSYS2 tree), and `win32 session dbus binary not found` on
+     * stderr where it has not (the portable tree). The runtime registers with
+     * an address GLib refuses, only for that call, so a child of the program
+     * does not see the variable either. Only Windows autolaunches like this.
+     */
+    testNoSessionBus() {
+        if (Environment.OS !== "Windows") return;
+        const dir = File.Join(SCRATCH, "no-session-bus");
+        Directory.Make(dir);
+        File.SaveJson(File.Join(dir, "project.btp"),
+                      { name: "nobus", id: "org.bintana.NoSessionBus",
+                        startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(dir, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 200, Height: 100 } });
+        File.Save(File.Join(dir, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        print('BUS=' + (Environment.Get('DBUS_SESSION_BUS_ADDRESS') || 'unset'));\n" +
+                  "        Application.Quit(0);\n" +
+                  "    }\n" +
+                  "}\n");
+        const ran = Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        eq("the window child ran", ran.ExitCode, 0);
+        check("GLib looked for no session bus daemon",
+              !ran.Output.includes("session dbus binary"), ran.Output);
+        check("and the program does not see the refused address",
+              ran.Output.includes("BUS=unset"), ran.Output);
+    }
+
     testSingleInstance() {
         const proj = File.Join(SCRATCH, "single-instance");
 

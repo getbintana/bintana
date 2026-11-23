@@ -27,6 +27,13 @@ one-page answer to *what is new since the release I have*.
   today for Cairo, Almaty, Asunción and Nuuk. The reader was checked against
   Python's zoneinfo and `zdump` over 418 zones, 1850-2099, the second before
   and the second of every transition, in the fat and the slim TZif forms.
+- **A window on Windows starts no session bus.** GApplication asks for the
+  session bus while registering, whatever its flags, and GLib on Windows
+  autolaunches one: a `gdbus.exe` daemon that outlived the program in an MSYS2
+  tree, and `win32 session dbus binary not found` on stderr in the portable
+  tree and the setup. Nothing here uses the bus on Windows, so the runtime
+  registers with an address GLib refuses at once (`disabled:`), only for that
+  call and only when `DBUS_SESSION_BUS_ADDRESS` is not set.
 - **A popover that stays goes away with its window's turn.** On X11 a popover
   is a surface of its own above every window, and one that does not hide
   itself -- the SourceEditor's completion list, a `TextBox`'s, a
