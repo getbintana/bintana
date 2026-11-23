@@ -28285,15 +28285,32 @@ export class UriChild extends Form {
         File.SaveJson(File.Join(dir, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 200, Height: 100 } });
+        /*
+         * Two trees, two symptoms. Where `gdbus.exe` sits beside GIO -- an
+         * MSYS2 tree, where this suite runs -- GLib started it, silently, as a
+         * child of the program for as long as the window was open; where it
+         * does not -- the portable tree, the setup -- GLib warned on stderr.
+         * The child counts its own `gdbus.exe` children while its window is
+         * up, which is what goes red here, and the warning is checked for the
+         * other tree. No double quotes in the query: they would have to
+         * survive the command line twice.
+         */
         File.Save(File.Join(dir, "Form1.js"),
                   "class Form1 extends Form {\n" +
                   "    Form_Open() {\n" +
                   "        print('BUS=' + (Environment.Get('DBUS_SESSION_BUS_ADDRESS') || 'unset'));\n" +
+                  "        const query = \"@(Get-CimInstance Win32_Process -Filter 'ParentProcessId=\" +\n" +
+                  "                      Environment.ProcessId + \"' | Where-Object Name -eq 'gdbus.exe').Count\";\n" +
+                  "        const r = Exec.Wait(['powershell.exe', '-NoProfile', '-NonInteractive',\n" +
+                  "                             '-Command', query], { Timeout: 60000 });\n" +
+                  "        print('GDBUS=' + (r.ExitCode === 0 ? r.Output.trim() : 'error ' + r.ExitCode + ' ' + r.Output));\n" +
                   "        Application.Quit(0);\n" +
                   "    }\n" +
                   "}\n");
-        const ran = Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
+        const ran = Exec.Wait([Application.Executable, dir], { Timeout: 90000 });
         eq("the window child ran", ran.ExitCode, 0);
+        check("no session bus daemon was started for it",
+              ran.Output.includes("GDBUS=0"), ran.Output);
         check("GLib looked for no session bus daemon",
               !ran.Output.includes("session dbus binary"), ran.Output);
         check("and the program does not see the refused address",

@@ -2500,9 +2500,10 @@ int bta_app_run(BtaApp *app, int argc, char **argv)
      * asks for the session bus whatever its flags (`gapplicationimpl-dbus.c`,
      * `g_bus_get_sync` in `g_application_impl_register`), and GLib's answer on
      * Windows is to autolaunch one: it looks for `gdbus.exe` beside its DLL,
-     * and **starts a session bus daemon that outlives the program** when it is
-     * there -- an MSYS2 tree -- or warns `win32 session dbus binary not found`
-     * when it is not -- the portable tree and the setup. Nothing here needs the
+     * and **starts a session bus daemon, a process of its own beside every
+     * window program for as long as it runs**, when it is there -- an MSYS2
+     * tree -- or warns `win32 session dbus binary not found` when it is not --
+     * the portable tree and the setup. Nothing here needs the
      * bus on Windows (one instance is the mutex and the pipe above), so the
      * registration is made with an address GLib refuses at once -- `disabled:`
      * is no transport it knows -- and it proceeds as it does with no bus. Only
