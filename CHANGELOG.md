@@ -34,8 +34,9 @@ one-page answer to *what is new since the release I have*.
   on stderr in the portable tree and the setup. Nothing here uses the bus on
   Windows, so the runtime registers with an address GLib refuses at once
   (`disabled:`), only for that call and only when `DBUS_SESSION_BUS_ADDRESS`
-  is not set. The `widgets` test counts the program's own `gdbus.exe`
-  children, which is what an MSYS2 tree shows.
+  is not set. The `widgets` test counts the `gdbus.exe` children of a window
+  child and of the suite itself, which is what an MSYS2 tree shows: GLib
+  reuses a bus it autolaunched, so the suite's own was the one to see.
 - **A popover that stays goes away with its window's turn.** On X11 a popover
   is a surface of its own above every window, and one that does not hide
   itself -- the SourceEditor's completion list, a `TextBox`'s, a

@@ -28259,21 +28259,14 @@ export class UriChild extends Form {
     }
 
     /*
-     * `"singleInstance": true`: a second run of the project hands its arguments
-     * to the first and leaves.  Two real processes on a bus of their own
-     * (`dbus-run-session`), so the suite never touches the desktop's: the
-     * first records what `Application.OnSecondInstance` was told and quits, the
-     * second must exit `0` with no window of its own.  Skipped, never failed,
-     * where there is no `dbus-run-session` to give them a bus.
-     */
-    /*
      * **A window on Windows starts no session bus.** GApplication asks for one
      * while registering, whatever its flags, and GLib on Windows autolaunches
-     * it: a `gdbus.exe` daemon that outlives the program where the DLL has one
-     * beside it (an MSYS2 tree), and `win32 session dbus binary not found` on
-     * stderr where it has not (the portable tree). The runtime registers with
-     * an address GLib refuses, only for that call, so a child of the program
-     * does not see the variable either. Only Windows autolaunches like this.
+     * it: a `gdbus.exe` daemon beside the program for as long as it runs
+     * where the DLL has one beside it (an MSYS2 tree), and `win32 session dbus
+     * binary not found` on stderr where it has not (the portable tree). The
+     * runtime registers with an address GLib refuses, only for that call, so a
+     * child of the program does not see the variable either. Only Windows
+     * autolaunches like this.
      */
     testNoSessionBus() {
         if (Environment.OS !== "Windows") return;
@@ -28290,11 +28283,20 @@ export class UriChild extends Form {
          * MSYS2 tree, where this suite runs -- GLib started it, silently, as a
          * child of the program for as long as the window was open; where it
          * does not -- the portable tree, the setup -- GLib warned on stderr.
-         * The child counts its own `gdbus.exe` children while its window is
-         * up, which is what goes red here, and the warning is checked for the
-         * other tree. No double quotes in the query: they would have to
-         * survive the command line twice.
+         * The `gdbus.exe` children are counted, which is what goes red here,
+         * and the warning is checked for the other tree.
+         *
+         * **Counted for the suite and for the child, because GLib reuses a bus
+         * it autolaunched.** The suite is a window program too, registered
+         * long before this test: with the old runtime it had started the one
+         * `gdbus.exe`, and the child then found that bus and started none of
+         * its own -- `GDBUS=0` with the fix or without it. The child's count
+         * stays for a child run alone. No double quotes in the query: they
+         * would have to survive the command line twice.
          */
+        const gdbusQuery = (pid) =>
+            "@(Get-CimInstance Win32_Process -Filter 'ParentProcessId=" + pid +
+            "' | Where-Object Name -eq 'gdbus.exe').Count";
         File.Save(File.Join(dir, "Form1.js"),
                   "class Form1 extends Form {\n" +
                   "    Form_Open() {\n" +
@@ -28311,12 +28313,24 @@ export class UriChild extends Form {
         eq("the window child ran", ran.ExitCode, 0);
         check("no session bus daemon was started for it",
               ran.Output.includes("GDBUS=0"), ran.Output);
+        const own = Exec.Wait(["powershell.exe", "-NoProfile", "-NonInteractive",
+                               "-Command", gdbusQuery(Environment.ProcessId)],
+                              { Timeout: 60000 });
+        eq("nor for the suite, a window program itself", own.Output.trim(), "0", own.Output);
         check("GLib looked for no session bus daemon",
               !ran.Output.includes("session dbus binary"), ran.Output);
         check("and the program does not see the refused address",
               ran.Output.includes("BUS=unset"), ran.Output);
     }
 
+    /*
+     * `"singleInstance": true`: a second run of the project hands its arguments
+     * to the first and leaves.  Two real processes on a bus of their own
+     * (`dbus-run-session`), so the suite never touches the desktop's: the
+     * first records what `Application.OnSecondInstance` was told and quits, the
+     * second must exit `0` with no window of its own.  Skipped, never failed,
+     * where there is no `dbus-run-session` to give them a bus.
+     */
     testSingleInstance() {
         const proj = File.Join(SCRATCH, "single-instance");
 
