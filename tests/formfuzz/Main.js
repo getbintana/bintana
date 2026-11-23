@@ -233,7 +233,8 @@ function main() {
     Directory.Make(dir);
 
     File.SaveJson(File.Join(dir, "project.btp"),
-                  { name: "formfuzz", startup: "F", sources: ["F.js"] });
+                  { name: "formfuzz", id: "io.github.getbintana.test.FormFuzz",
+                    startup: "F", sources: ["F.js"] });
     write("class F extends Form {\n" +
           "    Form_Open() { print('OPEN ' + this.Controls.length); Application.Quit(0); }\n" +
           "}\n", File.Join(dir, "F.js"));

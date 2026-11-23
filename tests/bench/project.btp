@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.Bench",
   "name": "bench",
   "main": "Main",
   "sources": ["Programs.js", "Main.js"],

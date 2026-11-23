@@ -232,7 +232,7 @@ function checkTool(prefix, work) {
     const bad = File.Join(work, "check-bad");
     Directory.Make(bad);
     File.SaveJson(File.Join(bad, "project.btp"),
-                  { name: "check-bad", startup: "Main",
+                  { name: "check-bad", id: "io.github.getbintana.test.CheckBad", startup: "Main",
                     sources: ["Main.js", "Missing.js"] });
     File.Save(File.Join(bad, "Main.js"), "class Main extends Form {}\n");
 
@@ -258,7 +258,8 @@ function checkTool(prefix, work) {
     const good = File.Join(work, "check-good");
     Directory.Make(good);
     File.SaveJson(File.Join(good, "project.btp"),
-                  { name: "check-good", main: "Go", sources: ["Go.js"] });
+                  { name: "check-good", id: "io.github.getbintana.test.CheckGood",
+                    main: "Go", sources: ["Go.js"] });
     File.Save(File.Join(good, "Go.js"), "function Go() {}\n");
 
     const ok = Exec.Wait([runtime, "check", good],
@@ -354,7 +355,8 @@ function pluginDev(prefix, work) {
     const proj = File.Join(work, "plugproj");
     Directory.Make(proj);
     File.SaveJson(File.Join(proj, "project.btp"),
-                  { name: "stageplug", main: "Main", uses: ["testplug"] });
+                  { name: "stageplug", id: "io.github.getbintana.test.StagePlug",
+                    main: "Main", uses: ["testplug"] });
     File.Save(File.Join(proj, "Main.js"), `
 "use strict";
 function Main() {
@@ -559,7 +561,7 @@ function opens(prefix, work, done) {
          * install: an IDE that could only remember things in its own tree would
          * work from a build directory and fail from /usr. */
         check("its settings went to the user's config directory",
-              File.Exists(File.Join(config, "bintana", "Bintana IDE", "settings.json")));
+              File.Exists(File.Join(config, ideId, "settings.json")));
 
         ide.Stop();
         server.handle.Stop();

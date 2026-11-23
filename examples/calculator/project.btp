@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Calculator",
   "name": "calculator",
   "startup": "Calculator",
   "sources": [

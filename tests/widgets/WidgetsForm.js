@@ -2403,7 +2403,8 @@ class WidgetsForm extends Form {
         const proj = File.Join(SCRATCH, "key-preview");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "keypreview", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.KeyPreview",
+                        name: "keypreview", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 400, Height: 240 } });
@@ -2488,7 +2489,8 @@ class WidgetsForm extends Form {
         const proj = File.Join(SCRATCH, "table-multi-keys");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "tablemultikeys", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.TableMultiKeys",
+                        name: "tablemultikeys", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 420, Height: 300 } });
@@ -2791,7 +2793,8 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "fold-click");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "foldclick", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.FoldClick",
+                        name: "foldclick", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 400, Height: 240 } });
@@ -5376,6 +5379,7 @@ class Form1 extends Form {
         Directory.Make(dir);
 
         File.Save(File.Join(dir, "project.btp"), JSON.stringify({
+            id: "io.github.getbintana.test.Protect",
             name: "protect", main: "Main", sources: ["Main.js"],
         }));
         File.Save(File.Join(dir, "Main.js"),
@@ -5735,7 +5739,8 @@ class Form1 extends Form {
         const dir = File.Join(SCRATCH, "viddrop");
         Directory.Make(dir);
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "viddrop", startup: "V", sources: ["V.js"] });
+                      { id: "io.github.getbintana.test.VidDrop",
+                        name: "viddrop", startup: "V", sources: ["V.js"] });
         File.SaveJson(File.Join(dir, "V.form"),
                       { type: "Form", name: "V",
                         properties: { Width: 300, Height: 200 },
@@ -5887,7 +5892,8 @@ class Form1 extends Form {
         const dir = File.Join(SCRATCH, "designshort");
         Directory.Make(dir);
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "designshort", startup: "F", sources: ["F.js"] });
+                      { id: "io.github.getbintana.test.DesignShort",
+                        name: "designshort", startup: "F", sources: ["F.js"] });
         File.SaveJson(File.Join(dir, "F.form"),
                       { format: "bintana-form/1", class: "F",
                         properties: { Width: 400, Height: 400 },
@@ -5929,7 +5935,8 @@ class Form1 extends Form {
         const dir = File.Join(SCRATCH, "designpad");
         Directory.Make(dir);
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "designpad", startup: "F", sources: ["F.js"] });
+                      { id: "io.github.getbintana.test.DesignPad",
+                        name: "designpad", startup: "F", sources: ["F.js"] });
         File.SaveJson(File.Join(dir, "F.form"),
                       { format: "bintana-form/1", class: "F",
                         properties: { Width: 412, Height: 276, Padding: "6", Arrangement: "Fixed" },
@@ -5977,7 +5984,8 @@ class Form1 extends Form {
             const dir = File.Join(SCRATCH, "shadow-" + name);
             Directory.Make(dir);
             const sources = Dictionary.Keys(files).filter((f) => f.endsWith(".js"));
-            File.SaveJson(File.Join(dir, "project.btp"), { name: "shadow" + name, startup: startup, sources: sources });
+            File.SaveJson(File.Join(dir, "project.btp"), { id: "io.github.getbintana.test.Shadow" + name,
+                                                           name: "shadow" + name, startup: startup, sources: sources });
             for (const f of Dictionary.Keys(files)) {
                 const v = files[f];
                 if (typeof v === "string") File.Save(File.Join(dir, f), v);
@@ -6068,7 +6076,8 @@ class Form1 extends Form {
             Directory.Make(dir);
             const sources = Dictionary.Keys(files).filter((f) => f.endsWith(".js"));
             File.SaveJson(File.Join(dir, "project.btp"),
-                          { name: "module" + name, sources, ...project });
+                          { id: "io.github.getbintana.test.Module" + name,
+                            name: "module" + name, sources, ...project });
             for (const f of Dictionary.Keys(files)) File.Save(File.Join(dir, f), files[f]);
             return Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
         };
@@ -6282,7 +6291,8 @@ class Form1 extends Form {
                 Directory.Make(File.Directory(File.Join(dir, f)));
                 File.Save(File.Join(dir, f), files[f]);
             }
-            File.SaveJson(File.Join(dir, "project.btp"), { name: "import" + name, main: "Main", ...project });
+            File.SaveJson(File.Join(dir, "project.btp"), { id: "io.github.getbintana.test.Import" + name,
+                                                           name: "import" + name, main: "Main", ...project });
             return Exec.Wait([Application.Executable, dir], { Timeout: 30000 });
         };
         const main = (head, body) => `${head}\nexport function Main() {\n${body}\n    Application.Quit(0);\n}\n`;
@@ -6783,7 +6793,8 @@ class Form1 extends Form {
             Directory.Make(dir);
             const sources = Dictionary.Keys(files).filter((f) => f.endsWith(".js"));
             File.SaveJson(File.Join(dir, "project.btp"),
-                          { name: "record" + name, main: "Main", sources,
+                          { id: "io.github.getbintana.test.Record" + name.replace(/[^A-Za-z0-9]/g, ""),
+                            name: "record" + name, main: "Main", sources,
                             ...(project || {}) });
             for (const f of Dictionary.Keys(files)) {
                 Directory.Make(File.Directory(File.Join(dir, f)));
@@ -7044,7 +7055,8 @@ class Form1 extends Form {
 
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "moduledbg", main: "Main",
+                      { id: "io.github.getbintana.test.ModuleDbg" + (imported ? "Import" : ""),
+                        name: "moduledbg", main: "Main",
                         sources: imported ? ["Main.js"] : ["Lib.js", "Main.js"] });
         File.Save(File.Join(proj, "Lib.js"),
                   "const K = 100;\n" +
@@ -7272,7 +7284,8 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "error-window");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "errorwindow", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.ErrorWindow",
+                        name: "errorwindow", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1", properties: { Width: 200, Height: 100 } });
         File.Save(File.Join(proj, "Form1.js"),
@@ -7297,7 +7310,8 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "check-shadowing");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "shadowing", startup: "Form1", sources: ["Grid.js", "Form1.js"] });
+                      { id: "io.github.getbintana.test.Shadowing",
+                        name: "shadowing", startup: "Form1", sources: ["Grid.js", "Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1", properties: {} });
         File.Save(File.Join(proj, "Grid.js"), [
@@ -8891,7 +8905,8 @@ class Form1 extends Form {
                   'msgid ""\nmsgstr "Content-Type: text/plain; charset=UTF-8\\n"\n\n' +
                   'msgid "both"\nmsgstr "el proyecto"\n');
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "uses", startup: "Showcase", uses: ["marca"] });
+                      { id: "io.github.getbintana.test.Uses",
+                        name: "uses", startup: "Showcase", uses: ["marca"] });
         File.SaveJson(File.Join(proj, "Showcase.form"), {
             type: "Form", name: "Showcase",
             properties: { Text: "Showcase", Width: 200, Height: 80 },
@@ -8980,7 +8995,8 @@ class Showcase extends Form {
         Directory.Make(proj);
 
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "charted", startup: "Spike", uses: ["charts"] });
+                      { id: "io.github.getbintana.test.Charted",
+                        name: "charted", startup: "Spike", uses: ["charts"] });
         File.SaveJson(File.Join(proj, "Spike.form"), {
             type: "Form", name: "Spike",
             properties: { Text: "Spike", Width: 420, Height: 260 },
@@ -9144,7 +9160,8 @@ class Spike extends Form {
         const proj = File.Join(SCRATCH, "uses-missing");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "missing", main: "Main", uses: ["nosuchlibrary"] });
+                      { id: "io.github.getbintana.test.Missing",
+                        name: "missing", main: "Main", uses: ["nosuchlibrary"] });
         File.Save(File.Join(proj, "Main.js"), "function Main() { print('ran'); }\n");
 
         const said = [];
@@ -9221,7 +9238,8 @@ function plugGlue() { return "saw:" + GLUE_SAW; }
         const proj = File.Join(SCRATCH, "plugproj");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "plug", main: "Main", uses: ["testplug"] });
+                      { id: "io.github.getbintana.test.Plug",
+                        name: "plug", main: "Main", uses: ["testplug"] });
         File.Save(File.Join(proj, "Main.js"), `
 "use strict";
 function Main() {
@@ -9308,7 +9326,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "plugold");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "old", main: "Main", uses: ["oldplug"] });
+                      { id: "io.github.getbintana.test.OldPlug", name: "old", main: "Main", uses: ["oldplug"] });
         File.Save(File.Join(proj, "Main.js"),
                   "function Main() { print('ran'); }\n");
 
@@ -9338,7 +9356,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "plugbare");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "bare", main: "Main", uses: ["bareplug"] });
+                      { id: "io.github.getbintana.test.BarePlug", name: "bare", main: "Main", uses: ["bareplug"] });
         File.Save(File.Join(proj, "Main.js"),
                   "function Main() { print('ran'); }\n");
 
@@ -9378,7 +9396,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "plugabi1");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "abi1", main: "Main", uses: ["abi1plug"] });
+                      { id: "io.github.getbintana.test.Abi1", name: "abi1", main: "Main", uses: ["abi1plug"] });
         File.Save(File.Join(proj, "Main.js"), `
 "use strict";
 function Main() {
@@ -9428,7 +9446,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "throws");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "throws", main: "Main" });
+                      { id: "io.github.getbintana.test.Throws", name: "throws", main: "Main" });
         File.Save(File.Join(proj, "Main.js"),
                   "function Main() { throw new Error('a purpose'); }\n");
 
@@ -9469,7 +9487,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "name-taken");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "taken", startup: "Taken", sources: ["Taken.js"] });
+                      { id: "io.github.getbintana.test.Taken", name: "taken", startup: "Taken", sources: ["Taken.js"] });
         File.SaveJson(File.Join(proj, "Taken.form"), {
             format: "bintana-form/1",
             class: "Taken",
@@ -9523,7 +9541,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "name-taken-method");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "takenmethod", startup: "Taken", sources: ["Taken.js"] });
+                      { id: "io.github.getbintana.test.TakenMethod", name: "takenmethod", startup: "Taken", sources: ["Taken.js"] });
         File.SaveJson(File.Join(proj, "Taken.form"), {
             format: "bintana-form/1",
             class: "Taken",
@@ -9568,7 +9586,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "menu-taken");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "menutaken", startup: "Taken2", sources: ["Taken2.js"] });
+                      { id: "io.github.getbintana.test.MenuTaken", name: "menutaken", startup: "Taken2", sources: ["Taken2.js"] });
         File.SaveJson(File.Join(proj, "Taken2.form"), {
             format: "bintana-form/1",
             class: "Taken2",
@@ -9608,7 +9626,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "action-taken");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "acttaken", startup: "Taken3", sources: ["Taken3.js"] });
+                      { id: "io.github.getbintana.test.ActTaken", name: "acttaken", startup: "Taken3", sources: ["Taken3.js"] });
         File.SaveJson(File.Join(proj, "Taken3.form"), {
             format: "bintana-form/1",
             class: "Taken3",
@@ -9649,7 +9667,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "action-old-click");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "actoldclick", startup: "OldClick", sources: ["OldClick.js"] });
+                      { id: "io.github.getbintana.test.ActOldClick", name: "actoldclick", startup: "OldClick", sources: ["OldClick.js"] });
         File.SaveJson(File.Join(proj, "OldClick.form"), {
             format: "bintana-form/1",
             class: "OldClick",
@@ -9723,7 +9741,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "strict");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "strict", startup: "Strict",
+                      { id: "io.github.getbintana.test.Strict", name: "strict", startup: "Strict",
                         sources: ["Slab.js", "Strict.js"] });
 
         /* A component of the project: its own `.form`, its own class, placed on
@@ -10457,7 +10475,7 @@ function Main() {
         const child = at("child");
         Directory.Make(child);
         File.Save(File.Join(child, "project.btp"),
-                  JSON.stringify({ name: "keychild", main: "Main", sources: ["Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.KeyChild", name: "keychild", main: "Main", sources: ["Main.js"] }));
         File.Save(File.Join(child, "Main.js"), `"use strict";
 function Main() {
     const out = {};
@@ -11778,7 +11796,7 @@ function Main() {
         const proj = File.Join(SCRATCH, "table-tree-column");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "tabletreecolumn", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.TableTreeColumn", name: "tabletreecolumn", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 420, Height: 240 } });
@@ -11986,7 +12004,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "table-column-resize");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "tablecolumnresize", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.TableColumnResize", name: "tablecolumnresize", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 440, Height: 220 } });
@@ -12084,7 +12102,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "table-hover");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "tablehover", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.TableHover", name: "tablehover", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 520, Height: 260 } });
@@ -12176,7 +12194,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "table-tab");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "tabletab", startup: "Form1", sources: ["Form1.js"], uses: ["datagrid"] });
+                      { id: "io.github.getbintana.test.TableTab", name: "tabletab", startup: "Form1", sources: ["Form1.js"], uses: ["datagrid"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 760, Height: 420 } });
@@ -12288,7 +12306,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "table-node-toggle");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "tablenodetoggle", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.TableNodeToggle", name: "tablenodetoggle", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 400, Height: 300 } });
@@ -12377,7 +12395,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "table-reorder-drag");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "tablereorderdrag", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.TableReorderDrag", name: "tablereorderdrag", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 440, Height: 200 } });
@@ -12494,7 +12512,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "table-rtl-headings");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "tablertl", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.TableRtl", name: "tablertl", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 460, Height: 200 } });
@@ -14428,7 +14446,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "menu-visible");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "menuvisible", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.MenuVisible", name: "menuvisible", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Width: 400, Height: 240 },
@@ -16179,7 +16197,7 @@ class Form1 extends Form {
         Directory.Make(dir);
 
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "shape", startup: "F", sources: ["F.js"] });
+                      { id: "io.github.getbintana.test.FormShape", name: "shape", startup: "F", sources: ["F.js"] });
         File.Save(File.Join(dir, "F.js"),
                   "class F extends Form {\n" +
                   "    Form_Open() { print('OPEN ' + this.Controls.length); Application.Quit(0); }\n" +
@@ -16323,7 +16341,7 @@ class Form1 extends Form {
         eq("LoadBytes keeps the bytes it was given",
            File.LoadBytes(jsonPath).At(0), 0x00);
 
-        const project = JSON.stringify({ name: "encodings", startup: "F",
+        const project = JSON.stringify({ id: "io.github.getbintana.test.Encodings", name: "encodings", startup: "F",
                                          sources: ["F.js"] });
         const form = JSON.stringify({ format: "bintana-form/1", class: "F",
                                       properties: { Width: 200, Height: 100,
@@ -18954,7 +18972,7 @@ class Form1 extends Form {
         const helper = File.Join(SCRATCH, "privilege-helper");
         Directory.Make(helper);
         File.Save(File.Join(helper, "project.btp"),
-                  JSON.stringify({ name: "helper", main: "HelperMain",
+                  JSON.stringify({ id: "io.github.getbintana.test.PrivilegeHelper", name: "helper", main: "HelperMain",
                                    sources: ["Helper.js"] }));
         File.Save(File.Join(helper, "Helper.js"),
                   "export function HelperMain() {\n" +
@@ -19138,8 +19156,13 @@ class Form1 extends Form {
         const handlers = [1];
         let local;
 
-        eq("a member a global does not have is named as missing",
-           said(() => Database.Open("x")), "Database has no function Open");
+        /* Through a local, which is the same failure: written as
+         * `Database.Open` it is also a warning of the editor's check, which
+         * the graphical host gives and the console host cannot yet, and
+         * `tests/headless.sh` holds the two checks of this file equal. */
+        const Db = Database;
+        eq("a member an object does not have is named as missing",
+           said(() => Db.Open("x")), "Db has no function Open");
         eq("a member that is there and is not a function says what it is, " +
            "through arguments that call and branch",
            said(() => grid.rows.add(1, nothing(), grid ? 2 : 3)),
@@ -20227,7 +20250,7 @@ class Form1 extends Form {
         const dir = File.Join(SCRATCH, "termspawn");
         Directory.Make(dir);
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "termspawn", startup: "T", sources: ["T.js"] });
+                      { id: "io.github.getbintana.test.TermSpawn", name: "termspawn", startup: "T", sources: ["T.js"] });
         File.SaveJson(File.Join(dir, "T.form"),
                       { format: "bintana-form/1", class: "T",
                         properties: { Width: 300, Height: 200 }, children: [] });
@@ -20340,6 +20363,21 @@ class Form1 extends Form {
         eq("with what was set", onDisk.size.h, 600);
         check("under the application's own config",
               Settings.Path.startsWith(Application.ConfigDirectory), Settings.Path);
+
+        /* Both of the application's directories are named after its id, and
+         * the data one is made at startup, before anything asks for it. */
+        check("ConfigDirectory ends with the application's id",
+              Application.Id !== "" && Application.ConfigDirectory.endsWith(Application.Id),
+              `${Application.ConfigDirectory} for ${Application.Id}`);
+        check("DataDirectory exists as a directory",
+              File.IsDir(Application.DataDirectory), Application.DataDirectory);
+        check("...and ends with the application's id",
+              Application.Id !== "" && Application.DataDirectory.endsWith(Application.Id),
+              `${Application.DataDirectory} for ${Application.Id}`);
+        if (Environment.OS !== "Windows")
+            check("...and is not the config directory",
+                  Application.DataDirectory !== Application.ConfigDirectory,
+                  Application.DataDirectory);
 
         Settings.Delete("on");
         check("Delete removes it", !Settings.Has("on"));
@@ -21749,7 +21787,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "gestures");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "gestures", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.Gestures", name: "gestures", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Text: "flick-probe", Width: 500, Height: 240 },
@@ -21840,7 +21878,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "longpress");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "longpress", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.LongPress", name: "longpress", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Text: "hold-probe", Width: 400, Height: 240 },
@@ -21946,7 +21984,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "mousecancel");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "mousecancel", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.MouseCancel", name: "mousecancel", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Text: "cancel-probe", Width: 400, Height: 240 },
@@ -22070,7 +22108,7 @@ class Form1 extends Form {
         const proj = File.Join(SCRATCH, "frameless");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "frameless", startup: "Form1", sources: ["Form1.js"] });
+                      { id: "io.github.getbintana.test.Frameless", name: "frameless", startup: "Form1", sources: ["Form1.js"] });
         File.SaveJson(File.Join(proj, "Form1.form"),
                       { format: "bintana-form/1", class: "Form1",
                         properties: { Text: "frameless-probe", Width: 300, Height: 200,
@@ -27607,7 +27645,7 @@ export class UriChild extends Form {
         const dir = File.Join(SCRATCH, "cformat");
         Directory.Make(dir);
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "cformat", main: "main" });
+                      { id: "io.github.getbintana.test.CFormat", name: "cformat", main: "main" });
         File.Save(File.Join(dir, "Main.js"),
                   'function main() {\n' +
                   '    const d = new Date(2026, 7, 31, 14, 5, 9);\n' +
@@ -27678,7 +27716,7 @@ export class UriChild extends Form {
          */
         const months = File.Join(SCRATCH, "cmonths");
         Directory.Make(months);
-        File.SaveJson(File.Join(months, "project.btp"), { name: "cmonths", main: "main" });
+        File.SaveJson(File.Join(months, "project.btp"), { id: "io.github.getbintana.test.CMonths", name: "cmonths", main: "main" });
         File.Save(File.Join(months, "Main.js"),
                   'function main() {\n' +
                   '    print(Locale.Date("2026-08-01", "Month"));\n' +
@@ -28048,7 +28086,7 @@ export class UriChild extends Form {
         const dir = File.Join(SCRATCH, "collate");
         Directory.Make(dir);
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "collate", main: "main" });
+                      { id: "io.github.getbintana.test.Collate", name: "collate", main: "main" });
         File.Save(File.Join(dir, "Main.js"),
                   'function main() {\n' +
                   '    const n = ["Zapata", "Álvarez", "acosta", "Bertoni", "Núñez"];\n' +
@@ -28252,7 +28290,7 @@ export class UriChild extends Form {
         Directory.Make(SCRATCH);
         const dir = File.Join(SCRATCH, "today");
         Directory.Make(dir);
-        File.SaveJson(File.Join(dir, "project.btp"), { name: "today", main: "main" });
+        File.SaveJson(File.Join(dir, "project.btp"), { id: "io.github.getbintana.test.Today", name: "today", main: "main" });
         File.Save(File.Join(dir, "Main.js"),
                   'function main() {\n' +
                   '    print(Day.Today);\n' +
@@ -28395,13 +28433,15 @@ export class UriChild extends Form {
                   "}\n");
 
         /* Without an id there is nothing for instances to find each other by,
-         * and the project is refused where it loads. */
+         * and the project is refused where it loads -- as every project with
+         * no id is now, before `singleInstance` is read. */
         const bare = File.Join(SCRATCH, "single-instance-bare");
         Directory.Make(bare);
         File.SaveJson(File.Join(bare, "project.btp"),
                       { name: "bare", singleInstance: true, main: "Main", sources: [] });
-        eq("singleInstance without an id stops the program",
-           Exec.Wait([Application.Executable, bare], { Timeout: 30000 }).ExitCode, 2);
+        const noid = Exec.Wait([Application.Executable, bare], { Timeout: 30000 });
+        eq("singleInstance without an id stops the program", noid.ExitCode, 2);
+        check("...saying it declares no id", noid.Output.includes('declares no "id"'), noid.Output);
         File.SaveJson(File.Join(bare, "project.btp"),
                       { name: "bare", id: "org.bintana.Bare", singleInstance: "yes",
                         main: "Main", sources: [] });
@@ -28477,8 +28517,8 @@ export class UriChild extends Form {
      * A window classed by a typo is one no dock recognises, and nobody looks
      * until the icon is wrong.
      *
-     * Children, because both answers are about a *project* and this one
-     * declares no id. `Exec.Wait` blocks, so it belongs with the other blocking
+     * Children, because both answers are about a *project*, and one with no
+     * id never starts. `Exec.Wait` blocks, so it belongs with the other blocking
      * tests near the top of the run rather than in the asynchronous tail.
      */
     testApplicationId() {
@@ -28502,7 +28542,8 @@ export class UriChild extends Form {
            "id:io.github.getbintana.WidgetProbe");
         eq("with the name still its own", said[1], "name:appid");
 
-        /* No id at all is an ordinary project: it runs, and answers "". */
+        /* No id at all stops the program too: every application needs one,
+         * and the sentence says what to add. Nothing of the project runs. */
         const plain = File.Join(SCRATCH, "noid");
         Directory.Make(plain);
         File.SaveJson(File.Join(plain, "project.btp"),
@@ -28513,9 +28554,14 @@ export class UriChild extends Form {
                   '    Application.Quit(0);\n' +
                   '}\n');
 
-        const bare = Exec.Wait([Application.Executable, plain], { Timeout: 20000 });
-        eq("a project without an id runs", bare.ExitCode, 0);
-        eq("and answers the empty string", bare.Output.trim(), "[]");
+        const bare = Exec.Wait([Application.Executable, plain],
+                               { Timeout: 20000, Stderr: "separate" });
+        eq("a project without an id stops the program", bare.ExitCode, 2);
+        check("...saying it declares none, and what to add",
+              (bare.Errors || "").includes('declares no "id"') &&
+              (bare.Errors || "").includes("reverse-DNS"),
+              bare.Errors);
+        check("...before any of its code runs", !bare.Output.includes("["), bare.Output);
 
         /* And one that is not an application id stops the program, naming it. */
         File.SaveJson(File.Join(dir, "project.btp"),
@@ -28542,7 +28588,7 @@ export class UriChild extends Form {
         /* And a status that is not a number is refused rather than read as 0,
          * which a runner took for success. */
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "appid", main: "main" });
+                      { name: "appid", id: "io.github.getbintana.WidgetProbe", main: "main" });
         File.Save(File.Join(dir, "Main.js"),
                   'function main() {\n' +
                   '    try { Application.Quit("fail"); }\n' +
@@ -28601,7 +28647,7 @@ export class UriChild extends Form {
         const dir = File.Join(SCRATCH, "profile");
         Directory.Make(dir);
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "profile", main: "Main", sources: ["Main.js"] });
+                      { id: "io.github.getbintana.test.Profile", name: "profile", main: "Main", sources: ["Main.js"] });
         File.Save(File.Join(dir, "Main.js"),
                   'function Main() {\n' +
                   '    print("active:" + Profile.Active);\n' +
@@ -28676,7 +28722,7 @@ export class UriChild extends Form {
         File.Save(File.Join(dir, "SheetReader.js"), File.Load(src));
         File.Save(File.Join(dir, "SheetParts.js"), File.Load(File.Join(File.Directory(src), "SheetParts.js")));
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "sheetprobe", main: "Main", version: "1.0", sources: ["SheetReader.js", "Main.js"] });
+                      { id: "io.github.getbintana.test.SheetProbe", name: "sheetprobe", main: "Main", version: "1.0", sources: ["SheetReader.js", "Main.js"] });
         File.Save(File.Join(dir, "Main.js"),
                   'function Main() {\n' +
                   '    const t = new SheetReader();\n' +
@@ -28827,7 +28873,8 @@ export class UriChild extends Form {
         /* The writer is the library, not a copy of it: the scratch project
          * declares it, which is the whole point of the move. */
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "excelprobe", main: "Main", version: "1.0", uses: ["xlsx"],
+                      { id: "io.github.getbintana.test.ExcelProbe",
+                        name: "excelprobe", main: "Main", version: "1.0", uses: ["xlsx"],
                         sources: ["SheetReader.js", "Main.js"] });
 
         const out = File.Join(dir, "t.xlsx");
@@ -28979,7 +29026,8 @@ export class UriChild extends Form {
             '    Application.Quit(0);\n' +
             '}\n');
         File.SaveJson(File.Join(dir, "project.btp"),
-                      { name: "excelprobe", main: "Main", version: "1.0", uses: ["xlsx"], sources: ["Main.js"] });
+                      { id: "io.github.getbintana.test.ExcelRefusals",
+                        name: "excelprobe", main: "Main", version: "1.0", uses: ["xlsx"], sources: ["Main.js"] });
 
         const never = File.Join(dir, "never.xlsx");
         const refused = Exec.Wait([Application.Executable, dir, never], { Timeout: 60000 }).Output;
@@ -29029,15 +29077,17 @@ export class UriChild extends Form {
 
         const out = File.Join(dir, "clients.xlsx");
         const cfg = File.Join(dir, "config");
+        const data = File.Join(dir, "data");
         const ran = Exec.Wait([Application.Executable, example, out],
-                              { Timeout: 90000, Environment: { HOME: dir, XDG_CONFIG_HOME: cfg } });
+                              { Timeout: 90000,
+                                Environment: { HOME: dir, XDG_CONFIG_HOME: cfg, XDG_DATA_HOME: data } });
 
         check("the example exports and quits", ran.ExitCode === 0 && File.Exists(out), ran.Output);
         check("and says what it did", ran.Output.includes("Exported 5 clients"), ran.Output);
 
-        const dbPath = File.Join(cfg, "bintana", "Clients", "clients.db");
+        const dbPath = File.Join(data, "io.github.getbintana.Clients", "clients.db");
 
-        check("it kept its database in the configuration directory it was given", File.Exists(dbPath), dbPath);
+        check("it kept its database in the data directory it was given", File.Exists(dbPath), dbPath);
         if (!File.Exists(dbPath) || !File.Exists(out)) {
             Directory.DeleteTree(dir);
             return;
@@ -29245,7 +29295,8 @@ export class UriChild extends Form {
         const dir = File.Join(SCRATCH, "tray-nohost");
         Directory.Make(dir);
         File.SaveJson(File.Join(dir, "project.btp"),
-            { name: "tray-nohost", startup: "F", sources: ["F.js"],
+            { id: "io.github.getbintana.test.TrayNoHost",
+              name: "tray-nohost", startup: "F", sources: ["F.js"],
               version: "1.0" });
         File.Save(File.Join(dir, "F.form"),
             '{ "type": "Form", "name": "F", ' +
@@ -29394,15 +29445,17 @@ export class UriChild extends Form {
         eq("Urgent is the daemon's critical", urgency(calls[2]), 2);
         eq("Low is the daemon's low, in any case", urgency(calls[3]), 0);
 
-        /* The two the runtime refuses to send from, and says why. */
+        /* The two the runtime refuses to send from, and says why. A project
+         * with no id used to start and refuse at Send; it no longer starts at
+         * all, so what is asserted is the runtime's own refusal, before any
+         * code of the project runs. */
         const bare = make("bare", { name: "bare", startup: "NForm", sources: ["NForm.js"], version: "1.0" },
             { "NForm.form": form, "NForm.js": open(
-                '        t("no id", () => Notification.Send("x"));\n' +
-                '        t("no id withdraw", () => Notification.Withdraw("x"));\n') });
+                '        t("no id", () => Notification.Send("x"));\n') });
         const noid = Exec.Wait([Application.Executable, bare], { Timeout: 30000 });
-        check("a project with no id refuses, and says what to declare",
-              /no id THROWS: .*declares no `id`/.test(noid.Output), noid.Output);
-        check("...and so does withdrawing", /no id withdraw THROWS: .*declares no `id`/.test(noid.Output), noid.Output);
+        eq("a project with no id does not start", noid.ExitCode, 2, noid.Output);
+        check("...says what to declare, and sends nothing",
+              noid.Output.includes('declares no "id"') && !noid.Output.includes("no id:"), noid.Output);
 
         const console_ = make("console", { name: "console", id: "org.example.NotifyConsole", main: "main" },
             { "Main.js": 'function main() {\n' +
@@ -33029,7 +33082,7 @@ export class UriChild extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "lateclass", main: "Main",
+                  JSON.stringify({ id: "io.github.getbintana.test.LateClass", name: "lateclass", main: "Main",
                                    sources: ["Workers.js", "Main.js"] }));
         File.Save(File.Join(proj, "Workers.js"),
                   '"use strict";\n' +
@@ -35088,7 +35141,7 @@ export class UriChild extends Form {
 
         /* No "sources": the whole tree is the source. */
         File.Save(File.Join(dir, "project.btp"),
-                  JSON.stringify({ name: "nested", startup: "Main" }));
+                  JSON.stringify({ id: "io.github.getbintana.test.Nested", name: "nested", startup: "Main" }));
 
         File.Save(File.Join(dir, "forms", "Main.form"), JSON.stringify({
             format: "bintana-form/1",
@@ -35154,7 +35207,7 @@ export class UriChild extends Form {
         File.Save(File.Join(dir, "b", "Twin.form"), twin);
 
         File.Save(File.Join(dir, "project.btp"),
-                  JSON.stringify({ name: "ambiguous", startup: "Twin",
+                  JSON.stringify({ id: "io.github.getbintana.test.Ambiguous", name: "ambiguous", startup: "Twin",
                                    sources: ["a/Twin.js"] }));
         File.Save(File.Join(dir, "a", "Twin.js"), "class Twin extends Form {}\n");
 
@@ -35179,7 +35232,7 @@ export class UriChild extends Form {
         Directory.Make(File.Join(dir, "Deep", "Parts"));
 
         File.Save(File.Join(dir, "project.btp"),
-                  JSON.stringify({ name: "spaces", startup: "App.Main" }));
+                  JSON.stringify({ id: "io.github.getbintana.test.Spaces", name: "spaces", startup: "App.Main" }));
 
         File.Save(File.Join(dir, "App", "Main.form"), JSON.stringify({
             format: "bintana-form/1",
@@ -35260,7 +35313,7 @@ export class UriChild extends Form {
         Directory.Make(dir);
 
         File.Save(File.Join(dir, "project.btp"),
-                  JSON.stringify({ name: "console", main: "Main" }));
+                  JSON.stringify({ id: "io.github.getbintana.test.Console", name: "console", main: "Main" }));
         File.Save(File.Join(dir, "Main.js"),
                   'function Main() {\n' +
                   '    print("args " + Application.Arguments.join(","));\n' +
@@ -35313,7 +35366,7 @@ export class UriChild extends Form {
         Directory.Make(dir);
 
         File.Save(File.Join(dir, "project.btp"),
-                  JSON.stringify({ name: "console-form", startup: "Blank" }));
+                  JSON.stringify({ id: "io.github.getbintana.test.ConsoleForm", name: "console-form", startup: "Blank" }));
         File.Save(File.Join(dir, "Blank.form"), JSON.stringify({
             format: "bintana-form/1", class: "Blank",
             properties: { Text: "blank", Width: 100, Height: 100 }, children: [],
@@ -35330,7 +35383,7 @@ export class UriChild extends Form {
             const bad = File.Join(SCRATCH, "console-lost");
             Directory.Make(bad);
             File.Save(File.Join(bad, "project.btp"),
-                      JSON.stringify({ name: "console-lost", main: "Absent" }));
+                      JSON.stringify({ id: "io.github.getbintana.test.ConsoleLost", name: "console-lost", main: "Absent" }));
             File.Save(File.Join(bad, "Main.js"), "function Main() { print('no'); }\n");
 
             const lines = [];
@@ -35464,7 +35517,7 @@ export class UriChild extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbg", main: "Main", sources: ["Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.Dbg", name: "dbg", main: "Main", sources: ["Main.js"] }));
         /* Three lines that each have an opcode of their own, so the breakpoint
          * needs no moving and the assertion below is about stopping and not
          * about pc2line. */
@@ -35563,7 +35616,7 @@ export class UriChild extends Form {
 
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "dbgtree", main: "Main", sources: ["Main.js"] });
+                      { id: "io.github.getbintana.test.DbgTree", name: "dbgtree", main: "Main", sources: ["Main.js"] });
         File.Save(File.Join(proj, "Main.js"),
                   'function Main() {\n' +
                   '    const client = { name: "Ana", "first name": "A.",\n' +
@@ -35664,7 +35717,7 @@ export class UriChild extends Form {
 
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "dbgwatch", main: "Main", sources: ["Main.js"] });
+                      { id: "io.github.getbintana.test.DbgWatch", name: "dbgwatch", main: "Main", sources: ["Main.js"] });
         File.Save(File.Join(proj, "Main.js"),
                   'function Main() {\n' +
                   '    const client = { name: "Ana", balance: 10 };\n' +
@@ -35765,7 +35818,7 @@ export class UriChild extends Form {
 
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "dbgbraces", main: "Main", sources: ["Main.js"] });
+                      { id: "io.github.getbintana.test.DbgBraces", name: "dbgbraces", main: "Main", sources: ["Main.js"] });
         File.Save(File.Join(proj, "Main.js"),
                   'function a() {\n' +           // 1
                   '    let x = 1;\n' +           // 2
@@ -35842,7 +35895,7 @@ export class UriChild extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbgorders", main: "Main", sources: ["Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.DbgOrders", name: "dbgorders", main: "Main", sources: ["Main.js"] }));
         File.Save(File.Join(proj, "Main.js"),
                   'function quiet() {\n' +
                   '    print("quiet");\n' +
@@ -36071,7 +36124,7 @@ export class UriChild extends Form {
         const proj = File.Join(SCRATCH, "print-at-quit");
         Directory.Make(proj);
         File.SaveJson(File.Join(proj, "project.btp"),
-                      { name: "printquit", startup: "PQ", sources: ["PQ.js"] });
+                      { id: "io.github.getbintana.test.PrintQuit", name: "printquit", startup: "PQ", sources: ["PQ.js"] });
         File.SaveJson(File.Join(proj, "PQ.form"), {
             type: "Form", name: "PQ",
             properties: { Text: "PQ", Width: 240, Height: 140 },
@@ -36151,7 +36204,7 @@ class PQ extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbg2", main: "Main", sources: ["Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.Dbg2", name: "dbg2", main: "Main", sources: ["Main.js"] }));
         /*
          * `let` and `const` on purpose: a *direct* eval reaches arguments and
          * `var`s and stops there, so an immediate window built on one could read
@@ -36295,7 +36348,7 @@ class PQ extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbg3", main: "Main", sources: ["Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.Dbg3", name: "dbg3", main: "Main", sources: ["Main.js"] }));
         File.Save(File.Join(proj, "Main.js"),
                   '"use strict";\n' +
                   'function work(n) {\n' +
@@ -36378,7 +36431,7 @@ class PQ extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbg4", main: "Main", sources: ["Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.Dbg4", name: "dbg4", main: "Main", sources: ["Main.js"] }));
         File.Save(File.Join(proj, "Main.js"),
                   '"use strict";\n' +
                   'function Main() {\n' +
@@ -36458,7 +36511,7 @@ class PQ extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbghits", main: "Main", sources: ["Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.DbgHits", name: "dbghits", main: "Main", sources: ["Main.js"] }));
         File.Save(File.Join(proj, "Main.js"),
                   '"use strict";\n' +                          /* 1 */
                   'function Main() {\n' +                      /* 2 */
@@ -36543,7 +36596,7 @@ class PQ extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbgthis", main: "Main", sources: ["Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.DbgThis", name: "dbgthis", main: "Main", sources: ["Main.js"] }));
         File.Save(File.Join(proj, "Main.js"),
                   '"use strict";\n' +                                   /* 1 */
                   'class Base { constructor() { this.v = 1; } }\n' +    /* 2 */
@@ -36599,7 +36652,7 @@ class PQ extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbgtask", main: "Main", sources: ["Sum.js", "Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.DbgTask", name: "dbgtask", main: "Main", sources: ["Sum.js", "Main.js"] }));
         File.Save(File.Join(proj, "Sum.js"),
                   '"use strict";\n' +                                    /* 1 */
                   'class Sum extends Task {\n' +                         /* 2 */
@@ -36694,7 +36747,7 @@ class PQ extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbgpause", main: "Main", sources: ["Spin.js", "Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.DbgPause", name: "dbgpause", main: "Main", sources: ["Spin.js", "Main.js"] }));
         File.Save(File.Join(proj, "Spin.js"),
                   '"use strict";\n' +
                   'class Spin extends Task {\n' +
@@ -36758,7 +36811,7 @@ class PQ extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbgtaskwatch", main: "Main", sources: ["Acc.js", "Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.DbgTaskWatch", name: "dbgtaskwatch", main: "Main", sources: ["Acc.js", "Main.js"] }));
         File.Save(File.Join(proj, "Acc.js"),
                   '"use strict";\n' +                                  /* 1 */
                   'class Acc extends Task {\n' +                       /* 2 */
@@ -36829,7 +36882,7 @@ class PQ extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbgtaskunwatch", main: "Main", sources: ["Spin.js", "Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.DbgTaskUnwatch", name: "dbgtaskunwatch", main: "Main", sources: ["Spin.js", "Main.js"] }));
         File.Save(File.Join(proj, "Spin.js"),
                   '"use strict";\n' +                                              /* 1 */
                   'class Spin extends Task {\n' +                                  /* 2 */
@@ -36913,7 +36966,7 @@ class PQ extends Form {
 
         Directory.Make(proj);
         File.Save(File.Join(proj, "project.btp"),
-                  JSON.stringify({ name: "dbgreplace", main: "Main", sources: ["Calc.js", "Mod.js", "Main.js"] }));
+                  JSON.stringify({ id: "io.github.getbintana.test.DbgReplace", name: "dbgreplace", main: "Main", sources: ["Calc.js", "Mod.js", "Main.js"] }));
         File.Save(File.Join(proj, "Calc.js"),
                   '"use strict";\n' +
                   'class Base {\n' +

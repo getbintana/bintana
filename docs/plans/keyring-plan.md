@@ -64,7 +64,7 @@ who protects the secret:
 
 `Application.ConfigDirectory/secrets/<enc(service)>/<enc(key)>`: one file per
 secret, the file's bytes are the value. `Application.ConfigDirectory` is
-`~/.config/bintana/<name>`, created at startup, which is where anything an
+`~/.config/<id>` (it was `~/.config/bintana/<name>` when this was written), created at startup, which is where anything an
 application remembers already belongs.
 
 - `enc` percent-encodes everything outside `[A-Za-z0-9._-]` plus `%` itself.

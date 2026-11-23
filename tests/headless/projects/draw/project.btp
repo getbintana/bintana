@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessDraw",
   "name": "headless-draw",
   "main": "Main",
   "description": "A drawing with no control: PNG, PDF and text measurements in the core",

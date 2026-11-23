@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessLibtypo",
   "name": "headless-libtypo",
   "main": "Main",
   "description": "A library with a plain typo whose name contains Form: the error is the typo, not a missing display",

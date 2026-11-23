@@ -147,7 +147,7 @@ at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
   under the strip -- and `tests/ide`'s `nested` phase, which asserts there is
   room *around* a 360 form, went red with this commit and stayed red for every
   commit after it, while the message said *suite green*. The window it ran in
-  is whatever `~/.config/bintana/ide-test` last saved, so a run that inherited
+  is whatever the test project's `ConfigDirectory` last saved, so a run that inherited
   a wider one passed. The phase sizes the window it measures in now; **a test
   about the room around something sets the room**, because the settings file
   the suite shares is somebody else's state. The same inheritance put the
@@ -1634,17 +1634,37 @@ tripped on, each fixed and asserted in `tests/ide`:
   `--force-local`. The suite runs under MSYS and saw GNU tar, so Export was
   green here and broken on every plain Windows. `Exporter.tar()` asks
   `tar --version`; `export` drives `System32\tar.exe` by its path.
-- **The installer's refusal for no id came after the chooser.** A new project
-  usually has no id (it is optional in New project). `Installer.run` reads
-  `ide.manifest.read()` -- `Package.configOf` throws on exactly this -- and
-  opens Project settings on `TxtPrId`.
+- **The installer's refusal for no id came after the chooser.** `Installer.run`
+  reads `ide.manifest.read()` -- `Package.configOf` throws on exactly this --
+  and opens Project settings on `TxtPrId`. A project made since the id became
+  required always has one; this is for a manifest edited by hand.
 
-Not changed, and why: `Application` has no `DataDirectory`, which is the first
-name a person writes for where a database goes (`ConfigDirectory` is
-documented as "anything the application remembers"; `Desktop.DataDirectory`
-is not per application). The live check catches it as a member `Application`
-does not have. Adding it is public surface across three repositories, and
-was left for the owner to decide.
+It also wrote `Application.DataDirectory`, which did not exist, for the
+database -- the first name a person reaches for. That walk is what made the
+id required and the directories named by it; see *Every project has an id*
+below.
+
+## Every project has an id
+
+Decided 2026-11-23: the id stopped being optional, because a project that
+grew always reached something that needs one -- the installer, the metainfo,
+`singleInstance`, a toast on Windows -- and was refused there, after the name
+was in a dozen files. The runtime refuses at load (`bta_project_id_ok`);
+`ProjectFile.Validate` says it first; and nothing the IDE makes is without
+one:
+
+- **`NewProjectForm.suggestId(name)` proposes it**: the prefix the last
+  project was made with (`newProject.idPrefix` in Settings), or
+  `io.github.<login>` the first time, and the name as one element. The field
+  follows the name until the person types in it -- a `TextBox`'s `Change` is
+  GTK's and comes for an assignment too, so the proposal is written under a
+  flag (`proposing`) that tells it from typing.
+- **`createProject` and `createConsoleProject` take the proposal when given
+  no id**, and always write the metainfo now, since there is always a name
+  for the file.
+- **`ConfigDirectory` and `DataDirectory` are `<config>/<id>` and
+  `<data>/<id>`**: a project's settings moved when this landed (no migration,
+  by decision), the IDE's own and the suite's included.
 
 ## Breakpoints: on, off, kept
 

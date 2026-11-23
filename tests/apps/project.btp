@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.Apps",
   "name": "apps",
   "main": "main",
   "sources": ["Main.js"]

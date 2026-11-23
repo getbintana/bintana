@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessColors",
   "name": "headless-colors",
   "main": "Main",
   "description": "Painter.Color in both hosts: which strings are colours, and which colour each one is",

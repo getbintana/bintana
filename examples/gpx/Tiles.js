@@ -28,7 +28,7 @@
  *     page, and it is not hidden behind a toggle.
  *   - **`Cache-Control: no-cache` is never sent**, and neither is `Pragma`.
  *
- * The cache lives under `Application.ConfigDirectory/tiles/<z>/<x>/<y>.png`,
+ * The cache lives under `Application.DataDirectory/tiles/<z>/<x>/<y>.png`,
  * with a `<y>.png.json` beside it holding the `ETag` and when it expires next.
  * The PNG's presence on disk is also what makes the drawing fast:
  * `Painter.Image` caches decoded images **by path** and decodes bytes on every
@@ -64,7 +64,7 @@ function mercatorY(lat, z) {
 
 class Tiles {
 
-    dir     = File.Join(Application.ConfigDirectory, "tiles");
+    dir     = File.Join(Application.DataDirectory, "tiles");
     client  = Http.Client({
         UserAgent:  "Bintana-GPX-example/1.0 (+https://github.com/getbintana/bintana)",
         MaxConns:   2,

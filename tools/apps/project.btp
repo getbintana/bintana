@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.tool.Apps",
   "name": "apps",
   "main": "main",
   "version": "1.0",

@@ -134,7 +134,7 @@
  *
  * ## The file holds user data, not prose
  *
- * `kanban.json` lives in `Application.ConfigDirectory` (a project directory
+ * `kanban.json` lives in `Application.DataDirectory` (a project directory
  * may be installed read-only) and is written on every change — `File.Save`
  * is atomic, so saving often is safe. Column titles and task texts are
  * stored raw and shown raw: they are what somebody typed, and running them
@@ -196,7 +196,7 @@ class Board extends Form {
         const was = Settings.Get("size", null);
         if (was) this.Resize(was.width, was.height);
 
-        this.model = new BoardData(File.Join(Application.ConfigDirectory, "kanban.json"));
+        this.model = new BoardData(File.Join(Application.DataDirectory, "kanban.json"));
         this.priNames = new Task().PropertyOptions("Priority");
 
         this.model.load();

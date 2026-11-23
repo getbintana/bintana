@@ -13332,7 +13332,16 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "`~/.config/bintana/<name>`, **created at startup**, which is where anything the application remembers belongs. [`Settings`](docs/reference/globals/Settings.md) writes there; nothing of yours should go in the project directory, which is a thing people hand to each other",
+          "Doc": "`~/.config/<id>`, **created at startup**: the application's configuration -- what a person chose, kept apart from what the application made. [`Settings`](docs/reference/globals/Settings.md) writes there. On Windows it is `%LOCALAPPDATA%\\<id>`, the same folder as `DataDirectory`, which is what GLib answers for both. Nothing of yours should go in the project directory, which is a thing people hand to each other",
+          "Native": true
+        },
+        {
+          "Name": "DataDirectory",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`~/.local/share/<id>`, **created at startup**: what the application makes and keeps -- a database, a saved document, a download -- as against what a person configured. On Windows `%LOCALAPPDATA%\\<id>`, local and not roaming, since a database copied around with a profile is a database that breaks; in a Flatpak, the sandbox's own",
           "Native": true
         },
         {
@@ -13413,7 +13422,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "from `project.btp`: the application's identity in reverse DNS — `io.github.you.App`. It is **one name in four places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, the Flatpak app id, and on Windows the process's AppUserModelID -- what the taskbar groups by and what a toast belongs to. `\"\"` when the project declares none, which is an ordinary project classed by the program's name; a value that is not an application id **stops the program when the project loads**, because every one of those names is something nobody looks at until a dock shows the wrong icon",
+          "Doc": "from `project.btp`: the application's identity in reverse DNS — `io.github.you.App`. **Every project that runs declares one**, and a project without one, or with one that is not an application id, does not start. It is **one name in five places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, the Flatpak app id, on Windows the process's AppUserModelID -- what the taskbar groups by and what a toast belongs to -- and the name of `ConfigDirectory` and `DataDirectory`",
           "Native": true
         },
         {

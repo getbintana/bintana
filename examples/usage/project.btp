@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Usage",
   "name": "Usage",
   "startup": "UsageForm",
   "sources": [

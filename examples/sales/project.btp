@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Sales",
   "name": "Sales",
   "version": "1.0",
   "startup": "SalesForm",

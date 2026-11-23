@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Clock",
   "name": "Clock",
   "startup": "ClockForm",
   "sources": [

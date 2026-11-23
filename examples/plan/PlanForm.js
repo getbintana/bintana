@@ -17,7 +17,7 @@
  * those cells are shut with `SetEditable` -- drawn dim, opening nothing --
  * while the same columns are fields on every task. Its name is still its own.
  *
- * Saving writes `plan.json` in `Application.ConfigDirectory`, and the plan is
+ * Saving writes `plan.json` in `Application.DataDirectory`, and the plan is
  * read back from there on the next start. `EndEdit()` first, so a field still
  * open when Save is clicked is in what is written.
  */
@@ -65,7 +65,7 @@ class PlanForm extends Form {
     }
 
     path() {
-        return File.Join(Application.ConfigDirectory, "plan.json");
+        return File.Join(Application.DataDirectory, "plan.json");
     }
 
     fill() {

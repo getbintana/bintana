@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessRun",
   "name": "headless-run",
   "version": "1.0",
   "main": "Main",

@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Notify",
   "name": "Notify",
   "startup": "NotifyForm",
   "sources": [

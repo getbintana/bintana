@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Vector",
   "uses": ["drawing"],
   "name": "Vector",
   "startup": "VectorForm",

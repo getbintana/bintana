@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Factory",
   "name": "Factory",
   "startup": "FactoryForm",
   "sources": [

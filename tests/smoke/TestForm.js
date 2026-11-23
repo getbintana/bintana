@@ -328,8 +328,8 @@ class TestForm extends Form {
         Directory.Make(File.Join(dir, "tests"));
         const write = (shape) => File.Save(File.Join(dir, "project.btp"),
             JSON.stringify(shape === "main"
-                ? { name: "smoke-tests", main: "Go" }
-                : { name: "smoke-tests", startup: "Main" }));
+                ? { name: "smoke-tests", id: "io.github.getbintana.test.SmokeTests", main: "Go" }
+                : { name: "smoke-tests", id: "io.github.getbintana.test.SmokeTests", startup: "Main" }));
         File.Save(File.Join(dir, "Invoice.js"),
             "class Invoice {\n" +
             "  constructor(l) { if (l.some((x) => x < 0)) throw new RangeError('neg'); this.l = l; }\n" +
@@ -419,7 +419,7 @@ class TestForm extends Form {
             /* An error, a warning that is not one, and a file the manifest
              * forgot: the three shapes the pass exists for. */
             write("project.btp", JSON.stringify({
-                name: "smoke-check", startup: "Main",
+                name: "smoke-check", id: "io.github.getbintana.test.SmokeCheck", startup: "Main",
                 sources: ["Main.js", "Missing.js"], nonsense: true,
             }));
             write("Main.js",
@@ -466,7 +466,8 @@ class TestForm extends Form {
             /* Warnings alone are a green run unless the caller asked for the
              * other answer. */
             write("project.btp", JSON.stringify({
-                name: "smoke-check", startup: "Main", sources: ["Main.js"],
+                name: "smoke-check", id: "io.github.getbintana.test.SmokeCheck",
+                startup: "Main", sources: ["Main.js"],
             }));
             write("Main.js", "class Main extends Form { Form_Open() {} }\n");
             write("Main.form", JSON.stringify({
@@ -493,22 +494,23 @@ class TestForm extends Form {
 
             /* `singleInstance` is a key the runtime reads, so it is not one
              * "nothing reads" -- which is what the pass said of it while
-             * `ProjectFile` did not declare it -- and the two values the window's
-             * runtime refuses at load are errors here too. */
+             * `ProjectFile` did not declare it -- and a value the window's
+             * runtime refuses at load is an error here too. So is a project
+             * that runs with no id: both hosts refuse to start it. */
             const manifest = (extra) => write("project.btp", JSON.stringify({
                 name: "smoke-check", startup: "Main", sources: ["Main.js"], ...extra,
             }));
-            manifest({ id: "org.bintana.SmokeCheck", singleInstance: true });
+            manifest({ id: "io.github.getbintana.test.SmokeCheck", singleInstance: true });
             const single = run(dir);
             eq("singleInstance with an id passes", single.ExitCode, 0);
             check("...and is not a key nothing reads", !single.Output.includes("singleInstance"),
                   single.Output);
-            manifest({ singleInstance: true });
+            manifest({});
             const noId = run(dir);
-            eq("singleInstance with no id is an error", noId.ExitCode, 1);
-            check("...that says what it needs", noId.Output.includes("singleInstance needs an id"),
+            eq("a project that runs with no id is an error", noId.ExitCode, 1);
+            check("...that says what it needs", noId.Output.includes("declares no id"),
                   noId.Output);
-            manifest({ id: "org.bintana.SmokeCheck", singleInstance: "yes" });
+            manifest({ id: "io.github.getbintana.test.SmokeCheck", singleInstance: "yes" });
             const yes = run(dir);
             eq("a singleInstance that is not a boolean is an error", yes.ExitCode, 1);
             check("...that says so", yes.Output.includes("singleInstance is not true or false"),
@@ -516,15 +518,15 @@ class TestForm extends Form {
             /* A console project has no window to bring forward: there the key
              * does nothing, said as a warning, and a bad value is not an error. */
             write("project.btp", JSON.stringify({
-                name: "smoke-check", main: "Main", sources: ["Main.js"],
-                singleInstance: "yes",
+                name: "smoke-check", id: "io.github.getbintana.test.SmokeCheck",
+                main: "Main", sources: ["Main.js"], singleInstance: "yes",
             }));
             const consoleRun = run(dir);
             eq("singleInstance on a main project is not an error", consoleRun.ExitCode, 0);
             check("...but says it does nothing", consoleRun.Output.includes(
                       'singleInstance does nothing for a project with "main"'), consoleRun.Output);
             check("...and nothing more", !consoleRun.Output.includes("not true or false"), consoleRun.Output);
-            manifest({});
+            manifest({ id: "io.github.getbintana.test.SmokeCheck" });
 
             /* A `.form` a person edited can be any JSON at all. The pass reads
              * files it did not write, so a shape it cannot walk is a row about
@@ -581,7 +583,8 @@ class TestForm extends Form {
              * lost its real finding -- the `Clik` below.
              */
             write("project.btp", JSON.stringify({
-                name: "smoke-check", startup: "Main", sources: ["Main.js"],
+                name: "smoke-check", id: "io.github.getbintana.test.SmokeCheck",
+                startup: "Main", sources: ["Main.js"],
             }));
             write("Main.js",
                 "class Main extends Form {\n" +
@@ -612,7 +615,8 @@ class TestForm extends Form {
 
             /* A clean project says nothing at all. */
             write("project.btp", JSON.stringify({
-                name: "smoke-check", main: "Go", sources: ["Go.js"],
+                name: "smoke-check", id: "io.github.getbintana.test.SmokeCheck",
+                main: "Go", sources: ["Go.js"],
             }));
             write("Go.js", "function Go() {}\n");
             File.Delete(File.Join(dir, "Main.form"));
@@ -642,7 +646,7 @@ class TestForm extends Form {
         Directory.Make(dir);
         File.Save(File.Join(dir, "project.btp"),
                   JSON.stringify({ name: "smoke-look", startup: "First",
-                                   singleInstance: true, id: "org.bintana.SmokeLook",
+                                   singleInstance: true, id: "io.github.getbintana.test.SmokeLook",
                                    sources: ["Look.js"] }));
         File.Save(File.Join(dir, "Look.js"),
             "class First extends Form { Form_Open() { print('opened First'); Application.Quit(); } }\n" +
@@ -708,7 +712,8 @@ class TestForm extends Form {
 
         Directory.Make(dir);
         File.Save(File.Join(dir, "project.btp"),
-                  JSON.stringify({ name: "smoke-exit", main: "Main", version: "1.0",
+                  JSON.stringify({ name: "smoke-exit", id: "io.github.getbintana.test.SmokeExit",
+                                   main: "Main", version: "1.0",
                                    sources: ["Main.js"] }));
 
         try {
@@ -729,6 +734,18 @@ class TestForm extends Form {
                                       { Timeout: 10000 });
                 eq(name, res.ExitCode, want);
             }
+
+            /* **A project that runs has an id**, and with none the host
+             * refuses it as a usage error before any of it is loaded. */
+            File.Save(File.Join(dir, "project.btp"),
+                      JSON.stringify({ name: "smoke-exit", main: "Main", version: "1.0",
+                                       sources: ["Main.js"] }));
+            const noId = Exec.Wait([Application.Executable, dir], { Timeout: 10000 });
+            eq("a project with no id is refused", noId.ExitCode, 2);
+            check("...saying what it lacks", noId.Output.includes('declares no "id"'),
+                  noId.Output);
+            check("...and never runs",
+                  !noId.Output.split("\n").some((l) => l.trim() === "ok"), noId.Output);
         } finally {
             Directory.DeleteTree(dir);
         }
@@ -753,7 +770,8 @@ class TestForm extends Form {
 
         Directory.Make(dir);
         File.Save(File.Join(dir, "project.btp"),
-                  JSON.stringify({ name: "smoke-teardown", main: "Main", version: "1.0",
+                  JSON.stringify({ name: "smoke-teardown", id: "io.github.getbintana.test.SmokeTeardown",
+                                   main: "Main", version: "1.0",
                                    sources: ["Sleeper.js", "Main.js"] }));
         File.Save(File.Join(dir, "Sleeper.js"),
             "class Sleeper extends Task {\n" +

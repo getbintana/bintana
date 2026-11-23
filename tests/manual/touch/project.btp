@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.ManualTouch",
   "name": "TouchProbe",
   "startup": "TouchProbe",
   "sources": ["TouchProbe.js"],

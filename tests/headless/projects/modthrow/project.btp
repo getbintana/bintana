@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessModthrow",
   "name": "headless-modthrow",
   "main": "Main",
   "description": "A source that is a module and throws while it loads: the error must be reported, as the graphical host reports it",

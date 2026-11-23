@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessOnerror",
   "name": "headless-onerror",
   "main": "Main",
   "description": "Application.OnError takes an uncaught error over in both hosts, and the run still exits 1",

@@ -175,8 +175,14 @@ one no dock recognises, in silence. The rule is the platform's
 (`g_application_id_is_valid`: reverse DNS, at least one dot, no element starting
 with a digit) and it is refused **at load**, naming the key, rather than
 ignored -- and so is an `id` that is not a string, which `json_str`'s fallback
-used to read as no id at all; a project that declares none keeps the old answer, which is the
-program's own name. `GtkApplication` also takes the id as the default window
+used to read as no id at all. **And no id at all is refused too** (2026-11-23): the
+id names `ConfigDirectory` and `DataDirectory` as well, so a project that runs declares one
+(`bta_project_id_ok`, shared by both hosts). **The console host builds its
+own `BtaApp` on the stack and fills it by hand** (`bta_headless.c`), so a field
+the graphical host sets is not there unless it is copied: a `Task` started from
+a `main` read `app->id` as NULL and `JS_NewString(NULL)` crashed the worker --
+`tests/headless.sh`'s `globals` fixture is the one that runs a task there. A new
+`BtaApp` field a worker reads is set in both hosts. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
 ### `bintana test`, and an application with no window

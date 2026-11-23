@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.Markdown",
   "name": "markdown",
   "startup": "MarkdownTest",
   "uses": ["markdown"],

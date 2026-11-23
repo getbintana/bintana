@@ -16,7 +16,7 @@
  * thirteen findings, three of which changed that document.
  *
  * Run it with `./build/bintana examples/clients`. The database is created in
- * `~/.config/bintana/Clients/clients.db` on the first run and seeded, because
+ * `~/.local/share/io.github.getbintana.Clients/clients.db` on the first run and seeded, because
  * an application with an empty first screen cannot be told from a broken one.
  *
  * What is worth knowing to read *this file*:
@@ -132,13 +132,13 @@ class ClientsForm extends Form {
     /*
      * The database: opened, created if it is not there, seeded if it is empty.
      *
-     * In `Application.ConfigDirectory` and not beside the project, because a
+     * In `Application.DataDirectory` and not beside the project, because a
      * project directory may be installed read-only -- `cmake --install` puts
      * `examples/` under `/usr/share`, and a program that wrote to its own
      * directory would work from the source tree and fail from a package.
      */
     open() {
-        const path = File.Join(Application.ConfigDirectory, "clients.db");
+        const path = File.Join(Application.DataDirectory, "clients.db");
 
         this.db = Database.Sqlite(path);
         this.db.Script(SCHEMA);

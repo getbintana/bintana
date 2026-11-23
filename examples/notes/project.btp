@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Notes",
   "name": "Notes",
   "startup": "NotesForm",
   "sources": [

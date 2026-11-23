@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Camera",
   "name": "Camera",
   "startup": "CameraForm",
   "sources": [

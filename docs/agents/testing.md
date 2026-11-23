@@ -44,7 +44,7 @@ so `tests/ide` compares the two lists and names what is missing from either.
 (`bta-suite-<pid>/data`), because `tests/ide`'s `apps` phase installs a menu
 entry for real. Without it every suite run would leave a `bta-suite-app.desktop`
 in the developer's menu, and only that phase would be able to say why. What is
-deliberately *not* moved is `~/.config/bintana`: the projects' own settings
+deliberately *not* moved is `~/.config/<id>`: the projects' own settings
 directory has always been written to by the tests, and `tests/ide`'s `settings`
 and `session` phases are about it.
 

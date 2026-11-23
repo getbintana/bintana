@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.Smoke",
   "name": "smoke",
   "startup": "TestForm",
   "sources": [

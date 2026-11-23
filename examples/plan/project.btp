@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Plan",
   "name": "Plan",
   "startup": "PlanForm",
   "sources": [

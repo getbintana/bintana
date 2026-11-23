@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Todo",
   "name": "Todo",
   "startup": "TodoForm",
   "sources": [

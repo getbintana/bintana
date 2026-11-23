@@ -118,7 +118,7 @@ class ReportForm extends Form {
      * This is what to reach for when a page is going into something else -- an
      * email, a slide -- and it is one file per page by construction. */
     BtnExport_Click() {
-        const dir = Application.ConfigDirectory;
+        const dir = Application.DataDirectory;
         const n   = this.Report.PageCount;
 
         for (let p = 1; p <= n; p++)
@@ -133,7 +133,7 @@ class ReportForm extends Form {
      * statement of account is *for*, and it is what this example used to have to
      * apologise for not having. */
     BtnPdf_Click() {
-        const path = File.Join(Application.ConfigDirectory, "statement.pdf");
+        const path = File.Join(Application.DataDirectory, "statement.pdf");
 
         this.Report.SavePdf(path);
         this.LblStatus.Text = Locale.Text("Saved {0} page(s) as {1}",

@@ -1205,7 +1205,7 @@ class ReportTest extends Form {
         const dir = at("console");
         Directory.Make(dir);
         File.Save(File.Join(dir, "project.btp"), JSON.stringify({
-            id: "ar.test.ReportConsole", main: "Main", uses: ["report", "charts"], sources: ["Main.js"],
+            id: "io.github.getbintana.test.ReportConsole", main: "Main", uses: ["report", "charts"], sources: ["Main.js"],
         }));
         File.Save(File.Join(dir, "Main.js"), `
             function Main() {

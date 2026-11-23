@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Check",
   "name": "check",
   "main": "main",
   "version": "1.0",

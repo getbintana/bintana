@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Flood",
   "uses": ["drawing"],
   "name": "Flood",
   "startup": "MainForm",

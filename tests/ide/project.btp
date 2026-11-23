@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.Ide",
   "name": "ide-test",
   "version": "9.9.9",
   "startup": "MainForm",

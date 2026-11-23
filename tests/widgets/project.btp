@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.Widgets",
   "name": "widgets",
   "startup": "WidgetsForm",
   "sources": [

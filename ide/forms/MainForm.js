@@ -840,9 +840,12 @@ export class MainForm extends Form {
 
         const first = inFolder(FORM_DIR, "Form1");
 
+        /* Never without an id: the runtime does not start a project that has
+         * none. A caller that brings none gets the proposal the dialog makes. */
+        id = id || NewProjectForm.suggestId(File.Name(dir));
         const config = new ProjectFile({
             Name:        File.Name(dir),
-            Id:          id || "",
+            Id:          id,
             Startup:     "Form1",
             Sources:     [`${first}.js`],
             Uses:        NEW_FORM_USES,
@@ -851,11 +854,9 @@ export class MainForm extends Form {
 
         File.SaveJson(File.Join(dir, "project.btp"), config);
 
-        /* A project that declares an id gets its metainfo from the start: it is
-         * part of what the project *is*, and creating it later is a step nobody
-         * remembers. Without an id there is no name for the file, and the
-         * Application info dialog is where one is made once there is. */
-        if (id) Metainfo.create(dir, config);
+        /* The metainfo from the start: it is part of what the project *is*,
+         * and creating it later is a step nobody remembers. */
+        Metainfo.create(dir, config);
 
         /* A project starts with a stylesheet, empty but for what it is for.
          * The runtime finds app.css by name, so an existing project gets one by
@@ -891,16 +892,17 @@ export class MainForm extends Form {
      * describing a window to a program that has no display.
      */
     createConsoleProject(dir, description, id) {
+        id = id || NewProjectForm.suggestId(File.Name(dir));
         const config = new ProjectFile({
             Name:        File.Name(dir),
-            Id:          id || "",
+            Id:          id,
             Main:        "Main",
             Sources:     ["Main.js"],
             Description: description || "",
         });
 
         File.SaveJson(File.Join(dir, "project.btp"), config);
-        if (id) Metainfo.create(dir, config);
+        Metainfo.create(dir, config);
         File.Save(File.Join(dir, "Main.js"), MAIN_JS);
 
         this.project = File.Absolute(dir);

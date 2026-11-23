@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessLibshadow",
   "name": "headless-libshadow",
   "main": "Main",
   "description": "A project with its own copy of a library that another library also uses: one copy is loaded, the project's",

@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Files",
   "name": "Files",
   "startup": "Files",
   "sources": [

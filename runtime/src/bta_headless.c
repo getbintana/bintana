@@ -176,11 +176,13 @@ static void install_application(JSContext *ctx, JSValueConst global,
     JS_SetPropertyStr(ctx, application, "Version",
                       JS_NewString(ctx, version ? version : ""));
 
-    char *config = g_build_filename(g_get_user_config_dir(), "bintana",
-                                    name && *name ? name : "console", NULL);
-    g_mkdir_with_parents(config, 0700);
+    /* The graphical host's directories, by the same id (`bta_app_dir`). */
+    char *config = bta_app_dir(g_get_user_config_dir(), id, 0700);
     JS_SetPropertyStr(ctx, application, "ConfigDirectory", JS_NewString(ctx, config));
     g_free(config);
+    char *data = bta_app_dir(g_get_user_data_dir(), id, 0700);
+    JS_SetPropertyStr(ctx, application, "DataDirectory", JS_NewString(ctx, data));
+    g_free(data);
 
     char *exe = bta_exe_path();
     JS_SetPropertyStr(ctx, application, "Executable",
@@ -514,7 +516,11 @@ static int run_check(int argc, char **argv)
                       JS_NewCFunction(ctx, headless_print, "print", 1));
     JS_SetPropertyStr(ctx, global, "BTA_VERSION",
                       JS_NewString(ctx, BTA_VERSION_STRING));
-    install_application(ctx, global, tools, "check", "1.0", "", argv, argc);
+    /* The checker is the runtime's own tool and not a project anybody wrote,
+     * so its id is the runtime's: the same one `tools/check/project.btp`
+     * declares, which is what the graphical road runs it as. */
+    install_application(ctx, global, tools, "check", "1.0",
+                        "io.github.getbintana.Check", argv, argc);
     install_core(ctx, global, tools, libs);
     JS_FreeValue(ctx, global);
 
@@ -1113,13 +1119,10 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     g_free(base);
     id            = bta_project_string(ctx, cfg, "id", "");
 
-    /* The graphical host's rule, and its sentence: an id that is not an
-     * application id stops the program when the project loads, in either
-     * host, rather than becoming a wrong name somewhere nobody looks. */
-    if (id[0] && !g_application_id_is_valid(id)) {
-        fprintf(stderr,
-                "bintana: project.btp id \"%s\" is not an application id "
-                "(a reverse-DNS name like org.example.App)\n", id);
+    /* The graphical host's rule, and its sentence: no id, or one that is not
+     * an application id, stops the program when the project loads, in either
+     * host -- a console tool has a `ConfigDirectory` named after it too. */
+    if (!bta_project_id_ok(id, manifest)) {
         status = 2;
         goto out;
     }
@@ -1189,6 +1192,9 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     app.dir     = dir;
     app.name    = name;
     app.version = version;
+    /* A worker's `Application` answers the id and names its directories by
+     * it (`bta_task.c`), so the console host hands it over like the rest. */
+    app.id      = id;
     app.libs    = libs;
     /* NULL-terminated, as `BtaApp.args` is: a `Task` hands the worker the
      * same `Application.Arguments` the main thread has. The strings are

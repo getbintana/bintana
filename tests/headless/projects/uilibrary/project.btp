@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessUilibrary",
   "name": "headless-uilibrary",
   "main": "Main",
   "description": "A UI library named by a main: the core refuses by library and display",

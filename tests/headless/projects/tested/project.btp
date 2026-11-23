@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessTested",
   "name": "headless-tested",
   "main": "Main",
   "description": "A console project with tests, run by the core's own test mode",

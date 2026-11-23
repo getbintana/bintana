@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Pulse",
   "name": "pulse",
   "startup": "PulseForm",
   "version": "1.0",

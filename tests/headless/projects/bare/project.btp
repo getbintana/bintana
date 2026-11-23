@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessBare",
   "name": "headless-bare",
   "main": "Main",
   "description": "Asks the bare host what it does not have",

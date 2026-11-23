@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.I18n",
   "name": "i18n",
   "startup": "Layouts",
   "sources": [

@@ -62,7 +62,7 @@ three programs that did not write it. What bit:
   with a date style -- so the test reads `xl/worksheets/sheet1.xml` and asserts the serials, worked out from the
   calendar in the test and not by the writer (45352, 36525, 36585, 46297, 45657).
 - **A test that runs an example which keeps a database runs it in the developer's configuration**
-  unless told otherwise. `examples/clients` writes `~/.config/bintana/Clients/clients.db`, so
+  unless told otherwise. `examples/clients` writes `~/.local/share/io.github.getbintana.Clients/clients.db`, so
   `ExampleClientsExport` gives the child `HOME` and `XDG_CONFIG_HOME` of its own, and then reads *that* database
   to check the workbook against -- a source `Xlsx` had no hand in. The example takes a path as its argument
   to export and quit, and hides its window before it is shown (`Form_Open` runs before `Show()` returns), so a

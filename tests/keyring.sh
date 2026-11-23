@@ -38,8 +38,13 @@ if (( status != 0 )) || ! grep -q '^STORE=true$' <<<"$out"; then
     exit 1
 fi
 
-file="$config/bintana/keyring/secrets/service/key"
-secrets="$config/bintana/keyring/secrets"
+# The provider keeps secrets under `<config>/<id>/secrets`, the id being the
+# one tests/keyring/project.btp declares.
+id=$(sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' tests/keyring/project.btp)
+[[ -n $id ]] || { echo "keyring.sh: tests/keyring/project.btp declares no id" >&2; exit 2; }
+
+file="$config/$id/secrets/service/key"
+secrets="$config/$id/secrets"
 service_dir="$secrets/service"
 
 for path in "$file" "$secrets" "$service_dir"; do
@@ -60,8 +65,8 @@ done
 # A failed store must leave no temporary behind. Making `secrets` a regular
 # file makes `g_mkdir_with_parents` fail before anything is written.
 bad="$tmp/bad"
-mkdir -p "$bad/bintana/keyring"
-: > "$bad/bintana/keyring/secrets"
+mkdir -p "$bad/$id"
+: > "$bad/$id/secrets"
 
 out2=$(XDG_CONFIG_HOME="$bad" timeout "${TIMEOUT:-30}" "$BINTANA" tests/keyring 2>&1)
 printf '%s\n' "$out2"

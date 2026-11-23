@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.Qr",
   "name": "qr",
   "startup": "QrTest",
   "uses": ["qr"],

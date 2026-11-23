@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Invoices",
   "name": "invoices",
   "startup": "InvoicesForm",
   "version": "1.0",

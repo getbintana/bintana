@@ -13,8 +13,8 @@
 #
 # Two things worth knowing.  A later `cmake --install` **overwrites** the
 # manifest, so it always describes the last install -- the one this undoes; and
-# what is *not* here is anything a program wrote while it ran (the user's
-# `~/.config/bintana/<project>` and its settings), because the install never
+# what is *not* here is anything a program wrote while it ran (its settings
+# and data under the user's `~/.config/<id>` and `~/.local/share/<id>`), because the install never
 # put it there.
 
 if(NOT EXISTS "@CMAKE_BINARY_DIR@/install_manifest.txt")

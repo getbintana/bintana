@@ -331,10 +331,12 @@ static void keyring_provider_delete(KeyringJob *job)
 
 static char *keyring_file_path(KeyringJob *job, char **service_dir)
 {
+    /* Under `ConfigDirectory`, which is named by the id. */
     const BtaApp *app  = bta_current_app();
-    const char   *name = app && app->name ? app->name : "bintana";
-    char         *path = g_build_filename(g_get_user_config_dir(), "bintana",
-                                          name, "secrets", job->enc_service,
+    const char   *id   = app && app->id && *app->id ? app->id
+                                                    : "io.github.getbintana.Bintana";
+    char         *path = g_build_filename(g_get_user_config_dir(), id,
+                                          "secrets", job->enc_service,
                                           job->enc_key, NULL);
 
     if (service_dir)

@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessDrawspeed",
   "name": "headless-drawspeed",
   "main": "Main",
   "description": "The same loop as the drawing plugin, through the linked Drawing",

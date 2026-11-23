@@ -232,7 +232,7 @@ class ChartsForm extends Form {
     }
 
     BtnSave_Click() {
-        const path = File.Join(Application.ConfigDirectory, "sales.png");
+        const path = File.Join(Application.DataDirectory, "sales.png");
 
         this.Sales.Save(path, 800, 400);
         this.say(Locale.Text("Saved {0}", path));

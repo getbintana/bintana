@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.Xlsx",
   "name": "xlsx",
   "startup": "XlsxTest",
   "uses": ["xlsx"],

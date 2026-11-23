@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessPrivilege",
   "name": "headless-privilege",
   "main": "Main",
   "description": "Privilege is a global of both hosts, and a helper project at the first level is not one of the application's sources",

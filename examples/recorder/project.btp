@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Recorder",
   "name": "Recorder",
   "startup": "RecorderForm",
   "sources": [

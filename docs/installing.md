@@ -384,7 +384,7 @@ Two things it deliberately does not do.  It does not `rm -rf` a prefix: that is
 right for a private one (`/tmp/stage`, `~/.local`) and wrong for `/usr`, where
 the prefix is shared — for a private prefix, deleting the tree is simply another
 answer.  And it does not touch what a **program** wrote while it ran: the
-settings and recovery files under `~/.config/bintana/<project>`, and any project
+settings and recovery files under `~/.config/<id>`, the data under `~/.local/share/<id>`, and any project
 the IDE created. Those were never the install's, and they are the user's to
 decide about.
 

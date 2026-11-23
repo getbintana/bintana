@@ -262,7 +262,8 @@ function makeChildProject() {
     wipe(TMP);
 
     File.Save(File.Join(TMP, "project.btp"),
-              JSON.stringify({ name: "child", startup: "Child", sources: ["Child.js"],
+              JSON.stringify({ name: "child", id: "io.github.getbintana.test.Child",
+                               startup: "Child", sources: ["Child.js"],
                                uses: ["gadgets"] }));
 
     /*
@@ -2193,7 +2194,8 @@ function* p_subclass(ide) {
     Directory.Make(dir);
 
     File.SaveJson(File.Join(dir, "project.btp"),
-                  { name: "subclass", startup: "MySub",
+                  { name: "subclass", id: "io.github.getbintana.test.Subclass",
+                    startup: "MySub",
                     sources: ["MySub.js", "MyList.js"] });
     File.Save(File.Join(dir, "MyList.js"),
               "export class MyList extends ListBox {\n" +
@@ -7674,7 +7676,8 @@ function* p_nested(ide) {
     /* The tests above renamed and deleted files of the project.  A fresh one is
      * built so the tab tests do not depend on the state they left behind. */
     File.Save(File.Join(TMP, "project.btp"),
-              JSON.stringify({ name: "tabs", startup: "Tabs", sources: ["Tabs.js"] }));
+              JSON.stringify({ name: "tabs", id: "io.github.getbintana.test.Tabs",
+                               startup: "Tabs", sources: ["Tabs.js"] }));
     File.Save(File.Join(TMP, "Tabs.form"), JSON.stringify({
         format: "bintana-form/1",
         class: "Tabs",
@@ -8837,6 +8840,12 @@ function* p_projects(ide) {
        newCfg.startup, "Form1");
     check("whose source is registered by its path",
           newCfg.sources.includes("forms/Form1.js"), JSON.stringify(newCfg.sources));
+    /* Asked for or not, it has an id: the runtime starts no project without
+     * one, so `createProject` proposes it from the folder's name. */
+    check("and an application id, since nothing runs without one",
+          ProjectFile.idValid(newCfg.id || ""), JSON.stringify(newCfg.id));
+    check("with the metainfo that carries it",
+          Metainfo.find(NEWPROJ) !== null);
 
     eq("the IDE switched to it", ide.project, NEWPROJ);
     eq("and opened its form", ide.activeFile, "forms/Form1.form");
@@ -9050,6 +9059,40 @@ function* p_projects(ide) {
           npHome.LblHint.Tooltip.includes(Environment.HomeDirectory),
           npHome.LblHint.Tooltip);
     npHome.dismiss();
+
+    /*
+     * **The id is required, and proposed from the name** until the person
+     * types one of their own. Emptied, accepting is refused with a
+     * `Message.Error` -- stubbed here, since nothing in a test dismisses the
+     * real one -- and nothing is answered.
+     */
+    asked = null;
+    const realIdError = Message.Error;
+    const idSaid = [];
+    const npId = NewProjectForm.ask("/tmp", (info) => { asked = info; });
+    try {
+        Message.Error = (...args) => { idSaid.push(Locale.Text(...args)); };
+
+        npId.TxtName.Text = "Mis Gastos";
+        check("a name proposes an id ending in it",
+              npId.TxtId.Text.endsWith(".MisGastos"), npId.TxtId.Text);
+        check("...which is an application id", ProjectFile.idValid(npId.TxtId.Text),
+              npId.TxtId.Text);
+
+        npId.TxtId.Text   = "io.github.getbintana.Propio";
+        npId.TxtName.Text = "Otra Cosa";
+        eq("once an id is typed it stops following the name",
+           npId.TxtId.Text, "io.github.getbintana.Propio");
+
+        npId.TxtId.Text = "";
+        npId.BtnCreate_Click();
+        eq("accepting with no id is refused", asked, null);
+        check("...saying why", idSaid.some((m) => m.includes("needs an id")),
+              JSON.stringify(idSaid));
+    } finally {
+        Message.Error = realIdError;
+    }
+    npId.dismiss();
 
     /* The description goes into project.btp, and with no description the key is
      * not written: a project has no reason to carry empty fields. */
@@ -10735,7 +10778,7 @@ function* p_folders(ide) {
     Directory.Make(FLAT);
 
     File.SaveJson(File.Join(FLAT, "project.btp"), {
-        name: "flat", startup: "Main",
+        name: "flat", id: "io.github.getbintana.test.Flat", startup: "Main",
         sources: ["Util.js", "Chip.js", "Main.js"],
     });
     File.SaveJson(File.Join(FLAT, "Main.form"), {
@@ -11827,7 +11870,8 @@ function* p_settings(ide) {
     ide.reportProject();
     eq("a sound manifest says nothing", said.length, 0);
 
-    File.SaveJson(manifestPath, { name: "child", startup: 42, sources: ["Main.js"] });
+    File.SaveJson(manifestPath, { name: "child", id: "io.github.getbintana.test.Child",
+                                  startup: 42, sources: ["Main.js"] });
     ide.reportProject();
     ide.log = realLog;
 
@@ -11856,16 +11900,26 @@ function* p_settings(ide) {
     };
 
     eq("a console project is a project: nothing to report",
-       complaints({ name: "child", main: "Main", sources: ["Main.js"] }), "");
+       complaints({ name: "child", id: "io.github.getbintana.test.Child", main: "Main",
+                    sources: ["Main.js"] }), "");
 
     check("with neither, it is told what is missing",
           complaints({ name: "child", sources: ["Main.js"] }).includes("nothing to start"),
           complaints({ name: "child", sources: ["Main.js"] }));
 
-    const both = complaints({ name: "child", startup: "Tabs", main: "Main",
-                              sources: ["Main.js"] });
+    const both = complaints({ name: "child", id: "io.github.getbintana.test.Child",
+                              startup: "Tabs", main: "Main", sources: ["Main.js"] });
     check("with both, it is told which one wins",
           both.includes("main") && both.includes("never opens the form"), both);
+
+    /* **A project that runs declares an id**: the runtime refuses to start one
+     * without, so the manifest says so before Run finds out. One with neither
+     * a startup nor a main is a library, and the line above is all it hears. */
+    const noId = complaints({ name: "child", main: "Main", sources: ["Main.js"] });
+    check("with no id, a project that runs is told it needs one",
+          noId.includes("declares no id"), noId);
+    check("...and a library is not",
+          !complaints({ name: "child", sources: ["Main.js"] }).includes("declares no id"));
 
     File.Save(manifestPath, sound);          /* back to the one that runs */
 
@@ -11968,8 +12022,9 @@ function* p_settings(ide) {
     eq("showing the name it has",     pdlg.TxtPrName.Text, named);
     eq("and the version, which it now has a row for", pdlg.TxtPrVersion.Text,
        File.LoadJson(manifestPath).version || "");
-    eq("and no application id, which this project does not declare",
-       pdlg.TxtPrId.Text, "");
+    /* Declared since `p_nested` wrote it: a project that runs has to. */
+    eq("and the application id this project declares",
+       pdlg.TxtPrId.Text, "io.github.getbintana.test.Tabs");
     eq("and where it starts",         pdlg.CmbPrStartup.Text, otherClass);
     check("offered as a choice among the project's classes",
           pdlg.CmbPrStartup.Count > 1, `${pdlg.CmbPrStartup.Count} classes`);
@@ -13229,10 +13284,11 @@ function* p_installer(ide) {
     eq("and the first filter is the one it writes",
        asked.opts.Filters[0][1], "*.exe");
 
-    /* A project with no id -- what a new one usually is, since the id is
-     * optional when it is made -- is told so before any file is chosen, and
-     * Project settings opens where the id goes. It used to reach the chooser,
-     * suggest `bintana-app-0.0`, and refuse after a file was picked. */
+    /* A project with no id -- which nothing the IDE creates is any more, but a
+     * manifest edited by hand can still lose it, and then it does not run
+     * either -- is told so before any file is chosen, and Project settings
+     * opens where the id goes. It used to reach the chooser, suggest
+     * `bintana-app-0.0`, and refuse after a file was picked. */
     const manifest = File.Join(TMP, "project.btp");
     const kept     = File.Load(manifest);
     const noId     = File.LoadJson(manifest);
@@ -13281,7 +13337,8 @@ function* p_installer(ide) {
  * twice.**  A project that declares an application id installs under it, and
  * the entry claims that id as `StartupWMClass` -- the window really is classed
  * by it.  A project that declares none installs under a slug of the name and
- * claims no class, because its window is `bintana`'s.  The dialog road below is
+ * claims no class, because its window is `bintana`'s -- a manifest that lost
+ * its id by hand, since the runtime no longer starts one.  The dialog road below is
  * the first; the second is driven straight through `Apps`, since what
  * changes between them is only which string names the file.
  */
@@ -13412,7 +13469,9 @@ function* p_apps(ide) {
     /*
      * A project with no application id takes that slug as the entry's name and
      * claims no window class -- its window really is `bintana`'s, and an entry
-     * claiming otherwise is one the dock can never match.
+     * claiming otherwise is one the dock can never match.  Such a project no
+     * longer runs (the runtime refuses a manifest with no `id`), but `Apps`
+     * still writes what it is given, so the slug is driven straight through it.
      */
     const slugproj = File.Join(TEMP, "bta-test-ide-slugproj");
     Apps.Install(slugproj, { Name: "My App 2", AppId: "" });
@@ -13828,7 +13887,7 @@ function* p_errors(ide) {
     Directory.Make(boom);
     const go = File.Join(boom, "go");
     File.Save(File.Join(boom, "project.btp"),
-              '{ "main": "Main", "sources": ["Main.js"] }\n');
+              '{ "id": "io.github.getbintana.test.Boom", "main": "Main", "sources": ["Main.js"] }\n');
     File.Save(File.Join(boom, "Main.js"),
               "function Main() {\n" +
               "    Timer.After(10, () => { Database.Open(\"x\"); });\n" +
@@ -15243,7 +15302,8 @@ function* p_check(ide) {
     if (File.IsDir(imports)) Directory.DeleteTree(imports);
     Directory.Make(imports);
     File.Save(File.Join(imports, "project.btp"), JSON.stringify({
-        name: "imports", startup: "A", version: "1.0", sources: ["A.js"],
+        name: "imports", id: "io.github.getbintana.test.Imports", startup: "A",
+        version: "1.0", sources: ["A.js"],
     }, null, 2));
     File.Save(File.Join(imports, "A.js"),
               "import { B } from \"./B.js\";\n" +
@@ -16138,7 +16198,8 @@ function* p_git(ide) {
     run("config", "user.name", "Suite");
 
     File.Save(File.Join(repo, "project.btp"),
-              JSON.stringify({ name: "gitrepo", startup: "Uno", sources: ["Uno.js"] }));
+              JSON.stringify({ name: "gitrepo", id: "io.github.getbintana.test.GitRepo",
+                               startup: "Uno", sources: ["Uno.js"] }));
     File.Save(File.Join(repo, "Uno.js"), "class Uno extends Form {\n}\n");
     /* The name the whole `-z` decision exists for. */
     File.Save(File.Join(repo, "con espacio y ñ.txt"), "viejo\n");
@@ -17064,7 +17125,8 @@ function* p_git(ide) {
 
     Directory.Make(sub);
     File.Save(File.Join(sub, "project.btp"),
-              JSON.stringify({ name: "sub", startup: "Dos", sources: ["Dos.js"] }));
+              JSON.stringify({ name: "sub", id: "io.github.getbintana.test.Sub",
+                               startup: "Dos", sources: ["Dos.js"] }));
     File.Save(File.Join(sub, "Dos.js"), "class Dos extends Form {\n}\n");
     run("add", "-A");
     run("commit", "-qm", "el subproyecto");
@@ -17776,7 +17838,8 @@ function* p_debug(ide) {
     const twin = `${TMP}-twin`;
     Directory.Make(File.Join(twin, File.Directory(js) || "."));
     File.Save(File.Join(twin, "project.btp"),
-              JSON.stringify({ name: "twin", startup: startup, sources: [js] }));
+              JSON.stringify({ name: "twin", id: "io.github.getbintana.test.Twin",
+                               startup: startup, sources: [js] }));
     File.Save(File.Join(twin, js), ide.Editor.Text);
     ide.openProject(twin);
     yield* settled(ide);
@@ -19409,7 +19472,8 @@ function* p_report(ide) {
     wipe(DIR);
 
     File.Save(File.Join(DIR, "project.btp"),
-              JSON.stringify({ name: "reportprobe", startup: "Main",
+              JSON.stringify({ name: "reportprobe", id: "io.github.getbintana.test.ReportProbe",
+                               startup: "Main",
                                sources: ["Main.js"], uses: ["report"] }));
     File.Save(File.Join(DIR, "Main.js"),
               'class Main extends Form {\n' +

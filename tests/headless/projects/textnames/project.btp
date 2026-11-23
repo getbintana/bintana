@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessTextnames",
   "name": "headless-textnames",
   "main": "Main",
   "description": "Text's members as the graphical host has them, for the core's stand-ins to be compared with",

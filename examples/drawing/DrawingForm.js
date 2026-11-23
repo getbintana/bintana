@@ -256,7 +256,7 @@ class DrawingForm extends Form {
     /* The same `Draw`, against an image surface. A chart in a report is this
      * call, and so is a chart in a bug report. */
     BtnSave_Click() {
-        const path = File.Join(Application.ConfigDirectory, "sparkline.png");
+        const path = File.Join(Application.DataDirectory, "sparkline.png");
 
         this.Line.Save(path, 800, 240);
         this.LblCost.Text = Locale.Text("Saved {0}", path);

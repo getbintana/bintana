@@ -1,7 +1,7 @@
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11670 assertions
+./tests/run.sh                          # all seven projects, 11686 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -1095,8 +1095,8 @@ and the collisions fail assertions that read exactly like real bugs (*"a form ca
 be created in a folder: expected true, got false"*). Invoked by hand with no
 argument the directory is simply untagged.
 
-`Application.ConfigDirectory` is per project name, so `tests/ide` writes its own
-`~/.config/bintana/ide-test/recent.json` and can never touch the real IDE's list.
+`Application.ConfigDirectory` is per application id, so `tests/ide` writes its own
+`~/.config/io.github.getbintana.test.Ide/recent.json` and can never touch the real IDE's list.
 That test both uses and exercises the persistence: the second run of the suite reads
 back a list whose `/tmp` entries no longer exist, which is what proves they get
 filtered out.

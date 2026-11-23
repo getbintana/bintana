@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Kanban",
   "name": "Kanban",
   "startup": "Board",
   "sources": [

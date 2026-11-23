@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.tool.Pack",
   "name": "pack",
   "version": "0.1.0",
   "main": "Main",

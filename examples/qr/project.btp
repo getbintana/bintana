@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Qr",
   "name": "QR",
   "startup": "QrForm",
   "uses": [

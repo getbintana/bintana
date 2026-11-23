@@ -7,11 +7,11 @@
  * stays visible before accepting -- which the folder chooser used on its own
  * did not give.
  *
- * **The application id is asked from the beginning** and is optional: a
- * project without one runs like any other, and it is the packaging chain that
- * needs it -- the window's class, the metainfo and the Flatpak app all carry
- * it. Asking here is what keeps it from being a thing to remember later, when
- * the name is already in a dozen files.
+ * **The application id is asked from the beginning, and it is required**: the
+ * runtime does not start a project without one, since its settings and data
+ * are kept under it and the window's class, the metainfo and the Flatpak app
+ * all carry it. The field proposes one from the name (`suggestId`), so asking
+ * costs nothing to a person who has never written a reverse-DNS name.
  */
 "use strict";
 
@@ -19,7 +19,40 @@
  * that points somewhere else. */
 const BAD_NAME = /[/\\]|^\.\.?$/;
 
+/* The id's beginning the last project was made with: everything before its
+ * last element, which is the person's or the organisation's and the same for
+ * every project they make. */
+const ID_PREFIX_KEY = "newProject.idPrefix";
+
 export class NewProjectForm extends Form {
+
+    /*
+     * An application id for a project of this name: the prefix the last
+     * project was made with -- `io.github.<login>` the first time -- and the
+     * name as an id element.
+     *
+     * **Proposed, because it is required now and most people do not have one
+     * in mind.** A reverse-DNS name is a convention to learn, and a field that
+     * starts empty is a field that stops the dialog; one that starts with a
+     * good answer is changed by the person who knows better and accepted by
+     * everybody else. `MainForm.createProject` asks this too, so nothing the
+     * IDE creates is without one.
+     */
+    static suggestId(name) {
+        let prefix = Settings.Get(ID_PREFIX_KEY, "");
+        if (typeof prefix !== "string" || !ProjectFile.idValid(`${prefix}.App`)) {
+            const login = String(Environment.Get("USER") || Environment.Get("USERNAME") || "")
+                .toLowerCase().replace(/[^a-z0-9_-]/g, "");
+            prefix = `io.github.${/^[a-z_-]/.test(login) ? login : "you"}`;
+        }
+        /* The name as one element: its words joined and capitalised, only the
+         * characters an id takes, and never starting with a digit. */
+        let last = String(name || "").split(/[^A-Za-z0-9_-]+/).filter((w) => w)
+            .map((w) => w[0].toUpperCase() + w.slice(1)).join("");
+        if (!last) last = "App";
+        if (/^[0-9]/.test(last)) last = `App${last}`;
+        return `${prefix}.${last}`;
+    }
 
     static ask(baseDir, onAccept) {
         const dlg = new NewProjectForm();
@@ -76,13 +109,20 @@ export class NewProjectForm extends Form {
             Message.Error("\"{0}\" is not usable as a folder name.", name);
             return;
         }
-        /* Optional, and checked when it is there: an id that is not one is a
-         * window class nothing matches, so it is cheaper to say so here than
-         * to meet it as a generic icon in a dock. */
-        if (id && !ProjectFile.idValid(id)) {
+        /* **Required**: the runtime does not start a project without one. An
+         * id that is not one is a window class nothing matches, so it is
+         * cheaper to say so here than to meet it as a refusal at the first
+         * run. */
+        if (!id) {
+            Message.Error("Every application needs an id: its settings and data are kept under it. Use a reverse-DNS name like io.github.you.App.");
+            return;
+        }
+        if (!ProjectFile.idValid(id)) {
             Message.Error("\"{0}\" is not an application id. Use a reverse-DNS name like io.github.you.App.", id);
             return;
         }
+        /* The beginning is the person's and the next project starts from it. */
+        Settings.Set(ID_PREFIX_KEY, id.slice(0, id.lastIndexOf(".")));
         if (!File.IsDir(base)) {
             Message.Error("The base folder does not exist:\n{0}", base);
             return;
@@ -109,7 +149,19 @@ export class NewProjectForm extends Form {
         });
     }
 
-    TxtName_Change() { this.updateHint(); }
+    /* The id follows the name until the person types one of their own. A
+     * field's `Change` is GTK's and comes for an assignment too, so the
+     * proposal is written under a flag that tells it from typing. */
+    TxtName_Change() {
+        if (!this.idTyped) {
+            this.proposing = true;
+            this.TxtId.Text = this.TxtName.Text.trim()
+                ? NewProjectForm.suggestId(this.TxtName.Text.trim()) : "";
+            this.proposing = false;
+        }
+        this.updateHint();
+    }
+    TxtId_Change() { if (!this.proposing) this.idTyped = true; }
     TxtBase_Change() { this.updateHint(); }
 
     /*

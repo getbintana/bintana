@@ -8,6 +8,23 @@ one-page answer to *what is new since the release I have*.
 
 ### Runtime and libraries
 
+- **Every project that runs declares an `id`, and the runtime does not start
+  one that does not.** It was optional, and a project that grew reached the
+  installer, the metainfo, `singleInstance` or a Windows toast and was
+  refused there, late, after its name was everywhere. Both hosts now refuse
+  at load with a sentence that says what to add (`"id":
+  "io.github.you.App"`), `bintana check` reports it first, and the IDE's New
+  project proposes one from the name. A library (no `startup`, no `main`)
+  needs none. **Breaking**: a project without an id must add one.
+- **`Application.ConfigDirectory` is `~/.config/<id>`, and the new
+  `Application.DataDirectory` is `~/.local/share/<id>`**, both created at
+  startup and both named by the id, as a native program's or a Flatpak's are.
+  Configuration goes in the first and what the application makes -- a
+  database, a saved document -- in the second. On Windows both are
+  `%LOCALAPPDATA%\<id>`. **Breaking**: `ConfigDirectory` was
+  `~/.config/bintana/<name>`, and what was saved there is not moved. A
+  `Task` worker sees `Application.Id` and `DataDirectory` too, and the
+  examples that keep a database or a document use `DataDirectory`.
 - **A failed call says what it called.** The engine threw `TypeError: not a
   function` and named nothing, so a line with three calls left the reader to
   guess which. It now reads the caller's bytecode for what put the function on

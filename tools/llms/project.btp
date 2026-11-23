@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.tool.Llms",
   "name": "llms",
   "main": "Main",
   "version": "1.0",

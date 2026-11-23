@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.HeadlessDrawplugin",
   "name": "headless-drawplugin",
   "main": "Main",
   "description": "The drawing spike: SavePdf and a painter carried by a native plugin",

@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Quote",
   "name": "Quote",
   "startup": "QuoteForm",
   "sources": [

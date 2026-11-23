@@ -200,6 +200,8 @@ struct BtaTaskJob {
     char      *language;    /* the catalogue in use at Start, for this worker */
     GPtrArray *app_libs;    /* what `uses` resolved to, for the file's imports */
     char      *app_config;
+    char      *app_data;
+    char      *app_id;
     char      *app_exe;         /* "" where the platform will not say */
     char     **app_args;        /* NULL-terminated copy */
     GQueue    *reports;         /* char* JSON, FIFO, under task_lock */
@@ -292,6 +294,8 @@ static void task_job_unref(gpointer data)
     if (job->app_libs)
         g_ptr_array_unref(job->app_libs);
     g_free(job->app_config);
+    g_free(job->app_data);
+    g_free(job->app_id);
     g_free(job->app_exe);
     g_strfreev(job->app_args);
     g_queue_free_full(job->reports, g_free);
@@ -1408,14 +1412,37 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
     JS_SetPropertyStr(ctx, application, "Directory",
                       JS_NewString(ctx, job->app_dir));
     /* ConfigDirectory
-     *   `~/.config/bintana/<name>`, **created at startup**, which is where
-     *   anything the application remembers belongs.
-     *   [`Settings`](docs/reference/globals/Settings.md) writes there;
-     *   nothing of yours should go in the project directory, which is a thing
-     *   people hand to each other
+     *   `~/.config/<id>`, **created at startup**: the application's
+     *   configuration -- what a person chose, kept apart from what the
+     *   application made. [`Settings`](docs/reference/globals/Settings.md)
+     *   writes there. On Windows it is `%LOCALAPPDATA%\<id>`, the same folder
+     *   as `DataDirectory`, which is what GLib answers for both. Nothing of
+     *   yours should go in the project directory, which is a thing people
+     *   hand to each other
      */
     JS_SetPropertyStr(ctx, application, "ConfigDirectory",
                       JS_NewString(ctx, job->app_config));
+    /* DataDirectory
+     *   `~/.local/share/<id>`, **created at startup**: what the application
+     *   makes and keeps -- a database, a saved document, a download -- as
+     *   against what a person configured. On Windows `%LOCALAPPDATA%\<id>`,
+     *   local and not roaming, since a database copied around with a profile
+     *   is a database that breaks; in a Flatpak, the sandbox's own
+     */
+    JS_SetPropertyStr(ctx, application, "DataDirectory",
+                      JS_NewString(ctx, job->app_data));
+    /* Id
+     *   from `project.btp`: the application's identity in reverse DNS —
+     *   `io.github.you.App`. **Every project that runs declares one**, and a
+     *   project without one, or with one that is not an application id, does
+     *   not start. It is **one name in five places**: the window's own class
+     *   (the runtime hands it to `GtkApplication` for Wayland and to the
+     *   program name for X11's `WM_CLASS`), the `<id>` of the project's
+     *   metainfo, the Flatpak app id, on Windows the process's AppUserModelID
+     *   -- what the taskbar groups by and what a toast belongs to -- and the
+     *   name of `ConfigDirectory` and `DataDirectory`
+     */
+    JS_SetPropertyStr(ctx, application, "Id", JS_NewString(ctx, job->app_id));
     /* Executable
      *   the `bintana` binary that is running this, so a project can re-invoke
      *   it — which is how the IDE runs a project and how the test runner runs
@@ -2172,8 +2199,12 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
         job->app_libs    = g_ptr_array_new_with_free_func(g_free);
         for (guint i = 0; app->libs && i < app->libs->len; i++)
             g_ptr_array_add(job->app_libs, g_strdup(app->libs->pdata[i]));
-        job->app_config  = g_build_filename(g_get_user_config_dir(), "bintana",
-                                            app->name, NULL);
+        /* The main thread made both at startup (`bta_app_dir`); the worker
+         * is told the same paths, not given a second rule for them. */
+        const char *id = app->id ? app->id : "";
+        job->app_config  = g_build_filename(g_get_user_config_dir(), id, NULL);
+        job->app_data    = g_build_filename(g_get_user_data_dir(), id, NULL);
+        job->app_id      = g_strdup(id);
         job->app_exe     = exe ? exe : g_strdup("");
         if (app->args) {
             int n = 0;
@@ -2189,6 +2220,8 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
         job->app_version = g_strdup("");
         job->app_dir     = g_strdup("");
         job->app_config  = g_strdup("");
+        job->app_data    = g_strdup("");
+        job->app_id      = g_strdup("");
         job->app_exe     = g_strdup("");
     }
 

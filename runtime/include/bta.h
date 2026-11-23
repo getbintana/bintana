@@ -1051,6 +1051,11 @@ int bta_project_has_main(const char *dir);
  * is not text. */
 char *bta_project_string(JSContext *ctx, JSValueConst cfg, const char *key,
                          const char *fallback);
+/* Whether the project's id is there and is an application id; when not, the
+ * sentence is on stderr and the caller exits 2. `manifest` names the file. */
+bool bta_project_id_ok(const char *id, const char *manifest);
+/* `<base>/<id>`, created with `mode`: an application's own directory. Free it. */
+char *bta_app_dir(const char *base, const char *id, int mode);
 /* Every `.js` under a directory, subdirectories included. `root` skips the
  * project's own `tests/`, which a run never loads. */
 void bta_collect_js(GPtrArray *out, const char *dir, bool root);

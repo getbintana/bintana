@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.Headless",
   "name": "headless",
   "main": "Main",
   "sources": [

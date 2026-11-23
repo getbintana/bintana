@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.SysnoteWriteNote",
   "name": "write-note",
   "main": "Main",
   "sources": ["Main.js"]

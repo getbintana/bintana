@@ -804,24 +804,16 @@ static bool install_globals(BtaApp *app)
      *   wrong one is what an About box does until it knows the difference
      */
     JS_SetPropertyStr(ctx, application, "Version", JS_NewString(ctx, app->version));
-    /*
-     * The application's own identity, in reverse DNS -- the name its window is
-     * classed by, its metainfo declares and its package installs under.  "" for
-     * a project that declares none, which is an ordinary project and not a
-     * fault: the window then keeps the program's name, as it always did.
-     */
     /* Id
      *   from `project.btp`: the application's identity in reverse DNS —
-     *   `io.github.you.App`. It is **one name in four places**: the window's
-     *   own class (the runtime hands it to `GtkApplication` for Wayland and
-     *   to the program name for X11's `WM_CLASS`), the `<id>` of the
-     *   project's metainfo, the Flatpak app id, and on Windows the process's
-     *   AppUserModelID -- what the taskbar groups by and what a toast belongs
-     *   to. `""` when the project
-     *   declares none, which is an ordinary project classed by the program's
-     *   name; a value that is not an application id **stops the program when
-     *   the project loads**, because every one of those names is something
-     *   nobody looks at until a dock shows the wrong icon
+     *   `io.github.you.App`. **Every project that runs declares one**, and a
+     *   project without one, or with one that is not an application id, does
+     *   not start. It is **one name in five places**: the window's own class
+     *   (the runtime hands it to `GtkApplication` for Wayland and to the
+     *   program name for X11's `WM_CLASS`), the `<id>` of the project's
+     *   metainfo, the Flatpak app id, on Windows the process's AppUserModelID
+     *   -- what the taskbar groups by and what a toast belongs to -- and the
+     *   name of `ConfigDirectory` and `DataDirectory`
      */
     JS_SetPropertyStr(ctx, application, "Id", JS_NewString(ctx, app->id));
     /* Directory
@@ -860,24 +852,32 @@ static bool install_globals(BtaApp *app)
     JS_SetPropertyStr(ctx, application, "Inhibit",
                       JS_NewCFunction(ctx, js_inhibit, "Inhibit", 2));
 
-    /* A directory of its own under the user's config, created up front so
-     * saving a setting is one File.Save and no ceremony.  Named after the
-     * project, which is why two projects never read each other's settings --
-     * and why the test projects cannot touch the IDE's. */
-    char *slug = g_strdup(app->name);
-    g_strdelimit(slug, G_DIR_SEPARATOR_S, '-');
-    char *config = g_build_filename(g_get_user_config_dir(), "bintana", slug, NULL);
-    g_mkdir_with_parents(config, 0755);
+    /* Directories of its own, created up front so saving a setting or opening
+     * a database is one call and no ceremony. Named after the id, which is
+     * why two projects never read each other's settings -- and why the test
+     * projects cannot touch the IDE's. */
+    char *config = bta_app_dir(g_get_user_config_dir(), app->id, 0755);
     /* ConfigDirectory
-     *   `~/.config/bintana/<name>`, **created at startup**, which is where
-     *   anything the application remembers belongs.
-     *   [`Settings`](docs/reference/globals/Settings.md) writes there;
-     *   nothing of yours should go in the project directory, which is a thing
-     *   people hand to each other
+     *   `~/.config/<id>`, **created at startup**: the application's
+     *   configuration -- what a person chose, kept apart from what the
+     *   application made. [`Settings`](docs/reference/globals/Settings.md)
+     *   writes there. On Windows it is `%LOCALAPPDATA%\<id>`, the same folder
+     *   as `DataDirectory`, which is what GLib answers for both. Nothing of
+     *   yours should go in the project directory, which is a thing people
+     *   hand to each other
      */
     JS_SetPropertyStr(ctx, application, "ConfigDirectory", JS_NewString(ctx, config));
     g_free(config);
-    g_free(slug);
+    char *data = bta_app_dir(g_get_user_data_dir(), app->id, 0755);
+    /* DataDirectory
+     *   `~/.local/share/<id>`, **created at startup**: what the application
+     *   makes and keeps -- a database, a saved document, a download -- as
+     *   against what a person configured. On Windows `%LOCALAPPDATA%\<id>`,
+     *   local and not roaming, since a database copied around with a profile
+     *   is a database that breaks; in a Flatpak, the sandbox's own
+     */
+    JS_SetPropertyStr(ctx, application, "DataDirectory", JS_NewString(ctx, data));
+    g_free(data);
 
     /* Whether the desktop has an icon by that name.  Only whoever picks the
      * name can choose a fallback, and an icon the theme lacks is dropped
@@ -1394,36 +1394,22 @@ BtaApp *bta_app_new(const char *project_dir)
         JS_FreeValue(app->ctx, cfg);
         g_free(cfg_src);
     } else {
-        fprintf(stderr, "bintana: no project.btp in %s, using defaults\n", app->dir);
+        fprintf(stderr, "bintana: no project.btp in %s\n", app->dir);
+        exit(2);
     }
-    g_free(cfg_path);
 
     /*
-     * An id that is not one is refused here rather than ignored, and the
-     * difference matters: the id is the window's own class, the `<id>` of the
-     * metainfo and the name a package installs under, so a typo would be a
-     * window nothing recognises -- in silence, because every one of those is
-     * something nobody looks at until a dock shows the wrong icon.
-     *
-     * The rule is the platform's (`g_application_id_is_valid`: reverse-DNS,
-     * at least one dot, no element starting with a digit) and not a second one
-     * written here -- the same rule `GtkApplication` and AppStream apply.
+     * No id, or one that is not an id, is refused here rather than ignored,
+     * and the difference matters: the id is the window's own class, the `<id>`
+     * of the metainfo, the name a package installs under and the name of the
+     * application's own directories -- so a project without one, or with a
+     * typo in it, was a window nothing recognises and a packaging step that
+     * refused it late. The sentence is `bta_project_id_ok`'s, shared with the
+     * console host.
      */
-    if (app->id[0] && !g_application_id_is_valid(app->id)) {
-        fprintf(stderr,
-                "bintana: project.btp id \"%s\" is not an application id "
-                "(a reverse-DNS name like org.example.App)\n", app->id);
+    if (!bta_project_id_ok(app->id, cfg_path))
         exit(2);
-    }
-
-    /* The id is what instances find each other by, so a project without one
-     * cannot be single: refused, as a typo in the id is, and not ignored. */
-    if (app->single && !app->id[0]) {
-        fprintf(stderr, "bintana: project.btp singleInstance needs an id (a "
-                        "reverse-DNS name like org.example.App): it is the "
-                        "name the instances find each other by\n");
-        exit(2);
-    }
+    g_free(cfg_path);
 
     if (!app->sources) {
         JSValue empty = JS_NewObject(app->ctx);

@@ -1631,8 +1631,14 @@ one no dock recognises, in silence. The rule is the platform's
 (`g_application_id_is_valid`: reverse DNS, at least one dot, no element starting
 with a digit) and it is refused **at load**, naming the key, rather than
 ignored -- and so is an `id` that is not a string, which `json_str`'s fallback
-used to read as no id at all; a project that declares none keeps the old answer, which is the
-program's own name. `GtkApplication` also takes the id as the default window
+used to read as no id at all. **And no id at all is refused too** (2026-11-23): the
+id names `ConfigDirectory` and `DataDirectory` as well, so a project that runs declares one
+(`bta_project_id_ok`, shared by both hosts). **The console host builds its
+own `BtaApp` on the stack and fills it by hand** (`bta_headless.c`), so a field
+the graphical host sets is not there unless it is copied: a `Task` started from
+a `main` read `app->id` as NULL and `JS_NewString(NULL)` crashed the worker --
+`tests/headless.sh`'s `globals` fixture is the one that runs a task there. A new
+`BtaApp` field a worker reads is set in both hosts. `GtkApplication` also takes the id as the default window
 icon when the theme has one by that name (`gtkapplication.c`).
 
 ### `bintana test`, and an application with no window
@@ -4442,7 +4448,7 @@ so `tests/ide` compares the two lists and names what is missing from either.
 (`bta-suite-<pid>/data`), because `tests/ide`'s `apps` phase installs a menu
 entry for real. Without it every suite run would leave a `bta-suite-app.desktop`
 in the developer's menu, and only that phase would be able to say why. What is
-deliberately *not* moved is `~/.config/bintana`: the projects' own settings
+deliberately *not* moved is `~/.config/<id>`: the projects' own settings
 directory has always been written to by the tests, and `tests/ide`'s `settings`
 and `session` phases are about it.
 
@@ -8320,7 +8326,7 @@ at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
   under the strip -- and `tests/ide`'s `nested` phase, which asserts there is
   room *around* a 360 form, went red with this commit and stayed red for every
   commit after it, while the message said *suite green*. The window it ran in
-  is whatever `~/.config/bintana/ide-test` last saved, so a run that inherited
+  is whatever the test project's `ConfigDirectory` last saved, so a run that inherited
   a wider one passed. The phase sizes the window it measures in now; **a test
   about the room around something sets the room**, because the settings file
   the suite shares is somebody else's state. The same inheritance put the
@@ -9807,17 +9813,37 @@ tripped on, each fixed and asserted in `tests/ide`:
   `--force-local`. The suite runs under MSYS and saw GNU tar, so Export was
   green here and broken on every plain Windows. `Exporter.tar()` asks
   `tar --version`; `export` drives `System32\tar.exe` by its path.
-- **The installer's refusal for no id came after the chooser.** A new project
-  usually has no id (it is optional in New project). `Installer.run` reads
-  `ide.manifest.read()` -- `Package.configOf` throws on exactly this -- and
-  opens Project settings on `TxtPrId`.
+- **The installer's refusal for no id came after the chooser.** `Installer.run`
+  reads `ide.manifest.read()` -- `Package.configOf` throws on exactly this --
+  and opens Project settings on `TxtPrId`. A project made since the id became
+  required always has one; this is for a manifest edited by hand.
 
-Not changed, and why: `Application` has no `DataDirectory`, which is the first
-name a person writes for where a database goes (`ConfigDirectory` is
-documented as "anything the application remembers"; `Desktop.DataDirectory`
-is not per application). The live check catches it as a member `Application`
-does not have. Adding it is public surface across three repositories, and
-was left for the owner to decide.
+It also wrote `Application.DataDirectory`, which did not exist, for the
+database -- the first name a person reaches for. That walk is what made the
+id required and the directories named by it; see *Every project has an id*
+below.
+
+## Every project has an id
+
+Decided 2026-11-23: the id stopped being optional, because a project that
+grew always reached something that needs one -- the installer, the metainfo,
+`singleInstance`, a toast on Windows -- and was refused there, after the name
+was in a dozen files. The runtime refuses at load (`bta_project_id_ok`);
+`ProjectFile.Validate` says it first; and nothing the IDE makes is without
+one:
+
+- **`NewProjectForm.suggestId(name)` proposes it**: the prefix the last
+  project was made with (`newProject.idPrefix` in Settings), or
+  `io.github.<login>` the first time, and the name as one element. The field
+  follows the name until the person types in it -- a `TextBox`'s `Change` is
+  GTK's and comes for an assignment too, so the proposal is written under a
+  flag (`proposing`) that tells it from typing.
+- **`createProject` and `createConsoleProject` take the proposal when given
+  no id**, and always write the metainfo now, since there is always a name
+  for the file.
+- **`ConfigDirectory` and `DataDirectory` are `<config>/<id>` and
+  `<data>/<id>`**: a project's settings moved when this landed (no migration,
+  by decision), the IDE's own and the suite's included.
 
 ## Breakpoints: on, off, kept
 
@@ -13662,7 +13688,7 @@ three programs that did not write it. What bit:
   with a date style -- so the test reads `xl/worksheets/sheet1.xml` and asserts the serials, worked out from the
   calendar in the test and not by the writer (45352, 36525, 36585, 46297, 45657).
 - **A test that runs an example which keeps a database runs it in the developer's configuration**
-  unless told otherwise. `examples/clients` writes `~/.config/bintana/Clients/clients.db`, so
+  unless told otherwise. `examples/clients` writes `~/.local/share/io.github.getbintana.Clients/clients.db`, so
   `ExampleClientsExport` gives the child `HOME` and `XDG_CONFIG_HOME` of its own, and then reads *that* database
   to check the workbook against -- a source `Xlsx` had no hand in. The example takes a path as its argument
   to export and quit, and hides its window before it is shown (`Form_Open` runs before `Show()` returns), so a
@@ -15573,7 +15599,7 @@ Two things it deliberately does not do.  It does not `rm -rf` a prefix: that is
 right for a private one (`/tmp/stage`, `~/.local`) and wrong for `/usr`, where
 the prefix is shared — for a private prefix, deleting the tree is simply another
 answer.  And it does not touch what a **program** wrote while it ran: the
-settings and recovery files under `~/.config/bintana/<project>`, and any project
+settings and recovery files under `~/.config/<id>`, the data under `~/.local/share/<id>`, and any project
 the IDE created. Those were never the install's, and they are the user's to
 decide about.
 
@@ -15761,7 +15787,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11670 assertions
+./tests/run.sh                          # all seven projects, 11686 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -16855,8 +16881,8 @@ and the collisions fail assertions that read exactly like real bugs (*"a form ca
 be created in a folder: expected true, got false"*). Invoked by hand with no
 argument the directory is simply untagged.
 
-`Application.ConfigDirectory` is per project name, so `tests/ide` writes its own
-`~/.config/bintana/ide-test/recent.json` and can never touch the real IDE's list.
+`Application.ConfigDirectory` is per application id, so `tests/ide` writes its own
+`~/.config/io.github.getbintana.test.Ide/recent.json` and can never touch the real IDE's list.
 That test both uses and exercises the persistence: the second run of the suite reads
 back a list whose `/tmp` entries no longer exist, which is what proves they get
 filtered out.

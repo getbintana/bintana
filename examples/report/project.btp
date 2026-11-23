@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.Report",
   "name": "Report",
   "startup": "ReportForm",
   "uses": [

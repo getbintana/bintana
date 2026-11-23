@@ -65,6 +65,54 @@ char *bta_project_string(JSContext *ctx, JSValueConst obj, const char *key,
 }
 
 /*
+ * **Every project that runs has an id**, and this is the one door both hosts
+ * refuse at, with one sentence. It used to be optional, and the projects that
+ * did without it reached the packaging chain -- the installer, the metainfo,
+ * the menu entry, `singleInstance` -- and were refused there, late, after the
+ * name was in a dozen places. The id is also what the application's own
+ * directories are named after (`bta_app_dir`), so asking for it at the start
+ * is asking for something the program uses from its first setting.
+ *
+ * The rule for a present one is the platform's (`g_application_id_is_valid`:
+ * reverse-DNS, at least one dot, no element starting with a digit), the same
+ * `GtkApplication` and AppStream apply. True when it is good; otherwise the
+ * sentence is on stderr and the caller exits 2.
+ */
+bool bta_project_id_ok(const char *id, const char *manifest)
+{
+    if (!id || !*id) {
+        fprintf(stderr,
+                "bintana: %s declares no \"id\". Every application needs one: "
+                "its settings and data are kept under it, and its window, menu "
+                "entry and package are named after it. Add a reverse-DNS name, "
+                "like \"id\": \"io.github.you.App\".\n", manifest);
+        return false;
+    }
+    if (!g_application_id_is_valid(id)) {
+        fprintf(stderr,
+                "bintana: project.btp id \"%s\" is not an application id "
+                "(a reverse-DNS name like org.example.App)\n", id);
+        return false;
+    }
+    return true;
+}
+
+/*
+ * `<base>/<id>`, created: where an application keeps what is its own --
+ * `ConfigDirectory` under the user's config, `DataDirectory` under the user's
+ * data. **Named by the id and nothing else**, as a native program or a Flatpak
+ * is (`~/.config/<id>`), so two projects that happen to share a name never read
+ * each other's settings, and the folder is the one a person looking for the
+ * application's files would look for. Free the answer.
+ */
+char *bta_app_dir(const char *base, const char *id, int mode)
+{
+    char *dir = g_build_filename(base, id, NULL);
+    g_mkdir_with_parents(dir, mode);
+    return dir;
+}
+
+/*
  * Whether the manifest declares `"main"`: 1 yes, 0 no, -1 when it cannot be
  * read as a JSON object and the full parser should report it.
  *

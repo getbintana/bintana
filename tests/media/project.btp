@@ -1,4 +1,5 @@
 {
+  "id": "io.github.getbintana.test.Media",
   "name": "media",
   "main": "Main",
   "version": "1.0",
