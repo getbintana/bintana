@@ -1752,6 +1752,13 @@ cairo_t *bta_painter_cairo(JSContext *ctx, JSValueConst painter);
 void bta_popover_init(JSContext *ctx, JSValue global);
 void bta_popover_cleanup(void);
 bool bta_popover_take(BtaWidget *cw);
+/* A window lost or regained the user's attention: the popovers that would
+ * otherwise outlive it on screen are put away, and the program's own come back
+ * (see bta_popover.c). Called from the form's `notify::is-active`. */
+void bta_popover_window_active(GtkWidget *window, bool active);
+/* The completion popup of the SourceEditor that has the window's focus, put
+ * away: GtkSourceView's own `hide`, not its popover's (bta_editor.c). */
+void bta_editor_hide_completion(GtkWidget *window);
 
 /* --- commands: actions and menus ---------------------------------------- */
 

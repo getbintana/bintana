@@ -73,6 +73,8 @@ typedef struct {
     bool       open;        /* shown, and the program has not been told it closed */
     bool       owes_closed; /* the popover went away without saying so */
     bool       queued;      /* a settle is on the loop */
+    bool       parked;      /* put away while its window is inactive */
+    bool       parking;     /* being put away: GTK's `closed` is not the program's */
 
     JSContext *ctx;
     JSValue    content;     /* owned */
@@ -230,7 +232,7 @@ static void on_pop_closed(GtkWidget *pop, gpointer data)
     PopJob *job = data;
 
     (void)pop;
-    if (job->dead || !job->open)
+    if (job->dead || !job->open || job->parking)
         return;
 
     /* Told on the loop and not here: this is a signal GTK emits from inside
@@ -627,9 +629,85 @@ static JSValue popover_close(JSContext *ctx, JSValueConst this_val,
 
     PopJob *job = job_for(cw);
 
-    if (job && job->open && job->pop)
+    if (job && job->open && job->parked) {
+        /* Put away by its window, so already down: closing it is the program
+         * being told, and it not coming back. */
+        job->parked      = false;
+        job->open        = false;
+        job->owes_closed = true;
+        job_queue(job);
+    } else if (job && job->open && job->pop) {
         gtk_popover_popdown(GTK_POPOVER(job->pop));
+    }
     return JS_UNDEFINED;
+}
+
+/*
+ * A window lost the user's attention, or got it back.
+ *
+ * **A popover that does not hide itself outlives its window's turn on X11.**
+ * There a popover is a surface of its own, override-redirect -- above every
+ * window the window manager stacks -- so a completion list, or a
+ * `Popover.Show(..., { Autohide: false })`, went on floating over whatever
+ * application the person had moved to. An autohide popover goes by itself;
+ * these never did, and GTK does not move the keyboard focus out of the window
+ * when it is deactivated, so nothing they listen to told them.
+ *
+ * So on deactivation every popover of that window that is up and does not
+ * autohide comes down: the SourceEditor's completion through GtkSourceView's
+ * own `hide` (its popover alone would leave the completion's state behind), any
+ * other -- a `TextBox`'s `Completion` list -- by `popdown`. Neither comes back:
+ * a completion is offered again by the next key, as in any editor. The
+ * program's own, from `Popover.Show`, are **parked** instead: put away without
+ * telling the program (`IsOpen` stays true, `Closed` is not called) and shown
+ * again when the window is active again, since the program asked for one that
+ * stays. A `Popover.Close` while parked is the program closing it.
+ */
+static void popdown_unparked(GtkWidget *w)
+{
+    for (GtkWidget *c = gtk_widget_get_first_child(w); c; c = gtk_widget_get_next_sibling(c)) {
+        if (GTK_IS_POPOVER(c) && gtk_widget_get_visible(c) &&
+            !gtk_popover_get_autohide(GTK_POPOVER(c)))
+            gtk_popover_popdown(GTK_POPOVER(c));
+        popdown_unparked(c);
+    }
+}
+
+void bta_popover_window_active(GtkWidget *window, bool active)
+{
+    if (!window)
+        return;
+
+    if (active) {
+        for (GList *l = pop_jobs; l; l = l->next) {
+            PopJob *job = l->data;
+
+            if (!job->dead && job->parked && job->open && job->pop &&
+                GTK_WIDGET(gtk_widget_get_root(job->pop)) == window) {
+                job->parked = false;
+                gtk_popover_popup(GTK_POPOVER(job->pop));
+            }
+        }
+        return;
+    }
+
+    bta_editor_hide_completion(window);
+
+    for (GList *l = pop_jobs; l; l = l->next) {
+        PopJob *job = l->data;
+
+        if (job->dead || !job->open || job->parked || !job->pop ||
+            !gtk_widget_get_visible(job->pop) ||
+            gtk_popover_get_autohide(GTK_POPOVER(job->pop)) ||
+            GTK_WIDGET(gtk_widget_get_root(job->pop)) != window)
+            continue;
+        job->parking = true;
+        gtk_popover_popdown(GTK_POPOVER(job->pop));
+        job->parking = false;
+        job->parked  = true;
+    }
+
+    popdown_unparked(window);
 }
 
 static JSValue popover_is_open(JSContext *ctx, JSValueConst this_val,

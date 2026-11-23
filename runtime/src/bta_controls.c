@@ -324,6 +324,9 @@ static void on_form_active(GObject *win, GParamSpec *spec, gpointer data)
 
     if (!gtk_widget_get_mapped(GTK_WIDGET(win)))
         return;
+    /* What floats over the window goes with its turn: on X11 a popover that
+     * does not hide itself stayed above every other application. */
+    bta_popover_window_active(GTK_WIDGET(win), gtk_window_is_active(GTK_WINDOW(win)));
     bta_emit(w, gtk_window_is_active(GTK_WINDOW(win)) ? "Activate" : "Deactivate", 0, NULL);
 }
 

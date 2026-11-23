@@ -9,6 +9,7 @@
 ./tests/check.sh                        # every project's `bintana check`, no window
 ./tests/check-strict.sh                 # ...and the IDE and examples with warnings failing too
 ./tests/keyring.sh                      # the File provider: 0600 under 0700, no temporary
+./tests/windowing.sh                    # with a window manager (xfwm4 on Xvfb): popovers go with the window's turn
 ./tests/odbc.sh                         # Database.Odbc through real drivers: 187 checks, and examples/invoices on both engines
 ./tests/pack.sh                         # lib/package, the packaging step's output: 179 assertions
 ./tests/headless.sh                     # the metadata host: no toolkit in the link, the same Widget.* answers

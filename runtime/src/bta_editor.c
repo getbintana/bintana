@@ -28,6 +28,23 @@ static GtkSourceBuffer *buffer_of(BtaWidget *w)
     return GTK_SOURCE_BUFFER(gtk_text_view_get_buffer(GTK_TEXT_VIEW(w->inner)));
 }
 
+/*
+ * The completion popup of whichever SourceEditor has the window's focus, put
+ * away when the window stops being the active one (bta_popover.c says why).
+ * Only the focused view can be showing one, and asking any other view for its
+ * completion would build one: `gtk_source_view_get_completion` is lazy.
+ */
+void bta_editor_hide_completion(GtkWidget *window)
+{
+    if (!GTK_IS_ROOT(window))
+        return;
+    for (GtkWidget *w = gtk_root_get_focus(GTK_ROOT(window)); w; w = gtk_widget_get_parent(w))
+        if (GTK_SOURCE_IS_VIEW(w)) {
+            gtk_source_completion_hide(gtk_source_view_get_completion(GTK_SOURCE_VIEW(w)));
+            return;
+        }
+}
+
 /* Below, with the completion: it needs a window to put a popover in, and this is
  * connected here because `build_editor` is where the view is made.  The provider
  * fed from JS has the same constraint, so it is attached from the same place. */

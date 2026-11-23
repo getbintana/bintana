@@ -1,0 +1,6 @@
+{
+  "name": "windowing",
+  "id": "org.bintana.WindowingTest",
+  "startup": "Main",
+  "sources": ["Main.js"]
+}

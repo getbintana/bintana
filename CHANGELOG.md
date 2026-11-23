@@ -27,6 +27,15 @@ one-page answer to *what is new since the release I have*.
   today for Cairo, Almaty, Asunción and Nuuk. The reader was checked against
   Python's zoneinfo and `zdump` over 418 zones, 1850-2099, the second before
   and the second of every transition, in the fat and the slim TZif forms.
+- **A popover that stays goes away with its window's turn.** On X11 a popover
+  is a surface of its own above every window, and one that does not hide
+  itself -- the SourceEditor's completion list, a `TextBox`'s, a
+  `Popover.Show(..., { Autohide: false })` -- went on floating over whatever
+  application the person moved to. When a form's window stops being the active
+  one they are put away: the completion lists for good (the next key offers
+  them again), the program's own popovers parked and shown again when the
+  window is active -- with no `Closed` and `IsOpen` still true; a `Close` while
+  parked is a close. `tests/windowing.sh` checks it on Xvfb with xfwm4.
 - **`Locale.Date` on Windows writes what Windows writes.** GLib does not ask
   Windows for `%x`, `%A` or `%B`: with no `nl_langinfo` it takes them from its
   own catalogue, so every Windows date was `11/22/26` -- month first, two
