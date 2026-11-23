@@ -30,9 +30,11 @@ one-page answer to *what is new since the release I have*.
 - **`bintana check` knows `singleInstance`.** The key the runtime reads to
   hand a second run to the first was reported as one "nothing reads", because
   `ProjectFile` never declared it -- so a project that used it could not pass
-  `--strict`. It is a field now, and the check says as errors the two
-  manifests the window's runtime refuses to start: a value that is not `true`
-  or `false`, and `true` with no `id`.
+  `--strict`. It is a field now, and for a window project the check says as
+  errors the two manifests the runtime refuses to start: a value that is not
+  `true` or `false`, and `true` with no `id`. On a `main` project the key does
+  nothing -- there is no window to bring forward -- and the check says so as a
+  warning.
 
 ## 0.4.1 — 2026-11-22
 

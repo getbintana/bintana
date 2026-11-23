@@ -513,6 +513,17 @@ class TestForm extends Form {
             eq("a singleInstance that is not a boolean is an error", yes.ExitCode, 1);
             check("...that says so", yes.Output.includes("singleInstance is not true or false"),
                   yes.Output);
+            /* A console project has no window to bring forward: there the key
+             * does nothing, said as a warning, and a bad value is not an error. */
+            write("project.btp", JSON.stringify({
+                name: "smoke-check", main: "Main", sources: ["Main.js"],
+                singleInstance: "yes",
+            }));
+            const consoleRun = run(dir);
+            eq("singleInstance on a main project is not an error", consoleRun.ExitCode, 0);
+            check("...but says it does nothing", consoleRun.Output.includes(
+                      'singleInstance does nothing for a project with "main"'), consoleRun.Output);
+            check("...and nothing more", !consoleRun.Output.includes("not true or false"), consoleRun.Output);
             manifest({});
 
             /* A `.form` a person edited can be any JSON at all. The pass reads
