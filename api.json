@@ -22983,7 +22983,7 @@
               "Params": 3,
               "Signature": "(project, out, options)",
               "Returns": "",
-              "Doc": "writes `<id>.metainfo.xml`, `<id>.desktop`, the icon as `<id>.svg\\|png`, a copy of the project and `<id>.json`; answers where each went",
+              "Doc": "writes `<id>.metainfo.xml`, `<id>.desktop`, the icon as `<id>.svg\\|png`, a copy of the project and `<id>.json`; answers where each went, and in `Data` the database files the copy carries (`dataFiles`)",
               "Native": false
             }
           ],

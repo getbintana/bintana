@@ -12772,6 +12772,23 @@ without that marker, and the uninstaller leaves such a folder alone instead of
 `RMDir /r` it. The license list and the source-offer caveat are in
 [`THIRD-PARTY-NOTICES.md`](../../THIRD-PARTY-NOTICES.md).
 
+**The project folder travels whole, a database included, and is only
+named.** `Package.copyProject` takes every top-level entry but the hidden ones,
+and Run starts a program in its project folder -- so a relative
+`Database.Sqlite("x.db")` tried under the IDE is in the next setup.
+`Package.dataFiles` lists the databases (by extension, `/` separators on every
+system); the IDE's installer says them in its closing message and the log,
+`tools/pack` prints `carries:` lines, and `Package.Write` answers them in
+`Data`. **Not excluded, and not a `bintana check` finding** (decided
+2026-11-24): projects ship a database on purpose -- reference data, a starting
+copy -- and a warning on every open would be one nobody could silence. How to
+ship one is in `bintana-docs`' `first-app.md` and `bintana-llm`'s
+`06-data.md`.
+
+**The Start Menu shortcut starts in `$INSTDIR`** (`SetOutPath` comes before
+`CreateShortCut` in `Nsis.Script`), Run in the project folder, and a Linux
+menu entry has no `Path=`, so a relative path means three places.
+
 The rest of the end-to-end test, so the next person can repeat it:
 
 ```powershell

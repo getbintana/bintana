@@ -87,9 +87,31 @@ function Main() {
     nameEs.Text = "Notas";
     File.SaveXml(metaPath, doc);
 
+    /* Databases a program wrote while it was tried: one at the top, one in a
+     * folder, one under a hidden folder the copy leaves out. */
+    File.Save(File.Join(project, "notes.db"), "x");
+    Directory.Make(File.Join(project, "data"));
+    File.Save(File.Join(project, "data", "cache.sqlite"), "x");
+    Directory.Make(File.Join(project, ".scratch"));
+    File.Save(File.Join(project, ".scratch", "old.db"), "x");
+
     /* --- the four files and the manifest ----------------------------------- */
     const out     = File.Join(root, "out");
     const written = Package.Write(project, out);
+
+    /* **What it carries that a program probably wrote is named**, not left
+     * out: one may ship on purpose. The hidden folder is not copied, so it is
+     * not named either. */
+    eq("the package names the databases it carries",
+       JSON.stringify(written.Data),
+       JSON.stringify(["data/cache.sqlite", "notes.db"]));   /* `/` on every system, as File.Relative answers */
+    check("...and carries them, since one may ship on purpose",
+          File.Exists(File.Join(written.Project, "notes.db")));
+    eq("dataFiles answers the same on its own",
+       JSON.stringify(Package.dataFiles(project)), JSON.stringify(written.Data));
+    File.Delete(File.Join(project, "notes.db"));
+    Directory.DeleteTree(File.Join(project, "data"));
+    Directory.DeleteTree(File.Join(project, ".scratch"));
 
     eq("the command is the id's last element", written.Command, "bintana-notes");
 

@@ -569,6 +569,15 @@ class TestForm extends Form {
             }
             write("Main.js", "class Main extends Form { Form_Open() {} }\n");
 
+            /* **A database in the project is not a finding**: projects ship
+             * one on purpose, and a warning on every open would be one nobody
+             * could silence. Packaging names it instead (`Package.dataFiles`). */
+            write("clientes.db", "x");
+            const dataRun = run(dir);
+            check("check says nothing of a database in the project",
+                  !dataRun.Output.includes("clientes.db"), dataRun.Output);
+            File.Delete(File.Join(dir, "clientes.db"));
+
             /* A `.form` a person edited can be any JSON at all. The pass reads
              * files it did not write, so a shape it cannot walk is a row about
              * that file and not a stack trace that stops the pass -- which is

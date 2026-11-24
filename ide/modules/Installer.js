@@ -108,6 +108,19 @@ export class Installer {
             ide.log(`Windows installer: the build folder was left behind: ${e.message}\n`);
         }
         ide.log(`Windows installer: ${exe}\n`);
+
+        /* **The databases it carries are named**, at the moment someone is
+         * looking at what ships: a project may ship one on purpose, and one
+         * Run left in the project folder looks the same (`Package.dataFiles`).
+         * Information, so the person decides -- not a warning. */
+        let data = [];
+        try { data = Package.dataFiles(ide.project); } catch (e) { data = []; }
+        if (data.length) {
+            ide.log(`Windows installer: it carries ${data.join(", ")}\n`);
+            Message.Info("Installer written to {0}\n\nIt carries these databases from the project: {1}",
+                         exe, data.join(", "));
+            return exe;
+        }
         Message.Info("Installer written to {0}", exe);
         return exe;
     }

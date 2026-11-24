@@ -82,6 +82,7 @@ function Main() {
     print(`desktop:  ${written.Desktop}`);
     if (written.Icon)
         print(`icon:     ${written.Icon}`);
+    carries(written.Data);
     Application.Quit(0);
 }
 
@@ -157,5 +158,13 @@ function nsis(args) {
     if (ctx.Note)
         print(`note:    ${ctx.Note}`);
     print(`setup:   ${File.Absolute(exe)}`);
+    carries(Package.dataFiles(project));
     Application.Quit(0);
+}
+
+/* The databases the package carries, one `carries:` line each, beside what
+ * else it wrote: so whoever ships one sees it (`Package.dataFiles`). */
+function carries(files) {
+    for (const file of files || [])
+        print(`carries: ${file}`);
 }

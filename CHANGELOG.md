@@ -167,6 +167,11 @@ one-page answer to *what is new since the release I have*.
   empty band list and an Add that refused.
 - **The Windows installer logs a build folder it could not delete** instead of
   throwing after the setup was written.
+- **The installer and `tools/pack` name the databases they carry**
+  (`Package.dataFiles`, and `Data` in what `Package.Write` answers). Run starts
+  a program in its project folder, so a relative `Database.Sqlite("x.db")`
+  leaves the file there, and the package copies everything in it. Named and
+  not left out: a project may ship a database on purpose.
 
 ## 0.4.1 — 2026-11-22
 
