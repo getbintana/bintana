@@ -25,6 +25,30 @@
 static SoupSession *http_default_session = NULL;
 static SoupSession *http_default_sync_session = NULL;
 
+/*
+ * A session that asks the system for its proxy -- through the runtime's
+ * resolver (`bta_system_proxy_resolver`, bta_proxy.c), not GIO's default: the
+ * machine's own addresses go direct, and on Windows the answer is Windows'
+ * own rather than a WPAD discovery that cost every process its first three
+ * seconds. Every `soup_session_new()` here was GIO's default before.
+ */
+static void http_use_system_proxy(SoupSession *sess)
+{
+    GProxyResolver *resolver = bta_system_proxy_resolver();
+
+    soup_session_set_proxy_resolver(sess, resolver);
+    g_object_unref(resolver);
+}
+
+static SoupSession *http_system_session_new(void)
+{
+    SoupSession *sess = soup_session_new();
+
+    if (sess)
+        http_use_system_proxy(sess);
+    return sess;
+}
+
 /* A worker's blocking calls get a session of their own: the process-global
  * one is shared with the main thread, and a `SoupSession` is not thread-safe.
  * Lazy, and freed with the thread that made it. */
@@ -38,7 +62,7 @@ static SoupSession *http_sync_session(JSContext *ctx)
     SoupSession *sess = g_private_get(&http_worker_sync_key);
 
     if (!sess) {
-        sess = soup_session_new();
+        sess = http_system_session_new();
         g_private_set(&http_worker_sync_key, sess);
     }
     return sess;
@@ -422,9 +446,17 @@ static void http_log_sync(SoupLogger *logger, SoupLoggerLogLevel level, char dir
  * once and never again, so both of a client's sessions are born with them. */
 static SoupSession *http_session_new(int max_conns, int max_per_host)
 {
-    return soup_session_new_with_options("max-conns", (guint)max_conns,
-                                         "max-conns-per-host", (guint)max_per_host,
-                                         NULL);
+    SoupSession *sess = soup_session_new_with_options(
+        "max-conns", (guint)max_conns,
+        "max-conns-per-host", (guint)max_per_host,
+        NULL);
+
+    /* `Http.Client()` with no options never reaches the apply below, so the
+     * session is born asking the system -- this runtime's resolver, like
+     * every other. */
+    if (sess)
+        http_use_system_proxy(sess);
+    return sess;
 }
 
 /* Language, proxy, cookies and log live on the sessions; called at creation
@@ -473,7 +505,12 @@ static void http_client_apply_session(HttpClientData *c)
             soup_session_set_proxy_resolver(pair[i], resolver);
             g_object_unref(resolver);
         } else {
-            soup_session_set_proxy_resolver(pair[i], NULL);
+            /* **The system's, which is not NULL.** libsoup 3 reads a NULL
+             * resolver as *no proxies* (its GIR says so), and this branch
+             * passed one under a comment saying the opposite -- so every
+             * `Http.Client` went direct whatever the system said, while
+             * `Http.Get` used the system's. Both ask the same resolver now. */
+            http_use_system_proxy(pair[i]);
         }
         /* One jar at most, and only on the async session: taking it off and
          * putting it back on keeps a toggled flag from stacking. */
@@ -4048,7 +4085,13 @@ static const JSCFunctionListEntry http_client_props[] = {
      */
     JS_CGETSET_DEF("Language",        http_client_get_language, http_client_set_language),
     /* Proxy
-     *   what to go through
+     *   what to go through: `"default"` (the system's, and the default),
+     *   `null` (direct) or an `http(s)://` proxy of your own. The system's
+     *   sends the machine's own addresses (`localhost`, `127.0.0.1`, `::1`)
+     *   direct everywhere; on Windows it is `HTTP_PROXY`/`HTTPS_PROXY` and
+     *   `NO_PROXY` first, then the user's Internet settings -- a fixed proxy
+     *   and its exceptions, or automatic detection and a configuration
+     *   script, answered by Windows itself
      */
     JS_CGETSET_DEF("Proxy",           http_client_get_proxy, http_client_set_proxy),
     /* Auth
@@ -5065,7 +5108,7 @@ static JSValue websocket_open(JSContext *ctx, JSValueConst this_val,
     if (!g_str_has_prefix(w->url, "ws://") && !g_str_has_prefix(w->url, "wss://"))
         return JS_ThrowTypeError(ctx, "WebSocket.Open: Url must start with ws:// or wss://");
 
-    w->session = soup_session_new();
+    w->session = http_system_session_new();
     w->msg     = soup_message_new("GET", w->url);
     if (!w->session || !w->msg) {
         g_clear_object(&w->session);
@@ -7200,9 +7243,9 @@ void bta_http_init(JSContext *ctx, JSValue global)
     JS_SetClassProto(ctx, http_request_class_id, rproto);
 
     if (!http_default_session)
-        http_default_session = soup_session_new();
+        http_default_session = http_system_session_new();
     if (!http_default_sync_session)
-        http_default_sync_session = soup_session_new();
+        http_default_sync_session = http_system_session_new();
 
     http_multipart_init(ctx, global);
     websocket_init(ctx, global);

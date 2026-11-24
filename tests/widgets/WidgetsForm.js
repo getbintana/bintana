@@ -761,6 +761,7 @@ const TESTS = [
     /* Async: a handler that answers and then stops its own server -- the shape
      * of every `/shutdown` endpoint. */
     "HttpServerStop",
+    "HttpProxy",
     "HttpServerDropped",
     "HttpServerHold",
     /* Async: lib/datagrid, laid out and scrolled. */
@@ -31624,6 +31625,83 @@ export class UriChild extends Form {
              * which is the truth about the socket. */
             until("and the server is stopped afterwards", () => !srv.Running, done);
         }, (e) => done(`request errored: ${e.Message}`));
+    }
+
+    /*
+     * **Which proxy a request asks, in a child of its own** -- the variables
+     * are the process's, and the tests overlap.
+     *
+     * Two servers here: A is where a request is going, B stands in for a
+     * proxy and says so in its answer. The child is told `HTTP_PROXY=B`:
+     *
+     * - **A request to this machine goes direct**, on every platform. It
+     *   reached A through GIO's resolver, which on Windows ran WPAD discovery
+     *   first -- 2.4 s for `127.0.0.1`, measured -- and a proxy named in the
+     *   environment would have been asked for `localhost` too.
+     * - **On Windows the environment is honoured** (bta_proxy.c reads it before
+     *   the user's settings, as libproxy did): a request to a `.invalid` host
+     *   reaches B, `NO_PROXY` takes a domain out, and **an `Http.Client` built
+     *   with options asks the system too** -- it went direct whatever the
+     *   system said, because libsoup 3 reads a NULL resolver as *no proxy*.
+     *   Elsewhere what the environment does is GIO's module's business.
+     */
+    testHttpProxy() {
+        let a = null, b = null;
+        try { a = Http.Server({ Port: 0 }); b = Http.Server({ Port: 0 }); }
+        catch (e) { return; }   /* no libsoup */
+        a.Request = (req) => req.Answer(200, `A ${req.Path}`);
+        b.Request = (req) => req.Answer(200, `B ${req.Path} ${req.Headers.Host || req.Headers.host || ""}`);
+        a.Start();
+        b.Start();
+
+        const dir = File.Join(SCRATCH, "proxy-child");
+        Directory.Make(dir);
+        File.Save(File.Join(dir, "project.btp"), JSON.stringify({
+            name: "ProxyChild", id: "io.github.getbintana.test.ProxyChild", main: "Main" }));
+        File.Save(File.Join(dir, "Main.js"), `
+function Main() {
+    const said = {};
+    const out  = () => { print("PROXY " + JSON.stringify(said)); };
+    const ask  = (key, fn, url, next) => fn(url, { Timeout: 20000 },
+        (r) => { said[key] = r.Body.ToText(); next(); },
+        (e) => { said[key] = "error " + e.Message; next(); });
+    const get    = (u, o, d, f) => Http.Get(u, o, d, f);
+    const client = Http.Client({ Timeout: 20000 });
+    const viaClient = (u, o, d, f) => client.Get(u, o, d, f);
+    ask("local", get, Application.Arguments[0] + "direct", () =>
+        ask("localhost", get, Application.Arguments[0].replace("127.0.0.1", "localhost") + "named", () =>
+            ask("remote", get, "http://bintana-proxy-test.invalid/remote", () =>
+                ask("client", viaClient, "http://bintana-proxy-test.invalid/client", () =>
+                    ask("bypassed", get, "http://direct.skip.invalid/bypassed", out)))));
+}
+`);
+        waiting++;
+        const lines = [];
+        const done  = (why) => { a.Stop(); b.Stop(); waiting--; if (why) failures.push(why); };
+        Exec([Application.Executable, dir, a.Url], {
+            Timeout: LOOPBACK,
+            Environment: { HTTP_PROXY: b.Url.replace(/\/$/, ""),
+                           NO_PROXY: "example.org, .skip.invalid" },
+        }, (line) => lines.push(line), (code) => {
+            const row = lines.find((l) => l.startsWith("PROXY "));
+            let said = null;
+            try { said = row ? JSON.parse(row.slice(6)) : null; } catch (e) { said = null; }
+            if (!said) { done(`the proxy child said nothing (exit ${code}): ${lines.join(" | ")}`); return; }
+
+            eq("a request to 127.0.0.1 goes direct, whatever HTTP_PROXY says", said.local, "A /direct");
+            eq("...and one to localhost", said.localhost, "A /named");
+            if (Environment.OS === "Windows") {
+                check("on Windows HTTP_PROXY is honoured for another host",
+                      String(said.remote).startsWith("B /remote bintana-proxy-test.invalid"), said.remote);
+                check("...by an Http.Client built with options too",
+                      String(said.client).startsWith("B /client"), said.client);
+                check("...and NO_PROXY takes a domain out of it",
+                      String(said.bypassed).startsWith("error") && !String(said.bypassed).includes("B /"),
+                      said.bypassed);
+            }
+            Directory.DeleteTree(dir);
+            done();
+        });
     }
 
     /*

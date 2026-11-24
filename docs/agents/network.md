@@ -245,6 +245,44 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   it. The rule: **a deferral written into a verb is owed by every other road to
   the same effect**, and a finaliser is always one of them.
 
+## Proxies: one resolver, and Windows answers for itself
+
+Every session that asks the system gets `bta_system_proxy_resolver()`
+(`bta_proxy.c`): the shorthands' two sessions, a `Task`'s, a `WebSocket`'s, and
+an `Http.Client` whose `Proxy` is `"default"`. Measured 2026-11-24, Windows 11,
+MSYS2 UCRT64 (glib-networking 2.90.1, libproxy 0.5.12, libsoup3 3.8.1):
+
+- **GIO's resolver cost every process's first request 2.4-3 s on Windows**,
+  `127.0.0.1` included, and nothing after it. Both modules MSYS2 ships
+  (`libproxy` 2774 ms, `gnome` 2415 ms) discover on their own when Windows'
+  default *Automatically detect settings* is on (`DefaultConnectionSettings`
+  flags `0x09`); `GIO_USE_PROXY_RESOLVER=dummy` was 14 ms, and
+  `WinHttpGetProxyForUrl` with auto-detect 8 ms in a fresh process -- it asks
+  the WinHTTP Auto-Proxy service, which keeps what detection found. The
+  upstream half is
+  [`UPSTREAM-windows-proxy-wpad.md`](../issues/UPSTREAM-windows-proxy-wpad.md).
+- **The order on Windows**: the machine's own addresses direct; then
+  `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY` with `NO_PROXY` (curl's spelling: a
+  comma list, `.example.com` and `example.com` alike, `*` for everything);
+  then `WinHttpGetIEProxyConfigForCurrentUser` -- automatic detection or a PAC
+  URL through `WinHttpGetProxyForUrl`, and if that cannot answer, the fixed
+  `ProxyServer` with its `<local>`/wildcard bypass list; otherwise direct.
+  Elsewhere only the loopback answer is ours, and GIO's default does the rest.
+- **libsoup 3 reads a NULL resolver as *no proxy*** (its GIR: *If
+  proxy_resolver is NULL then no proxies will be used*). `http_client_apply_session`
+  passed NULL for `"default"` under a comment saying the opposite, so an
+  `Http.Client` built with any option went direct whatever the system said,
+  while one built with none -- whose apply never ran -- used GIO's default.
+  Both get the resolver at birth now.
+- **A refused connect to `127.0.0.1` still takes ~2 s on Windows**: that is
+  Windows retrying the SYN, not the resolver (4811 ms before, 2017 ms after).
+  It is what `LOOPBACK` in `tests/widgets` was written around.
+- **The test runs in a child** (`testHttpProxy`): the variables are the
+  process's and the tests overlap. Two servers -- the destination and a
+  stand-in proxy that says it was one -- tell which way a request went. The
+  user's registry is never written; `HTTP_PROXY` is how the fixed-proxy path
+  is reached.
+
 ## A held request: `Hold`, and what a paused message cannot see
 
 `req.Hold([timeout])` lets a handler return without the `500` and answer from

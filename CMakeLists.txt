@@ -331,7 +331,9 @@ function(bta_link_console_libraries target)
         target_compile_definitions(${target} PRIVATE BTA_HAVE_SQLITE=1)
     endif()
     if(WIN32)
-        target_link_libraries(${target} PRIVATE odbc32)
+        # `winhttp`: the proxy Windows itself would use (bta_proxy.c), asked
+        # instead of GIO's WPAD discovery.
+        target_link_libraries(${target} PRIVATE odbc32 winhttp)
         target_compile_definitions(${target} PRIVATE BTA_HAVE_ODBC=1)
     elseif(ODBC_FOUND)
         target_link_libraries(${target} PRIVATE PkgConfig::ODBC)
@@ -432,6 +434,7 @@ add_executable(${BTA_GUI_TARGET}
     runtime/src/bta_zone.c
     runtime/src/bta_form.c
     runtime/src/bta_http.c
+    runtime/src/bta_proxy.c
     runtime/src/bta_media.c
     runtime/src/bta_plugin.c
     ${BTA_PDF_SOURCES}
@@ -793,6 +796,7 @@ set(BTA_HEADLESS_SOURCES
         runtime/src/bta_sqlite.c
         runtime/src/bta_odbc.c
         runtime/src/bta_http.c
+        runtime/src/bta_proxy.c
         runtime/src/bta_socket.c
         runtime/src/bta_serial.c
         ${BTA_SERIAL_SOURCE}

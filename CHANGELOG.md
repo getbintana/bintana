@@ -136,6 +136,16 @@ one-page answer to *what is new since the release I have*.
   error said *invalid argument* about the folder the walk began at -- which is
   how the IDE's installer threw after writing a setup, its build folder
   holding MSYS2's read-only time-zone files.
+- **The first HTTP request on Windows no longer waits 2.4-3 s.** GIO's proxy
+  resolver discovered on its own what Windows already knows -- to
+  `127.0.0.1` too. The runtime asks Windows now: `HTTP_PROXY`, `HTTPS_PROXY`
+  and `NO_PROXY` first, then the user's Internet settings (a fixed proxy and
+  its exceptions, or automatic detection and a configuration script, through
+  WinHTTP). On every platform the machine's own addresses go direct.
+  Measured: 3133 ms to 8 ms for the first request to a LAN address.
+- **An `Http.Client` built with options uses the system's proxy.** It went
+  direct whatever the system said, while `Http.Get` used it: libsoup 3 reads
+  the resolver the client was given as *no proxy*.
 - **The member check says what the line does.** `this.MnuSave.Emit("Click")`
   was reported as an assignment that would do nothing; a call is now a
   TypeError when it runs, a read gives undefined, and the nearest member is

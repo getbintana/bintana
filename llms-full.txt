@@ -9872,9 +9872,9 @@ through `makensis`. The installer refuses a development checkout (it stages
   to `127.0.0.1` included: GIO's proxy resolver (MSYS2 ships `libproxy` and
   `gnome`, both measured) runs WPAD discovery, because Windows' default
   *Automatically detect settings* is on (`DefaultConnectionSettings` flags
-  `0x09`). `GIO_USE_PROXY_RESOLVER=dummy` makes it 14 ms. Not fixed here: the
-  answer is a resolver that asks WinHTTP, and that is a decision about people
-  behind a proxy.
+  `0x09`). `GIO_USE_PROXY_RESOLVER=dummy` makes it 14 ms. Fixed the next day
+  with a resolver that asks WinHTTP (`bta_proxy.c`, and *Proxies* in
+  `network.md`).
 
 ## Every project has an id
 
@@ -12065,6 +12065,44 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   since nothing after the call reads it. `testHttpServerDropped` is red without
   it. The rule: **a deferral written into a verb is owed by every other road to
   the same effect**, and a finaliser is always one of them.
+
+## Proxies: one resolver, and Windows answers for itself
+
+Every session that asks the system gets `bta_system_proxy_resolver()`
+(`bta_proxy.c`): the shorthands' two sessions, a `Task`'s, a `WebSocket`'s, and
+an `Http.Client` whose `Proxy` is `"default"`. Measured 2026-11-24, Windows 11,
+MSYS2 UCRT64 (glib-networking 2.90.1, libproxy 0.5.12, libsoup3 3.8.1):
+
+- **GIO's resolver cost every process's first request 2.4-3 s on Windows**,
+  `127.0.0.1` included, and nothing after it. Both modules MSYS2 ships
+  (`libproxy` 2774 ms, `gnome` 2415 ms) discover on their own when Windows'
+  default *Automatically detect settings* is on (`DefaultConnectionSettings`
+  flags `0x09`); `GIO_USE_PROXY_RESOLVER=dummy` was 14 ms, and
+  `WinHttpGetProxyForUrl` with auto-detect 8 ms in a fresh process -- it asks
+  the WinHTTP Auto-Proxy service, which keeps what detection found. The
+  upstream half is
+  [`UPSTREAM-windows-proxy-wpad.md`](../issues/UPSTREAM-windows-proxy-wpad.md).
+- **The order on Windows**: the machine's own addresses direct; then
+  `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY` with `NO_PROXY` (curl's spelling: a
+  comma list, `.example.com` and `example.com` alike, `*` for everything);
+  then `WinHttpGetIEProxyConfigForCurrentUser` -- automatic detection or a PAC
+  URL through `WinHttpGetProxyForUrl`, and if that cannot answer, the fixed
+  `ProxyServer` with its `<local>`/wildcard bypass list; otherwise direct.
+  Elsewhere only the loopback answer is ours, and GIO's default does the rest.
+- **libsoup 3 reads a NULL resolver as *no proxy*** (its GIR: *If
+  proxy_resolver is NULL then no proxies will be used*). `http_client_apply_session`
+  passed NULL for `"default"` under a comment saying the opposite, so an
+  `Http.Client` built with any option went direct whatever the system said,
+  while one built with none -- whose apply never ran -- used GIO's default.
+  Both get the resolver at birth now.
+- **A refused connect to `127.0.0.1` still takes ~2 s on Windows**: that is
+  Windows retrying the SYN, not the resolver (4811 ms before, 2017 ms after).
+  It is what `LOOPBACK` in `tests/widgets` was written around.
+- **The test runs in a child** (`testHttpProxy`): the variables are the
+  process's and the tests overlap. Two servers -- the destination and a
+  stand-in proxy that says it was one -- tell which way a request went. The
+  user's registry is never written; `HTTP_PROXY` is how the fixed-proxy path
+  is reached.
 
 ## A held request: `Hold`, and what a paused message cannot see
 
@@ -15855,7 +15893,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11724 assertions
+./tests/run.sh                          # all seven projects, 11729 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it
@@ -17785,6 +17823,7 @@ a runtime gap, check here and name the project and version.
 | `SourceEditor.Completion` offers a word only about five seconds after it was written, later while typing goes on -- GtkSourceView 5.20's words provider waits that long before indexing new text | [UPSTREAM-gtksourceview-words-delay](../issues/UPSTREAM-gtksourceview-words-delay.md), no workaround short of a provider of our own |
 | A window that loses its focus while an autohide popover is visible makes GTK print `gtk_widget_is_ancestor: assertion 'GTK_IS_WIDGET (widget)' failed` -- the popover's focus vfunc passes a NULL focus | [UPSTREAM-gtk-popover-null-focus](../issues/UPSTREAM-gtk-popover-null-focus.md), the same code in 4.14 and 4.22, no workaround |
 | On Windows, a window maximized from the system title bar shrinks when a menu opens -- GTK 4.24.1's Win32 backend does not read the actual maximized state when it lays the window out | [UPSTREAM-windows-maximize-restyle](../issues/UPSTREAM-windows-maximize-restyle.md) |
+| On Windows a program's first HTTP request waited 2.4-3 s, to `127.0.0.1` too -- GIO's proxy resolver (glib-networking 2.90.1) discovers on its own what Windows already knows; the runtime asks Windows through WinHTTP and sends the machine's own addresses direct | [UPSTREAM-windows-proxy-wpad](../issues/UPSTREAM-windows-proxy-wpad.md) |
 | With no session bus, opening an address crashes inside GTK -- GTK 4.14.5's `GtkUriLauncher` looks for the OpenURI portal anyway; `Desktop.OpenUri` goes to GIO directly when there is no bus | [UPSTREAM-gtk-uri-launcher-no-bus](../issues/UPSTREAM-gtk-uri-launcher-no-bus.md) |
 
 ## One more thing

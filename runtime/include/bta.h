@@ -1059,6 +1059,10 @@ char *bta_app_dir(const char *base, const char *id, int mode);
 /* `CacheDirectory`'s path for that id, not created: `<cache>/<id>`, and on
  * Windows `%LOCALAPPDATA%\<id>\Cache`. Free it. */
 char *bta_app_cache_path(const char *id);
+/* The proxy resolver every Http session that asks the system is given
+ * (bta_proxy.c): the machine's own addresses direct, Windows' own settings on
+ * Windows, GIO's default elsewhere. A new reference. */
+GProxyResolver *bta_system_proxy_resolver(void);
 /* Every `.js` under a directory, subdirectories included. `root` skips the
  * project's own `tests/`, which a run never loads. */
 void bta_collect_js(GPtrArray *out, const char *dir, bool root);

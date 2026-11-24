@@ -1690,9 +1690,9 @@ through `makensis`. The installer refuses a development checkout (it stages
   to `127.0.0.1` included: GIO's proxy resolver (MSYS2 ships `libproxy` and
   `gnome`, both measured) runs WPAD discovery, because Windows' default
   *Automatically detect settings* is on (`DefaultConnectionSettings` flags
-  `0x09`). `GIO_USE_PROXY_RESOLVER=dummy` makes it 14 ms. Not fixed here: the
-  answer is a resolver that asks WinHTTP, and that is a decision about people
-  behind a proxy.
+  `0x09`). `GIO_USE_PROXY_RESOLVER=dummy` makes it 14 ms. Fixed the next day
+  with a resolver that asks WinHTTP (`bta_proxy.c`, and *Proxies* in
+  `network.md`).
 
 ## Every project has an id
 

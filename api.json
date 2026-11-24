@@ -19807,7 +19807,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "what to go through",
+          "Doc": "what to go through: `\"default\"` (the system's, and the default), `null` (direct) or an `http(s)://` proxy of your own. The system's sends the machine's own addresses (`localhost`, `127.0.0.1`, `::1`) direct everywhere; on Windows it is `HTTP_PROXY`/`HTTPS_PROXY` and `NO_PROXY` first, then the user's Internet settings -- a fixed proxy and its exceptions, or automatic detection and a configuration script, answered by Windows itself",
           "Native": true
         },
         {
