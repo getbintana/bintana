@@ -143,9 +143,19 @@ ship one is in `bintana-docs`' `first-app.md` and `bintana-llm`'s
 `payload\bin\bintana-gui.exe` on `payload\share\bintana\apps\<command>`, started
 in `payload` with only `System32` on `PATH` -- the shortcut's target and its
 working directory -- loaded `report`, built the menu bar and wrote a PDF to
-`DataDirectory`. The install itself (shortcuts, the uninstall key, the
-uninstaller) was not run then: it writes the user's Start Menu, desktop and
-registry, and the procedure below is for a person to run.
+`DataDirectory`. **Then installed and uninstalled by hand, the same day**
+(an agent's silent install is refused: it writes the user's Start Menu,
+desktop and registry). The setup wrote the uninstall key (name, version,
+location, uninstaller), a Start Menu folder with the application and
+*Uninstall*, and a desktop shortcut, each starting `bin\bintana-gui.exe` on the
+project in `$INSTDIR`; the application reported `$INSTDIR` as its working
+directory. The uninstaller took the key, both shortcuts' places and the whole
+`$INSTDIR`, and left `%LOCALAPPDATA%\<id>`, as it should. **What it does not
+yet write**: `DisplayIcon`, `Publisher` and `EstimatedSize` in the key, so the
+Apps page shows no icon, publisher or size. **461 MB installed**, 269 MB of it
+`bin` -- the largest DLLs video encoders (`libx265`, `avcodec`, `libaom`,
+`SvtAv1Enc`) -- and 141 MB `lib/gstreamer-1.0`, for an application that uses
+neither `Video` nor audio.
 
 **The Start Menu shortcut starts in `$INSTDIR`** (`SetOutPath` comes before
 `CreateShortCut` in `Nsis.Script`), Run in the project folder, and a Linux
