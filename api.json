@@ -14688,10 +14688,10 @@
         {
           "Name": "Delete",
           "Kind": "Method",
-          "Params": 1,
-          "Signature": "(path)",
+          "Params": 3,
+          "Signature": "(path, [recursive], [cancellable])",
           "Returns": "",
-          "Doc": "an **empty** directory, as [`File.Delete`](docs/reference/globals/File.md) is",
+          "Doc": "an **empty** directory, or with `recursive` true it and everything under it — the shape of .NET's `Directory.Delete(path, recursive)`. **Platform-normal**: a read-only file on Windows, or a folder without write permission on POSIX, is refused; `Directory.DeleteTree` is the force variant. A `Cancellable` last stops it part way, leaving what was not yet deleted",
           "Native": true
         },
         {
@@ -14700,7 +14700,7 @@
           "Params": 2,
           "Signature": "(path, [cancellable])",
           "Returns": "",
-          "Doc": "it and everything under it — the one to be careful with, and the reason it has a name of its own rather than a flag. A read-only file under it goes too, on Windows as on Linux; one that cannot go is named in the error. A `Cancellable` last stops it part way, leaving what was not yet deleted",
+          "Doc": "it and everything under it — the force one, and the reason it has a name of its own rather than a flag. A read-only file on Windows and a folder without write permission on POSIX are taken; one that cannot go is named in the error. A `Cancellable` last stops it part way, leaving what was not yet deleted",
           "Native": true
         },
         {
@@ -15085,7 +15085,7 @@
           "Params": 1,
           "Signature": "(path)",
           "Returns": "",
-          "Doc": "a file, or an **empty** directory. Throws on failure. On Windows a delete refused because another program holds the path a moment -- the antivirus or OneDrive right after it was written -- is tried again for up to a second; a read-only path is refused at once, and a directory that is not empty is never taken. Elsewhere the folder's permission decides, as `unlink` does: a read-only file in a writable folder goes",
+          "Doc": "a file, or an **empty** directory. Throws on failure. On Windows a delete refused because another program holds the path a moment -- the antivirus or OneDrive right after it was written -- is tried again for up to a second; a read-only file is refused at once, and a directory that is not empty is never taken. Elsewhere the folder's permission decides, as `unlink` does: a read-only file in a writable folder goes. A directory's read-only attribute is not honored by Windows, so an empty directory carrying it still goes",
           "Native": true
         },
         {

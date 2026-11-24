@@ -84,7 +84,8 @@
   only thing that reaches a thread blocked in native code, and it reaches the
   blocking verbs `Run` hands `this.Cancellable` to, as their last argument:
   `Exec.Wait`, `Http.*Wait`, the GIO file verbs and the directory walk
-  (`List`, `Files`, `Folders`, `Copy`, `DeleteTree`). Handed, not implied:
+  (`List`, `Files`, `Folders`, `Copy`, `Delete` when recursive, `DeleteTree`).
+  Handed, not implied:
   when every blocking call of a worker took the job's signal, `Stop` -- which
   raises it at once -- refused the very calls a `Run` makes to wind down after
   `Stopping`. `File.Hash`, `Gzip`'s four verbs and `ZipArchive.ExtractAll`

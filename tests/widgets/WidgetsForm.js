@@ -25582,6 +25582,8 @@ class Form1 extends Form {
         eq("a global's native verb says its parameters", sigOf("File", "Load"), "(path, [cancellable])");
         eq("...and one with an optional", sigOf("Directory", "Files"),
            "(path, [options], [cancellable])");
+        eq("...and the .NET-shaped recursive delete",
+           sigOf("Directory", "Delete"), "(path, [recursive], [cancellable])");
         eq("a native class static says its own", sigOf("Widget", "New"), "(type)");
         eq("an inherited control method answers from the class that declares it",
            sigOf("Button", "Bounds"), "([container])");
@@ -26700,10 +26702,11 @@ class Form1 extends Form {
 
         /* --- and the two deletes ---------------------------------------------
          *
-         * One word apart on purpose: a recursive delete behind an innocent name
-         * is how a wrong path becomes a lost afternoon. `Delete` takes a folder
-         * with nothing left in it, which is the operation a program actually
-         * reaches for, and says so when it is not that.
+         * `Delete` takes a folder with nothing left in it; with `recursive`
+         * true it takes the tree, as .NET's `Directory.Delete(path, true)`
+         * does. It is platform-normal on the way: a read-only file on Windows,
+         * or a folder without write permission on POSIX, is refused.
+         * `DeleteTree` is the force one, and says so in its name.
          */
         throws("deleting a folder with something in it is refused",
                () => Directory.Delete(copy));
@@ -26713,10 +26716,59 @@ class Form1 extends Form {
         check("the one that says it takes everything, does",
               !File.Exists(copy));
 
+        const recursive = File.Join(SCRATCH, "recursive");
+        Directory.Copy(File.Join(SCRATCH, "deep"), recursive);
+        eq("Delete(path, true) takes a tree, as .NET's does",
+           refusal(() => Directory.Delete(recursive, true)), null);
+        check("...and it is gone", !File.Exists(recursive));
+
         const empty = File.Join(SCRATCH, "vacia");
         Directory.Make(empty);
         Directory.Delete(empty);
         check("an empty one goes with the plain word", !File.Exists(empty));
+
+        const emptyCancel = File.Join(SCRATCH, "vacia-cancel");
+        Directory.Make(emptyCancel);
+        Directory.Delete(emptyCancel, false, new Cancellable());
+        check("Delete(path, false, cancellable) takes an empty folder",
+              !File.IsDir(emptyCancel));
+
+        const stoppedEmpty = File.Join(SCRATCH, "vacia-stop");
+        Directory.Make(stoppedEmpty);
+        const stop = new Cancellable();
+        stop.Cancel();
+        const stoppedSaid = refusal(() => Directory.Delete(stoppedEmpty, false, stop));
+        check("a raised Cancellable stops an empty Delete too",
+              String(stoppedSaid).includes("cancel"), String(stoppedSaid));
+        check("...and it is still there", File.IsDir(stoppedEmpty));
+        Directory.Delete(stoppedEmpty);
+
+        /* **The policy at the two halves of the delete**: `Delete(..., true)`
+         * leaves the refusal to the platform; `DeleteTree` forces it. A
+         * read-only file on Windows and a `0555` folder on POSIX are the two
+         * shapes of the same refusal. */
+        const policy = File.Join(SCRATCH, "delete-policy");
+        Directory.Make(File.Join(policy, "sub"));
+        const policyFile = File.Join(policy, "sub", "kept.txt");
+        File.Save(policyFile, "kept");
+        if (Environment.OS === "Windows")
+            Exec.Wait(["attrib", "+r", policyFile]);
+        else
+            Exec.Wait(["chmod", "0555", File.Join(policy, "sub")]);
+        check("Delete(path, true) does not force what the platform refuses",
+              refusal(() => Directory.Delete(policy, true)) !== null);
+        check("...and the tree is still there", File.IsDir(policy));
+        eq("DeleteTree is the one that forces it",
+           refusal(() => Directory.DeleteTree(policy)), null);
+        check("...and it is gone", !File.Exists(policy));
+
+        throws("Directory.Delete refuses a recursive that is not a boolean",
+               () => Directory.Delete(SCRATCH, "yes"));
+        throws("...and a file with recursive true is not a folder",
+               () => Directory.Delete(File.Join(SCRATCH, "one.js"), true));
+        check("...and the file is still there", File.Exists(File.Join(SCRATCH, "one.js")));
+        throws("...nor a third argument that is not a Cancellable",
+               () => Directory.Delete(SCRATCH, true, 5));
 
         throws("and a file handed to the recursive one is a computed path gone "
                + "wrong, not a job",
@@ -31731,7 +31783,9 @@ export class UriChild extends Form {
      * the caller for which gone is success), and an empty directory still goes.
      * A read-only file is the platform's answer: Windows refuses it at once,
      * not because a neighbour will let go; POSIX takes it in a writable folder,
-     * as `unlink` does. The test asserts each, and the Windows hold follows.
+     * as `unlink` does. A directory's read-only attribute is not honored on
+     * Windows, so an empty one still goes. The test asserts each, and the
+     * Windows hold follows.
      */
     testRemoveHeld() {
         const dir = File.Join(SCRATCH, "remove-held");
@@ -31778,6 +31832,21 @@ export class UriChild extends Form {
             Exec.Wait(["powershell", "-NoProfile", "-Command",
                 `(Get-Item -LiteralPath '${locked}').IsReadOnly = $false`],
                 { Timeout: 30000 });
+
+        /* The other half of the Microsoft sentence: the attribute is **not**
+         * honored on directories, so an empty one carrying it still goes.
+         * `path_is_read_only` must not refuse it. */
+        const dirRo = File.Join(dir, "read-only-dir");
+        Directory.Make(dirRo);
+        const markedDir = Exec.Wait(["powershell", "-NoProfile", "-Command",
+            `$d = Get-Item -LiteralPath '${dirRo}'; ` +
+            `$d.Attributes = $d.Attributes -bor [IO.FileAttributes]::ReadOnly`],
+            { Timeout: 30000 });
+        check("...and the read-only bit is set on a directory",
+              markedDir.ExitCode === 0, markedDir.Output);
+        eq("a read-only directory is still taken when it is empty",
+           refusal(() => File.Delete(dirRo)), null);
+        check("...and it is gone", !File.IsDir(dirRo));
 
         const file = File.Join(dir, "held.txt");
         File.Save(file, "just written");
@@ -33508,6 +33577,7 @@ function Main() {
             ["Directory.Files",      () => Directory.Files(tree, { Recursive: true }, token)],
             ["Directory.Folders",    () => Directory.Folders(tree, token)],
             ["Directory.Copy",       () => Directory.Copy(tree, File.Join(SCRATCH, "token-copy"), token)],
+            ["Directory.Delete",     () => Directory.Delete(tree, true, token)],
             ["Directory.DeleteTree", () => Directory.DeleteTree(tree, token)],
         ]) {
             let said = "";

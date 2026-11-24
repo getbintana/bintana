@@ -1361,46 +1361,88 @@ static JSValue sys_dir_copy_in(JSContext *ctx, JSValueConst this_val,
 BTA_CANCEL_SCOPED(sys_dir_copy, "Directory.Copy")
 
 /*
- * Two deletes, and the dangerous one says so in its name.
+ * Two deletes: the recursive one can be the platform's or the force one.
  *
- * `Directory.Delete` takes a folder that is empty and refuses one that is not, which
- * is the operation a program actually reaches for -- "that folder has nothing
- * left in it". `Directory.DeleteTree` takes the folder and everything under it, and
- * spells that out: a recursive delete behind an innocent name is how a wrong
- * path becomes a lost afternoon, and the two are one word apart on purpose.
+ * `Directory.Delete(path, [recursive])` follows .NET's
+ * `Directory.Delete(path, recursive)`: an empty folder, or with `recursive`
+ * true the folder and everything under it, and **platform-normal for the
+ * recursive walk** -- a read-only file on Windows, or a folder without write
+ * permission on POSIX, is refused. `Directory.DeleteTree` is the force
+ * variant: it clears
+ * read-only files on Windows and gives the owner write permission to the
+ * folders on POSIX. The name says force, because a recursive delete behind an
+ * innocent name is how a wrong path becomes a lost afternoon.
  */
 /*
- * **On Windows a read-only file is taken too**, as it is on Linux, where
- * what decides is the folder's permission and not the file's. `g_remove`
+ * **On Windows the force verb takes a read-only file too**, as it is on Linux,
+ * where what decides is the folder's permission and not the file's. `g_remove`
  * refuses one there, then tries `rmdir` on it and reports *that* failure --
  * "invalid argument" -- so the IDE's installer, whose payload carries MSYS2's
  * read-only `zoneinfo` files, wrote the setup and then threw while cleaning up,
  * naming the root and nothing under it. The bit is cleared just before the
  * file goes, and only for a file this walk is about to delete anyway.
  */
-static bool delete_entry(GFile *file, GCancellable *cancel, GError **error)
+static bool delete_entry(GFile *file, GCancellable *cancel, GError **error,
+                         bool force)
 {
 #ifdef G_OS_WIN32
-    char *path = g_file_get_path(file);
-    if (path) {
-        gunichar2 *wide = g_utf8_to_utf16(path, -1, NULL, NULL, NULL);
-        if (wide) {
-            DWORD attrs = GetFileAttributesW(wide);
-            if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_READONLY))
-                SetFileAttributesW(wide, attrs & ~FILE_ATTRIBUTE_READONLY);
-            g_free(wide);
+    if (force) {
+        char *path = g_file_get_path(file);
+        if (path) {
+            gunichar2 *wide = g_utf8_to_utf16(path, -1, NULL, NULL, NULL);
+            if (wide) {
+                DWORD attrs = GetFileAttributesW(wide);
+                if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_READONLY))
+                    SetFileAttributesW(wide, attrs & ~FILE_ATTRIBUTE_READONLY);
+                g_free(wide);
+            }
+            g_free(path);
         }
-        g_free(path);
     }
+#else
+    (void)force;
 #endif
     return g_file_delete(file, cancel, error);
 }
 
-/* `failed` is set to the entry that could not go, so the sentence names it
- * rather than the folder the walk began at. */
-static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error,
-                        char **failed)
+#ifndef G_OS_WIN32
+/*
+ * **The POSIX half of the force verb.** Unlinking a child needs write and
+ * execute on its folder, not write on the child; a folder with mode 0555 --
+ * read and enter, no write -- makes every child fail, however writable the
+ * children are. Add the owner's write bit before walking. `chattr +i` and
+ * macOS's `uchg` are not this: they stop even the owner, and are left to the
+ * platform's refusal.
+ */
+static void make_dir_writable(GFile *dir)
 {
+    char   *path = g_file_get_path(dir);
+    GStatBuf st;
+
+    if (!path)
+        return;
+    if (g_stat(path, &st) == 0 && S_ISDIR(st.st_mode) && !(st.st_mode & S_IWUSR))
+        g_chmod(path, (st.st_mode & 07777) | S_IWUSR);
+    g_free(path);
+}
+#else
+static void make_dir_writable(GFile *dir)
+{
+    (void)dir;
+}
+#endif
+
+/* `failed` is set to the entry that could not go, so the sentence names it
+ * rather than the folder the walk began at. `force` is `DeleteTree`'s: clear
+ * read-only files on Windows and make folders writable on POSIX. */
+static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error,
+                        char **failed, bool force)
+{
+    if (cancel && g_cancellable_set_error_if_cancelled(cancel, error))
+        return false;
+    if (force)
+        make_dir_writable(dir);
+
     GFileEnumerator *walk = g_file_enumerate_children(
         dir, G_FILE_ATTRIBUTE_STANDARD_NAME, G_FILE_QUERY_INFO_NONE,
         cancel, error);
@@ -1408,7 +1450,7 @@ static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error,
     /* Not a folder: it is a file, and deleting it is the whole of the job. */
     if (!walk) {
         g_clear_error(error);
-        if (delete_entry(dir, cancel, error))
+        if (delete_entry(dir, cancel, error, force))
             return true;
         if (failed && !*failed)
             *failed = g_file_get_path(dir);
@@ -1424,7 +1466,7 @@ static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error,
         }
 
         GFile *child = g_file_get_child(dir, g_file_info_get_name(info));
-        ok = delete_tree(child, cancel, error, failed);
+        ok = delete_tree(child, cancel, error, failed, force);
 
         g_object_unref(child);
         g_object_unref(info);
@@ -1442,20 +1484,88 @@ static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error,
     return false;
 }
 
-static JSValue sys_dir_delete(JSContext *ctx, JSValueConst this_val,
-                              int argc, JSValueConst *argv)
+/* The error shape both recursive verbs answer with, so Delete and DeleteTree
+ * name the same entry when they fail for the same reason. */
+static JSValue dir_delete_tree_at(JSContext *ctx, const char *path,
+                                  GCancellable *cancel, bool force)
+{
+    if (!g_file_test(path, G_FILE_TEST_IS_DIR)) {
+        /* A file handed to a recursive delete is a path that was computed
+         * wrong, and taking it would be doing the wrong thing quietly. */
+        return bta_throw_text(ctx, "%s is not a folder", path);
+    }
+
+    GFile  *dir    = g_file_new_for_path(path);
+    GError *error  = NULL;
+    char   *failed = NULL;
+    JSValue e      = JS_UNDEFINED;
+
+    if (!delete_tree(dir, cancel, &error, &failed, force)) {
+        if (failed && strcmp(failed, path) != 0)
+            e = bta_throw_text(ctx, "cannot delete %s: %s could not be deleted: %s",
+                               path, failed, bta_gerror_text(error));
+        else
+            e = bta_throw_text(ctx, "cannot delete %s: %s", path,
+                               bta_gerror_text(error));
+    }
+    g_free(failed);
+    g_clear_error(&error);
+    g_object_unref(dir);
+    return e;
+}
+
+/*
+ * Delete(path, [recursive], [cancellable]) -- .NET's shape. The second
+ * argument is a boolean and nothing else: `Directory.Delete(path, true)` used
+ * to ignore the `true`, delete an empty folder by luck and refuse a tree as
+ * "not empty", which is the worst answer for a person arriving from .NET.
+ */
+static JSValue sys_dir_delete_in(JSContext *ctx, JSValueConst this_val,
+                                 int argc, JSValueConst *argv, GCancellable *cancel)
 {
     const char *path = argc > 0 ? bta_file_path(ctx, argv[0], "Directory.Delete") : NULL;
     if (!path)
         return JS_ThrowTypeError(ctx, "Directory.Delete(path) needs a path");
 
-    bool    ok = g_rmdir(path) == 0;
-    JSValue e  = ok ? JS_UNDEFINED
-                    : bta_throw_text(ctx, "cannot delete %s: %s", path,
-                                     bta_errno_text(errno));
+    if (argc > 2) {
+        JS_FreeCString(ctx, path);
+        return JS_ThrowTypeError(ctx, "Directory.Delete(path, [recursive], "
+                                      "[cancellable]) takes a path, an optional "
+                                      "recursive, and a Cancellable last");
+    }
+
+    bool recursive = false;
+    if (argc > 1 && !JS_IsUndefined(argv[1])) {
+        if (!JS_IsBool(argv[1])) {
+            JS_FreeCString(ctx, path);
+            return JS_ThrowTypeError(ctx, "Directory.Delete: recursive is true "
+                                          "or false");
+        }
+        recursive = JS_ToBool(ctx, argv[1]) > 0;
+    }
+
+    JSValue e;
+    if (recursive) {
+        e = dir_delete_tree_at(ctx, path, cancel, false);
+    } else {
+        GError *cancelled = NULL;
+
+        if (cancel && g_cancellable_set_error_if_cancelled(cancel, &cancelled)) {
+            e = bta_throw_text(ctx, "cannot delete %s: %s", path,
+                               bta_gerror_text(cancelled));
+            g_clear_error(&cancelled);
+        } else {
+            bool ok = g_rmdir(path) == 0;
+            e = ok ? JS_UNDEFINED
+                   : bta_throw_text(ctx, "cannot delete %s: %s", path,
+                                    bta_errno_text(errno));
+        }
+    }
+
     JS_FreeCString(ctx, path);
     return e;
 }
+BTA_CANCEL_SCOPED(sys_dir_delete, "Directory.Delete")
 
 static JSValue sys_dir_delete_tree_in(JSContext *ctx, JSValueConst this_val,
                                    int argc, JSValueConst *argv, GCancellable *cancel)
@@ -1464,28 +1574,7 @@ static JSValue sys_dir_delete_tree_in(JSContext *ctx, JSValueConst this_val,
     if (!path)
         return JS_ThrowTypeError(ctx, "Directory.DeleteTree(path) needs a path");
 
-    JSValue e = JS_UNDEFINED;
-    if (!g_file_test(path, G_FILE_TEST_IS_DIR)) {
-        /* A file handed to a recursive delete is a path that was computed
-         * wrong, and taking it would be doing the wrong thing quietly. */
-        e = bta_throw_text(ctx, "%s is not a folder", path);
-    } else {
-        GFile  *dir    = g_file_new_for_path(path);
-        GError *error  = NULL;
-        char   *failed = NULL;
-
-        if (!delete_tree(dir, cancel, &error, &failed)) {
-            if (failed && strcmp(failed, path) != 0)
-                e = bta_throw_text(ctx, "cannot delete %s: %s could not be deleted: %s",
-                                   path, failed, bta_gerror_text(error));
-            else
-                e = bta_throw_text(ctx, "cannot delete %s: %s", path,
-                                   bta_gerror_text(error));
-        }
-        g_free(failed);
-        g_clear_error(&error);
-        g_object_unref(dir);
-    }
+    JSValue e = dir_delete_tree_at(ctx, path, cancel, true);
 
     JS_FreeCString(ctx, path);
     return e;
@@ -5965,9 +6054,11 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   a file, or an **empty** directory. Throws on failure. On Windows a
      *   delete refused because another program holds the path a moment -- the
      *   antivirus or OneDrive right after it was written -- is tried again for
-     *   up to a second; a read-only path is refused at once, and a directory
+     *   up to a second; a read-only file is refused at once, and a directory
      *   that is not empty is never taken. Elsewhere the folder's permission
-     *   decides, as `unlink` does: a read-only file in a writable folder goes
+     *   decides, as `unlink` does: a read-only file in a writable folder goes.
+     *   A directory's read-only attribute is not honored by Windows, so an
+     *   empty directory carrying it still goes
      */
     JS_SetPropertyStr(ctx, file, "Delete", JS_NewCFunction(ctx, sys_file_delete, "Delete", 1));
     /* Open(path)
@@ -6169,18 +6260,22 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   was copied
      */
     JS_SetPropertyStr(ctx, dir, "Copy", JS_NewCFunction(ctx, sys_dir_copy, "Copy", 3));
-    /* Delete(path)
-     *   an **empty** directory, as
-     *   [`File.Delete`](docs/reference/globals/File.md) is
+    /* Delete(path, [recursive], [cancellable])
+     *   an **empty** directory, or with `recursive` true it and everything
+     *   under it — the shape of .NET's `Directory.Delete(path, recursive)`.
+     *   **Platform-normal**: a read-only file on Windows, or a folder without
+     *   write permission on POSIX, is refused; `Directory.DeleteTree` is the
+     *   force variant. A `Cancellable` last stops it part way, leaving what was
+     *   not yet deleted
      */
     JS_SetPropertyStr(ctx, dir, "Delete",
-                      JS_NewCFunction(ctx, sys_dir_delete, "Delete", 1));
+                      JS_NewCFunction(ctx, sys_dir_delete, "Delete", 3));
     /* DeleteTree(path, [cancellable])
-     *   it and everything under it — the one to be careful with, and the
-     *   reason it has a name of its own rather than a flag. A read-only file
-     *   under it goes too, on Windows as on Linux; one that cannot go is named
-     *   in the error. A `Cancellable` last stops it part way, leaving what was
-     *   not yet deleted
+     *   it and everything under it — the force one, and the reason it has a
+     *   name of its own rather than a flag. A read-only file on Windows and a
+     *   folder without write permission on POSIX are taken; one that cannot go
+     *   is named in the error. A `Cancellable` last stops it part way, leaving
+     *   what was not yet deleted
      */
     JS_SetPropertyStr(ctx, dir, "DeleteTree",
                       JS_NewCFunction(ctx, sys_dir_delete_tree, "DeleteTree", 2));

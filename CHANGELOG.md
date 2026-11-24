@@ -131,11 +131,20 @@ one-page answer to *what is new since the release I have*.
   `true` or `false`, and `true` with no `id`. On a `main` project the key does
   nothing -- there is no window to bring forward -- and the check says so as a
   warning.
-- **`Directory.DeleteTree` takes a read-only file on Windows**, as it does on
-  Linux, and names the entry that would not go. Windows refused one and the
-  error said *invalid argument* about the folder the walk began at -- which is
-  how the IDE's installer threw after writing a setup, its build folder
-  holding MSYS2's read-only time-zone files.
+- **`Directory.Delete(path, true)` takes the tree, as .NET's does.** The second
+  argument is recursive, and the way is **platform-normal**: a read-only file
+  on Windows, or a folder without write permission on POSIX, is refused.
+  `Directory.Delete(path, false, stop)` and `Directory.Delete(path, true,
+  stop)` take a `Cancellable` last. `DeleteTree` remains the **force** verb:
+  it takes read-only files on Windows and gives the owner write permission to
+  folders on POSIX.
+- **`Directory.DeleteTree` takes a read-only file on Windows and a read-only
+  folder on POSIX**, and names the entry that would not go. Windows refused one
+  and the error said *invalid argument* about the folder the walk began at --
+  which is how the IDE's installer threw after writing a setup, its build
+  folder holding MSYS2's read-only time-zone files. On POSIX, a `0555` folder
+  stopped every child it held; the force verb now adds the owner's write bit
+  before walking.
 - **The first HTTP request on Windows no longer waits 2.4-3 s.** GIO's proxy
   resolver discovered on its own what Windows already knows -- to
   `127.0.0.1` too. The runtime asks Windows now: `HTTP_PROXY`, `HTTPS_PROXY`
@@ -174,7 +183,8 @@ one-page answer to *what is new since the release I have*.
   and then with *permission denied*, and a cancelled download left its
   `.part`. Such a refusal is tried again for up to a second
   (`bta_graceful.c`); `File.Rename` and `File.Delete` do the same, while a
-  read-only path is refused at once.
+  read-only file is refused at once. The read-only attribute is not honored on
+  directories, so an empty one still goes.
 - **The Windows Apps page shows the application's icon, publisher and
   size.** The uninstall key had no `DisplayIcon` without a project icon, no
   `Publisher` without a developer in the metainfo, and never an

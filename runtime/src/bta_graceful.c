@@ -40,7 +40,7 @@
  *
  * **Only a refusal for access that a neighbour can end is waited out**, for a
  * second at most, 5 ms doubling. Anything else -- the file is not there, the
- * folder is not writable, or (on Windows) the path is read-only -- is the
+ * folder is not writable, or (on Windows) the file is read-only -- is the
  * answer at once: a read-only file is refused there, not held, and waiting
  * does not change it. On POSIX the folder's permission decides, as `unlink`
  * does. A hold that outlasts the second is the refusal it always was, with
@@ -61,11 +61,16 @@ static bool held_by_another(int e)
 }
 
 /*
- * **A read-only path is not a hold.** Windows answers it the same way it
+ * **A read-only file is not a hold.** Windows answers it the same way it
  * answers a file another process has open -- access denied -- but no amount of
  * waiting changes it. `File.Delete` says so at once, as it did before the
  * retry existed; `DeleteTree`, which takes read-only files, clears the bit
  * first and does not come through here.
+ *
+ * **A directory is not this.** Microsoft documents `FILE_ATTRIBUTE_READONLY`
+ * as "not honored on directories": an empty directory carrying it can still
+ * be removed, and Explorer uses the bit only to mark a customized folder. So
+ * the check asks for a non-directory.
  */
 static bool path_is_read_only(const char *path)
 {
@@ -75,7 +80,9 @@ static bool path_is_read_only(const char *path)
 
     DWORD attrs = GetFileAttributesW((LPCWSTR)wide);
     g_free(wide);
-    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_READONLY);
+    return attrs != INVALID_FILE_ATTRIBUTES &&
+           !(attrs & FILE_ATTRIBUTE_DIRECTORY) &&
+           (attrs & FILE_ATTRIBUTE_READONLY);
 }
 
 /* The next pause, or 0 once a second has been spent. */
@@ -138,8 +145,8 @@ int bta_graceful_fs_rename(const char *from, const char *to)
 int bta_graceful_fs_remove(const char *path, bool missing_ok)
 {
 #ifdef G_OS_WIN32
-    /* Read-only is the platform's answer, not a hold; waiting out a second
-     * would only delay the same refusal. */
+    /* A read-only file is the platform's answer, not a hold; waiting out a
+     * second would only delay the same refusal. */
     if (path_is_read_only(path)) {
         errno = EACCES;
         return -1;
