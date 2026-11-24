@@ -580,12 +580,15 @@ icon when the theme has one by that name (`gtkapplication.c`).
 
 **A refusal the platform makes for a moment, under ordinary conditions, is
 waited out there and not failed on** -- npm's `graceful-fs` idea and name. One
-prefix per area; files are `bta_graceful_fs_rename` and
-`bta_graceful_fs_remove`, and the runtime's own renames and deletes of a file
-it has just written go through them (`File.Rename`, `File.Delete`, `Http`'s
-`SaveTo` `.part`, `ZipWriter.Finish`, `Gzip`, the `File` keyring provider).
-`File.Save` has its own shorter retry; `DeleteTree` and `PdfDocument` do not
-use these yet.
+prefix per area; files are `bta_graceful_fs_rename`, `bta_graceful_fs_remove`
+and `bta_graceful_fs_write`, and the runtime's own writes, renames and deletes
+of a file it has just made go through them (`File.Save` and `File.SaveBytes`,
+`Locale.Write`, `Zip`'s extraction, the `File` keyring provider,
+`Desktop.Entries`, `File.Rename`, `File.Delete`, `Directory.DeleteTree`,
+`Http`'s `SaveTo` `.part`, `ZipWriter.Finish`, `Gzip`, and `PdfDocument`'s
+form fields and encryption). A write needs its own function because the
+rename `g_file_set_contents` performs happens inside it, invisible to the
+caller.
 
 - **Why files.** On Windows a file open elsewhere without `FILE_SHARE_DELETE`
   cannot be renamed or deleted, and Defender, the indexer and OneDrive open a
@@ -593,9 +596,9 @@ use these yet.
   protection on: 0 refusals in 14 400 write-and-renames from six processes, and
   refusals in two of three whole runs of `tests/widgets` (`SaveTo`'s rename,
   a cancelled download's `.part` left behind, `ZipWriter.Finish` in a `Task`).
-  The next two whole runs had none. `testRenameHeld` and `testRemoveHeld`
-  hold a file from a PowerShell child for 400 ms; both failed at once before,
-  and pass now.
+  The next two whole runs had none. `testRenameHeld`, `testRemoveHeld`,
+  `testSaveHeld` and `testDeleteTreeHeld` hold a file from a PowerShell child
+  for 400 ms; all failed at once before, and pass now.
 - **What was ruled out first**: handle inheritance into a child spawned while
   a temporary was open (an `Exec` between `Zip.Create` and `Finish` did not
   reproduce it -- GLib 2.90 limits what its children inherit), and a
@@ -604,10 +607,9 @@ use these yet.
 - **Only an access refusal that a neighbour can end waits** (`EACCES`, `EPERM`,
   `EBUSY`), a second at most, 5 ms doubling; anything else is the answer at
   once. **A read-only file is not a hold**: Windows answers it access denied
-  too, but no waiting changes it, so `File.Delete` and `Directory.Delete(path,
-  true)` fail at once; `Directory.DeleteTree` clears the bit first and does not
-  come through here. (`File.Save`'s own retry still spends its 315 ms on a
-  read-only file; see its own paragraph.)
+  too, but no waiting changes it, so `File.Save`, `File.Delete` and
+  `Directory.Delete(path, true)` fail at once; `Directory.DeleteTree` clears
+  the bit first and does not come through here.
   The attribute is **not honored on directories** (Microsoft documents it so;
   Explorer uses it only to mark a customized folder), so an empty directory
   carrying it is still removed; only files are cleared or refused. On POSIX the

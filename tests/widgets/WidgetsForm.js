@@ -26420,6 +26420,30 @@ class Form1 extends Form {
            refusal(() => File.Save(File.Join(SCRATCH, "no-dir", "x.txt"), "t")),
            `cannot write ${File.Join(SCRATCH, "no-dir", "x.txt")}: no such file or directory`);
 
+        /* **A read-only target is the platform's answer.** Windows refuses it
+         * at once, as `File.Delete` does, rather than spending the second the
+         * retry is for; POSIX replaces it when the folder allows the rename,
+         * which is the platform's own rule. */
+        const readOnly = File.Join(SCRATCH, "read-only.txt");
+        File.Save(readOnly, "before");
+        if (Environment.OS === "Windows") {
+            Exec.Wait(["attrib", "+r", readOnly], { Timeout: 10000 });
+            const watch = new Stopwatch().Start();
+            const said  = refusal(() => File.Save(readOnly, "after"));
+            const took  = watch.Stop().Elapsed;
+            check("a read-only file is refused at once", said !== null && took < 500,
+                  `${took} ms: ${said}`);
+            eq("...and it keeps what it had", File.Load(readOnly), "before");
+            Exec.Wait(["attrib", "-r", readOnly], { Timeout: 10000 });
+        } else {
+            const chmod = Exec.Wait(["chmod", "0444", readOnly], { Timeout: 10000 });
+            check("...and the read-only bit is set", chmod.ExitCode === 0, chmod.Output);
+            eq("Save replaces a read-only file where the folder allows it",
+               refusal(() => File.Save(readOnly, "after")), null);
+            eq("...with the new contents", File.Load(readOnly), "after");
+        }
+        File.Delete(readOnly);
+
         /* --- appending, which is the log/CSV case: no read, no rewrite. */
         const log = File.Join(SCRATCH, "append.txt");
         if (File.Exists(log)) File.Delete(log);
@@ -31767,6 +31791,75 @@ export class UriChild extends Form {
              (code) => {
                  if (!tried) failures.push(`RenameHeld: the holder never held the file (exit ${code})`);
                  Directory.DeleteTree(dir);
+                 waiting--;
+             });
+    }
+
+    /*
+     * **A save that another process blocks for a moment still happens**, on
+     * Windows. `g_file_set_contents` writes a temporary and renames it over
+     * the target; the rename is refused while the target is open without
+     * `FILE_SHARE_DELETE`. `File.Save` had a 315 ms retry of its own, shorter
+     * than the second the renames and deletes use, so this holder outlasted
+     * it. The holder is the same scanner-shaped child as `RenameHeld`.
+     */
+    testSaveHeld() {
+        if (Environment.OS !== "Windows") return;
+
+        const dir  = File.Join(SCRATCH, "save-held");
+        Directory.Make(dir);
+        const file = File.Join(dir, "saved.txt");
+        File.Save(file, "before");
+
+        const hold = `$f = [IO.File]::Open('${file}', 'Open', 'Read', 'Read'); ` +
+                     `'held'; Start-Sleep -Milliseconds 400; $f.Close()`;
+        let tried = false;
+        waiting++;
+        Exec(["powershell", "-NoProfile", "-Command", hold], { Timeout: 30000 },
+             (line) => {
+                 if (tried || String(line).trim() !== "held") return;
+                 tried = true;
+                 eq("File.Save waits out another process holding the file",
+                    refusal(() => File.Save(file, "after")), null);
+                 eq("...and the file has the new contents", File.Load(file), "after");
+             },
+             (code) => {
+                 if (!tried) failures.push(`SaveHeld: the holder never held the file (exit ${code})`);
+                 Directory.DeleteTree(dir);
+                 waiting--;
+             });
+    }
+
+    /*
+     * **The recursive delete waits too**: its walk used `g_file_delete`, which
+     * failed at once on a file another process held, while `File.Delete` next
+     * to it waited out the same refusal. The force verb is the one the IDE's
+     * installer calls on a build folder just written, so the scanner is
+     * exactly the neighbour it meets there.
+     */
+    testDeleteTreeHeld() {
+        if (Environment.OS !== "Windows") return;
+
+        const dir  = File.Join(SCRATCH, "tree-held");
+        Directory.Make(dir);
+        const file = File.Join(dir, "held.txt");
+        File.Save(file, "just written");
+
+        const hold = `$f = [IO.File]::Open('${file}', 'Open', 'Read', 'Read'); ` +
+                     `'held'; Start-Sleep -Milliseconds 400; $f.Close()`;
+        let tried = false;
+        waiting++;
+        Exec(["powershell", "-NoProfile", "-Command", hold], { Timeout: 30000 },
+             (line) => {
+                 if (tried || String(line).trim() !== "held") return;
+                 tried = true;
+                 eq("DeleteTree waits out another process holding a file",
+                    refusal(() => Directory.DeleteTree(dir)), null);
+                 check("...and the tree is gone", !File.IsDir(dir));
+             },
+             (code) => {
+                 if (!tried) failures.push(`DeleteTreeHeld: the holder never held the file (exit ${code})`);
+                 if (File.IsDir(dir)) Directory.DeleteTree(dir);
                  waiting--;
              });
     }

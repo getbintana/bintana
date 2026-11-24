@@ -230,15 +230,18 @@ one-page answer to *what is new since the release I have*.
   empty band list and an Add that refused.
 - **The Windows installer logs a build folder it could not delete** instead of
   throwing after the setup was written.
-- **On Windows, a rename or delete of a file just written waits out a
+- **On Windows, a write, rename or delete of a file just made waits out a
   program that holds it a moment.** Defender, the search indexer and OneDrive
-  open a file as it is closed, and Windows refuses to rename or delete a file
-  open elsewhere: a `SaveTo` download, `ZipWriter.Finish` or `Gzip` failed now
-  and then with *permission denied*, and a cancelled download left its
-  `.part`. Such a refusal is tried again for up to a second
-  (`bta_graceful.c`); `File.Rename` and `File.Delete` do the same, while a
-  read-only file is refused at once. The read-only attribute is not honored on
-  directories, so an empty one still goes.
+  open a file as it is closed, and Windows refuses to write, rename or delete a
+  file open elsewhere: a `SaveTo` download, `ZipWriter.Finish` or `Gzip`
+  failed now and then with *permission denied*, and a cancelled download left
+  its `.part`. Such a refusal is tried again for up to a second
+  (`bta_graceful.c`). `File.Save`, `File.SaveBytes`, `Locale.Write`, `Zip`'s
+  extraction, `Desktop.Entries`, `File.Rename`, `File.Delete`,
+  `Directory.DeleteTree` and `PdfDocument`'s form fields and encryption all do
+  the same, while a read-only file is refused at once -- `File.Save` no
+  longer spends 315 ms discovering it. The read-only attribute is not honored
+  on directories, so an empty one still goes.
 - **The Windows Apps page shows the application's icon, publisher and
   size.** The uninstall key had no `DisplayIcon` without a project icon, no
   `Publisher` without a developer in the metainfo, and never an

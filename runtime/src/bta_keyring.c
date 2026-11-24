@@ -355,14 +355,14 @@ static gboolean keyring_file_store_idle(gpointer data)
 
     if (g_mkdir_with_parents(service_dir, 0700) == 0) {
         g_chmod(service_dir, 0700);
-        if (g_file_set_contents(tmp, job->value, (gssize)job->value_len, &err)) {
+        if (bta_graceful_fs_write(tmp, job->value, (gssize)job->value_len, &err)) {
             g_chmod(tmp, 0600);
             if (bta_graceful_fs_rename(tmp, path) == 0)
                 ok = true;
         }
     }
     if (!ok)
-        g_unlink(tmp);
+        bta_graceful_fs_remove(tmp, true);
     g_clear_error(&err);
     g_free(tmp);
     g_free(service_dir);

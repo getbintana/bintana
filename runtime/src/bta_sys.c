@@ -130,41 +130,6 @@ static JSValue sys_file_load_in(JSContext *ctx, JSValueConst this_val,
 }
 BTA_CANCEL_SCOPED(sys_file_load, "File.Load")
 
-/*
- * `g_file_set_contents`, which `File.Save` and `File.SaveBytes` are: a
- * temporary beside the file, renamed over it.
- *
- * **On Windows a refused rename is often only a moment long.** The rename
- * fails with access denied while another process holds the target open
- * without `FILE_SHARE_DELETE` -- the scanner or the indexer looking at what was
- * just written is the usual one. Four tasks saving one file under a `Lock`
- * each failed that way inside `tests/widgets` (the book stopped at 105 of
- * 160), while the same 800 saves alone never did (2026-11-12). Linux has no
- * such moment, so the call that succeeds there is retried briefly here,
- * 315 ms in all, and only for that error -- which a file that really is
- * read-only also answers, a third of a second later than it used to.
- */
-static bool bta_save_contents(const char *path, const char *data, gssize len,
-                              GError **err)
-{
-#ifdef G_OS_WIN32
-    for (int wait = 5; ; wait *= 2) {
-        GError *e = NULL;
-
-        if (g_file_set_contents(path, data, len, &e))
-            return true;
-        if (wait > 160 || !g_error_matches(e, G_FILE_ERROR, G_FILE_ERROR_ACCES)) {
-            g_propagate_error(err, e);
-            return false;
-        }
-        g_clear_error(&e);
-        g_usleep((gulong)wait * 1000);
-    }
-#else
-    return g_file_set_contents(path, data, len, err);
-#endif
-}
-
 static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
                              int argc, JSValueConst *argv)
 {
@@ -194,7 +159,7 @@ static JSValue sys_file_save(JSContext *ctx, JSValueConst this_val,
     GError *err = NULL;
     /* A JS string lives in memory, so it cannot outgrow G_MAXSSIZE; the cast
      * is for the signedness of the length the write takes. */
-    bool ok = bta_save_contents(path, text, (gssize)len, &err);
+    bool ok = bta_graceful_fs_write(path, text, (gssize)len, &err);
 
     JS_FreeCString(ctx, text);
     if (!ok) {
@@ -1385,24 +1350,47 @@ BTA_CANCEL_SCOPED(sys_dir_copy, "Directory.Copy")
 static bool delete_entry(GFile *file, GCancellable *cancel, GError **error,
                          bool force)
 {
+    char *path = g_file_get_path(file);
+
+    if (!path) {
+        g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
+                            "not a local file");
+        return false;
+    }
+
 #ifdef G_OS_WIN32
     if (force) {
-        char *path = g_file_get_path(file);
-        if (path) {
-            gunichar2 *wide = g_utf8_to_utf16(path, -1, NULL, NULL, NULL);
-            if (wide) {
-                DWORD attrs = GetFileAttributesW(wide);
-                if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_READONLY))
-                    SetFileAttributesW(wide, attrs & ~FILE_ATTRIBUTE_READONLY);
-                g_free(wide);
-            }
-            g_free(path);
+        gunichar2 *wide = g_utf8_to_utf16(path, -1, NULL, NULL, NULL);
+        if (wide) {
+            DWORD attrs = GetFileAttributesW(wide);
+            if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_READONLY))
+                SetFileAttributesW(wide, attrs & ~FILE_ATTRIBUTE_READONLY);
+            g_free(wide);
         }
     }
 #else
     (void)force;
 #endif
-    return g_file_delete(file, cancel, error);
+
+    /* **The walk waits out a held file too**, as `File.Delete` does: the
+     * installer's cleanup runs just after the setup was written, while the
+     * scanner is still reading it. `g_file_delete` failed at once there, so
+     * the delete gave the refusal the helper exists to end. The cancellable
+     * cuts the wait short, and the errno is put back into a `GError` the
+     * caller's sentence knows. */
+    bool ok = bta_graceful_fs_remove_cancellable(path, false, cancel) == 0;
+    int  e  = errno;
+
+    if (!ok) {
+        if (e == ECANCELED)
+            g_set_error_literal(error, G_IO_ERROR, G_IO_ERROR_CANCELLED,
+                                "the delete was cancelled");
+        else
+            g_set_error(error, G_FILE_ERROR, g_file_error_from_errno(e),
+                        "%s", bta_errno_text(e));
+    }
+    g_free(path);
+    return ok;
 }
 
 #ifndef G_OS_WIN32
@@ -5594,7 +5582,7 @@ static JSValue sys_file_save_bytes(JSContext *ctx, JSValueConst this_val,
     }
 
     GError *err = NULL;
-    bool    ok  = bta_save_contents(path, (const char *)bytes, (gssize)len, &err);
+    bool    ok  = bta_graceful_fs_write(path, (const char *)bytes, (gssize)len, &err);
 
     if (!ok) {
         JSValue e = bta_throw_text(ctx, "cannot write %s: %s", path,

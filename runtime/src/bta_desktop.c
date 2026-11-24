@@ -276,9 +276,10 @@ static JSValue entries_read(JSContext *ctx, JSValueConst this_val,
  * `Exec` is the same silence: a menu item that is offered and does nothing.  A
  * program that wants to write something else wants `File.Save`.
  *
- * The write is `g_file_set_contents`, which is the same promise `File.Save`
- * makes: a temporary beside it, renamed over, so a failure leaves whatever was
- * there.
+ * The write is `bta_graceful_fs_write` (`g_file_set_contents`), which is the
+ * same promise `File.Save` makes: a temporary beside it, renamed over, so a
+ * failure leaves whatever was there, and a Windows scanner holding the target
+ * is waited out instead of refusing the entry.
  */
 /* The body both verbs share: serialise the entry, refuse what is not one, and
  * write it atomically at `path`.  `who` names the caller in every sentence --
@@ -378,7 +379,7 @@ static JSValue entry_write_file(JSContext *ctx, const char *path,
 
     /* The serialised key file lives in memory, so it cannot outgrow G_MAXSSIZE;
      * the cast is for the signedness of the length the write takes. */
-    if (!g_file_set_contents(path, text, (gssize)len, &error)) {
+    if (!bta_graceful_fs_write(path, text, (gssize)len, &error)) {
         JSValue e = bta_throw_text(ctx, "cannot write %s: %s", path,
                                    bta_gerror_text(error));
         g_clear_error(&error);
@@ -804,7 +805,7 @@ static bool shortcut_write_meta(const char *path, const char *name,
     if (!data)
         return false;
 
-    bool ok = g_file_set_contents(path, data, len, error);
+    bool ok = bta_graceful_fs_write(path, data, len, error);
 
     g_free(data);
     return ok;

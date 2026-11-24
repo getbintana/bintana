@@ -7,6 +7,7 @@
  * visual form stays Cairo's and this file only knows rectangles and names.
  */
 #include "bta_pdf.h"
+#include "bta_graceful.h"
 
 #include <podofo/podofo.h>
 
@@ -90,19 +91,19 @@ int bta_pdf_add_fields_native(const char *path, const char *password,
         }
 
         tmp = std::string(path) + ".bta-form";
-        g_remove(tmp.c_str());
+        bta_graceful_fs_remove(tmp.c_str(), true);
         doc.Save(tmp);
 
-        if (g_rename(tmp.c_str(), path) != 0) {
+        if (bta_graceful_fs_rename(tmp.c_str(), path) != 0) {
             const std::string why = g_strerror(errno);
-            g_remove(tmp.c_str());
+            bta_graceful_fs_remove(tmp.c_str(), true);
             throw std::runtime_error("could not replace the PDF: " + why);
         }
 
         return count;
     } catch (const std::exception &e) {
         if (!tmp.empty())
-            g_remove(tmp.c_str());
+            bta_graceful_fs_remove(tmp.c_str(), true);
         set_error(error, e.what());
         return 0;
     }
@@ -210,7 +211,7 @@ int bta_pdf_sign_native(const char *src, const char *src_password,
         return 1;
     } catch (const std::exception &e) {
         if (copied)
-            g_remove(out);
+            bta_graceful_fs_remove(out, true);
         set_error(error, e.what());
         return 0;
     }
@@ -241,18 +242,18 @@ int bta_pdf_encrypt_native(const char *src, const char *src_password,
                          PdfEncryptionAlgorithm::AESV3R6, PdfKeyLength::L256);
 
         tmp = std::string(out) + ".bta-encrypt";
-        g_remove(tmp.c_str());
+        bta_graceful_fs_remove(tmp.c_str(), true);
         doc.Save(tmp);
 
-        if (g_rename(tmp.c_str(), out) != 0) {
+        if (bta_graceful_fs_rename(tmp.c_str(), out) != 0) {
             const std::string why = g_strerror(errno);
-            g_remove(tmp.c_str());
+            bta_graceful_fs_remove(tmp.c_str(), true);
             throw std::runtime_error("could not write the PDF: " + why);
         }
         return 1;
     } catch (const std::exception &e) {
         if (!tmp.empty())
-            g_remove(tmp.c_str());
+            bta_graceful_fs_remove(tmp.c_str(), true);
         set_error(error, e.what());
         return 0;
     }

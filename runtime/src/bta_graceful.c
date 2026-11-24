@@ -10,11 +10,12 @@
  *
  * ---------------------------------------------------------------- files
  *
- * `bta_graceful_fs_rename` and `bta_graceful_fs_remove`: the runtime's own
- * renames and deletes of a file it has just written -- `File.Rename`,
- * `File.Delete`, `Http`'s `SaveTo` `.part`, `ZipWriter.Finish`, `Gzip` and
- * the `File` keyring provider. `File.Save` has its own retry; `DeleteTree` and
- * `PdfDocument` do not use these yet.
+ * `bta_graceful_fs_rename`, `bta_graceful_fs_remove` and
+ * `bta_graceful_fs_write`: the runtime's own writes, renames and deletes of a
+ * file it has just made -- `File.Save` and `File.SaveBytes`, `Locale.Write`,
+ * `Zip`'s extraction, the `File` keyring provider, `Desktop.Entries`,
+ * `File.Rename`, `File.Delete`, `Directory.DeleteTree`, `Http`'s `SaveTo`,
+ * `ZipWriter.Finish`, `Gzip`, and `PdfDocument`'s form fields and encryption.
  *
  * **Why.** On Windows a file that another process has open without
  * `FILE_SHARE_DELETE` cannot be renamed or deleted -- and the antivirus, the
@@ -97,6 +98,20 @@ static gulong held_wait(gulong *wait, gulong *spent)
     *wait  *= 2;
     return now;
 }
+
+/* A pause that a raised `Cancellable` cuts short: the walk asks between 5 ms
+ * slices, so a cancelled delete does not wait out the last half second. */
+static bool nap_cancellable(gulong usec, GCancellable *cancel)
+{
+    while (usec > 0) {
+        if (cancel && g_cancellable_is_cancelled(cancel))
+            return false;
+        gulong step = MIN(usec, 5000);
+        g_usleep(step);
+        usec -= step;
+    }
+    return !(cancel && g_cancellable_is_cancelled(cancel));
+}
 #endif
 
 /*
@@ -131,7 +146,8 @@ int bta_graceful_fs_rename(const char *from, const char *to)
  * `g_remove(path)` -- a file or an empty directory -- waiting out another
  * process that holds it for a moment. `missing_ok` says whether a path that is
  * already gone is success (the `.part` cleanup) or the refusal it is for
- * `File.Delete`, which has always thrown. 0, or -1 with `errno`.
+ * `File.Delete`, which has always thrown. A raised `cancel` stops the wait and
+ * answers ECANCELED. 0, or -1 with `errno`.
  *
  * **On Windows `g_remove` alone cannot see the refusal it waits for.** GLib
  * tries `_wremove` and then `_wrmdir` on every path, and keeps the second
@@ -142,9 +158,15 @@ int bta_graceful_fs_rename(const char *from, const char *to)
  * `g_unlink`, which asks only the file and keeps the EACCES the retry needs.
  * An empty directory still goes through `g_remove`.
  */
-int bta_graceful_fs_remove(const char *path, bool missing_ok)
+int bta_graceful_fs_remove_cancellable(const char *path, bool missing_ok,
+                                       GCancellable *cancel)
 {
 #ifdef G_OS_WIN32
+    if (cancel && g_cancellable_is_cancelled(cancel)) {
+        errno = ECANCELED;
+        return -1;
+    }
+
     /* A read-only file is the platform's answer, not a hold; waiting out a
      * second would only delay the same refusal. */
     if (path_is_read_only(path)) {
@@ -155,6 +177,10 @@ int bta_graceful_fs_remove(const char *path, bool missing_ok)
     gulong wait = 5000, spent = 0;
 
     for (;;) {
+        if (cancel && g_cancellable_is_cancelled(cancel)) {
+            errno = ECANCELED;
+            return -1;
+        }
         if (g_remove(path) == 0)
             return 0;
 
@@ -180,13 +206,71 @@ int bta_graceful_fs_remove(const char *path, bool missing_ok)
             errno = e;
             return -1;
         }
-        g_usleep(pause);
+        if (!nap_cancellable(pause, cancel)) {
+            errno = ECANCELED;
+            return -1;
+        }
     }
 #else
+    if (cancel && g_cancellable_is_cancelled(cancel)) {
+        errno = ECANCELED;
+        return -1;
+    }
     if (g_remove(path) == 0)
         return 0;
     if (missing_ok && errno == ENOENT)
         return 0;
     return -1;
+#endif
+}
+
+int bta_graceful_fs_remove(const char *path, bool missing_ok)
+{
+    return bta_graceful_fs_remove_cancellable(path, missing_ok, NULL);
+}
+
+/*
+ * `g_file_set_contents(path, data, len)` -- a temporary beside it, renamed
+ * over -- waiting out another process that holds the target for a moment.
+ *
+ * **`File.Save` was the one writer with a retry of its own**, 315 ms in all,
+ * while the renames and deletes around it waited a second: four tasks saving
+ * one file under a `Lock` failed inside `tests/widgets` (the book stopped at
+ * 105 of 160) with the shorter budget, and a read-only target spent all of it
+ * before saying no. This is that retry, with the duration and the read-only
+ * rule of the others; the rename inside `g_file_set_contents` is not visible
+ * to the caller, which is why the write has a function of its own.
+ */
+bool bta_graceful_fs_write(const char *path, const char *data, gssize len,
+                           GError **error)
+{
+#ifdef G_OS_WIN32
+    gulong wait = 5000, spent = 0;
+    GError *refused = NULL;
+
+    for (;;) {
+        g_clear_error(&refused);
+        if (g_file_set_contents(path, data, len, &refused))
+            return true;
+
+        /* A read-only target answers access denied as a held one does, and no
+         * neighbour will let go: it is the answer at once. */
+        if (!g_error_matches(refused, G_FILE_ERROR, G_FILE_ERROR_ACCES) ||
+            path_is_read_only(path))
+            break;
+
+        gulong pause = held_wait(&wait, &spent);
+        if (!pause)
+            break;
+        g_usleep(pause);
+    }
+
+    if (error)
+        *error = refused;
+    else
+        g_clear_error(&refused);
+    return false;
+#else
+    return g_file_set_contents(path, data, len, error);
 #endif
 }

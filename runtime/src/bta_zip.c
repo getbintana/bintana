@@ -735,8 +735,8 @@ static bool zip_write_file(const char *dest, const guint8 *data, gsize n, char *
 {
     GError *err = NULL;
 
-    if (!g_file_set_contents(dest, (const gchar *)(data ? data : (const guint8 *)""),
-                             (gssize)n, &err)) {
+    if (!bta_graceful_fs_write(dest, (const gchar *)(data ? data : (const guint8 *)""),
+                               (gssize)n, &err)) {
         *why = g_strdup_printf("cannot write '%s': %s", dest, bta_gerror_text(err));
         g_clear_error(&err);
         return false;

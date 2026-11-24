@@ -1243,8 +1243,8 @@ static bool po_write_entry(JSContext *ctx, GString *out, JSValueConst entry,
  *
  * **The whole text is built before the file is touched**, so a refusal leaves
  * the catalogue exactly as it was, and the write itself is
- * `g_file_set_contents` -- a temporary and a rename, the promise `File.Save`
- * makes.
+ * `bta_graceful_fs_write` -- `g_file_set_contents`, a temporary and a rename,
+ * the promise `File.Save` makes.
  */
 static JSValue js_locale_write(JSContext *ctx, JSValueConst this_val,
                                int argc, JSValueConst *argv)
@@ -1289,7 +1289,7 @@ static JSValue js_locale_write(JSContext *ctx, JSValueConst this_val,
     g_string_append_c(out, '\n');
 
     GError *err = NULL;
-    bool    ok  = g_file_set_contents(path, out->str, (gssize)out->len, &err);
+    bool    ok  = bta_graceful_fs_write(path, out->str, (gssize)out->len, &err);
 
     g_string_free(out, TRUE);
 
