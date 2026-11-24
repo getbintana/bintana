@@ -2037,9 +2037,11 @@ icon when the theme has one by that name (`gtkapplication.c`).
 **A refusal the platform makes for a moment, under ordinary conditions, is
 waited out there and not failed on** -- npm's `graceful-fs` idea and name. One
 prefix per area; files are `bta_graceful_fs_rename` and
-`bta_graceful_fs_remove`, and every rename and delete of a file the runtime
-has just written goes through them (`File.Rename`, `Http`'s `SaveTo` `.part`,
-`ZipWriter.Finish`, `Gzip`, the `File` keyring provider).
+`bta_graceful_fs_remove`, and the runtime's own renames and deletes of a file
+it has just written go through them (`File.Rename`, `File.Delete`, `Http`'s
+`SaveTo` `.part`, `ZipWriter.Finish`, `Gzip`, the `File` keyring provider).
+`File.Save` has its own shorter retry; `DeleteTree` and `PdfDocument` do not
+use these yet.
 
 - **Why files.** On Windows a file open elsewhere without `FILE_SHARE_DELETE`
   cannot be renamed or deleted, and Defender, the indexer and OneDrive open a
@@ -2047,8 +2049,9 @@ has just written goes through them (`File.Rename`, `Http`'s `SaveTo` `.part`,
   protection on: 0 refusals in 14 400 write-and-renames from six processes, and
   refusals in two of three whole runs of `tests/widgets` (`SaveTo`'s rename,
   a cancelled download's `.part` left behind, `ZipWriter.Finish` in a `Task`).
-  The next two whole runs had none. `testRenameHeld` holds a file from a
-  PowerShell child for 400 ms; it failed at once before, and passes now.
+  The next two whole runs had none. `testRenameHeld` and `testRemoveHeld`
+  hold a file from a PowerShell child for 400 ms; both failed at once before,
+  and pass now.
 - **What was ruled out first**: handle inheritance into a child spawned while
   a temporary was open (an `Exec` between `Zip.Create` and `Finish` did not
   reproduce it -- GLib 2.90 limits what its children inherit), and a
@@ -2057,6 +2060,15 @@ has just written goes through them (`File.Rename`, `Http`'s `SaveTo` `.part`,
 - **Only an access refusal waits** (`EACCES`, `EPERM`, `EBUSY`), a second at
   most, 5 ms doubling; anything else is the answer at once. Linux and macOS
   rename and delete an open file, so there each is one call.
+- **`g_remove` on Windows keeps the `rmdir` half's errno, not the `remove`
+  half's.** GLib tries `_wremove` and then `_wrmdir` on every path; for a file
+  another process holds open, the first says EACCES and the second overwrites
+  it with EINVAL ("invalid argument", the sentence `delete_tree` documents).
+  So `bta_graceful_fs_remove` tries `g_unlink` when `g_remove` answers EINVAL
+  or ENOTDIR, which asks the file alone and keeps the EACCES the retry needs.
+  `File.Delete` uses it with `missing_ok` false -- a path that is not there is
+  still a refusal -- while the `.part` cleanup passes true, because gone is
+  what it asked.
 - **A new area** (a socket bind refused while the port is in `TIME_WAIT`, say)
   goes in the same file under its own prefix, with what it measured.
 
@@ -15972,7 +15984,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11735 assertions
+./tests/run.sh                          # all seven projects, 11737 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

@@ -1217,7 +1217,9 @@ static JSValue sys_file_delete(JSContext *ctx, JSValueConst this_val,
     if (!path)
         return JS_EXCEPTION;
 
-    bool ok = g_remove(path) == 0;
+    /* `false`: a path that is not there has always been a refusal here, while
+     * the `.part` cleanup is the caller for which gone is success. */
+    bool ok = bta_graceful_fs_remove(path, false) == 0;
     JSValue e = ok ? JS_UNDEFINED
                    : bta_throw_text(ctx, "cannot delete %s", path);
     JS_FreeCString(ctx, path);
@@ -5958,7 +5960,10 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, file, "Append",
                       JS_NewCFunction(ctx, sys_file_append, "Append", 2));
     /* Delete(path)
-     *   a file, or an **empty** directory. Throws on failure
+     *   a file, or an **empty** directory. Throws on failure. On Windows a
+     *   delete refused because another program holds the path a moment -- the
+     *   antivirus or OneDrive right after it was written -- is tried again for
+     *   up to a second
      */
     JS_SetPropertyStr(ctx, file, "Delete", JS_NewCFunction(ctx, sys_file_delete, "Delete", 1));
     /* Open(path)

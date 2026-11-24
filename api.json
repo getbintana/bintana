@@ -15085,7 +15085,7 @@
           "Params": 1,
           "Signature": "(path)",
           "Returns": "",
-          "Doc": "a file, or an **empty** directory. Throws on failure",
+          "Doc": "a file, or an **empty** directory. Throws on failure. On Windows a delete refused because another program holds the path a moment -- the antivirus or OneDrive right after it was written -- is tried again for up to a second",
           "Native": true
         },
         {

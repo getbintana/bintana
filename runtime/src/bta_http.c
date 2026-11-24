@@ -1570,7 +1570,7 @@ static void http_save_discard(HttpSave *s)
          * left the `.part` this function promises is gone. */
         char *path = g_file_get_path(s->part);
         if (path)
-            bta_graceful_fs_remove(path);
+            bta_graceful_fs_remove(path, true);
         g_free(path);
         g_clear_object(&s->part);
     }

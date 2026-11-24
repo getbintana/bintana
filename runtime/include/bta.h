@@ -1067,9 +1067,11 @@ GProxyResolver *bta_system_proxy_resolver(void);
  * the platform causes are waited out, one prefix per area): on Windows a refusal
  * for access -- the antivirus, the indexer or OneDrive holding a file just
  * closed -- is waited out for up to a second instead of failing. One call
- * elsewhere. 0, or -1 with errno; removing a file already gone is 0. */
+ * elsewhere. 0, or -1 with errno. `bta_graceful_fs_remove` takes a file or an
+ * empty directory; `missing_ok` says a path already gone is success (the
+ * `.part` cleanup) rather than ENOENT (`File.Delete`). */
 int bta_graceful_fs_rename(const char *from, const char *to);
-int bta_graceful_fs_remove(const char *path);
+int bta_graceful_fs_remove(const char *path, bool missing_ok);
 /* Every `.js` under a directory, subdirectories included. `root` skips the
  * project's own `tests/`, which a run never loads. */
 void bta_collect_js(GPtrArray *out, const char *dir, bool root);

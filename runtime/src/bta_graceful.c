@@ -10,8 +10,11 @@
  *
  * ---------------------------------------------------------------- files
  *
- * `bta_graceful_fs_rename` and `bta_graceful_fs_remove`: every rename and
- * delete the runtime does of a file it has just written goes through them.
+ * `bta_graceful_fs_rename` and `bta_graceful_fs_remove`: the runtime's own
+ * renames and deletes of a file it has just written -- `File.Rename`,
+ * `File.Delete`, `Http`'s `SaveTo` `.part`, `ZipWriter.Finish`, `Gzip` and
+ * the `File` keyring provider. `File.Save` has its own retry; `DeleteTree` and
+ * `PdfDocument` do not use these yet.
  *
  * **Why.** On Windows a file that another process has open without
  * `FILE_SHARE_DELETE` cannot be renamed or deleted -- and the antivirus, the
@@ -95,11 +98,21 @@ int bta_graceful_fs_rename(const char *from, const char *to)
 }
 
 /*
- * `g_remove(path)`, waiting out another process that holds it for a moment.
- * 0 -- a file that is already gone included, since gone is what was asked --
- * or -1 with `errno`.
+ * `g_remove(path)` -- a file or an empty directory -- waiting out another
+ * process that holds it for a moment. `missing_ok` says whether a path that is
+ * already gone is success (the `.part` cleanup) or the refusal it is for
+ * `File.Delete`, which has always thrown. 0, or -1 with `errno`.
+ *
+ * **On Windows `g_remove` alone cannot see the refusal it waits for.** GLib
+ * tries `_wremove` and then `_wrmdir` on every path, and keeps the second
+ * call's `errno`: for a file another process holds open, `_wremove` says
+ * EACCES and `_wrmdir` -- on something that is not a directory -- overwrites
+ * it with EINVAL. That is the "invalid argument" `delete_tree` documents. So
+ * when `g_remove` answers EINVAL or ENOTDIR, the path is tried again with
+ * `g_unlink`, which asks only the file and keeps the EACCES the retry needs.
+ * An empty directory still goes through `g_remove`.
  */
-int bta_graceful_fs_remove(const char *path)
+int bta_graceful_fs_remove(const char *path, bool missing_ok)
 {
 #ifdef G_OS_WIN32
     gulong wait = 5000, spent = 0;
@@ -109,8 +122,21 @@ int bta_graceful_fs_remove(const char *path)
             return 0;
 
         int e = errno;
-        if (e == ENOENT)
-            return 0;
+
+        /* The rmdir half of g_remove masks a file's refusal. `g_unlink` asks
+         * the file alone and leaves EACCES, which held_by_another knows. */
+        if (e == EINVAL || e == ENOTDIR) {
+            if (g_unlink(path) == 0)
+                return 0;
+            e = errno;
+        }
+
+        if (e == ENOENT) {
+            if (missing_ok)
+                return 0;
+            errno = e;
+            return -1;
+        }
 
         gulong pause = held_by_another(e) ? held_wait(&wait, &spent) : 0;
         if (!pause) {
@@ -120,7 +146,9 @@ int bta_graceful_fs_remove(const char *path)
         g_usleep(pause);
     }
 #else
-    if (g_remove(path) == 0 || errno == ENOENT)
+    if (g_remove(path) == 0)
+        return 0;
+    if (missing_ok && errno == ENOENT)
         return 0;
     return -1;
 #endif

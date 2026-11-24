@@ -764,6 +764,7 @@ const TESTS = [
     "HttpProxy",
     "AbsoluteSources",
     "RenameHeld",
+    "RemoveHeld",
     "HttpServerDropped",
     "HttpServerHold",
     /* Async: lib/datagrid, laid out and scrolled. */
@@ -31710,6 +31711,58 @@ export class UriChild extends Form {
              },
              (code) => {
                  if (!tried) failures.push(`RenameHeld: the holder never held the file (exit ${code})`);
+                 Directory.DeleteTree(dir);
+                 waiting--;
+             });
+    }
+
+    /*
+     * **A delete that another process blocks for a moment still happens**,
+     * on Windows. `g_remove` alone cannot see it: GLib tries `_wremove` and
+     * then `_wrmdir` on every path and keeps the second call's error, so a file
+     * another process holds open answers *invalid argument* instead of *access
+     * denied* -- the same sentence `delete_tree` documents. The helper asks the
+     * file again with `g_unlink`, which keeps the refusal the retry needs. The
+     * holder is the second process `RenameHeld` uses: it opens the file the way
+     * a scanner does and lets go 400 ms later.
+     *
+     * The two contract halves run everywhere: a missing file is still a
+     * refusal (`File.Delete` has always thrown for one; the `.part` cleanup is
+     * the caller for which gone is success), and an empty directory still goes.
+     */
+    testRemoveHeld() {
+        const dir = File.Join(SCRATCH, "remove-held");
+        if (File.IsDir(dir)) Directory.DeleteTree(dir);
+        Directory.Make(dir);
+        check("File.Delete still refuses a file that is not there",
+              refusal(() => File.Delete(File.Join(dir, "nope.txt"))) !== null);
+        const empty = File.Join(dir, "empty");
+        Directory.Make(empty);
+        eq("File.Delete removes an empty directory",
+           refusal(() => File.Delete(empty)), null);
+        check("...and it is gone", !File.IsDir(empty));
+
+        if (Environment.OS !== "Windows") {
+            Directory.DeleteTree(dir);
+            return;
+        }
+
+        const file = File.Join(dir, "held.txt");
+        File.Save(file, "just written");
+        const hold = `$f = [IO.File]::Open('${file}', 'Open', 'Read', 'Read'); ` +
+                     `'held'; Start-Sleep -Milliseconds 400; $f.Close()`;
+        let tried = false;
+        waiting++;
+        Exec(["powershell", "-NoProfile", "-Command", hold], { Timeout: 30000 },
+             (line) => {
+                 if (tried || String(line).trim() !== "held") return;
+                 tried = true;
+                 eq("a delete waits out another process holding the file",
+                    refusal(() => File.Delete(file)), null);
+                 check("...and the file is gone", !File.Exists(file));
+             },
+             (code) => {
+                 if (!tried) failures.push(`RemoveHeld: the holder never held the file (exit ${code})`);
                  Directory.DeleteTree(dir);
                  waiting--;
              });
