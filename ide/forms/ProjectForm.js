@@ -300,6 +300,15 @@ export class ProjectForm extends Form {
             }
         }
 
+        /* **A project that runs needs an id**, and clearing this field used to
+         * save one without it: the dialog closed, project.btp was written, and
+         * the next Run refused. A library (neither Startup nor Main) may leave
+         * it empty, as `ProjectFile.Validate` says. */
+        if (!this.record.Id && (this.record.Startup || this.record.Main)) {
+            Message.Error("Every application needs an id: its settings and data are kept under it, and its window, menu entry and package are named after it.\nUse a reverse-DNS name like io.github.you.App.");
+            return false;
+        }
+
         /* The record cannot refuse a bad id -- the rule is the platform's and
          * a `Field` speaks about one value -- so it is checked here, where the
          * person who typed it still is. The same rule the runtime enforces when

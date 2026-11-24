@@ -12281,6 +12281,27 @@ function* p_settings(ide) {
         pd5.TxtPrId.Text = "io.github.getbintana.IdeChild";
         eq("...and the old id typed back says nothing of the kind",
            pd5.LblPrIdNote.Text, idNote);
+
+        /* **Clearing the id is refused here**, not saved: this dialog used to
+         * close and write project.btp without it, and the next Run refused. */
+        const settingsError = Message.Error;
+        const idProblems = [];
+        const beforeId = File.Load(File.Join(ide.project, "project.btp"));
+        Message.Error = (...args) => { idProblems.push(Locale.Text(...args)); };
+        try {
+            pd5.TxtPrId.Text = "";
+            pd5.BtnPrOk_Click();
+            yield;
+            check("Project settings refuses an empty id",
+                  idProblems.some((m) => m.includes("needs an id")),
+                  JSON.stringify(idProblems));
+            eq("...and project.btp was left alone",
+               File.Load(File.Join(ide.project, "project.btp")), beforeId);
+            check("...with the dialog still open", pd5.Visible);
+        } finally {
+            Message.Error = settingsError;
+        }
+
         pd5.TxtPrId.Text = "io.github.getbintana.IdeChild2";
         pd5.BtnPrOk_Click();
         yield;

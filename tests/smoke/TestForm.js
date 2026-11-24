@@ -534,6 +534,19 @@ class TestForm extends Form {
             eq("an id that is not an application id is an error", badId.ExitCode, 1);
             check("...that says so", badId.Output.includes('"../Escape" is not an application id'),
                   badId.Output);
+
+            /* **255 bytes is the limit**, `g_application_id_is_valid`'s, and
+             * `ProjectFile.idValid` used to leave it to a regex that did not
+             * know: `check` passed an id the runtime refuses. */
+            const id255 = "io.github." + "a".repeat(245);
+            manifest({ id: id255 });
+            const at255 = run(dir);
+            eq("a 255-byte id passes", at255.ExitCode, 0, at255.Output);
+            manifest({ id: id255 + "a" });
+            const at256 = run(dir);
+            eq("a 256-byte id is an error", at256.ExitCode, 1);
+            check("...that says it is not an application id",
+                  at256.Output.includes("is not an application id"), at256.Output);
             manifest({ id: "io.github.getbintana.test.SmokeCheck" });
 
             /* **A member a global lacks reaches the console check.** The console
