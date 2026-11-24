@@ -14,8 +14,10 @@ one-page answer to *what is new since the release I have*.
   refused there, late, after its name was everywhere. Both hosts now refuse
   at load with a sentence that says what to add (`"id":
   "io.github.you.App"`), `bintana check` reports it first, and the IDE's New
-  project proposes one from the name. A library (no `startup`, no `main`)
-  needs none. **Breaking**: a project without an id must add one.
+  project proposes one from the name. Project settings refuses to clear it,
+  and `bintana check` holds a 255-byte id to the limit the platform applies.
+  A library (no `startup`, no `main`) needs none. **Breaking**: a project
+  without an id must add one.
 - **`Application.ConfigDirectory` is `~/.config/<id>`, and the new
   `Application.DataDirectory` is `~/.local/share/<id>`**, both created at
   startup and both named by the id, as a native program's or a Flatpak's are.
@@ -162,6 +164,55 @@ one-page answer to *what is new since the release I have*.
 
 ### IDE
 
+- **A control from the palette lands where nothing else is.** A click on the
+  palette put the control at the form's corner and stepped it diagonally only
+  past a control with the very same corner, so a Label, a TextBox and a Button
+  clicked in a row sat half on top of each other -- the first thing a new
+  project does, and the first thing it had to undo. They now go down a column
+  from the corner, 8 px apart, and to the next column when the form is full;
+  dragging from the palette still drops where the pointer is.
+- **Designing after a rename is saved.** Renaming a control saves its `.form`
+  from the designer, and the tab was not told: its watch took the IDE's own
+  write for somebody else's, said the file had changed on disk, and Save All
+  refused to write it -- so every caption and property set after naming the
+  controls was lost at the next save. The designer now tells the tab what it
+  wrote, whoever calls it.
+- **A new form goes where the suggestion says.** File > New form offers
+  `forms/Form2` with only the name selected, so typing a name keeps the folder;
+  it used to select all of it, and a second form named by typing landed beside
+  `project.btp`. The same for a new module and a new component.
+- **A text field from the palette starts empty.** A `TextBox`, `TextEditor` or
+  `SourceEditor` used to start holding its own name, which is data and not a
+  caption: a search box filtered by `TextBox1` and a new application's list
+  came up empty with its rows in the database. Captions (`Label`, `Button`
+  ...) still start as the control's name.
+- **Export project works with the tar Windows has.** It passed GNU tar's
+  `--force-local` on every Windows, and the `tar` in `System32` is bsdtar,
+  which refuses it -- so Export failed everywhere but under MSYS or Git's
+  shell. The option now goes only to a tar that says it is GNU's.
+- **The Windows installer asks for an id before a file.** A new project
+  usually has none, and the installer offered `bintana-app-0.0-windows-x86_64.exe`
+  and refused only after a file was chosen. It now says so first and opens
+  Project settings on the id.
+- **An error while the program runs goes to its line then.** A handler that
+  throws does not end a form project -- the runtime prints the traceback and
+  the window stays up -- and the IDE read the traceback only at the exit, so
+  the click that failed said where in the output pane and nowhere else until
+  the program was closed. Each traceback is now read as it arrives: a row in
+  Problems and the editor at the line, while the program is still running.
+  The same error is said once per run, however often it is thrown.
+- **The editor underlines a member a runtime global does not have.**
+  `Database.Open(path)`, `File.Read(p)`, `Message.Show(t)` -- the name another
+  library taught -- went through every check and failed at the first run as
+  `TypeError: not a function`, with no word of which (the run names it now,
+  above, but only once the line runs). The live pass now says
+  `Database has no Open: it has Odbc, Sqlite`, or `Timer has no Aftr: did you
+  mean Timer.After?`, from the same `Widget.Members` completion offers after the
+  dot. The language's own globals (`Date`, `Math`, `JSON` ...), a class the
+  project declares under the same name, and a member the file defines or asks
+  about with `typeof` are left alone. `bintana check` does not report it yet:
+  its console host knows the widget classes' members and not the globals'.
+
 - **The palette offers the libraries a project does not use yet.** Its last
   tab, *More*, names each library this machine has with the controls it brings
   (`report: Report`); a click adds it to `uses` and shows its tab. `Report`,
@@ -262,54 +313,6 @@ one-page answer to *what is new since the release I have*.
   of 300 controls and 355,298 for one of 3,000 -- 68 MB of history, 135 MB with
   the redo stack beside it. Each stack stops at 16 MB now and always keeps the
   newest; 200 stays the depth, so a form of ordinary size is unchanged.
-- **A control from the palette lands where nothing else is.** A click on the
-  palette put the control at the form's corner and stepped it diagonally only
-  past a control with the very same corner, so a Label, a TextBox and a Button
-  clicked in a row sat half on top of each other -- the first thing a new
-  project does, and the first thing it had to undo. They now go down a column
-  from the corner, 8 px apart, and to the next column when the form is full;
-  dragging from the palette still drops where the pointer is.
-- **Designing after a rename is saved.** Renaming a control saves its `.form`
-  from the designer, and the tab was not told: its watch took the IDE's own
-  write for somebody else's, said the file had changed on disk, and Save All
-  refused to write it -- so every caption and property set after naming the
-  controls was lost at the next save. The designer now tells the tab what it
-  wrote, whoever calls it.
-- **A new form goes where the suggestion says.** File > New form offers
-  `forms/Form2` with only the name selected, so typing a name keeps the folder;
-  it used to select all of it, and a second form named by typing landed beside
-  `project.btp`. The same for a new module and a new component.
-- **A text field from the palette starts empty.** A `TextBox`, `TextEditor` or
-  `SourceEditor` used to start holding its own name, which is data and not a
-  caption: a search box filtered by `TextBox1` and a new application's list
-  came up empty with its rows in the database. Captions (`Label`, `Button`
-  ...) still start as the control's name.
-- **Export project works with the tar Windows has.** It passed GNU tar's
-  `--force-local` on every Windows, and the `tar` in `System32` is bsdtar,
-  which refuses it -- so Export failed everywhere but under MSYS or Git's
-  shell. The option now goes only to a tar that says it is GNU's.
-- **The Windows installer asks for an id before a file.** A new project
-  usually has none, and the installer offered `bintana-app-0.0-windows-x86_64.exe`
-  and refused only after a file was chosen. It now says so first and opens
-  Project settings on the id.
-- **An error while the program runs goes to its line then.** A handler that
-  throws does not end a form project -- the runtime prints the traceback and
-  the window stays up -- and the IDE read the traceback only at the exit, so
-  the click that failed said where in the output pane and nowhere else until
-  the program was closed. Each traceback is now read as it arrives: a row in
-  Problems and the editor at the line, while the program is still running.
-  The same error is said once per run, however often it is thrown.
-- **The editor underlines a member a runtime global does not have.**
-  `Database.Open(path)`, `File.Read(p)`, `Message.Show(t)` -- the name another
-  library taught -- went through every check and failed at the first run as
-  `TypeError: not a function`, with no word of which (the run names it now,
-  above, but only once the line runs). The live pass now says
-  `Database has no Open: it has Odbc, Sqlite`, or `Timer has no Aftr: did you
-  mean Timer.After?`, from the same `Widget.Members` completion offers after the
-  dot. The language's own globals (`Date`, `Math`, `JSON` ...), a class the
-  project declares under the same name, and a member the file defines or asks
-  about with `typeof` are left alone. `bintana check` does not report it yet:
-  its console host knows the widget classes' members and not the globals'.
 
 ## 0.4.0 — 2026-11-20
 
