@@ -150,9 +150,13 @@ location, uninstaller), a Start Menu folder with the application and
 *Uninstall*, and a desktop shortcut, each starting `bin\bintana-gui.exe` on the
 project in `$INSTDIR`; the application reported `$INSTDIR` as its working
 directory. The uninstaller took the key, both shortcuts' places and the whole
-`$INSTDIR`, and left `%LOCALAPPDATA%\<id>`, as it should. **What it does not
-yet write**: `DisplayIcon`, `Publisher` and `EstimatedSize` in the key, so the
-Apps page shows no icon, publisher or size. **461 MB installed**, 269 MB of it
+`$INSTDIR`, and left `%LOCALAPPDATA%\<id>`, as it should. **The Apps page showed no icon,
+publisher or size** -- `DisplayIcon` and `Publisher` were written only when
+the project had an icon and the metainfo a developer, and `EstimatedSize`
+never. Now `DisplayIcon` falls back to `bin\bintana-gui.exe,0`,
+`EstimatedSize` is `${GetSize}` of `$INSTDIR` after the copy (`FileFunc.nsh`),
+and `Metainfo.create` names a developer (the id's prefix, `Environment.UserName`)
+so a new project has a `Publisher`. **461 MB installed**, 269 MB of it
 `bin` -- the largest DLLs video encoders (`libx265`, `avcodec`, `libaom`,
 `SvtAv1Enc`) -- and 141 MB `lib/gstreamer-1.0`, for an application that uses
 neither `Video` nor audio.

@@ -63,6 +63,12 @@ function Main() {
     Metainfo.create(project, shape);
 
     const metaPath = Metainfo.find(project);
+    /* A developer from the start -- the id's prefix and the user's name --
+     * so an installer has a Publisher and a catalogue a developer. */
+    const born = Metainfo.read(File.LoadXml(metaPath));
+    eq("a new metainfo names a developer by the id's prefix",
+       born.DeveloperId, "io.github.getbintana");
+    eq("...and the user's name", born.DeveloperName, Environment.UserName);
     check("the metainfo is named after the id",
           metaPath !== null &&
           File.Name(metaPath) === "io.github.getbintana.Notes.metainfo.xml", metaPath);
@@ -500,6 +506,18 @@ function checkNsis(root) {
           nsi.includes(`WriteRegStr HKCU`) &&
           nsi.includes(`"Publisher" "Bintana"`) &&
           nsi.includes(`"URLInfoAbout" "https://example.org/setup"`), nsi);
+    /* The Apps page's icon and size: measured empty on a real install. */
+    check("the Apps page gets the application's icon",
+          nsi.includes(`"DisplayIcon" "$INSTDIR\\io.github.getbintana.Setup.ico"`), nsi);
+    check("...and its size, measured after the copy",
+          nsi.includes(`!include "FileFunc.nsh"`) &&
+          nsi.includes(`\${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2`) &&
+          nsi.includes(`"EstimatedSize" "$0"`), nsi);
+    const bare = Nsis.script({ Id: "io.github.getbintana.Bare", Command: "bintana-bare",
+                               Version: "1.0", Info: { Name: "Bare" }, Icon: null,
+                               Files: [], Schemes: [] });
+    check("with no icon of its own, the runtime's",
+          bare.includes(`"DisplayIcon" "$INSTDIR\\bin\\bintana-gui.exe,0"`), bare);
     eq("with the version's numeric head as the version resource",
        new Regex(`^VIProductVersion "(.*)"`, { Multiline: true }).Matches(nsi)
            .map((m) => m.Group(1)).join(), "2.1.0.0");

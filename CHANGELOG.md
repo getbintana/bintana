@@ -167,6 +167,12 @@ one-page answer to *what is new since the release I have*.
   empty band list and an Add that refused.
 - **The Windows installer logs a build folder it could not delete** instead of
   throwing after the setup was written.
+- **The Windows Apps page shows the application's icon, publisher and
+  size.** The uninstall key had no `DisplayIcon` without a project icon, no
+  `Publisher` without a developer in the metainfo, and never an
+  `EstimatedSize`: the icon falls back to the runtime's, the size is measured
+  after the copy, and a new metainfo names a developer (the id's prefix and
+  the user's name, editable in *Application info*).
 - **A new project starts at version 0.1.0**, the release its metainfo already
   named; it had none, and its installer said `0.0`.
 - **Uninstalling from *Installed applications* says which folders stay**, as
