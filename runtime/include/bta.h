@@ -1063,6 +1063,13 @@ char *bta_app_cache_path(const char *id);
  * (bta_proxy.c): the machine's own addresses direct, Windows' own settings on
  * Windows, GIO's default elsewhere. A new reference. */
 GProxyResolver *bta_system_proxy_resolver(void);
+/* Graceful g_rename and g_remove (bta_graceful.c, where transient refusals
+ * the platform causes are waited out, one prefix per area): on Windows a refusal
+ * for access -- the antivirus, the indexer or OneDrive holding a file just
+ * closed -- is waited out for up to a second instead of failing. One call
+ * elsewhere. 0, or -1 with errno; removing a file already gone is 0. */
+int bta_graceful_fs_rename(const char *from, const char *to);
+int bta_graceful_fs_remove(const char *path);
 /* Every `.js` under a directory, subdirectories included. `root` skips the
  * project's own `tests/`, which a run never loads. */
 void bta_collect_js(GPtrArray *out, const char *dir, bool root);

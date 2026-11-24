@@ -1565,7 +1565,13 @@ static void http_save_discard(HttpSave *s)
         g_clear_object(&s->out);
     }
     if (s->part) {
-        g_file_delete(s->part, NULL, NULL);
+        /* `bta_graceful_fs_remove` and not `g_file_delete`: on Windows a file just closed
+         * may be held a moment by the antivirus, and the delete refused then
+         * left the `.part` this function promises is gone. */
+        char *path = g_file_get_path(s->part);
+        if (path)
+            bta_graceful_fs_remove(path);
+        g_free(path);
         g_clear_object(&s->part);
     }
 }
@@ -1595,8 +1601,20 @@ static void on_http_save_closed(GObject *src, GAsyncResult *res, gpointer data)
         return;
     }
     /* Beside its destination, so this is a rename: the file appears whole
-     * under its name or not at all. */
-    if (!g_file_move(s->part, s->dest, G_FILE_COPY_OVERWRITE, NULL, NULL, NULL, &err)) {
+     * under its name or not at all. `bta_graceful_fs_rename`, which replaces what is there
+     * as `G_FILE_COPY_OVERWRITE` did, and on Windows waits out a scanner
+     * holding the file it was just handed -- `g_file_move` failed there with
+     * *permission denied* now and then under load. */
+    char *from = g_file_get_path(s->part);
+    char *to   = g_file_get_path(s->dest);
+    int   rc   = (from && to) ? bta_graceful_fs_rename(from, to) : -1;
+    int   why  = errno;
+
+    g_free(from);
+    g_free(to);
+    if (rc != 0) {
+        err = g_error_new_literal(G_IO_ERROR, g_io_error_from_errno(why),
+                                  g_strerror(why));
         http_save_fail(s, err, true);
         g_clear_error(&err);
         return;

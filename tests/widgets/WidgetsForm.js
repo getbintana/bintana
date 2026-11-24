@@ -763,6 +763,7 @@ const TESTS = [
     "HttpServerStop",
     "HttpProxy",
     "AbsoluteSources",
+    "RenameHeld",
     "HttpServerDropped",
     "HttpServerHold",
     /* Async: lib/datagrid, laid out and scrolled. */
@@ -31673,6 +31674,45 @@ export class UriChild extends Form {
 
         Directory.DeleteTree(proj);
         Directory.DeleteTree(shared);
+    }
+
+    /*
+     * **A rename that another process blocks for a moment still happens**, on
+     * Windows. A file open elsewhere without `FILE_SHARE_DELETE` cannot be
+     * renamed there, and the antivirus opens every file the moment it is
+     * closed -- so "write a temporary, rename it into place" (`SaveTo`,
+     * `ZipWriter.Finish`) failed with *permission denied* now and then under
+     * the suite's load, and a cancelled download left its `.part`. `bta_rename`
+     * tries again for up to a second. The holder here is a second process that
+     * opens the file the way a scanner does and lets go 400 ms later.
+     */
+    testRenameHeld() {
+        if (Environment.OS !== "Windows") return;
+
+        const dir  = File.Join(SCRATCH, "held");
+        Directory.Make(dir);
+        const from = File.Join(dir, "written.tmp");
+        const to   = File.Join(dir, "in-place.txt");
+        File.Save(from, "just written");
+
+        const hold = `$f = [IO.File]::Open('${from}', 'Open', 'Read', 'Read'); ` +
+                     `'held'; Start-Sleep -Milliseconds 400; $f.Close()`;
+        let tried = false;
+        waiting++;
+        Exec(["powershell", "-NoProfile", "-Command", hold], { Timeout: 30000 },
+             (line) => {
+                 if (tried || String(line).trim() !== "held") return;
+                 tried = true;
+                 eq("a rename waits out another process holding the file",
+                    refusal(() => File.Rename(from, to)), null);
+                 check("...and the file is there under its new name",
+                       File.Exists(to) && !File.Exists(from));
+             },
+             (code) => {
+                 if (!tried) failures.push(`RenameHeld: the holder never held the file (exit ${code})`);
+                 Directory.DeleteTree(dir);
+                 waiting--;
+             });
     }
 
     testHttpProxy() {

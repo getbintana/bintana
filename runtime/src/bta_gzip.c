@@ -324,7 +324,7 @@ static JSValue gz_file(JSContext *ctx, int argc, JSValueConst *argv,
         if (g_stat(from, &st) == 0)
             g_chmod(tmp, st.st_mode & 0777);
 #endif
-        if (g_rename(tmp, to) != 0)
+        if (bta_graceful_fs_rename(tmp, to) != 0)
             why = g_strdup_printf("cannot move the result to '%s': %s", to,
                                   bta_errno_text(errno));
     }

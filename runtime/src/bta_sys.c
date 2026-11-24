@@ -612,7 +612,7 @@ static JSValue sys_file_rename(JSContext *ctx, JSValueConst this_val,
     JSValue e = JS_UNDEFINED;
     if (g_file_test(to, G_FILE_TEST_EXISTS))
         e = JS_ThrowPlainError(ctx, "%s already exists", to);
-    else if (g_rename(from, to) != 0)
+    else if (bta_graceful_fs_rename(from, to) != 0)
         e = JS_ThrowPlainError(ctx, "cannot rename %s to %s", from, to);
 
     JS_FreeCString(ctx, from);
@@ -6004,7 +6004,9 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     JS_SetPropertyStr(ctx, file, "Trash",
                       JS_NewCFunction(ctx, sys_file_trash, "Trash", 2));
     /* Rename(from, to)
-     *   also moves; refuses to clobber
+     *   also moves; refuses to clobber. On Windows a rename refused because
+     *   another program holds the file a moment -- the antivirus or OneDrive
+     *   right after it was written -- is tried again for up to a second
      */
     JS_SetPropertyStr(ctx, file, "Rename", JS_NewCFunction(ctx, sys_file_rename, "Rename", 2));
     /* Hash(path, [algorithm], [cancellable]) -> string

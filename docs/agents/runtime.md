@@ -573,6 +573,34 @@ icon when the theme has one by that name (`gtkapplication.c`).
   `Emit` returns before reaching the IDE's handlers. The tray, the tree and the
   save are in [agents/ide.md](ide.md).
 
+## Graceful operations (`bta_graceful.c`)
+
+**A refusal the platform makes for a moment, under ordinary conditions, is
+waited out there and not failed on** -- npm's `graceful-fs` idea and name. One
+prefix per area; files are `bta_graceful_fs_rename` and
+`bta_graceful_fs_remove`, and every rename and delete of a file the runtime
+has just written goes through them (`File.Rename`, `Http`'s `SaveTo` `.part`,
+`ZipWriter.Finish`, `Gzip`, the `File` keyring provider).
+
+- **Why files.** On Windows a file open elsewhere without `FILE_SHARE_DELETE`
+  cannot be renamed or deleted, and Defender, the indexer and OneDrive open a
+  file as it is closed. Measured 2026-11-24 with Defender's real-time
+  protection on: 0 refusals in 14 400 write-and-renames from six processes, and
+  refusals in two of three whole runs of `tests/widgets` (`SaveTo`'s rename,
+  a cancelled download's `.part` left behind, `ZipWriter.Finish` in a `Task`).
+  The next two whole runs had none. `testRenameHeld` holds a file from a
+  PowerShell child for 400 ms; it failed at once before, and passes now.
+- **What was ruled out first**: handle inheritance into a child spawned while
+  a temporary was open (an `Exec` between `Zip.Create` and `Finish` did not
+  reproduce it -- GLib 2.90 limits what its children inherit), and a
+  `.part` closed with a write still pending (every failure path runs from a
+  completed callback).
+- **Only an access refusal waits** (`EACCES`, `EPERM`, `EBUSY`), a second at
+  most, 5 ms doubling; anything else is the answer at once. Linux and macOS
+  rename and delete an open file, so there each is one call.
+- **A new area** (a socket bind refused while the port is in `TIME_WAIT`, say)
+  goes in the same file under its own prefix, with what it measured.
+
 ## Conversions and refusals
 
 - **A refusal longer than 255 bytes is cut, without a word.** `JS_MakeError`

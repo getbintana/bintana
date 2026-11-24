@@ -397,6 +397,7 @@ add_executable(${BTA_GUI_TARGET}
     runtime/src/bta_debug.c
     runtime/src/bta_profile.c
     runtime/src/bta_sys.c
+    runtime/src/bta_graceful.c
     runtime/src/bta_privilege.c
     runtime/src/bta_task.c
     runtime/src/bta_cancellable.c
@@ -773,6 +774,7 @@ set(BTA_HEADLESS_SOURCES
         runtime/src/bta_module.c
         runtime/src/bta_debug.c
         runtime/src/bta_sys.c
+        runtime/src/bta_graceful.c
         runtime/src/bta_privilege.c
         runtime/src/bta_form.c
         runtime/src/bta_plugin.c

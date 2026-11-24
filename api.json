@@ -15238,7 +15238,7 @@
           "Params": 2,
           "Signature": "(from, to)",
           "Returns": "",
-          "Doc": "also moves; refuses to clobber",
+          "Doc": "also moves; refuses to clobber. On Windows a rename refused because another program holds the file a moment -- the antivirus or OneDrive right after it was written -- is tried again for up to a second",
           "Native": true
         },
         {

@@ -1619,7 +1619,7 @@ static JSValue zipw_finish(JSContext *ctx, JSValueConst this_val, int argc, JSVa
         umask(um);
         g_chmod(w->tmp, 0666 & ~um);
 #endif
-        if (g_rename(w->tmp, w->dest) != 0)
+        if (bta_graceful_fs_rename(w->tmp, w->dest) != 0)
             why = g_strdup_printf("cannot move the archive to '%s': %s", w->dest, bta_errno_text(errno));
     }
 

@@ -357,7 +357,7 @@ static gboolean keyring_file_store_idle(gpointer data)
         g_chmod(service_dir, 0700);
         if (g_file_set_contents(tmp, job->value, (gssize)job->value_len, &err)) {
             g_chmod(tmp, 0600);
-            if (g_rename(tmp, path) == 0)
+            if (bta_graceful_fs_rename(tmp, path) == 0)
                 ok = true;
         }
     }

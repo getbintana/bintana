@@ -363,6 +363,14 @@ save will edit `examples/hello` for real.
 
 ## Test traps
 
+- **`tests/widgets` hung twice on Windows, cause unknown** (2026-11-24, two of
+  about eight whole runs; the runner's timeout ended one, a person the other).
+  Both times the log was lost: the output went through a `grep` that waits for
+  the end, and MSYS2's `/tmp` did not keep the file. The next time, write the
+  run's output to a file under the scratch directory first and read its tail
+  to see which test it stopped in. It is not the rename refusals
+  (`bta_graceful.c`): one hang came before that change and one after.
+
 - **The suite is headless by default, and that is a mechanism replacing a rule
   that failed five times.** `asan.sh` exported `HEADLESS=${HEADLESS:-1}` first,
   after four sanitizer runs went onto the user's desktop -- each of them the
