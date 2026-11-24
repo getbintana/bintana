@@ -1,0 +1,5 @@
+{
+  "name": "headless-displaylib",
+  "description": "A library with a display half, whose tests belong to the graphical host",
+  "display": true
+}

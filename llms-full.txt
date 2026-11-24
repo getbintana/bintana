@@ -1639,7 +1639,9 @@ id names `ConfigDirectory` and `DataDirectory` as well, so an application -- a
 project with `startup` or `main` -- declares one (`bta_project_id_ok`, shared by
 both hosts). A library has neither and none; both hosts say it is a library
 instead of asking for an id, and `bintana test` runs one under the test host's
-id, `io.github.getbintana.Test`. **The console host builds its
+id, `io.github.getbintana.Test` -- in the console host when it has no display
+half, and in the graphical host when it declares one (`bta_project_has_display`,
+because those tests may build controls). **The console host builds its
 own `BtaApp` on the stack and fills it by hand** (`bta_headless.c`), so a field
 the graphical host sets is not there unless it is copied: a `Task` started from
 a `main` read `app->id` as NULL and `JS_NewString(NULL)` crashed the worker --
@@ -9980,7 +9982,9 @@ first; and nothing the IDE makes as an application is without one:
 - **A library is not an application.** It has no id; `Check` warns if one
   declares it, and `bintana test` runs it under the test host's id,
   `io.github.getbintana.Test`, so a library's tests have a real
-  `Application.Id` and directories without inventing one for the library.
+  `Application.Id` and directories without inventing one for the library. A
+  library with a display half runs them in the graphical host, because they
+  may build controls; one without, in the console.
 
 ## Breakpoints: on, off, kept
 
@@ -14101,7 +14105,7 @@ alone.
 
 ```
 main()                       first bare argument is the project directory
-  bta_app_new(dir)           build_context(): chosen intrinsics only
+  bta_app_new(dir, testing)  build_context(): chosen intrinsics only
                              reads project.btp: name, startup, sources
   bta_app_run()
     gtk_application_new(NON_UNIQUE)
@@ -16007,7 +16011,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11843 assertions
+./tests/run.sh                          # all seven projects, 11846 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

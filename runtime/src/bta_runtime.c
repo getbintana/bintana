@@ -1274,7 +1274,7 @@ static bool install_globals(BtaApp *app)
     return true;
 }
 
-BtaApp *bta_app_new(const char *project_dir)
+BtaApp *bta_app_new(const char *project_dir, bool testing)
 {
     BtaApp *app = g_new0(BtaApp, 1);
 
@@ -1425,25 +1425,36 @@ BtaApp *bta_app_new(const char *project_dir)
      * window, settings or package of its own. `bintana-gui` has nothing to
      * open here, and saying so is better than the default form's
      * `ReferenceError` or an id refusal the library does not owe.
+     *
+     * **Its tests are the exception.** `bintana test` on a library with a
+     * display half reaches this host, and the library is held under the test
+     * host's id -- not one invented for it. Its own id, if it has one, is
+     * ignored: a library is loaded, not identified. An application's tests
+     * keep the application's id.
      */
-    if (!has_startup && !app->entry) {
-        fprintf(stderr, "bintana: %s is a library: it declares neither "
-                        "\"startup\" nor \"main\", and is loaded by an "
-                        "application with \"uses\"\n", app->dir);
+    bool library = !has_startup && !app->entry;
+
+    if (library) {
+        if (!testing) {
+            fprintf(stderr, "bintana: %s is a library: it declares neither "
+                            "\"startup\" nor \"main\", and is loaded by an "
+                            "application with \"uses\"\n", app->dir);
+            exit(2);
+        }
+        g_free(app->id);
+        app->id = g_strdup("io.github.getbintana.Test");
+    } else if (!bta_project_id_ok(app->id, cfg_path)) {
+        /*
+         * No id, or one that is not an id, is refused here rather than ignored,
+         * and the difference matters: the id is the window's own class, the
+         * `<id>` of the metainfo, the name a package installs under and the
+         * name of the application's own directories -- so a project without
+         * one, or with a typo in it, was a window nothing recognises and a
+         * packaging step that refused it late. The sentence is
+         * `bta_project_id_ok`'s, shared with the console host.
+         */
         exit(2);
     }
-
-    /*
-     * No id, or one that is not an id, is refused here rather than ignored,
-     * and the difference matters: the id is the window's own class, the `<id>`
-     * of the metainfo, the name a package installs under and the name of the
-     * application's own directories -- so a project without one, or with a
-     * typo in it, was a window nothing recognises and a packaging step that
-     * refused it late. The sentence is `bta_project_id_ok`'s, shared with the
-     * console host.
-     */
-    if (!bta_project_id_ok(app->id, cfg_path))
-        exit(2);
     g_free(cfg_path);
 
     if (!app->sources) {

@@ -1551,11 +1551,18 @@ static int run_test_command(int argc, char **argv)
     char *dir         = bta_project_dir(project);
     int   has_main    = bta_project_has_main(dir);
     int   has_startup = bta_project_has_startup(dir);
+    int   has_display = bta_project_has_display(dir);
 
     /* A form project's tests may build controls, so they go to the graphical
-     * host. A library has neither startup nor main: it is code under the test
-     * host, and the core runs it without a display. */
-    if (has_main == 0 && has_startup == 1) {
+     * host. A library has neither startup nor main: if it declares a display
+     * half -- `"display": true`, or the files that are -- its tests build
+     * controls too and take the same road; one without a display is code under
+     * the test host, and the core runs it with no display at all. */
+    bool window = has_main == 0 &&
+                  (has_startup == 1 ||
+                   (has_startup == 0 && has_display == 1));
+
+    if (window) {
         char *gui = find_gui_host();
 
         if (!gui) {
@@ -1577,7 +1584,8 @@ static int run_test_command(int argc, char **argv)
     char *one[1] = { (char *)project };
 
     /* A malformed manifest falls through to `run_project`, whose parser says
-     * what is wrong; a `main` project and a library both run here. */
+     * what is wrong; a `main` project and a library without a display both run
+     * here. */
     return run_project(1, one, true, json, filter);
 }
 

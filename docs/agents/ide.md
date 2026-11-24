@@ -1734,7 +1734,9 @@ first; and nothing the IDE makes as an application is without one:
 - **A library is not an application.** It has no id; `Check` warns if one
   declares it, and `bintana test` runs it under the test host's id,
   `io.github.getbintana.Test`, so a library's tests have a real
-  `Application.Id` and directories without inventing one for the library.
+  `Application.Id` and directories without inventing one for the library. A
+  library with a display half runs them in the graphical host, because they
+  may build controls; one without, in the console.
 
 ## Breakpoints: on, off, kept
 

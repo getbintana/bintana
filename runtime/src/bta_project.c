@@ -208,11 +208,29 @@ static const char *project_skip_value(const char *p)
     return p;
 }
 
-/* Whether the top-level object declares `key` as a string: 1 yes, 0 no, -1 a
- * manifest that cannot be read. The one scan both `has_main` and
- * `has_startup` use, so the two cannot disagree about escaping or a nested
- * object of the same name. */
-static int project_has_key(const char *dir, const char *key)
+/* What the top-level object declares, found in one scan so the answers cannot
+ * disagree about escaping or a nested object of the same name. */
+typedef struct {
+    bool main;
+    bool startup;
+    bool display;
+} ProjectKeys;
+
+/* `p` at a JSON value: a display half is `true`, or a non-empty array of file
+ * names (`["Chart.js"]`), which is a library whose control is a window
+ * project's and whose document half is everybody's. */
+static bool project_display_value(const char *p)
+{
+    if (*p == 't')                       /* JSON's only value starting with t */
+        return true;
+    if (*p == '[') {
+        const char *after = project_skip_ws(p + 1);
+        return *after && *after != ']';
+    }
+    return false;
+}
+
+static int project_keys(const char *dir, ProjectKeys *keys)
 {
     char *path = bta_project_manifest(dir);
     char *text = bta_read_file(path, NULL);
@@ -231,9 +249,6 @@ static int project_has_key(const char *dir, const char *key)
         return -1;
     }
 
-    int  has    = 0;
-    size_t want = strlen(key);
-
     p++;
     for (;;) {
         p = project_skip_ws(p);
@@ -247,8 +262,10 @@ static int project_has_key(const char *dir, const char *key)
         if (!key_end)
             goto malformed;
 
-        bool is_key = (size_t)(key_end - key_at - 1) == want &&
-                      !memcmp(key_at, key, want);
+        size_t key_len = (size_t)(key_end - key_at - 1);
+        bool   is_main    = key_len == 4 && !memcmp(key_at, "main", 4);
+        bool   is_startup = key_len == 7 && !memcmp(key_at, "startup", 7);
+        bool   is_display = key_len == 7 && !memcmp(key_at, "display", 7);
 
         p = project_skip_ws(key_end);
         if (*p != ':')
@@ -258,8 +275,12 @@ static int project_has_key(const char *dir, const char *key)
         /* A string is a declaration, the empty one included: `json_str`
          * answers "" and the run then says the function is not there, which
          * is the graphical host's own answer. `null` is not a declaration. */
-        if (is_key && *p == '"')
-            has = 1;
+        if (is_main && *p == '"')
+            keys->main = true;
+        if (is_startup && *p == '"')
+            keys->startup = true;
+        if (is_display)
+            keys->display = project_display_value(p);
 
         const char *value = p;
 
@@ -275,7 +296,7 @@ static int project_has_key(const char *dir, const char *key)
     }
 
     g_free(text);
-    return has;
+    return 0;
 
 malformed:
     g_free(text);
@@ -284,7 +305,9 @@ malformed:
 
 int bta_project_has_main(const char *dir)
 {
-    return project_has_key(dir, "main");
+    ProjectKeys keys = { false, false, false };
+
+    return project_keys(dir, &keys) < 0 ? -1 : keys.main;
 }
 
 /*
@@ -294,7 +317,22 @@ int bta_project_has_main(const char *dir)
  */
 int bta_project_has_startup(const char *dir)
 {
-    return project_has_key(dir, "startup");
+    ProjectKeys keys = { false, false, false };
+
+    return project_keys(dir, &keys) < 0 ? -1 : keys.startup;
+}
+
+/*
+ * Whether the library at `dir` has a display half: `"display": true`, or a
+ * non-empty list of the files that do. `bintana test` sends such a library to
+ * the graphical host, where its controls can be built; one without a display
+ * runs in the console host.
+ */
+int bta_project_has_display(const char *dir)
+{
+    ProjectKeys keys = { false, false, false };
+
+    return project_keys(dir, &keys) < 0 ? -1 : keys.display;
 }
 
 /* Every .js under a directory, subdirectories included: a project is allowed to

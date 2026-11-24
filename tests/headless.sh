@@ -618,6 +618,26 @@ else
     fail=1
 fi
 
+# A library has neither startup nor main, but one that declares a display half
+# has tests that build controls: it takes the graphical host too. One with no
+# display stays in the core (the `tested` case above).
+BINTANA_GUI="$gui" BINTANA_TEST_GUI_ARGS="$tmp/gui-test-display" \
+    "$BINTANA_CORE" test --json tests/headless/projects/displaylib \
+    >/dev/null 2>"$tmp/gui-test-display.err"
+display_status=$?
+printf '%s\n' test --json tests/headless/projects/displaylib \
+    >"$tmp/gui-test-display-want"
+
+if [[ $display_status -eq 7 ]] && diff -u "$tmp/gui-test-display-want" \
+        "$tmp/gui-test-display" >"$tmp/gui-test-display.diff"; then
+    echo "a display library's tests are exec'd as the graphical host"
+else
+    echo "the core did not dispatch a display library's tests: exit " \
+         "$display_status" >&2
+    cat "$tmp/gui-test-display.diff" "$tmp/gui-test-display.err" >&2
+    fail=1
+fi
+
 if BINTANA_GUI=/nonexistent/host "$BINTANA_CORE" \
         tests/headless/projects/window >/dev/null 2>"$tmp/gui-fail.err"; then
     echo "the core host claimed to run a missing graphical host" >&2

@@ -651,6 +651,9 @@ const TESTS = [
     /* Blocking too, and in the same group: it runs children with `Exec.Wait`
      * to see a project's own id answered, and a bad one refused. */
     "ApplicationId",
+    /* Blocking too: a child that runs a display library's tests in this host,
+     * under the test host's id. */
+    "LibraryTestHost",
     /* Blocking too: a child that closes Object.prototype and tries to add. */
     "ProtectPrototype",
     /* Blocking too: the key that signs a PDF is openssl's, a child awaited
@@ -28712,6 +28715,36 @@ export class UriChild extends Form {
         eq("Quit refuses a word, and a number after it is the status", word.ExitCode, 3);
         check("...naming what it was handed",
               word.Output.includes('"fail" is not a number'), word.Output);
+    }
+
+    /*
+     * **A display library's tests run in this host, under the test host's
+     * id.** A library has no startup and no main, and a library with a
+     * `"display"` half has controls its tests may build -- so `bintana test`
+     * sends it here rather than to the console, and `bta_app_new` holds it
+     * under `io.github.getbintana.Test` instead of asking for an id a library
+     * does not have. `Application.Directory` and `Name` stay the library's.
+     */
+    testLibraryTestHost() {
+        const dir = File.Join(SCRATCH, "library-test-host");
+        Directory.Make(File.Join(dir, "tests"));
+        File.SaveJson(File.Join(dir, "project.btp"),
+                      { name: "library-test-host", display: true });
+        File.Save(File.Join(dir, "tests", "HostTest.js"),
+                  'class HostTest extends Test {\n' +
+                  '    testHostIdentity() { this.Eq(Application.Id, "io.github.getbintana.Test"); }\n' +
+                  '    testLibraryName()  { this.Eq(Application.Name, "library-test-host"); }\n' +
+                  '}\n');
+
+        const ran = Exec.Wait([Application.Executable, "test", "--json", dir],
+                              { Timeout: 30000 });
+        eq("a display library's tests run in the graphical host", ran.ExitCode, 0,
+           ran.Output);
+        check("...both of them passed", ran.Output.includes('"Passed":2'), ran.Output);
+        check("...and Application.Id is the test host's",
+              ran.Output.includes('"Name":"testHostIdentity"'), ran.Output);
+
+        Directory.DeleteTree(dir);
     }
 
     /*

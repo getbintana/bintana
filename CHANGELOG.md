@@ -19,7 +19,9 @@ one-page answer to *what is new since the release I have*.
   A library (no `startup`, no `main`) has none: it is loaded with `uses`, not
   run, and an id on one is a warning. `bintana test` runs a library under the
   test host's id, `io.github.getbintana.Test`, so its tests have a real
-  `Application.Id` and directories without inventing one for the library.
+  `Application.Id` and directories without inventing one for the library. A
+  library with a display half runs them in the graphical host, since those
+  tests may build controls; one without runs in the console.
   **Breaking**: a project without an id must add one.
 - **`Application.ConfigDirectory` is `~/.config/<id>`, and the new
   `Application.DataDirectory` is `~/.local/share/<id>`**, both created at

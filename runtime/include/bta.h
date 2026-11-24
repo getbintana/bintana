@@ -912,7 +912,10 @@ bool bta_class_runnable(const BtaClass *cls);
 BtaApp *bta_current_app(void);
 
 /* --- runtime ------------------------------------------------------------ */
-BtaApp *bta_app_new(const char *project_dir);
+/* The application at `project_dir`; `testing` lets a library -- no `startup`,
+ * no `main` -- be held for `bintana test`, under the test host's id. A library
+ * without it is refused as one. */
+BtaApp *bta_app_new(const char *project_dir, bool testing);
 void    bta_app_free(BtaApp *app);
 int     bta_app_run(BtaApp *app, int argc, char **argv);
 
@@ -1053,6 +1056,10 @@ int bta_project_has_main(const char *dir);
 /* Whether the manifest declares `"startup"`: 1 yes, 0 no, -1 unreadable. A
  * project with neither this nor `"main"` is a library. */
 int bta_project_has_startup(const char *dir);
+/* Whether a library declares a display half (`"display": true`, or a non-empty
+ * list of its files): 1 yes, 0 no, -1 unreadable. `bintana test` sends such a
+ * library to the graphical host and one without a display to the console. */
+int bta_project_has_display(const char *dir);
 /* A string key out of a parsed manifest, or `fallback` when it is absent or
  * is not text. */
 char *bta_project_string(JSContext *ctx, JSValueConst cfg, const char *key,

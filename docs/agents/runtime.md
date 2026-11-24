@@ -180,7 +180,9 @@ id names `ConfigDirectory` and `DataDirectory` as well, so an application -- a
 project with `startup` or `main` -- declares one (`bta_project_id_ok`, shared by
 both hosts). A library has neither and none; both hosts say it is a library
 instead of asking for an id, and `bintana test` runs one under the test host's
-id, `io.github.getbintana.Test`. **The console host builds its
+id, `io.github.getbintana.Test` -- in the console host when it has no display
+half, and in the graphical host when it declares one (`bta_project_has_display`,
+because those tests may build controls). **The console host builds its
 own `BtaApp` on the stack and fills it by hand** (`bta_headless.c`), so a field
 the graphical host sets is not there unless it is copied: a `Task` started from
 a `main` read `app->id` as NULL and `JS_NewString(NULL)` crashed the worker --

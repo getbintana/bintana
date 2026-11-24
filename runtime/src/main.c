@@ -242,7 +242,7 @@ static int run_check(int argc, char **argv)
     }
     g_ptr_array_add(args, NULL);
 
-    BtaApp *app = bta_app_new(tool);
+    BtaApp *app = bta_app_new(tool, false);
     if (!app) {
         g_ptr_array_unref(args);
         g_free(tool);
@@ -580,7 +580,7 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    BtaApp *app = bta_app_new(dir);
+    BtaApp *app = bta_app_new(dir, testing);
     if (!app) {
         bta_profile_finish();
         g_ptr_array_unref(rest);
