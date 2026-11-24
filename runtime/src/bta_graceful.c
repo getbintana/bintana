@@ -40,10 +40,11 @@
  *
  * **Only a refusal for access that a neighbour can end is waited out**, for a
  * second at most, 5 ms doubling. Anything else -- the file is not there, the
- * folder is not writable, the path is read-only -- is the answer at once: a
- * read-only file is refused by the platform, not held, and waiting does not
- * change it. A hold that outlasts the second is the refusal it always was,
- * with `errno` as the last try left it.
+ * folder is not writable, or (on Windows) the path is read-only -- is the
+ * answer at once: a read-only file is refused there, not held, and waiting
+ * does not change it. On POSIX the folder's permission decides, as `unlink`
+ * does. A hold that outlasts the second is the refusal it always was, with
+ * `errno` as the last try left it.
  */
 #include "bta.h"
 

@@ -5948,7 +5948,9 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     /* Save(path, text)
      *   writes it **atomically** — a temporary beside it, renamed over — so a
      *   failed write leaves the old file intact and a reader never sees half
-     *   a file
+     *   a file. On Windows a read-only target is refused; elsewhere the
+     *   folder's permission decides, as a rename does, and a read-only file
+     *   in a writable folder is replaced
      */
     JS_SetPropertyStr(ctx, file, "Save",   JS_NewCFunction(ctx, sys_file_save, "Save", 2));
     /* Append(path, text)
@@ -5964,7 +5966,8 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   delete refused because another program holds the path a moment -- the
      *   antivirus or OneDrive right after it was written -- is tried again for
      *   up to a second; a read-only path is refused at once, and a directory
-     *   that is not empty is never taken
+     *   that is not empty is never taken. Elsewhere the folder's permission
+     *   decides, as `unlink` does: a read-only file in a writable folder goes
      */
     JS_SetPropertyStr(ctx, file, "Delete", JS_NewCFunction(ctx, sys_file_delete, "Delete", 1));
     /* Open(path)

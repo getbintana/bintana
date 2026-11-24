@@ -31729,8 +31729,9 @@ export class UriChild extends Form {
      * The two contract halves run everywhere: a missing file is still a
      * refusal (`File.Delete` has always thrown for one; the `.part` cleanup is
      * the caller for which gone is success), and an empty directory still goes.
-     * On Windows a read-only file is refused at once -- it is the platform's
-     * answer, not a neighbour that will let go -- and the hold is waited out.
+     * A read-only file is the platform's answer: Windows refuses it at once,
+     * not because a neighbour will let go; POSIX takes it in a writable folder,
+     * as `unlink` does. The test asserts each, and the Windows hold follows.
      */
     testRemoveHeld() {
         const dir = File.Join(SCRATCH, "remove-held");
@@ -31745,6 +31746,16 @@ export class UriChild extends Form {
         check("...and it is gone", !File.IsDir(empty));
 
         if (Environment.OS !== "Windows") {
+            /* POSIX: the file's mode does not stop `unlink` -- the folder's
+             * permission decides -- so a read-only file in this writable
+             * folder goes. Windows is the other answer, below. */
+            const ro = File.Join(dir, "read-only.txt");
+            File.Save(ro, "no");
+            const chmod = Exec.Wait(["chmod", "0444", ro], { Timeout: 10000 });
+            check("...and the read-only bit is set", chmod.ExitCode === 0, chmod.Output);
+            eq("a read-only file goes where the folder allows it",
+               refusal(() => File.Delete(ro)), null);
+            check("...and it is gone", !File.Exists(ro));
             Directory.DeleteTree(dir);
             return;
         }

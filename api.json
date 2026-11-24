@@ -15085,7 +15085,7 @@
           "Params": 1,
           "Signature": "(path)",
           "Returns": "",
-          "Doc": "a file, or an **empty** directory. Throws on failure. On Windows a delete refused because another program holds the path a moment -- the antivirus or OneDrive right after it was written -- is tried again for up to a second; a read-only path is refused at once, and a directory that is not empty is never taken",
+          "Doc": "a file, or an **empty** directory. Throws on failure. On Windows a delete refused because another program holds the path a moment -- the antivirus or OneDrive right after it was written -- is tried again for up to a second; a read-only path is refused at once, and a directory that is not empty is never taken. Elsewhere the folder's permission decides, as `unlink` does: a read-only file in a writable folder goes",
           "Native": true
         },
         {
@@ -15247,7 +15247,7 @@
           "Params": 2,
           "Signature": "(path, text)",
           "Returns": "",
-          "Doc": "writes it **atomically** — a temporary beside it, renamed over — so a failed write leaves the old file intact and a reader never sees half a file",
+          "Doc": "writes it **atomically** — a temporary beside it, renamed over — so a failed write leaves the old file intact and a reader never sees half a file. On Windows a read-only target is refused; elsewhere the folder's permission decides, as a rename does, and a read-only file in a writable folder is replaced",
           "Native": true
         },
         {

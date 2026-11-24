@@ -603,8 +603,11 @@ use these yet.
   once. **A read-only path is not a hold**: Windows answers it access denied
   too, but no waiting changes it, so `File.Delete` fails at once; `DeleteTree`
   clears the bit first and does not come through here. (`File.Save`'s own
-  retry still spends its 315 ms on a read-only file.) Linux and macOS rename
-  and delete an open file, so there each is one call.
+  retry still spends its 315 ms on a read-only file; see its own paragraph.)
+  On POSIX the file's mode does not stop `unlink` or `rename` -- the folder's
+  permission decides -- so `File.Delete` takes a read-only file in a writable
+  folder, and `File.Save` replaces it, as the platform does. Linux and macOS
+  rename and delete an open file, so there each is one call.
 - **`g_remove` on Windows keeps the `rmdir` half's errno, not the `remove`
   half's.** GLib tries `_wremove` and then `_wrmdir` on every path; for a file
   another process holds open, the first says EACCES and the second overwrites
