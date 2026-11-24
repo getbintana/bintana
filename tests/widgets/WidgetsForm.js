@@ -2548,8 +2548,11 @@ class Form1 extends Form {
     }
 }
 `);
+        /* Leave the manifest: it is `.btp` now, and this cleanup was written
+         * when it was `.json` -- so the child started without one. */
         for (const gone of Directory.List(proj))
-            if (!gone.endsWith(".js") && !gone.endsWith(".json") && !gone.endsWith(".form"))
+            if (!gone.endsWith(".js") && !gone.endsWith(".json") &&
+                !gone.endsWith(".form") && !gone.endsWith(".btp"))
                 File.Delete(File.Join(proj, gone));
         for (const gone of ["geom", "out.json"])
             if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
