@@ -13318,6 +13318,15 @@
           "Native": true
         },
         {
+          "Name": "CacheDirectory",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "`~/.cache/<id>`, **created at startup**: what the application can throw away and make again -- thumbnails, a downloaded copy, an index. A backup skips it and a person short of space deletes it, so nothing that cannot be rebuilt goes here. On Windows `%LOCALAPPDATA%\\<id>\\Cache`, inside the application's own folder",
+          "Native": true
+        },
+        {
           "Name": "CheckSource",
           "Kind": "Method",
           "Params": 1,
@@ -13422,7 +13431,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "from `project.btp`: the application's identity in reverse DNS — `io.github.you.App`. **Every project that runs declares one**, and a project without one, or with one that is not an application id, does not start. It is **one name in five places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, the Flatpak app id, on Windows the process's AppUserModelID -- what the taskbar groups by and what a toast belongs to -- and the name of `ConfigDirectory` and `DataDirectory`",
+          "Doc": "from `project.btp`: the application's identity in reverse DNS — `io.github.you.App`. **Every project that runs declares one**, and a project without one, or with one that is not an application id, does not start. It is **one name in five places**: the window's own class (the runtime hands it to `GtkApplication` for Wayland and to the program name for X11's `WM_CLASS`), the `<id>` of the project's metainfo, the Flatpak app id, on Windows the process's AppUserModelID -- what the taskbar groups by and what a toast belongs to -- and the name of `ConfigDirectory`, `DataDirectory` and `CacheDirectory`. **Changing it leaves those folders behind** under the old name: nothing moves them",
           "Native": true
         },
         {
@@ -14378,7 +14387,7 @@
           "Params": -1,
           "Signature": "",
           "Returns": "",
-          "Doc": "`$XDG_CACHE_HOME`, or `~/.cache`. Anything that can be thrown away and rebuilt",
+          "Doc": "`$XDG_CACHE_HOME`, or `~/.cache`. Anything that can be thrown away and rebuilt. On Windows GLib answers the browser's cache (`...\\Microsoft\\Windows\\INetCache`); an application's own cache is `Application.CacheDirectory`",
           "Native": true
         },
         {
@@ -21716,6 +21725,15 @@
               "Signature": "(project)",
               "Returns": "",
               "Doc": "the entry that points at this project, or `null`",
+              "Native": false
+            },
+            {
+              "Name": "Kept",
+              "Kind": "Static",
+              "Params": 1,
+              "Signature": "(id)",
+              "Returns": "",
+              "Doc": "the folders an uninstall leaves behind: the application's config, data and cache, those that exist",
               "Native": false
             },
             {

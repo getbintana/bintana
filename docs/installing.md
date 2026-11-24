@@ -125,6 +125,7 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/share/bintana/examples/` | the examples, to open and copy |
 | `<prefix>/share/bintana/lib/` | the shipped libraries, `check` among them |
 | `<prefix>/share/bintana/tools/check/` | the console project behind `bintana check` |
+| `<prefix>/share/bintana/check/` | what `bintana check` knows of classes it cannot build: `widgets.json` and `WidgetMeta.js`, and `api.json` for the globals' members |
 | `<prefix>/share/bintana/tools/apps/` | the console project behind `bintana apps`, which lists and removes the user's own entries |
 | `<prefix>/include/bintana/bta_plugin.h` | the only header a native plugin compiles against |
 | `<prefix>/lib*/pkgconfig/bintana.pc` | what points a compiler at that header |

@@ -1384,7 +1384,9 @@ void bta_desktop_init(JSContext *ctx, JSValue global)
                       JS_NewString(ctx, g_get_user_config_dir()));
     /* CacheDirectory
      *   `$XDG_CACHE_HOME`, or `~/.cache`. Anything that can be thrown away
-     *   and rebuilt
+     *   and rebuilt. On Windows GLib answers the browser's cache
+     *   (`...\Microsoft\Windows\INetCache`); an application's own cache is
+     *   `Application.CacheDirectory`
      */
     JS_SetPropertyStr(ctx, desktop, "CacheDirectory",
                       JS_NewString(ctx, g_get_user_cache_dir()));

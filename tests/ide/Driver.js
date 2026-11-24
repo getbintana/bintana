@@ -12211,6 +12211,20 @@ function* p_settings(ide) {
          * is one nothing looks for, and the `<id>` inside has to agree. */
         ide.MnuProjectSettings.Click();
         const pd5 = ide.projectEditor;
+        /* **The id names the application's folders**, so the line under the
+         * field says what it is for -- and, once the id typed is a new one,
+         * that what the old one kept stays where it is. Typing it back says
+         * the first thing again. */
+        const idNote = pd5.LblPrIdNote.Text;
+        check("the id's line says the folders are named by it",
+              idNote.includes("folders named by it"), idNote);
+        pd5.TxtPrId.Text = "io.github.getbintana.IdeChild2";
+        check("a new id says the old one's settings and data stay",
+              pd5.LblPrIdNote.Text.includes("io.github.getbintana.IdeChild stay there"),
+              pd5.LblPrIdNote.Text);
+        pd5.TxtPrId.Text = "io.github.getbintana.IdeChild";
+        eq("...and the old id typed back says nothing of the kind",
+           pd5.LblPrIdNote.Text, idNote);
         pd5.TxtPrId.Text = "io.github.getbintana.IdeChild2";
         pd5.BtnPrOk_Click();
         yield;

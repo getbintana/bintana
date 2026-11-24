@@ -25,6 +25,21 @@ one-page answer to *what is new since the release I have*.
   `~/.config/bintana/<name>`, and what was saved there is not moved. A
   `Task` worker sees `Application.Id` and `DataDirectory` too, and the
   examples that keep a database or a document use `DataDirectory`.
+- **`Application.CacheDirectory`, the third: `~/.cache/<id>`**, created at
+  startup, for what can be thrown away and made again -- thumbnails, a
+  downloaded copy, an index. On Windows it is `%LOCALAPPDATA%\<id>\Cache`,
+  since GLib's cache directory there is the browser's. A `Task` sees it too.
+- **`bintana check` refuses an id that is not an application id**, as the
+  runtime does: it only said *missing* before, and the id is a folder name
+  now, so `"../x"` would be a path out of the config.
+- **`bintana check` sees a member a global does not have**: `Database.Open`
+  says `Database has no Open: it has Odbc, Sqlite`, and `File.Lod` offers
+  `File.Load`. The IDE's live pass said it; the console check could not ask
+  the globals and was silent until the first run. It reads them from the
+  `api.json` now installed beside `widgets.json`.
+- **A new id leaves the old folders, and says so.** Project settings shows it
+  under the id while the one typed is new, and `bintana apps remove` names the
+  config, data and cache folders it leaves (`Kept` in `--json`).
 - **A failed call says what it called.** The engine threw `TypeError: not a
   function` and named nothing, so a line with three calls left the reader to
   guess which. It now reads the caller's bytecode for what put the function on

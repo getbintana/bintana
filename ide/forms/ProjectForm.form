@@ -4,7 +4,7 @@
   "properties": {
     "Text": "Project",
     "Width": 552,
-    "Height": 736
+    "Height": 762
   },
   "children": [
     {
@@ -73,10 +73,22 @@
         "HAlign": "Fill",
         "Height": 34,
         "Placeholder": "io.github.you.MyApp",
-        "Tooltip": "Reverse-DNS identity: the window's class, the metainfo's <id> and the Flatpak app id. Optional -- a project without one runs, and cannot be packaged.",
+        "Tooltip": "Reverse-DNS identity: the window's class, the metainfo's <id>, the Flatpak app id, and the name of the folders its settings, data and cache are kept in. Required -- a project without one does not run.",
         "Width": 410,
         "X": 130,
         "Y": 104
+      }
+    },
+    {
+      "type": "Label",
+      "name": "LblPrIdNote",
+      "properties": {
+        "HAlign": "Fill",
+        "Height": 20,
+        "Style": "dim-label",
+        "Width": 410,
+        "X": 130,
+        "Y": 140
       }
     },
     {
@@ -87,7 +99,7 @@
         "Text": "Starts at:",
         "Width": 110,
         "X": 12,
-        "Y": 156,
+        "Y": 182,
         "For": "CmbPrKind"
       }
     },
@@ -105,7 +117,7 @@
         "Tooltip": "A project opens a startup form, or calls a main function and never draws at all.",
         "Width": 126,
         "X": 130,
-        "Y": 150
+        "Y": 176
       }
     },
     {
@@ -116,7 +128,7 @@
         "Height": 34,
         "Width": 276,
         "X": 264,
-        "Y": 150,
+        "Y": 176,
         "AccessibleName": "Startup form"
       }
     },
@@ -129,7 +141,7 @@
         "Visible": false,
         "Width": 276,
         "X": 264,
-        "Y": 150,
+        "Y": 176,
         "AccessibleName": "Main function"
       }
     },
@@ -141,7 +153,7 @@
         "Text": "Description:",
         "Width": 110,
         "X": 12,
-        "Y": 202,
+        "Y": 228,
         "For": "TxtPrDesc"
       }
     },
@@ -153,7 +165,7 @@
         "Height": 34,
         "Width": 410,
         "X": 130,
-        "Y": 196
+        "Y": 222
       }
     },
     {
@@ -164,7 +176,7 @@
         "Text": "Accessibility:",
         "Width": 110,
         "X": 12,
-        "Y": 248,
+        "Y": 274,
         "For": "CmbPrA11y"
       }
     },
@@ -183,7 +195,7 @@
         "Tooltip": "How the project check reports a control a screen reader cannot name: as a warning, as a note, or not at all.",
         "Width": 200,
         "X": 130,
-        "Y": 242
+        "Y": 268
       }
     },
     {
@@ -194,7 +206,7 @@
         "Text": "Libraries:",
         "Width": 200,
         "X": 12,
-        "Y": 292
+        "Y": 318
       }
     },
     {
@@ -206,7 +218,7 @@
         "Style": "frame",
         "Width": 528,
         "X": 12,
-        "Y": 320
+        "Y": 346
       }
     },
     {
@@ -219,7 +231,7 @@
         "Width": 528,
         "Wrap": true,
         "X": 12,
-        "Y": 438
+        "Y": 464
       }
     },
     {
@@ -230,7 +242,7 @@
         "Text": "Load order:",
         "Width": 200,
         "X": 12,
-        "Y": 484
+        "Y": 510
       }
     },
     {
@@ -243,7 +255,7 @@
         "VAlign": "Fill",
         "Width": 424,
         "X": 12,
-        "Y": 512
+        "Y": 538
       }
     },
     {
@@ -255,7 +267,7 @@
         "Text": "Up",
         "Width": 92,
         "X": 448,
-        "Y": 512
+        "Y": 538
       }
     },
     {
@@ -267,7 +279,7 @@
         "Text": "Down",
         "Width": 92,
         "X": 448,
-        "Y": 550
+        "Y": 576
       }
     },
     {
@@ -280,7 +292,7 @@
         "Tooltip": "Write the order this project already loads in, so it can be changed",
         "Width": 92,
         "X": 448,
-        "Y": 598
+        "Y": 624
       }
     },
     {
@@ -294,7 +306,7 @@
         "Width": 528,
         "Wrap": true,
         "X": 12,
-        "Y": 644
+        "Y": 670
       }
     },
     {
@@ -308,7 +320,7 @@
         "VAlign": "End",
         "Width": 90,
         "X": 350,
-        "Y": 692
+        "Y": 718
       }
     },
     {
@@ -323,7 +335,7 @@
         "VAlign": "End",
         "Width": 90,
         "X": 450,
-        "Y": 692
+        "Y": 718
       }
     }
   ]

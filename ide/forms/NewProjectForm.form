@@ -60,7 +60,7 @@
                 "HAlign": "Fill",
                 "HExpand": true,
                 "Placeholder": "io.github.you.MyApp",
-                "Tooltip": "Reverse-DNS identity: the window's own class, the metainfo's <id> and the name a package installs under. Optional here -- a project without one runs, and cannot be packaged."
+                "Tooltip": "Reverse-DNS identity: the window's own class, the metainfo's <id>, the name a package installs under, and the name of the folders its settings, data and cache are kept in. Required -- proposed from the name until you type one."
               }
             },
             {

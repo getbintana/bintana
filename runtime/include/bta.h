@@ -1056,6 +1056,9 @@ char *bta_project_string(JSContext *ctx, JSValueConst cfg, const char *key,
 bool bta_project_id_ok(const char *id, const char *manifest);
 /* `<base>/<id>`, created with `mode`: an application's own directory. Free it. */
 char *bta_app_dir(const char *base, const char *id, int mode);
+/* `CacheDirectory`'s path for that id, not created: `<cache>/<id>`, and on
+ * Windows `%LOCALAPPDATA%\<id>\Cache`. Free it. */
+char *bta_app_cache_path(const char *id);
 /* Every `.js` under a directory, subdirectories included. `root` skips the
  * project's own `tests/`, which a run never loads. */
 void bta_collect_js(GPtrArray *out, const char *dir, bool root);

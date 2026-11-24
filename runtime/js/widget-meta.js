@@ -13,11 +13,44 @@
 "use strict";
 
 const widgetData = File.LoadJson(globalThis.WidgetDataPath);
+/* Read now: by the time a check asks, `globalThis` is sealed off. */
+const apiPath = globalThis.WidgetDataPath.slice(0, -"widgets.json".length) + "api.json";
 
 function widgetClass(type) {
     if (!Dictionary.Has(widgetData.Members, type))
         throw new TypeError(`'${type}' is not a widget class`);
     return widgetData.Members[type];
+}
+
+/*
+ * **The globals' members, from `api.json`** -- `Database`, `File`, `Http` and
+ * the value types (`HttpClient`, `Key`, ...). The graphical host answers
+ * `Widget.Members("Database")` by walking the live object; this host cannot,
+ * because several of its globals are the console's subset or an empty stub
+ * (`Text` has `LineOf` only, `Printer` `Papers`, the GUI globals nothing), and
+ * a walk would call `Text.Width` a mistake in a project that opens a window.
+ * `api.json` is that walk, written by the graphical host and held to it by
+ * `tests/api.sh`, so the check's `Database.Open` finding -- the first thing a
+ * person new to the runtime gets wrong -- reaches `bintana check` too.
+ *
+ * Read on the first question and not at load: a check that never asks pays
+ * nothing for a megabyte of JSON. Missing (a build that did not copy it) is
+ * the old answer, a refusal, and the finding stays quiet rather than wrong.
+ */
+let globalData = null;
+
+function globalMembers(type) {
+    if (globalData === null) {
+        globalData = {};
+        if (File.Exists(apiPath)) {
+            const api = File.LoadJson(apiPath);
+            for (const g of (api.Types || []).concat(api.Globals || []))
+                if (g && g.Name && g.Members) globalData[g.Name] = g.Members;
+        }
+    }
+    if (!Dictionary.Has(globalData, type))
+        throw new TypeError(`'${type}' is not a class the runtime knows`);
+    return globalData[type];
 }
 
 const Widget = {
@@ -26,6 +59,8 @@ const Widget = {
     },
 
     Members(type) {
+        if (!Dictionary.Has(widgetData.Members, type))
+            return globalMembers(type).slice();
         return widgetClass(type).slice();
     },
 

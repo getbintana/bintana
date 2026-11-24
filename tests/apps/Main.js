@@ -62,6 +62,20 @@ function main() {
     /* Every child inherits this, and the parent never reads the person's own
      * applications folder. */
     Environment.Set("XDG_DATA_HOME", root);
+    Environment.Set("XDG_CONFIG_HOME", File.Join(root, "config"));
+    Environment.Set("XDG_CACHE_HOME", File.Join(root, "cache"));
+
+    /* An entry the IDE installs is `<id>.devel`, and the application's own
+     * folders are named by the id: removing the entry leaves them, and says
+     * where. */
+    File.Save(File.Join(dir, "org.example.Kept.devel.desktop"),
+              "[Desktop Entry]\n" +
+              "Type=Application\n" +
+              "Name=Kept app\n" +
+              "Exec=/bin/true\n" +
+              "X-Bintana-Project=/tmp/kept-project\n");
+    Directory.Make(File.Join(root, "org.example.Kept"));
+    Directory.Make(File.Join(root, "cache", "org.example.Kept"));
 
     File.Save(File.Join(dir, "org.example.Demo.desktop"),
               "[Desktop Entry]\n" +
@@ -83,6 +97,7 @@ function main() {
     step(aForeignOneIsNotListedAsOurs);
     step(removeRefusesWhatItDidNotWrite);
     step(remove);
+    step(removeKeepsTheFolders);
     step(empty);
 
     next();
@@ -162,6 +177,21 @@ function remove(done) {
         check("...and says what it removed", out.includes("removed org.example.Demo"), out);
         check("...and the file is gone",
               !File.Exists(File.Join(dir, "org.example.Demo.desktop")));
+        done();
+    });
+}
+
+function removeKeepsTheFolders(done) {
+    apps(["remove", "org.example.Kept.devel"], (code, out) => {
+        eq("removing an entry with folders answers 0", code, 0);
+        check("...names the data it leaves",
+              out.includes(`kept ${File.Join(root, "org.example.Kept")}`), out);
+        check("...and the cache",
+              out.includes(`kept ${File.Join(root, "cache", "org.example.Kept")}`), out);
+        check("...and not a config folder that is not there",
+              !out.includes(File.Join(root, "config")), out);
+        check("...and the folders are still there",
+              File.IsDir(File.Join(root, "org.example.Kept")), out);
         done();
     });
 }

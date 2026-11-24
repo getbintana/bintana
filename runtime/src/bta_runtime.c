@@ -813,7 +813,9 @@ static bool install_globals(BtaApp *app)
      *   program name for X11's `WM_CLASS`), the `<id>` of the project's
      *   metainfo, the Flatpak app id, on Windows the process's AppUserModelID
      *   -- what the taskbar groups by and what a toast belongs to -- and the
-     *   name of `ConfigDirectory` and `DataDirectory`
+     *   name of `ConfigDirectory`, `DataDirectory` and `CacheDirectory`.
+     *   **Changing it leaves those folders behind** under the old name:
+     *   nothing moves them
      */
     JS_SetPropertyStr(ctx, application, "Id", JS_NewString(ctx, app->id));
     /* Directory
@@ -878,6 +880,17 @@ static bool install_globals(BtaApp *app)
      */
     JS_SetPropertyStr(ctx, application, "DataDirectory", JS_NewString(ctx, data));
     g_free(data);
+    char *cache = bta_app_cache_path(app->id);
+    g_mkdir_with_parents(cache, 0755);
+    /* CacheDirectory
+     *   `~/.cache/<id>`, **created at startup**: what the application can
+     *   throw away and make again -- thumbnails, a downloaded copy, an index.
+     *   A backup skips it and a person short of space deletes it, so nothing
+     *   that cannot be rebuilt goes here. On Windows `%LOCALAPPDATA%\<id>\Cache`,
+     *   inside the application's own folder
+     */
+    JS_SetPropertyStr(ctx, application, "CacheDirectory", JS_NewString(ctx, cache));
+    g_free(cache);
 
     /* Whether the desktop has an icon by that name.  Only whoever picks the
      * name can choose a fallback, and an icon the theme lacks is dropped

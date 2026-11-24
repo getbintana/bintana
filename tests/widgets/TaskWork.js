@@ -295,6 +295,13 @@ class TaskWork extends Task {
             };
         }
 
+        /* The application's own folders, as the main thread named them: a
+         * worker is told the paths, and a missing one is a database the task
+         * opens in the working directory instead. */
+        if (msg.mode === "dirs")
+            return { id: Application.Id, config: Application.ConfigDirectory,
+                     data: Application.DataDirectory, cache: Application.CacheDirectory };
+
         /* Bytes cross as base64 under a tag, and come back a Bytes. */
         if (msg.mode === "bytes")
             return { n: msg.data.Length, back: msg.data, b64: msg.data.ToBase64() };

@@ -113,6 +113,27 @@ char *bta_app_dir(const char *base, const char *id, int mode)
 }
 
 /*
+ * Where `CacheDirectory` is: what the application can throw away and make
+ * again -- thumbnails, a downloaded copy, an index. Apart from `DataDirectory`
+ * because a backup should skip it and a person short of space may delete it.
+ *
+ * **On Windows it is not GLib's cache directory.** `g_get_user_cache_dir`
+ * answers the Internet Explorer cache there (`...\Microsoft\Windows\INetCache`),
+ * which no program's own cache belongs in; the folder is
+ * `%LOCALAPPDATA%\<id>\Cache`, inside the application's own, the way Chromium
+ * and Electron lay theirs out. Elsewhere `$XDG_CACHE_HOME/<id>`. Not created:
+ * the callers do, the main thread with its mode, a `Task` never.
+ */
+char *bta_app_cache_path(const char *id)
+{
+#ifdef G_OS_WIN32
+    return g_build_filename(g_get_user_data_dir(), id, "Cache", NULL);
+#else
+    return g_build_filename(g_get_user_cache_dir(), id, NULL);
+#endif
+}
+
+/*
  * Whether the manifest declares `"main"`: 1 yes, 0 no, -1 when it cannot be
  * read as a JSON object and the full parser should report it.
  *

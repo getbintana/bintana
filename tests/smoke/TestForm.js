@@ -526,7 +526,48 @@ class TestForm extends Form {
             check("...but says it does nothing", consoleRun.Output.includes(
                       'singleInstance does nothing for a project with "main"'), consoleRun.Output);
             check("...and nothing more", !consoleRun.Output.includes("not true or false"), consoleRun.Output);
+            /* ...and one whose id is not an application id: the runtime
+             * refuses that too, and the id names the application's folders, so
+             * `..` would be a path out of the user's config. */
+            manifest({ id: "../Escape" });
+            const badId = run(dir);
+            eq("an id that is not an application id is an error", badId.ExitCode, 1);
+            check("...that says so", badId.Output.includes('"../Escape" is not an application id'),
+                  badId.Output);
             manifest({ id: "io.github.getbintana.test.SmokeCheck" });
+
+            /* **A member a global lacks reaches the console check.** The console
+             * host's own globals are partly stubs, so its `Widget.Members`
+             * answers them from the `api.json` beside `widgets.json`; before
+             * that `Database.Open` went through `bintana check` silently and
+             * failed at the first run. `Text.Width` is the stub's trap: the
+             * console's `Text` has `LineOf` alone, and the window's has it. */
+            write("Main.js", "class Main extends Form { Form_Open() {\n" +
+                             '    const db = Database.Open("x.db");\n' +
+                             '    Text.Width("a"); File.Lod("x");\n} }\n');
+            /* **Both hosts, by name.** This suite runs in `bintana-gui`, whose
+             * `check` walks the live globals; the console host is the one that
+             * reads `api.json`, and the one `bintana check` is. Run through
+             * `Application.Executable` alone, this stayed green with the file
+             * gone. */
+            const exe  = Application.Executable;
+            const core = File.Join(File.Directory(exe),
+                                   Environment.OS === "Windows" ? "bintana.exe" : "bintana");
+            const hosts = [exe];
+            if (core !== exe && File.Exists(core)) hosts.push(core);
+            check("the console host is beside this one", hosts.length === 2, core);
+            for (const host of hosts) {
+                const strays = Exec.Wait([host, "check", dir], { Timeout: 20000 });
+                const said   = `${File.Name(host)}: ${strays.Output}`;
+                check(`${File.Name(host)} check says Database has no Open, and what it has`,
+                      strays.Output.includes("Main.js:2: warning: Database has no Open: it has Odbc, Sqlite"),
+                      said);
+                check("...and the member a typo was close to",
+                      strays.Output.includes("File has no Lod: did you mean File.Load?"), said);
+                check("...and not a member the console's stub lacks",
+                      !strays.Output.includes("Text has no"), said);
+            }
+            write("Main.js", "class Main extends Form { Form_Open() {} }\n");
 
             /* A `.form` a person edited can be any JSON at all. The pass reads
              * files it did not write, so a shape it cannot walk is a row about

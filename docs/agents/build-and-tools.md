@@ -596,7 +596,10 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
 - **The core links no widget file.** `bintana-meta --dump` writes
   `check/widgets.json` from the real rows, property tables, both preludes and
   the generated signatures; `runtime/js/widget-meta.js` answers `Widget.*` over
-  it. The data is 1.7 MB and loads only for `check`; the binary is 3.3 MB in
+  it. The data is 1.7 MB and loads only for `check`. **Beside it, `api.json`**
+  (1 MB, copied from the source tree and installed with it) answers
+  `Widget.Members` for the globals -- read on the first such question, not at
+  load; see `ide.md`, *A member a runtime global does not have*. The binary is 3.3 MB in
   Debug and 7.7 MB with `RelWithDebInfo`'s symbols, which a packager strips.
   A `main` that never asks for a widget never sees `Widget` at all.
 - **`bta_paint.c` is compiled twice: into `bintana-gui` and into

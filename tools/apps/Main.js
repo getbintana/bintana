@@ -5,7 +5,8 @@
  *   bintana apps                  the entries the IDE installed
  *   bintana apps list             the same
  *   bintana apps files <id>       what one of them installed, one path per line
- *   bintana apps remove <id>...   take them out of the menu
+ *   bintana apps remove <id>...   take them out of the menu; their settings and
+ *                                 data stay, and the folders are named
  *   bintana apps --json           every answer as one JSON object per line
  *
  * What is installed belongs to the user, not to a project: this runs in the
@@ -124,6 +125,10 @@ function remove(ids, json) {
             continue;
         }
 
+        /* Asked before the entry goes: nothing about the folders depends on
+         * it, but the answer is about the application that was there. */
+        const kept = Apps.Kept(id);
+
         try {
             Apps.Uninstall(id);
         } catch (e) {
@@ -132,8 +137,15 @@ function remove(ids, json) {
             continue;
         }
 
-        if (json) print(JSON.stringify({ Id: id, Removed: true }));
-        else      print(`removed ${id}`);
+        /* The settings and data stay -- they are what the person made, and the
+         * same id installed again finds them -- and are only named, so whoever
+         * wants them gone knows where to look. */
+        if (json) {
+            print(JSON.stringify({ Id: id, Removed: true, Kept: kept }));
+        } else {
+            print(`removed ${id}`);
+            for (const dir of kept) print(`  kept ${dir}`);
+        }
     }
 
     Application.Quit(failed ? 1 : 0);

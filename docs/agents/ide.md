@@ -1571,13 +1571,23 @@ this pass is what says it while the line is typed.
   is `["UTC"]`, so the first run over this tree reported 76 `Date.now` and
   `Date.parse` -- the language's own globals are excluded by name
   (`LANGUAGE_GLOBALS`), a list the specification fixes.
-- **It is silent in the console host**, which is `bintana check` and the IDE's
-  Check (a child): `widget-meta.js` answers from `widgets.json`, which holds the
-  widget classes only, and refuses `Database` as *not a widget class*. So a
-  run of `tests/check.sh` proves nothing about this pass; the false-positive
-  count above came from a graphical project that ran it over every `.js`. The
-  console half needs `bintana-meta --dump` to carry the globals, and
-  `bintana-meta` installs none of them.
+- **The console host answers it from `api.json`**, which is `bintana check`
+  and the IDE's Check (a child). `widgets.json` holds the widget classes only,
+  and `bintana-meta` installs no global, so `widget-meta.js` reads the
+  `Globals` and `Types` of the `api.json` that CMake copies (and installs)
+  beside it. **Not the live objects**: the console's `Text` is `LineOf` alone,
+  `Printer` is `Papers`, and every GUI global is an empty stub, so a walk would
+  call `Text.Width` a mistake in a window project. Two traps found on the way,
+  2026-11-23:
+  - `globalThis` is sealed by the time a check asks; the script reads the path
+    it needs at load, where `WidgetDataPath` is read.
+  - Without `api.json`, `Members` refuses and the pass says nothing, which is
+    exactly what it looked like before. `tests/smoke` asserts the finding
+    through `bintana check`, so a build that stops copying the file goes red
+    there.
+
+  `tests/check.sh` over the tree, after: no global-member finding (the only
+  `has no` is a control's, `Label has no Add`).
 - **`Names` already had a field `this.globals`** (`nearby` caches
   `Application.Globals()` in it). A method of that name replaced it, `nearby`
   iterated a function, and `bintana check` said *the check could not read it:
@@ -1664,7 +1674,21 @@ one:
   for the file.
 - **`ConfigDirectory` and `DataDirectory` are `<config>/<id>` and
   `<data>/<id>`**: a project's settings moved when this landed (no migration,
-  by decision), the IDE's own and the suite's included.
+  by decision), the IDE's own and the suite's included. **`CacheDirectory`**
+  is the third: `<cache>/<id>`, and on Windows `%LOCALAPPDATA%\<id>\Cache`,
+  because `g_get_user_cache_dir` answers the browser's INetCache there
+  (`bta_app_cache_path`).
+- **The id's format is the runtime's in every door**: `bta_project_id_ok`
+  (`g_application_id_is_valid`), `ProjectFile.idValid` in the dialogs and in
+  `ProjectFile.Validate`, and `Check.manifest`, which only said *missing* until
+  2026-11-23. It matters more than it did: the id is a folder name now, and
+  `"../x"` is a path out of the config.
+- **A new id leaves the old folders behind, and only says so.** Project
+  settings shows a line under the field (`LblPrIdNote`) while the id typed is
+  not the project's, and `bintana apps remove` names the folders it does not
+  delete (`Apps.Kept`, which reads the id off the `<id>.devel` entry, since the
+  project may be what was deleted). A line and not a modal: the suite changes
+  the id five times in a row, and so does a person correcting a typo.
 
 ## Breakpoints: on, off, kept
 

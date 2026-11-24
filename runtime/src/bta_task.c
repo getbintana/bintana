@@ -201,6 +201,7 @@ struct BtaTaskJob {
     GPtrArray *app_libs;    /* what `uses` resolved to, for the file's imports */
     char      *app_config;
     char      *app_data;
+    char      *app_cache;
     char      *app_id;
     char      *app_exe;         /* "" where the platform will not say */
     char     **app_args;        /* NULL-terminated copy */
@@ -295,6 +296,7 @@ static void task_job_unref(gpointer data)
         g_ptr_array_unref(job->app_libs);
     g_free(job->app_config);
     g_free(job->app_data);
+    g_free(job->app_cache);
     g_free(job->app_id);
     g_free(job->app_exe);
     g_strfreev(job->app_args);
@@ -1431,6 +1433,15 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      */
     JS_SetPropertyStr(ctx, application, "DataDirectory",
                       JS_NewString(ctx, job->app_data));
+    /* CacheDirectory
+     *   `~/.cache/<id>`, **created at startup**: what the application can
+     *   throw away and make again -- thumbnails, a downloaded copy, an index.
+     *   A backup skips it and a person short of space deletes it, so nothing
+     *   that cannot be rebuilt goes here. On Windows `%LOCALAPPDATA%\<id>\Cache`,
+     *   inside the application's own folder
+     */
+    JS_SetPropertyStr(ctx, application, "CacheDirectory",
+                      JS_NewString(ctx, job->app_cache));
     /* Id
      *   from `project.btp`: the application's identity in reverse DNS —
      *   `io.github.you.App`. **Every project that runs declares one**, and a
@@ -1440,7 +1451,9 @@ static bool task_build_worker(JSContext *ctx, BtaTaskJob *job)
      *   program name for X11's `WM_CLASS`), the `<id>` of the project's
      *   metainfo, the Flatpak app id, on Windows the process's AppUserModelID
      *   -- what the taskbar groups by and what a toast belongs to -- and the
-     *   name of `ConfigDirectory` and `DataDirectory`
+     *   name of `ConfigDirectory`, `DataDirectory` and `CacheDirectory`.
+     *   **Changing it leaves those folders behind** under the old name:
+     *   nothing moves them
      */
     JS_SetPropertyStr(ctx, application, "Id", JS_NewString(ctx, job->app_id));
     /* Executable
@@ -2204,6 +2217,7 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
         const char *id = app->id ? app->id : "";
         job->app_config  = g_build_filename(g_get_user_config_dir(), id, NULL);
         job->app_data    = g_build_filename(g_get_user_data_dir(), id, NULL);
+        job->app_cache   = bta_app_cache_path(id);
         job->app_id      = g_strdup(id);
         job->app_exe     = exe ? exe : g_strdup("");
         if (app->args) {
@@ -2221,6 +2235,7 @@ static JSValue task_start(JSContext *ctx, JSValueConst this_val,
         job->app_dir     = g_strdup("");
         job->app_config  = g_strdup("");
         job->app_data    = g_strdup("");
+        job->app_cache   = g_strdup("");
         job->app_id      = g_strdup("");
         job->app_exe     = g_strdup("");
     }

@@ -1241,7 +1241,10 @@ Both binaries are installed; `bintana-meta` is the generator and is not.
 - **The core links no widget file.** `bintana-meta --dump` writes
   `check/widgets.json` from the real rows, property tables, both preludes and
   the generated signatures; `runtime/js/widget-meta.js` answers `Widget.*` over
-  it. The data is 1.7 MB and loads only for `check`; the binary is 3.3 MB in
+  it. The data is 1.7 MB and loads only for `check`. **Beside it, `api.json`**
+  (1 MB, copied from the source tree and installed with it) answers
+  `Widget.Members` for the globals -- read on the first such question, not at
+  load; see `ide.md`, *A member a runtime global does not have*. The binary is 3.3 MB in
   Debug and 7.7 MB with `RelWithDebInfo`'s symbols, which a packager strips.
   A `main` that never asks for a widget never sees `Widget` at all.
 - **`bta_paint.c` is compiled twice: into `bintana-gui` and into
@@ -9750,13 +9753,23 @@ this pass is what says it while the line is typed.
   is `["UTC"]`, so the first run over this tree reported 76 `Date.now` and
   `Date.parse` -- the language's own globals are excluded by name
   (`LANGUAGE_GLOBALS`), a list the specification fixes.
-- **It is silent in the console host**, which is `bintana check` and the IDE's
-  Check (a child): `widget-meta.js` answers from `widgets.json`, which holds the
-  widget classes only, and refuses `Database` as *not a widget class*. So a
-  run of `tests/check.sh` proves nothing about this pass; the false-positive
-  count above came from a graphical project that ran it over every `.js`. The
-  console half needs `bintana-meta --dump` to carry the globals, and
-  `bintana-meta` installs none of them.
+- **The console host answers it from `api.json`**, which is `bintana check`
+  and the IDE's Check (a child). `widgets.json` holds the widget classes only,
+  and `bintana-meta` installs no global, so `widget-meta.js` reads the
+  `Globals` and `Types` of the `api.json` that CMake copies (and installs)
+  beside it. **Not the live objects**: the console's `Text` is `LineOf` alone,
+  `Printer` is `Papers`, and every GUI global is an empty stub, so a walk would
+  call `Text.Width` a mistake in a window project. Two traps found on the way,
+  2026-11-23:
+  - `globalThis` is sealed by the time a check asks; the script reads the path
+    it needs at load, where `WidgetDataPath` is read.
+  - Without `api.json`, `Members` refuses and the pass says nothing, which is
+    exactly what it looked like before. `tests/smoke` asserts the finding
+    through `bintana check`, so a build that stops copying the file goes red
+    there.
+
+  `tests/check.sh` over the tree, after: no global-member finding (the only
+  `has no` is a control's, `Label has no Add`).
 - **`Names` already had a field `this.globals`** (`nearby` caches
   `Application.Globals()` in it). A method of that name replaced it, `nearby`
   iterated a function, and `bintana check` said *the check could not read it:
@@ -9843,7 +9856,21 @@ one:
   for the file.
 - **`ConfigDirectory` and `DataDirectory` are `<config>/<id>` and
   `<data>/<id>`**: a project's settings moved when this landed (no migration,
-  by decision), the IDE's own and the suite's included.
+  by decision), the IDE's own and the suite's included. **`CacheDirectory`**
+  is the third: `<cache>/<id>`, and on Windows `%LOCALAPPDATA%\<id>\Cache`,
+  because `g_get_user_cache_dir` answers the browser's INetCache there
+  (`bta_app_cache_path`).
+- **The id's format is the runtime's in every door**: `bta_project_id_ok`
+  (`g_application_id_is_valid`), `ProjectFile.idValid` in the dialogs and in
+  `ProjectFile.Validate`, and `Check.manifest`, which only said *missing* until
+  2026-11-23. It matters more than it did: the id is a folder name now, and
+  `"../x"` is a path out of the config.
+- **A new id leaves the old folders behind, and only says so.** Project
+  settings shows a line under the field (`LblPrIdNote`) while the id typed is
+  not the project's, and `bintana apps remove` names the folders it does not
+  delete (`Apps.Kept`, which reads the id off the `<id>.devel` entry, since the
+  project may be what was deleted). A line and not a modal: the suite changes
+  the id five times in a row, and so does a person correcting a typo.
 
 ## Breakpoints: on, off, kept
 
@@ -15340,6 +15367,7 @@ PKG_CONFIG_PATH=<bintana>/build/pkgconfig cmake -S some-plugin -B some-plugin/bu
 | `<prefix>/share/bintana/examples/` | the examples, to open and copy |
 | `<prefix>/share/bintana/lib/` | the shipped libraries, `check` among them |
 | `<prefix>/share/bintana/tools/check/` | the console project behind `bintana check` |
+| `<prefix>/share/bintana/check/` | what `bintana check` knows of classes it cannot build: `widgets.json` and `WidgetMeta.js`, and `api.json` for the globals' members |
 | `<prefix>/share/bintana/tools/apps/` | the console project behind `bintana apps`, which lists and removes the user's own entries |
 | `<prefix>/include/bintana/bta_plugin.h` | the only header a native plugin compiles against |
 | `<prefix>/lib*/pkgconfig/bintana.pc` | what points a compiler at that header |
@@ -15787,7 +15815,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11686 assertions
+./tests/run.sh                          # all seven projects, 11705 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

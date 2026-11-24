@@ -824,6 +824,11 @@ set(BTA_HEADLESS_SOURCES
     add_custom_target(bintana-check-data ALL DEPENDS ${WIDGETS_JSON})
     configure_file(${CMAKE_SOURCE_DIR}/runtime/js/widget-meta.js
                    ${CMAKE_BINARY_DIR}/check/WidgetMeta.js COPYONLY)
+    # The globals' members, for `Widget.Members("Database")` in the console
+    # host: `api.json` is the graphical host's answer, written down
+    # (widget-meta.js says why the live objects cannot be asked).
+    configure_file(${CMAKE_SOURCE_DIR}/api.json
+                   ${CMAKE_BINARY_DIR}/check/api.json COPYONLY)
 
     add_executable(bintana ${BTA_HEADLESS_SOURCES})
     bta_add_version_resource(bintana "Bintana console core" "bintana.exe")
@@ -1080,6 +1085,7 @@ install(DIRECTORY tools/apps DESTINATION ${BTA_DATADIR}/tools
 install(FILES runtime/js/widget-meta.js
         DESTINATION ${BTA_DATADIR}/check RENAME WidgetMeta.js)
 install(FILES ${WIDGETS_JSON} DESTINATION ${BTA_DATADIR}/check)
+install(FILES api.json DESTINATION ${BTA_DATADIR}/check)
 
 # **One header, and that is the whole development surface a plugin needs.** Not
 # `bta.h` and not `quickjs.h`: a plugin links neither the runtime nor the

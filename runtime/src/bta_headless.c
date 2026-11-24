@@ -183,6 +183,10 @@ static void install_application(JSContext *ctx, JSValueConst global,
     char *data = bta_app_dir(g_get_user_data_dir(), id, 0700);
     JS_SetPropertyStr(ctx, application, "DataDirectory", JS_NewString(ctx, data));
     g_free(data);
+    char *cache = bta_app_cache_path(id);
+    g_mkdir_with_parents(cache, 0700);
+    JS_SetPropertyStr(ctx, application, "CacheDirectory", JS_NewString(ctx, cache));
+    g_free(cache);
 
     char *exe = bta_exe_path();
     JS_SetPropertyStr(ctx, application, "Executable",

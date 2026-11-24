@@ -20379,6 +20379,22 @@ class Form1 extends Form {
                   Application.DataDirectory !== Application.ConfigDirectory,
                   Application.DataDirectory);
 
+        /* The cache is the third, made at startup too, and never the data
+         * folder itself: a person short of space deletes it whole. On Windows
+         * it is `<data>\Cache`, since GLib's cache there is the browser's. */
+        check("CacheDirectory exists as a directory",
+              File.IsDir(Application.CacheDirectory), Application.CacheDirectory);
+        check("...is named by the id and is not the data directory",
+              Application.CacheDirectory.includes(Application.Id) &&
+              Application.CacheDirectory !== Application.DataDirectory,
+              Application.CacheDirectory);
+        if (Environment.OS === "Windows")
+            eq("...and on Windows it is Cache inside the application's folder",
+               Application.CacheDirectory, File.Join(Application.DataDirectory, "Cache"));
+        else
+            eq("...and elsewhere it is <cache>/<id>",
+               Application.CacheDirectory, File.Join(Desktop.CacheDirectory, Application.Id));
+
         Settings.Delete("on");
         check("Delete removes it", !Settings.Has("on"));
         eq("and the file follows",
@@ -33458,6 +33474,21 @@ export class UriChild extends Form {
                 next();
             };
             t.Start({ mode: "process" });
+        });
+
+        /* The application's folders are the main thread's, path for path. */
+        steps.push(() => {
+            const t = new TaskWork();
+
+            t.Error = (m) => fail(`dirs errored: ${m}`);
+            t.Done  = (r) => {
+                eq("a worker sees the application's id", r.id, Application.Id);
+                eq("...its ConfigDirectory", r.config, Application.ConfigDirectory);
+                eq("...its DataDirectory", r.data, Application.DataDirectory);
+                eq("...and its CacheDirectory", r.cache, Application.CacheDirectory);
+                next();
+            };
+            t.Start({ mode: "dirs" });
         });
 
         steps.push(() => {

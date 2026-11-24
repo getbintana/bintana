@@ -51,7 +51,9 @@ export class ProjectForm extends Form {
 
         dlg.TxtPrName.Text    = record.Name;
         dlg.TxtPrVersion.Text = record.Version;
+        dlg.idShown           = record.Id;
         dlg.TxtPrId.Text      = record.Id;
+        dlg.showIdNote();
         dlg.TxtPrDesc.Text    = record.Description;
 
         /*
@@ -310,6 +312,23 @@ export class ProjectForm extends Form {
         return true;
     }
 
+    /*
+     * **The id names the application's folders** -- `ConfigDirectory`,
+     * `DataDirectory`, `CacheDirectory` -- so a new one starts with none of
+     * what the old one kept: its settings, its database. Nothing moves them
+     * (they may be in use by an installed copy, and the old id may come back),
+     * so the line under the field says so while the id typed is not the one
+     * the project had. A line and not a question: the change is the person's
+     * to make, and a modal on every keystroke would be a toll on all of them.
+     */
+    showIdNote() {
+        const typed = this.TxtPrId.Text.trim();
+        this.LblPrIdNote.Text = this.idShown && typed !== this.idShown
+            ? Locale.Text("Settings and data kept under {0} stay there: a new id does not move them.",
+                          this.idShown)
+            : Locale.Text("Its settings, data and cache are kept in folders named by it.");
+    }
+
     accept() {
         if (!this.apply()) return;
 
@@ -335,6 +354,7 @@ export class ProjectForm extends Form {
     /* Enter walks to the next field, and asks the tab order which one that is
      * rather than naming it: naming the next control writes the order down a
      * second time, in the copy nobody updates when the form is redrawn. */
+    TxtPrId_Change()        { this.showIdNote(); }
     TxtPrName_Activate()    { this.FocusNext(); }
     TxtPrVersion_Activate() { this.FocusNext(); }
     TxtPrId_Activate()      { this.FocusNext(); }
