@@ -63,7 +63,7 @@
                   "name": "BtnGrid",
                   "properties": {
                     "ColumnSpacing": 6,
-                    "Columns": 3,
+                    "Columns": 4,
                     "Homogeneous": true,
                     "RowSpacing": 6,
                     "Spacing": 6
@@ -71,10 +71,20 @@
                   "children": [
                     {
                       "type": "Button",
+                      "name": "BtnMenu",
+                      "properties": {
+                        "Height": 30,
+                        "Text": "Menu",
+                        "Tooltip": "A menu on the bar, after the last one, whatever is selected"
+                      }
+                    },
+                    {
+                      "type": "Button",
                       "name": "BtnItem",
                       "properties": {
                         "Height": 30,
-                        "Text": "Item"
+                        "Text": "Item",
+                        "Tooltip": "A command inside the selected menu, or after the selected item"
                       }
                     },
                     {
@@ -82,7 +92,8 @@
                       "name": "BtnSubmenu",
                       "properties": {
                         "Height": 30,
-                        "Text": "Submenu"
+                        "Text": "Submenu",
+                        "Tooltip": "A menu inside the selected menu, or after the selected item"
                       }
                     },
                     {

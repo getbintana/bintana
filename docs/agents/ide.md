@@ -1654,6 +1654,46 @@ database -- the first name a person reaches for. That walk is what made the
 id required and the directories named by it; see *Every project has an id*
 below.
 
+**The second walk, 2026-11-24**: an exchange-rate viewer -- a menu bar made
+in the menu editor, a `TableView` filled by `Http.Get` from a local
+`Http.Server` the probe ran in the IDE's process, a `Report` designed with a
+double click and saved with `SavePdf`, Check, and the Windows installer
+through `makensis`. The installer refuses a development checkout (it stages
+`bin/bintana.exe` from the runtime's own tree), so that half ran from a tree
+`tools/windows-portable.sh` made. What it found:
+
+- **`Report` was nowhere in the palette**, being `lib/report`'s, and nothing
+  said so; the way to it was a list in Project settings one has to know to
+  open. The palette's last tab, *More*, offers each library this machine has
+  and the project does not use, with the components it brings
+  (`Classes.offeredLibraries`); a click names it in `uses`
+  (`Manifest.useLibrary`) and shows its tab.
+- **The menu editor could not make a second menu on the bar.** *Submenu* goes
+  inside a selected menu, and a `TreeView` with rows always has a selection,
+  so *Ayuda* landed inside *Archivo*. *Menu* (`BtnMenu_Click`) appends to the
+  bar whatever is selected.
+- **A Report off the palette opened the designer with no band**, and Add said
+  *Add a Detail band first*. `ReportForm.edit` proposes a page header and a
+  detail, the detail selected, on its copy.
+- **The installer threw after writing the setup**: `Directory.DeleteTree` of
+  its build folder met MSYS2's read-only `zoneinfo` files, which `g_remove`
+  refuses on Windows -- and then tries `rmdir` on, so the error said *invalid
+  argument* about the root. The runtime now clears the bit on what it is
+  deleting anyway and names the entry that would not go
+  (`bta_sys.c`, `delete_entry`); the installer logs a cleanup failure instead
+  of throwing past its own success.
+- **`this.MnuImprimir.Emit("Click")` was called an assignment** by the member
+  check. The sentence now follows the line: a call is a TypeError, an
+  assignment does nothing, a read is undefined -- with the nearest member when
+  one is close. (A menu item is raised with `Click()`; it has no `Emit`.)
+- **The first HTTP request of a process takes 2.4-3 s on Windows**, a request
+  to `127.0.0.1` included: GIO's proxy resolver (MSYS2 ships `libproxy` and
+  `gnome`, both measured) runs WPAD discovery, because Windows' default
+  *Automatically detect settings* is on (`DefaultConnectionSettings` flags
+  `0x09`). `GIO_USE_PROXY_RESOLVER=dummy` makes it 14 ms. Not fixed here: the
+  answer is a resolver that asks WinHTTP, and that is a decision about people
+  behind a proxy.
+
 ## Every project has an id
 
 Decided 2026-11-23: the id stopped being optional, because a project that

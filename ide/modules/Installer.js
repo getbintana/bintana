@@ -98,7 +98,15 @@ export class Installer {
             return null;
         }
 
-        Directory.DeleteTree(out);
+        /* **The installer is written by now**, so a build context that will
+         * not go is a line in the log and not a failure: it threw out of here
+         * once, past the sentence below, and the person was told nothing about
+         * the setup that was sitting there finished. */
+        try {
+            Directory.DeleteTree(out);
+        } catch (e) {
+            ide.log(`Windows installer: the build folder was left behind: ${e.message}\n`);
+        }
         ide.log(`Windows installer: ${exe}\n`);
         Message.Info("Installer written to {0}", exe);
         return exe;

@@ -326,6 +326,9 @@ export class Palette {
         this.designer = designer;
         this.ide      = designer.ide;
         this.buttons  = {};
+        /* The *More* tab's, by library name. */
+        this.libraryButtons = {};
+        this.wanted   = null;
         /* What the buttons were built from, so a rebuild only happens when the
          * answer would be different. */
         this.offers   = null;
@@ -343,10 +346,20 @@ export class Palette {
      * nothing at all when what it would build is what is already there.
      */
     offer(components) {
-        const offers = (components || []).map((c) => c.name).join(",");
+        const more   = this.more();
+        const offers = (components || []).map((c) => c.name).join(",") + "|" +
+                       more.map((m) => m.name).join(",");
         if (this.book.Count && this.offers === offers) return;
 
         this.build(components || [], offers);
+    }
+
+    /* The libraries the *More* tab offers (`Classes.offeredLibraries`); none
+     * when there is no project to add one to. */
+    more() {
+        const classes = this.ide && this.ide.classes;
+        if (!classes || !this.ide.project) return [];
+        try { return classes.offeredLibraries(); } catch (e) { return []; }
     }
 
     /* Rebuilt whole rather than patched: the project's tab appears and
@@ -358,6 +371,7 @@ export class Palette {
 
         book.Clear();
         this.buttons = {};
+        this.libraryButtons = {};
         this.offers  = offers;
 
         /*
@@ -404,7 +418,44 @@ export class Palette {
             for (const type of tab.types) page.Add(this.button(type, component));
         }
 
-        book.Current = Math.min(page0, book.Count - 1);
+        /*
+         * **More: the controls of libraries the project does not use yet.**
+         * `Report`, `Chart`, `DataGrid` live in libraries, and a palette built
+         * from `uses` alone never shows a newcomer that they exist -- the first
+         * walkthrough of a report looked for it here and found nothing. One
+         * button per library, saying what it brings; a click names it in
+         * `project.btp` and the library's own tab takes over.
+         */
+        const more = this.more();
+        if (more.length) {
+            const page = new Flow();
+            page.Spacing = 4;
+            page.Margin  = 4;
+            book.Append(page);
+
+            const label = new Label();
+            label.Text = Locale.Text("More");
+            book.SetTabLabel(book.Count - 1, label);
+
+            for (const lib of more) {
+                const button = new Button();
+                button.Text    = `${lib.name}: ${lib.components.join(", ")}`;
+                button.Tooltip = Locale.Text("Use the {0} library in this project, and put its controls in the palette",
+                                             lib.name);
+                button.On("Click", () => {
+                    this.wanted = lib.name;
+                    this.ide.manifest.useLibrary(lib.name);
+                });
+                this.libraryButtons[lib.name] = button;
+                page.Add(button);
+            }
+        }
+
+        /* The library just added, if there is one: its tab is what the click
+         * was for. Otherwise the tab the person was on. */
+        const wanted = this.wanted ? tabs.findIndex((t) => t.name === this.wanted) : -1;
+        this.wanted  = null;
+        book.Current = wanted >= 0 ? wanted : Math.min(page0, book.Count - 1);
     }
 
     button(type, component) {

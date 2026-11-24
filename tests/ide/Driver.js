@@ -2289,8 +2289,10 @@ function* p_palette(ide) {
      */
     const libTabs = new Set(ide.components.filter((c) => c.library)
                                           .map((c) => c.library));
+    /* ...and *More* last, while a library this machine has is not used yet. */
+    const moreTab = ide.palette.more().length ? 1 : 0;
     eq("the palette has a tab per group, and per library",
-       ide.Palette.Count, PALETTE_TABS.length + libTabs.size);
+       ide.Palette.Count, PALETTE_TABS.length + libTabs.size + moreTab);
     eq("and a button per type, the libraries' included",
        Dictionary.Keys(ide.palette.buttons).length,
        PALETTE.length + ide.components.length);
@@ -2345,9 +2347,42 @@ function* p_palette(ide) {
     /* Last, after the runtime's groups -- and there is no `Project` tab here at
      * all, because this project has no components of its own. A library's
      * components in a tab by that name would be saying something untrue. */
-    eq("the library gets a tab of its own, last", tabs.at(-1), "gadgets");
+    eq("the library gets a tab of its own, last but More",
+       tabs[tabs.length - 1 - moreTab], "gadgets");
     check("and no Project tab, since the project has none of its own",
           !tabs.includes(COMPONENT_TAB), JSON.stringify(tabs));
+
+    /*
+     * **More: the controls of libraries the project does not use yet.** A
+     * `Report` is `lib/report`'s, and the walkthrough of a report looked for it
+     * in the palette and found nothing, with no word of where it was. The last
+     * tab names each library this machine has and what it brings; a click
+     * writes it in `uses`, and the library's own tab is what shows next.
+     */
+    eq("libraries not used yet get a More tab, last", tabs.at(-1), "More");
+    const reportOffer = ide.palette.libraryButtons.report;
+    check("...with a button for report that says it brings Report",
+          !!reportOffer && reportOffer.Text.startsWith("report: ") &&
+          reportOffer.Text.includes("Report"),
+          reportOffer ? reportOffer.Text : JSON.stringify(Dictionary.Keys(ide.palette.libraryButtons)));
+    check("...and not for a library the project already uses",
+          !ide.palette.libraryButtons.gadgets);
+    const manifestBefore = File.Load(File.Join(TMP, "project.btp"));
+    if (reportOffer) {
+        reportOffer.Click();
+        yield* settled(ide);
+        check("pressing it names the library in uses",
+              (JSON.parse(File.Load(File.Join(TMP, "project.btp"))).uses || []).includes("report"),
+              File.Load(File.Join(TMP, "project.btp")));
+        check("...and the palette offers its controls", !!palette(ide, "Report"),
+              JSON.stringify(Dictionary.Keys(ide.palette.buttons).slice(-6)));
+        eq("...on its own tab, which is the one shown",
+           ide.Palette.Tabs[ide.Palette.Current], "report");
+        check("...and More no longer offers it", !ide.palette.libraryButtons.report);
+    }
+    File.Save(File.Join(TMP, "project.btp"), manifestBefore);
+    ide.listFiles();
+    yield* settled(ide);
 
     check("and a button that places it", !!palette(ide, "Dial"));
     palette(ide, "Dial").Click();
@@ -10417,6 +10452,23 @@ function* p_menus(ide) {
     eq("cancelling leaves the form untouched",
        ide.designer.menus()[0].children[0].text, "First");
 
+    /* **Menu: a second menu on the bar, whatever is selected.** Submenu goes
+     * inside a selected menu, and the tree always has a selection once it has
+     * a row, so the walkthrough's *Ayuda* landed inside *Archivo* with no
+     * gesture left that made it a sibling. */
+    ide.MnuMenus.Click();
+    yield;
+    const barDlg = ide.menuEditor;
+    const onBar  = barDlg.menus.length;
+    barDlg.Tree.Key = "0";
+    barDlg.BtnMenu_Click();
+    eq("Menu adds to the bar, not inside the selected menu",
+       barDlg.menus.length, onBar + 1);
+    eq("...at its end, selected", barDlg.Tree.Key, `${onBar}`);
+    eq("...as a menu, with nothing in it yet",
+       JSON.stringify((barDlg.menus[onBar] || {}).children), "[]");
+    barDlg.BtnCancel_Click();
+
     /* An item with no name has no action to raise: the loader would refuse it,
      * so the editor does instead. */
     ide.MnuMenus.Click();
@@ -15214,6 +15266,23 @@ function* p_check(ide) {
           said.some((r) => r.file === "Bad.js" && r.text.includes("has no Txt")),
           JSON.stringify(said));
 
+    /* **The sentence says what the line does with it.** Every use was called
+     * an assignment that would do nothing, a call included -- and a call is a
+     * TypeError when it runs. The nearest member is offered when one is close. */
+    const memberSaid = (line) =>
+        [...ide.names.members(line, [{ name: "Btn", type: "Button" },
+                                     { name: "MnuPrint", type: "MenuItem" }], "M.js", -1)]
+            .map((p) => p.text).join(" | ");
+    eq("a call to a member the class lacks is a TypeError",
+       memberSaid('this.MnuPrint.Emit("Click");\n'),
+       "MenuItem has no Emit: this call is a TypeError when it runs");
+    eq("...an assignment does nothing, and the close name is offered",
+       memberSaid('this.Btn.Txt = "x";\n'),
+       "Button has no Txt: the assignment would be accepted and do nothing -- did you mean Text?");
+    eq("...and a read gives undefined",
+       memberSaid("const t = this.Btn.Txt;\n"),
+       "Button has no Txt: reading it gives undefined -- did you mean Text?");
+
     /*
      * And the same three checks over what a `.form` names outside `children`,
      * which is the hole three flatteners shared. Every one of these is a real
@@ -19597,6 +19666,24 @@ function* p_report(ide) {
         dlg.BtnOk_Click();
         yield;
     }
+
+    /* **A report with no band starts with a page header and a detail**, the
+     * detail selected: a Report fresh off the palette is `Sections: {}`, and
+     * the walkthrough's designer opened with nothing to add an element to.
+     * Proposed on the copy -- Cancel hands nothing back. */
+    let emptyAccepted = null;
+    const fresh = ReportForm.edit({}, {}, (shape) => { emptyAccepted = shape; });
+    yield;
+    eq("an empty report opens with a page header and a detail",
+       JSON.stringify(fresh.bandNames()), '["PageHeader","Detail"]');
+    eq("...the detail selected, so Add has somewhere to put a field",
+       fresh.bandName, "Detail");
+    fresh.CmbAddKind.Text = "Field";
+    fresh.BtnAdd_Click();
+    eq("...and Add puts it there",
+       ((fresh.sections.Detail || {}).Elements || []).length, 1);
+    fresh.BtnCancel_Click();
+    eq("cancelling hands nothing back", emptyAccepted, null);
 
     const props = rep.__node.properties;
     check("the designed shape is in the node",

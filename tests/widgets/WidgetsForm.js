@@ -26616,6 +26616,21 @@ class Form1 extends Form {
         Directory.DeleteTree(closed);
         Directory.DeleteTree(tree);
 
+        /* **A read-only file under it goes too, on Windows as on Linux.**
+         * `g_remove` refused one on Windows and reported the `rmdir` it tried
+         * next -- "invalid argument", about the root -- so the IDE's installer,
+         * whose payload carries MSYS2's read-only `zoneinfo`, threw while
+         * cleaning up after a setup it had written. */
+        const ro = File.Join(SCRATCH, "read-only-tree");
+        Directory.Make(File.Join(ro, "inner"));
+        const roFile = File.Join(ro, "inner", "fixed.txt");
+        File.Save(roFile, "do not touch");
+        if (Environment.OS === "Windows") Exec.Wait(["attrib", "+r", roFile]);
+        else Exec.Wait(["chmod", "a-w", roFile]);
+        eq("DeleteTree takes a folder with a read-only file in it",
+           refusal(() => Directory.DeleteTree(ro)), null);
+        eq("...and it is gone", File.Exists(ro), false);
+
         /* One level unless asked, which is the same bargain `List` makes. */
         check("shallow by default",
               !Directory.Files(SCRATCH).some((p) => p.includes("/deep/")),

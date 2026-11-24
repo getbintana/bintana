@@ -131,6 +131,32 @@ one-page answer to *what is new since the release I have*.
   `true` or `false`, and `true` with no `id`. On a `main` project the key does
   nothing -- there is no window to bring forward -- and the check says so as a
   warning.
+- **`Directory.DeleteTree` takes a read-only file on Windows**, as it does on
+  Linux, and names the entry that would not go. Windows refused one and the
+  error said *invalid argument* about the folder the walk began at -- which is
+  how the IDE's installer threw after writing a setup, its build folder
+  holding MSYS2's read-only time-zone files.
+- **The member check says what the line does.** `this.MnuSave.Emit("Click")`
+  was reported as an assignment that would do nothing; a call is now a
+  TypeError when it runs, a read gives undefined, and the nearest member is
+  offered when one is close (`did you mean Text?`).
+
+### IDE
+
+- **The palette offers the libraries a project does not use yet.** Its last
+  tab, *More*, names each library this machine has with the controls it brings
+  (`report: Report`); a click adds it to `uses` and shows its tab. `Report`,
+  `Chart` and `DataGrid` were nowhere in the palette until a library was named
+  in Project settings, and nothing said so.
+- **The menu editor has a *Menu* button**, which adds a menu at the end of the
+  bar whatever is selected. *Submenu* goes inside a selected menu, and a tree
+  with rows always has a selection, so a second menu on the bar could not be
+  made.
+- **A report with no bands opens its designer with a page header and a
+  detail**, the detail selected. A `Report` off the palette opened with an
+  empty band list and an Add that refused.
+- **The Windows installer logs a build folder it could not delete** instead of
+  throwing after the setup was written.
 
 ## 0.4.1 — 2026-11-22
 

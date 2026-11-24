@@ -1367,7 +1367,37 @@ BTA_CANCEL_SCOPED(sys_dir_copy, "Directory.Copy")
  * spells that out: a recursive delete behind an innocent name is how a wrong
  * path becomes a lost afternoon, and the two are one word apart on purpose.
  */
-static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error)
+/*
+ * **On Windows a read-only file is taken too**, as it is on Linux, where
+ * what decides is the folder's permission and not the file's. `g_remove`
+ * refuses one there, then tries `rmdir` on it and reports *that* failure --
+ * "invalid argument" -- so the IDE's installer, whose payload carries MSYS2's
+ * read-only `zoneinfo` files, wrote the setup and then threw while cleaning up,
+ * naming the root and nothing under it. The bit is cleared just before the
+ * file goes, and only for a file this walk is about to delete anyway.
+ */
+static bool delete_entry(GFile *file, GCancellable *cancel, GError **error)
+{
+#ifdef G_OS_WIN32
+    char *path = g_file_get_path(file);
+    if (path) {
+        gunichar2 *wide = g_utf8_to_utf16(path, -1, NULL, NULL, NULL);
+        if (wide) {
+            DWORD attrs = GetFileAttributesW(wide);
+            if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_READONLY))
+                SetFileAttributesW(wide, attrs & ~FILE_ATTRIBUTE_READONLY);
+            g_free(wide);
+        }
+        g_free(path);
+    }
+#endif
+    return g_file_delete(file, cancel, error);
+}
+
+/* `failed` is set to the entry that could not go, so the sentence names it
+ * rather than the folder the walk began at. */
+static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error,
+                        char **failed)
 {
     GFileEnumerator *walk = g_file_enumerate_children(
         dir, G_FILE_ATTRIBUTE_STANDARD_NAME, G_FILE_QUERY_INFO_NONE,
@@ -1376,7 +1406,11 @@ static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error)
     /* Not a folder: it is a file, and deleting it is the whole of the job. */
     if (!walk) {
         g_clear_error(error);
-        return g_file_delete(dir, cancel, error);
+        if (delete_entry(dir, cancel, error))
+            return true;
+        if (failed && !*failed)
+            *failed = g_file_get_path(dir);
+        return false;
     }
 
     bool ok = true;
@@ -1388,7 +1422,7 @@ static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error)
         }
 
         GFile *child = g_file_get_child(dir, g_file_info_get_name(info));
-        ok = delete_tree(child, cancel, error);
+        ok = delete_tree(child, cancel, error, failed);
 
         g_object_unref(child);
         g_object_unref(info);
@@ -1397,7 +1431,13 @@ static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error)
     }
 
     g_object_unref(walk);
-    return ok && g_file_delete(dir, cancel, error);
+    if (!ok)
+        return false;
+    if (g_file_delete(dir, cancel, error))
+        return true;
+    if (failed && !*failed)
+        *failed = g_file_get_path(dir);
+    return false;
 }
 
 static JSValue sys_dir_delete(JSContext *ctx, JSValueConst this_val,
@@ -1428,12 +1468,19 @@ static JSValue sys_dir_delete_tree_in(JSContext *ctx, JSValueConst this_val,
          * wrong, and taking it would be doing the wrong thing quietly. */
         e = bta_throw_text(ctx, "%s is not a folder", path);
     } else {
-        GFile  *dir   = g_file_new_for_path(path);
-        GError *error = NULL;
+        GFile  *dir    = g_file_new_for_path(path);
+        GError *error  = NULL;
+        char   *failed = NULL;
 
-        if (!delete_tree(dir, cancel, &error))
-            e = bta_throw_text(ctx, "cannot delete %s: %s", path,
-                               bta_gerror_text(error));
+        if (!delete_tree(dir, cancel, &error, &failed)) {
+            if (failed && strcmp(failed, path) != 0)
+                e = bta_throw_text(ctx, "cannot delete %s: %s could not be deleted: %s",
+                                   path, failed, bta_gerror_text(error));
+            else
+                e = bta_throw_text(ctx, "cannot delete %s: %s", path,
+                                   bta_gerror_text(error));
+        }
+        g_free(failed);
         g_clear_error(&error);
         g_object_unref(dir);
     }
@@ -6119,8 +6166,10 @@ void bta_sys_init(JSContext *ctx, JSValue global)
                       JS_NewCFunction(ctx, sys_dir_delete, "Delete", 1));
     /* DeleteTree(path, [cancellable])
      *   it and everything under it — the one to be careful with, and the
-     *   reason it has a name of its own rather than a flag. A `Cancellable`
-     *   last stops it part way, leaving what was not yet deleted
+     *   reason it has a name of its own rather than a flag. A read-only file
+     *   under it goes too, on Windows as on Linux; one that cannot go is named
+     *   in the error. A `Cancellable` last stops it part way, leaving what was
+     *   not yet deleted
      */
     JS_SetPropertyStr(ctx, dir, "DeleteTree",
                       JS_NewCFunction(ctx, sys_dir_delete_tree, "DeleteTree", 2));

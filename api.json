@@ -14700,7 +14700,7 @@
           "Params": 2,
           "Signature": "(path, [cancellable])",
           "Returns": "",
-          "Doc": "it and everything under it — the one to be careful with, and the reason it has a name of its own rather than a flag. A `Cancellable` last stops it part way, leaving what was not yet deleted",
+          "Doc": "it and everything under it — the one to be careful with, and the reason it has a name of its own rather than a flag. A read-only file under it goes too, on Windows as on Linux; one that cannot go is named in the error. A `Cancellable` last stops it part way, leaving what was not yet deleted",
           "Native": true
         },
         {

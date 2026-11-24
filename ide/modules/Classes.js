@@ -270,6 +270,7 @@ export class Classes {
         this.files        = [];
         this.components   = [];
         this.startupClass = "";
+        this.offered      = null;
         this.cache        = null;
         this.byNamespace  = null;
         this.controlClasses = null;
@@ -863,9 +864,48 @@ export class Classes {
     }
 
     componentsInLibraries() {
+        return this.componentsIn(this.libraries || []);
+    }
+
+    /*
+     * **The libraries this machine has that the project does not load, with
+     * the components each would put in the palette** -- `[{ name, components }]`,
+     * only those with one at least.
+     *
+     * A `Report` is a component of `lib/report`, and a palette built from the
+     * project's `uses` does not have it until the library is named there. The
+     * first walkthrough of a report found exactly that: nothing on screen said
+     * the control existed, and the way to it was a list in Project settings
+     * one has to know to open. The palette's last tab offers these instead
+     * (`Palette.build`), and a click names the library (`Manifest.useLibrary`).
+     *
+     * Worked out on the first question after a listing, and kept until the
+     * next: a palette is built on every switch between forms.
+     */
+    offeredLibraries() {
+        if (this.offered) return this.offered;
+
+        const project = this.ide.project;
+        const loaded  = new Set((this.libraries || []).map((l) => l.name));
+        const out     = [];
+        let   names   = [];
+
+        try { names = project ? Application.Libraries(project) : []; } catch (e) { names = []; }
+        for (const name of names) {
+            if (loaded.has(name)) continue;
+            const dir = Application.LibraryPath(name, project);
+            if (!dir) continue;
+            const components = this.componentsIn([{ name, dir }]).map((c) => c.name);
+            if (components.length) out.push({ name, components });
+        }
+        this.offered = out;
+        return out;
+    }
+
+    componentsIn(libraries) {
         const out = [];
 
-        for (const { name: library, dir } of this.libraries || []) {
+        for (const { name: library, dir } of libraries) {
             for (const path of Directory.Files(dir, { Pattern: "*.form",
                                                       Recursive: true })) {
                 const base = File.BaseName(path);

@@ -249,6 +249,27 @@ export class Manifest {
     }
 
     /*
+     * Names a library in `uses`, and lists the project again so its components
+     * reach the palette. What the palette's *More* tab does with a click: the
+     * same edit Project settings makes with a tick, without the dialog.
+     * Answers whether the file now names it.
+     */
+    useLibrary(name) {
+        let has = false;
+        this.update((config) => {
+            const uses = config.Uses || [];
+            has = true;
+            if (uses.includes(name)) return false;
+            config.Uses = [...uses, name];
+        });
+        if (!has) return false;
+
+        this.ide.listFiles();
+        this.ide.log(Locale.Text("project.btp now uses {0}\n", name));
+        return true;
+    }
+
+    /*
      * The order the runtime would load a project that declares none: every `.js`
      * under it, sorted by path.  The same rule `collect_sources` follows, so
      * writing it down changes nothing about what happens today -- which is the

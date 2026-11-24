@@ -58,6 +58,20 @@ export class ReportForm extends Form {
         const opts = options || {};
 
         dlg.sections    = clone(sections || {});
+        /*
+         * **A report with no band at all starts with a page header and a
+         * detail**, the detail selected. A `Report` fresh off the palette has
+         * `Sections: {}`, and the walkthrough's double click opened a designer
+         * whose band list was empty and whose Add said *Add a Detail band
+         * first* -- every element a report has lives in a band, so the first
+         * thing anybody does is add the same two. Proposed on the copy: Cancel
+         * leaves the report as empty as it was.
+         */
+        const seeded = !ReportForm.hasBand(dlg.sections);
+        if (seeded) {
+            dlg.sections.PageHeader = { Height: 30, Elements: [] };
+            dlg.sections.Detail     = { Height: 24, Elements: [] };
+        }
         dlg.paper       = opts.Paper || "A4";
         dlg.orientation = opts.Orientation || "Portrait";
         dlg.margin      = typeof opts.Margins === "number" ? opts.Margins
@@ -65,7 +79,7 @@ export class ReportForm extends Form {
                             ? (opts.Margins.Top ?? 40) : 40;
         dlg.project     = opts.Project || "";
         dlg.onAccept    = onAccept;
-        dlg.bandName    = "";
+        dlg.bandName    = seeded ? "Detail" : "";
         dlg.elIndex     = -1;
         dlg.rows        = {};
         dlg.filling     = false;
@@ -74,6 +88,13 @@ export class ReportForm extends Form {
 
         dlg.Show();
         return dlg;
+    }
+
+    /* Whether a `Sections` has any band in it, a group's included. */
+    static hasBand(sections) {
+        const sec = sections || {};
+        return FIXED.some((name) => !!sec[name]) ||
+               (Array.isArray(sec.Groups) && sec.Groups.length > 0);
     }
 
     /* --------------------------------------------------------------- the form */

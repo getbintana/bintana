@@ -220,6 +220,19 @@ export class MenuForm extends Form {
         this.fillTree(key);
     }
 
+    /*
+     * **A menu on the bar, at its end, whatever is selected.** `Submenu`
+     * goes where the selection says -- inside a selected menu -- and the tree
+     * always has a selection once it has a row, so with one menu on the bar
+     * there was no gesture left that made a second: the walkthrough's *Ayuda*
+     * landed inside *Archivo*. The bar is the one place every menu bar needs
+     * a second thing in.
+     */
+    BtnMenu_Click() {
+        this.menus.push({ text: "Menu", children: [] });
+        this.fillTree(`${this.menus.length - 1}`);
+    }
+
     BtnItem_Click() {
         this.insert({ name: this.freshName(), text: "Item" });
     }
