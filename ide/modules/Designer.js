@@ -1097,12 +1097,23 @@ export class Designer {
 
     reportInfo(node) {
         const props = node.properties || {};
+        let head;
         try {
             const count = this.reportDocument(node).DesignLayout().Bands.length;
-            return `${props.Paper || "A4"} · ${count} band${count === 1 ? "" : "s"} — double click to design`;
+            head = `${props.Paper || "A4"} · ${count} band${count === 1 ? "" : "s"} — double click to design`;
         } catch (e) {
-            return "Report — double click to design";
+            head = "Report — double click to design";
         }
+
+        /* **A report is shown in the window unless it is told not to be**:
+         * it is a page preview, as large as a page, and the walkthrough's sat
+         * over the table it was meant to print. One that is only printed or
+         * saved (`Send`, `SavePdf`) keeps working with `Visible` false, and
+         * nothing said so. */
+        const tail = props.Visible === false
+            ? Locale.Text("Hidden when the program runs: it prints and saves all the same.")
+            : Locale.Text("Shown when the program runs. Visible = false keeps it off the window; it still prints and saves.");
+        return `${head}\n${tail}`;
     }
 
     drawReportDesign(p, node, width, height) {

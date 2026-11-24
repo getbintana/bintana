@@ -601,6 +601,20 @@ GPtrArray *bta_project_libs(JSContext *ctx, const char *dir, JSValueConst cfg)
  * An **empty array** is a real answer: the library declared no files for that
  * purpose.
  */
+/*
+ * A path a manifest names, against the directory it lives in -- **and an
+ * absolute one as it is.** `g_build_filename(dir, "/abs/x.js")` concatenates:
+ * on Linux that is `dir//abs/x.js`, which does not exist either, and on
+ * Windows `C:\proj\C:/src/x.js`, which is how a probe that listed the IDE's
+ * sources by absolute path failed with `cannot read`. Free the answer.
+ */
+static char *manifest_path(const char *dir, const char *named)
+{
+    if (g_path_is_absolute(named))
+        return g_strdup(named);
+    return g_build_filename(dir, named, NULL);
+}
+
 static GPtrArray *library_list(JSContext *ctx, const char *dir, const char *key)
 {
     GPtrArray *out  = NULL;
@@ -634,7 +648,7 @@ static GPtrArray *library_list(JSContext *ctx, const char *dir, const char *key)
                 const char *f = JS_ToCString(ctx, e);
 
                 if (f && *f)
-                    g_ptr_array_add(out, g_build_filename(dir, f, NULL));
+                    g_ptr_array_add(out, manifest_path(dir, f));
                 JS_FreeCString(ctx, f);
                 JS_FreeValue(ctx, e);
             }
@@ -691,7 +705,7 @@ GPtrArray *bta_project_sources(JSContext *ctx, const char *dir,
             JSValue     e = JS_GetPropertyUint32(ctx, arr, i);
             const char *s = JS_ToCString(ctx, e);
             if (s)
-                g_ptr_array_add(out, g_build_filename(dir, s, NULL));
+                g_ptr_array_add(out, manifest_path(dir, s));
             JS_FreeCString(ctx, s);
             JS_FreeValue(ctx, e);
         }

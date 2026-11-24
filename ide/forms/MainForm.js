@@ -81,6 +81,10 @@ const FORMAT_LANGUAGES = ["js", "json", "css"];
  */
 const NEW_FORM_USES = ["dialog"];
 
+/* The release a new project starts at: the one `Metainfo.create` writes as its
+ * first, so the two agree from the start. */
+const NEW_VERSION = "0.1.0";
+
 /* The stylesheet a new project starts with: how the application looks, in the
  * one place that answers for it.  A control wears a class from here by setting
  * Style; Background, Foreground and Font on a control are the exception. */
@@ -843,9 +847,13 @@ export class MainForm extends Form {
         /* Never without an id: the runtime does not start a project that has
          * none. A caller that brings none gets the proposal the dialog makes. */
         id = id || NewProjectForm.suggestId(File.Name(dir));
+        /* **And a version**, `NEW_VERSION`: the metainfo's first release says
+         * 0.1.0 already, and a project that said nothing named its installer
+         * `…-0.0-…` and its About box nothing at all. */
         const config = new ProjectFile({
             Name:        File.Name(dir),
             Id:          id,
+            Version:     NEW_VERSION,
             Startup:     "Form1",
             Sources:     [`${first}.js`],
             Uses:        NEW_FORM_USES,
@@ -896,6 +904,7 @@ export class MainForm extends Form {
         const config = new ProjectFile({
             Name:        File.Name(dir),
             Id:          id,
+            Version:     NEW_VERSION,
             Main:        "Main",
             Sources:     ["Main.js"],
             Description: description || "",

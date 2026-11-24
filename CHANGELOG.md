@@ -167,6 +167,23 @@ one-page answer to *what is new since the release I have*.
   empty band list and an Add that refused.
 - **The Windows installer logs a build folder it could not delete** instead of
   throwing after the setup was written.
+- **A new project starts at version 0.1.0**, the release its metainfo already
+  named; it had none, and its installer said `0.0`.
+- **Uninstalling from *Installed applications* says which folders stay**, as
+  `bintana apps remove` does.
+- **A report on a form says it is shown when the program runs**, and that
+  `Visible = false` keeps it off the window while it still prints and saves.
+- **The IDE's Spanish catalogue is complete again**: 926 of 926, the dialogs
+  of these days included, every one read and not taken from msgmerge's
+  guesses.
+- **A setup is named after the application**: `Cotizaciones-0.1.0-setup.exe`
+  where it was `bintana-cotizaciones-0.0-windows-x86_64.exe`, the Linux
+  command's spelling. `Nsis.Script` answers the name in `Setup`, and the IDE's
+  chooser and `tools/pack --nsis` both use it.
+- **A `sources` entry may be an absolute path.** The loader joined every
+  entry to the project folder, so on Windows `C:/shared/x.js` became
+  `C:\proj\C:/shared/x.js` and the program stopped with `cannot read`; and
+  `bintana check` reported such a file as missing.
 - **The installer and `tools/pack` name the databases they carry**
   (`Package.dataFiles`, and `Data` in what `Package.Write` answers). Run starts
   a program in its project folder, so a relative `Database.Sqlite("x.db")`

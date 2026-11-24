@@ -87,10 +87,21 @@ export class AppsForm extends Form {
         const entry = at >= 0 && at < this.entries.length ? this.entries[at] : null;
         if (!entry) return;
 
+        /* **What stays is said too**: the application's own folders, named by
+         * its id, hold what the person made with it, and removing the entry
+         * leaves them -- the same sentence `bintana apps remove` prints
+         * (`Apps.Kept`). */
+        let kept = [];
+        try { kept = Apps.Kept(entry.Id); } catch (e) { kept = []; }
+        let question = Locale.Text("Remove {0} from the menu? The project and its files are not touched.",
+                                   entry.Name);
+        if (kept.length)
+            question += "\n\n" + Locale.Text("Its settings and data stay where they are:\n{0}",
+                                             kept.join("\n"));
+
         this.confirm = ConfirmForm.ask(
             Locale.Text("Uninstall application"),
-            Locale.Text("Remove {0} from the menu? The project and its files are not touched.",
-                        entry.Name),
+            question,
             Locale.Text("Uninstall"),
             () => {
                 try {

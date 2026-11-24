@@ -56,11 +56,12 @@ export class Installer {
         /* The suggestion is best-effort: a manifest that will not read still
          * reaches the chooser, and `Script` refuses with the sentence when it
          * is asked to write. */
-        let command = "bintana-app", version = "0.0";
+        /* Named after the application (`Nsis.setupName`), as `Nsis.Script`
+         * names it when nobody chooses. */
+        let suggested = Nsis.setupName(File.Name(ide.project), "");
         try {
             const config = Package.configOf(ide.project);
-            command = Package.commandName(config.Id);
-            version = config.Version || "0.0";
+            suggested = Nsis.setupName(config.Name, config.Version);
         } catch (e) { /* named where it is refused */ }
 
         Dialog.SaveFile(Locale.Text("Windows installer"), {
@@ -68,7 +69,7 @@ export class Installer {
              * so starting inside it would be offering a folder whose contents
              * do not matter. */
             Folder:  File.Directory(File.Absolute(ide.project)),
-            Name:    `${command}-${version}-windows-x86_64.exe`,
+            Name:    suggested,
             Filters: [[Locale.Text("Windows installers"), "*.exe"],
                       [Locale.Text("All files"), "*"]],
         }, (path) => this.writeInstaller(path));

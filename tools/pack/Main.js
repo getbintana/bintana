@@ -141,8 +141,7 @@ function nsis(args) {
         ctx = Nsis.Script(project, out, { Files: files, Schemes: schemes });
         Nsis.Stage(project, out, { Prefix: prefix || undefined, With: extra });
         if (!exe)
-            exe = File.Join(out, `${ctx.Command}-` +
-                                 `${ctx.Version || "0.0"}-windows-x86_64.exe`);
+            exe = File.Join(out, ctx.Setup);
         Nsis.Build(ctx.Script, File.Absolute(exe));
     } catch (e) {
         print(`pack: ${e.message}`);

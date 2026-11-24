@@ -135,6 +135,18 @@ copy -- and a warning on every open would be one nobody could silence. How to
 ship one is in `bintana-docs`' `first-app.md` and `bintana-llm`'s
 `06-data.md`.
 
+**The setup is named after the application** (`Nsis.setupName`:
+`<Name>-<version>-setup.exe`, what Windows refuses in a name a dash), and
+`Nsis.Script` answers it in `Setup` for `tools/pack` and the IDE's chooser.
+
+**Run from the payload, before installing** (2026-11-24): the staged
+`payload\bin\bintana-gui.exe` on `payload\share\bintana\apps\<command>`, started
+in `payload` with only `System32` on `PATH` -- the shortcut's target and its
+working directory -- loaded `report`, built the menu bar and wrote a PDF to
+`DataDirectory`. The install itself (shortcuts, the uninstall key, the
+uninstaller) was not run then: it writes the user's Start Menu, desktop and
+registry, and the procedure below is for a person to run.
+
 **The Start Menu shortcut starts in `$INSTDIR`** (`SetOutPath` comes before
 `CreateShortCut` in `Nsis.Script`), Run in the project folder, and a Linux
 menu entry has no `Path=`, so a relative path means three places.

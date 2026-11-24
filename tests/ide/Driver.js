@@ -9137,6 +9137,10 @@ function* p_projects(ide) {
     eq("and it lands in project.btp",
        JSON.parse(File.Load(File.Join(DESCED, "project.btp"))).description,
        "a test project");
+    /* A version from the start, the one the metainfo's first release says:
+     * a project with none named its installer `…-0.0-…`. */
+    eq("a new project starts at version 0.1.0",
+       JSON.parse(File.Load(File.Join(DESCED, "project.btp"))).version, "0.1.0");
     removeTree(DESCED);
 
     removeTree(NEWPROJ);
@@ -13344,8 +13348,9 @@ function* p_installer(ide) {
     }
 
     check("the item reaches the chooser", asked !== null);
-    check("suggesting a setup executable",
-          asked !== null && asked.opts.Name.endsWith("-windows-x86_64.exe"),
+    check("suggesting a setup executable named after the application",
+          asked !== null && asked.opts.Name.endsWith("-setup.exe") &&
+          !asked.opts.Name.startsWith("bintana-"),
           asked && asked.opts.Name);
     eq("and the first filter is the one it writes",
        asked.opts.Filters[0][1], "*.exe");
@@ -13715,12 +13720,22 @@ function* p_apps(ide) {
           browser.LblAppsFiles.Text);
     check("and something to remove", browser.BtnAppsRemove.Enabled);
 
+    /* **What stays is said in the question**: the application's own data
+     * folder, named by its id, is left by an uninstall (`Apps.Kept`). One is
+     * made for it here if the run has not made it already. */
+    const keptDir  = File.Join(Desktop.DataDirectory, "io.github.getbintana.IdeChild");
+    const madeKept = !File.IsDir(keptDir);
+    if (madeKept) Directory.Make(keptDir);
+
     browser.BtnAppsRemove.Click();
     yield;
 
     check("removing asks first", !!browser.confirm);
     if (!browser.confirm) return;
+    check("...naming the folders that stay",
+          browser.confirm.LblMessage.Text.includes(keptDir), browser.confirm.LblMessage.Text);
     browser.confirm.BtnYes.Click();
+    if (madeKept) Directory.DeleteTree(keptDir);
     yield;
 
     check("the entry is gone from the menu", at() === null);
@@ -19594,8 +19609,13 @@ function* p_report(ide) {
           rep.Children.map((c) => c.Name).join(","));
 
     const info = rep.Children.find((c) => c.Name === "ReportInfo");
-    if (info)
+    if (info) {
         check("the line says how to design it", /double click/.test(info.Text), info.Text);
+        /* A report is a page in the window unless told otherwise, and the
+         * walkthrough's covered the table it was meant to print. */
+        check("...and that Visible = false keeps it off the window",
+              info.Text.includes("Visible = false"), info.Text);
+    }
 
     /* The gesture: a double click on the stand-in opens the designer. */
     ide.Glass_DblClick(rep.X + 10, rep.Y + 10);

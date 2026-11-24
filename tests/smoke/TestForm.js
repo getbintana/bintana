@@ -569,6 +569,15 @@ class TestForm extends Form {
             }
             write("Main.js", "class Main extends Form { Form_Open() {} }\n");
 
+            /* An absolute path in `sources` is the file itself, as the runtime
+             * reads it -- joined to the project it was reported missing. */
+            manifest({ id: "io.github.getbintana.test.SmokeCheck",
+                       sources: [File.Absolute(File.Join(dir, "Main.js"))] });
+            const absRun = run(dir);
+            check("check finds a source named by its absolute path",
+                  !absRun.Output.includes("sources names"), absRun.Output);
+            manifest({ id: "io.github.getbintana.test.SmokeCheck" });
+
             /* **A database in the project is not a finding**: projects ship
              * one on purpose, and a warning on every open would be one nobody
              * could silence. Packaging names it instead (`Package.dataFiles`). */

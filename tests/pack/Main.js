@@ -539,10 +539,16 @@ function checkNsis(root) {
                        `"$INSTDIR\\share\\bintana\\apps\\bintana-setup"'`) &&
           !nsi.includes(`MUI_FINISHPAGE_RUN_PARAMETERS`), nsi);
     check("and none of them the .cmd", !nsi.includes(`bintana-setup.cmd`), nsi);
-    eq("named after the command and the version by default",
+    /* After the application, not the Linux command: it is what a person
+     * downloads and double-clicks. */
+    eq("named after the application and the version by default",
        new Regex(`^!define OUTFILE "(.*)"`, { Multiline: true }).Matches(nsi)
            .map((m) => m.Group(1)).join(),
-       "bintana-setup-2.1-windows-x86_64.exe");
+       "Setup-2.1-setup.exe");
+    eq("...the name Script answers too", ctx.Setup, "Setup-2.1-setup.exe");
+    eq("what Windows refuses in a file name becomes a dash",
+       Nsis.setupName("Cuentas a/b: 2026?", "1.0"), "Cuentas a-b- 2026-1.0-setup.exe");
+    eq("...and with no version it is 0.0", Nsis.setupName("Notas", ""), "Notas-0.0-setup.exe");
 
     check("the icon travels beside the script", File.Exists(ctx.Icon), ctx.Icon || "");
     const ico = File.LoadBytes(ctx.Icon);

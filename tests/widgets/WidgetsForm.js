@@ -762,6 +762,7 @@ const TESTS = [
      * of every `/shutdown` endpoint. */
     "HttpServerStop",
     "HttpProxy",
+    "AbsoluteSources",
     "HttpServerDropped",
     "HttpServerHold",
     /* Async: lib/datagrid, laid out and scrolled. */
@@ -31645,6 +31646,35 @@ export class UriChild extends Form {
      *   system said, because libsoup 3 reads a NULL resolver as *no proxy*.
      *   Elsewhere what the environment does is GIO's module's business.
      */
+    /*
+     * **A `sources` entry may be an absolute path**, and is read as it is.
+     * The loader joined every entry to the project folder, so on Windows
+     * `C:/src/shared/Shared.js` became `C:\proj\C:/src/shared/Shared.js` and the
+     * program stopped with `cannot read` -- found by a probe that listed the
+     * IDE's own sources from a scratch folder. A relative entry is the
+     * project's, as before.
+     */
+    testAbsoluteSources() {
+        const shared = File.Join(SCRATCH, "abs-shared");
+        const proj   = File.Join(SCRATCH, "abs-proj");
+        Directory.Make(shared);
+        Directory.Make(proj);
+        File.Save(File.Join(shared, "Shared.js"), "function sharedValue() { return 42; }\n");
+        File.Save(File.Join(proj, "Main.js"),
+                  "function Main() { print(`shared says ${sharedValue()}`); }\n");
+        File.Save(File.Join(proj, "project.btp"), JSON.stringify({
+            name: "AbsSources", id: "io.github.getbintana.test.AbsSources", main: "Main",
+            sources: [File.Absolute(File.Join(shared, "Shared.js")), "Main.js"] }));
+
+        const r = Exec.Wait([Application.Executable, proj], { Timeout: 30000 });
+        eq("a project runs with an absolute path in sources", r.ExitCode, 0, r.Output);
+        check("...and the file at that path is what loaded",
+              r.Output.includes("shared says 42"), r.Output);
+
+        Directory.DeleteTree(proj);
+        Directory.DeleteTree(shared);
+    }
+
     testHttpProxy() {
         let a = null, b = null;
         try { a = Http.Server({ Port: 0 }); b = Http.Server({ Port: 0 }); }
