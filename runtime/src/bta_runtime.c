@@ -1356,11 +1356,13 @@ BtaApp *bta_app_new(const char *project_dir)
     char *cfg_path = bta_project_manifest(app->dir);
     size_t len;
     char  *cfg_src = bta_read_file(cfg_path, &len);
+    bool   has_startup = false;
 
     if (cfg_src) {
         JSValue cfg = JS_ParseJSON(app->ctx, cfg_src, len, cfg_path);
         if (JS_IsException(cfg)) {
             bta_dump_error(app->ctx);
+            exit(2);
         } else {
             g_free(app->name);
             g_free(app->version);
@@ -1393,6 +1395,12 @@ BtaApp *bta_app_new(const char *project_dir)
             app->single = JS_ToBool(app->ctx, sv) > 0;
             JS_FreeValue(app->ctx, sv);
             app->startup = bta_project_string(app->ctx, cfg, "startup", "Form1");
+            /* Declared, not defaulted: a library has neither a startup form
+             * nor a main, and the default `Form1` must not make it look like
+             * an application. */
+            JSValue stv = JS_GetPropertyStr(app->ctx, cfg, "startup");
+            has_startup = JS_IsString(stv);
+            JS_FreeValue(app->ctx, stv);
             /* A project declares one or the other: "startup" opens a form,
              * "main" calls a function and never touches the display. */
             app->entry   = bta_project_string(app->ctx, cfg, "main", NULL);
@@ -1408,6 +1416,20 @@ BtaApp *bta_app_new(const char *project_dir)
         g_free(cfg_src);
     } else {
         fprintf(stderr, "bintana: no project.btp in %s\n", app->dir);
+        exit(2);
+    }
+
+    /*
+     * **A library is not an application.** It declares neither "startup" nor
+     * "main"; it is a directory an application loads with "uses", and has no
+     * window, settings or package of its own. `bintana-gui` has nothing to
+     * open here, and saying so is better than the default form's
+     * `ReferenceError` or an id refusal the library does not owe.
+     */
+    if (!has_startup && !app->entry) {
+        fprintf(stderr, "bintana: %s is a library: it declares neither "
+                        "\"startup\" nor \"main\", and is loaded by an "
+                        "application with \"uses\"\n", app->dir);
         exit(2);
     }
 

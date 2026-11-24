@@ -1694,14 +1694,16 @@ through `makensis`. The installer refuses a development checkout (it stages
   with a resolver that asks WinHTTP (`bta_proxy.c`, and *Proxies* in
   `network.md`).
 
-## Every project has an id
+## Every application has an id
 
-Decided 2026-11-23: the id stopped being optional, because a project that
-grew always reached something that needs one -- the installer, the metainfo,
-`singleInstance`, a toast on Windows -- and was refused there, after the name
-was in a dozen files. The runtime refuses at load (`bta_project_id_ok`);
-`ProjectFile.Validate` says it first; and nothing the IDE makes is without
-one:
+Decided 2026-11-23: the id stopped being optional for a project that runs,
+because one that grew always reached something that needs it -- the installer,
+the metainfo, `singleInstance`, a toast on Windows -- and was refused there,
+after the name was in a dozen files. **An application -- a project with
+`startup` or `main` -- declares one; a library has neither and none**, and the
+hosts say it is a library rather than asking for an id. The runtime refuses an
+application without one (`bta_project_id_ok`); `ProjectFile.Validate` says it
+first; and nothing the IDE makes as an application is without one:
 
 - **`NewProjectForm.suggestId(name)` proposes it**: the prefix the last
   project was made with (`newProject.idPrefix` in Settings), or
@@ -1729,6 +1731,10 @@ one:
   delete (`Apps.Kept`, which reads the id off the `<id>.devel` entry, since the
   project may be what was deleted). A line and not a modal: the suite changes
   the id five times in a row, and so does a person correcting a typo.
+- **A library is not an application.** It has no id; `Check` warns if one
+  declares it, and `bintana test` runs it under the test host's id,
+  `io.github.getbintana.Test`, so a library's tests have a real
+  `Application.Id` and directories without inventing one for the library.
 
 ## Breakpoints: on, off, kept
 

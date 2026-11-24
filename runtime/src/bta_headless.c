@@ -1123,19 +1123,44 @@ static int run_project(int argc, char **argv, bool testing, bool json,
     g_free(base);
     id            = bta_project_string(ctx, cfg, "id", "");
 
-    /* The graphical host's rule, and its sentence: no id, or one that is not
-     * an application id, stops the program when the project loads, in either
-     * host -- a console tool has a `ConfigDirectory` named after it too. */
-    if (!bta_project_id_ok(id, manifest)) {
-        status = 2;
-        goto out;
+    /* Declared, not defaulted: a library has neither a startup form nor a
+     * main, and the `Form1` fallback must not make it look like an
+     * application. */
+    JSValue stv = JS_GetPropertyStr(ctx, cfg, "startup");
+    bool    has_startup = JS_IsString(stv);
+    JS_FreeValue(ctx, stv);
+    bool    library = !has_startup && !entry_name;
+
+    if (!testing) {
+        if (library) {
+            fprintf(stderr,
+                    "bintana: '%s' is a library: it declares neither "
+                    "\"startup\" nor \"main\", and is loaded by an application "
+                    "with \"uses\"\n", name);
+            status = 2;
+            goto out;
+        }
+        if (!entry_name) {
+            fprintf(stderr,
+                    "bintana: '%s' opens a window (startup '%s'); this "
+                    "host has no display. Run it with bintana-gui.\n",
+                    name, startup);
+            status = 2;
+            goto out;
+        }
     }
 
-    if (!entry_name && !testing) {
-        fprintf(stderr,
-                "bintana: '%s' opens a window (startup '%s'); this "
-                "host has no display. Run it with bintana-gui.\n",
-                name, startup);
+    /*
+     * **An application declares an id; a library does not.** A library run
+     * under `bintana test` is code under the test host: its `Application.Id`
+     * and its directories are the runner's (`io.github.getbintana.Test`), not
+     * an identity invented for the library. An application's tests keep the
+     * application's id, as before.
+     */
+    if (library && testing) {
+        g_free(id);
+        id = g_strdup("io.github.getbintana.Test");
+    } else if (!bta_project_id_ok(id, manifest)) {
         status = 2;
         goto out;
     }
@@ -1523,10 +1548,14 @@ static int run_test_command(int argc, char **argv)
         return 2;
     }
 
-    char *dir      = bta_project_dir(project);
-    int   has_main = bta_project_has_main(dir);
+    char *dir         = bta_project_dir(project);
+    int   has_main    = bta_project_has_main(dir);
+    int   has_startup = bta_project_has_startup(dir);
 
-    if (has_main == 0) {
+    /* A form project's tests may build controls, so they go to the graphical
+     * host. A library has neither startup nor main: it is code under the test
+     * host, and the core runs it without a display. */
+    if (has_main == 0 && has_startup == 1) {
         char *gui = find_gui_host();
 
         if (!gui) {
@@ -1547,6 +1576,8 @@ static int run_test_command(int argc, char **argv)
 
     char *one[1] = { (char *)project };
 
+    /* A malformed manifest falls through to `run_project`, whose parser says
+     * what is wrong; a `main` project and a library both run here. */
     return run_project(1, one, true, json, filter);
 }
 
@@ -1742,9 +1773,10 @@ int main(int argc, char **argv)
      * graphical host, not build the language to find out it has nothing to do
      * here. */
     char *dir = bta_project_dir(words[project]);
-    int   has_main = bta_project_has_main(dir);
+    int   has_main    = bta_project_has_main(dir);
+    int   has_startup = bta_project_has_startup(dir);
 
-    if (has_main == 0) {
+    if (has_main == 0 && has_startup == 1) {
         char *gui = find_gui_host();
 
         if (!gui) {
@@ -1764,9 +1796,10 @@ int main(int argc, char **argv)
 
     g_free(dir);
 
-    if (has_main < 0)
-        /* The full parser's diagnosis is the useful one; no option is worth
-         * reading for a manifest that cannot be read. */
+    if (has_main < 0 || has_startup < 0 || (has_main == 0 && has_startup == 0))
+        /* The full parser's diagnosis is the useful one for a manifest that
+         * cannot be read; a library -- neither startup nor main -- is refused
+         * by `run_project` as a library, not as an application without id. */
         return run_project(nwords - project, words + project, false, false, NULL);
 
     /* The graphical host owns the look and the form options, even for a

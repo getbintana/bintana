@@ -582,6 +582,49 @@ class TestForm extends Form {
             }
             write("Main.js", "class Main extends Form { Form_Open() {} }\n");
 
+            /* **A library is not an application**: it has no id, `check` says
+             * nothing, and `bintana test` runs it under the test host's id.
+             * The test host is the runner's identity, not one invented for the
+             * library, so `Application.Id` and its directories are real. */
+            const libDir = File.Join(dir, "library");
+            Directory.Make(File.Join(libDir, "tests"));
+            File.SaveJson(File.Join(libDir, "project.btp"),
+                          { name: "smoke-library", sources: ["Lib.js"] });
+            File.Save(File.Join(libDir, "Lib.js"),
+                      "class Lib { static Answer() { return 42; } }\n");
+            File.Save(File.Join(libDir, "tests", "LibTest.js"),
+                      "class LibTest extends Test {\n" +
+                      "  testHostIdentity() { this.Eq(Application.Id, 'io.github.getbintana.Test'); }\n" +
+                      "  testLibrarySource() { this.Eq(Lib.Answer(), 42); }\n" +
+                      "}\n");
+            const libCheck = run(libDir);
+            eq("a library without an id passes check", libCheck.ExitCode, 0, libCheck.Output);
+            check("...and is not asked for one", !libCheck.Output.includes("declares no id"),
+                  libCheck.Output);
+
+            const libRun = Exec.Wait([core, "test", "--json", libDir], { Timeout: 20000 });
+            eq("bintana test runs a library under the test host", libRun.ExitCode, 0,
+               libRun.Output);
+            check("...with both tests passed", libRun.Output.includes('"Passed":2'),
+                  libRun.Output);
+            check("...and Application.Id is the test host's",
+                  libRun.Output.includes('"Name":"testHostIdentity"'), libRun.Output);
+
+            File.SaveJson(File.Join(libDir, "project.btp"),
+                          { name: "smoke-library",
+                            id: "io.github.getbintana.test.SmokeLibrary",
+                            sources: ["Lib.js"] });
+            const libWarn = run(libDir);
+            eq("a library with an id is not an error", libWarn.ExitCode, 0, libWarn.Output);
+            check("...but the id is a warning", libWarn.Output.includes("a library declares an id"),
+                  libWarn.Output);
+
+            const libWrong = Exec.Wait([core, libDir], { Timeout: 20000 });
+            eq("the console host refuses a library", libWrong.ExitCode, 2);
+            check("...saying what it is, not asking for an id",
+                  libWrong.Output.includes("is a library") &&
+                  !libWrong.Output.includes("declares no \"id\""), libWrong.Output);
+
             /* An absolute path in `sources` is the file itself, as the runtime
              * reads it -- joined to the project it was reported missing. */
             manifest({ id: "io.github.getbintana.test.SmokeCheck",

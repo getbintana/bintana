@@ -477,11 +477,12 @@ struct BtaApp {
     char           *version;
     /*
      * project.btp's "id": the application's reverse-DNS identity, and the one
-     * name its window class, its metainfo and its package all share.  "" when
-     * the project declares none -- an ordinary project, whose window is classed
-     * by the program's name as it always was.  `bta_app_new` refuses one that
-     * is not an application id; see `bta_app_run` for where it becomes the
-     * window's.
+     * name its window class, its metainfo and its package all share. **Every
+     * application -- one with "startup" or "main" -- declares one**; a library
+     * (neither) has none, and `bta_app_new` refuses it as a library rather than
+     * asking for an id. `bintana test` runs a library under the test host's
+     * id, `io.github.getbintana.Test`. See `bta_app_run` for where the id
+     * becomes the window's.
      */
     char           *id;
     char           *startup;  /* class name of the form to open first */
@@ -1047,6 +1048,9 @@ char *bta_project_manifest(const char *dir);
  * top-level object only, so a startup project can reach the graphical host
  * without starting the language. */
 int bta_project_has_main(const char *dir);
+/* Whether the manifest declares `"startup"`: 1 yes, 0 no, -1 unreadable. A
+ * project with neither this nor `"main"` is a library. */
+int bta_project_has_startup(const char *dir);
 /* A string key out of a parsed manifest, or `fallback` when it is absent or
  * is not text. */
 char *bta_project_string(JSContext *ctx, JSValueConst cfg, const char *key,

@@ -16,8 +16,11 @@ one-page answer to *what is new since the release I have*.
   "io.github.you.App"`), `bintana check` reports it first, and the IDE's New
   project proposes one from the name. Project settings refuses to clear it,
   and `bintana check` holds a 255-byte id to the limit the platform applies.
-  A library (no `startup`, no `main`) needs none. **Breaking**: a project
-  without an id must add one.
+  A library (no `startup`, no `main`) has none: it is loaded with `uses`, not
+  run, and an id on one is a warning. `bintana test` runs a library under the
+  test host's id, `io.github.getbintana.Test`, so its tests have a real
+  `Application.Id` and directories without inventing one for the library.
+  **Breaking**: a project without an id must add one.
 - **`Application.ConfigDirectory` is `~/.config/<id>`, and the new
   `Application.DataDirectory` is `~/.local/share/<id>`**, both created at
   startup and both named by the id, as a native program's or a Flatpak's are.

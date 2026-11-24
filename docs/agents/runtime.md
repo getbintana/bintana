@@ -176,8 +176,11 @@ one no dock recognises, in silence. The rule is the platform's
 with a digit) and it is refused **at load**, naming the key, rather than
 ignored -- and so is an `id` that is not a string, which `json_str`'s fallback
 used to read as no id at all. **And no id at all is refused too** (2026-11-23): the
-id names `ConfigDirectory` and `DataDirectory` as well, so a project that runs declares one
-(`bta_project_id_ok`, shared by both hosts). **The console host builds its
+id names `ConfigDirectory` and `DataDirectory` as well, so an application -- a
+project with `startup` or `main` -- declares one (`bta_project_id_ok`, shared by
+both hosts). A library has neither and none; both hosts say it is a library
+instead of asking for an id, and `bintana test` runs one under the test host's
+id, `io.github.getbintana.Test`. **The console host builds its
 own `BtaApp` on the stack and fills it by hand** (`bta_headless.c`), so a field
 the graphical host sets is not there unless it is copied: a `Task` started from
 a `main` read `app->id` as NULL and `JS_NewString(NULL)` crashed the worker --

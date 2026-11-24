@@ -208,7 +208,11 @@ static const char *project_skip_value(const char *p)
     return p;
 }
 
-int bta_project_has_main(const char *dir)
+/* Whether the top-level object declares `key` as a string: 1 yes, 0 no, -1 a
+ * manifest that cannot be read. The one scan both `has_main` and
+ * `has_startup` use, so the two cannot disagree about escaping or a nested
+ * object of the same name. */
+static int project_has_key(const char *dir, const char *key)
 {
     char *path = bta_project_manifest(dir);
     char *text = bta_read_file(path, NULL);
@@ -227,7 +231,8 @@ int bta_project_has_main(const char *dir)
         return -1;
     }
 
-    int has_main = 0;
+    int  has    = 0;
+    size_t want = strlen(key);
 
     p++;
     for (;;) {
@@ -237,12 +242,13 @@ int bta_project_has_main(const char *dir)
         if (*p != '"')
             goto malformed;
 
-        const char *key     = p + 1;
+        const char *key_at  = p + 1;
         const char *key_end = project_skip_string(p);
         if (!key_end)
             goto malformed;
 
-        bool is_main = key_end - key - 1 == 4 && !memcmp(key, "main", 4);
+        bool is_key = (size_t)(key_end - key_at - 1) == want &&
+                      !memcmp(key_at, key, want);
 
         p = project_skip_ws(key_end);
         if (*p != ':')
@@ -252,8 +258,8 @@ int bta_project_has_main(const char *dir)
         /* A string is a declaration, the empty one included: `json_str`
          * answers "" and the run then says the function is not there, which
          * is the graphical host's own answer. `null` is not a declaration. */
-        if (is_main && *p == '"')
-            has_main = 1;
+        if (is_key && *p == '"')
+            has = 1;
 
         const char *value = p;
 
@@ -269,11 +275,26 @@ int bta_project_has_main(const char *dir)
     }
 
     g_free(text);
-    return has_main;
+    return has;
 
 malformed:
     g_free(text);
     return -1;
+}
+
+int bta_project_has_main(const char *dir)
+{
+    return project_has_key(dir, "main");
+}
+
+/*
+ * Whether the manifest declares `"startup"`: 1 yes, 0 no, -1 unreadable. A
+ * project with neither this nor `"main"` is a library: it has no window and no
+ * console entry, and is loaded by an application with `"uses"`.
+ */
+int bta_project_has_startup(const char *dir)
+{
+    return project_has_key(dir, "startup");
 }
 
 /* Every .js under a directory, subdirectories included: a project is allowed to
