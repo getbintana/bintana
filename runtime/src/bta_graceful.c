@@ -38,10 +38,12 @@
  * reason. Linux and macOS rename and delete an open file, so there both are
  * one call.
  *
- * **Only a refusal for access is waited out**, for a second at most, 5 ms
- * doubling. Anything else -- the file is not there, the folder is not
- * writable -- is the answer at once, and a hold that outlasts the second is
- * the refusal it always was, with `errno` as the last try left it.
+ * **Only a refusal for access that a neighbour can end is waited out**, for a
+ * second at most, 5 ms doubling. Anything else -- the file is not there, the
+ * folder is not writable, the path is read-only -- is the answer at once: a
+ * read-only file is refused by the platform, not held, and waiting does not
+ * change it. A hold that outlasts the second is the refusal it always was,
+ * with `errno` as the last try left it.
  */
 #include "bta.h"
 
@@ -49,10 +51,30 @@
 #include <glib/gstdio.h>
 
 #ifdef G_OS_WIN32
+#include <windows.h>
+
 /* The errnos GLib maps a sharing violation and a denied access to. */
 static bool held_by_another(int e)
 {
     return e == EACCES || e == EPERM || e == EBUSY;
+}
+
+/*
+ * **A read-only path is not a hold.** Windows answers it the same way it
+ * answers a file another process has open -- access denied -- but no amount of
+ * waiting changes it. `File.Delete` says so at once, as it did before the
+ * retry existed; `DeleteTree`, which takes read-only files, clears the bit
+ * first and does not come through here.
+ */
+static bool path_is_read_only(const char *path)
+{
+    gunichar2 *wide = g_utf8_to_utf16(path, -1, NULL, NULL, NULL);
+    if (!wide)
+        return false;
+
+    DWORD attrs = GetFileAttributesW((LPCWSTR)wide);
+    g_free(wide);
+    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_READONLY);
 }
 
 /* The next pause, or 0 once a second has been spent. */
@@ -115,6 +137,13 @@ int bta_graceful_fs_rename(const char *from, const char *to)
 int bta_graceful_fs_remove(const char *path, bool missing_ok)
 {
 #ifdef G_OS_WIN32
+    /* Read-only is the platform's answer, not a hold; waiting out a second
+     * would only delay the same refusal. */
+    if (path_is_read_only(path)) {
+        errno = EACCES;
+        return -1;
+    }
+
     gulong wait = 5000, spent = 0;
 
     for (;;) {

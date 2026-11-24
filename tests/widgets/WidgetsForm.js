@@ -31729,6 +31729,8 @@ export class UriChild extends Form {
      * The two contract halves run everywhere: a missing file is still a
      * refusal (`File.Delete` has always thrown for one; the `.part` cleanup is
      * the caller for which gone is success), and an empty directory still goes.
+     * On Windows a read-only file is refused at once -- it is the platform's
+     * answer, not a neighbour that will let go -- and the hold is waited out.
      */
     testRemoveHeld() {
         const dir = File.Join(SCRATCH, "remove-held");
@@ -31746,6 +31748,25 @@ export class UriChild extends Form {
             Directory.DeleteTree(dir);
             return;
         }
+
+        /* Read-only is not a hold: Windows refuses it the same way, but no
+         * neighbour will let go, so `File.Delete` says no at once rather than
+         * spending the second the retry is for. */
+        const locked = File.Join(dir, "read-only.txt");
+        File.Save(locked, "no");
+        const marked = Exec.Wait(["powershell", "-NoProfile", "-Command",
+            `(Get-Item -LiteralPath '${locked}').IsReadOnly = $true`],
+            { Timeout: 30000 });
+        check("...and the read-only bit is set", marked.ExitCode === 0, marked.Output);
+        const watch = new Stopwatch().Start();
+        const said  = refusal(() => File.Delete(locked));
+        const took  = watch.Stop().Elapsed;
+        check("a read-only file is refused at once",
+              said !== null && took < 500, `${took} ms: ${said}`);
+        if (File.Exists(locked))
+            Exec.Wait(["powershell", "-NoProfile", "-Command",
+                `(Get-Item -LiteralPath '${locked}').IsReadOnly = $false`],
+                { Timeout: 30000 });
 
         const file = File.Join(dir, "held.txt");
         File.Save(file, "just written");

@@ -598,9 +598,13 @@ use these yet.
   reproduce it -- GLib 2.90 limits what its children inherit), and a
   `.part` closed with a write still pending (every failure path runs from a
   completed callback).
-- **Only an access refusal waits** (`EACCES`, `EPERM`, `EBUSY`), a second at
-  most, 5 ms doubling; anything else is the answer at once. Linux and macOS
-  rename and delete an open file, so there each is one call.
+- **Only an access refusal that a neighbour can end waits** (`EACCES`, `EPERM`,
+  `EBUSY`), a second at most, 5 ms doubling; anything else is the answer at
+  once. **A read-only path is not a hold**: Windows answers it access denied
+  too, but no waiting changes it, so `File.Delete` fails at once; `DeleteTree`
+  clears the bit first and does not come through here. (`File.Save`'s own
+  retry still spends its 315 ms on a read-only file.) Linux and macOS rename
+  and delete an open file, so there each is one call.
 - **`g_remove` on Windows keeps the `rmdir` half's errno, not the `remove`
   half's.** GLib tries `_wremove` and then `_wrmdir` on every path; for a file
   another process holds open, the first says EACCES and the second overwrites

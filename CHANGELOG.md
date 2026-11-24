@@ -173,7 +173,8 @@ one-page answer to *what is new since the release I have*.
   open elsewhere: a `SaveTo` download, `ZipWriter.Finish` or `Gzip` failed now
   and then with *permission denied*, and a cancelled download left its
   `.part`. Such a refusal is tried again for up to a second
-  (`bta_graceful.c`); `File.Rename` and `File.Delete` do the same.
+  (`bta_graceful.c`); `File.Rename` and `File.Delete` do the same, while a
+  read-only path is refused at once.
 - **The Windows Apps page shows the application's icon, publisher and
   size.** The uninstall key had no `DisplayIcon` without a project icon, no
   `Publisher` without a developer in the metainfo, and never an

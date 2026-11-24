@@ -5963,7 +5963,8 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   a file, or an **empty** directory. Throws on failure. On Windows a
      *   delete refused because another program holds the path a moment -- the
      *   antivirus or OneDrive right after it was written -- is tried again for
-     *   up to a second
+     *   up to a second; a read-only path is refused at once, and a directory
+     *   that is not empty is never taken
      */
     JS_SetPropertyStr(ctx, file, "Delete", JS_NewCFunction(ctx, sys_file_delete, "Delete", 1));
     /* Open(path)
