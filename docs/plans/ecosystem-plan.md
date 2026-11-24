@@ -99,6 +99,14 @@ the directory would be a second manifest to keep in sync, and `project.btp`
 already exists. If a library needs an icon for the IDE, the convention
 `icons/<name>.svg` is enough.
 
+**A library is not an application.** It has no `startup`, no `main` and no
+`id`: it is a directory another project loads with `uses`, not a program with
+a window, settings or a package of its own. The identity a published library
+has is the index's `name` and `version`; a `project.btp` beside its sources
+carries `sources` and `worker`, and nothing that names an application. A
+repository that also ships a demo or a command-line tool ships that as a
+separate project with its own `id`; the library directory stays a library.
+
 ### Trust, and what it does not promise
 
 A library's JavaScript runs with the application's permissions; a native `.so`
@@ -128,6 +136,15 @@ gallery over the same index; it is the same data, not a second catalogue.
 Templates are the answer to *what do I build first*: `crud-sqlite`, `report`,
 `http-server`, `console-tool`, each a small working project rather than an
 empty form.
+
+**The generated project is an application, so it needs an `id`.** A template
+cannot ship a fixed one -- two people making `crud-sqlite` would collide -- and
+`bintana new` must generate a valid reverse-DNS id from the new project's name,
+write it into `project.btp`, and only then run `bintana check`. The IDE's New
+project dialog already proposes one from the name (`NewProjectForm.suggestId`);
+`bintana new` does the same, from the target directory's name. A template may
+declare the field, but the value is the person's or the machine's, not the
+template's.
 
 ### Docs and community
 
@@ -190,7 +207,14 @@ empty form.
    Pages, or a generated file in the main repository. A static file is enough
    for v1; a server is not.
 2. **Name ownership**: first come, or a namespace (`author/name`)? A flat name
-   matches `uses` today; a namespace needs a syntax change.
+   matches `uses` today; a namespace needs a syntax change. **A library's
+   package name and `Application.Id` are different namespaces**: an `id` names
+   a running application and its directories, and a library has neither. A
+   package name is the registry's key and the string `uses` carries. If a
+   stable reverse-DNS key is wanted later, it is a **package id** in the index
+   and the lock -- not an `Application.Id`, and not necessarily a
+   `project.btp` field. v1 keeps the flat name; a namespace is a change to
+   `uses` and the installer together.
 3. **Native code**: allow it with a flag, or keep the first index pure
    JavaScript? The plugin ABI already exists; trust is the question.
 4. **Semver**: exact versions only in v1; when does a range earn its resolver?
@@ -205,6 +229,8 @@ empty form.
 - A resolver that picks a version silently.
 - A global install that a clean checkout cannot reproduce.
 - A library manifest that duplicates `project.btp`.
+- An application `id` on a library: it names a window, its directories and a
+  package that a library does not have.
 - A marketplace UI before `bintana add` works from a shell.
 - A native library without saying, in the index and the docs, that it runs with
   the application's permissions.
