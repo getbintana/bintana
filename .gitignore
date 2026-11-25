@@ -1,5 +1,6 @@
 build/
 build-asan/
+build-meta/
 build-rwd/
 .cache/
 compile_commands.json

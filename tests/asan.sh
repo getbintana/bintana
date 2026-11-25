@@ -17,6 +17,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 BUILD=${BUILD:-build-asan}
+META_BUILD=${META_BUILD:-build-meta}
 LOG=/tmp/bta-asan.log
 
 # Configure once, but build every time: a stale sanitizer binary reports on code
@@ -28,15 +29,35 @@ if [[ ! -f $BUILD/CMakeCache.txt ]]; then
           -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address" >/dev/null || exit 2
 fi
 echo "== building $BUILD"
-# **Not `bintana-meta`.** Its class rows are linked with `--gc-sections` so the
-# toolkit vfuncs drop; under AddressSanitizer's instrumentation the linker keeps
-# the GObject class structs even at -O0 and the no-GTK link fails. The sanitizer
-# suite does not run `tests/headless.sh`, so the metadata generator is not part
-# of this question. Everything the suite starts is built: the core, the GUI it
-# dispatches to, the drawing module, and the plugins.
+# **Not `bintana-meta` in this build.** Its class rows are linked with
+# `--gc-sections` so the toolkit vfuncs drop; under AddressSanitizer's
+# instrumentation the linker keeps the GObject class structs even at -O0 and
+# the no-GTK link fails. The sanitizer suite does not run `tests/headless.sh`,
+# but `tests/smoke` still runs `bintana check`, which needs the metadata
+# document: an ordinary `build-meta` makes it below. Everything the suite
+# starts is built here: the core, the GUI it dispatches to, the drawing module,
+# and the plugins.
 cmake --build "$BUILD" -j"$(nproc)" \
       --target bintana bintana-gui bintana-drawing \
                testplug testplug-bare testplug-old testplug-abi1 >/dev/null || exit 2
+
+# **`bintana check` still needs its metadata.** It is a document loaded by the
+# console host, not a linked toolkit, and the generator is the `bintana-meta`
+# target this script deliberately does not build: under ASan its no-GTK link
+# keeps the GObject class structs and fails. A separate ordinary build makes
+# only that generator and its `widgets.json`, and the three files are copied
+# into the sanitized tree beside the binary. Without them `tests/smoke`'s two
+# `bintana check` assertions fail with "the check metadata is not installed",
+# which is a hole in the harness and not a sanitizer finding.
+if [[ ! -f "$META_BUILD/CMakeCache.txt" ]]; then
+    cmake -S . -B "$META_BUILD" -DCMAKE_BUILD_TYPE=Release >/dev/null || exit 2
+fi
+cmake --build "$META_BUILD" --target bintana-check-data -j"$(nproc)" \
+      >/dev/null || exit 2
+mkdir -p "$BUILD/check"
+cp runtime/js/widget-meta.js "$BUILD/check/WidgetMeta.js"
+cp api.json "$BUILD/check/api.json"
+cp "$META_BUILD/check/widgets.json" "$BUILD/check/widgets.json"
 
 rm -f "$LOG".*
 export ASAN_OPTIONS="detect_leaks=1:log_path=$LOG:abort_on_error=0"

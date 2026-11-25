@@ -1112,6 +1112,13 @@ anything `tests/lsan.supp` did not suppress -- GTK, fontconfig and the GL stack
 leak plenty of their own, and the suppression file is what keeps those out of the
 way so that what is left is ours.
 
+**The check metadata is made by a separate ordinary build.** `bintana-meta`
+cannot link under ASan (its no-GTK link keeps the GObject class structs), so
+`asan.sh` configures `build-meta`, builds `bintana-check-data`, and copies
+`WidgetMeta.js`, `widgets.json` and `api.json` into `build-asan/check`. Without
+them `tests/smoke`'s two `bintana check` assertions fail with *the check
+metadata is not installed* -- a hole in the harness, not a sanitizer finding.
+
 Both memory bugs this codebase has had were use-after-free: a wrapper collected
 while GTK still showed the widget, and a handler that outlived the widget it
 carried. Neither is deterministic, and both showed up as a crash that could as
