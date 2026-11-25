@@ -1,7 +1,9 @@
 build/
 build-asan/
 build-meta/
+build-nosysprof/
 build-rwd/
+fake/
 .cache/
 compile_commands.json
 tests/widgets/RoundTrip.form
