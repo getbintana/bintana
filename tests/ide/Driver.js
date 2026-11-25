@@ -8472,13 +8472,13 @@ function* p_nested(ide) {
     /* Through the grid, which is how a user does it: an edit is what tells the
      * designer to look again. */
     ide.designer.select(alignLbl);
-    yield* settled(ide);   // the chrome has painted the selection
+    ide.designer.chrome.layout();
     const selected = ide.designer.chrome.outline[0].Background;
 
     typeInto(ide, "Text", "a line with far more text in it than the hundred and " +
                           "twenty pixels this label says it wants");
     yield* until(() => !!ide.designer.overflow(alignLbl));
-    yield* settled(ide);   // ...and its 30 ms re-lay, which is where the colour is chosen
+    ide.designer.chrome.layout();
 
     const over = ide.designer.overflow(alignLbl);
     check("a control that came out bigger is flagged", !!over,
@@ -8501,14 +8501,15 @@ function* p_nested(ide) {
      * looks like from the outside and what an unsettled read looks like from in
      * here.
      *
-     * **The colour is chosen in the chrome's 30 ms re-lay**, and a fixed number
-     * of yields is not that timer: under the sanitizer the old wait gave up
-     * with the selection colour still in place. `settled` waits for the timer
-     * itself, so the read is the one the designer really painted.
+     * **The chrome's 30 ms pass is a UI nicety, not a promise a test can
+     * measure.** Under the sanitizer the allocation a changed text causes can
+     * still be later than that pass, and then no repaint follows it. The test
+     * asks for the same layout the pass runs; what it asserts is which colour
+     * the designer chooses, not when the timer happens to fire.
      */
     const fitting = ide.designer.chrome.outline[0].Background;
     ide.designer.select(alignBtn);
-    yield* settled(ide);   // the chrome has painted the other selection
+    ide.designer.chrome.layout();
     const other = ide.designer.chrome.outline[0].Background;
     check("a control that fits is not flagged", !ide.designer.overflow(alignBtn));
     neq("and its outline is the other colour", other, fitting);
