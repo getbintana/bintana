@@ -1262,6 +1262,20 @@ export class Completion {
         const form = this.ide.formOf(this.ide.activeFile);
         if (!form) return [];
 
+        /*
+         * **The designer's form when it is open, not the file.** A control
+         * dropped on the canvas and not saved yet is one the code beside it
+         * is written against: read from disk, `this.` did not offer it, and
+         * `Names.strangers` called `this.TextBox2` a name the form does not
+         * have. `contentOf` serialises once per designer edit, so asking on
+         * every pause costs a lookup.
+         */
+        let live = null;
+        try { live = this.ide.tabs ? this.ide.tabs.contentOf(form) : null; }
+        catch (e) { live = null; }
+        if (live && live.mode === "design" && live.root)
+            return this.ide.names.tableOf(live.root);
+
         if (this.forms.has(form)) return this.forms.get(form);
 
         let out = [];

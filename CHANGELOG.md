@@ -6,6 +6,38 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+The first fifteen minutes, walked through on a fresh project -- new project,
+three controls, a handler, a run -- and what got in the way.
+
+### Runtime and libraries
+
+- **`Scroller.FollowFocus`.** A `Scroller` scrolls to whatever takes the focus
+  inside it, which is GTK's and what a long form wants; for a control wider
+  than the view GTK goes to its *far edge*. `FollowFocus = false` keeps the
+  view where it is, for a surface that takes the focus as a whole.
+- **`bintana check` reports a control misspelt in code.** `this.Labl1.Text`
+  beside a `Label1` went through the whole check and failed at the first run
+  as *cannot set property 'Text' of undefined*; it is now `Form1 has no
+  control or member Labl1 … did you mean Label1?`, in the check and underlined
+  in the IDE as it is typed.
+
+### IDE
+
+- **The canvas no longer jumps sideways at the first click.** On a form wider
+  than the canvas -- a new project's 400 pixels at the IDE's default size --
+  clicking a control scrolled to the form's right edge and the control was
+  gone, so the double click that writes its handler never landed.
+- **A new handler puts the cursor inside its body, indented**; the first line
+  typed used to go flush left, in front of the indentation.
+- **`F5` runs the project**, as in Visual Basic, beside `Ctrl+R`. It used to
+  re-list the project's files; *Refresh* keeps its button and its menu item.
+- **The status line no longer widens the window.** It named the file, the
+  control and its geometry at their natural width, and the window grew by
+  about 150 pixels over a few clicks; it ends in `…` now, with the whole of it
+  as a tooltip.
+- **`this.` offers a form's parts** (a `Timer`, a `Connection`, a `Model`), and
+  a control dropped on the canvas is offered before the form is saved.
+
 ## 0.4.2 — 2026-11-25
 
 [Compare with 0.4.0](https://github.com/getbintana/bintana/compare/v0.4.0...v0.4.2)

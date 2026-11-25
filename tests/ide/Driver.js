@@ -15327,6 +15327,38 @@ function* p_check(ide) {
        "Button has no Txt: reading it gives undefined -- did you mean Text?");
 
     /*
+     * **A control misspelt, which `members` skipped as no control at all.**
+     * The first mistake of a fresh project -- `this.Labl1.Text = …` beside a
+     * `Label1` -- went through the whole check and met the user as *cannot
+     * set property 'Text' of undefined*. What the class declares, what the
+     * runtime's `Form` has, a field assigned and a name in quotes are all
+     * answers, and a class that extends anything but `Form` is not asked.
+     */
+    const strangerSaid = (body, head = "class Greeter extends Form {") =>
+        [...ide.names.strangers(`${head}\n${body}\n}\n`,
+                                [{ name: "Label1", type: "Label" },
+                                 { name: "Tick1", type: "Timer" }], "G.js", -1)]
+            .map((p) => `${p.line}: ${p.text}`).join(" | ");
+    eq("a control the form does not have is reported, with the near one",
+       strangerSaid('    Go() { this.Labl1.Text = "hi"; this.Labl1.Visible = true; }'),
+       "2: Greeter has no control or member Labl1: this line fails when it runs " +
+       "-- did you mean Label1?");
+    eq("...and the controls, a part and the Form's own are not",
+       strangerSaid("    Go() { this.Label1.Text = 'x'; this.Tick1.Enabled = true; " +
+                    "this.Controls.length; }"),
+       "");
+    eq("...nor what the class declares or the program assigns",
+       strangerSaid("    get Shown() { return 1; }\n    Go() { this.Shown.x; " +
+                    "this.cache = {}; this.cache.y; this.Sync.z; }\n" +
+                    "    static ask() { const d = new Greeter(); d.Sync = 1; }"),
+       "");
+    eq("...nor a name the file spells in quotes",
+       strangerSaid("    Go() { this[\"Dyn\"] = 1; this.Dyn.x; }"), "");
+    eq("...and a class that extends another form is not asked",
+       strangerSaid("    Go() { this.Labl1.Text = 1; }", "class Child extends Greeter {"),
+       "");
+
+    /*
      * And the same three checks over what a `.form` names outside `children`,
      * which is the hole three flatteners shared. Every one of these is a real
      * silence: a command declared twice loses the first, a menu item called
