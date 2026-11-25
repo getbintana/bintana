@@ -14091,6 +14091,34 @@ function* p_errors(ide) {
     ide.listFiles();
 
     /*
+     * **Stopped by hand is not a failure.** A program paused on a line and
+     * stopped with Stop ended with -1, and the search for where it died read
+     * the last `file:line` in the pane -- the pause's own -- and put *the run
+     * ended badly* in Problems at the breakpoint. A real child again: one that
+     * prints a line of that shape, as a pause or a logpoint does, and waits.
+     */
+    const halt = File.Join(TMP, "halt");
+    if (File.Exists(halt)) Directory.DeleteTree(halt);
+    Directory.Make(halt);
+    File.Save(File.Join(halt, "project.btp"),
+              '{ "id": "io.github.getbintana.test.Halt", "main": "Main", "sources": ["Main.js"] }\n');
+    File.Save(File.Join(halt, "Main.js"),
+              "function Main() {\n" +
+              "    print(Application.Directory + '/Main.js:2: waiting');\n" +
+              "    Timer.Every(50, () => {});\n" +
+              "}\n");
+    ide.runner.spawn([halt], {});
+    yield* until(() => ide.LogView.Text.includes("waiting"), 600);
+    ide.stopRun();
+    yield* until(() => ide.runner.job === null, 600);
+    check("a run stopped by hand says so",
+          ide.LogView.Text.includes("[stopped]"), JSON.stringify(ide.LogView.Text));
+    eq("...and is no error in Problems", ide.problems.of("run").length, 0);
+    ide.problems.clear("run");
+    Directory.DeleteTree(halt);
+    ide.listFiles();
+
+    /*
      * And what this run *is*, as against what the project is.
      *
      * `--strict` makes a control refuse a property its class does not have, so

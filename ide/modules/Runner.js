@@ -294,7 +294,10 @@ export class Runner {
     /* What the Stop button means, in the one place that knows there is a child
      * at all.  Pressed twice is an ordinary thing to do, so it asks first. */
     stop() {
-        if (this.job && this.job.Running) this.job.Stop();
+        if (this.job && this.job.Running) {
+            this.stopping = true;
+            this.job.Stop();
+        }
     }
 
     /* The child is over. A run that ended badly said where, so go there rather
@@ -303,20 +306,24 @@ export class Runner {
         const ide = this.ide;
 
         this.job = null;
+        /* Stopped by the person, which is no failure to go and find. */
+        const asked = this.stopping;
+        this.stopping = false;
         /* Whatever arrived in the same turn as the exit, before the traceback
          * below is read out of the pane -- and a traceback the exit cut short,
          * which has no blank line to end it. */
         this.flushLog();
         this.endTrace();
-        ide.log(code === 0 ? "\n[finished ok]\n"
-                           : `\n[finished with code ${code}]\n`);
+        ide.log(asked ? Locale.Text("\n[stopped]\n")
+                : code === 0 ? "\n[finished ok]\n"
+                : `\n[finished with code ${code}]\n`);
         ide.running = false;
         ide.refresh();
 
         if (this.capture) this.captured(this.capture);
         this.capture = null;
 
-        if (code !== 0) this.findErrorLine();
+        if (code !== 0 && !asked) this.findErrorLine();
     }
 
     /*

@@ -594,10 +594,18 @@ export class Debugger {
     }
 
     stop() {
-        if (this.job) this.job.Stop();
+        if (this.job) {
+            this.stopping = true;
+            this.job.Stop();
+        }
     }
 
     finished(code) {
+        /* Stopped by the person -- usually while paused on a line, which the
+         * error search read as *where it failed*: a Stop in a handler was
+         * reported as "the run ended badly" on the breakpoint's line. */
+        const asked = this.stopping;
+        this.stopping = false;
         this.job     = null;
         this.stopped = null;
         this.peeking = null;
@@ -627,11 +635,12 @@ export class Debugger {
             this.ide.refresh();
             return;
         }
-        this.ide.log(code === 0 ? "\n[finished ok]\n"
-                                : `\n[finished with code ${code}]\n`);
+        this.ide.log(asked ? Locale.Text("\n[stopped]\n")
+                     : code === 0 ? "\n[finished ok]\n"
+                     : `\n[finished with code ${code}]\n`);
         this.fill();
         this.ide.refresh();
-        if (code !== 0) this.ide.runner.findErrorLine();
+        if (code !== 0 && !asked) this.ide.runner.findErrorLine();
     }
 
     /*
