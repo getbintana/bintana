@@ -16101,7 +16101,7 @@
           "Name": "Error",
           "Kind": "Method",
           "Params": 1,
-          "Signature": "(text, ...args)",
+          "Signature": "(text, ...args, [done])",
           "Returns": "",
           "Doc": "something failed; the same as `Info` in every other respect",
           "Native": true
@@ -16110,16 +16110,16 @@
           "Name": "Info",
           "Kind": "Method",
           "Params": 1,
-          "Signature": "(text, ...args)",
+          "Signature": "(text, ...args, [done])",
           "Returns": "",
-          "Doc": "something happened. **It shows and returns**: it does not block and there is no answer. The text goes through the catalogue with `{0}` holes filled from the arguments -- never a template literal -- and with no display it prints to stderr",
+          "Doc": "something happened. **It shows and returns**: it does not block and there is no answer -- a question is a form, `Confirm` and `AskText` in `lib/dialog`. **`done`, a function last, runs once it has been closed**, by its button, Enter, Escape or the window's own close, so `Message.Error(\"Cannot open {0}\", path, () => Application.Quit())` quits after the person has read it. The text goes through the catalogue with `{0}` holes filled from the arguments -- never a template literal. The window is titled with `Application.Name`, carries the icon of its kind, and its text can be selected and copied. With no display it prints to stderr and `done` runs at once",
           "Native": true
         },
         {
           "Name": "Warning",
           "Kind": "Method",
           "Params": 1,
-          "Signature": "(text, ...args)",
+          "Signature": "(text, ...args, [done])",
           "Returns": "",
           "Doc": "something is not right; the same as `Info` in every other respect",
           "Native": true

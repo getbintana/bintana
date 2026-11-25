@@ -66,11 +66,12 @@ void bta_report_fatal(BtaApp *app, const char *message)
     fprintf(stderr, "bintana: %s\n", message);
 }
 
-/* A console has no alert to raise; `Message` prints to stderr, as the
- * graphical host does when it has no display. */
-bool bta_message_show(int kind, const char *text)
+/* A console has no alert to raise; `Message` prints to stderr and runs `done`
+ * at once, as the graphical host does when it has no display. */
+bool bta_message_show(int kind, const char *text, JSContext *ctx,
+                      JSValueConst done)
 {
-    (void)kind; (void)text;
+    (void)kind; (void)text; (void)ctx; (void)done;
     return false;
 }
 

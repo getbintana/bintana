@@ -13,8 +13,12 @@
 #include <stdio.h>
 
 /*
- * Message.Info / .Warning / .Error -- GTK4 alert dialogs are fire-and-forget,
- * so these show and return rather than blocking like VB's MsgBox.
+ * Message.Info / .Warning / .Error -- these show and return rather than
+ * blocking like VB's MsgBox: nothing in this language blocks, and a question is
+ * a form (`lib/dialog`). **What a caller can wait for is the dismissal**: a
+ * function last is not a `{0}` argument but `done`, run once the message has
+ * been closed -- which is what `Message.Error(...); Application.Quit()` needed,
+ * since that quit before anybody had read the error.
  *
  * **The first argument is a declared position for prose**, so it goes through
  * the catalogue and takes `{0}`-style arguments of its own:
@@ -39,9 +43,17 @@
 static JSValue js_message(JSContext *ctx, JSValueConst this_val,
                           int argc, JSValueConst *argv, int magic)
 {
-    char *text = NULL;
+    char        *text = NULL;
+    JSValueConst done = JS_UNDEFINED;
 
     (void)this_val;
+    /* A function last is `done`, never a value for a hole: a function has no
+     * text anybody wants to read, so the two cannot be confused. Only after
+     * the text, so `Message.Info(fn)` stays a message (of the function). */
+    if (argc > 1 && JS_IsFunction(ctx, argv[argc - 1])) {
+        done = argv[argc - 1];
+        argc--;
+    }
     if (argc > 0) {
         const char *msgid = JS_ToCString(ctx, argv[0]);
         if (!msgid)
@@ -54,9 +66,21 @@ static JSValue js_message(JSContext *ctx, JSValueConst this_val,
         if (!text)
             return JS_EXCEPTION;       /* an argument could not become text */
     }
-    if (!bta_message_show(magic, text ? text : ""))
-        fprintf(stderr, "message: %s\n", text ? text : "");
+    if (bta_message_show(magic, text ? text : "", ctx, done)) {
+        g_free(text);
+        return JS_UNDEFINED;           /* the host calls `done` when it closes */
+    }
+
+    /* Nowhere to show it: printed, and dismissed as soon as it is -- so a
+     * `main` that waits on `done` goes on, under either host. */
+    fprintf(stderr, "message: %s\n", text ? text : "");
     g_free(text);
+    if (JS_IsFunction(ctx, done)) {
+        JSValue r = JS_Call(ctx, done, JS_UNDEFINED, 0, NULL);
+        if (JS_IsException(r))
+            return r;                  /* thrown here, at the caller's line */
+        JS_FreeValue(ctx, r);
+    }
     return JS_UNDEFINED;
 }
 
@@ -66,22 +90,28 @@ void bta_message_init(JSContext *ctx, JSValueConst global)
      * comment above a line is what `Widget.Members` answers with -- a loop
      * leaves nowhere to write one. The magic is the index `js_message` reads. */
     JSValue message = JS_NewObject(ctx);
-    /* Info(text, ...args)
+    /* Info(text, ...args, [done])
      *   something happened. **It shows and returns**: it does not block and
-     *   there is no answer. The text goes through the catalogue with `{0}`
-     *   holes filled from the arguments -- never a template literal -- and
-     *   with no display it prints to stderr
+     *   there is no answer -- a question is a form, `Confirm` and `AskText`
+     *   in `lib/dialog`. **`done`, a function last, runs once it has been
+     *   closed**, by its button, Enter, Escape or the window's own close, so
+     *   `Message.Error("Cannot open {0}", path, () => Application.Quit())`
+     *   quits after the person has read it. The text goes through the
+     *   catalogue with `{0}` holes filled from the arguments -- never a
+     *   template literal. The window is titled with `Application.Name`,
+     *   carries the icon of its kind, and its text can be selected and
+     *   copied. With no display it prints to stderr and `done` runs at once
      */
     JS_SetPropertyStr(ctx, message, "Info",
                       JS_NewCFunctionMagic(ctx, js_message, "Info", 1,
                                            JS_CFUNC_generic_magic, 0));
-    /* Warning(text, ...args)
+    /* Warning(text, ...args, [done])
      *   something is not right; the same as `Info` in every other respect
      */
     JS_SetPropertyStr(ctx, message, "Warning",
                       JS_NewCFunctionMagic(ctx, js_message, "Warning", 1,
                                            JS_CFUNC_generic_magic, 1));
-    /* Error(text, ...args)
+    /* Error(text, ...args, [done])
      *   something failed; the same as `Info` in every other respect
      */
     JS_SetPropertyStr(ctx, message, "Error",

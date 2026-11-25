@@ -310,29 +310,175 @@ static JSValue js_quit(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
- * How this host shows a `Message` (bta_message.c): a GTK alert, which is
- * fire-and-forget, so `Message.Info` shows and returns rather than blocking
- * like VB's MsgBox. With no display -- a `main`, or before the application
- * is up -- it answers false and the shared half prints to stderr.
+ * How this host shows a `Message` (bta_message.c): a window of its own, which
+ * shows and returns rather than blocking like VB's MsgBox. With no display --
+ * a `main`, or before the application is up -- it answers false and the
+ * shared half prints to stderr.
+ *
+ * **It was a `GtkAlertDialog`, and that is what a first program met first.**
+ * Measured 2026-11-25 under xfwm4: a window of 131x97 with no title, no icon
+ * and no margin, the text pressed against its button -- and `Warning` and
+ * `Error` headed in English whatever the language, since the heading was a
+ * literal nobody translated. The alert has no title and no icon to set, so
+ * the window is built here: the application's name as its title, the icon of
+ * its kind, the text wrapped at a readable measure and selectable (an error is
+ * copied into a report more often than it is read twice), and one button that
+ * says GTK's own *Close*, in GTK's own translation. Enter and Escape close it.
+ *
+ * **`done` is held from C until the window is gone**, and called on the next
+ * turn rather than inside `destroy`, where no JavaScript runs. A message open
+ * at teardown is destroyed and its `done` released uncalled: nobody is left to
+ * answer, and `JS_FreeRuntime` aborts on a value still held.
  */
-bool bta_message_show(int kind, const char *text)
+typedef struct {
+    JSContext *ctx;
+    JSValue    done;      /* JS_UNDEFINED when nobody asked */
+    GtkWidget *window;    /* NULL once it is destroyed */
+    guint      idle;      /* the turn `done` runs on */
+} MessageJob;
+
+static GList *message_jobs;
+
+static void message_job_free(MessageJob *job)
 {
-    static const char *headings[] = { NULL, "Warning", "Error" };
-    BtaApp            *app = bta_current_app();
-    GtkAlertDialog    *d;
+    message_jobs = g_list_remove(message_jobs, job);
+    if (job->idle)
+        g_source_remove(job->idle);
+    JS_FreeValue(job->ctx, job->done);
+    g_free(job);
+}
 
-    if (!app || !app->gapp)
-        return false;
+static gboolean message_answer(gpointer data)
+{
+    MessageJob *job = data;
+    JSContext  *ctx = job->ctx;
+    JSValue     done;
 
-    if (kind > 0 && kind < 3) {
-        d = gtk_alert_dialog_new("%s", headings[kind]);
-        gtk_alert_dialog_set_detail(d, text);
-    } else {
-        d = gtk_alert_dialog_new("%s", text);
+    job->idle = 0;
+    /* Out of the list before the call: `done` may show the next message, or
+     * quit, and either reaches the list. */
+    done = JS_DupValue(ctx, job->done);
+    message_job_free(job);
+
+    if (JS_IsFunction(ctx, done)) {
+        JSValue r = JS_Call(ctx, done, JS_UNDEFINED, 0, NULL);
+        if (JS_IsException(r))
+            bta_dump_error(ctx);
+        JS_FreeValue(ctx, r);
+        bta_drain_jobs(JS_GetRuntime(ctx));
     }
-    gtk_alert_dialog_set_modal(d, TRUE);
-    gtk_alert_dialog_show(d, gtk_application_get_active_window(app->gapp));
-    g_object_unref(d);
+    JS_FreeValue(ctx, done);
+    return G_SOURCE_REMOVE;
+}
+
+static void on_message_destroy(GtkWidget *window, gpointer data)
+{
+    MessageJob *job = data;
+
+    (void)window;
+    job->window = NULL;
+    if (!job->idle)
+        job->idle = g_idle_add(message_answer, job);
+}
+
+static void message_cleanup(void)
+{
+    while (message_jobs) {
+        MessageJob *job = message_jobs->data;
+
+        if (job->window) {
+            GtkWidget *w = job->window;
+
+            g_signal_handlers_disconnect_by_data(w, job);
+            job->window = NULL;
+            gtk_window_destroy(GTK_WINDOW(w));
+        }
+        message_job_free(job);
+    }
+}
+
+bool bta_message_show(int kind, const char *text, JSContext *ctx,
+                      JSValueConst done)
+{
+    static const char *icons[] = { "dialog-information-symbolic",
+                                   "dialog-warning-symbolic",
+                                   "dialog-error-symbolic" };
+    BtaApp *app = bta_current_app();
+
+    if (!app || !app->gapp || !gdk_display_get_default())
+        return false;
+    if (kind < 0 || kind > 2)
+        kind = 0;
+
+    GtkWidget *win = g_object_new(GTK_TYPE_WINDOW,
+                                  "accessible-role", GTK_ACCESSIBLE_ROLE_ALERT_DIALOG,
+                                  NULL);
+    GtkWindow *parent = gtk_application_get_active_window(app->gapp);
+
+    gtk_window_set_title(GTK_WINDOW(win), app->name ? app->name : "");
+    gtk_window_set_modal(GTK_WINDOW(win), TRUE);
+    gtk_window_set_resizable(GTK_WINDOW(win), FALSE);
+    if (parent) {
+        gtk_window_set_transient_for(GTK_WINDOW(win), parent);
+        gtk_window_set_destroy_with_parent(GTK_WINDOW(win), TRUE);
+    }
+    gtk_window_set_application(GTK_WINDOW(win), app->gapp);
+
+    GtkWidget *column = gtk_box_new(GTK_ORIENTATION_VERTICAL, 18);
+    gtk_widget_set_margin_top(column, 20);
+    gtk_widget_set_margin_bottom(column, 16);
+    gtk_widget_set_margin_start(column, 20);
+    gtk_widget_set_margin_end(column, 20);
+
+    GtkWidget *row  = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
+    GtkWidget *icon = gtk_image_new_from_icon_name(icons[kind]);
+    gtk_image_set_pixel_size(GTK_IMAGE(icon), 48);
+    gtk_widget_set_valign(icon, GTK_ALIGN_START);
+
+    /* A measure a sentence reads at, and a floor so "Saved" is not a window
+     * the size of its button. */
+    GtkWidget *label = gtk_label_new(text);
+    gtk_label_set_wrap(GTK_LABEL(label), TRUE);
+    gtk_label_set_wrap_mode(GTK_LABEL(label), PANGO_WRAP_WORD_CHAR);
+    gtk_label_set_width_chars(GTK_LABEL(label), 30);
+    gtk_label_set_max_width_chars(GTK_LABEL(label), 60);
+    gtk_label_set_xalign(GTK_LABEL(label), 0);
+    gtk_label_set_selectable(GTK_LABEL(label), TRUE);
+    gtk_widget_set_valign(label, GTK_ALIGN_CENTER);
+    gtk_widget_set_hexpand(label, TRUE);
+
+    gtk_box_append(GTK_BOX(row), icon);
+    gtk_box_append(GTK_BOX(row), label);
+
+    GtkWidget *close = gtk_button_new_with_mnemonic(g_dgettext("gtk40", "_Close"));
+    gtk_widget_set_halign(close, GTK_ALIGN_END);
+    gtk_widget_set_size_request(close, 96, -1);
+    g_signal_connect_swapped(close, "clicked", G_CALLBACK(gtk_window_close), win);
+
+    gtk_box_append(GTK_BOX(column), row);
+    gtk_box_append(GTK_BOX(column), close);
+    gtk_window_set_child(GTK_WINDOW(win), column);
+
+    /* Escape closes it, as every dialog's does; Enter presses the button. */
+    GtkEventController *keys = gtk_shortcut_controller_new();
+    gtk_shortcut_controller_add_shortcut(
+        GTK_SHORTCUT_CONTROLLER(keys),
+        gtk_shortcut_new(gtk_keyval_trigger_new(GDK_KEY_Escape, 0),
+                         gtk_named_action_new("window.close")));
+    gtk_widget_add_controller(win, keys);
+    gtk_window_set_default_widget(GTK_WINDOW(win), close);
+    /* The button and not the text: a selectable label that takes the focus
+     * selects all of itself. */
+    gtk_window_set_focus(GTK_WINDOW(win), close);
+
+    MessageJob *job = g_new0(MessageJob, 1);
+    job->ctx    = ctx;
+    job->done   = JS_IsFunction(ctx, done) ? JS_DupValue(ctx, done) : JS_UNDEFINED;
+    job->window = win;
+    message_jobs = g_list_prepend(message_jobs, job);
+    g_signal_connect(win, "destroy", G_CALLBACK(on_message_destroy), job);
+
+    gtk_window_present(GTK_WINDOW(win));
     return true;
 }
 
@@ -1481,6 +1627,7 @@ void bta_app_free(BtaApp *app)
      * so they are stopped and joined before anything they touch goes away. */
     bta_task_cleanup();
     bta_sys_cleanup();
+    message_cleanup();
     bta_http_cleanup();
     bta_media_cleanup();
     bta_printer_cleanup();

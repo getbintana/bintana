@@ -992,7 +992,8 @@ void    bta_report_fatal(BtaApp *app, const char *message);
  * Info, 1 Warning, 2 Error) and answer true, or answer false when there is no
  * display and the shared half prints it to stderr. */
 void    bta_message_init(JSContext *ctx, JSValueConst global);
-bool    bta_message_show(int kind, const char *text);
+bool    bta_message_show(int kind, const char *text, JSContext *ctx,
+                         JSValueConst done);
 
 /* The globals a `Task` worker gets that belong to the host that started it,
  * installed by `bta_task.c` after the shared ones: the graphical host's

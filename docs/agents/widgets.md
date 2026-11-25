@@ -115,6 +115,22 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 ## Popover, menus and accelerators
 
+- **`GtkAlertDialog` is not a dialog to show anybody** (2026-11-25). It has
+  no title and no icon to set, and under xfwm4 `Message.Info("Listo, Ana")`
+  was a 131x97 window with its text against the button; its heading was the
+  literal `"Warning"`/`"Error"`, English in every language. `Message` builds
+  its own window in `bta_runtime.c` now -- title `Application.Name`, the
+  `dialog-*-symbolic` icon of its kind, a selectable label at 30 to 60
+  characters, GTK's own `_Close` from the `gtk40` domain, Escape through a
+  `GtkShortcutController` on `window.close`. **The focus goes on the button
+  and not the label**: a selectable label that takes the focus selects all of
+  itself. `done` runs from an idle queued in `destroy` (which also comes when
+  the parent closes, where `close-request` does not), and `message_cleanup`
+  destroys what is open at teardown with its `done` uncalled. With no window
+  manager, `testMessageWindow` reaches it by moving the pointer over it --
+  the focus follows the pointer -- and `xdotool search --name` on the
+  application's name.
+
 - **`MenuItem.Visible` is the action leaving its group** (2026-11-17). GMenu has
   no visibility; GTK's `hidden-when: action-missing` attribute, set on every
   plain and check item, drops the row while the action is not in the group,

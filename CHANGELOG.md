@@ -11,6 +11,15 @@ three controls, a handler, a run -- and what got in the way.
 
 ### Runtime and libraries
 
+- **`Message` is a window of the runtime's own, and can be waited for.** It
+  was GTK's alert: under Xfce a 131x97 box with no title, no icon and no
+  margin, headed *Warning* or *Error* in English whatever the language. Now it
+  is titled with `Application.Name`, carries the icon of its kind, wraps at a
+  readable width, its text can be copied, and Enter or Escape closes it. **A
+  function last is `done`**, run once it has been closed --
+  `Message.Error("Cannot open {0}", path, () => Application.Quit(1))` -- where
+  quitting on the next line used to close the error before it was read. With
+  no display it prints and runs `done` at once.
 - **`Scroller.FollowFocus`.** A `Scroller` scrolls to whatever takes the focus
   inside it, which is GTK's and what a long form wants; for a control wider
   than the view GTK goes to its *far edge*. `FollowFocus = false` keeps the

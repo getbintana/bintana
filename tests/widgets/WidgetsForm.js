@@ -673,6 +673,8 @@ const TESTS = [
     "Accessible",
     "EditorSnippet",
     "EditorKeyPreview",
+    /* Blocking too: a child shows a Message, and a real Escape closes it. */
+    "MessageWindow",
     /* Blocking too: a child with a real pointer and keyboard on a tree. */
     "TableMultiKeys",
     /* And again: the expander clicked in the column that carries it. */
@@ -2403,6 +2405,105 @@ class WidgetsForm extends Form {
      * what `KeyPress` hears; Return ends it with the answer in a file.
      * Skipped, never failed, without `xdotool`.
      */
+    /*
+     * `Message`: the window it shows, and `done`, the function last.
+     *
+     * It was a `GtkAlertDialog` of 131x97 with no title and no icon, and a
+     * program had no way to wait for it -- `Message.Error(...);
+     * Application.Quit()` quit before the error was read. The child shows one
+     * with a `{0}` and a `done`; the script finds the window by its title,
+     * which is `Application.Name`, measures it, and presses a real Escape
+     * with the pointer over it (no window manager: the focus follows the
+     * pointer). `done` writes the answer and quits. A second child quits with
+     * a message still open, which must end with its own code and not abort
+     * over a `done` still held. And the console host prints and runs `done`
+     * at once. Skipped, never failed, without `xdotool`.
+     */
+    testMessageWindow() {
+        const proj = File.Join(SCRATCH, "message-window");
+        Directory.Make(proj);
+        File.SaveJson(File.Join(proj, "project.btp"),
+                      { id: "io.github.getbintana.test.MessageWindow",
+                        name: "MsgWindowTest", startup: "Form1", sources: ["Form1.js"] });
+        File.SaveJson(File.Join(proj, "Form1.form"),
+                      { format: "bintana-form/1", class: "Form1",
+                        properties: { Width: 300, Height: 200, Text: "Owner" } });
+        File.Save(File.Join(proj, "Form1.js"),
+                  "class Form1 extends Form {\n" +
+                  "    Form_Open() {\n" +
+                  "        const dir = Application.Directory;\n" +
+                  "        if (Application.Arguments[0] === 'quit') {\n" +
+                  "            Timer.After(300, () => Message.Info('open', () => File.Save(dir + '/late', '1')));\n" +
+                  "            Timer.After(900, () => Application.Quit(3));\n" +
+                  "            return;\n" +
+                  "        }\n" +
+                  "        Timer.After(300, () => {\n" +
+                  "            Message.Warning('Saved {0}', 'x.txt', () => {\n" +
+                  "                File.Save(dir + '/out', 'done');\n" +
+                  "                Application.Quit(0);\n" +
+                  "            });\n" +
+                  "            File.Save(dir + '/ready', '1');\n" +
+                  "        });\n" +
+                  "    }\n" +
+                  "}\n");
+
+        /* The console host first: no window, nothing to wait for. */
+        const con = File.Join(SCRATCH, "message-console");
+        Directory.Make(con);
+        File.SaveJson(File.Join(con, "project.btp"),
+                      { id: "io.github.getbintana.test.MessageConsole",
+                        name: "msgconsole", main: "Main", sources: ["Main.js"] });
+        File.Save(File.Join(con, "Main.js"),
+                  "function Main() {\n" +
+                  "    Message.Info('one {0}', 1, () => print('done one'));\n" +
+                  "    print('after');\n" +
+                  "}\n");
+        const plain = Exec.Wait([Application.Executable, con], { Timeout: 30000 });
+        check("with no display the message is printed",
+              (plain.Output || "").includes("message: one 1"), plain.Output);
+        check("...and done runs at once, before the next line",
+              /done one[\s\S]*after/.test(plain.Output || ""), plain.Output);
+
+        if (!Application.HasCommand("xdotool")) {
+            print("  (skipping the message window: it needs xdotool)");
+            return;
+        }
+        for (const gone of ["ready", "out", "late"])
+            if (File.Exists(File.Join(proj, gone))) File.Delete(File.Join(proj, gone));
+
+        const script = File.Join(proj, "run.sh");
+        File.Save(script,
+                  "bin=$1; dir=$2\n" +
+                  "\"$bin\" \"$dir\" &\n" +
+                  "child=$!\n" +
+                  "i=0; while [ ! -f \"$dir/ready\" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done\n" +
+                  "sleep 0.5\n" +
+                  "wid=$(xdotool search --name '^MsgWindowTest$' | tail -1)\n" +
+                  "echo \"found=$wid\"\n" +
+                  "eval $(xdotool getwindowgeometry --shell \"$wid\")\n" +
+                  "echo \"size=${WIDTH}x${HEIGHT}\"\n" +
+                  "xdotool mousemove --window \"$wid\" 20 20; sleep 0.3\n" +
+                  "xdotool key Escape\n" +
+                  "wait $child; echo \"child=$?\"\n" +
+                  "\"$bin\" \"$dir\" quit; echo \"quit=$?\"\n");
+
+        const ran = Exec.Wait(["/bin/sh", script, Application.Executable, proj],
+                              { Timeout: 60000 });
+        const out = ran.Output || "";
+        check("the message is a window titled with the application's name",
+              /found=\d+/.test(out), out);
+        const size = /size=(\d+)x(\d+)/.exec(out);
+        check("...wide enough to read, not the size of its button",
+              size !== null && Number(size[1]) >= 250, out);
+        eq("Escape closed it and done ran", File.Exists(File.Join(proj, "out"))
+           ? File.Load(File.Join(proj, "out")) : "", "done");
+        check("...and done could quit the program", out.includes("child=0"), out);
+        check("quitting with a message open ends with the program's own code",
+              out.includes("quit=3"), out);
+        check("...and the done of a message nobody closed is not called",
+              !File.Exists(File.Join(proj, "late")), out);
+    }
+
     testEditorKeyPreview() {
         if (!Application.HasCommand("xdotool")) {
             print("  (skipping the real keys: they need xdotool)");
