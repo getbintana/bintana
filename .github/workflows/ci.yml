@@ -1044,7 +1044,8 @@ jobs:
           # dialog waiting on a click nobody will make.
           probe="stage/probe"
           rm -rf "$probe"; mkdir -p "$probe"
-          printf '%s\n' '{"name":"probe","main":"Main"}' > "$probe/project.btp"
+          # A project that runs declares an id; the runtime refuses one without.
+          printf '%s\n' '{"name":"probe","id":"io.github.getbintana.test.PortableProbe","main":"Main"}' > "$probe/project.btp"
           printf '%s\n' \
               'function Main() {' \
               '    Application.OnError = (e) => {' \
