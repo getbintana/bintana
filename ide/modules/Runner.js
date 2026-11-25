@@ -242,7 +242,7 @@ export class Runner {
                          (line) => this.log(`${line}\n`),
                          (code) => {
                              if (this.previewJob === job) this.previewJob = null;
-                             if (code !== 0) this.log(`[preview ended with code ${code}]\n`);
+                             if (code !== 0) this.log(Locale.Text("[preview ended with code {0}]\n", code));
                          });
         this.previewJob = job;
     }

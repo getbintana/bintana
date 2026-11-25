@@ -1146,7 +1146,7 @@ export class TabSet {
         try { state.onDisk = File.Load(File.Join(this.ide.project, this.ide.activeFile)); }
         catch (e) { /* saved and then removed: the watch will say so */ }
         state.changedOnDisk = false;
-        this.ide.log(`Saved ${this.ide.activeFile}\n`);
+        this.ide.log(Locale.Text("Saved {0}\n", this.ide.activeFile));
         this.checkSyntax(this.ide.activeFile, this.ide.Editor);
         /* A program running under the debugger is offered what changed. */
         if (state.mode !== "design")

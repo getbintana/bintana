@@ -100,7 +100,7 @@ export class Tests {
 
         this.ide.listFiles();
         this.ide.openInTab(file);
-        this.ide.log(`Created ${file}\n`);
+        this.ide.log(Locale.Text("Created {0}\n", file));
         return file;
     }
 
@@ -200,9 +200,9 @@ export class Tests {
         /* 0 and 1 are the two answers; anything else is a run that did not get
          * as far as answering, and the reason is in Output. */
         if (code !== 0 && code !== 1)
-            this.ide.log(`[tests did not run: code ${code}]\n`);
+            this.ide.log(Locale.Text("[tests did not run: code {0}]\n", code));
         else
-            this.ide.log(`[tests: ${this.passed} passed, ${this.failed} failed]\n`);
+            this.ide.log(Locale.Text("[tests: {0} passed, {1} failed]\n", this.passed, this.failed));
         this.show();
         this.ide.refresh();
     }

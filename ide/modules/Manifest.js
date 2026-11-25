@@ -314,7 +314,7 @@ export class Manifest {
 
         /* The tree marks the startup form, and the name may have moved. */
         this.ide.listFiles();
-        this.ide.log("project.btp saved\n");
+        this.ide.log(Locale.Text("project.btp saved\n"));
         return true;
     }
 
@@ -352,7 +352,7 @@ export class Manifest {
         });
         if (!changed) return;
 
-        ide.log(`Starts at ${name}\n`);
+        ide.log(Locale.Text("Starts at {0}\n", name));
         ide.listFiles();                /* the marker moved */
     }
 }

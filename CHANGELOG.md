@@ -37,6 +37,19 @@ three controls, a handler, a run -- and what got in the way.
   as a tooltip.
 - **`this.` offers a form's parts** (a `Timer`, a `Connection`, a `Model`), and
   a control dropped on the canvas is offered before the form is saved.
+- **Open an example**, on the welcome page and in the File menu. It lists the
+  examples that came with the runtime, `hello` first, and opens a *copy* in
+  the folder New project uses, at its startup form: installed, the examples
+  are read-only, and in the source tree they are the repository's own.
+  `hello`, `calculator` and `sysnote` have a description now, like the rest.
+- **Double click or Enter on a file in the project tree puts the cursor in
+  it.** A click opens it and leaves the keys in the tree; typing after a
+  double click on *code* used to walk the tree, and Enter opened whatever
+  file the arrows had reached.
+- **The IDE's Output speaks its language**: *Saved*, *Added Button1_Click()
+  to*, *Project:*, *Renamed* and some forty other lines were English in the
+  Spanish IDE, and one (*Ojo: … todavia nombran a …*) was Spanish in the
+  English one.
 
 ## 0.4.2 — 2026-11-25
 

@@ -528,7 +528,7 @@ export class MainForm extends Form {
         this.git.refresh();
         this.listFiles();
         this.rememberRecent(dir);
-        this.log(`Project: ${dir}\n`);
+        this.log(Locale.Text("Project: {0}\n", dir));
         this.reportProject();
 
         /* Its breakpoints and watches first, so each tab that reopens below
@@ -539,7 +539,7 @@ export class MainForm extends Form {
         /* What was open the last time this project was, reopened before anything
          * is offered: the recovered text below lands in these same tabs. */
         const back = this.session.restoreTabs(dir);
-        if (back) this.log(`Reopened ${back} file${back === 1 ? "" : "s"}\n`);
+        if (back) this.log(Locale.Plural("Reopened {0} file\n", "Reopened {0} files\n", back));
 
         /*
          * **A project nobody has worked in here opens on its README**, which is
@@ -597,7 +597,7 @@ export class MainForm extends Form {
         /* Failing to write the list down cannot stop the project from opening:
          * what is lost is the memory, not the work. */
         if (!Settings.Set(RECENT_KEY, this.recent)) {
-            this.log("Could not save the recent list.\n");
+            this.log(Locale.Text("Could not save the recent list.\n"));
         }
     }
 
@@ -1994,7 +1994,7 @@ export class MainForm extends Form {
     openOutside(name) {
         try {
             File.Open(File.Join(this.project, name));
-            this.log(`Opened ${name} outside the IDE\n`);
+            this.log(Locale.Text("Opened {0} outside the IDE\n", name));
         } catch (e) {
             Message.Error("Cannot open {0}:\n{1}", name, e.message);
         }
@@ -2023,7 +2023,7 @@ export class MainForm extends Form {
         try {
             this.recordEditor = RecordForm.edit(doc, (shape) => {
                 File.SaveJson(path, shape);
-                this.log(`Edited ${file}\n`);
+                this.log(Locale.Text("Edited {0}\n", file));
                 this.refresh();
             });
         } catch (e) {
@@ -2078,7 +2078,7 @@ export class MainForm extends Form {
             Message.Error("Cannot write {0}:\n{1}", file, e.message);
             return;
         }
-        this.log(`Wrote ${file}\n`);
+        this.log(Locale.Text("Wrote {0}\n", file));
         this.listFiles();
     }
 
@@ -3228,8 +3228,9 @@ export class MainForm extends Form {
                     Message.Error(done.Refused);
                     return;
                 }
-                this.log(`${name} -> ${newName}: ${done.Moved} references in ` +
-                         `${done.Files.length} files\n`);
+                this.log(Locale.Plural("{1} -> {2}: {0} reference in {3} files\n",
+                                        "{1} -> {2}: {0} references in {3} files\n",
+                                        done.Moved, name, newName, done.Files.length));
                 RefsForm.show(this, newName);
             });
         return this.renameSymbolPrompt;

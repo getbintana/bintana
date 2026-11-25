@@ -94,7 +94,7 @@ export class Installer {
             Nsis.Stage(ide.project, out);
             Nsis.Build(ctx.Script, File.Absolute(exe));
         } catch (e) {
-            ide.log(`Windows installer: ${e.message}\n`);
+            ide.log(Locale.Text("Windows installer: {0}\n", e.message));
             Message.Error(e.message);
             return null;
         }
@@ -106,9 +106,9 @@ export class Installer {
         try {
             Directory.DeleteTree(out);
         } catch (e) {
-            ide.log(`Windows installer: the build folder was left behind: ${e.message}\n`);
+            ide.log(Locale.Text("Windows installer: the build folder was left behind: {0}\n", e.message));
         }
-        ide.log(`Windows installer: ${exe}\n`);
+        ide.log(Locale.Text("Windows installer: {0}\n", exe));
 
         /* **The databases it carries are named**, at the moment someone is
          * looking at what ships: a project may ship one on purpose, and one
@@ -117,7 +117,7 @@ export class Installer {
         let data = [];
         try { data = Package.dataFiles(ide.project); } catch (e) { data = []; }
         if (data.length) {
-            ide.log(`Windows installer: it carries ${data.join(", ")}\n`);
+            ide.log(Locale.Text("Windows installer: it carries {0}\n", data.join(", ")));
             Message.Info("Installer written to {0}\n\nIt carries these databases from the project: {1}",
                          exe, data.join(", "));
             return exe;

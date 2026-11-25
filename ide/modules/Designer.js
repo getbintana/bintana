@@ -2104,7 +2104,7 @@ export class Designer {
         }
         const plan = Arrange.plan(items, frame);
         if (!plan || plan.kind === "Fixed") {
-            this.ide.log("Nothing to arrange: those controls overlap, so no row or column can be read from them.\n");
+            this.ide.log(Locale.Text("Nothing to arrange: those controls overlap, so no row or column can be read from them.\n"));
             return false;
         }
 
@@ -2183,10 +2183,15 @@ export class Designer {
         this.touch();
 
         const left = Arrange.fixedCount(plan);
-        this.ide.log(`Arranged ${items.length} controls` +
-                     (made.length ? ` into ${made[0]}` : " on the form") +
-                     (left ? `; ${left} overlapping ones stay placed by coordinate in a panel of their own` : "") +
-                     ".\n");
+        this.ide.log((made.length
+            ? Locale.Plural("Arranged {0} control into {1}", "Arranged {0} controls into {1}",
+                            items.length, made[0])
+            : Locale.Plural("Arranged {0} control on the form", "Arranged {0} controls on the form",
+                            items.length)) +
+            (left ? Locale.Plural("; {0} overlapping one stays placed by coordinate in a panel of its own",
+                                  "; {0} overlapping ones stay placed by coordinate in a panel of their own",
+                                  left) : "") +
+            ".\n");
         return true;
     }
 
@@ -3072,7 +3077,8 @@ export class Designer {
         this.chrome.show(false);
         this.chrome.position();
 
-        this.ide.log(`${control.Name} moved into ${target.Name || "the form"}\n`);
+        this.ide.log(target.Name ? Locale.Text("{0} moved into {1}\n", control.Name, target.Name)
+                                  : Locale.Text("{0} moved into the form\n", control.Name));
         return true;
     }
 
@@ -3548,7 +3554,7 @@ export class Designer {
     copySelection(cut = false) {
         if (!this.selection.length) return false;
         if (this.selection.some((c) => c instanceof FormPart)) {
-            this.ide.log("Components are not copied yet.\n");
+            this.ide.log(Locale.Text("Components are not copied yet.\n"));
             return false;
         }
         const clip = this.clipOf(this.selection);
@@ -3581,7 +3587,7 @@ export class Designer {
                 /* A gesture that appears to do nothing is worse than one that
                  * says why: Ctrl+V over a clipboard holding something else is
                  * the commonest way to meet this. */
-                this.ide.log("Nothing to paste: the clipboard holds no controls.\n");
+                this.ide.log(Locale.Text("Nothing to paste: the clipboard holds no controls.\n"));
                 return;
             }
             this.pasteNodes(clip.nodes, null, clip.cut ? clip.from || "" : null);
@@ -3739,10 +3745,9 @@ export class Designer {
         if (!left.length) return;
 
         const jsName = sibling(this.ide.activeFile, "js");
-        this.ide.log(`${left.join(", ")} ${left.length > 1 ? "are" : "is"} ` +
-                     `still in ${jsName}; ` +
-                     `${left.length > 1 ? "those names" : "that name"} ` +
-                     `will not be given to another control.\n`);
+        this.ide.log(Locale.Plural("{1} is still in {2}; that name will not be given to another control.\n",
+                                 "{1} are still in {2}; those names will not be given to another control.\n",
+                                 left.length, left.join(", "), jsName));
     }
 
     /* --- menus --------------------------------------------------------------
@@ -3951,8 +3956,8 @@ export class Designer {
 
         this.grid.fill();
         this.refresh();
-        this.ide.log(`Renamed ${oldName} to ${newName}` +
-                     (moved ? ` (${moved} in the code)\n` : "\n"));
+        this.ide.log(moved ? Locale.Text("Renamed {0} to {1} ({2} in the code)\n", oldName, newName, moved)
+                           : Locale.Text("Renamed {0} to {1}\n", oldName, newName));
         return true;
     }
 

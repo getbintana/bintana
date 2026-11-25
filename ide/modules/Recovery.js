@@ -212,7 +212,7 @@ export class Recovery {
             /* A snapshot that cannot be written is a net that is not there, and
              * that is all it is: the IDE goes on. Said once, in the log, rather
              * than in a dialog every thirty seconds. */
-            ide.log(`Recovery: ${e.message}\n`);
+            ide.log(Locale.Text("Recovery: {0}\n", e.message));
             return false;
         }
 
@@ -246,7 +246,7 @@ export class Recovery {
         try {
             File.SaveJson(this.fileFor(this.ide.project), shot);
         } catch (e) {
-            this.ide.log(`Recovery: ${e.message}\n`);
+            this.ide.log(Locale.Text("Recovery: {0}\n", e.message));
         }
     }
 
@@ -260,7 +260,7 @@ export class Recovery {
         try {
             if (File.Exists(path)) File.Delete(path);
         } catch (e) {
-            this.ide.log(`Recovery: ${e.message}\n`);
+            this.ide.log(Locale.Text("Recovery: {0}\n", e.message));
         }
     }
 
@@ -322,7 +322,7 @@ export class Recovery {
             else left.push(one);
         }
 
-        this.ide.log(`Recovered ${done} of ${shot.files.length}\n`);
+        this.ide.log(Locale.Text("Recovered {0} of {1}\n", done, shot.files.length));
 
         if (!left.length) {
             /* Answered, so the file goes -- and the tabs are dirty again, so
@@ -350,7 +350,7 @@ export class Recovery {
         try {
             File.SaveJson(this.fileFor(this.ide.project), kept);
         } catch (e) {
-            this.ide.log(`Recovery: ${e.message}\n`);
+            this.ide.log(Locale.Text("Recovery: {0}\n", e.message));
         }
         /* Through `{0}`, so a file name is never read as a hole of its own. */
         Message.Warning("{0}", Locale.Plural(

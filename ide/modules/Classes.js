@@ -340,8 +340,8 @@ export class Classes {
 
         for (const name in seen) {
             if (seen[name].length > 1) {
-                this.ide.log(`Warning: ${seen[name].join(" and ")} are both ${name}; ` +
-                         `the runtime cannot tell which one to load\n`);
+                this.ide.log(Locale.Text("Warning: {0} are all {1}; the runtime cannot tell which one to load\n",
+                                          seen[name].join(", "), name));
             }
         }
     }

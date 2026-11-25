@@ -487,7 +487,7 @@ export class Session {
 
                 done++;
             } catch (e) {
-                this.ide.log(`Session: ${name}: ${e.message}\n`);
+                this.ide.log(Locale.Text("Session: {0}: {1}\n", name, e.message));
             }
         }
 

@@ -136,7 +136,7 @@ export class Finder {
         if (this.search() === 0) return;
 
         const n = this.editor.ReplaceAll(this.ide.ReplaceText.Text);
-        this.ide.log(`${n} replaced in ${this.ide.activeFile}\n`);
+        this.ide.log(Locale.Text("{0} replaced in {1}\n", n, this.ide.activeFile));
         this.search();
     }
 

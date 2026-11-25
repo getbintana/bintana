@@ -530,7 +530,7 @@ export class Git {
 
         const names = this.remotes();
         if (names.length === 0) {
-            this.ide.log("git: there is no remote to push to\n");
+            this.ide.log(Locale.Text("git: there is no remote to push to\n"));
             return false;
         }
         if (names.length === 1) return this.pushTo(names[0], done);
@@ -659,7 +659,7 @@ export class Git {
                     else File.Delete(path);
                 }
             } catch (e) {
-                this.ide.log(`git: cannot delete ${f}: ${e.message}\n`);
+                this.ide.log(Locale.Text("git: cannot delete {0}: {1}\n", f, e.message));
             }
         }
     }
@@ -745,7 +745,7 @@ export class Git {
             try {
                 text = File.Load(file);
             } catch (e) {
-                this.ide.log(`git: cannot read .gitignore: ${e.message}\n`);
+                this.ide.log(Locale.Text("git: cannot read .gitignore: {0}\n", e.message));
                 return false;
             }
         }
@@ -759,7 +759,7 @@ export class Git {
         try {
             File.Save(file, `${text}${entry}\n`);
         } catch (e) {
-            this.ide.log(`git: cannot write .gitignore: ${e.message}\n`);
+            this.ide.log(Locale.Text("git: cannot write .gitignore: {0}\n", e.message));
             return false;
         }
         return true;

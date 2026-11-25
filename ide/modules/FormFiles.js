@@ -271,7 +271,7 @@ export class FormFiles {
 
         this.ide.listFiles();
         this.ide.openInTab(jsFile);
-        this.ide.log(`Created ${jsFile}\n`);
+        this.ide.log(Locale.Text("Created {0}\n", jsFile));
         return true;
     }
 
@@ -331,7 +331,7 @@ export class FormFiles {
 
         this.ide.listFiles();
         this.ide.openInTab(formFile);
-        this.ide.log(`Created ${formFile} and ${sibling(formFile, "js")}\n`);
+        this.ide.log(Locale.Text("Created {0} and {1}\n", formFile, sibling(formFile, "js")));
         return true;
     }
 
@@ -495,7 +495,7 @@ export class FormFiles {
          * reported -- unlike the .js, where a warning is the honest limit. */
         const retyped = this.retypeForms(oldFull, newFull, newFormFile);
         if (retyped.length) {
-            this.ide.log(`Renamed ${oldFull} to ${newFull} in ${retyped.join(", ")}\n`);
+            this.ide.log(Locale.Text("Renamed {0} to {1} in {2}\n", oldFull, newFull, retyped.join(", ")));
         }
 
         /* The tabs follow the files, and **their text follows too**: the `.js`
@@ -512,7 +512,7 @@ export class FormFiles {
 
         this.ide.listFiles();
         this.ide.openInTab(newFormFile);
-        this.ide.log(`Renamed ${oldFormFile} to ${newFormFile}\n`);
+        this.ide.log(Locale.Text("Renamed {0} to {1}\n", oldFormFile, newFormFile));
         return true;
     }
 
@@ -588,7 +588,7 @@ export class FormFiles {
             pattern.IsMatch(File.Load(File.Join(this.ide.project, f))));
 
         if (guilty.length) {
-            this.ide.log(`Ojo: ${guilty.join(", ")} todavia nombran a ${oldName}\n`);
+            this.ide.log(Locale.Text("Careful: {0} still name {1}\n", guilty.join(", "), oldName));
             Message.Warning("These files still name {0}:\n{1}\n\nThey have to be updated by hand.",
                             oldName, guilty.join("\n"));
         }
@@ -621,7 +621,7 @@ export class FormFiles {
         this.ide.renameTab(oldFile, newFile);
         this.ide.listFiles();
         this.ide.openInTab(newFile);
-        this.ide.log(`Renamed ${oldFile} to ${newFile}\n`);
+        this.ide.log(Locale.Text("Renamed {0} to {1}\n", oldFile, newFile));
         return true;
     }
 
@@ -710,7 +710,7 @@ export class FormFiles {
         }
 
         this.ide.listFiles();
-        this.ide.log(`Tidied ${moved} of ${plan.length} into folders\n`);
+        this.ide.log(Locale.Text("Tidied {0} of {1} into folders\n", moved, plan.length));
         return moved;
     }
 
@@ -992,7 +992,7 @@ export class FormFiles {
                 File.Save(jsPath, written.source);
             }
             line = written.line;
-            this.ide.log(`Added ${method}() to ${jsName}\n`);
+            this.ide.log(Locale.Text("Added {0}() to {1}\n", method, jsName));
         }
 
         this.ide.openInTab(jsName);

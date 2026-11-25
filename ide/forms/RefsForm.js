@@ -113,8 +113,9 @@ export class RefsForm extends Form {
                 Message.Error(done.Refused);
                 return;
             }
-            this.ide.log(`${this.word} -> ${name}: ${done.Moved} references in ` +
-                         `${done.Files.length} files\n`);
+            this.ide.log(Locale.Plural("{1} -> {2}: {0} reference in {3} files\n",
+                                     "{1} -> {2}: {0} references in {3} files\n",
+                                     done.Moved, this.word, name, done.Files.length));
             this.word = name;
             this.fill();
         });

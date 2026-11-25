@@ -147,7 +147,7 @@ export class Exporter {
             Message.Error("tar failed ({0}); the console says what it reported.", code);
             return;
         }
-        this.ide.log(`Exported ${File.Name(path)}\n`);
+        this.ide.log(Locale.Text("Exported {0}\n", File.Name(path)));
         Message.Info("Exported to {0}", path);
     }
 }

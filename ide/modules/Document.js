@@ -156,7 +156,7 @@ export class Document {
         const target = File.Absolute(File.Join(File.Directory(this.path),
                                                href.replace(/#.*$/, "")));
         if (!File.Exists(target)) {
-            this.ide.log(`${text}: ${href} is not here\n`);
+            this.ide.log(Locale.Text("{0}: {1} is not here\n", text, href));
             return true;
         }
 
@@ -177,7 +177,7 @@ export class Document {
         try {
             File.Open(target);
         } catch (e) {
-            this.ide.log(`Cannot open ${href}: ${e.message}\n`);
+            this.ide.log(Locale.Text("Cannot open {0}: {1}\n", href, e.message));
         }
         return true;
     }
