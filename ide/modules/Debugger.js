@@ -1142,6 +1142,15 @@ export class Debugger {
             row.Arrangement = "Horizontal";
             row.Spacing     = 2;
             row.Margin      = 2;
+            /*
+             * **The width of the list, or the value is only its `…`.** The row
+             * and the value both `Fill`: at `Start` a control is drawn at its
+             * natural width, and an ellipsized label's is the ellipsis -- every
+             * value, a watch's `"Ana"` as much as `this`, read `…` beside its
+             * name while the answer had arrived (traced 2026-11-25 on the
+             * protocol: `"\"Ana\""` came back, `…` was drawn).
+             */
+            row.HAlign      = "Fill";
             list.Add(row);
             this.rows.push(node);
 
@@ -1195,7 +1204,7 @@ export class Debugger {
             shown.Text      = node.value;
             shown.Ellipsize = true;
             shown.HExpand   = true;
-            shown.HAlign    = "Start";
+            shown.HAlign    = "Fill";     /* and the text at its start: Alignment */
             /* An expression that threw is dimmed rather than hidden: the
              * message is the answer, and a watch that cannot be answered in
              * this frame is a fact about the frame. */

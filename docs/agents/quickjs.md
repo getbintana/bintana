@@ -225,6 +225,17 @@ hold. `docs/plans/debug-plan.md` is the design and the measurements.
   of the frame's own names and calls it with the frame's own values instead,
   which also buys the property worth having: **what an immediate window can name
   is exactly what the values panel shows.**
+  **But not every name of a frame is a name a parameter list takes** (2026-11-25):
+  a derived class's method keeps `this` in a local of that name, and the own
+  names went into the list unfiltered -- `function(a, this)`, *SyntaxError:
+  missing formal parameter* for every expression asked in every method of every
+  `extends` class, which is every handler of every form. The closure half had
+  always skipped it (`bta_closure_at`); the own half had the comment saying so
+  and not the check. `bta_debug_param` is the check now, for both, and the
+  call's `this` is the frame's -- or that local, or an arrow's captured one,
+  which made `this.v` in an arrow `NaN`. `testDebuggerThisEval` asks in both.
+  The suite had asked only in plain functions and in a derived class's
+  *locals*, never an `eval` in one.
 - **Frame 0 is the topmost frame running *code*.** A throw is reported from
   inside `Error`'s own constructor -- a native frame with no line and no locals
   -- so the numbering skips native frames *at the top*, in one place

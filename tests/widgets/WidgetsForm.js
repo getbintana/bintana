@@ -797,6 +797,8 @@ const TESTS = [
     "DebuggerHits",
     /* Async: `this` once in a derived class's method. */
     "DebuggerThis",
+    /* Async: an expression that names `this`, in a method and in an arrow. */
+    "DebuggerThisEval",
     /* Async: a breakpoint inside a Task, on the worker's thread. */
     "DebuggerTask",
     /* Async: Pause reaching a Task while the window is idle. */
@@ -37335,6 +37337,74 @@ class PQ extends Form {
                 waiting--;
                 eq("a derived class's method finishes under the debugger", code, 0);
                 eq("...and lists this once, beside its argument and its local", names, "a, b, this");
+            });
+    }
+
+    /*
+     * **An expression that names `this`, where a form's handlers stand.** A
+     * method of a derived class keeps `this` in a local of that name -- the
+     * test above -- and `JS_DebugEval` wrote every local into the parameter
+     * list of the function it compiles the expression in, `this` included:
+     * `function(a, b, this)`, *SyntaxError: missing formal parameter*. So the
+     * immediate box and every watch failed in every handler of every form,
+     * since a form is a class that extends `Form` (found 2026-11-25, watching
+     * `this.TextBox1.Text` in a button's Click). An arrow function inside one
+     * has the same name among what it captures, and its own `this` is the
+     * captured one, not the frame's.
+     */
+    testDebuggerThisEval() {
+        const proj = File.Join(SCRATCH, "dbgthiseval");
+
+        Directory.Make(proj);
+        File.Save(File.Join(proj, "project.btp"),
+                  JSON.stringify({ id: "io.github.getbintana.test.DbgThisEval",
+                                   name: "dbgthiseval", main: "Main", sources: ["Main.js"] }));
+        File.Save(File.Join(proj, "Main.js"),
+                  '"use strict";\n' +                                   /* 1 */
+                  'class Base { constructor() { this.v = 1; } }\n' +    /* 2 */
+                  'class Derived extends Base {\n' +                    /* 3 */
+                  '    m(a) {\n' +                                       /* 4 */
+                  '        const f = (x) => {\n' +                       /* 5 */
+                  '            return x + this.v;\n' +                   /* 6 */
+                  '        };\n' +                                       /* 7 */
+                  '        return f(a);\n' +                             /* 8 */
+                  '    }\n' +                                            /* 9 */
+                  '}\n' +                                                /* 10 */
+                  'function Main() {\n' +                                /* 11 */
+                  '    new Derived().m(2);\n' +                          /* 12 */
+                  '    Application.Quit(0);\n' +                         /* 13 */
+                  '}\n');
+
+        const answers = {};
+        let   asked   = null;
+        const send = (o) => job.Write(JSON.stringify(o));
+        waiting++;
+        const job = Exec([Application.Executable, "--debug", proj],
+            {
+                Timeout: 20000,
+                Control: (line) => {
+                    const msg  = JSON.parse(line);
+                    const kind = msg.event || msg.reply;
+                    if (kind === "ready") {
+                        send({ do: "break", file: "Main.js", line: 8, id: 1 });
+                        send({ do: "break", file: "Main.js", line: 6, id: 2 });
+                        send({ do: "continue" });
+                    } else if (kind === "stopped") {
+                        asked = msg.frames[0].Line === 8 ? "method" : "arrow";
+                        send({ do: "eval", frame: 0,
+                               text: asked === "method" ? "this.v + a" : "this.v + x" });
+                    } else if (kind === "eval") {
+                        answers[asked] = msg.value;
+                        send({ do: "continue" });
+                    }
+                },
+            },
+            () => {},
+            (code) => {
+                waiting--;
+                eq("a program asked about this finishes", code, 0);
+                eq("this is named in a derived class's method", answers.method, "3");
+                eq("...and in an arrow inside it, as the arrow's own this", answers.arrow, "3");
             });
     }
 

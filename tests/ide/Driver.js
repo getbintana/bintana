@@ -17825,6 +17825,25 @@ function* p_debug(ide) {
     dbg.heard('{"event":"stopped","reason":"breakpoint","frames":[{"Name":"Main","File":"","Line":0,"Column":0}]}');
     dbg.heard(LOCALS);
     eq("a stop draws a row per value", ide.LocalList.Count, 2);
+
+    /*
+     * **Drawn at the list's width, and not as its ellipsis.** A row left at
+     * `Start` is as wide as its least, and the least of an ellipsized label is
+     * `…`: every value -- a watch's `"Ana"`, `this` -- read `…` while the
+     * answer had arrived. The value takes what the row has left, so it is
+     * wide even when the text is one digit.
+     */
+    const consolePage = ide.ConsoleBox.Current;
+    ide.ConsoleBox.Current = ide.ConsoleBox.Children.findIndex((p) => p.Name === "DebugPage");
+    const shownOf = (i) => {
+        const kids = ide.LocalList.Children[i].Children;
+        return kids[kids.length - 1];
+    };
+    yield* until(() => shownOf(1).Bounds().Width > 0);
+    check("a value has the rest of its row, not the width of an ellipsis",
+          shownOf(1).Bounds().Width > 60, JSON.stringify(shownOf(1).Bounds()));
+    ide.ConsoleBox.Current = consolePage;
+
     eq("an object is a row that opens", dbg.rows[0].openable, true);
     eq("and a number one that does not", dbg.rows[1].openable, false);
 
