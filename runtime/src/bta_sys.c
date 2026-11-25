@@ -1465,7 +1465,12 @@ static bool delete_tree(GFile *dir, GCancellable *cancel, GError **error,
     g_object_unref(walk);
     if (!ok)
         return false;
-    if (g_file_delete(dir, cancel, error))
+
+    /* **The directory goes through `delete_entry` too**, not `g_file_delete`:
+     * that is where the force verb clears the read-only bit, for folders as
+     * well as files. A read-only empty folder was refused at the end of the
+     * walk while every file under it had been cleared. */
+    if (delete_entry(dir, cancel, error, force))
         return true;
     if (failed && !*failed)
         *failed = g_file_get_path(dir);
@@ -6042,11 +6047,10 @@ void bta_sys_init(JSContext *ctx, JSValue global)
      *   a file, or an **empty** directory. Throws on failure. On Windows a
      *   delete refused because another program holds the path a moment -- the
      *   antivirus or OneDrive right after it was written -- is tried again for
-     *   up to a second; a read-only file is refused at once, and a directory
-     *   that is not empty is never taken. Elsewhere the folder's permission
-     *   decides, as `unlink` does: a read-only file in a writable folder goes.
-     *   A directory's read-only attribute is not honored by Windows, so an
-     *   empty directory carrying it still goes
+     *   up to a second; a read-only file or directory is refused at once,
+     *   and a directory that is not empty is never taken. Elsewhere the
+     *   folder's permission decides, as `unlink` does: a read-only file in a
+     *   writable folder goes
      */
     JS_SetPropertyStr(ctx, file, "Delete", JS_NewCFunction(ctx, sys_file_delete, "Delete", 1));
     /* Open(path)
@@ -6251,18 +6255,19 @@ void bta_sys_init(JSContext *ctx, JSValue global)
     /* Delete(path, [recursive], [cancellable])
      *   an **empty** directory, or with `recursive` true it and everything
      *   under it — the shape of .NET's `Directory.Delete(path, recursive)`.
-     *   **Platform-normal**: a read-only file on Windows, or a folder without
-     *   write permission on POSIX, is refused; `Directory.DeleteTree` is the
-     *   force variant. A `Cancellable` last stops it part way, leaving what was
-     *   not yet deleted
+     *   **Platform-normal**: a read-only file or directory on Windows, or a
+     *   folder without write permission on POSIX, is refused;
+     *   `Directory.DeleteTree` is the force variant. A `Cancellable` last
+     *   stops it part way, leaving what was not yet deleted
      */
     JS_SetPropertyStr(ctx, dir, "Delete",
                       JS_NewCFunction(ctx, sys_dir_delete, "Delete", 3));
     /* DeleteTree(path, [cancellable])
      *   it and everything under it — the force one, and the reason it has a
-     *   name of its own rather than a flag. A read-only file on Windows and a
-     *   folder without write permission on POSIX are taken; one that cannot go
-     *   is named in the error. A `Cancellable` last stops it part way, leaving
+     *   name of its own rather than a flag. A read-only file or directory on
+     *   Windows and a folder without write permission on POSIX are taken; one
+     *   that cannot go is named in the error. A `Cancellable` last stops it
+     *   part way, leaving
      *   what was not yet deleted
      */
     JS_SetPropertyStr(ctx, dir, "DeleteTree",

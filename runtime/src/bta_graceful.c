@@ -62,16 +62,17 @@ static bool held_by_another(int e)
 }
 
 /*
- * **A read-only file is not a hold.** Windows answers it the same way it
+ * **A read-only path is not a hold.** Windows answers it the same way it
  * answers a file another process has open -- access denied -- but no amount of
  * waiting changes it. `File.Delete` says so at once, as it did before the
- * retry existed; `DeleteTree`, which takes read-only files, clears the bit
+ * retry existed; `DeleteTree`, which takes read-only paths, clears the bit
  * first and does not come through here.
  *
- * **A directory is not this.** Microsoft documents `FILE_ATTRIBUTE_READONLY`
- * as "not honored on directories": an empty directory carrying it can still
- * be removed, and Explorer uses the bit only to mark a customized folder. So
- * the check asks for a non-directory.
+ * **A directory with the bit is this too**, whatever Microsoft's sentence
+ * about `FILE_ATTRIBUTE_READONLY` says: measured 2026-11-25 on Windows 11
+ * 26H2, an empty directory carrying it was refused by `File.Delete` and by
+ * the end of a `DeleteTree` walk until the bit was cleared. So the check asks
+ * about a file or a directory, and `DeleteTree` clears the bit first.
  */
 static bool path_is_read_only(const char *path)
 {
@@ -82,7 +83,6 @@ static bool path_is_read_only(const char *path)
     DWORD attrs = GetFileAttributesW((LPCWSTR)wide);
     g_free(wide);
     return attrs != INVALID_FILE_ATTRIBUTES &&
-           !(attrs & FILE_ATTRIBUTE_DIRECTORY) &&
            (attrs & FILE_ATTRIBUTE_READONLY);
 }
 
@@ -167,7 +167,7 @@ int bta_graceful_fs_remove_cancellable(const char *path, bool missing_ok,
         return -1;
     }
 
-    /* A read-only file is the platform's answer, not a hold; waiting out a
+    /* A read-only path is the platform's answer, not a hold; waiting out a
      * second would only delay the same refusal. */
     if (path_is_read_only(path)) {
         errno = EACCES;

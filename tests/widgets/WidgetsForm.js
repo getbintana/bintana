@@ -767,6 +767,8 @@ const TESTS = [
     "HttpProxy",
     "AbsoluteSources",
     "RenameHeld",
+    "SaveHeld",
+    "DeleteTreeHeld",
     "RemoveHeld",
     "HttpServerDropped",
     "HttpServerHold",
@@ -31822,9 +31824,14 @@ export class UriChild extends Form {
                        File.Exists(to) && !File.Exists(from));
              },
              (code) => {
-                 if (!tried) failures.push(`RenameHeld: the holder never held the file (exit ${code})`);
-                 Directory.DeleteTree(dir);
-                 waiting--;
+                 try {
+                     if (!tried) failures.push(`RenameHeld: the holder never held the file (exit ${code})`);
+                     if (File.IsDir(dir)) Directory.DeleteTree(dir);
+                 } catch (e) {
+                     failures.push(`RenameHeld cleanup: ${e.Message}`);
+                 } finally {
+                     waiting--;
+                 }
              });
     }
 
@@ -31857,9 +31864,14 @@ export class UriChild extends Form {
                  eq("...and the file has the new contents", File.Load(file), "after");
              },
              (code) => {
-                 if (!tried) failures.push(`SaveHeld: the holder never held the file (exit ${code})`);
-                 Directory.DeleteTree(dir);
-                 waiting--;
+                 try {
+                     if (!tried) failures.push(`SaveHeld: the holder never held the file (exit ${code})`);
+                     if (File.IsDir(dir)) Directory.DeleteTree(dir);
+                 } catch (e) {
+                     failures.push(`SaveHeld cleanup: ${e.Message}`);
+                 } finally {
+                     waiting--;
+                 }
              });
     }
 
@@ -31891,9 +31903,14 @@ export class UriChild extends Form {
                  check("...and the tree is gone", !File.IsDir(dir));
              },
              (code) => {
-                 if (!tried) failures.push(`DeleteTreeHeld: the holder never held the file (exit ${code})`);
-                 if (File.IsDir(dir)) Directory.DeleteTree(dir);
-                 waiting--;
+                 try {
+                     if (!tried) failures.push(`DeleteTreeHeld: the holder never held the file (exit ${code})`);
+                     if (File.IsDir(dir)) Directory.DeleteTree(dir);
+                 } catch (e) {
+                     failures.push(`DeleteTreeHeld cleanup: ${e.Message}`);
+                 } finally {
+                     waiting--;
+                 }
              });
     }
 
@@ -31912,8 +31929,9 @@ export class UriChild extends Form {
      * the caller for which gone is success), and an empty directory still goes.
      * A read-only file is the platform's answer: Windows refuses it at once,
      * not because a neighbour will let go; POSIX takes it in a writable folder,
-     * as `unlink` does. A directory's read-only attribute is not honored on
-     * Windows, so an empty one still goes. The test asserts each, and the
+     * as `unlink` does. **A read-only directory is refused too**, measured on
+     * Windows 11 26H2: `DeleteTree` clears the bit first and takes it, while
+     * `File.Delete` is non-force and says no. The test asserts each, and the
      * Windows hold follows.
      */
     testRemoveHeld() {
@@ -31962,9 +31980,11 @@ export class UriChild extends Form {
                 `(Get-Item -LiteralPath '${locked}').IsReadOnly = $false`],
                 { Timeout: 30000 });
 
-        /* The other half of the Microsoft sentence: the attribute is **not**
-         * honored on directories, so an empty one carrying it still goes.
-         * `path_is_read_only` must not refuse it. */
+        /* **Microsoft's sentence about directories was wrong here.** The
+         * attribute was said not to be honored on a directory, but on Windows
+         * 11 26H2 an empty one carrying it is refused until the bit is
+         * cleared. `File.Delete` is non-force, so it says no at once;
+         * `DeleteTree` is the force verb and takes it. */
         const dirRo = File.Join(dir, "read-only-dir");
         Directory.Make(dirRo);
         const markedDir = Exec.Wait(["powershell", "-NoProfile", "-Command",
@@ -31973,8 +31993,14 @@ export class UriChild extends Form {
             { Timeout: 30000 });
         check("...and the read-only bit is set on a directory",
               markedDir.ExitCode === 0, markedDir.Output);
-        eq("a read-only directory is still taken when it is empty",
-           refusal(() => File.Delete(dirRo)), null);
+        const watchDir = new Stopwatch().Start();
+        const saidDir  = refusal(() => File.Delete(dirRo));
+        const tookDir  = watchDir.Stop().Elapsed;
+        check("a read-only directory is refused at once",
+              saidDir !== null && tookDir < 500, `${tookDir} ms: ${saidDir}`);
+        check("...and it is still there", File.IsDir(dirRo));
+        eq("DeleteTree takes a read-only directory",
+           refusal(() => Directory.DeleteTree(dirRo)), null);
         check("...and it is gone", !File.IsDir(dirRo));
 
         const file = File.Join(dir, "held.txt");
@@ -31992,9 +32018,14 @@ export class UriChild extends Form {
                  check("...and the file is gone", !File.Exists(file));
              },
              (code) => {
-                 if (!tried) failures.push(`RemoveHeld: the holder never held the file (exit ${code})`);
-                 Directory.DeleteTree(dir);
-                 waiting--;
+                 try {
+                     if (!tried) failures.push(`RemoveHeld: the holder never held the file (exit ${code})`);
+                     if (File.IsDir(dir)) Directory.DeleteTree(dir);
+                 } catch (e) {
+                     failures.push(`RemoveHeld cleanup: ${e.Message}`);
+                 } finally {
+                     waiting--;
+                 }
              });
     }
 

@@ -2067,13 +2067,16 @@ caller.
   completed callback).
 - **Only an access refusal that a neighbour can end waits** (`EACCES`, `EPERM`,
   `EBUSY`), a second at most, 5 ms doubling; anything else is the answer at
-  once. **A read-only file is not a hold**: Windows answers it access denied
+  once. **A read-only path is not a hold**: Windows answers it access denied
   too, but no waiting changes it, so `File.Save`, `File.Delete` and
   `Directory.Delete(path, true)` fail at once; `Directory.DeleteTree` clears
   the bit first and does not come through here.
-  The attribute is **not honored on directories** (Microsoft documents it so;
-  Explorer uses it only to mark a customized folder), so an empty directory
-  carrying it is still removed; only files are cleared or refused. On POSIX the
+  **A directory carrying it is refused too** -- measured 2026-11-25 on
+  Windows 11 26H2, Microsoft's "not honored on directories" notwithstanding:
+  an empty directory was refused until the bit was cleared, and the end of a
+  `DeleteTree` walk did not clear it, which hung `RemoveHeld`. The walk now
+  deletes its directories through `delete_entry`, so the force verb clears
+  them. On POSIX the
   file's mode does not stop `unlink` or `rename` -- the folder's permission
   decides -- so `File.Delete` takes a read-only file in a writable folder, and
   `File.Save` replaces it, as the platform does. Linux and macOS rename and

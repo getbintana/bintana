@@ -25,11 +25,12 @@ extern "C" {
  * antivirus, the indexer or OneDrive holding a file just closed -- is waited
  * out for up to a second instead of failing. One call elsewhere. 0, or -1 with
  * `errno`. On Windows `bta_graceful_fs_remove` does not wait for a read-only
- * file: it is the platform's answer, and fails at once with EACCES; the
- * attribute is not honored on directories, so an empty one still goes. On
- * POSIX the folder's permission decides, as `unlink` does. It takes a file or
- * an empty directory; `missing_ok` says a path already gone is success (the
- * `.part` cleanup) rather than ENOENT (`File.Delete`).
+ * path: it is the platform's answer, and fails at once with EACCES, for a
+ * directory as well as a file (measured 2026-11-25, Microsoft's sentence
+ * about directories notwithstanding). On POSIX the folder's permission
+ * decides, as `unlink` does. It takes a file or an empty directory;
+ * `missing_ok` says a path already gone is success (the `.part` cleanup)
+ * rather than ENOENT (`File.Delete`).
  */
 int bta_graceful_fs_rename(const char *from, const char *to);
 int bta_graceful_fs_remove(const char *path, bool missing_ok);

@@ -241,9 +241,11 @@ one-page answer to *what is new since the release I have*.
   (`bta_graceful.c`). `File.Save`, `File.SaveBytes`, `Locale.Write`, `Zip`'s
   extraction, `Desktop.Entries`, `File.Rename`, `File.Delete`,
   `Directory.DeleteTree` and `PdfDocument`'s form fields and encryption all do
-  the same, while a read-only file is refused at once -- `File.Save` no
-  longer spends 315 ms discovering it. The read-only attribute is not honored
-  on directories, so an empty one still goes.
+  the same, while a read-only path is refused at once -- `File.Save` no
+  longer spends 315 ms discovering it. **A read-only directory is refused
+  too**: Windows 11 26H2 does not honor its own "not honored on directories"
+  sentence, as `RemoveHeld` found; `Directory.DeleteTree` now clears the bit
+  for folders as well as files.
 - **The Windows Apps page shows the application's icon, publisher and
   size.** The uninstall key had no `DisplayIcon` without a project icon, no
   `Publisher` without a developer in the metainfo, and never an
