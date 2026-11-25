@@ -8472,15 +8472,13 @@ function* p_nested(ide) {
     /* Through the grid, which is how a user does it: an edit is what tells the
      * designer to look again. */
     ide.designer.select(alignLbl);
-    yield* until(() => !!ide.designer.chrome.outline[0].Background);
+    yield* settled(ide);   // the chrome has painted the selection
     const selected = ide.designer.chrome.outline[0].Background;
 
     typeInto(ide, "Text", "a line with far more text in it than the hundred and " +
                           "twenty pixels this label says it wants");
-    yield* until(() => {
-        const colour = ide.designer.chrome.outline[0].Background;
-        return !!colour && colour !== selected && !!ide.designer.overflow(alignLbl);
-    });
+    yield* until(() => !!ide.designer.overflow(alignLbl));
+    yield* settled(ide);   // ...and its 30 ms re-lay, which is where the colour is chosen
 
     const over = ide.designer.overflow(alignLbl);
     check("a control that came out bigger is flagged", !!over,
@@ -8489,7 +8487,7 @@ function* p_nested(ide) {
           ide.designer.overflowNote(alignLbl).includes("does not fit"),
           ide.designer.overflowNote(alignLbl));
     neq("and the outline stops being the selection colour",
-        ide.designer.chrome.outline[0].Background, "");
+        ide.designer.chrome.outline[0].Background, selected);
 
     /*
      * **The colour of an overflowing control, once it really is that colour.**
@@ -8503,17 +8501,14 @@ function* p_nested(ide) {
      * looks like from the outside and what an unsettled read looks like from in
      * here.
      *
-     * **And the chrome can be hidden for a frame while it re-lays**, so an
-     * empty background made the old `!==` true for any value and the next
-     * assertion then read the old colour again. Wait for a painted colour,
-     * the state that produces it, and only then compare.
+     * **The colour is chosen in the chrome's 30 ms re-lay**, and a fixed number
+     * of yields is not that timer: under the sanitizer the old wait gave up
+     * with the selection colour still in place. `settled` waits for the timer
+     * itself, so the read is the one the designer really painted.
      */
     const fitting = ide.designer.chrome.outline[0].Background;
     ide.designer.select(alignBtn);
-    yield* until(() => {
-        const colour = ide.designer.chrome.outline[0].Background;
-        return !!colour && colour !== fitting && !ide.designer.overflow(alignBtn);
-    });
+    yield* settled(ide);   // the chrome has painted the other selection
     const other = ide.designer.chrome.outline[0].Background;
     check("a control that fits is not flagged", !ide.designer.overflow(alignBtn));
     neq("and its outline is the other colour", other, fitting);
