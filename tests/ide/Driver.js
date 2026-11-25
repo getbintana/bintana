@@ -555,6 +555,16 @@ function* p_files(ide) {
     eq("loading a file is not an edit", ide.Editor.Modified, false);
     eq("Save stays disabled after a load", ide.BtnSave.Enabled, false);
 
+    /* Selecting shows the file and leaves the keys in the tree, for the
+     * arrows; double click or Enter on it goes in -- typing after a double
+     * click on *code* walked the tree and opened project.btp. */
+    ide.FileTree.SetFocus();
+    yield;
+    check("the tree keeps the keys after a select", !ide.Editor.Focused);
+    ide.FileTree.Emit("Activate");
+    yield* until(() => ide.Editor.Focused);
+    check("activating the open file puts the keys in its editor", ide.Editor.Focused);
+
     /* --- editing and saving --------------------------------------------- */
     ide.Editor.Text = ide.Editor.Text.replace("hello from the child", "edited hello");
     eq("editing enables Save", ide.BtnSave.Enabled, true);

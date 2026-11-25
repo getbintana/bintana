@@ -159,6 +159,20 @@ at ~14 ms in the IDE, against the 44-211 ms a form tab already costs to open
 begin below it, the canvas and both panels are inside the page -- and the
 whole-project count in [`docs/testing.md`](../testing.md) moves with it.
 
+- **A focus moved from a double click is taken back by its release**
+  (2026-11-25). `FileTree_Activate` set the editor's focus and the typing still
+  went to the tree: the row is focused when the button comes up, after the
+  second press that raised `Activate`. `Timer.After(0)` is enough -- the
+  release is already queued -- and `tests/ide`'s `files` phase waits for
+  `Editor.Focused` after an `Emit("Activate")`, which has no release and so
+  passes either way: the deferral was found on a real double click, under
+  `xdotool` on a private `Xvfb`, and only there.
+- **Walk a first project at the declared 1100x720 before calling a change to
+  the workspace done.** Every jump of this session -- the canvas scrolling to
+  the form's right edge at the first click, the status line widening the
+  window, the structure list showing two rows -- was invisible in a window
+  wide enough for the whole form, which is every window the author worked in.
+
 ## Components on the tray
 
 - **A part is not a surface child.** `Designer.parts` holds the live

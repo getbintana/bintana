@@ -1906,6 +1906,26 @@ export class MainForm extends Form {
         else if (this.selectedRecord) this.editRecord(this.selectedRecord);
         else if (this.selectedConnection) this.data.openFile(this.selectedConnection);
         else if (this.selectedOther) this.openOutside(this.selectedOther);
+        /*
+         * **A file the click already opened is gone into.** Selecting a row
+         * shows its file and leaves the focus in the tree, which is what lets
+         * the arrows walk it; double click and Enter did nothing more, so a
+         * person who double clicked *code* and started typing was typing into
+         * the tree -- its arrows moved the selection and Enter opened
+         * project.btp (measured 2026-11-25). Now they put the keys where the
+         * file is. **On the next turn**: called from the double
+         * click itself, the release that follows handed the focus back to the
+         * row, and the typing went to the tree all the same.
+         */
+        else if (this.byKey[this.FileTree.Key] === this.activeFile)
+            Timer.After(0, () => this.focusWork());
+    }
+
+    /* The keys to the file on screen: its editor, or the canvas the designer
+     * reads them on. */
+    focusWork() {
+        if (this.designing && this.designer) this.designer.glass.SetFocus();
+        else if (this.Editor) this.Editor.SetFocus();
     }
 
     /*
