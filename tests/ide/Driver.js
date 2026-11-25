@@ -8472,10 +8472,15 @@ function* p_nested(ide) {
     /* Through the grid, which is how a user does it: an edit is what tells the
      * designer to look again. */
     ide.designer.select(alignLbl);
-    yield;
+    yield* until(() => !!ide.designer.chrome.outline[0].Background);
+    const selected = ide.designer.chrome.outline[0].Background;
+
     typeInto(ide, "Text", "a line with far more text in it than the hundred and " +
                           "twenty pixels this label says it wants");
-    yield* until(() => !!ide.designer.overflow(alignLbl));
+    yield* until(() => {
+        const colour = ide.designer.chrome.outline[0].Background;
+        return !!colour && colour !== selected && !!ide.designer.overflow(alignLbl);
+    });
 
     const over = ide.designer.overflow(alignLbl);
     check("a control that came out bigger is flagged", !!over,
@@ -8497,15 +8502,21 @@ function* p_nested(ide) {
      * times in one afternoon and passed on every retry, which is what a flake
      * looks like from the outside and what an unsettled read looks like from in
      * here.
+     *
+     * **And the chrome can be hidden for a frame while it re-lays**, so an
+     * empty background made the old `!==` true for any value and the next
+     * assertion then read the old colour again. Wait for a painted colour,
+     * the state that produces it, and only then compare.
      */
-    const selected = ide.designer.chrome.outline[0].Background;
-    yield* until(() => ide.designer.chrome.outline[0].Background !== selected ||
-                       !ide.designer.overflow(alignLbl));
     const fitting = ide.designer.chrome.outline[0].Background;
     ide.designer.select(alignBtn);
-    yield* until(() => ide.designer.chrome.outline[0].Background !== fitting);
+    yield* until(() => {
+        const colour = ide.designer.chrome.outline[0].Background;
+        return !!colour && colour !== fitting && !ide.designer.overflow(alignBtn);
+    });
+    const other = ide.designer.chrome.outline[0].Background;
     check("a control that fits is not flagged", !ide.designer.overflow(alignBtn));
-    neq("and its outline is the other colour", ide.designer.chrome.outline[0].Background, fitting);
+    neq("and its outline is the other colour", other, fitting);
     eq("with nothing to say about it", ide.designer.overflowNote(alignBtn), "");
 
     alignBtn.Delete();
