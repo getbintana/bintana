@@ -55,6 +55,21 @@ three controls, a handler, a run -- and what got in the way.
   it.** A click opens it and leaves the keys in the tree; typing after a
   double click on *code* used to walk the tree, and Enter opened whatever
   file the arrows had reached.
+- **The debugger answers in a form's handlers.** Every expression asked in a
+  method of a class that extends another -- which every form is -- failed with
+  *SyntaxError: missing formal parameter*, so the immediate box and the
+  watches were useless exactly where they are needed; in an arrow inside one,
+  `this` was the wrong object. Fixed in the QuickJS fork's `JS_DebugEval`. And
+  the values panel drew every value as `…` even when the answer had arrived.
+- **A property typed and then clicked away from is kept.** The property grid
+  and the menu editor applied a text field on Enter only, and lost it when the
+  focus went to the canvas, another row or a button; they apply on leaving the
+  field as well, as VB's property window did.
+- **Stop is not a failure.** Stopping a program, above all one paused on a
+  breakpoint, reported *the run ended badly* at that line in Problems; it says
+  *[stopped]* now and reports nothing.
+- **The menu editor's hint is translated**: it was assigned from a constant no
+  catalogue could reach.
 - **The IDE's Output speaks its language**: *Saved*, *Added Button1_Click()
   to*, *Project:*, *Renamed* and some forty other lines were English in the
   Spanish IDE, and one (*Ojo: … todavia nombran a …*) was Spanish in the

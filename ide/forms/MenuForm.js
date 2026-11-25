@@ -22,14 +22,6 @@ const MENU_IDENT = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 /* What a separator looks like in the tree: it has no text of its own. */
 const MENU_RULE = "—————";
 
-const MENU_HELP =
-    "A submenu holds other items.  An item with no submenu needs a name: that " +
-    "is what its Name_Click handler is called after.\n\n" +
-    "A check item ticks on and off and its handler is given the new state; a " +
-    "dynamic one is filled by the application (Name.Items = [...]), and marking " +
-    "it radio keeps the entry that was chosen.\n\n" +
-    "Double click an item to write its handler.";
-
 export class MenuForm extends Form {
 
     /* MenuForm.edit(menus, (spec) => ..., (name) => ...) */
@@ -47,9 +39,11 @@ export class MenuForm extends Form {
         return dlg;
     }
 
+    /* The hint is the `.form`'s, where the loader translates it: assigned here
+     * from a constant, it was the one paragraph of this dialog no catalogue
+     * could reach, English in the Spanish IDE. */
     Form_Open() {
         this.muted = false;
-        this.LblHint.Text = MENU_HELP;
     }
 
     /* --- the spec, addressed by path ---------------------------------------
@@ -269,14 +263,31 @@ export class MenuForm extends Form {
     BtnUp_Click()   { this.move(-1); }
     BtnDown_Click() { this.move(1); }
 
-    /* The fields apply on Enter, like the designer's property grid: applying on
-     * every keystroke would rename an item once per letter. */
+    /*
+     * The fields apply on Enter **and on leaving them**, like the designer's
+     * property grid: applying on every keystroke would rename an item once per
+     * letter, and applying on Enter alone lost what was typed -- *Archivo* in
+     * the text, a click on *Item*, and the menu was still *Menu* (measured
+     * 2026-11-25, on the walkthrough's first menu).
+     *
+     * **The row is relabelled, not the tree rebuilt.** Leaving the field is
+     * the press of whatever was clicked next; rebuilding the rows under a
+     * click on one of them would take the row from under the pointer.
+     */
+    relabel() {
+        const node = this.nodeAt(this.selectedPath);
+        if (node) this.Tree.SetText(this.selectedPath, this.labelOf(node));
+    }
+
     TxtText_Activate() {
         const node = this.nodeAt(this.selectedPath);
-        if (!node) return;
+        if (!node || node.text === this.TxtText.Text) return;
         node.text = this.TxtText.Text;
-        this.fillTree(this.selectedPath);
+        this.relabel();
     }
+    TxtText_LostFocus()     { this.TxtText_Activate(); }
+    TxtName_LostFocus()     { this.TxtName_Activate(); }
+    TxtShortcut_LostFocus() { this.TxtShortcut_Activate(); }
 
     TxtName_Activate() {
         const node = this.nodeAt(this.selectedPath);
@@ -297,7 +308,7 @@ export class MenuForm extends Form {
 
         if (name) node.name = name;
         else      delete node.name;
-        this.fillTree(this.selectedPath);
+        this.relabel();
     }
 
     TxtShortcut_Activate() {

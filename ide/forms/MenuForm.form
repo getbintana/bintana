@@ -220,6 +220,7 @@
                   "properties": {
                     "Expand": true,
                     "HExpand": true,
+                    "Text": "A submenu holds other items.  An item with no submenu needs a name: that is what its Name_Click handler is called after.\n\nA check item ticks on and off and its handler is given the new state; a dynamic one is filled by the application (Name.Items = [...]), and marking it radio keeps the entry that was chosen.\n\nDouble click an item to write its handler.",
                     "VAlign": "Start",
                     "VExpand": true,
                     "Wrap": true

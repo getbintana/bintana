@@ -1089,7 +1089,15 @@ export class PropertyGrid {
      *
      * A drop-down and a spin apply as soon as they change -- choosing is already
      * deciding.  A text field waits for Enter: applying on every keystroke would
-     * rename a control once per letter typed. */
+     * rename a control once per letter typed.
+     *
+     * **Or for the focus to leave it**, as VB's property window did. On Enter
+     * alone, a `Text` typed and followed by a click on the canvas was thrown
+     * away without a word -- *Saludar ya* came back as *Saludar* (measured
+     * 2026-11-25). Leaving the field is the canvas's press, and the glass takes
+     * the focus before the designer reads the click, so the edit lands on the
+     * control it was typed for; `applyEditor` ignores a value that did not
+     * change, and the grid's own rebuild runs under `updating`. */
     bindEditor(key, editor) {
         const apply = () => this.applyEditor(key);
 
@@ -1097,7 +1105,10 @@ export class PropertyGrid {
         else if (editor instanceof SpinBox)      editor.On("Change",   apply);
         else if (editor instanceof ColorButton)  editor.On("Change",   apply);
         else if (editor instanceof FontButton)   editor.On("Change",   apply);
-        else                                     editor.On("Activate", apply);
+        else {
+            editor.On("Activate", apply);
+            editor.On("LostFocus", apply);
+        }
 
         /*
          * The icon inside the field opens the chooser, and what comes back is

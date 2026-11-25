@@ -115,6 +115,23 @@ The traps and decisions of this area, each with what it cost and the rule it lef
 
 ## Popover, menus and accelerators
 
+- **An ellipsized label left at `Start` is drawn as its ellipsis** (2026-11-25).
+  `Ellipsize` makes the label's least width the `…`, and a control at `Start`
+  is allocated its natural width -- so in a row that is itself at `Start`, or
+  with the label at `Start` inside an expanding slot, the debugger's values
+  panel drew every value as `…` while the protocol had carried `"\"Ana\""`.
+  `HExpand` gives the slot the room; `HAlign: "Fill"` is what puts the label in
+  it. The `debug` phase measures a value's `Bounds()` now.
+- **A text field that applies on Enter alone throws away what was typed when
+  the focus goes elsewhere.** The property grid and the menu editor did, and
+  VB's property window never has: *Saludar ya* typed into `Text` and a click on
+  the canvas left *Saludar*. Both apply on `LostFocus` as well. **The focus
+  leaves on the press of whatever was clicked**, before that click is read --
+  the canvas's glass takes it first, a tree row first -- so the edit lands on
+  what it was typed for; and the menu editor relabels its row with
+  `TreeView.SetText` rather than rebuilding the tree, which would have taken
+  the clicked row from under the pointer.
+
 - **`GtkAlertDialog` is not a dialog to show anybody** (2026-11-25). It has
   no title and no icon to set, and under xfwm4 `Message.Info("Listo, Ana")`
   was a 131x97 window with its text against the button; its heading was the
