@@ -352,6 +352,13 @@ export class TabSet {
             surface.Name = "Surface";      glass.Name   = "Glass";
             board.Name   = "Board";
             scroll.Expand = true;
+            /* **The glass takes the focus on every click** so the keys arrive
+             * there, and it is as wide as the form: a view that followed the
+             * focus scrolled to the form's far edge at the first click on a
+             * form wider than the canvas -- which the default 400 of a new
+             * project is, at the IDE's own default size -- and the control
+             * clicked went off screen. */
+            scroll.FollowFocus = false;
 
             /* The form is not flush against the corner of the room it is drawn
              * in, and it is drawn with the decoration it will be shown with: the

@@ -730,7 +730,7 @@ const TESTS = [
      * the note below. */
     "DefaultButton", "ActivatesDefault", "Direction", "TabOrder", "Completion", "EventNames", "WindowState", "Frameless", "FormMargin", "HideOnClose", "Remember", "FormKeepalive", "PointerEvents", "On", "Field", "Separator",     "TableView", "TableBatch", "TableTree", "TableTreeColumn", "TableTreeMulti", "TableReorder", "TableOnDemand", "TableFilter", "TableSort", "TableHeaderMenu", "TableColumnVisible", "TableGeometry", "TableEditors", "TableCell", "TableCellHow", "TableIcon", "TableProse",
     "Arrangement", "Orientation", "Boxes", "Stacking", "Splits",
-    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FillScroll", "FileInfo", "FileWatch", "DesktopShortcut", "Bitmap", "Picture", "Media", "MediaAttach", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
+    "Expand", "Spacing", "Designing", "CurrentPending", "IndexPending", "PageAt", "Scrolling", "FollowFocus", "FillScroll", "FileInfo", "FileWatch", "DesktopShortcut", "Bitmap", "Picture", "Media", "MediaAttach", "SmallOnes", "PropertyGrid", "Scrollbars", "Expander", "SourceEditor", "Format", "Diagnostics", "TextEditor", "EditorScroll", "CursorBounds", "PositionAt", "EditorMarks", "Allocated", "Search", "Tree", "TreeIcons", "TreeExpand",
     "CloseVeto",
     "ContextMenu", "Combo", "Spin", "Focus", "Cursor", "Theme", "ThemeWindows", "ThemeForced", "LoadQuiet", "WindowEvents", "MouseCancel", "LongPress", "Gestures", "Record", "Nested", "Database", "DatabaseCursor", "DatabaseOdbc", "Action", "Groups",
     "Toggle", "Switch", "Progress", "Slider", "DecimalBox", "Date", "Calendar", "Drawing", "PrintPreview", "Pdf", "Metrics", "Library", "Plugin", "ListMulti", "MenuState", "MenuVisible", "HandlerRemakes",
@@ -11301,6 +11301,56 @@ function Main() {
     }
 
     Sc1_Scroll(x, y) { this.scrolled.push([x, y]); }
+
+    /* --- Scroller: following the focus, or not --------------------------------
+     *
+     * GTK's viewport scrolls to whatever takes the focus inside it, and a
+     * focused control **wider than the view is scrolled to its far edge**: a
+     * 600-pixel panel at x 10 in a 200-pixel view went to `ScrollX` 410. That
+     * is the IDE's designer, whose glass is the whole form and takes the focus
+     * at every click -- the canvas jumped sideways and the control clicked was
+     * gone. The focus is moved for real here, and what is asserted is where
+     * GTK left the view.
+     */
+    testFollowFocus() {
+        const build = (follow, y) => {
+            const sc = new Scroller();
+            this.Fixed1.Add(sc);
+            sc.Move(0, y);
+            sc.Resize(200, 100);
+            if (!follow) sc.FollowFocus = false;
+
+            const wide = new Panel();
+            wide.Focusable = true;
+            wide.Move(10, 0);
+            wide.Resize(600, 80);
+            sc.Add(wide);
+            return [sc, wide];
+        };
+
+        const [moves, a] = build(true, 0);
+        const [stays, b] = build(false, 110);
+
+        eq("it follows the focus unless told", moves.FollowFocus, true);
+        eq("and says so when told not to",     stays.FollowFocus, false);
+
+        until("both are measured",
+              () => moves.ScrollMaxX > 0 && stays.ScrollMaxX > 0, () => {
+            /* **The one that must not move is focused first.** Nothing can be
+             * waited for in a view that stays put, so the other is the clock:
+             * its scroll starts a moment later on the same frames, and once it
+             * has arrived, one that followed the focus would have too. */
+            b.SetFocus();
+            a.SetFocus();
+            until("the view went after the focus", () => moves.ScrollX > 300, () => {
+                check("to the far edge of what is wider than it",
+                      moves.ScrollX > 300, moves.ScrollX);
+                eq("FollowFocus false leaves the view where it was", stays.ScrollX, 0);
+                moves.Delete();
+                stays.Delete();
+            });
+        });
+    }
 
     /* --- A Scroller that fills the room it has, and scrolls when it cannot ----
      *

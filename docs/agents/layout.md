@@ -16,6 +16,18 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   alignments; `tests/ide`'s `palette` phase asserts both halves. **A reason
   written for a set of properties has to be true of each member**: the measurement
   covered `Expand`, and the list grew `HAlign` beside it.
+- **A `Scroller` follows the focus, and to the far edge of anything wider than
+  it** (2026-11-25). The slot is not scrollable by itself, so
+  `gtk_scrolled_window_set_child` puts a `GtkViewport` around it, and a viewport
+  scrolls to its focus child -- which for a child larger than the view means
+  its *end*: a 600-pixel focusable panel at x 10 in a 200-pixel view went to
+  `ScrollX` 410. The designer's glass is the whole form and takes the focus at
+  every click (the accelerator note in `widgets.md` is why), so at the IDE's
+  default size a new project's 400-wide form jumped to its right edge at the
+  first click and the control clicked went off screen. `Scroller.FollowFocus`
+  is the switch, `TabSet` turns it off for the canvas, and `testFollowFocus`
+  asserts both. It was invisible at any window wide enough to show the whole
+  form, which is every window the suite and the author had used.
 - **A `Scroller` fills as well as scrolls, and the property that decides it is
   `Arrangement` -- which nothing said, so it was reported as a missing
   container.** Its slot is a `BtaFixed` by default, and a `Fixed` sizes what is

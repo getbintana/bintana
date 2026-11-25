@@ -7435,6 +7435,15 @@
       "Parent": "Container",
       "Members": [
         {
+          "Name": "FollowFocus",
+          "Kind": "Property",
+          "Params": -1,
+          "Signature": "",
+          "Returns": "",
+          "Doc": "whether the view scrolls to show a control inside it that takes the focus -- Tab to a field below the fold and it comes into view. **A focused control larger than the view is scrolled to its far edge**, which is GTK's answer and rarely the wanted one: turn it off for a surface that takes the focus as a whole, a canvas or a board. Default `true`",
+          "Native": true
+        },
+        {
           "Name": "ScrollMaxX",
           "Kind": "ReadOnly",
           "Params": -1,

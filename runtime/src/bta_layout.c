@@ -983,6 +983,55 @@ static JSValue scroller_set_bars(JSContext *ctx, JSValueConst this_val,
 }
 
 /*
+ * Whether the view moves to show whatever takes the focus inside it.
+ *
+ * GTK's `GtkViewport` does, which is what a column of fields wants: Tab to the
+ * one below the fold and the view follows. **And what it does with a focused
+ * child larger than the view is show its far edge** -- measured 2026-11-25, a
+ * focusable 700-pixel panel in a 300-pixel `Scroller` clicked at its left
+ * went from `ScrollX` 0 to 420, the end. The IDE's designer is exactly that:
+ * its glass is the whole form and takes the focus on every click so the keys
+ * arrive, so a form wider than the canvas jumped sideways under the pointer
+ * at the first click and the control clicked was gone.
+ *
+ * The viewport is the one `gtk_scrolled_window_set_child` puts around the slot
+ * by itself, since a `Fixed` cannot scroll on its own.
+ */
+static GtkViewport *scroller_viewport(BtaWidget *w)
+{
+    GtkWidget *child = gtk_scrolled_window_get_child(GTK_SCROLLED_WINDOW(w->gtk));
+
+    return GTK_IS_VIEWPORT(child) ? GTK_VIEWPORT(child) : NULL;
+}
+
+static JSValue scroller_get_follow(JSContext *ctx, JSValueConst this_val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    GtkViewport *vp = scroller_viewport(w);
+    return JS_NewBool(ctx, vp ? gtk_viewport_get_scroll_to_focus(vp) : TRUE);
+}
+
+static JSValue scroller_set_follow(JSContext *ctx, JSValueConst this_val,
+                                   JSValueConst val)
+{
+    BtaWidget *w = bta_this(ctx, this_val);
+    if (!w)
+        return JS_EXCEPTION;
+
+    int b = JS_ToBool(ctx, val);
+    if (b < 0)
+        return JS_EXCEPTION;
+
+    GtkViewport *vp = scroller_viewport(w);
+    if (vp)
+        gtk_viewport_set_scroll_to_focus(vp, b);
+    return JS_UNDEFINED;
+}
+
+/*
  * Where it is scrolled to, and how far it can go.
  *
  * A list that remembers where the user was, one that loads another page when
@@ -1083,6 +1132,15 @@ static const JSCFunctionListEntry scroller_props[] = {
      *   `Both` `Horizontal` `Vertical` `None`. Default `"Both"`
      */
     JS_CGETSET_DEF("Scrollbars", scroller_get_bars, scroller_set_bars),
+    /* FollowFocus
+     *   whether the view scrolls to show a control inside it that takes the
+     *   focus -- Tab to a field below the fold and it comes into view.
+     *   **A focused control larger than the view is scrolled to its far
+     *   edge**, which is GTK's answer and rarely the wanted one: turn it off
+     *   for a surface that takes the focus as a whole, a canvas or a board.
+     *   Default `true`
+     */
+    JS_CGETSET_DEF("FollowFocus", scroller_get_follow, scroller_set_follow),
     /* ScrollX
      *   how far across it is scrolled, in pixels. Assigning **clamps** to
      *   `[0, ScrollMaxX]`, so a number past the end means the end
