@@ -6,6 +6,13 @@ one-page answer to *what is new since the release I have*.
 
 ## Unreleased
 
+## 0.4.2 — 2026-11-25
+
+[Compare with 0.4.0](https://github.com/getbintana/bintana/compare/v0.4.0...v0.4.2)
+
+**This is the release after 0.4.0.** The 0.4.1 tag was created but never
+published as a release; its notes below are part of this one.
+
 ### Runtime and libraries
 
 - **Every project that runs declares an `id`, and the runtime does not start

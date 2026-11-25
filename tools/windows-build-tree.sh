@@ -9,7 +9,7 @@
 # Run from the repository root, inside the MSYS2 UCRT64 shell that already has
 # the packages installed (the `windows` job's list):
 #
-#   tools/windows-build-tree.sh stage/bintana-build-0.4.1-windows-x86_64
+#   tools/windows-build-tree.sh stage/bintana-build-0.4.2-windows-x86_64
 #
 # The tree is the shell's own root -- `cygpath -w /`, `C:\msys64` on the
 # runner -- minus the package cache, the logs, the homes and the temporary
