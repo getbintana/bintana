@@ -342,6 +342,10 @@
           "dynamic": true
         },
         {
+          "name": "MnuOpenExample",
+          "text": "Open an example..."
+        },
+        {
           "action": "ActReload"
         },
         {
@@ -1038,6 +1042,15 @@
                     "Height": 38,
                     "Icon": "document-new-symbolic",
                     "Text": "New project..."
+                  }
+                },
+                {
+                  "type": "Button",
+                  "name": "BtnWelcomeExample",
+                  "properties": {
+                    "Height": 38,
+                    "Icon": "x-office-document-symbolic",
+                    "Text": "Open an example..."
                   }
                 },
                 {

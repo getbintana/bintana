@@ -9,6 +9,7 @@
     "forms/PreviewForm.js",
     "forms/ConfirmForm.js",
     "forms/NewProjectForm.js",
+    "forms/ExampleForm.js",
     "forms/MenuForm.js",
     "forms/ActionForm.js",
     "modules/Palette.js",

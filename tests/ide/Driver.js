@@ -389,6 +389,59 @@ function* p_welcome(ide) {
     eq("...nor is installing an application, which is about a project",
        ide.MnuAppInstall.Enabled, false);
 
+    /*
+     * **The examples, offered from where a first visit starts -- and opened as
+     * a copy.** Installed they are under a prefix nobody writes to, and here
+     * they are the repository's own; either way the original is not the
+     * project that gets edited. The folder is found beside the libraries,
+     * which is where every layout puts it, so this run finds `examples/`.
+     */
+    const exFolder = ExampleForm.folder();
+    check("the examples are found beside the shipped libraries",
+          exFolder !== "" && File.Exists(File.Join(exFolder, "hello", "project.btp")),
+          exFolder);
+    eq("and the welcome page offers them", ide.BtnWelcomeExample.Visible, true);
+    eq("...as the File menu does", ide.MnuOpenExample.Visible, true);
+
+    ide.BtnWelcomeExample.Click();
+    const exDlg = ide.exampleDialog;
+    check("the button opens the list", !!exDlg);
+    if (exDlg) {
+        check("...of every example", exDlg.LstExamples.Count >= 40,
+              String(exDlg.LstExamples.Count));
+        eq("...starting at the one a tutorial starts at",
+           exDlg.chosen() ? exDlg.chosen().name : "", "hello");
+        eq("...which is first, so it is selected where it can be seen",
+           exDlg.LstExamples.Index, 0);
+        check("...which says what it is", exDlg.LblExAbout.Text.length > 20,
+              exDlg.LblExAbout.Text);
+
+        /* A copy already there is not written over: the next one is `-2`. */
+        const exBase = File.Join(TMP, "examples");
+        Directory.Make(File.Join(exBase, "hello"));
+        exDlg.base = exBase;
+        exDlg.describe();
+        const exCopy = File.Join(exBase, "hello-2");
+        eq("...and where its copy will go, past one already there",
+           exDlg.LblExWhere.Text, Locale.Text("Will copy it to {0}", exCopy));
+
+        exDlg.BtnExOpen.Click();
+        yield;
+        check("accepting writes the copy",
+              File.Exists(File.Join(exCopy, "project.btp")) &&
+              File.Exists(File.Join(exCopy, "Form1.form")), exCopy);
+        eq("and the copy is the project open", ide.project && File.Absolute(ide.project),
+           File.Absolute(exCopy));
+        eq("...with its first form on screen", ide.activeFile, "Form1.form");
+        /* Opened from the examples, a new project or the next copy does not
+         * go in among them. */
+        openFresh(ide, "examples/hello");
+        check("a project open in the examples does not make them the base",
+              !File.Within(File.Absolute(ide.projectsBase(exFolder)), exFolder),
+              ide.projectsBase(exFolder));
+        Directory.DeleteTree(exBase);
+    }
+
     /* A relative path has to end up absolute: when running, the child starts
      * with the project as its cwd and the relative one would stop resolving.
      * (run.sh runs from the repo root.) */

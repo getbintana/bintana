@@ -1,0 +1,90 @@
+{
+  "format": "bintana-form/1",
+  "class": "ExampleForm",
+  "properties": {
+    "Arrangement": "Vertical",
+    "Height": 460,
+    "Text": "Open an example",
+    "Width": 520
+  },
+  "children": [
+    {
+      "type": "Panel",
+      "name": "PnlExContent",
+      "properties": {
+        "Arrangement": "Vertical",
+        "Expand": true,
+        "Margin": 12,
+        "Spacing": 8
+      },
+      "children": [
+        {
+          "type": "Label",
+          "name": "LblExIntro",
+          "properties": {
+            "Text": "A copy of the example goes in your projects folder and the copy is opened, so you can change it and the original stays as it is.",
+            "Wrap": true
+          }
+        },
+        {
+          "type": "ListBox",
+          "name": "LstExamples",
+          "properties": {
+            "AccessibleName": "Examples",
+            "Expand": true,
+            "HExpand": true,
+            "Style": "frame",
+            "VExpand": true
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblExAbout",
+          "properties": {
+            "Text": "",
+            "Wrap": true
+          }
+        },
+        {
+          "type": "Label",
+          "name": "LblExWhere",
+          "properties": {
+            "Ellipsize": true,
+            "HAlign": "Fill",
+            "Style": "dim-label",
+            "Text": ""
+          }
+        },
+        {
+          "type": "Panel",
+          "name": "PnlExButtons",
+          "properties": {
+            "Arrangement": "Horizontal",
+            "HAlign": "End",
+            "Spacing": 8
+          },
+          "children": [
+            {
+              "type": "Button",
+              "name": "BtnExCancel",
+              "properties": {
+                "Cancel": true,
+                "Text": "Cancel"
+              }
+            },
+            {
+              "type": "Button",
+              "name": "BtnExOpen",
+              "properties": {
+                "Default": true,
+                "Icon": "folder-open",
+                "Style": "suggested-action",
+                "Text": "Open a copy"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

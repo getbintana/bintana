@@ -2,6 +2,7 @@
   "name": "Sysnote",
   "id": "io.github.getbintana.Sysnote",
   "startup": "MainForm",
+  "description": "A note written where only an administrator may write: Privilege.Run asks the system for permission to run one declared helper.",
   "sources": ["MainForm.js"],
   "privileged": ["tools/write-note"]
 }

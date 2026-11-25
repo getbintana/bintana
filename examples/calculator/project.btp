@@ -2,6 +2,7 @@
   "id": "io.github.getbintana.Calculator",
   "name": "calculator",
   "startup": "Calculator",
+  "description": "A calculator whose answers are right: Decimal does the arithmetic, so 0.1 + 0.2 is 0.3, and every key on the keyboard is the shortcut of its button.",
   "sources": [
     "Calculator.js"
   ],

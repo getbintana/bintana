@@ -664,6 +664,11 @@ export class MainForm extends Form {
          * visits are. */
         this.BtnWelcomeOpen.Style = empty ? "" : "suggested-action";
         this.BtnWelcomeNew.Style  = empty ? "suggested-action" : "";
+
+        /* An installation with no examples beside it offers no door to them. */
+        const examples = ExampleForm.folder() !== "";
+        this.BtnWelcomeExample.Visible = examples;
+        this.MnuOpenExample.Visible    = examples;
     }
 
     /*
@@ -777,18 +782,54 @@ export class MainForm extends Form {
      * project was created in, and home the first time.
      */
     newProject() {
-        let base = this.project ? File.Directory(this.project) : "";
-        if (!base) {
-            const saved = Settings.Get(NEW_BASE_KEY, "");
-            base = typeof saved === "string" && saved && File.IsDir(saved)
-                 ? saved : Environment.HomeDirectory;
-        }
-
-        this.leaveProject(() => NewProjectForm.ask(base, (info) => {
+        this.leaveProject(() => NewProjectForm.ask(this.projectsBase(), (info) => {
             Settings.Set(NEW_BASE_KEY, info.base);
             this.startProject(File.Join(info.base, info.name), info.description,
                               info.console, info.id);
         }));
+    }
+
+    /* Where a new project goes: beside the open one, or the last folder one
+     * was created in, or home. `avoid` is a folder that must not be the
+     * answer -- the examples', which a project opened from there would
+     * otherwise make the place its copies are written into. */
+    projectsBase(avoid) {
+        let base = this.project ? File.Directory(this.project) : "";
+        if (base && avoid && File.Within(File.Absolute(base), avoid)) base = "";
+        if (!base) {
+            const saved = Settings.Get(NEW_BASE_KEY, "");
+            base = typeof saved === "string" && saved && File.IsDir(saved) &&
+                   !(avoid && File.Within(File.Absolute(saved), avoid))
+                 ? saved : Environment.HomeDirectory;
+        }
+        return base;
+    }
+
+    /*
+     * An example, copied and opened: `ExampleForm` says why it is a copy.
+     * The copy is written where New project would write, and is a recent
+     * project like any other from then on.
+     */
+    openExample() {
+        const folder = ExampleForm.folder();
+        if (!folder) return null;
+
+        let dlg = null;
+        this.leaveProject(() => {
+            dlg = ExampleForm.ask(folder, this.projectsBase(folder), (dir) => {
+                this.openProject(dir);
+                /* **Its first form on screen**, as a new project's is: an
+                 * example opened on *Nothing open* asked the person to know
+                 * which of its files is the one to look at. */
+                let startup = "";
+                try { startup = File.LoadJson(File.Join(dir, "project.btp")).startup || ""; }
+                catch (e) { startup = ""; }
+                const form = startup ? this.classes.formOfClass(startup) : null;
+                if (form) this.openInTab(form);
+            });
+            this.exampleDialog = dlg;
+        });
+        return dlg;
     }
 
     /*
@@ -1597,8 +1638,10 @@ export class MainForm extends Form {
      * exists because a window with no project has nowhere else to put them, not
      * because they are different commands here.
      */
-    BtnWelcomeOpen_Click() { this.ActOpen_Execute(); }
-    BtnWelcomeNew_Click()  { this.newProject(); }
+    BtnWelcomeOpen_Click()    { this.ActOpen_Execute(); }
+    BtnWelcomeNew_Click()     { this.newProject(); }
+    BtnWelcomeExample_Click() { this.openExample(); }
+    MnuOpenExample_Click()    { this.openExample(); }
 
     /*
      * A row opens what it names.  The selection is dropped afterwards, or

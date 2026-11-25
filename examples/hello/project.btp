@@ -2,6 +2,7 @@
   "name": "hello",
   "id": "io.github.getbintana.Hello",
   "startup": "Form1",
+  "description": "The place to start: a form drawn in the designer, a handler wired by its name, a layout that survives a resize, and a component of the project's own.",
   "sources": [
     "About.js",
     "Form1.js"
