@@ -997,6 +997,15 @@ export class FormFiles {
 
         this.ide.openInTab(jsName);
         this.ide.Editor.GotoLine(line);
+        /* **A method just written puts the cursor after its indentation**, at
+         * the end of the body's blank line: `GotoLine` leaves it in column 1,
+         * so the first line of every new handler was typed in front of the
+         * eight spaces meant for it -- flush left, with the indentation
+         * trailing behind it. Measured on a fresh project, 2026-11-25. */
+        if (!found) {
+            const body = this.ide.Editor.Text.split("\n")[line - 1] || "";
+            this.ide.Editor.Select(line, [...body].length + 1, 0);
+        }
         this.ide.Editor.SetFocus();
         this.ide.renderTabs();
         return true;

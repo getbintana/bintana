@@ -1077,6 +1077,7 @@ msgstr ""
 
 #: forms/MainForm.form: action ActReload
 #: forms/MainForm.form: action ActFtRefresh
+#: forms/MainForm.form: BtnReload.Tooltip
 msgid "Refresh"
 msgstr ""
 
@@ -1270,10 +1271,6 @@ msgstr ""
 msgid "Save all (Ctrl+Shift+S)"
 msgstr ""
 
-#: forms/MainForm.form: BtnReload.Tooltip
-msgid "Refresh (F5)"
-msgstr ""
-
 #: forms/MainForm.form: BtnUndo.Tooltip
 msgid "Undo (Ctrl+Z)"
 msgstr ""
@@ -1293,7 +1290,7 @@ msgid "Tab order"
 msgstr ""
 
 #: forms/MainForm.form: BtnRun.Tooltip
-msgid "Run (Ctrl+R)"
+msgid "Run (F5)"
 msgstr ""
 
 #: forms/MainForm.form: BtnDebug.Tooltip

@@ -1574,7 +1574,14 @@ export class MainForm extends Form {
         const where = this.git.summary();
         if (where) status += `   ${where}`;
 
+        /* **`Ellipsize` in the form, and the whole sentence as a tooltip.** A
+         * label that asks for its natural width widened the IDE's window on
+         * every selection -- 1100 to 1255 pixels over a new project, one
+         * button and a click, measured 2026-11-25, the window walking down
+         * the screen as it grew -- since this line names the file, the
+         * control and its geometry and gets longer as they do. */
         this.LblStatus.Text = status;
+        this.LblStatus.Tooltip = status;
     }
 
     /* -------------------------------------------------------------- eventos */

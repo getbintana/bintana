@@ -15841,7 +15841,7 @@ function* p_quick(ide) {
     const run = dlg.entries.find((c) => c.name === "ActRun");
     check("a command of the menu is in it", run !== undefined);
     eq("...with the accelerator it declares, as a person reads it",
-       run.shortcut, "Ctrl+R");
+       run.shortcut, "F5");
 
     /* Nothing invented: every command answers to a menu item of the window. */
     check("every command is a menu item or an action that exists",

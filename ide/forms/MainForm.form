@@ -81,7 +81,6 @@
     {
       "name": "ActReload",
       "text": "Refresh",
-      "shortcut": "F5",
       "enabled": false
     },
     {
@@ -123,7 +122,10 @@
     {
       "name": "ActRun",
       "text": "Run",
-      "shortcut": "<Control>r",
+      "shortcut": [
+        "F5",
+        "<Control>r"
+      ],
       "enabled": false
     },
     {
@@ -1134,7 +1136,7 @@
                     "Icon": "view-refresh-symbolic",
                     "Style": "flat",
                     "Width": 30,
-                    "Tooltip": "Refresh (F5)"
+                    "Tooltip": "Refresh"
                   }
                 },
                 {
@@ -1338,7 +1340,7 @@
                         "Style": "suggested-action",
                         "Width": 34,
                         "Action": "ActRun",
-                        "Tooltip": "Run (Ctrl+R)"
+                        "Tooltip": "Run (F5)"
                       }
                     },
                     {
@@ -1437,6 +1439,7 @@
                   "name": "LblStatus",
                   "properties": {
                     "Alignment": "Right",
+                    "Ellipsize": true,
                     "HAlign": "Fill",
                     "HExpand": true,
                     "Height": 32,

@@ -350,6 +350,15 @@ Three things that will waste your time:
   for this reason: *Find next* is `["F3", "<Control>g"]` and only the second one
   fires there. Verified by hand — the accelerator is registered and correct, and
   the key simply never arrives.
+- **On this machine's `Xvfb`, `xdotool key F5` is Alt+F5** (2026-11-25). Every
+  bare function key arrives after an `Alt_L` press and matches `<Alt>F6`, never
+  `F6` -- an action with a bare function key looks dead, and under `xfwm4`
+  `F9` is the window manager's Alt+F9 and never reaches the program. The
+  keymap cannot be fixed from inside: `xmodmap -e` and `xkbcomp … $DISPLAY`
+  both return 0 and change nothing, `setxkbmap -option srvrkeys:none` neither.
+  A modified key (`ctrl+r`) is sent as written. So a bare function key is a
+  question for a real keyboard; a `KeyPress` handler that prints the key is
+  how to see the `Alt_L` for yourself.
 - **And a stolen key steals the focus with it, which makes every test after it
   lie.** Pressing `F3` at the IDE opened the finder *in front of it*, so the next
   `Ctrl+G` went to the finder and looked like a broken accelerator, and the next

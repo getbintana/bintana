@@ -1018,6 +1018,7 @@ msgid "Open project..."
 msgstr "Abrir proyecto..."
 
 #: forms/MainForm.form: action ActReload ActFtRefresh
+#: forms/MainForm.form: BtnReload.Tooltip
 msgid "Refresh"
 msgstr "Actualizar"
 
@@ -1191,10 +1192,6 @@ msgstr "Guardar (Ctrl+S)"
 msgid "Save all (Ctrl+Shift+S)"
 msgstr "Guardar todo (Ctrl+Mayús+S)"
 
-#: forms/MainForm.form: BtnReload.Tooltip
-msgid "Refresh (F5)"
-msgstr "Actualizar (F5)"
-
 #: forms/MainForm.form: BtnUndo.Tooltip
 msgid "Undo (Ctrl+Z)"
 msgstr "Deshacer (Ctrl+Z)"
@@ -1213,8 +1210,8 @@ msgid "Tab order"
 msgstr "Orden de tabulación"
 
 #: forms/MainForm.form: BtnRun.Tooltip
-msgid "Run (Ctrl+R)"
-msgstr "Ejecutar (Ctrl+R)"
+msgid "Run (F5)"
+msgstr "Ejecutar (F5)"
 
 #: forms/MainForm.form: BtnDebug.Tooltip BtnDbgDebug.Tooltip
 msgid "Debug (Ctrl+F9)"
