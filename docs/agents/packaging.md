@@ -168,7 +168,10 @@ menu entry has no `Path=`, so a relative path means three places.
 The rest of the end-to-end test, so the next person can repeat it:
 
 ```powershell
-# stage the tree, then build the IDE's setup from it
+# stage the tree, then build the IDE's setup from it. The portable tree does
+# not carry NSIS: copy the official bundle into
+# stage/bintana/share/bintana/tools/nsis first -- CI does the same -- or leave
+# that --with out and have makensis on PATH.
 tools/windows-portable.sh build stage/bintana
 BINTANA=stage/bintana/bin/bintana.exe tools/pack.sh --nsis ide stage/setup \
     --exe stage/bintana-setup.exe --prefix stage/bintana \

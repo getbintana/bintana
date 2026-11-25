@@ -452,8 +452,9 @@ second name is ignored and the line says `[only Hash]`.
   the module and reads CMake's own `no libsecret:` line back to prove it. The
   build's `Keyring` is then the `File` provider; `tests/run.sh widgets` does its
   round trip and `tests/keyring.sh` checks the `0600`/`0700` half a test in
-  JavaScript cannot see. The Windows job needs no change -- libsecret is not
-  found there and the Credential Manager half is what that build compiles.
+  JavaScript cannot see. Windows never looks for libsecret -- CMake asks only
+  on Linux -- and the Credential Manager half is what that build compiles,
+  even on a machine where MSYS2 has the port installed.
 
 ## Cutting a release
 

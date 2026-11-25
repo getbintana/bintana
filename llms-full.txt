@@ -1097,8 +1097,9 @@ second name is ignored and the line says `[only Hash]`.
   the module and reads CMake's own `no libsecret:` line back to prove it. The
   build's `Keyring` is then the `File` provider; `tests/run.sh widgets` does its
   round trip and `tests/keyring.sh` checks the `0600`/`0700` half a test in
-  JavaScript cannot see. The Windows job needs no change -- libsecret is not
-  found there and the Credential Manager half is what that build compiles.
+  JavaScript cannot see. Windows never looks for libsecret -- CMake asks only
+  on Linux -- and the Credential Manager half is what that build compiles,
+  even on a machine where MSYS2 has the port installed.
 
 ## Cutting a release
 
@@ -11266,7 +11267,12 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   neither library -- a report's form is written by a build with no poppler --
   and each member refuses naming its own; `CanRead`/`CanWrite` say which. A
   write to the document's own file re-opens the reading half on it, with the
-  new password after `Encrypt`. The encrypted PDF the reading half is tested
+  new password after `Encrypt` -- and **closes both handles first**: on Windows
+  poppler and PoDoFo kept the file open, so the rename from the writer's
+  temporary was refused after the whole second (the `Pdf`, `PdfSign` and
+  `report` tests found it). The PoDoFo document is destroyed before the
+  rename in the C++ bridge; `AddFields`, a same-file `Encrypt` and a same-file
+  `Sign` release the poppler document, then read it again. The encrypted PDF the reading half is tested
   with is made by `Encrypt`: no other tool. Built three ways -- both, without
   poppler, without PoDoFo (`-DBTA_WITH_PODOFO=OFF`) -- and `tests/report`,
   `testPdf` and `testPdfSign` pass in each.
@@ -11768,14 +11774,20 @@ What bit and what to know:
   is not a window, so `bta_keyring_pending` is summed into the console loop like
   `bta_http_pending`; a `Task` does not install the global at all, because the
   callback belongs to the main loop -- the `Http` bargain, not the sqlite one.
-- **The suite never writes to a real vault.** `testKeyring` forks on `Provider`:
-  with `"File"` it does the whole round trip and checks the file, and with a
-  vault it only asserts the argument and cap refusals. The `no-libsecret` job
-  is the File build, and `tests/keyring.sh` is the half JavaScript cannot see:
-  `0600` under `0700`, and no temporary left by a failed store. The real vault
-  round trip is a by-hand check -- measured on Windows 11 (2026-11-10):
-  `Provider=CredentialManager`, Store → Lookup `s3cr3t-✓` → Delete → `null` →
-  Delete `false`.
+- **Windows never takes libsecret, even though MSYS2 packages a port.** CMake
+  looks for it on Linux only; the provider's `#if` order puts `G_OS_WIN32`
+  first as well. A Windows build that found the port imported the Secret
+  Service calls while `Keyring.Provider` said `"CredentialManager"`, and every
+  store answered false -- the second Windows pass found it.
+- **The suite writes only to vaults that need no service.** `testKeyring`
+  forks on `Provider`: with `"File"` it does the whole round trip and checks
+  the file, and with `"CredentialManager"` it stores, reads and deletes a
+  secret under a name unique to the process. A `"SecretService"` or
+  `"Keychain"` vault is left to the by-hand list. The `no-libsecret` job is the
+  File build, and `tests/keyring.sh` is the half JavaScript cannot see: `0600`
+  under `0700`, and no temporary left by a failed store. The real vault round
+  trip was measured on Windows 11 (2026-11-10): `Provider=CredentialManager`,
+  Store → Lookup `s3cr3t-✓` → Delete → `null` → Delete `false`.
 
 ## Notification: the suite shares the user's session bus
 
@@ -12895,7 +12907,10 @@ menu entry has no `Path=`, so a relative path means three places.
 The rest of the end-to-end test, so the next person can repeat it:
 
 ```powershell
-# stage the tree, then build the IDE's setup from it
+# stage the tree, then build the IDE's setup from it. The portable tree does
+# not carry NSIS: copy the official bundle into
+# stage/bintana/share/bintana/tools/nsis first -- CI does the same -- or leave
+# that --with out and have makensis on PATH.
 tools/windows-portable.sh build stage/bintana
 BINTANA=stage/bintana/bin/bintana.exe tools/pack.sh --nsis ide stage/setup \
     --exe stage/bintana-setup.exe --prefix stage/bintana \

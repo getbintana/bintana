@@ -400,7 +400,12 @@ The traps and decisions of this area, each with what it cost and the rule it lef
   neither library -- a report's form is written by a build with no poppler --
   and each member refuses naming its own; `CanRead`/`CanWrite` say which. A
   write to the document's own file re-opens the reading half on it, with the
-  new password after `Encrypt`. The encrypted PDF the reading half is tested
+  new password after `Encrypt` -- and **closes both handles first**: on Windows
+  poppler and PoDoFo kept the file open, so the rename from the writer's
+  temporary was refused after the whole second (the `Pdf`, `PdfSign` and
+  `report` tests found it). The PoDoFo document is destroyed before the
+  rename in the C++ bridge; `AddFields`, a same-file `Encrypt` and a same-file
+  `Sign` release the poppler document, then read it again. The encrypted PDF the reading half is tested
   with is made by `Encrypt`: no other tool. Built three ways -- both, without
   poppler, without PoDoFo (`-DBTA_WITH_PODOFO=OFF`) -- and `tests/report`,
   `testPdf` and `testPdfSign` pass in each.

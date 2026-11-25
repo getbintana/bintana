@@ -17480,15 +17480,21 @@ class Form1 extends Form {
         File.Delete(path);
     }
 
-    /* --- the keyring, which the suite does not write to ---------------------
+    /* --- the keyring, which the suite drives only where it is safe ---------
      *
      * libsecret is optional at build time, so this is the same fork the other
-     * optional dependencies get -- and the vault itself is **not driven**: a
+     * optional dependencies get -- and a Linux vault is **not driven**: a
      * test secret written into the developer's keyring is a side effect the
      * suite has no business causing, and a locked collection would make the
-     * answer depend on the machine.  What is asserted is the refusal by name
-     * in a build without libsecret (the `no-libsecret` job is that build) and,
-     * with it, the argument refusals, which touch no bus at all.
+     * answer depend on the machine. What is asserted there is the refusal by
+     * name in a build without libsecret (the `no-libsecret` job is that build)
+     * and, with it, the argument refusals, which touch no bus at all.
+     *
+     * **Windows' Credential Manager is driven**, with a name unique to the
+     * process and deleted before the test ends: it needs no service, and a
+     * build that found an MSYS2 libsecret port used to import the Secret
+     * Service while naming this provider -- the round trip is what tells the
+     * two apart.
      */
     testKeyring() {
         const providers = ["SecretService", "File", "CredentialManager", "Keychain"];
@@ -17514,12 +17520,45 @@ class Form1 extends Form {
         throws("a value longer than 2560 bytes is refused",
                () => Keyring.Store("a", "b", "x".repeat(2561), () => {}));
 
+        /* Windows' own vault: a unique name, deleted at the end. */
+        if (Keyring.Provider === "CredentialManager") {
+            const service = `bta-keyring-win-${Environment.ProcessId}`;
+            const key = "token";
+            const value = "credential-manager-secret";
+            let answer;
+
+            Keyring.Store(service, key, value, (ok) => { answer = ok; });
+            until("the Credential Manager stores the secret", () => answer !== undefined, () => {
+                eq("CredentialManager: Store answers true", answer, true);
+
+                answer = undefined;
+                Keyring.Lookup(service, key, (found) => { answer = found; });
+                until("the Credential Manager reads it back", () => answer !== undefined, () => {
+                    eq("CredentialManager: Lookup answers it", answer, value);
+
+                    answer = undefined;
+                    Keyring.Delete(service, key, (deleted) => { answer = deleted; });
+                    until("the Credential Manager deletes it", () => answer !== undefined, () => {
+                        eq("CredentialManager: Delete answers true", answer, true);
+
+                        answer = "unset";
+                        Keyring.Lookup(service, key, (after) => { answer = after; });
+                        until("the Credential Manager answers null after Delete",
+                              () => answer !== "unset", () => {
+                            eq("CredentialManager: Lookup after Delete answers null", answer, null);
+                        });
+                    });
+                });
+            });
+            return;
+        }
+
         /*
-         * The File provider is the only one the suite can exercise without
-         * writing to a real vault: it is the `no-libsecret` build's floor.
-         * A vault (`SecretService`, `CredentialManager`, `Keychain`) is left
-         * to the by-hand list, because a test that stores a secret in the
-         * developer's keyring is a side effect the suite must not cause.
+         * The File provider is the only Linux one the suite can exercise
+         * without writing to a real vault: it is the `no-libsecret` build's
+         * floor. A `SecretService` or `Keychain` vault is left to the by-hand
+         * list, because a test that stores a secret in the developer's keyring
+         * is a side effect the suite must not cause.
          */
         if (Keyring.Provider !== "File") {
             print(`Keyring: Provider=${Keyring.Provider}; the vault round trip is by hand`);

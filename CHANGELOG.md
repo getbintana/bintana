@@ -246,6 +246,19 @@ one-page answer to *what is new since the release I have*.
   too**: Windows 11 26H2 does not honor its own "not honored on directories"
   sentence, as `RemoveHeld` found; `Directory.DeleteTree` now clears the bit
   for folders as well as files.
+- **`PdfDocument.AddFields`, `Encrypt` and `Sign` replace a PDF's own file on
+  Windows.** PoDoFo kept the document open while the finished file was renamed
+  over it, and poppler kept the reading half open, so the rename (or the
+  in-place signing) was refused with *permission denied* after the whole
+  retry -- a report's form, a same-file encryption and an in-place field write
+  all failed. Both handles are closed before the replacement, and the reading
+  half is opened again afterwards.
+- **`Keyring` on Windows uses the Credential Manager even when an MSYS2
+  libsecret is installed.** CMake found that port and the binary imported the
+  Secret Service calls while `Keyring.Provider` named the Credential Manager,
+  so every store answered false. libsecret is looked for on Linux only, and the
+  provider's `#if` order puts the platform first. The suite now drives a
+  Windows Credential Manager round trip with a name unique to the process.
 - **The Windows Apps page shows the application's icon, publisher and
   size.** The uninstall key had no `DisplayIcon` without a project icon, no
   `Publisher` without a developer in the metainfo, and never an

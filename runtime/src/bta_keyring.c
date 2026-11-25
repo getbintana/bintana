@@ -49,7 +49,16 @@
 #include <string.h>
 #include <glib/gstdio.h>
 
-#ifdef BTA_HAVE_LIBSECRET
+/* **libsecret is the Linux provider, not a Windows one.** A Windows build can
+ * find a libsecret port (MSYS2 packages one), and it did: the binary imported
+ * the Secret Service calls while `Keyring.Provider` named the Credential
+ * Manager, so the vault answered false. The platform's own store wins by the
+ * same `#if` order as the provider's name. */
+#if defined(BTA_HAVE_LIBSECRET) && !defined(G_OS_WIN32) && !defined(__APPLE__)
+#define BTA_KEYRING_SECRET_SERVICE 1
+#endif
+
+#ifdef BTA_KEYRING_SECRET_SERVICE
 #include <libsecret/secret.h>
 #endif
 
@@ -76,7 +85,7 @@
 #define KEYRING_PROVIDER "CredentialManager"
 #elif defined(__APPLE__)
 #define KEYRING_PROVIDER "Keychain"
-#elif defined(BTA_HAVE_LIBSECRET)
+#elif defined(BTA_KEYRING_SECRET_SERVICE)
 #define KEYRING_PROVIDER "SecretService"
 #else
 #define KEYRING_PROVIDER "File"
@@ -102,7 +111,7 @@ typedef struct {
 
 static GList *keyring_jobs;
 
-#ifdef BTA_HAVE_LIBSECRET
+#ifdef BTA_KEYRING_SECRET_SERVICE
 static SecretSchema *keyring_schema;
 #endif
 
@@ -254,7 +263,7 @@ static KeyringJob *keyring_prepare(JSContext *ctx, const char *who, int argc,
 
 /* ------------------------------------------------------------ SecretService */
 
-#ifdef BTA_HAVE_LIBSECRET
+#ifdef BTA_KEYRING_SECRET_SERVICE
 
 static void on_keyring_store(GObject *src, GAsyncResult *res, gpointer user_data)
 {
@@ -733,7 +742,7 @@ void bta_keyring_cleanup(void)
             g_cancellable_cancel(job->cancel);
         keyring_job_free(job);
     }
-#ifdef BTA_HAVE_LIBSECRET
+#ifdef BTA_KEYRING_SECRET_SERVICE
     g_clear_pointer(&keyring_schema, secret_schema_unref);
 #endif
 }
@@ -763,7 +772,7 @@ void bta_keyring_init(JSContext *ctx, JSValue global)
 {
     JSValue keyring = JS_NewObject(ctx);
 
-#ifdef BTA_HAVE_LIBSECRET
+#ifdef BTA_KEYRING_SECRET_SERVICE
     if (!keyring_schema)
         keyring_schema = secret_schema_new("org.bintana.Keyring", SECRET_SCHEMA_NONE,
                                            "service", SECRET_SCHEMA_ATTRIBUTE_STRING,

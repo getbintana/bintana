@@ -416,14 +416,20 @@ What bit and what to know:
   is not a window, so `bta_keyring_pending` is summed into the console loop like
   `bta_http_pending`; a `Task` does not install the global at all, because the
   callback belongs to the main loop -- the `Http` bargain, not the sqlite one.
-- **The suite never writes to a real vault.** `testKeyring` forks on `Provider`:
-  with `"File"` it does the whole round trip and checks the file, and with a
-  vault it only asserts the argument and cap refusals. The `no-libsecret` job
-  is the File build, and `tests/keyring.sh` is the half JavaScript cannot see:
-  `0600` under `0700`, and no temporary left by a failed store. The real vault
-  round trip is a by-hand check -- measured on Windows 11 (2026-11-10):
-  `Provider=CredentialManager`, Store → Lookup `s3cr3t-✓` → Delete → `null` →
-  Delete `false`.
+- **Windows never takes libsecret, even though MSYS2 packages a port.** CMake
+  looks for it on Linux only; the provider's `#if` order puts `G_OS_WIN32`
+  first as well. A Windows build that found the port imported the Secret
+  Service calls while `Keyring.Provider` said `"CredentialManager"`, and every
+  store answered false -- the second Windows pass found it.
+- **The suite writes only to vaults that need no service.** `testKeyring`
+  forks on `Provider`: with `"File"` it does the whole round trip and checks
+  the file, and with `"CredentialManager"` it stores, reads and deletes a
+  secret under a name unique to the process. A `"SecretService"` or
+  `"Keychain"` vault is left to the by-hand list. The `no-libsecret` job is the
+  File build, and `tests/keyring.sh` is the half JavaScript cannot see: `0600`
+  under `0700`, and no temporary left by a failed store. The real vault round
+  trip was measured on Windows 11 (2026-11-10): `Provider=CredentialManager`,
+  Store → Lookup `s3cr3t-✓` → Delete → `null` → Delete `false`.
 
 ## Notification: the suite shares the user's session bus
 

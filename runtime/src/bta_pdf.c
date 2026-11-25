@@ -822,6 +822,17 @@ static JSValue pdfdoc_add_fields(JSContext *ctx, JSValueConst this_val,
     if (!fields)
         return JS_EXCEPTION;
 
+    /*
+     * **The reading half is closed before the file is replaced.** On Windows
+     * poppler keeps the document open, and the writer's rename over it fails
+     * with access denied while that handle lives -- `Report.SavePdf` adds the
+     * fields to the very file it just loaded. It is read again afterwards.
+     */
+#ifdef BTA_HAVE_POPPLER
+    if (count)
+        g_clear_object(&d->doc);
+#endif
+
     char *error = NULL;
     int   added = count ? bta_pdf_add_fields_native(d->path, d->password, fields,
                                                     count, &error)
@@ -831,16 +842,26 @@ static JSValue pdfdoc_add_fields(JSContext *ctx, JSValueConst this_val,
         pdf_field_clear(&fields[i]);
     g_free(fields);
 
+    bool reread_ok = true;
+#ifdef BTA_HAVE_POPPLER
+    if (count)
+        reread_ok = reread(ctx, d, "AddFields");
+#endif
+
     if (count && added == 0) {
+        /* The file was not replaced: read the old one again, but report the
+         * writer's refusal, which is why the call failed. */
+        if (!reread_ok) {
+            JSValue ignored = JS_GetException(ctx);
+            JS_FreeValue(ctx, ignored);
+        }
         JSValue e = JS_ThrowPlainError(ctx, "AddFields: %s", error ? error : "PoDoFo refused");
         g_free(error);
         return e;
     }
     g_free(error);
-#ifdef BTA_HAVE_POPPLER
-    if (count && !reread(ctx, d, "AddFields"))
+    if (!reread_ok)
         return JS_EXCEPTION;
-#endif
     return JS_NewInt32(ctx, added);
 #endif
 }
@@ -960,27 +981,48 @@ static JSValue pdfdoc_encrypt(JSContext *ctx, JSValueConst this_val,
         JS_FreeValue(ctx, list);
     }
 
+    /* Written over its own file? The reading half has to let go before the
+     * writer's rename, the same handle `AddFields` documents. */
+    char *same_a = g_canonicalize_filename(out, NULL);
+    char *same_b = g_canonicalize_filename(d->path, NULL);
+    bool  same   = !strcmp(same_a, same_b);
+
+    g_free(same_a);
+    g_free(same_b);
+
+    if (ok && same) {
+#ifdef BTA_HAVE_POPPLER
+        g_clear_object(&d->doc);
+#endif
+    }
+
     char *error = NULL;
-    if (ok && !bta_pdf_encrypt_native(d->path, d->password, out, user,
-                                      owner ? owner : user, allow, &error)) {
+    bool  wrote = ok ? bta_pdf_encrypt_native(d->path, d->password, out, user,
+                                              owner ? owner : user, allow, &error)
+                     : false;
+
+    if (ok && !wrote) {
+        /* The file was not replaced: read the old one again, but report the
+         * writer's refusal, which is why the call failed. */
+        if (same) {
+#ifdef BTA_HAVE_POPPLER
+            if (!reread(ctx, d, "Encrypt")) {
+                JSValue ignored = JS_GetException(ctx);
+                JS_FreeValue(ctx, ignored);
+            }
+#endif
+        }
         JS_ThrowPlainError(ctx, "Encrypt: %s", error ? error : "PoDoFo refused");
         ok = false;
     }
 
     /* Written over its own file: it reads the encrypted one now. */
-    if (ok) {
-        char *a = g_canonicalize_filename(out, NULL);
-        char *b = g_canonicalize_filename(d->path, NULL);
-
-        if (!strcmp(a, b)) {
-            g_free(d->password);
-            d->password = g_strdup(user ? user : owner);
+    if (ok && same) {
+        g_free(d->password);
+        d->password = g_strdup(user ? user : owner);
 #ifdef BTA_HAVE_POPPLER
-            ok = reread(ctx, d, "Encrypt");
+        ok = reread(ctx, d, "Encrypt");
 #endif
-        }
-        g_free(a);
-        g_free(b);
     }
 
     g_free(error);
@@ -1200,6 +1242,21 @@ static JSValue pdfdoc_sign(JSContext *ctx, JSValueConst this_val,
     if (ok && !out)
         ok = false;
 
+    /* Signing in place opens the document for reading and writing: the
+     * poppler handle has to go first, as it does for `AddFields`. */
+    bool same = false;
+    if (ok) {
+        char *a = g_canonicalize_filename(out, NULL);
+        char *b = g_canonicalize_filename(d->path, NULL);
+        same = !strcmp(a, b);
+        g_free(a);
+        g_free(b);
+    }
+#ifdef BTA_HAVE_POPPLER
+    if (ok && same)
+        g_clear_object(&d->doc);
+#endif
+
     SignCall call = { ctx, signer, self, false };
     char    *error = NULL;
 
@@ -1213,6 +1270,14 @@ static JSValue pdfdoc_sign(JSContext *ctx, JSValueConst this_val,
         spec.sign     = sign_with_program;
         spec.data     = &call;
         if (!bta_pdf_sign_native(d->path, d->password, out, &spec, &error)) {
+            if (same) {
+#ifdef BTA_HAVE_POPPLER
+                if (!reread(ctx, d, "Sign")) {
+                    JSValue ignored = JS_GetException(ctx);
+                    JS_FreeValue(ctx, ignored);
+                }
+#endif
+            }
             /* The Signer's own throw is the answer when there is one. */
             if (!call.threw)
                 JS_ThrowPlainError(ctx, "Sign: %s", error ? error : "PoDoFo refused");
@@ -1221,14 +1286,8 @@ static JSValue pdfdoc_sign(JSContext *ctx, JSValueConst this_val,
     }
 
 #ifdef BTA_HAVE_POPPLER
-    if (ok) {
-        char *a = g_canonicalize_filename(out, NULL);
-        char *b = g_canonicalize_filename(d->path, NULL);
-        if (!strcmp(a, b))
-            ok = reread(ctx, d, "Sign");
-        g_free(a);
-        g_free(b);
-    }
+    if (ok && same)
+        ok = reread(ctx, d, "Sign");
 #endif
 
     g_free(error);

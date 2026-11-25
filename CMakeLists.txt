@@ -163,11 +163,15 @@ pkg_check_modules(LIBXML IMPORTED_TARGET libxml-2.0)
 # Optional: libsecret is what `Keyring` stores a token in on Linux. Optional
 # like sqlite and libxml2 -- a program that keeps nothing secret needs none of
 # it -- and without it Linux falls back to the File provider under the config
-# directory. Windows uses the Credential Manager and macOS the Keychain, so
-# libsecret has no Windows or macOS port to find. The runtime dependency it
+# directory. Windows uses the Credential Manager and macOS the Keychain;
+# **MSYS2 does package a libsecret port**, and finding it there put the Secret
+# Service in the Windows binary while `Keyring.Provider` named the Credential
+# Manager. It is not looked for off Linux at all. The runtime dependency it
 # brings is libsecret's own shared object, which every GNOME desktop already
 # has.
-pkg_check_modules(SECRET IMPORTED_TARGET libsecret-1)
+if(NOT WIN32 AND NOT APPLE)
+    pkg_check_modules(SECRET IMPORTED_TARGET libsecret-1)
+endif()
 
 # Optional: sysprof-capture is what lets a Sysprof capture carry the runtime's
 # own marks -- and what `--profile` writes to a file. Static and self-contained
@@ -347,7 +351,7 @@ function(bta_link_console_libraries target)
         target_link_libraries(${target} PRIVATE PkgConfig::GNUTLS)
         target_compile_definitions(${target} PRIVATE BTA_HAVE_GNUTLS=1)
     endif()
-    if(SECRET_FOUND)
+    if(SECRET_FOUND AND NOT WIN32 AND NOT APPLE)
         target_link_libraries(${target} PRIVATE PkgConfig::SECRET)
         target_compile_definitions(${target} PRIVATE BTA_HAVE_LIBSECRET=1)
     endif()
@@ -619,7 +623,7 @@ else()
     message(STATUS "no libxml2: Xml exists and refuses to read anything")
 endif()
 
-if(SECRET_FOUND)
+if(SECRET_FOUND AND NOT WIN32 AND NOT APPLE)
     message(STATUS "libsecret ${SECRET_VERSION}: Keyring uses the Secret Service")
 elseif(WIN32)
     message(STATUS "no libsecret: Keyring uses the Credential Manager")
