@@ -3279,9 +3279,22 @@ export class MainForm extends Form {
         this.debugger_.ask(this.TxtImmediate.Text.trim());
     }
 
+    /*
+     * The button's enabled state is `refresh`'s, and `refresh` runs on a tab
+     * change or a run state -- not on a keystroke in this box. So a box typed
+     * into while stopped left *Watch* grey until something else refreshed the
+     * window, and clicking it did nothing. The two lines that follow are the
+     * same answer `refresh` gives, at the moment the answer changes.
+     */
+    TxtImmediate_Change() {
+        this.BtnWatch.Enabled = this.TxtImmediate.Text.trim() !== "";
+    }
+
     BtnWatch_Click() {
-        if (this.debugger_.watch(this.TxtImmediate.Text.trim()))
+        if (this.debugger_.watch(this.TxtImmediate.Text.trim())) {
             this.TxtImmediate.Text = "";
+            this.BtnWatch.Enabled = false;
+        }
     }
 
     /* A row of the values: a watch comes off, a value is changed. */

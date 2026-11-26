@@ -1785,6 +1785,12 @@ ones only) cannot disagree with the gutter.
   dialog would refuse.
 - **The passes are asked at every stop** (`{"do":"hits"}`) and cleared when a
   run starts, not when it ends, so the last run's counts stay on the page.
+- **`Watch` is enabled by `refresh()`, and typing in its box does not call it.**
+  The expression field has no `Change` handler: its `Text` moved, `refresh()`
+  did not, and the button stayed grey from the empty state until a tab switch
+  or another event refreshed the window -- measured 2026-11-25, the first
+  watch of a stopped program. `TxtImmediate_Change` now sets the same
+  `BtnWatch.Enabled`; `BtnWatch_Click` turns it off when it clears the box.
 
 ## Edit and continue
 

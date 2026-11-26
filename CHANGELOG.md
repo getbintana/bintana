@@ -64,6 +64,10 @@ three controls, a handler, a run -- and what got in the way.
   watches were useless exactly where they are needed; in an arrow inside one,
   `this` was the wrong object. Fixed in the QuickJS fork's `JS_DebugEval`. And
   the values panel drew every value as `…` even when the answer had arrived.
+- **`Watch` enables as the expression is typed.** The button's sensitivity was
+  only refreshed when the window moved -- a tab switch, a run state -- so an
+  expression typed while stopped left the button grey and a click did nothing
+  until something else happened to refresh the IDE.
 - **A property typed and then clicked away from is kept.** The property grid
   and the menu editor applied a text field on Enter only, and lost it when the
   focus went to the canvas, another row or a button; they apply on leaving the

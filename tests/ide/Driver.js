@@ -18111,6 +18111,20 @@ function* p_debug(ide) {
     dbg.job = null;
     dbg.waiting = null;
 
+    /*
+     * The immediate box: typing is a `Change`, and `Watch` follows it without
+     * waiting for a tab switch to refresh the window.
+     */
+    ide.TxtImmediate.Text = "";
+    eq("an empty expression leaves Watch disabled", ide.BtnWatch.Enabled, false);
+    ide.TxtImmediate.Text = "total * 2";
+    eq("typing one enables Watch", ide.BtnWatch.Enabled, true);
+    ide.BtnWatch.Emit("Click");
+    eq("...and the click keeps it", dbg.watches.includes("total * 2"), true);
+    eq("...clears the box", ide.TxtImmediate.Text, "");
+    eq("...and disables Watch again", ide.BtnWatch.Enabled, false);
+    dbg.unwatch("total * 2");
+
     /* The session: what it keeps, and what loading another forgets. */
     dbg.setCondition(js, at.line, "n > 1");
     dbg.setEnabled(js, at.line, false);
