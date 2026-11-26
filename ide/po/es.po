@@ -472,7 +472,7 @@ msgstr "Abrir una copia"
 
 #: forms/GitForm.form: GitForm.Text forms/MainForm.form: menu MnuGitChanges
 #: SideStack.Tabs forms/MainForm.js:3308 modules/Changes.js:73
-#: modules/Data.js:757
+#: modules/Data.js:790
 msgid "Changes"
 msgstr "Cambios"
 
@@ -1067,7 +1067,7 @@ msgid "Find..."
 msgstr "Buscar..."
 
 #: forms/MainForm.form: action ActRun forms/LaunchForm.js:155
-#: modules/Data.js:257
+#: modules/Data.js:260
 msgid "Run"
 msgstr "Ejecutar"
 
@@ -3299,95 +3299,99 @@ msgstr "Poner la clase en {0}, como las demás de acá"
 msgid "Rename control"
 msgstr "Renombrar el control"
 
-#: modules/Data.js:125 modules/Data.js:229 modules/Data.js:293
+#: modules/Data.js:128 modules/Data.js:232 modules/Data.js:296
 msgid "Data"
 msgstr "Datos"
 
-#: modules/Data.js:126
+#: modules/Data.js:129
 msgid "Show the database view"
 msgstr "Mostrar la vista de bases de datos"
 
-#: modules/Data.js:201
+#: modules/Data.js:204
 msgid "Which database to show"
 msgstr "Qué base de datos mostrar"
 
-#: modules/Data.js:207
+#: modules/Data.js:210
 msgid "Read the project and its databases again"
 msgstr "Volver a leer el proyecto y sus bases de datos"
 
-#: modules/Data.js:454
+#: modules/Data.js:457
 msgid "(not created)"
 msgstr "(sin crear)"
 
-#: modules/Data.js:492
+#: modules/Data.js:495
 msgid "No databases in this project."
 msgstr "Este proyecto no tiene bases de datos."
 
-#: modules/Data.js:504
+#: modules/Data.js:507
 msgid "{0} is a {1} connection, which the IDE cannot open yet."
 msgstr "{0} es una conexión {1}, que el IDE todavía no puede abrir."
 
-#: modules/Data.js:512
-msgid "{0} is not there yet. Run the application to create it."
-msgstr "{0} todavía no existe. Ejecutá la aplicación para crearla."
+#: modules/Data.js:519
+msgid ""
+"{0} is not there yet. Run the application, or a CREATE TABLE in the console "
+"below, to create it."
+msgstr ""
+"{0} todavía no existe. Para crearla, ejecutá la aplicación o un CREATE TABLE "
+"en la consola de abajo."
 
-#: modules/Data.js:557
+#: modules/Data.js:564
 msgid "required"
 msgstr "obligatorio"
 
-#: modules/Data.js:558
+#: modules/Data.js:565
 msgid "key"
 msgstr "clave"
 
-#: modules/Data.js:571
+#: modules/Data.js:578
 msgid "Model {0} -> {1}"
 msgstr "Modelo {0} -> {1}"
 
-#: modules/Data.js:580
+#: modules/Data.js:587
 msgid "Record {0}"
 msgstr "Registro {0}"
 
-#: modules/Data.js:597
+#: modules/Data.js:604
 msgid "Model {0} -> {1} (table not created)"
 msgstr "Modelo {0} -> {1} (tabla sin crear)"
 
-#: modules/Data.js:603
+#: modules/Data.js:610
 msgid "This database has no tables."
 msgstr "Esta base de datos no tiene tablas."
 
-#: modules/Data.js:687
+#: modules/Data.js:694
 msgid "Choose a database first."
 msgstr "Elegí una base de datos primero."
 
-#: modules/Data.js:691
-msgid "{0} is not there yet."
-msgstr "{0} todavía no existe."
-
-#: modules/Data.js:695
+#: modules/Data.js:698
 msgid "The console speaks SQLite and ODBC."
 msgstr "La consola habla SQLite y ODBC."
 
-#: modules/Data.js:701
+#: modules/Data.js:704
 msgid "Type a statement first."
 msgstr "Escribí una sentencia primero."
 
-#: modules/Data.js:744
+#: modules/Data.js:721
+msgid "{0} is not there yet."
+msgstr "{0} todavía no existe."
+
+#: modules/Data.js:777
 msgid "No rows."
 msgstr "Sin filas."
 
-#: modules/Data.js:752
+#: modules/Data.js:785
 msgid "Showing {0} of {1} rows."
 msgstr "Se muestran {0} de {1} filas."
 
-#: modules/Data.js:758
+#: modules/Data.js:791
 msgid "Last id"
 msgstr "Último id"
 
-#: modules/Data.js:761
+#: modules/Data.js:794
 msgid "Statement executed."
 msgstr "Sentencia ejecutada."
 
-#: modules/Data.js:753
+#: modules/Data.js:786
 msgid "{0} row"
 msgid_plural "{0} rows"
 msgstr[0] "{0} fila"

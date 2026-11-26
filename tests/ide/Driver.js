@@ -13065,6 +13065,41 @@ function* p_data(ide) {
     eq("and the update is visible", ide.data.Rows.Cell(1, 0), "Carla");
 
     /*
+     * **A database that is not there yet is made by a statement, not by a
+     * look.** A new connection's file does not exist, and the console refused
+     * everything on it -- so the first table of a new project had to be made
+     * by a program. A query is still refused (there is nothing to read); a
+     * statement run here creates the file, in a folder of its own if it
+     * names one, and the schema shows what it made.
+     */
+    const freshRel = "made/fresh.db";
+    File.SaveJson(File.Join(TMP, "fresh.conn"), { kind: "sqlite", path: freshRel });
+    ide.listFiles();
+    ide.data.refresh();
+    const freshAt = ide.data.databases.findIndex((db) => db.name === "fresh");
+    check("a connection to a file not there is listed as not created",
+          freshAt >= 0 && ide.data.databases[freshAt].missing);
+    ide.data.DbList.Index = freshAt;
+    yield* settled(ide);
+    ide.data.Sql.Text = "select 1";
+    ide.data.run();
+    check("a query on it is refused, and creates nothing",
+          !File.Exists(File.Join(TMP, freshRel)), ide.data.Status.Text);
+    ide.data.Sql.Text = "create table notes (id integer primary key, body text)";
+    ide.data.run();
+    yield* settled(ide);
+    check("a statement creates the file, folder and all",
+          File.Exists(File.Join(TMP, freshRel)), ide.data.Status.Text);
+    check("...and the schema shows the table it made",
+          ide.data.current && ide.data.current.name === "fresh" &&
+          ide.data.Schema.Exists(ide.data.tableKeys["notes"]),
+          JSON.stringify(ide.data.tableKeys));
+    File.Delete(File.Join(TMP, "fresh.conn"));
+    if (File.IsDir(File.Join(TMP, "made"))) Directory.DeleteTree(File.Join(TMP, "made"));
+    ide.listFiles();
+    ide.data.refresh();
+
+    /*
      * --- the connection dialog -----------------------------------------------
      *
      * A `.conn` was a JSON file written by hand. The tree's menu edits it now,

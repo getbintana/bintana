@@ -39,6 +39,9 @@ const SHOWN_ROWS = 500;
 
 const SQLITE_EXTENSIONS = ["db", "sqlite", "sqlite3"];
 
+/* The first words of a statement that answers rows rather than changes. */
+const ROWS_WORDS = ["select", "with", "pragma", "explain"];
+
 /* The first word of a statement, with comments and space before it skipped.
  * It decides between `Query` and `Execute`, and nothing else: SQLite is not
  * asked to parse the statement twice. */
@@ -509,9 +512,13 @@ export class Data {
         }
 
         if (db.missing) {
+            /* Said relative to the project: the absolute path is one word with
+             * no space to wrap at, and it pushed the panels apart. */
+            const shown = this.ide.project && File.Within(db.path, this.ide.project)
+                ? File.Relative(db.path, this.ide.project) : db.path;
             this.Message.Text = Locale.Text(
-                "{0} is not there yet. Run the application to create it.",
-                db.path);
+                "{0} is not there yet. Run the application, or a CREATE TABLE in the console below, to create it.",
+                shown);
             this.Message.Visible = true;
             return;
         }
@@ -687,10 +694,6 @@ export class Data {
             this.say(Locale.Text("Choose a database first."), true);
             return;
         }
-        if (db.missing) {
-            this.say(Locale.Text("{0} is not there yet.", db.path), true);
-            return;
-        }
         if (!Data.opens(db)) {
             this.say(Locale.Text("The console speaks SQLite and ODBC."), true);
             return;
@@ -702,6 +705,31 @@ export class Data {
             return;
         }
 
+        /*
+         * **A statement that writes, run on purpose, creates the file.** The
+         * view does not create a database by looking at it, and still does
+         * not; but a `CREATE TABLE` typed here and run with the button is not
+         * looking, and refusing it left a new project with no way to make its
+         * first table but writing a program to do it (found 2026-11-25: a new
+         * connection, `CREATE TABLE contactos (...)`, Run, and *not there
+         * yet*). A query on a file that is not there is still refused -- it
+         * has nothing to read.
+         */
+        let created = false;
+        if (db.missing) {
+            if (db.kind !== "sqlite" || ROWS_WORDS.includes(firstWord(sql))) {
+                this.say(Locale.Text("{0} is not there yet.", File.Name(db.path)), true);
+                return;
+            }
+            try {
+                Directory.Make(File.Directory(db.path));
+            } catch (e) {
+                this.say(e.message || String(e), true);
+                return;
+            }
+            created = true;
+        }
+
         this.ide.showConsole(this.consolePage);
         this.ide.dressViewMenu();
 
@@ -709,7 +737,7 @@ export class Data {
         try {
             live = Data.open(db);
             const word = firstWord(sql);
-            if (["select", "with", "pragma", "explain"].includes(word)) {
+            if (ROWS_WORDS.includes(word)) {
                 /* Over a server, a row at a time and no further than what is
                  * shown: a SELECT with no limit on a big table must not bring
                  * it all into the IDE. A file is read whole, as before. */
@@ -729,6 +757,11 @@ export class Data {
         } finally {
             if (live) live.Close();
         }
+
+        /* A file just made, or a table made, dropped or changed, is a different
+         * schema to show; the console's own answer stays where it is. */
+        if (created || ["create", "drop", "alter"].includes(firstWord(sql)))
+            this.refresh();
     }
 
     fill(rows) {

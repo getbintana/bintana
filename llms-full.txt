@@ -8541,6 +8541,13 @@ whole-project count in [`docs/testing.md`](../testing.md) moves with it.
   creates a file, so the view checks `File.Exists` and says *not created*
   instead. It also opens a connection only to read `Tables`/`Columns` and
   closes it again; the console opens its own for a run.
+  **But it is created by a statement run on purpose** (2026-11-25): the
+  console refused everything on a missing file, so a new project's first table
+  had to be made by a program. A statement that writes, run from the console,
+  makes the folder and the file and refreshes the schema; a query on a missing
+  file is still refused. And the *not there yet* sentence says the path
+  relative to the project: the absolute one is one word with no space to wrap
+  at, and its natural width pushed the side bar and the console apart.
 - **A model is a mapping, not a schema.** `Connection`/`Model` components are
   read from the `.form` JSON, the record fields come from `Binding.records()`,
   and a model whose table has not been created is listed with that sentence
@@ -16108,7 +16115,7 @@ and a TagLib wrapper worked through.
 # Testing
 
 ```sh
-./tests/run.sh                          # all seven projects, 11886 assertions
+./tests/run.sh                          # all seven projects, 11890 assertions
 ./tests/run.sh widgets                  # one project
 ./tests/run.sh widgets record           # one test of it
 ./tests/run.sh ide designer             # one project, stopping after a phase of it

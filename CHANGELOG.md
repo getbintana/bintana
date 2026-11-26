@@ -68,6 +68,14 @@ three controls, a handler, a run -- and what got in the way.
 - **Stop is not a failure.** Stopping a program, above all one paused on a
   breakpoint, reported *the run ended badly* at that line in Problems; it says
   *[stopped]* now and reports nothing.
+- **A new project's first table can be made from the Data console.** A
+  connection to a SQLite file that does not exist yet refused every
+  statement, so the only way to a first table was a program. A statement
+  that writes (`CREATE TABLE …`) run from the console now creates the file and
+  its folder and shows the table; a query on a missing file is still refused,
+  and looking does not create anything. The *not there yet* sentence names
+  the path relative to the project, where the absolute one pushed the side bar
+  and the console apart.
 - **The menu editor's hint is translated**: it was assigned from a constant no
   catalogue could reach.
 - **The IDE's Output speaks its language**: *Saved*, *Added Button1_Click()
