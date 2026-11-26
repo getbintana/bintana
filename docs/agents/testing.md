@@ -290,6 +290,12 @@ Three things that will waste your time:
   out (`:backdrop`) — which looks exactly like every button being disabled — and
   the click that focuses it is eaten. `probe.sh shot` activates; a bare `xdotool
   click` does not.
+- **`xdotool windowclose` destroys the X window; `windowquit` asks the program
+  to close.** The first leaves the client alive with `GdkSurface … unexpectedly
+  destroyed`, no window and a process that looks like a runtime bug -- measured
+  2026-11-25 on a form closed that way, and again on a debug child, which no
+  later Stop could reach. Use `windowquit` for the X button's road, and
+  `windowkill` only when the client is meant to die.
 - **Capture the window, not the screen**, and make sure no earlier instance
   survived (`pkill -x bintana`). A leftover window overlapping the new one produces
   screenshots of a state that no longer exists — which reads as a rendering bug
