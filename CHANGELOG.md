@@ -24,11 +24,14 @@ three controls, a handler, a run -- and what got in the way.
   inside it, which is GTK's and what a long form wants; for a control wider
   than the view GTK goes to its *far edge*. `FollowFocus = false` keeps the
   view where it is, for a surface that takes the focus as a whole.
-- **`bintana check` reports a control misspelt in code.** `this.Labl1.Text`
-  beside a `Label1` went through the whole check and failed at the first run
-  as *cannot set property 'Text' of undefined*; it is now `Form1 has no
-  control or member Labl1 … did you mean Label1?`, in the check and underlined
-  in the IDE as it is typed.
+- **`bintana check` reports a control misspelt in code, with or without
+  `this.`.** `this.Labl1.Text` beside a `Label1` went through the whole check
+  and failed at the first run as *cannot set property 'Text' of undefined*; it
+  is now `Form1 has no control or member Labl1 … did you mean Label1?`, in the
+  check and underlined in the IDE as it is typed. A bare `Label1.Text` -- the
+  first line a person writes -- is told it is `this.Label1`, instead of the
+  misleading *did you mean Label?*, and a bare `TextBox2` suggests
+  `this.TextBox1`.
 
 ### IDE
 

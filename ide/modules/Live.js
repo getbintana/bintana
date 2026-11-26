@@ -124,9 +124,10 @@ export class Live {
         /* `Names`, and not a copy of it: the project pass runs the same
          * three. What belongs to this class is the *moment*: the pause, and the
          * caret rule that goes with it. */
+        const controls = ide.completion.controls();
         const found = [...ide.names.curated(text, name, at),
                        ...ide.names.ambiguous(text, name, at),
-                       ...ide.names.unresolved(text, name, at),
+                       ...ide.names.unresolved(text, name, at, controls),
                        ...ide.names.globalUses(text, name, at),
                        ...ide.names.shadowing(text, name, at)];
 
@@ -141,7 +142,7 @@ export class Live {
          */
         const form = ide.formOf(name);
         if (form)
-            found.push(...ide.names.check(text, ide.completion.controls(), name, at));
+            found.push(...ide.names.check(text, controls, name, at));
 
         ide.problems.report(`names:${name}`, found);
         this.mark(ide.Editor, found);

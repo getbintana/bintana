@@ -15239,6 +15239,19 @@ function* p_modules(ide) {
        [...ide.names.unresolved(files["ModTypo.js"], "ModTypo.js", typing)]
            .map((p) => p.text.split(" ")[0]).join(","), "MOD_IVA");
 
+    /* A control is a member of the form: the first line a person writes after
+     * double-clicking a button is `Label1.Text = …`, and it is a
+     * `ReferenceError`. The suggestion has to be the form's own control, not
+     * the unrelated class `Label`. */
+    const bare = [...ide.names.unresolved(
+        'Label1.Text = "a";\nLabl1.Text = "b";\n', "Main.js", -1,
+        [{ name: "Label1", type: "Label" }])].map((p) => p.text);
+    eq("a control written without this. is told how to reach it",
+       bare[0], "Label1 is a name of this form, not a global: " +
+                "write this.Label1 to reach it");
+    eq("...and a misspelt one suggests the control, not the class",
+       bare[1], "Labl1 is not declared anywhere: did you mean this.Label1?");
+
     /* --- a member a runtime global does not have ------------------------------
      *
      * `Database.Open` is the first thing a person who used another library
@@ -15348,6 +15361,7 @@ function* p_check(ide) {
         children: [
             { type: "Label",  name: "Twice", properties: { Text: "uno" } },
             { type: "Label",  name: "Twice", properties: { Text: "dos" } },
+            { type: "Label",  name: "Label1", properties: { Text: "uno" } },
             { type: "Panel",  name: "Close", properties: {} },
             { type: "Button", name: "Btn",   properties: { Txt: "nope" } },
             /* A menu a control shows from its own press: a property of the
@@ -15369,7 +15383,8 @@ function* p_check(ide) {
               "    save_draft() { }\n" +                  /* a helper, not a handler */
               "    Form_Load() { this.Built = new Button(); this.Built.Name = \"Built\"; }\n" +
               "    Form_Open() { this.Btn.Txt = \"x\"; this.MnuOk.Enabld = 1; " +
-              "this.MnuOnControl.Nope = 1; const generated = \"this.Twice.Txt\"; }\n" +
+              "this.MnuOnControl.Nope = 1; Label1.Text = \"x\"; " +
+              "Labl1.Text = \"y\"; const generated = \"this.Twice.Txt\"; }\n" +
               "}\n");
 
     /* A control built in another file, named where it is built: the handler
@@ -15418,6 +15433,11 @@ function* p_check(ide) {
           JSON.stringify(said));
     check("a property the class does not have is reported",
           has("Button has no Txt"), JSON.stringify(said));
+    check("a control written without this. is reported by the project pass",
+          has("Label1 is a name of this form, not a global"), JSON.stringify(said));
+    check("...and a misspelt one suggests this.Label1",
+          has("Labl1 is not declared anywhere: did you mean this.Label1?"),
+          JSON.stringify(said));
     check("a handler for an event it does not raise is reported",
           has("does not raise Clik"), JSON.stringify(said));
     /*
